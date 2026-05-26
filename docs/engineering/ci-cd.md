@@ -16,11 +16,11 @@ Current required check:
 
 - repository health check through `scripts/ci/check_repo.sh`
 
-Conditional checks are enabled when the relevant project files exist:
+Language-specific build checks should be added when those project files exist:
 
-- Rust: runs when `Cargo.toml` exists
-- Node: runs when `package.json` exists
-- Python: runs when `pyproject.toml` or `requirements.txt` exists
+- Rust: `cargo fmt --all -- --check` and `cargo test --all --locked`
+- Node: `npm ci`, lint, and tests
+- Python: install project dependencies and run tests
 
 ## CD
 
