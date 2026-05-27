@@ -137,6 +137,94 @@ pub struct PersistedAgentRun {
     pub steps: Vec<Value>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetSplitRecord {
+    pub split_name: String,
+    pub data_uri: String,
+    pub row_count: u64,
+    pub positive_count: Option<u64>,
+    pub negative_count: Option<u64>,
+    pub label_distribution_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SchemaFieldRecord {
+    pub field_name: String,
+    pub logical_type: String,
+    pub nullable: bool,
+    pub semantic_role: String,
+    pub description: String,
+    pub profile_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetRecord {
+    pub dataset_id: String,
+    pub source_key: String,
+    pub display_name: String,
+    pub business_domain: String,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub sample_grain: String,
+    pub label_column: String,
+    pub entity_keys: Vec<String>,
+    pub manifest_uri: String,
+    pub schema_uri: String,
+    pub profile_uri: String,
+    pub storage_format: String,
+    pub schema_hash: String,
+    pub row_count: u64,
+    pub status: String,
+    pub splits: Vec<DatasetSplitRecord>,
+    pub fields: Vec<SchemaFieldRecord>,
+    pub mappings: Vec<FieldMappingRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterDatasetInput {
+    pub source_key: String,
+    pub display_name: String,
+    pub business_domain: String,
+    pub owner: String,
+    pub description: String,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub sample_grain: String,
+    pub label_column: String,
+    pub entity_keys: Vec<String>,
+    pub manifest_uri: String,
+    pub schema_uri: String,
+    pub profile_uri: String,
+    pub storage_format: String,
+    pub schema_hash: String,
+    pub row_count: u64,
+    pub status: String,
+    pub splits: Vec<DatasetSplitRecord>,
+    pub fields: Vec<SchemaFieldRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FieldMappingRecord {
+    pub mapping_id: String,
+    pub dataset_id: String,
+    pub external_field: String,
+    pub canonical_target: String,
+    pub feature_name: Option<String>,
+    pub transform_kind: String,
+    pub transform_json: Value,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateFieldMappingInput {
+    pub external_field: String,
+    pub canonical_target: String,
+    pub feature_name: Option<String>,
+    pub transform_kind: String,
+    pub transform_json: Value,
+    pub status: String,
+}
+
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
     async fn upsert_claim_context(
@@ -179,6 +267,18 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<Vec<SimilarCaseRecord>>;
 
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
+
+    async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord>;
+
+    async fn list_datasets(&self) -> anyhow::Result<Vec<DatasetRecord>>;
+
+    async fn get_dataset(&self, dataset_id: &str) -> anyhow::Result<Option<DatasetRecord>>;
+
+    async fn add_field_mapping(
+        &self,
+        dataset_id: &str,
+        input: CreateFieldMappingInput,
+    ) -> anyhow::Result<Option<FieldMappingRecord>>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -190,6 +290,9 @@ pub struct InMemoryScoringRepository {
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
     rule_statuses: Mutex<HashMap<String, String>>,
+    datasets: Mutex<HashMap<String, DatasetRecord>>,
+    dataset_sequence: Mutex<u64>,
+    mapping_sequence: Mutex<u64>,
 }
 
 impl InMemoryScoringRepository {
@@ -308,6 +411,79 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
         self.agent_runs.lock().await.push(run);
         Ok(())
+    }
+
+    async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
+        let mut sequence = self.dataset_sequence.lock().await;
+        *sequence += 1;
+        let dataset_id = format!("dataset_{}", *sequence);
+        let record = DatasetRecord {
+            dataset_id: dataset_id.clone(),
+            source_key: input.source_key,
+            display_name: input.display_name,
+            business_domain: input.business_domain,
+            dataset_key: input.dataset_key,
+            dataset_version: input.dataset_version,
+            sample_grain: input.sample_grain,
+            label_column: input.label_column,
+            entity_keys: input.entity_keys,
+            manifest_uri: input.manifest_uri,
+            schema_uri: input.schema_uri,
+            profile_uri: input.profile_uri,
+            storage_format: input.storage_format,
+            schema_hash: input.schema_hash,
+            row_count: input.row_count,
+            status: input.status,
+            splits: input.splits,
+            fields: input.fields,
+            mappings: vec![],
+        };
+        self.datasets
+            .lock()
+            .await
+            .insert(dataset_id, record.clone());
+        Ok(record)
+    }
+
+    async fn list_datasets(&self) -> anyhow::Result<Vec<DatasetRecord>> {
+        let mut datasets = self
+            .datasets
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        datasets.sort_by(|left, right| left.dataset_key.cmp(&right.dataset_key));
+        Ok(datasets)
+    }
+
+    async fn get_dataset(&self, dataset_id: &str) -> anyhow::Result<Option<DatasetRecord>> {
+        Ok(self.datasets.lock().await.get(dataset_id).cloned())
+    }
+
+    async fn add_field_mapping(
+        &self,
+        dataset_id: &str,
+        input: CreateFieldMappingInput,
+    ) -> anyhow::Result<Option<FieldMappingRecord>> {
+        let mut datasets = self.datasets.lock().await;
+        let Some(dataset) = datasets.get_mut(dataset_id) else {
+            return Ok(None);
+        };
+        let mut sequence = self.mapping_sequence.lock().await;
+        *sequence += 1;
+        let mapping = FieldMappingRecord {
+            mapping_id: format!("mapping_{}", *sequence),
+            dataset_id: dataset_id.to_string(),
+            external_field: input.external_field,
+            canonical_target: input.canonical_target,
+            feature_name: input.feature_name,
+            transform_kind: input.transform_kind,
+            transform_json: input.transform_json,
+            status: input.status,
+        };
+        dataset.mappings.push(mapping.clone());
+        Ok(Some(mapping))
     }
 }
 
@@ -873,6 +1049,164 @@ impl ScoringRepository for PostgresScoringRepository {
         tx.commit().await?;
         Ok(())
     }
+
+    async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO external_data_sources
+             (source_key, display_name, business_domain, owner, description, status)
+             VALUES ($1, $2, $3, $4, $5, 'active')
+             ON CONFLICT (source_key) DO UPDATE
+             SET display_name = EXCLUDED.display_name,
+                 business_domain = EXCLUDED.business_domain,
+                 owner = EXCLUDED.owner,
+                 description = EXCLUDED.description,
+                 updated_at = now()",
+        )
+        .bind(&input.source_key)
+        .bind(&input.display_name)
+        .bind(&input.business_domain)
+        .bind(&input.owner)
+        .bind(&input.description)
+        .execute(&mut *tx)
+        .await?;
+
+        let dataset_row: (String,) = sqlx::query_as(
+            "INSERT INTO external_dataset_versions
+             (source_key, dataset_key, dataset_version, sample_grain, label_column, entity_keys, manifest_uri, schema_uri, profile_uri, storage_format, schema_hash, row_count, status)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (dataset_key, dataset_version) DO UPDATE
+             SET manifest_uri = EXCLUDED.manifest_uri,
+                 schema_uri = EXCLUDED.schema_uri,
+                 profile_uri = EXCLUDED.profile_uri,
+                 schema_hash = EXCLUDED.schema_hash,
+                 row_count = EXCLUDED.row_count,
+                 status = EXCLUDED.status
+             RETURNING id::text",
+        )
+        .bind(&input.source_key)
+        .bind(&input.dataset_key)
+        .bind(&input.dataset_version)
+        .bind(&input.sample_grain)
+        .bind(&input.label_column)
+        .bind(serde_json::json!(input.entity_keys))
+        .bind(&input.manifest_uri)
+        .bind(&input.schema_uri)
+        .bind(&input.profile_uri)
+        .bind(&input.storage_format)
+        .bind(&input.schema_hash)
+        .bind(input.row_count as i64)
+        .bind(&input.status)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        for split in &input.splits {
+            sqlx::query(
+                "INSERT INTO external_dataset_splits
+                 (dataset_id, split_name, data_uri, row_count, positive_count, negative_count, label_distribution_json)
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (dataset_id, split_name) DO UPDATE
+                 SET data_uri = EXCLUDED.data_uri,
+                     row_count = EXCLUDED.row_count,
+                     positive_count = EXCLUDED.positive_count,
+                     negative_count = EXCLUDED.negative_count,
+                     label_distribution_json = EXCLUDED.label_distribution_json",
+            )
+            .bind(&dataset_row.0)
+            .bind(&split.split_name)
+            .bind(&split.data_uri)
+            .bind(split.row_count as i64)
+            .bind(split.positive_count.map(|value| value as i64))
+            .bind(split.negative_count.map(|value| value as i64))
+            .bind(&split.label_distribution_json)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        for field in &input.fields {
+            sqlx::query(
+                "INSERT INTO external_schema_fields
+                 (dataset_id, field_name, logical_type, nullable, semantic_role, description, profile_json)
+                 VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+                 ON CONFLICT (dataset_id, field_name) DO UPDATE
+                 SET logical_type = EXCLUDED.logical_type,
+                     nullable = EXCLUDED.nullable,
+                     semantic_role = EXCLUDED.semantic_role,
+                     description = EXCLUDED.description,
+                     profile_json = EXCLUDED.profile_json",
+            )
+            .bind(&dataset_row.0)
+            .bind(&field.field_name)
+            .bind(&field.logical_type)
+            .bind(field.nullable)
+            .bind(&field.semantic_role)
+            .bind(&field.description)
+            .bind(&field.profile_json)
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        load_dataset_record(&self.pool, &dataset_row.0)
+            .await?
+            .ok_or_else(|| anyhow::anyhow!("registered dataset was not found"))
+    }
+
+    async fn list_datasets(&self) -> anyhow::Result<Vec<DatasetRecord>> {
+        let ids: Vec<(String,)> = sqlx::query_as(
+            "SELECT id::text FROM external_dataset_versions ORDER BY dataset_key, dataset_version",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut datasets = Vec::new();
+        for (id,) in ids {
+            if let Some(dataset) = load_dataset_record(&self.pool, &id).await? {
+                datasets.push(dataset);
+            }
+        }
+        Ok(datasets)
+    }
+
+    async fn get_dataset(&self, dataset_id: &str) -> anyhow::Result<Option<DatasetRecord>> {
+        load_dataset_record(&self.pool, dataset_id).await
+    }
+
+    async fn add_field_mapping(
+        &self,
+        dataset_id: &str,
+        input: CreateFieldMappingInput,
+    ) -> anyhow::Result<Option<FieldMappingRecord>> {
+        if load_dataset_record(&self.pool, dataset_id).await?.is_none() {
+            return Ok(None);
+        }
+
+        let row: (String,) = sqlx::query_as(
+            "INSERT INTO external_field_mappings
+             (dataset_id, external_field, canonical_target, feature_name, transform_kind, transform_json, status)
+             VALUES ($1::uuid, $2, $3, $4, $5, $6, $7)
+             RETURNING id::text",
+        )
+        .bind(dataset_id)
+        .bind(&input.external_field)
+        .bind(&input.canonical_target)
+        .bind(&input.feature_name)
+        .bind(&input.transform_kind)
+        .bind(&input.transform_json)
+        .bind(&input.status)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(Some(FieldMappingRecord {
+            mapping_id: row.0,
+            dataset_id: dataset_id.to_string(),
+            external_field: input.external_field,
+            canonical_target: input.canonical_target,
+            feature_name: input.feature_name,
+            transform_kind: input.transform_kind,
+            transform_json: input.transform_json,
+            status: input.status,
+        }))
+    }
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
@@ -1101,6 +1435,194 @@ fn json_array_to_strings(value: Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+type DatasetRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    Value,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i64,
+    String,
+);
+type DatasetSplitRow = (String, String, i64, Option<i64>, Option<i64>, Value);
+type DatasetMappingRow = (
+    String,
+    String,
+    String,
+    Option<String>,
+    String,
+    Value,
+    String,
+);
+
+async fn load_dataset_record(
+    pool: &PgPool,
+    dataset_id: &str,
+) -> anyhow::Result<Option<DatasetRecord>> {
+    let row: Option<DatasetRow> = sqlx::query_as(
+        "SELECT d.id::text,
+                d.source_key,
+                s.display_name,
+                s.business_domain,
+                d.dataset_key,
+                d.dataset_version,
+                d.sample_grain,
+                d.label_column,
+                d.entity_keys,
+                d.manifest_uri,
+                d.schema_uri,
+                d.profile_uri,
+                d.storage_format,
+                d.schema_hash,
+                d.row_count,
+                d.status
+         FROM external_dataset_versions d
+         JOIN external_data_sources s ON s.source_key = d.source_key
+         WHERE d.id = $1::uuid",
+    )
+    .bind(dataset_id)
+    .fetch_optional(pool)
+    .await?;
+
+    let Some((
+        dataset_id,
+        source_key,
+        display_name,
+        business_domain,
+        dataset_key,
+        dataset_version,
+        sample_grain,
+        label_column,
+        entity_keys,
+        manifest_uri,
+        schema_uri,
+        profile_uri,
+        storage_format,
+        schema_hash,
+        row_count,
+        status,
+    )) = row
+    else {
+        return Ok(None);
+    };
+
+    let split_rows: Vec<DatasetSplitRow> = sqlx::query_as(
+        "SELECT split_name, data_uri, row_count, positive_count, negative_count, label_distribution_json
+         FROM external_dataset_splits
+         WHERE dataset_id = $1::uuid
+         ORDER BY split_name",
+    )
+    .bind(&dataset_id)
+    .fetch_all(pool)
+    .await?;
+
+    let field_rows: Vec<(String, String, bool, String, String, Value)> = sqlx::query_as(
+        "SELECT field_name, logical_type, nullable, semantic_role, description, profile_json
+         FROM external_schema_fields
+         WHERE dataset_id = $1::uuid
+         ORDER BY field_name",
+    )
+    .bind(&dataset_id)
+    .fetch_all(pool)
+    .await?;
+
+    let mapping_rows: Vec<DatasetMappingRow> = sqlx::query_as(
+        "SELECT id::text, external_field, canonical_target, feature_name, transform_kind, transform_json, status
+             FROM external_field_mappings
+             WHERE dataset_id = $1::uuid
+             ORDER BY created_at, external_field",
+    )
+    .bind(&dataset_id)
+    .fetch_all(pool)
+    .await?;
+
+    Ok(Some(DatasetRecord {
+        dataset_id: dataset_id.clone(),
+        source_key,
+        display_name,
+        business_domain,
+        dataset_key,
+        dataset_version,
+        sample_grain,
+        label_column,
+        entity_keys: json_array_to_strings(entity_keys),
+        manifest_uri,
+        schema_uri,
+        profile_uri,
+        storage_format,
+        schema_hash,
+        row_count: row_count as u64,
+        status,
+        splits: split_rows
+            .into_iter()
+            .map(
+                |(
+                    split_name,
+                    data_uri,
+                    row_count,
+                    positive_count,
+                    negative_count,
+                    label_distribution_json,
+                )| DatasetSplitRecord {
+                    split_name,
+                    data_uri,
+                    row_count: row_count as u64,
+                    positive_count: positive_count.map(|value| value as u64),
+                    negative_count: negative_count.map(|value| value as u64),
+                    label_distribution_json,
+                },
+            )
+            .collect(),
+        fields: field_rows
+            .into_iter()
+            .map(
+                |(field_name, logical_type, nullable, semantic_role, description, profile_json)| {
+                    SchemaFieldRecord {
+                        field_name,
+                        logical_type,
+                        nullable,
+                        semantic_role,
+                        description,
+                        profile_json,
+                    }
+                },
+            )
+            .collect(),
+        mappings: mapping_rows
+            .into_iter()
+            .map(
+                |(
+                    mapping_id,
+                    external_field,
+                    canonical_target,
+                    feature_name,
+                    transform_kind,
+                    transform_json,
+                    status,
+                )| FieldMappingRecord {
+                    mapping_id,
+                    dataset_id: dataset_id.clone(),
+                    external_field,
+                    canonical_target,
+                    feature_name,
+                    transform_kind,
+                    transform_json,
+                    status,
+                },
+            )
+            .collect(),
+    }))
 }
 
 async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {

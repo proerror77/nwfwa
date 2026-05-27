@@ -43,7 +43,10 @@ async fn lists_knowledge_cases() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["cases"][0]["case_id"], "KC-1001");
     assert_eq!(body["cases"][0]["fwa_type"], "Abuse");
-    assert!(body["cases"][0]["evidence_refs"].as_array().unwrap().len() > 0);
+    assert!(!body["cases"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -67,20 +70,14 @@ async fn searches_similar_knowledge_cases_with_evidence() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["results"][0]["case_id"], "KC-1001");
     assert!(body["results"][0]["similarity_score"].as_f64().unwrap() > 0.0);
-    assert!(
-        body["results"][0]["matched_signals"]
-            .as_array()
-            .unwrap()
-            .len()
-            > 0
-    );
-    assert!(
-        body["results"][0]["evidence_refs"]
-            .as_array()
-            .unwrap()
-            .len()
-            > 0
-    );
+    assert!(!body["results"][0]["matched_signals"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(!body["results"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]
@@ -114,11 +111,11 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
     assert!(body["agent_run_id"].as_str().unwrap().starts_with("agent_"));
     assert!(body["risk_summary"].as_str().unwrap().contains("CLM-0287"));
     assert!(body["investigation_checklist"].as_array().unwrap().len() >= 3);
-    assert!(body["similar_cases"].as_array().unwrap().len() > 0);
+    assert!(!body["similar_cases"].as_array().unwrap().is_empty());
     assert!(body["findings"]
         .as_array()
         .unwrap()
         .iter()
-        .all(|finding| finding["evidence_refs"].as_array().unwrap().len() > 0));
-    assert!(body["evidence_refs"].as_array().unwrap().len() > 0);
+        .all(|finding| !finding["evidence_refs"].as_array().unwrap().is_empty()));
+    assert!(!body["evidence_refs"].as_array().unwrap().is_empty());
 }

@@ -211,3 +211,134 @@ CREATE TABLE IF NOT EXISTS agent_steps (
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS external_data_sources (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_key TEXT NOT NULL UNIQUE,
+  display_name TEXT NOT NULL,
+  business_domain TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  description TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS external_dataset_versions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  source_key TEXT NOT NULL REFERENCES external_data_sources(source_key),
+  dataset_key TEXT NOT NULL,
+  dataset_version TEXT NOT NULL,
+  sample_grain TEXT NOT NULL,
+  label_column TEXT NOT NULL,
+  entity_keys JSONB NOT NULL DEFAULT '[]'::jsonb,
+  manifest_uri TEXT NOT NULL,
+  schema_uri TEXT NOT NULL,
+  profile_uri TEXT NOT NULL,
+  storage_format TEXT NOT NULL CHECK (storage_format = 'parquet'),
+  schema_hash TEXT NOT NULL,
+  row_count BIGINT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(dataset_key, dataset_version)
+);
+
+CREATE TABLE IF NOT EXISTS external_dataset_splits (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  dataset_id UUID NOT NULL REFERENCES external_dataset_versions(id) ON DELETE CASCADE,
+  split_name TEXT NOT NULL,
+  data_uri TEXT NOT NULL,
+  row_count BIGINT NOT NULL,
+  positive_count BIGINT,
+  negative_count BIGINT,
+  label_distribution_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  UNIQUE(dataset_id, split_name)
+);
+
+CREATE TABLE IF NOT EXISTS external_schema_fields (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  dataset_id UUID NOT NULL REFERENCES external_dataset_versions(id) ON DELETE CASCADE,
+  field_name TEXT NOT NULL,
+  logical_type TEXT NOT NULL,
+  nullable BOOLEAN NOT NULL,
+  semantic_role TEXT NOT NULL,
+  description TEXT NOT NULL,
+  profile_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  UNIQUE(dataset_id, field_name)
+);
+
+CREATE TABLE IF NOT EXISTS external_field_mappings (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  dataset_id UUID NOT NULL REFERENCES external_dataset_versions(id) ON DELETE CASCADE,
+  external_field TEXT NOT NULL,
+  canonical_target TEXT NOT NULL,
+  feature_name TEXT,
+  transform_kind TEXT NOT NULL,
+  transform_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS feature_definitions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  feature_name TEXT NOT NULL,
+  business_domain TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  value_type TEXT NOT NULL,
+  source_fields_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  calculation_kind TEXT NOT NULL,
+  description TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(feature_name, business_domain, version)
+);
+
+CREATE TABLE IF NOT EXISTS feature_set_versions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  feature_set_key TEXT NOT NULL,
+  business_domain TEXT NOT NULL,
+  version TEXT NOT NULL,
+  dataset_id UUID NOT NULL REFERENCES external_dataset_versions(id),
+  features_uri TEXT NOT NULL,
+  feature_list_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  row_count BIGINT NOT NULL,
+  label_column TEXT NOT NULL,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(feature_set_key, version)
+);
+
+CREATE TABLE IF NOT EXISTS model_dataset_versions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  business_domain TEXT NOT NULL,
+  task_type TEXT NOT NULL,
+  label_name TEXT NOT NULL,
+  feature_set_id UUID NOT NULL REFERENCES feature_set_versions(id),
+  train_uri TEXT NOT NULL,
+  validation_uri TEXT NOT NULL,
+  test_uri TEXT,
+  row_counts_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  label_distribution_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  status TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS model_evaluation_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  evaluation_run_id TEXT NOT NULL UNIQUE,
+  model_key TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  model_dataset_id UUID NOT NULL REFERENCES model_dataset_versions(id),
+  auc NUMERIC,
+  ks NUMERIC,
+  precision_value NUMERIC,
+  recall_value NUMERIC,
+  f1 NUMERIC,
+  accuracy NUMERIC,
+  threshold NUMERIC,
+  confusion_matrix_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  feature_importance_uri TEXT,
+  metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
