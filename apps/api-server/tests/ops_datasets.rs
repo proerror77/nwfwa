@@ -326,7 +326,7 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     );
 
     let (status, loaded) = json_request(
-        app,
+        app.clone(),
         "GET",
         "/api/v1/ops/model-evaluations/eval_renewal_v1",
         "{}",
@@ -336,6 +336,18 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(loaded["evaluation"]["model_key"], "renewal_baseline");
     assert_eq!(loaded["evaluation"]["model_dataset_id"], model_dataset_id);
+
+    let (status, listed) = json_request(app, "GET", "/api/v1/ops/model-evaluations", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        listed["evaluations"][0]["evaluation_run_id"],
+        "eval_renewal_v1"
+    );
+    assert_eq!(
+        listed["evaluations"][0]["model_dataset_id"],
+        model_dataset_id
+    );
 }
 
 #[tokio::test]
