@@ -20,6 +20,10 @@ The platform is assistive. It can recommend review actions, surface suspicious
 patterns, and prepare evidence packages, but it must not automatically deny,
 approve, or accuse a claim without a customer-controlled adjudication process.
 
+The product language must distinguish fraud, waste, abuse, improper payment,
+documentation issue, and medical necessity issue. A high score, anomaly, or
+rule hit is a lead, not a confirmed fraud finding.
+
 ## Product Modules
 
 - FWA Core Runtime: score claims through features, rules, model signals, anomaly
@@ -43,6 +47,31 @@ The product must move from a generic scoring platform into a domain-specific FWA
 operations system. The following capabilities are required to strengthen the
 core product.
 
+### FWA Scheme Taxonomy
+
+Every rule, feature, case, lead, model evaluation, and report should map to a
+stable FWA scheme taxonomy.
+
+Initial scheme families:
+
+- duplicate billing;
+- upcoding;
+- unbundling;
+- medically unnecessary service;
+- excessive utilization;
+- diagnosis-procedure mismatch;
+- laboratory testing abuse;
+- telehealth abuse;
+- genetic testing abuse;
+- opioid, pharmacy, or controlled-substance abuse;
+- durable medical equipment, home health, hospice, or rehabilitation risk;
+- provider peer outlier;
+- suspicious referral, ownership, or relationship concentration.
+
+The taxonomy is a product classification layer, not an ontology. It exists so
+operators can route cases, compare rule performance, build evidence packages,
+and measure ROI by FWA pattern.
+
 ### Provider Risk Profile
 
 Provider risk profile is a first-class FWA capability. It tracks medical service
@@ -53,6 +82,9 @@ Required signals:
 
 - claim volume and amount over 30/90/180 day windows;
 - peer percentile by specialty, region, service type, and policy type;
+- provider enrollment, credential, specialty, location, and network status;
+- provider ownership or affiliation concentration when customer data provides
+  it;
 - high-cost code usage rate;
 - duplicate or repeated service patterns;
 - diagnosis-procedure mismatch rate;
@@ -87,6 +119,7 @@ investigation, review, and closure.
 Required workflow fields:
 
 - case id, claim id, member id, provider id, and source system;
+- scheme family and lead source;
 - status: new, triage, investigating, pending evidence, confirmed, rejected,
   closed;
 - assignee, reviewer, SLA, priority, and reason for routing;
@@ -103,12 +136,15 @@ Required labels:
 
 - confirmed_fwa;
 - false_positive;
+- improper_payment;
 - insufficient_evidence;
 - abuse_not_fraud;
 - documentation_issue;
+- medical_necessity_issue;
 - policy_exclusion;
 - amount_prevented;
 - amount_recovered;
+- lead_disposition;
 - feedback_target: rules, model, features, provider_profile, or workflow.
 
 ### Feature Factory And Peer Benchmark
@@ -137,6 +173,8 @@ Required monitoring:
 - reviewer disagreement rate;
 - prevented payment;
 - recovered amount;
+- avoided future exposure;
+- deterrence or provider behavior-change indicators;
 - review cost;
 - rule-level and model-level saving attribution.
 
@@ -173,6 +211,8 @@ Pilot customers may connect some or all of the following systems:
   and payment status;
 - investigation, SIU, QA, or case-management tools for reviewer workflow and
   outcome writeback;
+- provider enrollment, credentialing, ownership, and network management systems
+  where available;
 - data warehouse, lakehouse, or object storage for historical claims, Parquet
   datasets, feature matrices, and model evaluation artifacts.
 
@@ -188,10 +228,41 @@ Later phases can add:
 - SSO and role-based access control;
 - BI export for finance, compliance, and operations reporting;
 - alerting and notification systems for SLA breach and high-risk routing.
+- cross-payer or partner data collaboration where allowed by customer contracts,
+  privacy rules, and governance approval.
 
 Core rule evaluation, scoring aggregation, audit, and model governance must stay
 inside the FWA platform. External systems provide data, documents, workflow
 destinations, and outcome feedback.
+
+Partner collaboration must be privacy-preserving and evidence-controlled. Shared
+signals should use approved identifiers, aggregated patterns, hashed references,
+or customer-approved exchange formats rather than raw PII.
+
+## Lead Generation Lifecycle
+
+Analytics creates leads. It does not directly create fraud conclusions.
+
+Required lifecycle:
+
+```text
+signal -> lead -> triage -> case -> investigation -> outcome -> feedback
+```
+
+Definitions:
+
+- signal: a rule hit, anomaly, model score, peer deviation, document finding, or
+  external alert;
+- lead: a review candidate with score, scheme family, source, and evidence refs;
+- triage: operator review that accepts, rejects, merges, or requests more
+  evidence;
+- case: an opened investigation with owner, status, SLA, and evidence package;
+- outcome: structured conclusion from investigation, QA, or customer workflow;
+- feedback: governed labels and metrics used for rule tuning, feature quality,
+  model evaluation, and ROI reporting.
+
+Lead records must preserve why the lead was created and why it was promoted,
+rejected, merged, or closed.
 
 ## Review Mode Strategy
 
@@ -233,10 +304,41 @@ Required capabilities:
 - use OCR and LLM assistance only for extraction, summarization, evidence
   organization, and checklist generation.
 
+Evidence sufficiency depends on the scheme family:
+
+| Scheme | Minimum Evidence |
+| --- | --- |
+| duplicate billing | same member, provider, service date, procedure, amount, and claim lineage |
+| upcoding | diagnosis, billed code, lower-complexity comparator, medical record, and coding rationale |
+| unbundling | component codes, bundled-code comparator, same episode, and billing timeline |
+| medical necessity | diagnosis, order, chart note, treatment context, reviewer finding, and policy rule |
+| lab overuse | ordering pattern, diagnosis match, frequency, peer benchmark, and ordering provider |
+| provider outlier | peer group definition, time window, specialty, region, and statistical deviation |
+| telehealth abuse | visit mode, provider/member location, visit frequency, documentation, and policy rule |
+| pharmacy or opioid abuse | prescription, prescriber, fill pattern, dosage, member history, and policy rule |
+
 Clinical review output must remain structured. Free-text notes can explain the
 case, but model training and rule tuning must use controlled outcome fields such
 as `documentation_issue`, `medical_necessity_review_required`, and
 `insufficient_evidence`.
+
+## Sampling And Audit Methodology
+
+The platform should support both targeted FWA leads and statistically defensible
+audit sampling.
+
+Required sampling modes:
+
+- risk-ranked sample for high-risk lead review;
+- random control sample for baseline false-positive and missed-risk measurement;
+- stratified sample by scheme, provider type, region, policy type, and risk
+  band;
+- post-payment audit sample for recovery and rule discovery;
+- QA sample for reviewer consistency and workflow calibration.
+
+Sampling records must store population definition, inclusion criteria, random
+seed or deterministic selection method, sample size, reviewer assignment, and
+outcome distribution.
 
 ## Promotion Gates
 
@@ -320,6 +422,46 @@ Overfitting controls are product requirements, not optional data-science notes:
 - compare every candidate against rule-only and previous-model baselines;
 - require shadow-mode evidence before active routing impact.
 
+## Data Quality And Reproducibility Gates
+
+FWA accuracy depends on data quality as much as model choice. Every dataset,
+feature set, rule backtest, and model evaluation should be reproducible.
+
+Required gates:
+
+- source data quality score;
+- missingness, duplicate, outlier, and coding-distribution profiles;
+- diagnosis, procedure, provider, policy, and member identifier normalization;
+- provider and member identity-resolution lineage;
+- label provenance and reviewer source;
+- feature reproducibility hash;
+- dataset, split, feature-set, model, rule, and threshold version ids;
+- immutable artifact URIs for profiles, backtests, metrics, and feature
+  importance.
+
+No model, rule, or ROI report should be promoted from a dataset whose source,
+split, feature generation, and label lineage cannot be replayed.
+
+## Anti-Fraud Value Measurement
+
+The product must measure more than recovered money.
+
+Required value measures:
+
+- prevented payment;
+- recovered amount;
+- avoided future exposure;
+- deterrence or provider behavior-change signal;
+- review cost and reviewer capacity used;
+- false-positive operational cost;
+- net value by rule, model, scheme, provider segment, and campaign;
+- time to triage, time to investigation closure, and SLA breach rate;
+- confidence interval or evidence caveat for estimates where exact attribution
+  is not possible.
+
+Value reports must separate observed financial outcomes from estimated impact.
+Estimated deterrence and avoided future exposure must be labeled as estimates.
+
 ## Kaggle-Inspired Strategy
 
 Public Kaggle fraud and healthcare-provider datasets are useful for research
@@ -364,6 +506,18 @@ Borrow with caution:
 
 Reference anchors:
 
+- CMS Fraud, Waste & Abuse:
+  https://www.cms.gov/fraud
+- CMS Center for Program Integrity:
+  https://www.cms.gov/medicare/medicaid-coordination/center-program-integrity
+- CMS Healthcare Fraud Prevention Partnership white papers:
+  https://www.cms.gov/medicare/medicaid-coordination/healthcare-fraud-prevention-partnership/white-papers
+- GAO Medicare fraud analytics report:
+  https://files.gao.gov/reports/GAO-26-107799/index.html
+- HHS OIG Fraud resources:
+  https://oig.hhs.gov/fraud/
+- Data-Centric AI for Healthcare Fraud Detection:
+  https://pubmed.ncbi.nlm.nih.gov/37200563/
 - Kaggle Healthcare Provider Fraud Detection Analysis dataset:
   https://www.kaggle.com/datasets/rohitrox/healthcare-provider-fraud-detection-analysis
 - Kaggle IEEE-CIS Fraud Detection competition:
@@ -380,11 +534,16 @@ Reference anchors:
 - No production model promotion without dataset, feature, metric, and shadow-mode
   evidence.
 - No pre-payment routing impact without explicit promotion gates and rollback.
+- No confirmed fraud language without investigation or QA confirmation.
+- No partner data sharing without explicit customer, privacy, and governance
+  approval.
 
 ## Acceptance Criteria
 
 - Every score can be traced to feature values, rule hits, model signals, anomaly
   signals, and audit events.
+- Every lead has a scheme family, lead source, evidence refs, and lifecycle
+  disposition.
 - Rule changes are versioned, backtested, approved, and publishable.
 - Model versions are tied to immutable datasets, feature sets, evaluation runs,
   and runtime metadata.
@@ -393,5 +552,10 @@ Reference anchors:
   thresholds, and recommended actions.
 - Clinically sensitive findings are backed by structured evidence and routed to
   reviewers instead of being treated as autonomous conclusions.
+- Evidence sufficiency is defined by scheme family.
+- Data quality, feature reproducibility, and label provenance are required before
+  model or ROI promotion.
+- Value reporting separates prevented payment, recovered amount, avoided
+  exposure, review cost, and estimated impact.
 - Kaggle-inspired work remains an offline research input until validated on
   customer or pilot data.
