@@ -2,8 +2,9 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AgentApprovalRecord, AgentContextSnapshotRecord, AgentToolCallRecord,
-        AgentToolResultRecord, PersistedAgentRun, PersistedAuditEvent, SimilarCaseQuery,
+        AgentApprovalRecord, AgentContextSnapshotRecord, AgentPolicyCheckRecord,
+        AgentToolCallRecord, AgentToolResultRecord, PersistedAgentRun, PersistedAuditEvent,
+        SimilarCaseQuery,
     },
 };
 use axum::{
@@ -53,6 +54,20 @@ pub async fn investigate_case(
     authorize(&state, &headers)?;
     let tool_call_id = format!("tool_call_{}", request.claim_id);
     let tool_result_id = format!("tool_result_{}", request.claim_id);
+    let policy_check = AgentPolicyCheckRecord {
+        policy_check_id: format!("policy_check_{}", request.claim_id),
+        agent_run_id: format!("agent_{}", request.claim_id),
+        tool_call_id: tool_call_id.clone(),
+        tool_name: "knowledge.search_similar".into(),
+        policy_name: "agent_tool_allowlist".into(),
+        decision: "allowed".into(),
+        reason: "Tool is allowlisted for read-only similar-case evidence retrieval.".into(),
+        evidence_refs: vec![
+            "policy:agent_tool_allowlist".into(),
+            format!("knowledge_query:{}", request.claim_id),
+        ],
+        created_at: None,
+    };
     let tool_input = serde_json::json!({
         "claim_id": request.claim_id,
         "diagnosis_code": request.similar_case_query.diagnosis_code,
@@ -146,6 +161,10 @@ pub async fn investigate_case(
                 checksum: context_checksum(&context_json),
                 context_json,
                 source_refs: context_source_refs,
+            }],
+            policy_checks: vec![AgentPolicyCheckRecord {
+                agent_run_id: package.agent_run_id.clone(),
+                ..policy_check
             }],
             tool_calls: vec![AgentToolCallRecord {
                 tool_call_id: tool_call_id.clone(),

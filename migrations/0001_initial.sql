@@ -245,6 +245,19 @@ CREATE TABLE IF NOT EXISTS tool_calls (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS agent_policy_checks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  policy_check_id TEXT NOT NULL UNIQUE,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  tool_call_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  policy_name TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS tool_results (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tool_result_id TEXT NOT NULL UNIQUE,

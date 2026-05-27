@@ -256,6 +256,16 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert_eq!(tool_call["status"], "succeeded");
     assert!(!tool_call["input_json"].as_object().unwrap().is_empty());
     assert!(!tool_call["evidence_refs"].as_array().unwrap().is_empty());
+    let policy_check = run["policy_checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["tool_name"] == "knowledge.search_similar")
+        .expect("tool policy check should be audited before tool activity");
+    assert_eq!(policy_check["decision"], "allowed");
+    assert_eq!(policy_check["policy_name"], "agent_tool_allowlist");
+    assert_eq!(policy_check["tool_call_id"], tool_call["tool_call_id"]);
+    assert!(!policy_check["evidence_refs"].as_array().unwrap().is_empty());
     let tool_result = run["tool_results"]
         .as_array()
         .unwrap()

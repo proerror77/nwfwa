@@ -123,7 +123,13 @@ async fn openapi_includes_operations_paths() {
     );
     assert!(schema["components"]["schemas"]["AgentToolCallRecord"].is_object());
     assert!(schema["components"]["schemas"]["AgentToolResultRecord"].is_object());
+    assert!(schema["components"]["schemas"]["AgentPolicyCheckRecord"].is_object());
     assert!(schema["components"]["schemas"]["AgentApprovalRecord"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["policy_checks"]
+            ["items"]["$ref"],
+        "#/components/schemas/AgentPolicyCheckRecord"
+    );
     assert_eq!(
         schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["tool_calls"]["items"]
             ["$ref"],

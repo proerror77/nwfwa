@@ -64,6 +64,18 @@ describe("buildAgentRunLogSummary", () => {
             evidence_refs: ["knowledge_query:CLM-1"],
           },
         ],
+        policy_checks: [
+          {
+            policy_check_id: "policy_check_1",
+            agent_run_id: "agent_1",
+            tool_call_id: "tool_call_1",
+            tool_name: "knowledge.search_similar",
+            policy_name: "agent_tool_allowlist",
+            decision: "allowed",
+            reason: "Tool is allowlisted for read-only evidence retrieval.",
+            evidence_refs: ["policy:agent_tool_allowlist"],
+          },
+        ],
         tool_results: [
           {
             tool_result_id: "tool_result_1",
@@ -95,6 +107,8 @@ describe("buildAgentRunLogSummary", () => {
       toolCallCount: 1,
       toolResultCount: 1,
       failedToolCallCount: 0,
+      policyCheckCount: 1,
+      deniedPolicyCheckCount: 0,
       approvalCount: 1,
       pendingApprovalCount: 1,
     });

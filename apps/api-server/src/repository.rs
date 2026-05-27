@@ -323,6 +323,7 @@ pub struct PersistedAgentRun {
     pub evidence_refs: Vec<Value>,
     pub steps: Vec<Value>,
     pub context_snapshots: Vec<AgentContextSnapshotRecord>,
+    pub policy_checks: Vec<AgentPolicyCheckRecord>,
     pub tool_calls: Vec<AgentToolCallRecord>,
     pub tool_results: Vec<AgentToolResultRecord>,
     pub approvals: Vec<AgentApprovalRecord>,
@@ -338,6 +339,7 @@ pub struct AgentRunLogRecord {
     pub evidence_refs: Vec<String>,
     pub steps: Vec<Value>,
     pub context_snapshots: Vec<AgentContextSnapshotRecord>,
+    pub policy_checks: Vec<AgentPolicyCheckRecord>,
     pub tool_calls: Vec<AgentToolCallRecord>,
     pub tool_results: Vec<AgentToolResultRecord>,
     pub approvals: Vec<AgentApprovalRecord>,
@@ -361,6 +363,19 @@ pub struct AgentToolCallRecord {
     pub status: String,
     pub input_json: Value,
     pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentPolicyCheckRecord {
+    pub policy_check_id: String,
+    pub agent_run_id: String,
+    pub tool_call_id: String,
+    pub tool_name: String,
+    pub policy_name: String,
+    pub decision: String,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -680,6 +695,18 @@ struct AgentApprovalRow {
     proposed_action: String,
     decision: String,
     approver: String,
+    reason: String,
+    evidence_refs: Value,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
+#[derive(sqlx::FromRow)]
+struct AgentPolicyCheckRow {
+    policy_check_id: String,
+    tool_call_id: String,
+    tool_name: String,
+    policy_name: String,
+    decision: String,
     reason: String,
     evidence_refs: Value,
     created_at: chrono::DateTime<chrono::Utc>,
@@ -1913,6 +1940,35 @@ impl PostgresScoringRepository {
                     }
                 },
             )
+            .collect())
+    }
+
+    async fn load_agent_policy_checks(
+        &self,
+        agent_run_id: &str,
+    ) -> anyhow::Result<Vec<AgentPolicyCheckRecord>> {
+        let rows: Vec<AgentPolicyCheckRow> = sqlx::query_as(
+            "SELECT policy_check_id, tool_call_id, tool_name, policy_name, decision, reason, evidence_refs, created_at
+             FROM agent_policy_checks
+             WHERE agent_run_id = $1
+             ORDER BY created_at, id",
+        )
+        .bind(agent_run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| AgentPolicyCheckRecord {
+                policy_check_id: row.policy_check_id,
+                agent_run_id: agent_run_id.to_string(),
+                tool_call_id: row.tool_call_id,
+                tool_name: row.tool_name,
+                policy_name: row.policy_name,
+                decision: row.decision,
+                reason: row.reason,
+                evidence_refs: json_array_to_strings(row.evidence_refs),
+                created_at: Some(row.created_at.to_rfc3339()),
+            })
             .collect())
     }
 
@@ -3381,6 +3437,10 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&run.agent_run_id)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("DELETE FROM agent_policy_checks WHERE agent_run_id = $1")
+            .bind(&run.agent_run_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM tool_calls WHERE agent_run_id = $1")
             .bind(&run.agent_run_id)
             .execute(&mut *tx)
@@ -3430,6 +3490,23 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&call.status)
             .bind(&call.input_json)
             .bind(string_values(&call.evidence_refs))
+            .execute(&mut *tx)
+            .await?;
+        }
+        for check in &run.policy_checks {
+            sqlx::query(
+                "INSERT INTO agent_policy_checks
+                 (policy_check_id, agent_run_id, tool_call_id, tool_name, policy_name, decision, reason, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+            )
+            .bind(&check.policy_check_id)
+            .bind(&run.agent_run_id)
+            .bind(&check.tool_call_id)
+            .bind(&check.tool_name)
+            .bind(&check.policy_name)
+            .bind(&check.decision)
+            .bind(&check.reason)
+            .bind(string_values(&check.evidence_refs))
             .execute(&mut *tx)
             .await?;
         }
@@ -3510,6 +3587,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .fetch_all(&self.pool)
             .await?;
             let context_snapshots = self.load_agent_context_snapshots(&agent_run_id).await?;
+            let policy_checks = self.load_agent_policy_checks(&agent_run_id).await?;
             let tool_calls = self.load_agent_tool_calls(&agent_run_id).await?;
             let tool_results = self.load_agent_tool_results(&agent_run_id).await?;
             let approvals = self.load_agent_approvals(&agent_run_id).await?;
@@ -3522,6 +3600,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 evidence_refs: json_array_to_strings(evidence_refs),
                 steps: steps.into_iter().map(|row| row.0).collect(),
                 context_snapshots,
+                policy_checks,
                 tool_calls,
                 tool_results,
                 approvals,
@@ -5043,6 +5122,7 @@ fn agent_run_log_from_persisted(run: &PersistedAgentRun) -> AgentRunLogRecord {
         evidence_refs: evidence_values_to_strings(&run.evidence_refs),
         steps: run.steps.clone(),
         context_snapshots: run.context_snapshots.clone(),
+        policy_checks: run.policy_checks.clone(),
         tool_calls: run.tool_calls.clone(),
         tool_results: run.tool_results.clone(),
         approvals: run.approvals.clone(),

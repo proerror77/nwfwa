@@ -26,6 +26,7 @@ type AgentRunLog = {
   evidence_refs: string[];
   steps: Array<Record<string, unknown>>;
   context_snapshots: AgentContextSnapshot[];
+  policy_checks: AgentPolicyCheck[];
   tool_calls: AgentToolCall[];
   tool_results: AgentToolResult[];
   approvals: AgentApproval[];
@@ -47,6 +48,18 @@ type AgentToolCall = {
   status: string;
   input_json: Record<string, unknown>;
   evidence_refs: string[];
+};
+
+type AgentPolicyCheck = {
+  policy_check_id: string;
+  agent_run_id: string;
+  tool_call_id: string;
+  tool_name: string;
+  policy_name: string;
+  decision: string;
+  reason: string;
+  evidence_refs: string[];
+  created_at?: string | null;
 };
 
 type AgentToolResult = {
@@ -85,6 +98,7 @@ export function buildAuditSummary(data?: ClaimAuditHistoryResponse) {
 
 export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
   const contextSnapshots = runs.flatMap((run) => run.context_snapshots ?? []);
+  const policyChecks = runs.flatMap((run) => run.policy_checks ?? []);
   const toolCalls = runs.flatMap((run) => run.tool_calls ?? []);
   const toolResults = runs.flatMap((run) => run.tool_results ?? []);
   const approvals = runs.flatMap((run) => run.approvals ?? []);
@@ -97,6 +111,8 @@ export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
     toolCallCount: toolCalls.length,
     toolResultCount: toolResults.length,
     failedToolCallCount: toolCalls.filter((call) => call.status === "failed").length,
+    policyCheckCount: policyChecks.length,
+    deniedPolicyCheckCount: policyChecks.filter((check) => check.decision === "denied").length,
     approvalCount: approvals.length,
     pendingApprovalCount: approvals.filter((approval) => approval.decision === "pending").length,
   };
@@ -155,6 +171,10 @@ export function GovernancePage() {
             <strong>{agentSummary.toolCallCount}</strong>
           </div>
           <div>
+            <span>Policy Checks</span>
+            <strong>{agentSummary.policyCheckCount}</strong>
+          </div>
+          <div>
             <span>Contexts</span>
             <strong>{agentSummary.contextSnapshotCount}</strong>
           </div>
@@ -210,6 +230,10 @@ export function GovernancePage() {
                   {run.tool_calls.length} tool calls / {run.tool_results.length} tool results
                 </p>
                 <p>
+                  {run.policy_checks.length} policy checks /{" "}
+                  {run.policy_checks.filter((check) => check.decision === "denied").length} denied
+                </p>
+                <p>
                   {run.context_snapshots.length} context snapshots /{" "}
                   {
                     run.context_snapshots.filter(
@@ -234,6 +258,13 @@ export function GovernancePage() {
                   {run.approvals.map((approval) => (
                     <li key={approval.approval_id}>
                       {approval.proposed_action}: {approval.decision}
+                    </li>
+                  ))}
+                </ul>
+                <ul className="result-list">
+                  {run.policy_checks.map((check) => (
+                    <li key={check.policy_check_id}>
+                      {check.policy_name}: {check.decision}
                     </li>
                   ))}
                 </ul>

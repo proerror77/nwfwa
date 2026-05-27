@@ -2204,7 +2204,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AgentRunLogRecord": {
                     "type": "object",
-                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "context_snapshots", "tool_calls", "tool_results", "approvals"],
+                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "context_snapshots", "policy_checks", "tool_calls", "tool_results", "approvals"],
                     "properties": {
                         "agent_run_id": { "type": "string" },
                         "claim_id": { "type": "string" },
@@ -2216,6 +2216,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "context_snapshots": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/AgentContextSnapshotRecord" }
+                        },
+                        "policy_checks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AgentPolicyCheckRecord" }
                         },
                         "tool_calls": {
                             "type": "array",
@@ -2253,6 +2257,21 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status": { "type": "string" },
                         "input_json": { "type": "object" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "AgentPolicyCheckRecord": {
+                    "type": "object",
+                    "required": ["policy_check_id", "agent_run_id", "tool_call_id", "tool_name", "policy_name", "decision", "reason", "evidence_refs"],
+                    "properties": {
+                        "policy_check_id": { "type": "string" },
+                        "agent_run_id": { "type": "string" },
+                        "tool_call_id": { "type": "string" },
+                        "tool_name": { "type": "string" },
+                        "policy_name": { "type": "string" },
+                        "decision": { "type": "string", "enum": ["allowed", "denied"] },
+                        "reason": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "created_at": { "type": ["string", "null"] }
                     }
                 },
                 "AgentToolResultRecord": {
