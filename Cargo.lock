@@ -96,6 +96,7 @@ dependencies = [
  "fwa-anomaly",
  "fwa-audit",
  "fwa-auth",
+ "fwa-clinical",
  "fwa-core",
  "fwa-features",
  "fwa-ml-runtime",
@@ -879,6 +880,16 @@ version = "0.1.0"
 dependencies = [
  "fwa-audit",
  "thiserror",
+]
+
+[[package]]
+name = "fwa-clinical"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "fwa-core",
+ "rust_decimal",
+ "serde",
 ]
 
 [[package]]

@@ -764,7 +764,8 @@ pub async fn openapi_schema() -> Json<Value> {
                             { "required": ["items"] },
                             { "required": ["member"] },
                             { "required": ["policy"] },
-                            { "required": ["provider"] }
+                            { "required": ["provider"] },
+                            { "required": ["documents"] }
                         ]
                     }
                 },
@@ -794,6 +795,13 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "provider": {
                             "$ref": "#/components/schemas/ProviderPayload"
+                        },
+                        "documents": {
+                            "type": "array",
+                            "description": "Clinical documents linked to claim items for evidence sufficiency review.",
+                            "items": {
+                                "$ref": "#/components/schemas/DocumentPayload"
+                            }
                         }
                     },
                     "not": {
@@ -835,6 +843,12 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "provider": {
                             "$ref": "#/components/schemas/ProviderPayload"
+                        },
+                        "documents": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/components/schemas/DocumentPayload"
+                            }
                         }
                     }
                 },
@@ -933,6 +947,25 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "DocumentPayload": {
+                    "type": "object",
+                    "required": ["external_document_id", "document_type"],
+                    "properties": {
+                        "external_document_id": {
+                            "type": "string"
+                        },
+                        "document_type": {
+                            "type": "string",
+                            "description": "Examples: medical_record, clinical_order, radiology_report, prescription, lab_result"
+                        },
+                        "linked_item_codes": {
+                            "type": "array",
+                            "items": {
+                                "type": "string"
+                            }
+                        }
+                    }
+                },
                 "ScoreClaimResponse": {
                     "type": "object",
                     "required": [
@@ -949,6 +982,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "scores",
                         "alerts",
                         "top_reasons",
+                        "clinical_evidence",
                         "evidence_refs"
                     ],
                     "properties": {
@@ -1005,11 +1039,87 @@ pub async fn openapi_schema() -> Json<Value> {
                                 "type": "string"
                             }
                         },
+                        "clinical_evidence": {
+                            "$ref": "#/components/schemas/ClinicalEvidenceAssessment"
+                        },
                         "evidence_refs": {
                             "type": "array",
                             "items": {
-                                "type": "object"
+                                "oneOf": [
+                                    { "type": "object" },
+                                    { "type": "string" }
+                                ]
                             }
+                        }
+                    }
+                },
+                "ClinicalEvidenceAssessment": {
+                    "type": "object",
+                    "required": [
+                        "review_required",
+                        "review_route",
+                        "evidence_status",
+                        "minimum_evidence",
+                        "missing_evidence",
+                        "item_findings",
+                        "evidence_refs"
+                    ],
+                    "properties": {
+                        "review_required": { "type": "boolean" },
+                        "review_route": { "type": "string", "enum": ["none", "medical_review"] },
+                        "evidence_status": {
+                            "type": "string",
+                            "enum": [
+                                "no_clinical_evidence_required",
+                                "sufficient_for_basic_review",
+                                "missing_required_evidence"
+                            ]
+                        },
+                        "minimum_evidence": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "missing_evidence": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "item_findings": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ClinicalEvidenceFinding" }
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "ClinicalEvidenceFinding": {
+                    "type": "object",
+                    "required": [
+                        "item_code",
+                        "issue_type",
+                        "required_evidence",
+                        "missing_evidence",
+                        "reason",
+                        "review_route",
+                        "evidence_refs"
+                    ],
+                    "properties": {
+                        "item_code": { "type": "string" },
+                        "issue_type": { "type": "string" },
+                        "required_evidence": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "missing_evidence": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "reason": { "type": "string" },
+                        "review_route": { "type": "string" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
                         }
                     }
                 },

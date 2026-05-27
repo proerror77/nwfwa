@@ -190,6 +190,106 @@ async fn scores_spec_style_top_level_full_payload() {
 }
 
 #[tokio::test]
+async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-CLINICAL-1",
+                "claim_amount": "12000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-900",
+                  "item_type": "procedure",
+                  "description": "High cost imaging",
+                  "quantity": 1,
+                  "unit_amount": "12000",
+                  "total_amount": "12000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-CLINICAL-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-CLINICAL-1",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "15000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-CLINICAL-1",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "High"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let clinical = &body["clinical_evidence"];
+    assert_eq!(clinical["review_required"], true);
+    assert_eq!(clinical["review_route"], "medical_review");
+    assert_eq!(clinical["evidence_status"], "missing_required_evidence");
+    assert!(clinical["missing_evidence"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "medical_record"));
+    assert_eq!(
+        clinical["item_findings"][0]["issue_type"],
+        "medical_necessity_review_required"
+    );
+    assert_eq!(clinical["item_findings"][0]["item_code"], "IMG-900");
+    assert!(clinical["item_findings"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "claim_items:IMG-900"));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-CLINICAL-1")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(
+        scoring_event["payload"]["clinical_evidence"]["review_route"],
+        "medical_review"
+    );
+}
+
+#[tokio::test]
 async fn scoring_uses_only_active_rule_versions() {
     let app = build_app(test_config());
 
@@ -355,7 +455,14 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .expect("request schema oneOf");
     assert_eq!(one_of.len(), 2);
     let claim_id_mode = &schema["components"]["schemas"]["ClaimIdScoreClaimRequest"];
-    for field in ["claim", "items", "member", "policy", "provider"] {
+    for field in [
+        "claim",
+        "items",
+        "member",
+        "policy",
+        "provider",
+        "documents",
+    ] {
         assert!(
             claim_id_mode["not"]["anyOf"]
                 .as_array()
@@ -379,9 +486,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "routing_reason",
         "top_reasons",
         "evidence_refs",
+        "clinical_evidence",
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");
     }
+    assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
 
     let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
         .as_array()

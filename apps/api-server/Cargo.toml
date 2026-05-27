@@ -13,6 +13,7 @@ fwa-audit = { path = "../../crates/fwa-audit" }
 fwa-anomaly = { path = "../../crates/fwa-anomaly" }
 fwa-agent = { path = "../../crates/fwa-agent" }
 fwa-auth = { path = "../../crates/fwa-auth" }
+fwa-clinical = { path = "../../crates/fwa-clinical" }
 fwa-core = { path = "../../crates/fwa-core" }
 fwa-features = { path = "../../crates/fwa-features" }
 fwa-ml-runtime = { path = "../../crates/fwa-ml-runtime" }

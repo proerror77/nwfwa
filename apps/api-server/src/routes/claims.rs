@@ -8,6 +8,9 @@ use chrono::NaiveDate;
 use fwa_anomaly::detect_anomaly;
 use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_clinical::{
+    assess_clinical_evidence, ClinicalDocumentEvidence, ClinicalEvidenceAssessment,
+};
 use fwa_core::*;
 use fwa_features::calculate_features;
 use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
@@ -24,6 +27,7 @@ pub struct ScoreClaimRequest {
     pub member: Option<MemberPayload>,
     pub policy: Option<PolicyPayload>,
     pub provider: Option<ProviderPayload>,
+    pub documents: Option<Vec<DocumentPayload>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -37,6 +41,7 @@ pub struct FullClaimPayload {
     pub member: Option<MemberPayload>,
     pub policy: Option<PolicyPayload>,
     pub provider: Option<ProviderPayload>,
+    pub documents: Option<Vec<DocumentPayload>>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -76,6 +81,13 @@ pub struct ProviderPayload {
     pub risk_tier: Option<ProviderRiskTier>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct DocumentPayload {
+    pub external_document_id: String,
+    pub document_type: String,
+    pub linked_item_codes: Option<Vec<String>>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ScoreClaimResponse {
     pub run_id: String,
@@ -91,6 +103,7 @@ pub struct ScoreClaimResponse {
     pub scores: ScoreBreakdown,
     pub alerts: Vec<AlertResponse>,
     pub top_reasons: Vec<String>,
+    pub clinical_evidence: ClinicalEvidenceAssessment,
     pub evidence_refs: Vec<serde_json::Value>,
 }
 
@@ -142,7 +155,8 @@ pub async fn score_claim(
         || request.items.is_some()
         || request.member.is_some()
         || request.policy.is_some()
-        || request.provider.is_some();
+        || request.provider.is_some()
+        || request.documents.is_some();
     if request.claim_id.is_some() && has_full_payload {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
@@ -158,8 +172,8 @@ pub async fn score_claim(
         ));
     }
 
-    let context = if let Some(claim_id) = request.claim_id.clone() {
-        state
+    let (context, clinical_documents) = if let Some(claim_id) = request.claim_id.clone() {
+        let context = state
             .repository
             .load_claim_context(&claim_id)
             .await
@@ -170,7 +184,8 @@ pub async fn score_claim(
                     "CLAIM_NOT_FOUND",
                     "claim_id was not found",
                 )
-            })?
+            })?;
+        (context, Vec::new())
     } else {
         let mut payload = request.claim.clone().expect("validated claim payload");
         let duplicate_fields = duplicate_payload_fields(&request, &payload);
@@ -188,6 +203,14 @@ pub async fn score_claim(
         payload.member = payload.member.or_else(|| request.member.clone());
         payload.policy = payload.policy.or_else(|| request.policy.clone());
         payload.provider = payload.provider.or_else(|| request.provider.clone());
+        payload.documents = payload.documents.or_else(|| request.documents.clone());
+        let clinical_documents = payload
+            .documents
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(ClinicalDocumentEvidence::from)
+            .collect::<Vec<_>>();
         let context = demo_context(payload);
         state
             .repository
@@ -197,12 +220,13 @@ pub async fn score_claim(
             )
             .await
             .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
-        context
+        (context, clinical_documents)
     };
 
     let run_id = ScoringRunId::new();
     let features = calculate_features(&context);
-    let evidence_refs = features
+    let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
+    let mut evidence_refs = features
         .values()
         .flat_map(|feature| {
             feature.evidence_refs.iter().map(|evidence| {
@@ -210,6 +234,12 @@ pub async fn score_claim(
             })
         })
         .collect::<Vec<_>>();
+    evidence_refs.extend(
+        clinical_evidence
+            .evidence_refs
+            .iter()
+            .map(|evidence| serde_json::json!(evidence)),
+    );
     let rules = state
         .repository
         .list_active_rules()
@@ -279,6 +309,7 @@ pub async fn score_claim(
         "routing_reason": &decision.routing_reason,
         "scores": &scores,
         "top_reasons": &decision.top_reasons,
+        "clinical_evidence": &clinical_evidence,
         "triggered_rules": &alerts,
         "event_type": "scoring.completed",
         "event_status": "succeeded"
@@ -334,6 +365,7 @@ pub async fn score_claim(
         scores,
         alerts,
         top_reasons: decision.top_reasons,
+        clinical_evidence,
         evidence_refs,
     }))
 }
@@ -355,7 +387,20 @@ fn duplicate_payload_fields(
     if payload.provider.is_some() && request.provider.is_some() {
         fields.push("provider");
     }
+    if payload.documents.is_some() && request.documents.is_some() {
+        fields.push("documents");
+    }
     fields
+}
+
+impl From<DocumentPayload> for ClinicalDocumentEvidence {
+    fn from(value: DocumentPayload) -> Self {
+        Self {
+            document_id: value.external_document_id,
+            document_type: value.document_type,
+            linked_item_codes: value.linked_item_codes.unwrap_or_default(),
+        }
+    }
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
