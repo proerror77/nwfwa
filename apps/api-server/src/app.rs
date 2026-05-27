@@ -1,7 +1,7 @@
 use crate::{
     config::AppConfig,
     repository::{InMemoryScoringRepository, SharedRepository},
-    routes::{claims, health},
+    routes::{claims, health, openapi},
 };
 use axum::{
     routing::{get, post},
@@ -37,6 +37,7 @@ pub fn build_app_with_parts(
     };
 
     Router::new()
+        .route("/api/openapi.json", get(openapi::openapi_schema))
         .route("/api/v1/health", get(health::health))
         .route("/api/v1/claims/score", post(claims::score_claim))
         .with_state(state)

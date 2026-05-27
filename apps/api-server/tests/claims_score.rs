@@ -175,6 +175,42 @@ async fn rejects_missing_api_key() {
 }
 
 #[tokio::test]
+async fn exposes_openapi_schema_for_scoring_contract() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/api/openapi.json")
+        .body(Body::empty())
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(schema["openapi"], "3.1.0");
+    assert!(schema["paths"]["/api/v1/claims/score"]["post"].is_object());
+    assert_eq!(
+        schema["components"]["securitySchemes"]["ApiKeyAuth"]["name"],
+        "x-api-key"
+    );
+
+    let response_properties = &schema["components"]["schemas"]["ScoreClaimResponse"]["properties"];
+    for field in [
+        "run_id",
+        "audit_id",
+        "risk_score",
+        "rag",
+        "recommended_action",
+        "top_reasons",
+        "evidence_refs",
+    ] {
+        assert!(response_properties[field].is_object(), "missing {field}");
+    }
+}
+
+#[tokio::test]
 async fn scores_existing_claim_after_full_payload_upsert() {
     let app = build_app(test_config());
 
