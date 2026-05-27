@@ -5,6 +5,7 @@ import {
   buildProviderProfileInspection,
   type ProviderProfileAssessment,
 } from "./providerProfileInspection";
+import { buildScoringLayerSummary, type ScoringLayer } from "./scoringLayers";
 
 type ScoringResponse = {
   run_id: string;
@@ -34,6 +35,7 @@ type ScoringResponse = {
     rule_id: string;
     rule_version: number;
   }>;
+  layers: ScoringLayer[];
   top_reasons: string[];
   provider_profile?: ProviderProfileAssessment;
   evidence_refs: unknown[];
@@ -87,6 +89,7 @@ export function RuntimeScoring() {
     ? buildProviderProfileInspection(result.provider_profile)
     : null;
   const providerProfile = result?.provider_profile;
+  const layerSummary = result ? buildScoringLayerSummary(result.layers) : null;
 
   return (
     <section className="runtime">
@@ -183,6 +186,45 @@ export function RuntimeScoring() {
                 <dd>{result.scores.final_score}</dd>
               </div>
             </dl>
+            <section>
+              <h3>Seven Layer Detection</h3>
+              {layerSummary ? (
+                <>
+                  <div className="summary-grid">
+                    <div>
+                      <span>Layers</span>
+                      <strong>{layerSummary.layerCount}</strong>
+                    </div>
+                    <div>
+                      <span>Active</span>
+                      <strong>{layerSummary.activeCount}</strong>
+                    </div>
+                    <div>
+                      <span>Baseline</span>
+                      <strong>{layerSummary.baselineCount}</strong>
+                    </div>
+                    <div>
+                      <span>Highest</span>
+                      <strong>{layerSummary.highestLayerLabel}</strong>
+                    </div>
+                  </div>
+                  <div className="table-list">
+                    {result.layers.map((layer) => (
+                      <div className="metric-row compact-metric-row" key={layer.layer_id}>
+                        <span>{layer.layer_id}</span>
+                        <strong>{layer.score}</strong>
+                        <small>{layer.name}</small>
+                        <small>
+                          {layer.status} · {layer.reason}
+                        </small>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : (
+                <p className="empty">No layer data</p>
+              )}
+            </section>
             <section>
               <h3>Alerts</h3>
               {result.alerts.length > 0 ? (
