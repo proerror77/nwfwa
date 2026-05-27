@@ -707,6 +707,7 @@ dependencies = [
  "fwa-ml-runtime",
  "fwa-rules",
  "serde",
+ "serde_json",
 ]
 
 [[package]]

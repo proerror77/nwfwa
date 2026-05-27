@@ -21,3 +21,4 @@ class ScoreResponse(BaseModel):
     score: int = Field(ge=0, le=100)
     label: str
     explanations: list[ModelExplanation]
+    metadata: dict[str, object]

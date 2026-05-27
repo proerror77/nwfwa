@@ -77,6 +77,7 @@ mod tests {
                 contribution: 0.8,
                 reason: "金额比例高".into(),
             }],
+            metadata: serde_json::json!({}),
             latency_ms: 0,
         };
 

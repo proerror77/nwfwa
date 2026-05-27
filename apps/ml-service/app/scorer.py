@@ -20,4 +20,9 @@ def score_claim(request: ScoreRequest) -> ScoreResponse:
                 reason="理赔金额占保障额度比例较高",
             )
         ],
+        metadata={
+            "runtime_kind": "python_fastapi",
+            "execution_provider": "cpu",
+            "calibration": "baseline_v0",
+        },
     )

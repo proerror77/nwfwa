@@ -25,3 +25,4 @@ def test_score_returns_high_risk_for_large_amount_ratio():
     assert payload["score"] == 90
     assert payload["label"] == "HIGH_RISK"
     assert payload["model_version"] == "0.1.0"
+    assert payload["metadata"]["runtime_kind"] == "python_fastapi"

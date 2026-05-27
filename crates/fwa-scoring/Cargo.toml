@@ -9,3 +9,4 @@ fwa-core = { path = "../fwa-core" }
 fwa-ml-runtime = { path = "../fwa-ml-runtime" }
 fwa-rules = { path = "../fwa-rules" }
 serde.workspace = true
+serde_json.workspace = true

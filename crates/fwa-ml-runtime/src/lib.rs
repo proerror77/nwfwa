@@ -39,6 +39,7 @@ pub struct ModelScore {
     pub score: u8,
     pub label: String,
     pub explanations: Vec<ModelExplanation>,
+    pub metadata: Value,
     pub latency_ms: u64,
 }
 
@@ -72,6 +73,10 @@ impl ModelScorer for HeuristicModelScorer {
                 contribution: ratio,
                 reason: "理赔金额占保障额度比例影响模型分".into(),
             }],
+            metadata: serde_json::json!({
+                "source": "heuristic",
+                "calibration": "none"
+            }),
             latency_ms: 0,
         })
     }
@@ -107,6 +112,8 @@ struct HttpScoreResponse {
     score: u8,
     label: String,
     explanations: Vec<ModelExplanation>,
+    #[serde(default)]
+    metadata: Value,
 }
 
 #[async_trait]
@@ -145,6 +152,7 @@ impl ModelScorer for HttpModelScorer {
             score: body.score,
             label: body.label,
             explanations: body.explanations,
+            metadata: body.metadata,
             latency_ms: 0,
         })
     }
