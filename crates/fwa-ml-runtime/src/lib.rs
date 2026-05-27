@@ -2,6 +2,8 @@ use async_trait::async_trait;
 use fwa_core::{ClaimId, ScoringRunId};
 use fwa_features::FeatureMap;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -75,6 +77,79 @@ impl ModelScorer for HeuristicModelScorer {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct HttpModelScorer {
+    client: reqwest::Client,
+    base_url: String,
+}
+
+impl HttpModelScorer {
+    pub fn new(base_url: impl Into<String>) -> Self {
+        Self {
+            client: reqwest::Client::new(),
+            base_url: base_url.into().trim_end_matches('/').to_string(),
+        }
+    }
+}
+
+#[derive(Debug, Serialize)]
+struct HttpScoreRequest {
+    run_id: String,
+    claim_id: String,
+    model_key: String,
+    features: BTreeMap<String, Value>,
+}
+
+#[derive(Debug, Deserialize)]
+struct HttpScoreResponse {
+    model_key: String,
+    model_version: String,
+    score: u8,
+    label: String,
+    explanations: Vec<ModelExplanation>,
+}
+
+#[async_trait]
+impl ModelScorer for HttpModelScorer {
+    async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
+        let features = request
+            .features
+            .into_iter()
+            .map(|(name, value)| (name, value.value))
+            .collect();
+        let payload = HttpScoreRequest {
+            run_id: request.run_id.to_string(),
+            claim_id: request.claim_id.to_string(),
+            model_key: request.model_key,
+            features,
+        };
+        let response = self
+            .client
+            .post(format!("{}/score", self.base_url))
+            .json(&payload)
+            .send()
+            .await
+            .map_err(|_| ModelRuntimeError::ServiceUnavailable)?;
+        if !response.status().is_success() {
+            return Err(ModelRuntimeError::ServiceUnavailable);
+        }
+        let body = response
+            .json::<HttpScoreResponse>()
+            .await
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        Ok(ModelScore {
+            model_key: body.model_key,
+            model_version: body.model_version,
+            runtime_kind: "python_http".into(),
+            execution_provider: "cpu".into(),
+            score: body.score,
+            label: body.label,
+            explanations: body.explanations,
+            latency_ms: 0,
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -107,5 +182,11 @@ mod tests {
 
         assert_eq!(result.score, 82);
         assert_eq!(result.runtime_kind, "heuristic");
+    }
+
+    #[test]
+    fn http_scorer_normalizes_base_url() {
+        let scorer = HttpModelScorer::new("http://localhost:8001/");
+        assert_eq!(scorer.base_url, "http://localhost:8001");
     }
 }

@@ -3,6 +3,7 @@ pub struct AppConfig {
     pub api_key: String,
     pub source_system: String,
     pub database_url: String,
+    pub model_service_url: String,
 }
 
 impl AppConfig {
@@ -12,6 +13,8 @@ impl AppConfig {
             source_system: std::env::var("FWA_SOURCE_SYSTEM").unwrap_or_else(|_| "tpa-demo".into()),
             database_url: std::env::var("DATABASE_URL")
                 .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/fwa".into()),
+            model_service_url: std::env::var("FWA_MODEL_SERVICE_URL")
+                .unwrap_or_else(|_| "http://127.0.0.1:8001".into()),
         }
     }
 }
