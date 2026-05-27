@@ -225,6 +225,41 @@ pub struct CreateFieldMappingInput {
     pub status: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct InvestigationResultRecord {
+    pub investigation_id: String,
+    pub claim_id: String,
+    pub outcome: String,
+    pub confirmed_fwa: bool,
+    pub saving_amount: Option<Decimal>,
+    pub currency: Option<String>,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QaReviewRecord {
+    pub qa_case_id: String,
+    pub claim_id: String,
+    pub qa_conclusion: String,
+    pub issue_type: String,
+    pub feedback_target: String,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditHistoryEventRecord {
+    pub audit_id: String,
+    pub run_id: String,
+    pub event_type: String,
+    pub event_status: String,
+    pub summary: String,
+    pub payload: Value,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
     async fn upsert_claim_context(
@@ -279,6 +314,21 @@ pub trait ScoringRepository: Send + Sync {
         dataset_id: &str,
         input: CreateFieldMappingInput,
     ) -> anyhow::Result<Option<FieldMappingRecord>>;
+
+    async fn save_investigation_result(
+        &self,
+        record: InvestigationResultRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord>;
+
+    async fn save_qa_review(
+        &self,
+        record: QaReviewRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord>;
+
+    async fn claim_audit_history(
+        &self,
+        claim_id: &str,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -293,6 +343,7 @@ pub struct InMemoryScoringRepository {
     datasets: Mutex<HashMap<String, DatasetRecord>>,
     dataset_sequence: Mutex<u64>,
     mapping_sequence: Mutex<u64>,
+    pilot_audit_events: Mutex<Vec<(String, AuditHistoryEventRecord)>>,
 }
 
 impl InMemoryScoringRepository {
@@ -484,6 +535,62 @@ impl ScoringRepository for InMemoryScoringRepository {
         };
         dataset.mappings.push(mapping.clone());
         Ok(Some(mapping))
+    }
+
+    async fn save_investigation_result(
+        &self,
+        record: InvestigationResultRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        let event = AuditHistoryEventRecord {
+            audit_id: format!("audit_investigation_{}", record.investigation_id),
+            run_id: format!("pilot_investigation_{}", record.investigation_id),
+            event_type: "investigation.result.received".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Investigation result received: {}", record.outcome),
+            payload: serde_json::to_value(&record)?,
+            evidence_refs: record.evidence_refs.clone(),
+            created_at: None,
+        };
+        self.pilot_audit_events
+            .lock()
+            .await
+            .push((record.claim_id, event.clone()));
+        Ok(event)
+    }
+
+    async fn save_qa_review(
+        &self,
+        record: QaReviewRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        let event = AuditHistoryEventRecord {
+            audit_id: format!("audit_qa_{}", record.qa_case_id),
+            run_id: format!("pilot_qa_{}", record.qa_case_id),
+            event_type: "qa.result.received".into(),
+            event_status: "succeeded".into(),
+            summary: format!("QA result received: {}", record.qa_conclusion),
+            payload: serde_json::to_value(&record)?,
+            evidence_refs: record.evidence_refs.clone(),
+            created_at: None,
+        };
+        self.pilot_audit_events
+            .lock()
+            .await
+            .push((record.claim_id, event.clone()));
+        Ok(event)
+    }
+
+    async fn claim_audit_history(
+        &self,
+        claim_id: &str,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        Ok(self
+            .pilot_audit_events
+            .lock()
+            .await
+            .iter()
+            .filter(|(event_claim_id, _)| event_claim_id == claim_id)
+            .map(|(_, event)| event.clone())
+            .collect())
     }
 }
 
@@ -1207,6 +1314,131 @@ impl ScoringRepository for PostgresScoringRepository {
             status: input.status,
         }))
     }
+
+    async fn save_investigation_result(
+        &self,
+        record: InvestigationResultRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO investigation_results
+             (investigation_id, claim_id, outcome, confirmed_fwa, saving_amount, currency, notes, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             ON CONFLICT (investigation_id) DO UPDATE
+             SET outcome = EXCLUDED.outcome,
+                 confirmed_fwa = EXCLUDED.confirmed_fwa,
+                 saving_amount = EXCLUDED.saving_amount,
+                 currency = EXCLUDED.currency,
+                 notes = EXCLUDED.notes,
+                 evidence_refs = EXCLUDED.evidence_refs",
+        )
+        .bind(&record.investigation_id)
+        .bind(&record.claim_id)
+        .bind(&record.outcome)
+        .bind(record.confirmed_fwa)
+        .bind(record.saving_amount)
+        .bind(&record.currency)
+        .bind(&record.notes)
+        .bind(serde_json::json!(record.evidence_refs))
+        .execute(&mut *tx)
+        .await?;
+
+        let event = AuditHistoryEventRecord {
+            audit_id: format!("audit_investigation_{}", record.investigation_id),
+            run_id: format!("pilot_investigation_{}", record.investigation_id),
+            event_type: "investigation.result.received".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Investigation result received: {}", record.outcome),
+            payload: serde_json::to_value(&record)?,
+            evidence_refs: record.evidence_refs.clone(),
+            created_at: None,
+        };
+        insert_pilot_audit_event(&mut tx, &record.claim_id, &event, "tpa_system").await?;
+        tx.commit().await?;
+        Ok(event)
+    }
+
+    async fn save_qa_review(
+        &self,
+        record: QaReviewRecord,
+    ) -> anyhow::Result<AuditHistoryEventRecord> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO qa_reviews
+             (qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (qa_case_id) DO UPDATE
+             SET qa_conclusion = EXCLUDED.qa_conclusion,
+                 issue_type = EXCLUDED.issue_type,
+                 feedback_target = EXCLUDED.feedback_target,
+                 notes = EXCLUDED.notes,
+                 evidence_refs = EXCLUDED.evidence_refs",
+        )
+        .bind(&record.qa_case_id)
+        .bind(&record.claim_id)
+        .bind(&record.qa_conclusion)
+        .bind(&record.issue_type)
+        .bind(&record.feedback_target)
+        .bind(&record.notes)
+        .bind(serde_json::json!(record.evidence_refs))
+        .execute(&mut *tx)
+        .await?;
+
+        let event = AuditHistoryEventRecord {
+            audit_id: format!("audit_qa_{}", record.qa_case_id),
+            run_id: format!("pilot_qa_{}", record.qa_case_id),
+            event_type: "qa.result.received".into(),
+            event_status: "succeeded".into(),
+            summary: format!("QA result received: {}", record.qa_conclusion),
+            payload: serde_json::to_value(&record)?,
+            evidence_refs: record.evidence_refs.clone(),
+            created_at: None,
+        };
+        insert_pilot_audit_event(&mut tx, &record.claim_id, &event, "qa_reviewer").await?;
+        tx.commit().await?;
+        Ok(event)
+    }
+
+    async fn claim_audit_history(
+        &self,
+        claim_id: &str,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
+            sqlx::query_as(
+                "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+                 FROM audit_events
+                 WHERE payload ->> 'claim_id' = $1
+                 ORDER BY created_at, audit_id",
+            )
+            .bind(claim_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    audit_id,
+                    run_id,
+                    event_type,
+                    event_status,
+                    summary,
+                    payload,
+                    evidence_refs,
+                    created_at,
+                )| AuditHistoryEventRecord {
+                    audit_id,
+                    run_id,
+                    event_type,
+                    event_status,
+                    summary,
+                    payload,
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                    created_at: Some(created_at.to_rfc3339()),
+                },
+            )
+            .collect())
+    }
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
@@ -1692,6 +1924,47 @@ async fn insert_audit_event(
     .bind(&event.summary)
     .bind(&event.payload)
     .bind(serde_json::Value::Array(event.evidence_refs.clone()))
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
+
+async fn insert_pilot_audit_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    claim_id: &str,
+    event: &AuditHistoryEventRecord,
+    actor_role: &str,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO scoring_runs
+         (run_id, source_system, actor_id, status, completed_at)
+         VALUES ($1, 'pilot-loop', $2, 'succeeded', now())
+         ON CONFLICT (run_id) DO NOTHING",
+    )
+    .bind(&event.run_id)
+    .bind(actor_role)
+    .execute(&mut **tx)
+    .await?;
+
+    sqlx::query(
+        "INSERT INTO audit_events
+         (audit_id, run_id, claim_id, actor_id, actor_role, source_system, event_type, event_status, summary, payload, evidence_refs)
+         VALUES ($1, $2, NULL, $3, $4, 'pilot-loop', $5, $6, $7, $8, $9)
+         ON CONFLICT (audit_id) DO UPDATE
+         SET event_status = EXCLUDED.event_status,
+             summary = EXCLUDED.summary,
+             payload = EXCLUDED.payload,
+             evidence_refs = EXCLUDED.evidence_refs",
+    )
+    .bind(&event.audit_id)
+    .bind(&event.run_id)
+    .bind(claim_id)
+    .bind(actor_role)
+    .bind(&event.event_type)
+    .bind(&event.event_status)
+    .bind(&event.summary)
+    .bind(&event.payload)
+    .bind(serde_json::json!(event.evidence_refs))
     .execute(&mut **tx)
     .await?;
     Ok(())
