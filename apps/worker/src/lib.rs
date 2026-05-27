@@ -9,6 +9,11 @@ use std::{
 
 #[derive(Debug, Clone, Deserialize)]
 pub struct ParquetDatasetManifest {
+    pub source_key: Option<String>,
+    pub display_name: Option<String>,
+    pub owner: Option<String>,
+    pub description: Option<String>,
+    pub status: Option<String>,
     pub dataset_key: String,
     pub dataset_version: String,
     pub business_domain: String,
@@ -74,6 +79,50 @@ pub struct ValueCount {
 pub struct ProfileResult {
     pub schema: DatasetSchemaOutput,
     pub profile: DatasetProfileOutput,
+    pub catalog: DatasetCatalogOutput,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DatasetCatalogOutput {
+    pub source_key: String,
+    pub display_name: String,
+    pub business_domain: String,
+    pub owner: String,
+    pub description: String,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub sample_grain: String,
+    pub label_column: String,
+    pub entity_keys: Vec<String>,
+    pub manifest_uri: String,
+    pub schema_uri: String,
+    pub profile_uri: String,
+    pub storage_format: String,
+    pub schema_hash: String,
+    pub row_count: u64,
+    pub status: String,
+    pub splits: Vec<DatasetCatalogSplit>,
+    pub fields: Vec<DatasetCatalogField>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DatasetCatalogSplit {
+    pub split_name: String,
+    pub data_uri: String,
+    pub row_count: u64,
+    pub positive_count: Option<u64>,
+    pub negative_count: Option<u64>,
+    pub label_distribution_json: BTreeMap<String, u64>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DatasetCatalogField {
+    pub field_name: String,
+    pub logical_type: String,
+    pub nullable: bool,
+    pub semantic_role: String,
+    pub description: String,
+    pub profile_json: serde_json::Value,
 }
 
 #[derive(Debug, Default)]
@@ -110,6 +159,11 @@ pub fn profile_manifest_file(
         serde_json::to_string_pretty(&result.profile)?,
     )
     .context("write profile.json")?;
+    fs::write(
+        output_dir.as_ref().join("catalog.json"),
+        serde_json::to_string_pretty(&result.catalog)?,
+    )
+    .context("write catalog.json")?;
 
     Ok(result)
 }
@@ -248,6 +302,50 @@ pub fn profile_manifest(
         })
         .collect::<Vec<_>>();
 
+    let total_row_count = row_count_by_split.values().sum::<u64>();
+    let schema_hash = schema_hash(&schema_fields);
+    let catalog_splits = manifest
+        .splits
+        .iter()
+        .map(|split| {
+            let label_distribution_json = label_distribution_by_split
+                .get(&split.split_name)
+                .cloned()
+                .unwrap_or_default();
+            DatasetCatalogSplit {
+                split_name: split.split_name.clone(),
+                data_uri: split.data_uri.clone(),
+                row_count: row_count_by_split
+                    .get(&split.split_name)
+                    .copied()
+                    .unwrap_or_default(),
+                positive_count: label_distribution_json.get("1").copied(),
+                negative_count: label_distribution_json.get("0").copied(),
+                label_distribution_json,
+            }
+        })
+        .collect::<Vec<_>>();
+    let catalog_fields = schema_fields
+        .iter()
+        .map(|field| {
+            let profile = profile_fields
+                .iter()
+                .find(|profile| profile.field_name == field.field_name);
+            DatasetCatalogField {
+                field_name: field.field_name.clone(),
+                logical_type: field.logical_type.clone(),
+                nullable: field.nullable,
+                semantic_role: field.semantic_role.clone(),
+                description: String::new(),
+                profile_json: serde_json::json!({
+                    "missing_count_by_split": profile.map(|profile| &profile.missing_count_by_split),
+                    "missing_rate_by_split": profile.map(|profile| &profile.missing_rate_by_split),
+                    "top_values": profile.map(|profile| &profile.top_values),
+                }),
+            }
+        })
+        .collect::<Vec<_>>();
+
     Ok(ProfileResult {
         schema: DatasetSchemaOutput {
             dataset_key: manifest.dataset_key.clone(),
@@ -264,6 +362,36 @@ pub fn profile_manifest(
             row_count_by_split,
             label_distribution_by_split,
             fields: profile_fields,
+        },
+        catalog: DatasetCatalogOutput {
+            source_key: manifest
+                .source_key
+                .clone()
+                .unwrap_or_else(|| manifest.dataset_key.clone()),
+            display_name: manifest
+                .display_name
+                .clone()
+                .unwrap_or_else(|| manifest.dataset_key.clone()),
+            business_domain: manifest.business_domain.clone(),
+            owner: manifest.owner.clone().unwrap_or_else(|| "data-ops".into()),
+            description: manifest
+                .description
+                .clone()
+                .unwrap_or_else(|| "Generated from Parquet dataset manifest".into()),
+            dataset_key: manifest.dataset_key.clone(),
+            dataset_version: manifest.dataset_version.clone(),
+            sample_grain: manifest.sample_grain.clone(),
+            label_column: manifest.label_column.clone(),
+            entity_keys: manifest.entity_keys.clone(),
+            manifest_uri: "manifest.json".into(),
+            schema_uri: "schema.json".into(),
+            profile_uri: "profile.json".into(),
+            storage_format: "parquet".into(),
+            schema_hash,
+            row_count: total_row_count,
+            status: manifest.status.clone().unwrap_or_else(|| "draft".into()),
+            splits: catalog_splits,
+            fields: catalog_fields,
         },
     })
 }
@@ -422,6 +550,22 @@ fn top_values(counts: &BTreeMap<String, u64>) -> Vec<ValueCount> {
     values
 }
 
+fn schema_hash(fields: &[FieldSchemaOutput]) -> String {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for field in fields {
+        for byte in format!(
+            "{}:{}:{}:{};",
+            field.field_name, field.logical_type, field.nullable, field.semantic_role
+        )
+        .as_bytes()
+        {
+            hash ^= *byte as u64;
+            hash = hash.wrapping_mul(0x100000001b3);
+        }
+    }
+    format!("fnv64:{hash:016x}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -488,13 +632,23 @@ mod tests {
             .find(|field| field.field_name == "sum_premium")
             .unwrap();
         assert_eq!(premium_profile.missing_count_by_split["train"], 1);
+        assert_eq!(result.catalog.storage_format, "parquet");
+        assert_eq!(result.catalog.row_count, 6);
+        assert_eq!(result.catalog.splits[0].positive_count, Some(2));
+        assert!(result.catalog.schema_hash.starts_with("fnv64:"));
         assert!(output_dir.join("schema.json").is_file());
         assert!(output_dir.join("profile.json").is_file());
+        assert!(output_dir.join("catalog.json").is_file());
     }
 
     #[test]
     fn rejects_csv_manifest_split() {
         let manifest = ParquetDatasetManifest {
+            source_key: None,
+            display_name: None,
+            owner: None,
+            description: None,
+            status: None,
             dataset_key: "bad".into(),
             dataset_version: "v1".into(),
             business_domain: "renewal_retention".into(),
