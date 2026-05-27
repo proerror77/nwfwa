@@ -2,10 +2,12 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveRule,
   backtestRule,
+  createAuditSample,
   discoverRules,
   getDashboardSummary,
   getClaimAuditHistory,
   investigateCase,
+  listAuditSamples,
   listCases,
   listDatasets,
   listLeads,
@@ -196,6 +198,38 @@ describe("ops API helpers", () => {
       "/api/v1/ops/cases",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls audit sampling endpoints", async () => {
+    const fetchMock = mockFetch({ samples: [] });
+    const payload = {
+      sample_mode: "risk_ranked",
+      population_definition: "RED and high risk leads for weekly QA",
+      inclusion_criteria: { min_risk_score: 70 },
+      deterministic_seed: "pilot-week-1",
+      sample_size: 2,
+      reviewer: "qa-reviewer-1",
+      assignment_queue: "QA Review",
+    };
+
+    await listAuditSamples("dev-secret");
+    await createAuditSample(payload, "dev-secret");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/ops/audit-samples",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/audit-samples",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
     );
   });
