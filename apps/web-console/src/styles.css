@@ -80,3 +80,70 @@ pre {
 .error {
   color: #a40000;
 }
+
+.result-stack {
+  display: grid;
+  gap: 16px;
+}
+
+.score-hero {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.score-hero > div,
+.result-grid > div {
+  border: 1px solid #d8dde4;
+  border-radius: 6px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.score-hero span,
+.result-grid dt {
+  display: block;
+  color: #5f6b7a;
+  font-size: 12px;
+}
+
+.score-hero strong {
+  display: block;
+  margin-top: 4px;
+  font-size: 22px;
+  overflow-wrap: anywhere;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+}
+
+.result-grid dd {
+  margin: 4px 0 0;
+  overflow-wrap: anywhere;
+}
+
+.result-list {
+  display: grid;
+  gap: 8px;
+  padding-left: 18px;
+}
+
+.result-list li {
+  overflow-wrap: anywhere;
+}
+
+.result-list strong {
+  display: block;
+}
+
+.result-list span {
+  color: #4e5968;
+}
+
+.empty {
+  color: #6b7280;
+}
