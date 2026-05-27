@@ -96,6 +96,13 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("shadow comparison missing")));
+    let dataset_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Immutable dataset")
+        .unwrap();
+    assert_eq!(dataset_gate["evidence_source"], "missing");
 }
 
 #[tokio::test]
@@ -136,6 +143,7 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
         .find(|gate| gate["label"] == "Approval")
         .unwrap();
     assert_eq!(approval_gate["passed"], true);
+    assert_eq!(approval_gate["evidence_source"], "approval");
 }
 
 #[tokio::test]

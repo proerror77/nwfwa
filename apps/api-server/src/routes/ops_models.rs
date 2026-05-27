@@ -26,6 +26,7 @@ pub struct ModelPromotionGate {
     pub label: String,
     pub passed: bool,
     pub blocker: String,
+    pub evidence_source: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -191,83 +192,100 @@ fn build_model_promotion_gates(
     let has_out_of_time_metric = metrics.get("out_of_time_auc").is_some()
         || metrics.get("out_of_time_precision").is_some()
         || metrics.get("out_of_time_recall").is_some();
+    let immutable_dataset = latest_evaluation
+        .map(|evaluation| !evaluation.model_dataset_id.is_empty())
+        .unwrap_or(false);
+    let holdout_metrics = latest_evaluation
+        .map(|evaluation| {
+            evaluation.auc.is_some()
+                && evaluation.precision.is_some()
+                && evaluation.recall.is_some()
+        })
+        .unwrap_or(false);
+    let review_capacity_threshold = latest_evaluation
+        .map(|evaluation| {
+            evaluation.threshold.is_some()
+                && metrics
+                    .get("review_capacity_threshold_status")
+                    .and_then(|value| value.as_str())
+                    == Some("passed")
+        })
+        .unwrap_or(false);
+    let explanation_artifact = latest_evaluation
+        .and_then(|evaluation| evaluation.feature_importance_uri.as_ref())
+        .is_some();
+    let leakage_check = metrics
+        .get("leakage_check_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let shadow_comparison = metrics
+        .get("shadow_comparison_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let approval = latest_review
+        .map(|review| review.decision == "approved")
+        .unwrap_or_else(|| {
+            metrics
+                .get("approval_status")
+                .and_then(|value| value.as_str())
+                == Some("approved")
+        });
+    let active_version = model.status == "active";
 
     let gates = vec![
         gate(
             "Immutable dataset",
-            latest_evaluation
-                .map(|evaluation| !evaluation.model_dataset_id.is_empty())
-                .unwrap_or(false),
+            immutable_dataset,
             "dataset version missing",
+            evidence_source(immutable_dataset, "evaluation"),
         ),
         gate(
             "Holdout metrics",
-            latest_evaluation
-                .map(|evaluation| {
-                    evaluation.auc.is_some()
-                        && evaluation.precision.is_some()
-                        && evaluation.recall.is_some()
-                })
-                .unwrap_or(false),
+            holdout_metrics,
             "holdout metrics missing",
+            evidence_source(holdout_metrics, "evaluation"),
         ),
         gate(
             "Out-of-time evidence",
             has_out_of_time_metric,
             "out-of-time metrics missing",
+            evidence_source(has_out_of_time_metric, "evaluation"),
         ),
         gate(
             "Review-capacity threshold",
-            latest_evaluation
-                .map(|evaluation| {
-                    evaluation.threshold.is_some()
-                        && metrics
-                            .get("review_capacity_threshold_status")
-                            .and_then(|value| value.as_str())
-                            == Some("passed")
-                })
-                .unwrap_or(false),
+            review_capacity_threshold,
             "review-capacity threshold missing",
+            evidence_source(review_capacity_threshold, "evaluation"),
         ),
         gate(
             "Explanation artifact",
-            latest_evaluation
-                .and_then(|evaluation| evaluation.feature_importance_uri.as_ref())
-                .is_some(),
+            explanation_artifact,
             "feature importance missing",
+            evidence_source(explanation_artifact, "evaluation"),
         ),
         gate(
             "Leakage check",
-            metrics
-                .get("leakage_check_status")
-                .and_then(|value| value.as_str())
-                == Some("passed"),
+            leakage_check,
             "leakage check missing",
+            evidence_source(leakage_check, "evaluation"),
         ),
         gate(
             "Shadow comparison",
-            metrics
-                .get("shadow_comparison_status")
-                .and_then(|value| value.as_str())
-                == Some("passed"),
+            shadow_comparison,
             "shadow comparison missing",
+            evidence_source(shadow_comparison, "evaluation"),
         ),
         gate(
             "Approval",
-            latest_review
-                .map(|review| review.decision == "approved")
-                .unwrap_or_else(|| {
-                    metrics
-                        .get("approval_status")
-                        .and_then(|value| value.as_str())
-                        == Some("approved")
-                }),
+            approval,
             "approval missing",
+            evidence_source(approval, "approval"),
         ),
         gate(
             "Active version",
-            model.status == "active",
+            active_version,
             "model is not active",
+            evidence_source(active_version, "metadata"),
         ),
     ];
     let blockers = gates
@@ -296,11 +314,20 @@ fn build_model_promotion_gates(
     }
 }
 
-fn gate(label: &str, passed: bool, blocker: &str) -> ModelPromotionGate {
+fn evidence_source(passed: bool, source: &'static str) -> &'static str {
+    if passed {
+        source
+    } else {
+        "missing"
+    }
+}
+
+fn gate(label: &str, passed: bool, blocker: &str, evidence_source: &str) -> ModelPromotionGate {
     ModelPromotionGate {
         label: label.into(),
         passed,
         blocker: blocker.into(),
+        evidence_source: evidence_source.into(),
     }
 }
 

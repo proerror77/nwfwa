@@ -12,6 +12,10 @@ import {
   QaFeedbackItem,
   summarizeQaFeedbackItems,
 } from "./qaFeedbackItems";
+import {
+  buildPromotionGateEvidenceRows,
+  type PromotionGate,
+} from "./promotionGateEvidence";
 
 type ModelVersion = {
   model_key: string;
@@ -31,11 +35,7 @@ type ModelPromotionGatesResponse = {
   data_status: string;
   scored_runs: number;
   blockers: string[];
-  gates: Array<{
-    label: string;
-    passed: boolean;
-    blocker: string;
-  }>;
+  gates: PromotionGate[];
 };
 
 export function ModelOpsPage() {
@@ -93,6 +93,9 @@ export function ModelOpsPage() {
       queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
     },
   });
+  const promotionGateRows = promotionQuery.data
+    ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
+    : [];
 
   return (
     <section className="ops-grid">
@@ -249,10 +252,11 @@ export function ModelOpsPage() {
               </div>
             </div>
             <div className="table-list">
-              {promotionQuery.data.gates.map((gate) => (
+              {promotionGateRows.map((gate) => (
                 <div className="metric-row compact-metric-row" key={gate.label}>
                   <span>{gate.label}</span>
-                  <strong>{gate.passed ? "passed" : gate.blocker}</strong>
+                  <strong>{gate.status}</strong>
+                  <small className={gate.evidenceClassName}>{gate.evidenceSource}</small>
                 </div>
               ))}
             </div>

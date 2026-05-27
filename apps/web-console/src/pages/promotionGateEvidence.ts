@@ -16,6 +16,7 @@ const evidenceSourceLabels: Record<string, string> = {
   runtime: "Runtime",
   backtest: "Backtest",
   approval: "Approval",
+  evaluation: "Evaluation",
   metadata: "Metadata",
   missing: "Missing",
 };

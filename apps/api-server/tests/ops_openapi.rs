@@ -78,6 +78,18 @@ async fn openapi_includes_operations_paths() {
         "backtest"
     );
     assert!(
+        schema["components"]["schemas"]["ModelPromotionGate"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evidence_source")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelPromotionGate"]["properties"]["evidence_source"]
+            ["enum"][2],
+        "evaluation"
+    );
+    assert!(
         schema["components"]["schemas"]["RuleBacktestResponse"]["required"]
             .as_array()
             .unwrap()

@@ -17,6 +17,12 @@ describe("buildPromotionGateEvidenceRows", () => {
           blocker: "shadow rollout missing",
           evidence_source: "missing",
         },
+        {
+          label: "Holdout metrics",
+          passed: true,
+          blocker: "holdout metrics missing",
+          evidence_source: "evaluation",
+        },
       ]),
     ).toEqual([
       {
@@ -30,6 +36,12 @@ describe("buildPromotionGateEvidenceRows", () => {
         status: "shadow rollout missing",
         evidenceSource: "Missing",
         evidenceClassName: "source-missing",
+      },
+      {
+        label: "Holdout metrics",
+        status: "passed",
+        evidenceSource: "Evaluation",
+        evidenceClassName: "source-evaluation",
       },
     ]);
   });
