@@ -1,6 +1,6 @@
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
 
-CREATE TABLE members (
+CREATE TABLE IF NOT EXISTS members (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   external_member_id TEXT NOT NULL UNIQUE,
   name_hash TEXT,
@@ -10,7 +10,7 @@ CREATE TABLE members (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE policies (
+CREATE TABLE IF NOT EXISTS policies (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   external_policy_id TEXT NOT NULL UNIQUE,
   member_id UUID NOT NULL REFERENCES members(id),
@@ -23,7 +23,7 @@ CREATE TABLE policies (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE providers (
+CREATE TABLE IF NOT EXISTS providers (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   external_provider_id TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
@@ -34,7 +34,7 @@ CREATE TABLE providers (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE claims (
+CREATE TABLE IF NOT EXISTS claims (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   external_claim_id TEXT NOT NULL UNIQUE,
   member_id UUID NOT NULL REFERENCES members(id),
@@ -51,7 +51,7 @@ CREATE TABLE claims (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE claim_items (
+CREATE TABLE IF NOT EXISTS claim_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   claim_id UUID NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
   item_code TEXT NOT NULL,
@@ -64,7 +64,7 @@ CREATE TABLE claim_items (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE rules (
+CREATE TABLE IF NOT EXISTS rules (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   rule_key TEXT NOT NULL UNIQUE,
   name TEXT NOT NULL,
@@ -74,7 +74,7 @@ CREATE TABLE rules (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE rule_versions (
+CREATE TABLE IF NOT EXISTS rule_versions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   rule_id UUID NOT NULL REFERENCES rules(id),
   version INTEGER NOT NULL,
@@ -88,7 +88,7 @@ CREATE TABLE rule_versions (
   UNIQUE(rule_id, version)
 );
 
-CREATE TABLE model_versions (
+CREATE TABLE IF NOT EXISTS model_versions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,
   version TEXT NOT NULL,
@@ -104,7 +104,7 @@ CREATE TABLE model_versions (
   UNIQUE(model_key, version)
 );
 
-CREATE TABLE scoring_runs (
+CREATE TABLE IF NOT EXISTS scoring_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   run_id TEXT NOT NULL UNIQUE,
   claim_id UUID REFERENCES claims(id),
@@ -120,7 +120,7 @@ CREATE TABLE scoring_runs (
   error_message TEXT
 );
 
-CREATE TABLE feature_values (
+CREATE TABLE IF NOT EXISTS feature_values (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   run_id TEXT NOT NULL REFERENCES scoring_runs(run_id) ON DELETE CASCADE,
   claim_id UUID REFERENCES claims(id),
@@ -131,7 +131,7 @@ CREATE TABLE feature_values (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE rule_runs (
+CREATE TABLE IF NOT EXISTS rule_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   run_id TEXT NOT NULL REFERENCES scoring_runs(run_id) ON DELETE CASCADE,
   rule_id UUID REFERENCES rules(id),
@@ -144,7 +144,7 @@ CREATE TABLE rule_runs (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE model_scores (
+CREATE TABLE IF NOT EXISTS model_scores (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   run_id TEXT NOT NULL REFERENCES scoring_runs(run_id) ON DELETE CASCADE,
   model_version_id UUID REFERENCES model_versions(id),
@@ -158,7 +158,7 @@ CREATE TABLE model_scores (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
-CREATE TABLE audit_events (
+CREATE TABLE IF NOT EXISTS audit_events (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   audit_id TEXT NOT NULL UNIQUE,
   run_id TEXT NOT NULL REFERENCES scoring_runs(run_id) ON DELETE CASCADE,
