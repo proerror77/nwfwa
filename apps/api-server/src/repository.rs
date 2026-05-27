@@ -260,6 +260,98 @@ pub struct AuditHistoryEventRecord {
     pub created_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FeatureSetRecord {
+    pub feature_set_id: String,
+    pub business_domain: String,
+    pub feature_set_key: String,
+    pub version: String,
+    pub dataset_id: String,
+    pub features_uri: String,
+    pub feature_list_json: Value,
+    pub row_count: u64,
+    pub label_column: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterFeatureSetInput {
+    pub business_domain: String,
+    pub feature_set_key: String,
+    pub version: String,
+    pub dataset_id: String,
+    pub features_uri: String,
+    pub feature_list_json: Value,
+    pub row_count: u64,
+    pub label_column: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelDatasetRecord {
+    pub model_dataset_id: String,
+    pub business_domain: String,
+    pub task_type: String,
+    pub label_name: String,
+    pub feature_set_id: String,
+    pub train_uri: String,
+    pub validation_uri: String,
+    pub test_uri: Option<String>,
+    pub row_counts_json: Value,
+    pub label_distribution_json: Value,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterModelDatasetInput {
+    pub business_domain: String,
+    pub task_type: String,
+    pub label_name: String,
+    pub feature_set_id: String,
+    pub train_uri: String,
+    pub validation_uri: String,
+    pub test_uri: Option<String>,
+    pub row_counts_json: Value,
+    pub label_distribution_json: Value,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelEvaluationRecord {
+    pub evaluation_run_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub model_dataset_id: String,
+    pub auc: Option<Decimal>,
+    pub ks: Option<Decimal>,
+    pub precision: Option<Decimal>,
+    pub recall: Option<Decimal>,
+    pub f1: Option<Decimal>,
+    pub accuracy: Option<Decimal>,
+    pub threshold: Option<Decimal>,
+    pub confusion_matrix_json: Value,
+    pub feature_importance_uri: Option<String>,
+    pub metrics_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RegisterModelEvaluationInput {
+    pub evaluation_run_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub model_dataset_id: String,
+    pub auc: Option<Decimal>,
+    pub ks: Option<Decimal>,
+    pub precision: Option<Decimal>,
+    pub recall: Option<Decimal>,
+    pub f1: Option<Decimal>,
+    pub accuracy: Option<Decimal>,
+    pub threshold: Option<Decimal>,
+    pub confusion_matrix_json: Value,
+    pub feature_importance_uri: Option<String>,
+    pub metrics_json: Value,
+}
+
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
     async fn upsert_claim_context(
@@ -329,6 +421,26 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         claim_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
+
+    async fn register_feature_set(
+        &self,
+        input: RegisterFeatureSetInput,
+    ) -> anyhow::Result<Option<FeatureSetRecord>>;
+
+    async fn register_model_dataset(
+        &self,
+        input: RegisterModelDatasetInput,
+    ) -> anyhow::Result<Option<ModelDatasetRecord>>;
+
+    async fn register_model_evaluation(
+        &self,
+        input: RegisterModelEvaluationInput,
+    ) -> anyhow::Result<Option<ModelEvaluationRecord>>;
+
+    async fn get_model_evaluation(
+        &self,
+        evaluation_run_id: &str,
+    ) -> anyhow::Result<Option<ModelEvaluationRecord>>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -344,6 +456,11 @@ pub struct InMemoryScoringRepository {
     dataset_sequence: Mutex<u64>,
     mapping_sequence: Mutex<u64>,
     pilot_audit_events: Mutex<Vec<(String, AuditHistoryEventRecord)>>,
+    feature_sets: Mutex<HashMap<String, FeatureSetRecord>>,
+    feature_set_sequence: Mutex<u64>,
+    model_datasets: Mutex<HashMap<String, ModelDatasetRecord>>,
+    model_dataset_sequence: Mutex<u64>,
+    model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
 }
 
 impl InMemoryScoringRepository {
@@ -591,6 +708,117 @@ impl ScoringRepository for InMemoryScoringRepository {
             .filter(|(event_claim_id, _)| event_claim_id == claim_id)
             .map(|(_, event)| event.clone())
             .collect())
+    }
+
+    async fn register_feature_set(
+        &self,
+        input: RegisterFeatureSetInput,
+    ) -> anyhow::Result<Option<FeatureSetRecord>> {
+        if self.get_dataset(&input.dataset_id).await?.is_none() {
+            return Ok(None);
+        }
+        let mut sequence = self.feature_set_sequence.lock().await;
+        *sequence += 1;
+        let feature_set_id = format!("feature_set_{}", *sequence);
+        let record = FeatureSetRecord {
+            feature_set_id: feature_set_id.clone(),
+            business_domain: input.business_domain,
+            feature_set_key: input.feature_set_key,
+            version: input.version,
+            dataset_id: input.dataset_id,
+            features_uri: input.features_uri,
+            feature_list_json: input.feature_list_json,
+            row_count: input.row_count,
+            label_column: input.label_column,
+            status: input.status,
+        };
+        self.feature_sets
+            .lock()
+            .await
+            .insert(feature_set_id, record.clone());
+        Ok(Some(record))
+    }
+
+    async fn register_model_dataset(
+        &self,
+        input: RegisterModelDatasetInput,
+    ) -> anyhow::Result<Option<ModelDatasetRecord>> {
+        if !self
+            .feature_sets
+            .lock()
+            .await
+            .contains_key(&input.feature_set_id)
+        {
+            return Ok(None);
+        }
+        let mut sequence = self.model_dataset_sequence.lock().await;
+        *sequence += 1;
+        let model_dataset_id = format!("model_dataset_{}", *sequence);
+        let record = ModelDatasetRecord {
+            model_dataset_id: model_dataset_id.clone(),
+            business_domain: input.business_domain,
+            task_type: input.task_type,
+            label_name: input.label_name,
+            feature_set_id: input.feature_set_id,
+            train_uri: input.train_uri,
+            validation_uri: input.validation_uri,
+            test_uri: input.test_uri,
+            row_counts_json: input.row_counts_json,
+            label_distribution_json: input.label_distribution_json,
+            status: input.status,
+        };
+        self.model_datasets
+            .lock()
+            .await
+            .insert(model_dataset_id, record.clone());
+        Ok(Some(record))
+    }
+
+    async fn register_model_evaluation(
+        &self,
+        input: RegisterModelEvaluationInput,
+    ) -> anyhow::Result<Option<ModelEvaluationRecord>> {
+        if !self
+            .model_datasets
+            .lock()
+            .await
+            .contains_key(&input.model_dataset_id)
+        {
+            return Ok(None);
+        }
+        let record = ModelEvaluationRecord {
+            evaluation_run_id: input.evaluation_run_id,
+            model_key: input.model_key,
+            model_version: input.model_version,
+            model_dataset_id: input.model_dataset_id,
+            auc: input.auc,
+            ks: input.ks,
+            precision: input.precision,
+            recall: input.recall,
+            f1: input.f1,
+            accuracy: input.accuracy,
+            threshold: input.threshold,
+            confusion_matrix_json: input.confusion_matrix_json,
+            feature_importance_uri: input.feature_importance_uri,
+            metrics_json: input.metrics_json,
+        };
+        self.model_evaluations
+            .lock()
+            .await
+            .insert(record.evaluation_run_id.clone(), record.clone());
+        Ok(Some(record))
+    }
+
+    async fn get_model_evaluation(
+        &self,
+        evaluation_run_id: &str,
+    ) -> anyhow::Result<Option<ModelEvaluationRecord>> {
+        Ok(self
+            .model_evaluations
+            .lock()
+            .await
+            .get(evaluation_run_id)
+            .cloned())
     }
 }
 
@@ -1438,6 +1666,214 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect())
+    }
+
+    async fn register_feature_set(
+        &self,
+        input: RegisterFeatureSetInput,
+    ) -> anyhow::Result<Option<FeatureSetRecord>> {
+        if load_dataset_record(&self.pool, &input.dataset_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let row: (String,) = sqlx::query_as(
+            "INSERT INTO feature_set_versions
+             (feature_set_key, business_domain, version, dataset_id, features_uri, feature_list_json, row_count, label_column, status)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9)
+             ON CONFLICT (feature_set_key, version) DO UPDATE
+             SET features_uri = EXCLUDED.features_uri,
+                 feature_list_json = EXCLUDED.feature_list_json,
+                 row_count = EXCLUDED.row_count,
+                 status = EXCLUDED.status
+             RETURNING id::text",
+        )
+        .bind(&input.feature_set_key)
+        .bind(&input.business_domain)
+        .bind(&input.version)
+        .bind(&input.dataset_id)
+        .bind(&input.features_uri)
+        .bind(&input.feature_list_json)
+        .bind(input.row_count as i64)
+        .bind(&input.label_column)
+        .bind(&input.status)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(Some(FeatureSetRecord {
+            feature_set_id: row.0,
+            business_domain: input.business_domain,
+            feature_set_key: input.feature_set_key,
+            version: input.version,
+            dataset_id: input.dataset_id,
+            features_uri: input.features_uri,
+            feature_list_json: input.feature_list_json,
+            row_count: input.row_count,
+            label_column: input.label_column,
+            status: input.status,
+        }))
+    }
+
+    async fn register_model_dataset(
+        &self,
+        input: RegisterModelDatasetInput,
+    ) -> anyhow::Result<Option<ModelDatasetRecord>> {
+        let feature_set_known: Option<(String,)> =
+            sqlx::query_as("SELECT id::text FROM feature_set_versions WHERE id = $1::uuid")
+                .bind(&input.feature_set_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        if feature_set_known.is_none() {
+            return Ok(None);
+        }
+
+        let row: (String,) = sqlx::query_as(
+            "INSERT INTO model_dataset_versions
+             (business_domain, task_type, label_name, feature_set_id, train_uri, validation_uri, test_uri, row_counts_json, label_distribution_json, status)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10)
+             RETURNING id::text",
+        )
+        .bind(&input.business_domain)
+        .bind(&input.task_type)
+        .bind(&input.label_name)
+        .bind(&input.feature_set_id)
+        .bind(&input.train_uri)
+        .bind(&input.validation_uri)
+        .bind(&input.test_uri)
+        .bind(&input.row_counts_json)
+        .bind(&input.label_distribution_json)
+        .bind(&input.status)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(Some(ModelDatasetRecord {
+            model_dataset_id: row.0,
+            business_domain: input.business_domain,
+            task_type: input.task_type,
+            label_name: input.label_name,
+            feature_set_id: input.feature_set_id,
+            train_uri: input.train_uri,
+            validation_uri: input.validation_uri,
+            test_uri: input.test_uri,
+            row_counts_json: input.row_counts_json,
+            label_distribution_json: input.label_distribution_json,
+            status: input.status,
+        }))
+    }
+
+    async fn register_model_evaluation(
+        &self,
+        input: RegisterModelEvaluationInput,
+    ) -> anyhow::Result<Option<ModelEvaluationRecord>> {
+        let model_dataset_known: Option<(String,)> =
+            sqlx::query_as("SELECT id::text FROM model_dataset_versions WHERE id = $1::uuid")
+                .bind(&input.model_dataset_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        if model_dataset_known.is_none() {
+            return Ok(None);
+        }
+
+        sqlx::query(
+            "INSERT INTO model_evaluation_runs
+             (evaluation_run_id, model_key, model_version, model_dataset_id, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             ON CONFLICT (evaluation_run_id) DO UPDATE
+             SET model_key = EXCLUDED.model_key,
+                 model_version = EXCLUDED.model_version,
+                 model_dataset_id = EXCLUDED.model_dataset_id,
+                 auc = EXCLUDED.auc,
+                 ks = EXCLUDED.ks,
+                 precision_value = EXCLUDED.precision_value,
+                 recall_value = EXCLUDED.recall_value,
+                 f1 = EXCLUDED.f1,
+                 accuracy = EXCLUDED.accuracy,
+                 threshold = EXCLUDED.threshold,
+                 confusion_matrix_json = EXCLUDED.confusion_matrix_json,
+                 feature_importance_uri = EXCLUDED.feature_importance_uri,
+                 metrics_json = EXCLUDED.metrics_json",
+        )
+        .bind(&input.evaluation_run_id)
+        .bind(&input.model_key)
+        .bind(&input.model_version)
+        .bind(&input.model_dataset_id)
+        .bind(input.auc)
+        .bind(input.ks)
+        .bind(input.precision)
+        .bind(input.recall)
+        .bind(input.f1)
+        .bind(input.accuracy)
+        .bind(input.threshold)
+        .bind(&input.confusion_matrix_json)
+        .bind(&input.feature_importance_uri)
+        .bind(&input.metrics_json)
+        .execute(&self.pool)
+        .await?;
+
+        self.get_model_evaluation(&input.evaluation_run_id).await
+    }
+
+    async fn get_model_evaluation(
+        &self,
+        evaluation_run_id: &str,
+    ) -> anyhow::Result<Option<ModelEvaluationRecord>> {
+        let row: Option<(
+            String,
+            String,
+            String,
+            String,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Value,
+            Option<String>,
+            Value,
+        )> = sqlx::query_as(
+            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
+             FROM model_evaluation_runs
+             WHERE evaluation_run_id = $1",
+        )
+        .bind(evaluation_run_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(
+            |(
+                evaluation_run_id,
+                model_key,
+                model_version,
+                model_dataset_id,
+                auc,
+                ks,
+                precision,
+                recall,
+                f1,
+                accuracy,
+                threshold,
+                confusion_matrix_json,
+                feature_importance_uri,
+                metrics_json,
+            )| ModelEvaluationRecord {
+                evaluation_run_id,
+                model_key,
+                model_version,
+                model_dataset_id,
+                auc,
+                ks,
+                precision,
+                recall,
+                f1,
+                accuracy,
+                threshold,
+                confusion_matrix_json,
+                feature_importance_uri,
+                metrics_json,
+            },
+        ))
     }
 }
 
