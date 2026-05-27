@@ -1,10 +1,15 @@
-use crate::{app::AppState, error::ApiError, repository::PersistedScoringRun};
+use crate::{
+    app::AppState,
+    error::ApiError,
+    repository::{PersistedAuditEvent, PersistedScoringRun},
+};
 use axum::{extract::State, http::HeaderMap, Json};
 use chrono::NaiveDate;
+use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::*;
 use fwa_features::calculate_features;
-use fwa_ml_runtime::ModelScoreRequest;
+use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
 use fwa_rules::{evaluate_rules, Condition, Rule, RuleAction};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -162,10 +167,18 @@ pub async fn score_claim(
 
     let run_id = ScoringRunId::new();
     let features = calculate_features(&context);
+    let evidence_refs = features
+        .values()
+        .flat_map(|feature| {
+            feature.evidence_refs.iter().map(|evidence| {
+                serde_json::to_value(evidence).unwrap_or_else(|_| serde_json::json!({}))
+            })
+        })
+        .collect::<Vec<_>>();
     let rules = demo_rules();
     let rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
-    let model_score = state
+    let model_score = match state
         .scorer
         .score(ModelScoreRequest {
             run_id: run_id.clone(),
@@ -174,13 +187,24 @@ pub async fn score_claim(
             features: features.clone(),
         })
         .await
-        .map_err(|error| {
-            ApiError::new(
-                axum::http::StatusCode::BAD_GATEWAY,
-                "MODEL_SERVICE_UNAVAILABLE",
-                error.to_string(),
+    {
+        Ok(score) => score,
+        Err(error) => {
+            persist_failed_audit(
+                &state,
+                run_id.clone(),
+                &context,
+                &actor,
+                &request.source_system,
+                "model scoring failed",
+                &error.to_string(),
+                evidence_refs.clone(),
             )
-        })?;
+            .await
+            .map_err(internal_error("FAILED_AUDIT_PERSISTENCE_FAILED"))?;
+            return Err(model_runtime_error(error));
+        }
+    };
     let decision = fwa_scoring::aggregate(&rule_matches, &model_score);
     let audit_id = AuditEventId::new();
     let alerts: Vec<AlertResponse> = rule_matches
@@ -193,15 +217,6 @@ pub async fn score_claim(
             rule_version: rule_match.rule_version,
         })
         .collect();
-    let evidence_refs = features
-        .values()
-        .flat_map(|feature| {
-            feature.evidence_refs.iter().map(|evidence| {
-                serde_json::to_value(evidence).unwrap_or_else(|_| serde_json::json!({}))
-            })
-        })
-        .collect::<Vec<_>>();
-
     state
         .repository
         .save_scoring_run(PersistedScoringRun {
@@ -227,6 +242,7 @@ pub async fn score_claim(
                 .collect(),
             model_score: serde_json::to_value(&model_score)
                 .unwrap_or_else(|_| serde_json::json!({})),
+            evidence_refs: evidence_refs.clone(),
             audit_event: serde_json::json!({
                 "audit_id": audit_id.to_string(),
                 "event_type": "scoring.completed",
@@ -262,6 +278,52 @@ fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) ->
             error.to_string(),
         )
     }
+}
+
+fn model_runtime_error(error: ModelRuntimeError) -> ApiError {
+    match error {
+        ModelRuntimeError::ServiceUnavailable => ApiError::new(
+            axum::http::StatusCode::BAD_GATEWAY,
+            "MODEL_SERVICE_UNAVAILABLE",
+            "model service unavailable",
+        ),
+        ModelRuntimeError::InvalidResponse(message) => ApiError::new(
+            axum::http::StatusCode::BAD_GATEWAY,
+            "MODEL_RESPONSE_INVALID",
+            message,
+        ),
+    }
+}
+
+async fn persist_failed_audit(
+    state: &AppState,
+    run_id: ScoringRunId,
+    context: &ClaimContext,
+    actor: &ActorContext,
+    source_system: &str,
+    summary: &str,
+    error_message: &str,
+    evidence_refs: Vec<serde_json::Value>,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: run_id.to_string(),
+            claim_id: context.claim.external_claim_id.clone(),
+            source_system: source_system.to_string(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "scoring.failed".into(),
+            event_status: "failed".into(),
+            summary: summary.to_string(),
+            payload: serde_json::json!({
+                "claim_id": context.claim.external_claim_id,
+                "error": error_message
+            }),
+            evidence_refs,
+        })
+        .await
 }
 
 fn demo_context(payload: FullClaimPayload) -> ClaimContext {

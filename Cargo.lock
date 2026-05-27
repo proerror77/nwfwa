@@ -51,6 +51,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "fwa-audit",
  "fwa-auth",
  "fwa-core",
  "fwa-features",

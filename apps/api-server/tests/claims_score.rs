@@ -1,8 +1,15 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
+use async_trait::async_trait;
 use axum::{
-    body::Body,
+    body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest, ModelScorer};
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -123,4 +130,46 @@ async fn scores_existing_claim_after_full_payload_upsert() {
         ))
         .unwrap();
     assert_eq!(app.oneshot(second).await.unwrap().status(), StatusCode::OK);
+}
+
+#[derive(Debug)]
+struct InvalidResponseScorer;
+
+#[async_trait]
+impl ModelScorer for InvalidResponseScorer {
+    async fn score(&self, _request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
+        Err(ModelRuntimeError::InvalidResponse("missing score".into()))
+    }
+}
+
+#[tokio::test]
+async fn returns_invalid_model_response_code() {
+    let app = build_app_with_parts(
+        test_config(),
+        Arc::new(InvalidResponseScorer),
+        InMemoryScoringRepository::shared(),
+    );
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-BAD-MODEL",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("MODEL_RESPONSE_INVALID"));
 }

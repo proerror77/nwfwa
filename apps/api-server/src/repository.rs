@@ -20,6 +20,22 @@ pub struct PersistedScoringRun {
     pub rule_runs: Vec<Value>,
     pub model_score: Value,
     pub audit_event: Value,
+    pub evidence_refs: Vec<Value>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PersistedAuditEvent {
+    pub audit_id: String,
+    pub run_id: String,
+    pub claim_id: String,
+    pub source_system: String,
+    pub actor_id: String,
+    pub actor_role: String,
+    pub event_type: String,
+    pub event_status: String,
+    pub summary: String,
+    pub payload: Value,
+    pub evidence_refs: Vec<Value>,
 }
 
 #[async_trait]
@@ -36,6 +52,8 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<Option<ClaimContext>>;
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()>;
+
+    async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -44,6 +62,7 @@ pub type SharedRepository = Arc<dyn ScoringRepository>;
 pub struct InMemoryScoringRepository {
     claims: Mutex<HashMap<String, ClaimContext>>,
     runs: Mutex<Vec<PersistedScoringRun>>,
+    audit_events: Mutex<Vec<PersistedAuditEvent>>,
 }
 
 impl InMemoryScoringRepository {
@@ -75,6 +94,11 @@ impl ScoringRepository for InMemoryScoringRepository {
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()> {
         self.runs.lock().await.push(run);
+        Ok(())
+    }
+
+    async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()> {
+        self.audit_events.lock().await.push(event);
         Ok(())
     }
 }
@@ -278,23 +302,71 @@ impl ScoringRepository for PostgresScoringRepository {
         .execute(&mut *tx)
         .await?;
 
-        sqlx::query(
-            "INSERT INTO audit_events
-             (audit_id, run_id, claim_id, actor_id, actor_role, source_system, event_type, event_status, summary, payload, evidence_refs)
-             VALUES ($1, $2, $3::uuid, $4, 'tpa_system', $5, 'scoring.completed', 'succeeded', 'FWA scoring completed', $6, '[]'::jsonb)",
+        insert_audit_event(
+            &mut tx,
+            &PersistedAuditEvent {
+                audit_id: run.audit_id,
+                run_id: run.run_id,
+                claim_id: run.claim_id,
+                source_system: run.source_system,
+                actor_id: run.actor_id,
+                actor_role: "tpa_system".into(),
+                event_type: "scoring.completed".into(),
+                event_status: "succeeded".into(),
+                summary: "FWA scoring completed".into(),
+                payload: run.audit_event,
+                evidence_refs: run.evidence_refs,
+            },
+            claim_uuid.as_deref(),
         )
-        .bind(&run.audit_id)
-        .bind(&run.run_id)
-        .bind(claim_uuid.as_deref())
-        .bind(&run.actor_id)
-        .bind(&run.source_system)
-        .bind(run.audit_event)
-        .execute(&mut *tx)
         .await?;
 
+        tx.commit().await?;
+        Ok(())
+    }
+
+    async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        let claim_row: Option<(String,)> =
+            sqlx::query_as("SELECT id::text FROM claims WHERE external_claim_id = $1")
+                .bind(&event.claim_id)
+                .fetch_optional(&mut *tx)
+                .await?;
+        insert_audit_event(
+            &mut tx,
+            &event,
+            claim_row.as_ref().map(|row| row.0.as_str()),
+        )
+        .await?;
         tx.commit().await?;
         Ok(())
     }
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
+
+async fn insert_audit_event(
+    tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+    event: &PersistedAuditEvent,
+    claim_uuid: Option<&str>,
+) -> anyhow::Result<()> {
+    sqlx::query(
+        "INSERT INTO audit_events
+         (audit_id, run_id, claim_id, actor_id, actor_role, source_system, event_type, event_status, summary, payload, evidence_refs)
+         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11)",
+    )
+    .bind(&event.audit_id)
+    .bind(&event.run_id)
+    .bind(claim_uuid)
+    .bind(&event.actor_id)
+    .bind(&event.actor_role)
+    .bind(&event.source_system)
+    .bind(&event.event_type)
+    .bind(&event.event_status)
+    .bind(&event.summary)
+    .bind(&event.payload)
+    .bind(serde_json::Value::Array(event.evidence_refs.clone()))
+    .execute(&mut **tx)
+    .await?;
+    Ok(())
+}
