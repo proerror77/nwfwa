@@ -7,6 +7,7 @@ import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { AgentInvestigatorPage } from "./pages/AgentInvestigatorPage";
 import { DataSourcesPage } from "./pages/DataSourcesPage";
 import { DashboardPage } from "./pages/DashboardPage";
+import { QAReviewPage } from "./pages/QAReviewPage";
 
 const modules = [
   "Dashboard",
@@ -45,6 +46,7 @@ export function App() {
         {active === "Data Sources" ? <DataSourcesPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
+        {active === "QA Review" ? <QAReviewPage /> : null}
         {![
           "Runtime Scoring",
           "Dashboard",
@@ -53,6 +55,7 @@ export function App() {
           "Data Sources",
           "Knowledge Base",
           "Agent Investigator",
+          "QA Review",
         ].includes(active) ? (
           <PlannedModulePage title={active} />
         ) : null}

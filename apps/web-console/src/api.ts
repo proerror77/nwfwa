@@ -101,3 +101,10 @@ export async function investigateCase(payload: unknown, apiKey: string) {
     body: JSON.stringify(payload),
   });
 }
+
+export async function submitQaResult(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/qa/results", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
