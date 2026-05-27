@@ -3,6 +3,8 @@ import { RuntimeScoring } from "./pages/RuntimeScoring";
 import { PlannedModulePage } from "./pages/PlannedModulePage";
 import { RulesStudio } from "./pages/RulesStudio";
 import { ModelOpsPage } from "./pages/ModelOpsPage";
+import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
+import { AgentInvestigatorPage } from "./pages/AgentInvestigatorPage";
 
 const modules = [
   "Dashboard",
@@ -11,6 +13,7 @@ const modules = [
   "Models",
   "Factor Factory",
   "Knowledge Base",
+  "Agent Investigator",
   "QA Review",
   "Governance",
 ];
@@ -35,7 +38,11 @@ export function App() {
         {active === "Runtime Scoring" ? <RuntimeScoring /> : null}
         {active === "Rules" ? <RulesStudio /> : null}
         {active === "Models" ? <ModelOpsPage /> : null}
-        {!["Runtime Scoring", "Rules", "Models"].includes(active) ? (
+        {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
+        {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
+        {!["Runtime Scoring", "Rules", "Models", "Knowledge Base", "Agent Investigator"].includes(
+          active,
+        ) ? (
           <PlannedModulePage title={active} />
         ) : null}
       </main>

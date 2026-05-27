@@ -1,5 +1,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { approveRule, backtestRule, listModels, listRules, publishRule, submitRule } from "./api";
+import {
+  approveRule,
+  backtestRule,
+  investigateCase,
+  listKnowledgeCases,
+  listModels,
+  listRules,
+  publishRule,
+  searchSimilarCases,
+  submitRule,
+} from "./api";
 
 function mockFetch(body: unknown, ok = true) {
   const fetchMock = vi.fn().mockResolvedValue({
@@ -71,6 +81,50 @@ describe("ops API helpers", () => {
       "/api/v1/ops/models",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls knowledge and agent endpoints", async () => {
+    const fetchMock = mockFetch({ cases: [], results: [], evidence_refs: [] });
+    const searchPayload = {
+      diagnosis_code: "J10",
+      provider_region: "Shanghai",
+      tags: ["early_claim"],
+    };
+    const investigationPayload = {
+      claim_id: "CLM-0287",
+      risk_score: 87,
+      rag: "RED",
+      top_reasons: ["金额高于同病种同地区 P99"],
+      similar_case_query: searchPayload,
+    };
+
+    await listKnowledgeCases("dev-secret");
+    await searchSimilarCases(searchPayload, "dev-secret");
+    await investigateCase(investigationPayload, "dev-secret");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/ops/knowledge/cases",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/knowledge/search-similar",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(searchPayload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/agent/cases/investigate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(investigationPayload),
       }),
     );
   });
