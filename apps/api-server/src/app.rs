@@ -72,6 +72,10 @@ pub fn build_app_with_parts(
         )
         .route("/api/v1/qa/results", post(pilot_loop::write_qa_result))
         .route(
+            "/api/v1/ops/qa/feedback-items",
+            get(pilot_loop::list_qa_feedback_items),
+        )
+        .route(
             "/api/v1/audit/claims/:claim_id",
             get(pilot_loop::claim_audit_history),
         )

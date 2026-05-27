@@ -1,7 +1,7 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{InvestigationResultRecord, QaReviewRecord},
+    repository::{InvestigationResultRecord, QaFeedbackItemRecord, QaReviewRecord},
 };
 use axum::{
     extract::{Path, State},
@@ -25,6 +25,11 @@ pub struct PilotWritebackResponse {
 pub struct ClaimAuditHistoryResponse {
     pub claim_id: String,
     pub events: Vec<crate::repository::AuditHistoryEventRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct QaFeedbackItemListResponse {
+    pub items: Vec<QaFeedbackItemRecord>,
 }
 
 pub async fn write_investigation_result(
@@ -69,6 +74,19 @@ pub async fn write_qa_result(
         run_id: event.run_id,
         evidence_refs: event.evidence_refs,
     }))
+}
+
+pub async fn list_qa_feedback_items(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<QaFeedbackItemListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let items = state
+        .repository
+        .list_qa_feedback_items()
+        .await
+        .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
+    Ok(Json(QaFeedbackItemListResponse { items }))
 }
 
 pub async fn claim_audit_history(

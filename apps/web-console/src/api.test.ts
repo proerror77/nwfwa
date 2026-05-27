@@ -14,6 +14,7 @@ import {
   listDatasets,
   listLeads,
   listKnowledgeCases,
+  listQaFeedbackItems,
   listModelEvaluations,
   listModels,
   getModelPromotionGates,
@@ -305,6 +306,19 @@ describe("ops API helpers", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify(payload),
+      }),
+    );
+  });
+
+  it("lists QA feedback items", async () => {
+    const fetchMock = mockFetch({ items: [] });
+
+    await listQaFeedbackItems("dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/qa/feedback-items",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
   });

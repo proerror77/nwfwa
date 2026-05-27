@@ -196,3 +196,7 @@ export async function submitQaResult(payload: unknown, apiKey: string) {
     body: JSON.stringify(payload),
   });
 }
+
+export async function listQaFeedbackItems(apiKey: string) {
+  return requestJson("/api/v1/ops/qa/feedback-items", apiKey);
+}

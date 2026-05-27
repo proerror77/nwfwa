@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { submitQaResult } from "../api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { listQaFeedbackItems, submitQaResult } from "../api";
 
 type QaQueueItem = {
   qa_case_id: string;
@@ -9,6 +9,19 @@ type QaQueueItem = {
   risk_score: number;
   alert: string;
   amount: string;
+};
+
+type QaFeedbackItem = {
+  feedback_id: string;
+  qa_case_id: string;
+  claim_id: string;
+  feedback_target: string;
+  issue_type: string;
+  priority: string;
+  status: string;
+  summary: string;
+  note_present: boolean;
+  evidence_refs: string[];
 };
 
 const demoQueue: QaQueueItem[] = [
@@ -44,6 +57,11 @@ export function QAReviewPage() {
   const [evidenceRefs, setEvidenceRefs] = useState(
     "audit:scoring.completed\nrule_runs:EARLY_CLAIM",
   );
+  const queryClient = useQueryClient();
+  const feedbackQuery = useQuery({
+    queryKey: ["qa-feedback-items", apiKey],
+    queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
+  });
 
   const submitMutation = useMutation({
     mutationFn: () =>
@@ -62,6 +80,9 @@ export function QAReviewPage() {
         },
         apiKey,
       ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["qa-feedback-items"] });
+    },
   });
 
   return (
@@ -153,6 +174,28 @@ export function QAReviewPage() {
         ) : null}
         {submitMutation.data ? (
           <pre>{JSON.stringify(submitMutation.data, null, 2)}</pre>
+        ) : null}
+      </div>
+
+      <div className="panel wide-panel">
+        <h2>Feedback Items</h2>
+        {feedbackQuery.error ? (
+          <pre className="error">{String(feedbackQuery.error.message)}</pre>
+        ) : null}
+        <div className="table-list">
+          {feedbackQuery.data?.items.map((item) => (
+            <div className="metric-row compact-metric-row" key={item.feedback_id}>
+              <span>{item.summary}</span>
+              <strong>{item.feedback_target}</strong>
+              <small>{item.issue_type}</small>
+              <small>
+                {item.priority} · {item.status}
+              </small>
+            </div>
+          ))}
+        </div>
+        {feedbackQuery.data?.items.length === 0 ? (
+          <p className="empty">No QA feedback items</p>
         ) : null}
       </div>
     </section>

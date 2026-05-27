@@ -813,6 +813,22 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/qa/feedback-items": {
+                "get": {
+                    "summary": "List QA feedback items for rule and model operators",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "QA feedback items created from QA review writeback",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/QaFeedbackItemListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/audit/claims/{claim_id}": {
                 "get": {
                     "summary": "Get pilot audit history for a claim",
@@ -2144,6 +2160,35 @@ pub async fn openapi_schema() -> Json<Value> {
                         "audit_id": { "type": "string" },
                         "run_id": { "type": "string" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "QaFeedbackItem": {
+                    "type": "object",
+                    "required": ["feedback_id", "qa_case_id", "claim_id", "feedback_target", "issue_type", "qa_conclusion", "source", "status", "priority", "summary", "note_present", "evidence_refs"],
+                    "properties": {
+                        "feedback_id": { "type": "string" },
+                        "qa_case_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "feedback_target": { "type": "string" },
+                        "issue_type": { "type": "string" },
+                        "qa_conclusion": { "type": "string" },
+                        "source": { "type": "string", "const": "qa_review" },
+                        "status": { "type": "string" },
+                        "priority": { "type": "string" },
+                        "summary": { "type": "string" },
+                        "note_present": { "type": "boolean" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "QaFeedbackItemListResponse": {
+                    "type": "object",
+                    "required": ["items"],
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/QaFeedbackItem" }
+                        }
                     }
                 },
                 "ClaimAuditHistoryResponse": {

@@ -405,6 +405,23 @@ pub struct QaReviewRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct QaFeedbackItemRecord {
+    pub feedback_id: String,
+    pub qa_case_id: String,
+    pub claim_id: String,
+    pub feedback_target: String,
+    pub issue_type: String,
+    pub qa_conclusion: String,
+    pub source: String,
+    pub status: String,
+    pub priority: String,
+    pub summary: String,
+    pub note_present: bool,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditHistoryEventRecord {
     pub audit_id: String,
     pub run_id: String,
@@ -762,6 +779,8 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         record: QaReviewRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord>;
+
+    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
 
     async fn claim_audit_history(
         &self,
@@ -1399,6 +1418,24 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .push((record.claim_id, event.clone()));
         Ok(event)
+    }
+
+    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+        let mut items = self
+            .pilot_audit_events
+            .lock()
+            .await
+            .iter()
+            .filter_map(|(_, event)| {
+                (event.event_type == "qa.result.received")
+                    .then(|| serde_json::from_value::<QaReviewRecord>(event.payload.clone()).ok())
+                    .flatten()
+            })
+            .filter(|review| review.qa_conclusion != "pass")
+            .map(|review| qa_review_to_feedback_item(review, None))
+            .collect::<Vec<_>>();
+        sort_qa_feedback_items(&mut items);
+        Ok(items)
     }
 
     async fn claim_audit_history(
@@ -3032,6 +3069,56 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(event)
     }
 
+    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs, created_at
+             FROM qa_reviews
+             WHERE qa_conclusion <> 'pass'
+             ORDER BY created_at, qa_case_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut items = rows
+            .into_iter()
+            .map(
+                |(
+                    qa_case_id,
+                    claim_id,
+                    qa_conclusion,
+                    issue_type,
+                    feedback_target,
+                    notes,
+                    evidence_refs,
+                    created_at,
+                )| {
+                    qa_review_to_feedback_item(
+                        QaReviewRecord {
+                            qa_case_id,
+                            claim_id,
+                            qa_conclusion,
+                            issue_type,
+                            feedback_target,
+                            notes,
+                            evidence_refs: json_array_to_strings(evidence_refs),
+                        },
+                        Some(created_at.to_rfc3339()),
+                    )
+                },
+            )
+            .collect::<Vec<_>>();
+        sort_qa_feedback_items(&mut items);
+        Ok(items)
+    }
+
     async fn claim_audit_history(
         &self,
         claim_id: &str,
@@ -3593,6 +3680,53 @@ fn build_audit_sample(
         selected_leads,
         outcome_distribution: serde_json::json!({}),
         created_at,
+    }
+}
+
+fn qa_review_to_feedback_item(
+    review: QaReviewRecord,
+    created_at: Option<String>,
+) -> QaFeedbackItemRecord {
+    let priority = if review.qa_conclusion.contains("escalate") {
+        "high"
+    } else if review.qa_conclusion.contains("return") {
+        "medium"
+    } else {
+        "low"
+    };
+    QaFeedbackItemRecord {
+        feedback_id: format!("qa_feedback_{}", review.qa_case_id),
+        qa_case_id: review.qa_case_id.clone(),
+        claim_id: review.claim_id.clone(),
+        feedback_target: review.feedback_target.clone(),
+        issue_type: review.issue_type.clone(),
+        qa_conclusion: review.qa_conclusion.clone(),
+        source: "qa_review".into(),
+        status: "open".into(),
+        priority: priority.into(),
+        summary: format!(
+            "QA {} flagged {} feedback for claim {}",
+            review.qa_case_id, review.feedback_target, review.claim_id
+        ),
+        note_present: !review.notes.trim().is_empty(),
+        evidence_refs: review.evidence_refs,
+        created_at,
+    }
+}
+
+fn sort_qa_feedback_items(items: &mut [QaFeedbackItemRecord]) {
+    items.sort_by(|left, right| {
+        feedback_target_rank(&left.feedback_target)
+            .cmp(&feedback_target_rank(&right.feedback_target))
+            .then_with(|| left.qa_case_id.cmp(&right.qa_case_id))
+    });
+}
+
+fn feedback_target_rank(target: &str) -> u8 {
+    match target {
+        "rules" => 0,
+        "models" => 1,
+        _ => 2,
     }
 }
 

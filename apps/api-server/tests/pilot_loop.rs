@@ -104,6 +104,59 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
 }
 
 #[tokio::test]
+async fn lists_qa_feedback_items_for_rule_and_model_operators() {
+    let app = build_app(test_config());
+
+    for (qa_case_id, feedback_target, issue_type) in [
+        ("QA-RULE-1001", "rules", "alert_handling_incomplete"),
+        (
+            "QA-MODEL-1001",
+            "models",
+            "model_under_scored_confirmed_issue",
+        ),
+    ] {
+        let (status, _) = json_request(
+            app.clone(),
+            "POST",
+            "/api/v1/qa/results",
+            &format!(
+                r#"{{
+                  "qa_case_id": "{qa_case_id}",
+                  "claim_id": "CLM-0287",
+                  "qa_conclusion": "issue_found_escalate",
+                  "issue_type": "{issue_type}",
+                  "feedback_target": "{feedback_target}",
+                  "notes": "Reviewer notes stay in the source QA review, not the feedback queue summary.",
+                  "evidence_refs": ["audit:scoring.completed", "rule_runs:EARLY_CLAIM"]
+                }}"#,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let (status, feedback) = json_request(app, "GET", "/api/v1/ops/qa/feedback-items", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let items = feedback["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0]["feedback_id"], "qa_feedback_QA-RULE-1001");
+    assert_eq!(items[0]["feedback_target"], "rules");
+    assert_eq!(items[0]["status"], "open");
+    assert_eq!(items[0]["source"], "qa_review");
+    assert_eq!(items[0]["note_present"], true);
+    assert!(items[0]["summary"]
+        .as_str()
+        .unwrap()
+        .contains("QA-RULE-1001"));
+    assert!(items[0].get("notes").is_none());
+    assert_eq!(items[1]["feedback_target"], "models");
+    assert!(items
+        .iter()
+        .all(|item| !item["evidence_refs"].as_array().unwrap().is_empty()));
+}
+
+#[tokio::test]
 async fn pilot_loop_endpoints_require_api_key() {
     for (method, uri, body) in [
         (

@@ -58,6 +58,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/agent/cases/investigate",
         "/api/v1/investigations/results",
         "/api/v1/qa/results",
+        "/api/v1/ops/qa/feedback-items",
         "/api/v1/audit/claims/{claim_id}",
     ] {
         assert!(schema["paths"][path].is_object(), "missing {path}");
