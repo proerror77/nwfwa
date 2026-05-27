@@ -23,6 +23,47 @@ pub struct FullClaimPayload {
     pub currency: String,
     pub service_date: Option<NaiveDate>,
     pub diagnosis_code: Option<String>,
+    pub items: Option<Vec<ClaimItemPayload>>,
+    pub member: Option<MemberPayload>,
+    pub policy: Option<PolicyPayload>,
+    pub provider: Option<ProviderPayload>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ClaimItemPayload {
+    pub item_code: String,
+    pub item_type: String,
+    pub description: String,
+    pub quantity: u32,
+    pub unit_amount: Decimal,
+    pub total_amount: Decimal,
+    pub currency: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct MemberPayload {
+    pub external_member_id: String,
+    pub dob: Option<NaiveDate>,
+    pub gender: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct PolicyPayload {
+    pub external_policy_id: String,
+    pub product_code: Option<String>,
+    pub coverage_start_date: NaiveDate,
+    pub coverage_end_date: NaiveDate,
+    pub coverage_limit: Decimal,
+    pub currency: Option<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderPayload {
+    pub external_provider_id: String,
+    pub name: String,
+    pub provider_type: String,
+    pub region: String,
+    pub risk_tier: Option<ProviderRiskTier>,
 }
 
 #[derive(Debug, Serialize)]
@@ -224,12 +265,49 @@ fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) ->
 }
 
 fn demo_context(payload: FullClaimPayload) -> ClaimContext {
-    let member_id = MemberId::from_external("MBR-DEMO");
-    let policy_id = PolicyId::from_external("POL-DEMO");
-    let provider_id = ProviderId::from_external("PRV-DEMO");
+    let claim_currency = payload.currency.clone();
+    let member_payload = payload.member.clone().unwrap_or(MemberPayload {
+        external_member_id: "MBR-DEMO".into(),
+        dob: None,
+        gender: None,
+    });
+    let policy_payload = payload.policy.clone().unwrap_or(PolicyPayload {
+        external_policy_id: "POL-DEMO".into(),
+        product_code: Some("MED".into()),
+        coverage_start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
+        coverage_end_date: NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
+        coverage_limit: Decimal::new(10000, 0),
+        currency: Some(payload.currency.clone()),
+    });
+    let provider_payload = payload.provider.clone().unwrap_or(ProviderPayload {
+        external_provider_id: "PRV-DEMO".into(),
+        name: "Demo Hospital".into(),
+        provider_type: "hospital".into(),
+        region: "SH".into(),
+        risk_tier: Some(ProviderRiskTier::Medium),
+    });
+    let member_id = MemberId::from_external(member_payload.external_member_id.clone());
+    let policy_id = PolicyId::from_external(policy_payload.external_policy_id.clone());
+    let provider_id = ProviderId::from_external(provider_payload.external_provider_id.clone());
     let service_date = payload
         .service_date
         .unwrap_or_else(|| NaiveDate::from_ymd_opt(2026, 1, 6).unwrap());
+    let items = payload
+        .items
+        .unwrap_or_default()
+        .into_iter()
+        .map(|item| {
+            let currency = item.currency.unwrap_or_else(|| payload.currency.clone());
+            ClaimItem {
+                item_code: item.item_code,
+                item_type: item.item_type,
+                description: item.description,
+                quantity: item.quantity,
+                unit_amount: Money::new(item.unit_amount, currency.clone()),
+                total_amount: Money::new(item.total_amount, currency),
+            }
+        })
+        .collect();
 
     ClaimContext {
         claim: Claim {
@@ -242,29 +320,36 @@ fn demo_context(payload: FullClaimPayload) -> ClaimContext {
             service_date,
             amount: Money::new(payload.claim_amount, payload.currency),
         },
-        items: vec![],
+        items,
         member: Member {
             id: member_id.clone(),
-            external_member_id: "MBR-DEMO".into(),
-            dob: None,
-            gender: None,
+            external_member_id: member_payload.external_member_id,
+            dob: member_payload.dob,
+            gender: member_payload.gender,
         },
         policy: Policy {
             id: policy_id,
-            external_policy_id: "POL-DEMO".into(),
+            external_policy_id: policy_payload.external_policy_id,
             member_id,
-            product_code: "MED".into(),
-            coverage_start_date: NaiveDate::from_ymd_opt(2026, 1, 1).unwrap(),
-            coverage_end_date: NaiveDate::from_ymd_opt(2026, 12, 31).unwrap(),
-            coverage_limit: Money::new(Decimal::new(10000, 0), "CNY"),
+            product_code: policy_payload.product_code.unwrap_or_else(|| "MED".into()),
+            coverage_start_date: policy_payload.coverage_start_date,
+            coverage_end_date: policy_payload.coverage_end_date,
+            coverage_limit: Money::new(
+                policy_payload.coverage_limit,
+                policy_payload
+                    .currency
+                    .unwrap_or_else(|| claim_currency.clone()),
+            ),
         },
         provider: Provider {
             id: provider_id,
-            external_provider_id: "PRV-DEMO".into(),
-            name: "Demo Hospital".into(),
-            provider_type: "hospital".into(),
-            region: "SH".into(),
-            risk_tier: ProviderRiskTier::Medium,
+            external_provider_id: provider_payload.external_provider_id,
+            name: provider_payload.name,
+            provider_type: provider_payload.provider_type,
+            region: provider_payload.region,
+            risk_tier: provider_payload
+                .risk_tier
+                .unwrap_or(ProviderRiskTier::Medium),
         },
     }
 }

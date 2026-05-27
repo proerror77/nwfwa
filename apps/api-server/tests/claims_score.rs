@@ -29,7 +29,39 @@ async fn scores_full_payload_with_api_key() {
               "claim": {
                 "external_claim_id": "CLM-0287",
                 "claim_amount": "8000",
-                "currency": "CNY"
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10",
+                "items": [
+                  {
+                    "item_code": "PROC-001",
+                    "item_type": "procedure",
+                    "description": "Imaging",
+                    "quantity": 1,
+                    "unit_amount": "8000",
+                    "total_amount": "8000"
+                  }
+                ],
+                "member": {
+                  "external_member_id": "MBR-0287",
+                  "dob": "1988-03-12",
+                  "gender": "F"
+                },
+                "policy": {
+                  "external_policy_id": "POL-0287",
+                  "product_code": "MED",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": "10000",
+                  "currency": "CNY"
+                },
+                "provider": {
+                  "external_provider_id": "PRV-0287",
+                  "name": "Northwind Hospital",
+                  "provider_type": "hospital",
+                  "region": "SH",
+                  "risk_tier": "High"
+                }
               }
             }"#,
         ))
