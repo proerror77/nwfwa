@@ -81,6 +81,71 @@ async fn searches_similar_knowledge_cases_with_evidence() {
 }
 
 #[tokio::test]
+async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-PUBLISHED-1",
+          "title": "Published provider lab overuse case",
+          "fwa_type": "Waste",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste; provider education and post-payment audit opened.",
+          "tags": ["lab_overuse", "provider_pattern"],
+          "evidence_refs": ["investigation_results:INV-KB-1", "qa_reviews:QA-KB-1"],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["case"]["case_id"], "KC-PUBLISHED-1");
+    assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
+
+    let (status, body) =
+        json_request(app.clone(), "GET", "/api/v1/ops/knowledge/cases", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(body["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|case| case["case_id"] == "KC-PUBLISHED-1"));
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/knowledge/search-similar",
+        r#"{
+          "claim_id": "CLM-KB-SEARCH",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "tags": ["lab_overuse"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["results"][0]["case_id"], "KC-PUBLISHED-1");
+
+    let (status, body) = json_request(app, "GET", "/api/v1/audit/claims/CLM-KB-1", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "knowledge.case.published"));
+}
+
+#[tokio::test]
 async fn investigates_case_as_assistive_agent_with_evidence_refs() {
     let app = build_app(test_config());
 

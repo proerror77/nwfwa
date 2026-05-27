@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { listKnowledgeCases, searchSimilarCases } from "../api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { listKnowledgeCases, publishKnowledgeCase, searchSimilarCases } from "../api";
 
 type KnowledgeCase = {
   case_id: string;
@@ -31,7 +31,11 @@ export function KnowledgeBasePage() {
   const [diagnosisCode, setDiagnosisCode] = useState("J10");
   const [providerRegion, setProviderRegion] = useState("Shanghai");
   const [tags, setTags] = useState("early_claim, high_amount");
+  const [publishCaseId, setPublishCaseId] = useState("KC-PILOT-001");
+  const [publishTitle, setPublishTitle] = useState("Confirmed pilot FWA case");
+  const [publishSourceClaimId, setPublishSourceClaimId] = useState("CLM-0287");
   const [lastSearch, setLastSearch] = useState<SimilarCase[] | null>(null);
+  const queryClient = useQueryClient();
 
   const casesQuery = useQuery({
     queryKey: ["knowledge-cases", apiKey],
@@ -58,6 +62,31 @@ export function KnowledgeBasePage() {
     )) as { results: SimilarCase[] };
     setLastSearch(response.results);
   }
+  const publishMutation = useMutation({
+    mutationFn: () =>
+      publishKnowledgeCase(
+        {
+          case_id: publishCaseId,
+          title: publishTitle,
+          fwa_type: "Waste",
+          diagnosis_code: diagnosisCode,
+          provider_region: providerRegion,
+          provider_type: "provider",
+          summary: "Confirmed case published from operations review.",
+          outcome: "Published to FWA knowledge base for future similarity search.",
+          tags: tags
+            .split(",")
+            .map((tag) => tag.trim())
+            .filter(Boolean),
+          evidence_refs: [`claims:${publishSourceClaimId}`, `knowledge_cases:${publishCaseId}`],
+          source_claim_id: publishSourceClaimId,
+        },
+        apiKey,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["knowledge-cases"] });
+    },
+  });
 
   return (
     <section className="ops-grid">
@@ -146,6 +175,40 @@ export function KnowledgeBasePage() {
           </ul>
         ) : (
           <p className="empty">No search run yet</p>
+        )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Publish Case</h2>
+        <div className="form-grid">
+          <label>
+            Case ID
+            <input
+              value={publishCaseId}
+              onChange={(event) => setPublishCaseId(event.target.value)}
+            />
+          </label>
+          <label>
+            Title
+            <input value={publishTitle} onChange={(event) => setPublishTitle(event.target.value)} />
+          </label>
+          <label>
+            Source Claim
+            <input
+              value={publishSourceClaimId}
+              onChange={(event) => setPublishSourceClaimId(event.target.value)}
+            />
+          </label>
+        </div>
+        <button onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}>
+          Publish
+        </button>
+        {publishMutation.error ? (
+          <pre className="error">{String(publishMutation.error.message)}</pre>
+        ) : null}
+        {publishMutation.data ? (
+          <pre>{JSON.stringify(publishMutation.data, null, 2)}</pre>
+        ) : (
+          <p className="empty">No case published in this session</p>
         )}
       </div>
     </section>

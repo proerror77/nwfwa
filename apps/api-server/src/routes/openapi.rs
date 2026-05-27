@@ -715,6 +715,28 @@ pub async fn openapi_schema() -> Json<Value> {
                             }
                         }
                     }
+                },
+                "post": {
+                    "summary": "Publish confirmed FWA knowledge case",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/PublishKnowledgeCaseRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Published knowledge case",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/PublishKnowledgeCaseResponse" }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             "/api/v1/knowledge/search-similar": {
@@ -2156,6 +2178,31 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/KnowledgeCase" }
                         }
+                    }
+                },
+                "PublishKnowledgeCaseRequest": {
+                    "type": "object",
+                    "required": ["case_id", "title", "fwa_type", "diagnosis_code", "provider_region", "provider_type", "summary", "outcome", "tags", "evidence_refs"],
+                    "properties": {
+                        "case_id": { "type": "string" },
+                        "title": { "type": "string" },
+                        "fwa_type": { "type": "string" },
+                        "diagnosis_code": { "type": "string" },
+                        "provider_region": { "type": "string" },
+                        "provider_type": { "type": "string" },
+                        "summary": { "type": "string" },
+                        "outcome": { "type": "string" },
+                        "tags": { "type": "array", "items": { "type": "string" } },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "source_claim_id": { "type": ["string", "null"] }
+                    }
+                },
+                "PublishKnowledgeCaseResponse": {
+                    "type": "object",
+                    "required": ["case", "audit_id"],
+                    "properties": {
+                        "case": { "$ref": "#/components/schemas/KnowledgeCase" },
+                        "audit_id": { "type": "string" }
                     }
                 },
                 "SimilarCaseSearchRequest": {

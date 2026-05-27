@@ -63,6 +63,7 @@ async fn openapi_includes_operations_paths() {
     ] {
         assert!(schema["paths"][path].is_object(), "missing {path}");
     }
+    assert!(schema["paths"]["/api/v1/ops/knowledge/cases"]["post"].is_object());
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
     assert!(

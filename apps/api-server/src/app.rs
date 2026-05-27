@@ -61,7 +61,10 @@ pub fn build_app_with_parts(
             "/api/v1/agent/cases/investigate",
             post(agent::investigate_case),
         )
-        .route("/api/v1/ops/knowledge/cases", get(knowledge::list_cases))
+        .route(
+            "/api/v1/ops/knowledge/cases",
+            get(knowledge::list_cases).post(knowledge::publish_case),
+        )
         .route(
             "/api/v1/knowledge/search-similar",
             post(knowledge::search_similar),

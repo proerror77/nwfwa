@@ -20,6 +20,7 @@ import {
   getModelPromotionGates,
   submitModelPromotionReview,
   listRules,
+  publishKnowledgeCase,
   publishRule,
   saveRuleCandidate,
   searchSimilarCases,
@@ -339,6 +340,7 @@ describe("ops API helpers", () => {
     };
 
     await listKnowledgeCases("dev-secret");
+    await publishKnowledgeCase({ case_id: "KC-PUBLISHED-1" }, "dev-secret");
     await searchSimilarCases(searchPayload, "dev-secret");
     await investigateCase(investigationPayload, "dev-secret");
 
@@ -351,6 +353,14 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      "/api/v1/ops/knowledge/cases",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ case_id: "KC-PUBLISHED-1" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       "/api/v1/knowledge/search-similar",
       expect.objectContaining({
         method: "POST",
@@ -358,7 +368,7 @@ describe("ops API helpers", () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       "/api/v1/agent/cases/investigate",
       expect.objectContaining({
         method: "POST",

@@ -791,6 +791,11 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
+    async fn save_knowledge_case(
+        &self,
+        record: KnowledgeCaseRecord,
+    ) -> anyhow::Result<KnowledgeCaseRecord>;
+
     async fn search_similar_cases(
         &self,
         query: SimilarCaseQuery,
@@ -866,6 +871,7 @@ pub struct InMemoryScoringRepository {
     rule_statuses: Mutex<HashMap<String, String>>,
     rule_backtests: Mutex<Vec<RuleBacktestRecord>>,
     rule_promotion_reviews: Mutex<Vec<RulePromotionReviewRecord>>,
+    knowledge_cases: Mutex<HashMap<String, KnowledgeCaseRecord>>,
     datasets: Mutex<HashMap<String, DatasetRecord>>,
     dataset_sequence: Mutex<u64>,
     mapping_sequence: Mutex<u64>,
@@ -1399,14 +1405,32 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
-        Ok(default_knowledge_cases())
+        let mut cases = default_knowledge_cases()
+            .into_iter()
+            .map(|case| (case.case_id.clone(), case))
+            .collect::<HashMap<_, _>>();
+        cases.extend(self.knowledge_cases.lock().await.clone());
+        let mut cases = cases.into_values().collect::<Vec<_>>();
+        cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
+        Ok(cases)
+    }
+
+    async fn save_knowledge_case(
+        &self,
+        record: KnowledgeCaseRecord,
+    ) -> anyhow::Result<KnowledgeCaseRecord> {
+        self.knowledge_cases
+            .lock()
+            .await
+            .insert(record.case_id.clone(), record.clone());
+        Ok(record)
     }
 
     async fn search_similar_cases(
         &self,
         query: SimilarCaseQuery,
     ) -> anyhow::Result<Vec<SimilarCaseRecord>> {
-        Ok(search_cases(default_knowledge_cases(), &query))
+        Ok(search_cases(self.list_knowledge_cases().await?, &query))
     }
 
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
@@ -3046,6 +3070,41 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect())
+    }
+
+    async fn save_knowledge_case(
+        &self,
+        record: KnowledgeCaseRecord,
+    ) -> anyhow::Result<KnowledgeCaseRecord> {
+        sqlx::query(
+            "INSERT INTO knowledge_cases
+             (case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (case_id) DO UPDATE
+             SET title = EXCLUDED.title,
+                 fwa_type = EXCLUDED.fwa_type,
+                 diagnosis_code = EXCLUDED.diagnosis_code,
+                 provider_region = EXCLUDED.provider_region,
+                 provider_type = EXCLUDED.provider_type,
+                 summary = EXCLUDED.summary,
+                 outcome = EXCLUDED.outcome,
+                 tags = EXCLUDED.tags,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 updated_at = now()",
+        )
+        .bind(&record.case_id)
+        .bind(&record.title)
+        .bind(&record.fwa_type)
+        .bind(&record.diagnosis_code)
+        .bind(&record.provider_region)
+        .bind(&record.provider_type)
+        .bind(&record.summary)
+        .bind(&record.outcome)
+        .bind(serde_json::json!(record.tags))
+        .bind(serde_json::json!(record.evidence_refs))
+        .execute(&self.pool)
+        .await?;
+        Ok(record)
     }
 
     async fn search_similar_cases(

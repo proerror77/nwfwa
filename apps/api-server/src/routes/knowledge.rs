@@ -1,19 +1,42 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{KnowledgeCaseRecord, SimilarCaseQuery, SimilarCaseRecord},
+    repository::{KnowledgeCaseRecord, PersistedAuditEvent, SimilarCaseQuery, SimilarCaseRecord},
 };
 use axum::{
     extract::State,
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 pub struct KnowledgeCaseListResponse {
     pub cases: Vec<KnowledgeCaseRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct PublishKnowledgeCaseRequest {
+    pub case_id: String,
+    pub title: String,
+    pub fwa_type: String,
+    pub diagnosis_code: String,
+    pub provider_region: String,
+    pub provider_type: String,
+    pub summary: String,
+    pub outcome: String,
+    pub tags: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub source_claim_id: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct PublishKnowledgeCaseResponse {
+    pub case: KnowledgeCaseRecord,
+    pub audit_id: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -42,6 +65,81 @@ pub async fn list_cases(
     Ok(Json(KnowledgeCaseListResponse { cases }))
 }
 
+pub async fn publish_case(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<PublishKnowledgeCaseRequest>,
+) -> Result<Json<PublishKnowledgeCaseResponse>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    if request.case_id.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_KNOWLEDGE_CASE",
+            "case_id is required",
+        ));
+    }
+    if request.evidence_refs.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_KNOWLEDGE_CASE",
+            "evidence_refs are required",
+        ));
+    }
+
+    let case = KnowledgeCaseRecord {
+        case_id: request.case_id,
+        title: request.title,
+        fwa_type: request.fwa_type,
+        diagnosis_code: request.diagnosis_code,
+        provider_region: request.provider_region,
+        provider_type: request.provider_type,
+        summary: request.summary,
+        outcome: request.outcome,
+        tags: request.tags,
+        evidence_refs: request.evidence_refs,
+    };
+    let source_claim_id = request.source_claim_id.clone();
+    let case = state
+        .repository
+        .save_knowledge_case(case)
+        .await
+        .map_err(internal_error("KNOWLEDGE_CASE_SAVE_FAILED"))?;
+    let audit_id = AuditEventId::new().to_string();
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: audit_id.clone(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: source_claim_id
+                .clone()
+                .unwrap_or_else(|| case.case_id.clone()),
+            source_system: actor.source_system,
+            actor_id: actor.actor_id,
+            actor_role: actor.actor_role,
+            event_type: "knowledge.case.published".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Knowledge case published: {}", case.case_id),
+            payload: serde_json::json!({
+                "claim_id": source_claim_id,
+                "case_id": case.case_id,
+                "fwa_type": case.fwa_type,
+                "diagnosis_code": case.diagnosis_code,
+                "provider_region": case.provider_region,
+                "tags": case.tags,
+                "evidence_ref_count": case.evidence_refs.len()
+            }),
+            evidence_refs: case
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+        .map_err(internal_error("KNOWLEDGE_CASE_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(PublishKnowledgeCaseResponse { case, audit_id }))
+}
+
 pub async fn search_similar(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -61,7 +159,7 @@ pub async fn search_similar(
     Ok(Json(SimilarCaseSearchResponse { results }))
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
@@ -72,7 +170,6 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
             source_system: state.config.source_system.clone(),
         },
     )
-    .map(|_| ())
     .map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
