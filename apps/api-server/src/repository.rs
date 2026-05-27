@@ -394,6 +394,8 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>>;
 
+    async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>>;
+
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>>;
 
     async fn update_rule_status(
@@ -541,6 +543,23 @@ impl ScoringRepository for InMemoryScoringRepository {
                 detail.summary
             })
             .collect())
+    }
+
+    async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>> {
+        let statuses = self.rule_statuses.lock().await;
+        default_rule_details()
+            .into_iter()
+            .filter_map(|mut detail| {
+                if let Some(status) = statuses.get(&detail.summary.rule_id) {
+                    detail.summary.status = status.clone();
+                    for version in &mut detail.versions {
+                        version.status = status.clone();
+                    }
+                }
+                (detail.summary.status == "active").then_some(detail)
+            })
+            .map(runtime_rule_from_detail)
+            .collect()
     }
 
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>> {
@@ -1243,6 +1262,31 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect())
+    }
+
+    async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>> {
+        ensure_default_rules_seeded(&self.pool).await?;
+        let rows: Vec<(String, String, i32, Value)> = sqlx::query_as(
+            "SELECT r.rule_key, r.name, rv.version, rv.dsl
+             FROM rules r
+             JOIN LATERAL (
+               SELECT version, dsl
+               FROM rule_versions
+               WHERE rule_id = r.id
+               ORDER BY version DESC
+               LIMIT 1
+             ) rv ON true
+             WHERE r.status = 'active'
+             ORDER BY r.rule_key",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|(rule_id, name, version, dsl)| {
+                runtime_rule_from_parts(rule_id, name, version as u32, dsl)
+            })
+            .collect()
     }
 
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>> {
@@ -2206,6 +2250,37 @@ fn parse_recommended_action(value: &str) -> RecommendedAction {
         "EscalateInvestigation" => RecommendedAction::EscalateInvestigation,
         _ => RecommendedAction::ManualReview,
     }
+}
+
+fn runtime_rule_from_detail(detail: RuleDetailRecord) -> anyhow::Result<Rule> {
+    let version = detail
+        .versions
+        .into_iter()
+        .find(|version| Some(version.version) == detail.summary.active_version)
+        .ok_or_else(|| {
+            anyhow::anyhow!("active version missing for rule {}", detail.summary.rule_id)
+        })?;
+    runtime_rule_from_parts(
+        detail.summary.rule_id,
+        detail.summary.name,
+        version.version,
+        version.dsl,
+    )
+}
+
+fn runtime_rule_from_parts(
+    rule_id: String,
+    name: String,
+    version: u32,
+    dsl: Value,
+) -> anyhow::Result<Rule> {
+    Ok(Rule {
+        rule_id,
+        version,
+        name,
+        conditions: serde_json::from_value(dsl["conditions"].clone())?,
+        action: serde_json::from_value(dsl["action"].clone())?,
+    })
 }
 
 async fn ensure_default_rules_seeded(pool: &PgPool) -> anyhow::Result<()> {
