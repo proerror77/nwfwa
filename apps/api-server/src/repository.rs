@@ -11,6 +11,7 @@ use serde_json::Value;
 use sqlx::{postgres::PgPoolOptions, PgPool, Postgres, Transaction};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
+    hash::{Hash, Hasher},
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -147,6 +148,43 @@ pub struct TriageLeadInput {
 pub struct TriageLeadRecord {
     pub case: CaseRecord,
     pub audit_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditSampleLeadRecord {
+    pub lead_id: String,
+    pub claim_id: String,
+    pub scheme_family: String,
+    pub risk_score: u8,
+    pub rag: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CreateAuditSampleInput {
+    pub sample_mode: String,
+    pub population_definition: String,
+    pub inclusion_criteria: Value,
+    pub deterministic_seed: Option<String>,
+    pub sample_size: usize,
+    pub reviewer: String,
+    pub assignment_queue: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditSampleRecord {
+    pub sample_id: String,
+    pub sample_mode: String,
+    pub population_definition: String,
+    pub inclusion_criteria: Value,
+    pub deterministic_seed: Option<String>,
+    pub selection_method: String,
+    pub sample_size: usize,
+    pub reviewer: String,
+    pub assignment_queue: String,
+    pub selected_leads: Vec<AuditSampleLeadRecord>,
+    pub outcome_distribution: Value,
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -636,6 +674,13 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>>;
 
+    async fn create_audit_sample(
+        &self,
+        input: CreateAuditSampleInput,
+    ) -> anyhow::Result<AuditSampleRecord>;
+
+    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>>;
+
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
     async fn model_performance(
@@ -714,6 +759,8 @@ pub struct InMemoryScoringRepository {
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
     leads: Mutex<HashMap<String, LeadRecord>>,
     cases: Mutex<HashMap<String, CaseRecord>>,
+    audit_samples: Mutex<HashMap<String, AuditSampleRecord>>,
+    audit_sample_sequence: Mutex<u64>,
     candidate_rules: Mutex<HashMap<String, RuleDetailRecord>>,
     rule_statuses: Mutex<HashMap<String, String>>,
     datasets: Mutex<HashMap<String, DatasetRecord>>,
@@ -992,6 +1039,34 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect::<Vec<_>>();
         cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
         Ok(cases)
+    }
+
+    async fn create_audit_sample(
+        &self,
+        input: CreateAuditSampleInput,
+    ) -> anyhow::Result<AuditSampleRecord> {
+        let mut sequence = self.audit_sample_sequence.lock().await;
+        *sequence += 1;
+        let sample_id = format!("sample_{}", *sequence);
+        let leads = self.list_leads().await?;
+        let sample = build_audit_sample(sample_id, input, leads, None);
+        self.audit_samples
+            .lock()
+            .await
+            .insert(sample.sample_id.clone(), sample.clone());
+        Ok(sample)
+    }
+
+    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>> {
+        let mut samples = self
+            .audit_samples
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        samples.sort_by(|left, right| left.sample_id.cmp(&right.sample_id));
+        Ok(samples)
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
@@ -2132,6 +2207,93 @@ impl ScoringRepository for PostgresScoringRepository {
         load_cases(&self.pool).await
     }
 
+    async fn create_audit_sample(
+        &self,
+        input: CreateAuditSampleInput,
+    ) -> anyhow::Result<AuditSampleRecord> {
+        let sample_id = format!("sample_{}", AuditEventId::new());
+        let leads = self.list_leads().await?;
+        let sample = build_audit_sample(sample_id, input, leads, None);
+        sqlx::query(
+            "INSERT INTO audit_samples
+             (sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+        )
+        .bind(&sample.sample_id)
+        .bind(&sample.sample_mode)
+        .bind(&sample.population_definition)
+        .bind(&sample.inclusion_criteria)
+        .bind(&sample.deterministic_seed)
+        .bind(&sample.selection_method)
+        .bind(sample.sample_size as i64)
+        .bind(&sample.reviewer)
+        .bind(&sample.assignment_queue)
+        .bind(serde_json::to_value(&sample.selected_leads)?)
+        .bind(&sample.outcome_distribution)
+        .execute(&self.pool)
+        .await?;
+        self.list_audit_samples()
+            .await?
+            .into_iter()
+            .find(|record| record.sample_id == sample.sample_id)
+            .ok_or_else(|| anyhow::anyhow!("created audit sample was not found"))
+    }
+
+    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>> {
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            Value,
+            Option<String>,
+            String,
+            i64,
+            String,
+            String,
+            Value,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json, created_at
+             FROM audit_samples
+             ORDER BY created_at, sample_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    sample_id,
+                    sample_mode,
+                    population_definition,
+                    inclusion_criteria,
+                    deterministic_seed,
+                    selection_method,
+                    sample_size,
+                    reviewer,
+                    assignment_queue,
+                    selected_leads,
+                    outcome_distribution,
+                    created_at,
+                )| AuditSampleRecord {
+                    sample_id,
+                    sample_mode,
+                    population_definition,
+                    inclusion_criteria,
+                    deterministic_seed,
+                    selection_method,
+                    sample_size: sample_size.max(0) as usize,
+                    reviewer,
+                    assignment_queue,
+                    selected_leads: serde_json::from_value(selected_leads).unwrap_or_default(),
+                    outcome_distribution,
+                    created_at: Some(created_at.to_rfc3339()),
+                },
+            )
+            .collect())
+    }
+
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
         ensure_default_models_seeded(&self.pool).await?;
         let rows: Vec<(
@@ -3151,6 +3313,105 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
             "evidence_refs": lead.evidence_refs.clone()
         }),
     }
+}
+
+fn build_audit_sample(
+    sample_id: String,
+    input: CreateAuditSampleInput,
+    leads: Vec<LeadRecord>,
+    created_at: Option<String>,
+) -> AuditSampleRecord {
+    let selection_method = selection_method_for_mode(&input.sample_mode).to_string();
+    let mut candidates = leads
+        .into_iter()
+        .filter(|lead| lead_matches_inclusion(lead, &input.inclusion_criteria))
+        .collect::<Vec<_>>();
+
+    match selection_method.as_str() {
+        "deterministic_hash" => {
+            let seed = input
+                .deterministic_seed
+                .as_deref()
+                .unwrap_or("default-seed");
+            candidates.sort_by_key(|lead| deterministic_rank(seed, &lead.lead_id));
+        }
+        "scheme_family_then_risk_score" => candidates.sort_by(|left, right| {
+            left.scheme_family
+                .cmp(&right.scheme_family)
+                .then_with(|| right.risk_score.cmp(&left.risk_score))
+                .then_with(|| left.lead_id.cmp(&right.lead_id))
+        }),
+        _ => candidates.sort_by(|left, right| {
+            right
+                .risk_score
+                .cmp(&left.risk_score)
+                .then_with(|| left.lead_id.cmp(&right.lead_id))
+        }),
+    }
+
+    let selected_leads = candidates
+        .into_iter()
+        .take(input.sample_size)
+        .map(|lead| AuditSampleLeadRecord {
+            lead_id: lead.lead_id,
+            claim_id: lead.claim_id,
+            scheme_family: lead.scheme_family,
+            risk_score: lead.risk_score,
+            rag: lead.rag,
+            evidence_refs: lead.evidence_refs,
+        })
+        .collect::<Vec<_>>();
+
+    AuditSampleRecord {
+        sample_id,
+        sample_mode: input.sample_mode,
+        population_definition: input.population_definition,
+        inclusion_criteria: input.inclusion_criteria,
+        deterministic_seed: input.deterministic_seed,
+        selection_method,
+        sample_size: selected_leads.len(),
+        reviewer: input.reviewer,
+        assignment_queue: input.assignment_queue,
+        selected_leads,
+        outcome_distribution: serde_json::json!({}),
+        created_at,
+    }
+}
+
+fn selection_method_for_mode(sample_mode: &str) -> &'static str {
+    match sample_mode {
+        "random_control" => "deterministic_hash",
+        "stratified" => "scheme_family_then_risk_score",
+        "qa_calibration" => "reviewer_consistency_rotation",
+        "post_payment_audit" => "risk_score_desc_post_payment",
+        _ => "risk_score_desc",
+    }
+}
+
+fn lead_matches_inclusion(lead: &LeadRecord, criteria: &Value) -> bool {
+    if let Some(min_risk_score) = criteria["min_risk_score"].as_u64() {
+        if lead.risk_score < min_risk_score as u8 {
+            return false;
+        }
+    }
+    if let Some(scheme_family) = criteria["scheme_family"].as_str() {
+        if lead.scheme_family != scheme_family {
+            return false;
+        }
+    }
+    if let Some(rag) = criteria["rag"].as_str() {
+        if !lead.rag.eq_ignore_ascii_case(rag) {
+            return false;
+        }
+    }
+    true
+}
+
+fn deterministic_rank(seed: &str, lead_id: &str) -> u64 {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    seed.hash(&mut hasher);
+    lead_id.hash(&mut hasher);
+    hasher.finish()
 }
 
 async fn load_leads(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {

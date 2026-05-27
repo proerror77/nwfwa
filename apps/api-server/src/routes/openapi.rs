@@ -439,6 +439,44 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/audit-samples": {
+                "get": {
+                    "summary": "List governed audit sampling runs",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Audit sampling records",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/AuditSampleListResponse" }
+                                }
+                            }
+                        }
+                    }
+                },
+                "post": {
+                    "summary": "Create a deterministic audit sample from FWA leads",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/CreateAuditSampleRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Created audit sampling record",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/AuditSampleRecord" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/backtest": {
                 "post": {
                     "summary": "Backtest a candidate rule against sample claims",
@@ -1494,6 +1532,65 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "case": { "$ref": "#/components/schemas/Case" },
                         "audit_id": { "type": "string" }
+                    }
+                },
+                "CreateAuditSampleRequest": {
+                    "type": "object",
+                    "required": ["sample_mode", "population_definition", "inclusion_criteria", "sample_size", "reviewer", "assignment_queue"],
+                    "properties": {
+                        "sample_mode": {
+                            "type": "string",
+                            "enum": ["risk_ranked", "random_control", "stratified", "post_payment_audit", "qa_calibration"]
+                        },
+                        "population_definition": { "type": "string" },
+                        "inclusion_criteria": { "type": "object" },
+                        "deterministic_seed": { "type": ["string", "null"] },
+                        "sample_size": { "type": "integer", "minimum": 1 },
+                        "reviewer": { "type": "string" },
+                        "assignment_queue": { "type": "string" }
+                    }
+                },
+                "AuditSampleLeadRecord": {
+                    "type": "object",
+                    "required": ["lead_id", "claim_id", "scheme_family", "risk_score", "rag", "evidence_refs"],
+                    "properties": {
+                        "lead_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "scheme_family": { "type": "string" },
+                        "risk_score": { "type": "integer" },
+                        "rag": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "AuditSampleRecord": {
+                    "type": "object",
+                    "required": ["sample_id", "sample_mode", "population_definition", "inclusion_criteria", "selection_method", "sample_size", "reviewer", "assignment_queue", "selected_leads", "outcome_distribution"],
+                    "properties": {
+                        "sample_id": { "type": "string" },
+                        "sample_mode": { "type": "string" },
+                        "population_definition": { "type": "string" },
+                        "inclusion_criteria": { "type": "object" },
+                        "deterministic_seed": { "type": ["string", "null"] },
+                        "selection_method": { "type": "string" },
+                        "sample_size": { "type": "integer" },
+                        "reviewer": { "type": "string" },
+                        "assignment_queue": { "type": "string" },
+                        "selected_leads": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AuditSampleLeadRecord" }
+                        },
+                        "outcome_distribution": { "type": "object" },
+                        "created_at": { "type": ["string", "null"] }
+                    }
+                },
+                "AuditSampleListResponse": {
+                    "type": "object",
+                    "required": ["samples"],
+                    "properties": {
+                        "samples": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AuditSampleRecord" }
+                        }
                     }
                 },
                 "KnowledgeCase": {

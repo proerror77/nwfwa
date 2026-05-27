@@ -8,4 +8,5 @@ pub mod ops_cases;
 pub mod ops_datasets;
 pub mod ops_models;
 pub mod ops_rules;
+pub mod ops_sampling;
 pub mod pilot_loop;

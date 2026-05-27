@@ -263,6 +263,23 @@ CREATE TABLE IF NOT EXISTS investigation_cases (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS audit_samples (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  sample_id TEXT NOT NULL UNIQUE,
+  sample_mode TEXT NOT NULL,
+  population_definition TEXT NOT NULL,
+  inclusion_criteria_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  deterministic_seed TEXT,
+  selection_method TEXT NOT NULL,
+  sample_size INTEGER NOT NULL,
+  reviewer TEXT NOT NULL,
+  assignment_queue TEXT NOT NULL,
+  selected_leads_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  outcome_distribution_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS external_data_sources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_key TEXT NOT NULL UNIQUE,
