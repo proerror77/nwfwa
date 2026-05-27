@@ -221,6 +221,188 @@ SET model_type = EXCLUDED.model_type,
     metrics = EXCLUDED.metrics,
     activated_at = EXCLUDED.activated_at;
 
+INSERT INTO external_data_sources (
+  source_key,
+  display_name,
+  business_domain,
+  owner,
+  description,
+  status
+)
+VALUES (
+  'fwa_demo_claim_features',
+  'FWA Demo Claim Feature Store',
+  'health_fwa',
+  'feature-ops',
+  'Demo feature catalog for explainable health-insurance FWA factor cards.',
+  'active'
+)
+ON CONFLICT (source_key) DO UPDATE
+SET display_name = EXCLUDED.display_name,
+    business_domain = EXCLUDED.business_domain,
+    owner = EXCLUDED.owner,
+    description = EXCLUDED.description,
+    status = EXCLUDED.status,
+    updated_at = now();
+
+INSERT INTO external_dataset_versions (
+  id,
+  source_key,
+  dataset_key,
+  dataset_version,
+  sample_grain,
+  label_column,
+  entity_keys,
+  manifest_uri,
+  schema_uri,
+  profile_uri,
+  storage_format,
+  schema_hash,
+  row_count,
+  status
+)
+VALUES (
+  '70000000-0000-0000-0000-000000000001',
+  'fwa_demo_claim_features',
+  'fwa_claim_feature_cards',
+  'v1',
+  'claim',
+  'confirmed_fwa',
+  '["claim_id","provider_id","member_id"]'::jsonb,
+  'data/demo/fwa_claim_feature_cards/v1/manifest.json',
+  'data/demo/fwa_claim_feature_cards/v1/schema.json',
+  'data/demo/fwa_claim_feature_cards/v1/profile.json',
+  'parquet',
+  'sha256:fwa-demo-feature-cards-v1',
+  2,
+  'active'
+)
+ON CONFLICT (dataset_key, dataset_version) DO UPDATE
+SET sample_grain = EXCLUDED.sample_grain,
+    label_column = EXCLUDED.label_column,
+    entity_keys = EXCLUDED.entity_keys,
+    manifest_uri = EXCLUDED.manifest_uri,
+    schema_uri = EXCLUDED.schema_uri,
+    profile_uri = EXCLUDED.profile_uri,
+    storage_format = EXCLUDED.storage_format,
+    schema_hash = EXCLUDED.schema_hash,
+    row_count = EXCLUDED.row_count,
+    status = EXCLUDED.status;
+
+INSERT INTO external_dataset_splits (
+  dataset_id,
+  split_name,
+  data_uri,
+  row_count,
+  positive_count,
+  negative_count,
+  label_distribution_json
+)
+VALUES (
+  '70000000-0000-0000-0000-000000000001',
+  'demo',
+  'data/demo/fwa_claim_feature_cards/v1/split=demo/',
+  2,
+  1,
+  1,
+  '{"confirmed":1,"not_confirmed":1}'::jsonb
+)
+ON CONFLICT (dataset_id, split_name) DO UPDATE
+SET data_uri = EXCLUDED.data_uri,
+    row_count = EXCLUDED.row_count,
+    positive_count = EXCLUDED.positive_count,
+    negative_count = EXCLUDED.negative_count,
+    label_distribution_json = EXCLUDED.label_distribution_json;
+
+INSERT INTO external_schema_fields (
+  dataset_id,
+  field_name,
+  logical_type,
+  nullable,
+  semantic_role,
+  description,
+  profile_json
+)
+VALUES
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'claim_id',
+    'string',
+    false,
+    'key',
+    'External claim identifier used for evidence traceability.',
+    '{"missing_rate":0.0,"business_meaning":"理赔案件追踪键","risk_direction":"identifier","calculation_window":"claim","calculation_logic":"source claim id","source_table":"claims","source_fields":["external_claim_id"],"owner":"data-ops","version":1,"online_available":true,"convertible_to_rule":false}'::jsonb
+  ),
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'provider_id',
+    'string',
+    false,
+    'key',
+    'External provider identifier used for provider profile and network risk joins.',
+    '{"missing_rate":0.0,"business_meaning":"医疗服务方关联键","risk_direction":"identifier","calculation_window":"claim","calculation_logic":"source provider id","source_table":"providers","source_fields":["external_provider_id"],"owner":"data-ops","version":1,"online_available":true,"convertible_to_rule":false}'::jsonb
+  ),
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'member_id',
+    'string',
+    false,
+    'key',
+    'External member identifier used for member utilization features.',
+    '{"missing_rate":0.0,"business_meaning":"被保人关联键","risk_direction":"identifier","calculation_window":"claim","calculation_logic":"source member id","source_table":"members","source_fields":["external_member_id"],"owner":"data-ops","version":1,"online_available":true,"convertible_to_rule":false}'::jsonb
+  ),
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'claim_amount_to_limit_ratio',
+    'decimal',
+    false,
+    'feature',
+    'Claim amount divided by the policy coverage limit.',
+    '{"missing_rate":0.0,"business_meaning":"理赔金额占保障额度比例","risk_direction":"higher_is_riskier","calculation_window":"claim","calculation_logic":"claim_amount / coverage_limit_amount","source_table":"claims, policies","source_fields":["claim_amount","coverage_limit_amount"],"owner":"feature-ops","version":1,"iv":0.21,"auc_gain":0.03,"lift":2.4,"psi":0.04,"model_contribution":0.18,"online_available":true,"convertible_to_rule":true}'::jsonb
+  ),
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'days_since_policy_start',
+    'int32',
+    false,
+    'feature',
+    'Days between policy start date and claim service date.',
+    '{"missing_rate":0.0,"business_meaning":"保单生效后短期理赔","risk_direction":"lower_is_riskier","calculation_window":"claim","calculation_logic":"service_date - coverage_start_date","source_table":"claims, policies","source_fields":["service_date","coverage_start_date"],"owner":"feature-ops","version":1,"iv":0.17,"auc_gain":0.02,"lift":1.9,"psi":0.06,"model_contribution":0.12,"online_available":true,"convertible_to_rule":true}'::jsonb
+  ),
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'diagnosis_procedure_match_score',
+    'decimal',
+    false,
+    'feature',
+    'Clinical consistency score between diagnosis and billed procedures.',
+    '{"missing_rate":0.02,"business_meaning":"诊断与诊疗项目医学匹配度","risk_direction":"lower_is_riskier","calculation_window":"claim","calculation_logic":"clinical rule baseline score for diagnosis and procedure pair","source_table":"claims, claim_items, medical_codes","source_fields":["diagnosis_code","item_code","item_type"],"owner":"clinical-ops","version":1,"iv":0.24,"auc_gain":0.04,"lift":2.8,"psi":0.08,"model_contribution":0.22,"online_available":true,"convertible_to_rule":true}'::jsonb
+  ),
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'provider_high_cost_item_ratio_30d',
+    'decimal',
+    true,
+    'feature',
+    'Provider 30-day ratio of high-cost claim items.',
+    '{"missing_rate":0.04,"business_meaning":"Provider 近 30 天高价项目占比","risk_direction":"higher_is_riskier","calculation_window":"30d","calculation_logic":"high_cost_item_count_30d / item_count_30d","source_table":"claim_items, providers","source_fields":["provider_id","item_code","total_amount"],"owner":"provider-risk","version":1,"iv":0.19,"auc_gain":0.03,"lift":2.2,"psi":0.05,"model_contribution":0.16,"online_available":true,"convertible_to_rule":true}'::jsonb
+  ),
+  (
+    '70000000-0000-0000-0000-000000000001',
+    'confirmed_fwa',
+    'boolean',
+    false,
+    'label',
+    'Confirmed FWA outcome from investigation or QA.',
+    '{"missing_rate":0.0,"business_meaning":"调查或 QA 确认的 FWA 标签","risk_direction":"label","calculation_window":"outcome","calculation_logic":"human-confirmed investigation or QA result","source_table":"investigation_results, qa_reviews","source_fields":["confirmed_fwa","qa_conclusion"],"owner":"qa-ops","version":1,"online_available":false,"convertible_to_rule":false}'::jsonb
+  )
+ON CONFLICT (dataset_id, field_name) DO UPDATE
+SET logical_type = EXCLUDED.logical_type,
+    nullable = EXCLUDED.nullable,
+    semantic_role = EXCLUDED.semantic_role,
+    description = EXCLUDED.description,
+    profile_json = EXCLUDED.profile_json;
+
 INSERT INTO knowledge_cases (
   case_id,
   title,
