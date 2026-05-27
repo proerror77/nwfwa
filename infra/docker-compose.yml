@@ -1,0 +1,25 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: fwa
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d fwa"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - fwa_postgres_data:/var/lib/postgresql/data
+
+  ml-service:
+    build:
+      context: ../apps/ml-service
+    ports:
+      - "8001:8001"
+
+volumes:
+  fwa_postgres_data:

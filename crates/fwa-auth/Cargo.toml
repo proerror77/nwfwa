@@ -1,0 +1,9 @@
+[package]
+name = "fwa-auth"
+version = "0.1.0"
+edition.workspace = true
+publish.workspace = true
+
+[dependencies]
+fwa-audit = { path = "../fwa-audit" }
+thiserror.workspace = true
