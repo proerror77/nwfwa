@@ -4,6 +4,12 @@
 
 Status: completed on integration branch `develop`.
 
+Maintenance note: this is a completed MVP implementation plan, so historical
+tasks should not be rewritten to include later infrastructure scope. Future
+infrastructure decisions are governed by
+`docs/product/fwa-risk-operations-prd.md` and
+`docs/engineering/infrastructure-architecture.md`.
+
 Completion evidence:
 
 - Local verification: `cargo test --workspace`, `cargo fmt --all -- --check`, `git diff --check`.

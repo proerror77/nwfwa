@@ -18,6 +18,24 @@ This phase stays inside the Rust modular monolith. It does not introduce externa
 - No embedding service or vector database dependency.
 - No long-running workflow engine.
 
+## Infrastructure Alignment
+
+This phase is the deterministic, production-shaped slice of the broader
+agentic operating model. Its constraints are deliberate:
+
+- similar-case search uses structured fields and evidence refs instead of a
+  vector database;
+- agent investigation is deterministic and testable without external LLM calls;
+- agent output is assistive only and cannot change claim adjudication state;
+- `agent_runs` and `agent_steps` provide the first audit trail, not the full
+  future agent workspace model.
+
+Future agent-native infrastructure should follow
+`docs/engineering/infrastructure-architecture.md`: agent run records, step
+records, context snapshots, workspace artifacts, approval gates, retrieval audit,
+and optional `pgvector` or specialist vector search only after the evidence
+workflow needs it.
+
 ## API Surface
 
 ### `GET /api/v1/ops/knowledge/cases`

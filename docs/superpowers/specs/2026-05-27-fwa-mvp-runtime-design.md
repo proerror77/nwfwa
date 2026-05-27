@@ -54,6 +54,29 @@ TPA request
 
 Agent investigation, QA, rule discovery, knowledge search, model drift, and ROI attribution remain documented extension points. They do not block the MVP scoring path.
 
+## Infrastructure Baseline Alignment
+
+This MVP design should be read together with
+`docs/engineering/infrastructure-architecture.md`.
+
+The MVP runtime remains intentionally small:
+
+- PostgreSQL for transactional source-of-truth data;
+- Rust `api-server` and `worker`;
+- Python `ml-service`;
+- React `web-console`;
+- migrations, seed scripts, and CI checks.
+
+Infrastructure capabilities such as object storage, durable worker job tables,
+agent approval records, vector search, graph projections, ClickHouse, Redis,
+OpenSearch, and production observability are staged platform foundations, not
+requirements for this first scoring path.
+
+MVP out-of-scope decisions should be interpreted as phase boundaries, not as
+permanent architecture exclusions. Later phases may add those capabilities when
+the PRD and infrastructure baseline define the workload trigger and governance
+requirements.
+
 ## Rust Workspace
 
 The repository should be scaffolded as:
