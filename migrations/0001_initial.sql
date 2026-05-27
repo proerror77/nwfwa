@@ -349,8 +349,8 @@ CREATE TABLE IF NOT EXISTS investigation_results (
   claim_id TEXT NOT NULL,
   outcome TEXT NOT NULL,
   confirmed_fwa BOOLEAN NOT NULL,
-  saving_amount NUMERIC NOT NULL,
-  currency TEXT NOT NULL,
+  saving_amount NUMERIC,
+  currency TEXT,
   notes TEXT NOT NULL,
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
