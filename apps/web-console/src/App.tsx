@@ -9,6 +9,7 @@ import { DataSourcesPage } from "./pages/DataSourcesPage";
 import { DashboardPage } from "./pages/DashboardPage";
 import { QAReviewPage } from "./pages/QAReviewPage";
 import { FactorFactoryPage } from "./pages/FactorFactoryPage";
+import { LeadsCasesPage } from "./pages/LeadsCasesPage";
 
 const modules = [
   "Dashboard",
@@ -17,6 +18,7 @@ const modules = [
   "Models",
   "Data Sources",
   "Factor Factory",
+  "Leads & Cases",
   "Knowledge Base",
   "Agent Investigator",
   "QA Review",
@@ -46,6 +48,7 @@ export function App() {
         {active === "Models" ? <ModelOpsPage /> : null}
         {active === "Data Sources" ? <DataSourcesPage /> : null}
         {active === "Factor Factory" ? <FactorFactoryPage /> : null}
+        {active === "Leads & Cases" ? <LeadsCasesPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
         {active === "QA Review" ? <QAReviewPage /> : null}
@@ -56,6 +59,7 @@ export function App() {
           "Models",
           "Data Sources",
           "Factor Factory",
+          "Leads & Cases",
           "Knowledge Base",
           "Agent Investigator",
           "QA Review",

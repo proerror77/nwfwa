@@ -5,7 +5,9 @@ import {
   discoverRules,
   getDashboardSummary,
   investigateCase,
+  listCases,
   listDatasets,
+  listLeads,
   listKnowledgeCases,
   listModelEvaluations,
   listModels,
@@ -15,6 +17,7 @@ import {
   searchSimilarCases,
   submitRule,
   submitQaResult,
+  triageLead,
 } from "./api";
 
 function mockFetch(body: unknown, ok = true) {
@@ -139,6 +142,44 @@ describe("ops API helpers", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/dashboard/summary",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls lead and case lifecycle endpoints", async () => {
+    const fetchMock = mockFetch({ leads: [], cases: [], case: {}, audit_id: "aud_1" });
+    const triagePayload = {
+      decision: "open_case",
+      assignee: "siu-reviewer-1",
+      reviewer: "medical-reviewer-1",
+      priority: "high",
+      notes: "Open investigation from high-risk FWA lead.",
+    };
+
+    await listLeads("dev-secret");
+    await triageLead("lead_CLM-0287", triagePayload, "dev-secret");
+    await listCases("dev-secret");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/ops/leads",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/leads/lead_CLM-0287/triage",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(triagePayload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/ops/cases",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

@@ -280,6 +280,12 @@ pre {
   gap: 12px;
 }
 
+.case-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
 .factor-card {
   display: grid;
   gap: 12px;
@@ -336,6 +342,7 @@ pre {
   .form-grid,
   .summary-grid,
   .compact-list,
+  .case-grid,
   .metric-row {
     grid-template-columns: 1fr;
   }

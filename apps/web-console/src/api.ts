@@ -98,6 +98,21 @@ export async function getDashboardSummary(apiKey: string) {
   return requestJson("/api/v1/ops/dashboard/summary", apiKey);
 }
 
+export async function listLeads(apiKey: string) {
+  return requestJson("/api/v1/ops/leads", apiKey);
+}
+
+export async function triageLead(leadId: string, payload: unknown, apiKey: string) {
+  return requestJson(`/api/v1/ops/leads/${encodeURIComponent(leadId)}/triage`, apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function listCases(apiKey: string) {
+  return requestJson("/api/v1/ops/cases", apiKey);
+}
+
 export async function listKnowledgeCases(apiKey: string) {
   return requestJson("/api/v1/ops/knowledge/cases", apiKey);
 }
