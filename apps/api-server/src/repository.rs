@@ -237,6 +237,14 @@ pub struct DashboardModelScoreRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardLayerScoreRecord {
+    pub name: String,
+    pub scored_runs: u32,
+    pub average_score: f64,
+    pub high_risk_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -245,6 +253,7 @@ pub struct DashboardSummaryRecord {
     pub rag_distribution: BTreeMap<String, u32>,
     pub rule_hits: u32,
     pub model_scores: BTreeMap<String, DashboardModelScoreRecord>,
+    pub layer_scores: BTreeMap<String, DashboardLayerScoreRecord>,
     pub investigation_results: u32,
     pub qa_reviews: u32,
 }
@@ -1212,6 +1221,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut risk_amount = Decimal::ZERO;
         let mut rag_distribution = BTreeMap::new();
         let mut model_accumulators = BTreeMap::<String, (u32, u32, u32)>::new();
+        let mut layer_accumulators = BTreeMap::<String, (String, u32, u32, u32)>::new();
         let mut rule_hits = 0_u32;
 
         for run in runs.iter() {
@@ -1233,6 +1243,28 @@ impl ScoringRepository for InMemoryScoringRepository {
             entry.1 += score;
             if score >= 70 {
                 entry.2 += 1;
+            }
+
+            for layer in run
+                .audit_event
+                .get("layers")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                let layer_id = layer["layer_id"].as_str().unwrap_or("UNKNOWN").to_string();
+                let layer_name = layer["name"].as_str().unwrap_or("Unknown").to_string();
+                let layer_score = layer["score"].as_u64().unwrap_or(0) as u32;
+                let entry =
+                    layer_accumulators
+                        .entry(layer_id)
+                        .or_insert((layer_name.clone(), 0, 0, 0));
+                entry.0 = layer_name;
+                entry.1 += 1;
+                entry.2 += layer_score;
+                if layer_score >= 70 {
+                    entry.3 += 1;
+                }
             }
         }
 
@@ -1283,6 +1315,27 @@ impl ScoringRepository for InMemoryScoringRepository {
                         },
                     )
                 })
+                .collect(),
+            layer_scores: layer_accumulators
+                .into_iter()
+                .map(
+                    |(layer_id, (name, scored_runs, score_sum, high_risk_count))| {
+                        let average_score = if scored_runs == 0 {
+                            0.0
+                        } else {
+                            score_sum as f64 / scored_runs as f64
+                        };
+                        (
+                            layer_id,
+                            DashboardLayerScoreRecord {
+                                name,
+                                scored_runs,
+                                average_score,
+                                high_risk_count,
+                            },
+                        )
+                    },
+                )
                 .collect(),
             investigation_results,
             qa_reviews,
@@ -2680,6 +2733,38 @@ impl ScoringRepository for PostgresScoringRepository {
         .fetch_all(&self.pool)
         .await?;
 
+        let layer_payloads: Vec<(Value,)> = sqlx::query_as(
+            "SELECT payload
+             FROM audit_events
+             WHERE event_type = 'scoring.completed'
+               AND event_status = 'succeeded'",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let mut layer_accumulators = BTreeMap::<String, (String, u32, u32, u32)>::new();
+        for (payload,) in layer_payloads {
+            for layer in payload
+                .get("layers")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+            {
+                let layer_id = layer["layer_id"].as_str().unwrap_or("UNKNOWN").to_string();
+                let layer_name = layer["name"].as_str().unwrap_or("Unknown").to_string();
+                let layer_score = layer["score"].as_u64().unwrap_or(0) as u32;
+                let entry =
+                    layer_accumulators
+                        .entry(layer_id)
+                        .or_insert((layer_name.clone(), 0, 0, 0));
+                entry.0 = layer_name;
+                entry.1 += 1;
+                entry.2 += layer_score;
+                if layer_score >= 70 {
+                    entry.3 += 1;
+                }
+            }
+        }
+
         let investigation: (i64, i64, Option<Decimal>) = sqlx::query_as(
             "SELECT COUNT(*)::bigint,
                     COALESCE(SUM(CASE WHEN confirmed_fwa THEN 1 ELSE 0 END), 0)::bigint,
@@ -2717,6 +2802,27 @@ impl ScoringRepository for PostgresScoringRepository {
                         },
                     )
                 })
+                .collect(),
+            layer_scores: layer_accumulators
+                .into_iter()
+                .map(
+                    |(layer_id, (name, scored_runs, score_sum, high_risk_count))| {
+                        let average_score = if scored_runs == 0 {
+                            0.0
+                        } else {
+                            score_sum as f64 / scored_runs as f64
+                        };
+                        (
+                            layer_id,
+                            DashboardLayerScoreRecord {
+                                name,
+                                scored_runs,
+                                average_score,
+                                high_risk_count,
+                            },
+                        )
+                    },
+                )
                 .collect(),
             investigation_results: investigation.0 as u32,
             qa_reviews: qa_reviews.0 as u32,

@@ -138,6 +138,26 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
             .unwrap()
             > 0.0
     );
+    assert_eq!(
+        dashboard["layer_scores"]["L1_PEER_BENCHMARK"]["scored_runs"],
+        1
+    );
+    assert_eq!(
+        dashboard["layer_scores"]["L7_RISK_FUSION_ROUTING"]["scored_runs"],
+        1
+    );
+    assert!(
+        dashboard["layer_scores"]["L7_RISK_FUSION_ROUTING"]["average_score"]
+            .as_f64()
+            .unwrap()
+            > 0.0
+    );
+    assert!(
+        dashboard["layer_scores"]["L7_RISK_FUSION_ROUTING"]["high_risk_count"]
+            .as_u64()
+            .unwrap()
+            >= 1
+    );
 }
 
 #[tokio::test]

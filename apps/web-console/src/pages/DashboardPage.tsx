@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardSummary } from "../api";
+import { buildDashboardLayerRows, type DashboardLayerScore } from "./dashboardLayerRows";
 
 type DashboardModelScore = {
   scored_runs: number;
@@ -16,6 +17,7 @@ type DashboardSummary = {
   rag_distribution: Record<string, number>;
   rule_hits: number;
   model_scores: Record<string, DashboardModelScore>;
+  layer_scores: Record<string, DashboardLayerScore>;
   investigation_results: number;
   qa_reviews: number;
 };
@@ -33,6 +35,7 @@ export function DashboardPage() {
   const summary = dashboardQuery.data;
   const ragRows = Object.entries(summary?.rag_distribution ?? {});
   const modelRows = Object.entries(summary?.model_scores ?? {});
+  const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
 
   return (
     <section className="dashboard">
@@ -110,6 +113,24 @@ export function DashboardPage() {
           </div>
           {!dashboardQuery.isLoading && modelRows.length === 0 ? (
             <p className="empty">No model scores</p>
+          ) : null}
+        </div>
+
+        <div className="panel wide-panel">
+          <h2>Seven Layer Detection</h2>
+          <div className="table-list">
+            {layerRows.map((layer) => (
+              <div className="metric-row" key={layer.layerId}>
+                <span>{layer.layerId}</span>
+                <strong>{layer.name}</strong>
+                <small>{layer.scoredRuns} runs</small>
+                <small>Avg {formatScore(layer.averageScore)}</small>
+                <small>High risk {layer.highRiskCount}</small>
+              </div>
+            ))}
+          </div>
+          {!dashboardQuery.isLoading && layerRows.length === 0 ? (
+            <p className="empty">No layer scores</p>
           ) : null}
         </div>
       </div>

@@ -68,6 +68,19 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["components"]["schemas"]["LeadListResponse"].is_object());
     assert!(schema["components"]["schemas"]["CaseListResponse"].is_object());
     assert!(schema["components"]["schemas"]["AuditSampleRecord"].is_object());
+    assert!(schema["components"]["schemas"]["DashboardLayerScore"].is_object());
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "layer_scores")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["layer_scores"]
+            ["additionalProperties"]["$ref"],
+        "#/components/schemas/DashboardLayerScore"
+    );
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["get"].is_object());
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["post"].is_object());
 }

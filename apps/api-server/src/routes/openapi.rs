@@ -1929,9 +1929,19 @@ pub async fn openapi_schema() -> Json<Value> {
                         "high_risk_count": { "type": "integer" }
                     }
                 },
+                "DashboardLayerScore": {
+                    "type": "object",
+                    "required": ["name", "scored_runs", "average_score", "high_risk_count"],
+                    "properties": {
+                        "name": { "type": "string" },
+                        "scored_runs": { "type": "integer" },
+                        "average_score": { "type": "number" },
+                        "high_risk_count": { "type": "integer" }
+                    }
+                },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -1945,6 +1955,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "model_scores": {
                             "type": "object",
                             "additionalProperties": { "$ref": "#/components/schemas/DashboardModelScore" }
+                        },
+                        "layer_scores": {
+                            "type": "object",
+                            "additionalProperties": { "$ref": "#/components/schemas/DashboardLayerScore" }
                         },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
