@@ -1,0 +1,82 @@
+body {
+  margin: 0;
+  font-family: Inter, system-ui, sans-serif;
+  background: #f6f7f9;
+  color: #171717;
+}
+
+.app {
+  display: grid;
+  grid-template-columns: 240px 1fr;
+  min-height: 100vh;
+}
+
+aside {
+  background: #101820;
+  color: white;
+  padding: 20px;
+}
+
+aside button {
+  display: block;
+  width: 100%;
+  margin: 6px 0;
+  padding: 10px;
+  text-align: left;
+  background: transparent;
+  color: white;
+  border: 1px solid transparent;
+}
+
+aside button.active {
+  border-color: #8fb3ff;
+  background: #1f2f3f;
+}
+
+main {
+  padding: 24px;
+}
+
+.runtime {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+
+.panel {
+  background: white;
+  border: 1px solid #d8dde4;
+  border-radius: 8px;
+  padding: 18px;
+}
+
+label {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+}
+
+input,
+textarea {
+  font: inherit;
+  padding: 10px;
+  border: 1px solid #c7ccd4;
+  border-radius: 6px;
+}
+
+textarea {
+  min-height: 320px;
+}
+
+button {
+  cursor: pointer;
+}
+
+pre {
+  white-space: pre-wrap;
+  overflow: auto;
+}
+
+.error {
+  color: #a40000;
+}
