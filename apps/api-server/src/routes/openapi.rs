@@ -164,6 +164,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/{rule_id}/promotion-reviews": {
+                "post": {
+                    "summary": "Record a rule promotion review decision",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "rule_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitRulePromotionReviewRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded rule promotion review",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RulePromotionReview" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/{rule_id}": {
                 "get": {
                     "summary": "Get rule details and versions",
@@ -1501,6 +1533,27 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         }
+                    }
+                },
+                "SubmitRulePromotionReviewRequest": {
+                    "type": "object",
+                    "required": ["decision", "reviewer", "notes"],
+                    "properties": {
+                        "decision": { "type": "string", "enum": ["approved", "rejected"] },
+                        "reviewer": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                },
+                "RulePromotionReview": {
+                    "type": "object",
+                    "required": ["rule_id", "rule_version", "decision", "reviewer", "notes"],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "rule_version": { "type": "integer" },
+                        "decision": { "type": "string", "enum": ["approved", "rejected"] },
+                        "reviewer": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 },
                 "AuditHistoryEvent": {

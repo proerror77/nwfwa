@@ -1,7 +1,9 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{PersistedAuditEvent, RulePerformanceRecord, RuleSummaryRecord},
+    repository::{
+        PersistedAuditEvent, RulePerformanceRecord, RulePromotionReviewRecord, RuleSummaryRecord,
+    },
 };
 use axum::{
     extract::{Path, State},
@@ -51,6 +53,13 @@ pub struct RulePromotionGatesResponse {
     pub saving_amount: String,
     pub gates: Vec<RulePromotionGate>,
     pub blockers: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitRulePromotionReviewRequest {
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
 }
 
 #[derive(Debug, Deserialize)]
@@ -180,8 +189,63 @@ pub async fn rule_promotion_gates(
         .into_iter()
         .find(|record| record.rule_id == rule_id)
         .unwrap_or_else(|| empty_rule_performance(&rule));
+    let latest_review = state
+        .repository
+        .latest_rule_promotion_review(&rule.rule_id, rule.latest_version)
+        .await
+        .map_err(internal_error("RULE_PROMOTION_REVIEW_LOAD_FAILED"))?;
 
-    Ok(Json(build_rule_promotion_gates(&rule, &performance)))
+    Ok(Json(build_rule_promotion_gates(
+        &rule,
+        &performance,
+        latest_review.as_ref(),
+    )))
+}
+
+pub async fn submit_rule_promotion_review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(rule_id): Path<String>,
+    Json(request): Json<SubmitRulePromotionReviewRequest>,
+) -> Result<Json<RulePromotionReviewRecord>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    if !matches!(request.decision.as_str(), "approved" | "rejected") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROMOTION_DECISION",
+            "decision must be approved or rejected",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    let rule = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    let review = state
+        .repository
+        .save_rule_promotion_review(RulePromotionReviewRecord {
+            rule_id: rule.rule_id.clone(),
+            rule_version: rule.latest_version,
+            decision: request.decision,
+            reviewer: request.reviewer,
+            notes: request.notes,
+            created_at: None,
+        })
+        .await
+        .map_err(internal_error("RULE_PROMOTION_REVIEW_SAVE_FAILED"))?;
+    record_rule_promotion_audit(&state, &actor, &review)
+        .await
+        .map_err(internal_error("RULE_PROMOTION_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(review))
 }
 
 pub async fn get_rule(
@@ -202,6 +266,7 @@ pub async fn get_rule(
 fn build_rule_promotion_gates(
     rule: &RuleSummaryRecord,
     performance: &RulePerformanceRecord,
+    latest_review: Option<&RulePromotionReviewRecord>,
 ) -> RulePromotionGatesResponse {
     let has_review_evidence = performance.reviewed_count > 0;
     let has_saving_evidence = performance
@@ -232,7 +297,9 @@ fn build_rule_promotion_gates(
         ),
         rule_gate(
             "Approval before routing",
-            matches!(rule.status.as_str(), "approved" | "active"),
+            latest_review
+                .map(|review| review.decision == "approved")
+                .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active")),
             "approval missing",
         ),
         rule_gate(
@@ -592,6 +659,38 @@ async fn record_rule_audit(
             evidence_refs: vec![serde_json::json!(format!(
                 "rules:{}:v{}",
                 input.rule.rule_id, input.rule.latest_version
+            ))],
+        })
+        .await
+}
+
+async fn record_rule_promotion_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    review: &RulePromotionReviewRecord,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "rule.promotion.reviewed".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Rule promotion review: {}", review.decision),
+            payload: serde_json::json!({
+                "rule_id": review.rule_id,
+                "rule_version": review.rule_version,
+                "decision": review.decision,
+                "reviewer": review.reviewer,
+                "note_present": !review.notes.trim().is_empty(),
+            }),
+            evidence_refs: vec![serde_json::json!(format!(
+                "rules:{}:v{}",
+                review.rule_id, review.rule_version
             ))],
         })
         .await

@@ -100,6 +100,16 @@ pub struct RulePerformanceRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RulePromotionReviewRecord {
+    pub rule_id: String,
+    pub rule_version: u32,
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeadRecord {
     pub lead_id: String,
     pub run_id: String,
@@ -674,6 +684,17 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>>;
 
+    async fn save_rule_promotion_review(
+        &self,
+        record: RulePromotionReviewRecord,
+    ) -> anyhow::Result<RulePromotionReviewRecord>;
+
+    async fn latest_rule_promotion_review(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RulePromotionReviewRecord>>;
+
     async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>>;
 
     async fn triage_lead(
@@ -784,6 +805,7 @@ pub struct InMemoryScoringRepository {
     audit_sample_sequence: Mutex<u64>,
     candidate_rules: Mutex<HashMap<String, RuleDetailRecord>>,
     rule_statuses: Mutex<HashMap<String, String>>,
+    rule_promotion_reviews: Mutex<Vec<RulePromotionReviewRecord>>,
     datasets: Mutex<HashMap<String, DatasetRecord>>,
     dataset_sequence: Mutex<u64>,
     mapping_sequence: Mutex<u64>,
@@ -995,6 +1017,33 @@ impl ScoringRepository for InMemoryScoringRepository {
             &outcomes,
             runs.len() as u32,
         ))
+    }
+
+    async fn save_rule_promotion_review(
+        &self,
+        mut record: RulePromotionReviewRecord,
+    ) -> anyhow::Result<RulePromotionReviewRecord> {
+        record.created_at = Some(chrono::Utc::now().to_rfc3339());
+        self.rule_promotion_reviews
+            .lock()
+            .await
+            .push(record.clone());
+        Ok(record)
+    }
+
+    async fn latest_rule_promotion_review(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RulePromotionReviewRecord>> {
+        Ok(self
+            .rule_promotion_reviews
+            .lock()
+            .await
+            .iter()
+            .rev()
+            .find(|review| review.rule_id == rule_id && review.rule_version == rule_version)
+            .cloned())
     }
 
     async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>> {
@@ -2160,6 +2209,66 @@ impl ScoringRepository for PostgresScoringRepository {
             accumulators,
             &outcomes,
             total_runs.0.max(0) as u32,
+        ))
+    }
+
+    async fn save_rule_promotion_review(
+        &self,
+        record: RulePromotionReviewRecord,
+    ) -> anyhow::Result<RulePromotionReviewRecord> {
+        let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
+            "INSERT INTO rule_promotion_reviews
+             (rule_id, rule_version, decision, reviewer, notes)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING created_at",
+        )
+        .bind(&record.rule_id)
+        .bind(record.rule_version as i32)
+        .bind(&record.decision)
+        .bind(&record.reviewer)
+        .bind(&record.notes)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(RulePromotionReviewRecord {
+            created_at: Some(row.0.to_rfc3339()),
+            ..record
+        })
+    }
+
+    async fn latest_rule_promotion_review(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RulePromotionReviewRecord>> {
+        let row: Option<(
+            String,
+            i32,
+            String,
+            String,
+            String,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT rule_id, rule_version, decision, reviewer, notes, created_at
+                 FROM rule_promotion_reviews
+                 WHERE rule_id = $1 AND rule_version = $2
+                 ORDER BY created_at DESC
+                 LIMIT 1",
+        )
+        .bind(rule_id)
+        .bind(rule_version as i32)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(
+            |(rule_id, rule_version, decision, reviewer, notes, created_at)| {
+                RulePromotionReviewRecord {
+                    rule_id,
+                    rule_version: rule_version as u32,
+                    decision,
+                    reviewer,
+                    notes,
+                    created_at: Some(created_at.to_rfc3339()),
+                }
+            },
         ))
     }
 

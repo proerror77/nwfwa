@@ -40,6 +40,21 @@ export async function getRulePromotionGates(ruleId: string, apiKey: string) {
   );
 }
 
+export async function submitRulePromotionReview(
+  ruleId: string,
+  payload: unknown,
+  apiKey: string,
+) {
+  return requestJson(
+    `/api/v1/ops/rules/${encodeURIComponent(ruleId)}/promotion-reviews`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function backtestRule(payload: unknown, apiKey: string) {
   return requestJson("/api/v1/ops/rules/backtest", apiKey, {
     method: "POST",

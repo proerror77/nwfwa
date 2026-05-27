@@ -122,6 +122,52 @@ async fn returns_rule_promotion_gates_for_unreviewed_rule() {
 }
 
 #[tokio::test]
+async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/promotion-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-governance",
+          "notes": "Rejected until backtest evidence is attached."
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["rule_id"], "rule_early_claim");
+    assert_eq!(body["rule_version"], 1);
+    assert_eq!(body["decision"], "rejected");
+    assert_eq!(body["reviewer"], "rule-governance");
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("approval missing")));
+    let approval_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Approval before routing")
+        .unwrap();
+    assert_eq!(approval_gate["passed"], false);
+}
+
+#[tokio::test]
 async fn backtests_candidate_rule_against_samples() {
     let app = build_app(test_config());
 

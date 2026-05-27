@@ -34,6 +34,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/rules/backtest",
         "/api/v1/ops/rules/performance",
         "/api/v1/ops/rules/{rule_id}/promotion-gates",
+        "/api/v1/ops/rules/{rule_id}/promotion-reviews",
         "/api/v1/ops/rules/candidates",
         "/api/v1/ops/rules/discover",
         "/api/v1/ops/models",

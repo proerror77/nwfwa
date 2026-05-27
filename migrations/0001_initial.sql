@@ -421,6 +421,16 @@ CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS rule_promotion_reviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  rule_id TEXT NOT NULL,
+  rule_version INTEGER NOT NULL,
+  decision TEXT NOT NULL CHECK (decision IN ('approved', 'rejected')),
+  reviewer TEXT NOT NULL,
+  notes TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS investigation_results (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   investigation_id TEXT NOT NULL UNIQUE,

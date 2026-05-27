@@ -7,6 +7,7 @@ import {
   getDashboardSummary,
   getClaimAuditHistory,
   getRulePromotionGates,
+  submitRulePromotionReview,
   investigateCase,
   listAuditSamples,
   listCases,
@@ -45,6 +46,11 @@ describe("ops API helpers", () => {
 
     await listRules("dev-secret");
     await getRulePromotionGates("rule_early_claim", "dev-secret");
+    await submitRulePromotionReview(
+      "rule_early_claim",
+      { decision: "approved", reviewer: "rule-governance", notes: "limited rollout" },
+      "dev-secret",
+    );
     await submitRule("rule_early_claim", "dev-secret");
     await approveRule("rule_early_claim", "dev-secret");
     await publishRule("rule_early_claim", "dev-secret");
@@ -65,16 +71,28 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      "/api/v1/ops/rules/rule_early_claim/promotion-reviews",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          decision: "approved",
+          reviewer: "rule-governance",
+          notes: "limited rollout",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
       "/api/v1/ops/rules/rule_early_claim/submit",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       "/api/v1/ops/rules/rule_early_claim/approve",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       "/api/v1/ops/rules/rule_early_claim/publish",
       expect.objectContaining({ method: "POST" }),
     );

@@ -10,6 +10,7 @@ import {
   publishRule,
   saveRuleCandidate,
   submitRule,
+  submitRulePromotionReview,
 } from "../api";
 
 type RuleSummary = {
@@ -118,6 +119,8 @@ const defaultDiscovery = JSON.stringify(
 export function RulesStudio() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedRuleId, setSelectedRuleId] = useState("rule_early_claim");
+  const [reviewer, setReviewer] = useState("rule-governance");
+  const [reviewNotes, setReviewNotes] = useState("Approved for limited rollout only.");
   const [backtestPayload, setBacktestPayload] = useState(defaultBacktest);
   const [discoveryPayload, setDiscoveryPayload] = useState(defaultDiscovery);
   const queryClient = useQueryClient();
@@ -155,6 +158,19 @@ export function RulesStudio() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
       queryClient.invalidateQueries({ queryKey: ["rule"] });
+    },
+  });
+  const reviewMutation = useMutation({
+    mutationFn: (decision: "approved" | "rejected") => {
+      if (!selectedRule) throw new Error("No rule selected");
+      return submitRulePromotionReview(
+        selectedRule.rule_id,
+        { decision, reviewer, notes: reviewNotes },
+        apiKey,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rule-promotion-gates"] });
     },
   });
   const backtestMutation = useMutation({
@@ -287,6 +303,36 @@ export function RulesStudio() {
                   <strong>{gate.passed ? "passed" : gate.blocker}</strong>
                 </div>
               ))}
+            </div>
+            <div className="result-stack">
+              <label>
+                Reviewer
+                <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} />
+              </label>
+              <label>
+                Governance Note
+                <textarea
+                  value={reviewNotes}
+                  onChange={(event) => setReviewNotes(event.target.value)}
+                />
+              </label>
+              <div className="button-row">
+                <button
+                  onClick={() => reviewMutation.mutate("approved")}
+                  disabled={reviewMutation.isPending}
+                >
+                  Approve Promotion
+                </button>
+                <button
+                  onClick={() => reviewMutation.mutate("rejected")}
+                  disabled={reviewMutation.isPending}
+                >
+                  Reject Promotion
+                </button>
+              </div>
+              {reviewMutation.error ? (
+                <pre className="error">{String(reviewMutation.error.message)}</pre>
+              ) : null}
             </div>
           </>
         ) : (
