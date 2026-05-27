@@ -37,6 +37,162 @@ approve, or accuse a claim without a customer-controlled adjudication process.
 - QA And Feedback Loop: capture human review outcomes that improve rules,
   model evaluation, and future pilot thresholds.
 
+## FWA Core Capability Roadmap
+
+The product must move from a generic scoring platform into a domain-specific FWA
+operations system. The following capabilities are required to strengthen the
+core product.
+
+### Provider Risk Profile
+
+Provider risk profile is a first-class FWA capability. It tracks medical service
+providers such as hospitals, clinics, doctors, departments, pharmacies, labs,
+and rehabilitation facilities.
+
+Required signals:
+
+- claim volume and amount over 30/90/180 day windows;
+- peer percentile by specialty, region, service type, and policy type;
+- high-cost code usage rate;
+- duplicate or repeated service patterns;
+- diagnosis-procedure mismatch rate;
+- review failure, confirmed FWA, and false-positive history;
+- sudden volume increase for new or previously low-activity providers.
+
+### FWA Rule Pack
+
+The rule library should evolve from demo rules into reusable FWA rule packs.
+
+Required rule families:
+
+- duplicate claim;
+- upcoding;
+- unbundling;
+- medically unnecessary service;
+- excessive utilization;
+- early high-value claim after policy start;
+- provider peer outlier;
+- same member repeated service;
+- diagnosis-procedure mismatch;
+- suspicious provider-member or referral concentration.
+
+Each rule must keep version, owner, lifecycle status, applicability scope,
+backtest result, estimated saving, false-positive history, and evidence refs.
+
+### Investigation Case Management
+
+Scoring is not enough. FWA operators need a case workflow for triage,
+investigation, review, and closure.
+
+Required workflow fields:
+
+- case id, claim id, member id, provider id, and source system;
+- status: new, triage, investigating, pending evidence, confirmed, rejected,
+  closed;
+- assignee, reviewer, SLA, priority, and reason for routing;
+- evidence package with claim, rule, model, anomaly, document, and similar-case
+  references;
+- reviewer notes and final outcome writeback.
+
+### Feedback And Label Governance
+
+Human review outcomes must become structured labels. These labels are the basis
+for rule tuning, model evaluation, and future training.
+
+Required labels:
+
+- confirmed_fwa;
+- false_positive;
+- insufficient_evidence;
+- abuse_not_fraud;
+- documentation_issue;
+- policy_exclusion;
+- amount_prevented;
+- amount_recovered;
+- feedback_target: rules, model, features, provider_profile, or workflow.
+
+### Feature Factory And Peer Benchmark
+
+The platform needs durable feature families, not one-off fields.
+
+Required feature groups:
+
+- claim-level amount, timing, and diagnosis/procedure features;
+- member-level recurrence and utilization features;
+- provider-level aggregation and peer deviation features;
+- policy-level coverage, waiting-period, and limit features;
+- time-window features over 7/30/90/180 days;
+- network concentration features for provider-member and provider-agent
+  relationships.
+
+### Outcome, Drift, And ROI Monitoring
+
+FWA value must be measurable.
+
+Required monitoring:
+
+- rule hit rate and false-positive rate;
+- model shadow-mode performance and drift;
+- precision at review capacity;
+- reviewer disagreement rate;
+- prevented payment;
+- recovered amount;
+- review cost;
+- rule-level and model-level saving attribution.
+
+## Integration Roadmap
+
+The product should integrate with TPAs and customer insurance systems through
+explicit adapters. It should not hard-code one vendor, one data format, or one
+claim administration platform into the core runtime.
+
+### MVP Integration
+
+MVP supports a generic TPA scoring integration:
+
+- inbound claim scoring through `POST /api/v1/claims/score`;
+- stored claim scoring by `claim_id`;
+- API-key authentication;
+- scoring response with risk score, alerts, recommended action, evidence refs,
+  and audit ids;
+- investigation and QA result writeback for pilot feedback.
+
+### Pilot Integration Targets
+
+Pilot customers may connect some or all of the following systems:
+
+- TPA claim administration system for claim intake and scoring responses;
+- policy administration system for coverage, limits, waiting periods, and
+  policy status;
+- member eligibility system for member identity, plan, and enrollment status;
+- provider master data system for provider identity, specialty, region, and
+  network status;
+- document management or OCR system for medical records, invoices, receipts,
+  prescriptions, and discharge summaries;
+- payment or remittance system for paid amount, denied amount, recovery amount,
+  and payment status;
+- investigation, SIU, QA, or case-management tools for reviewer workflow and
+  outcome writeback;
+- data warehouse, lakehouse, or object storage for historical claims, Parquet
+  datasets, feature matrices, and model evaluation artifacts.
+
+### Later Enterprise Integrations
+
+Later phases can add:
+
+- batch import/export through customer-approved file drops;
+- event webhooks for score completed, case routed, investigation closed, and QA
+  result received;
+- standards-oriented adapters where customers require them, such as claim,
+  eligibility, remittance, or clinical-document exchange formats;
+- SSO and role-based access control;
+- BI export for finance, compliance, and operations reporting;
+- alerting and notification systems for SLA breach and high-risk routing.
+
+Core rule evaluation, scoring aggregation, audit, and model governance must stay
+inside the FWA platform. External systems provide data, documents, workflow
+destinations, and outcome feedback.
+
 ## Modeling Strategy
 
 The core FWA decision surface should be rule-first and explainable-model-first.
