@@ -508,6 +508,12 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>>;
 
+    async fn save_rule_candidate(
+        &self,
+        rule: Rule,
+        owner: String,
+    ) -> anyhow::Result<RuleDetailRecord>;
+
     async fn update_rule_status(
         &self,
         rule_id: &str,
@@ -590,6 +596,7 @@ pub struct InMemoryScoringRepository {
     runs: Mutex<Vec<PersistedScoringRun>>,
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
+    candidate_rules: Mutex<HashMap<String, RuleDetailRecord>>,
     rule_statuses: Mutex<HashMap<String, String>>,
     datasets: Mutex<HashMap<String, DatasetRecord>>,
     dataset_sequence: Mutex<u64>,
@@ -664,31 +671,27 @@ impl ScoringRepository for InMemoryScoringRepository {
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
         let statuses = self.rule_statuses.lock().await;
-        Ok(default_rule_details()
+        let mut details = default_rule_details();
+        details.extend(self.candidate_rules.lock().await.values().cloned());
+        let mut rules = details
             .into_iter()
             .map(|mut detail| {
-                if let Some(status) = statuses.get(&detail.summary.rule_id) {
-                    detail.summary.status = status.clone();
-                    for version in &mut detail.versions {
-                        version.status = status.clone();
-                    }
-                }
+                apply_rule_status(&mut detail, &statuses);
                 detail.summary
             })
-            .collect())
+            .collect::<Vec<_>>();
+        rules.sort_by(|left, right| left.rule_id.cmp(&right.rule_id));
+        Ok(rules)
     }
 
     async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>> {
         let statuses = self.rule_statuses.lock().await;
-        default_rule_details()
+        let mut details = default_rule_details();
+        details.extend(self.candidate_rules.lock().await.values().cloned());
+        details
             .into_iter()
             .filter_map(|mut detail| {
-                if let Some(status) = statuses.get(&detail.summary.rule_id) {
-                    detail.summary.status = status.clone();
-                    for version in &mut detail.versions {
-                        version.status = status.clone();
-                    }
-                }
+                apply_rule_status(&mut detail, &statuses);
                 (detail.summary.status == "active").then_some(detail)
             })
             .map(runtime_rule_from_detail)
@@ -697,18 +700,28 @@ impl ScoringRepository for InMemoryScoringRepository {
 
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>> {
         let statuses = self.rule_statuses.lock().await;
-        Ok(default_rule_details()
+        let mut details = default_rule_details();
+        details.extend(self.candidate_rules.lock().await.values().cloned());
+        Ok(details
             .into_iter()
             .find(|detail| detail.summary.rule_id == rule_id)
             .map(|mut detail| {
-                if let Some(status) = statuses.get(rule_id) {
-                    detail.summary.status = status.clone();
-                    for version in &mut detail.versions {
-                        version.status = status.clone();
-                    }
-                }
+                apply_rule_status(&mut detail, &statuses);
                 detail
             }))
+    }
+
+    async fn save_rule_candidate(
+        &self,
+        rule: Rule,
+        owner: String,
+    ) -> anyhow::Result<RuleDetailRecord> {
+        let detail = rule_detail_from_rule(rule, "draft", owner);
+        self.candidate_rules
+            .lock()
+            .await
+            .insert(detail.summary.rule_id.clone(), detail.clone());
+        Ok(detail)
     }
 
     async fn update_rule_status(
@@ -1525,6 +1538,53 @@ impl ScoringRepository for PostgresScoringRepository {
             .collect();
 
         Ok(Some(RuleDetailRecord { summary, versions }))
+    }
+
+    async fn save_rule_candidate(
+        &self,
+        rule: Rule,
+        owner: String,
+    ) -> anyhow::Result<RuleDetailRecord> {
+        ensure_default_rules_seeded(&self.pool).await?;
+        let detail = rule_detail_from_rule(rule, "draft", owner);
+        let mut tx = self.pool.begin().await?;
+        let row: (String,) = sqlx::query_as(
+            "INSERT INTO rules (rule_key, name, status, owner)
+             VALUES ($1, $2, 'draft', $3)
+             ON CONFLICT (rule_key) DO UPDATE
+             SET name = EXCLUDED.name,
+                 status = 'draft',
+                 owner = EXCLUDED.owner,
+                 updated_at = now()
+             RETURNING id::text",
+        )
+        .bind(&detail.summary.rule_id)
+        .bind(&detail.summary.name)
+        .bind(&detail.summary.owner)
+        .fetch_one(&mut *tx)
+        .await?;
+
+        let version = &detail.versions[0];
+        sqlx::query(
+            "INSERT INTO rule_versions
+             (rule_id, version, dsl, score, recommended_action, created_by)
+             VALUES ($1::uuid, $2, $3, $4, $5, $6)
+             ON CONFLICT (rule_id, version) DO UPDATE
+             SET dsl = EXCLUDED.dsl,
+                 score = EXCLUDED.score,
+                 recommended_action = EXCLUDED.recommended_action",
+        )
+        .bind(&row.0)
+        .bind(version.version as i32)
+        .bind(&version.dsl)
+        .bind(version.score as i32)
+        .bind(format!("{:?}", version.recommended_action))
+        .bind(&detail.summary.owner)
+        .execute(&mut *tx)
+        .await?;
+
+        tx.commit().await?;
+        Ok(detail)
     }
 
     async fn update_rule_status(
@@ -2406,37 +2466,51 @@ pub fn default_runtime_rules() -> Vec<Rule> {
 fn default_rule_details() -> Vec<RuleDetailRecord> {
     default_runtime_rules()
         .into_iter()
-        .map(|rule| {
-            let dsl = serde_json::json!({
-                "conditions": rule.conditions,
-                "action": rule.action
-            });
-            let summary = RuleSummaryRecord {
-                rule_id: rule.rule_id.clone(),
-                name: rule.name.clone(),
-                status: "active".into(),
-                owner: "rules-ops".into(),
-                active_version: Some(rule.version),
-                latest_version: rule.version,
-                score: rule.action.score,
-                alert_code: rule.action.alert_code.clone(),
-                recommended_action: rule.action.recommended_action,
-            };
-            let version = RuleVersionRecord {
-                version: rule.version,
-                status: "active".into(),
-                dsl,
-                score: rule.action.score,
-                alert_code: rule.action.alert_code,
-                recommended_action: rule.action.recommended_action,
-                reason: rule.action.reason,
-            };
-            RuleDetailRecord {
-                summary,
-                versions: vec![version],
-            }
-        })
+        .map(|rule| rule_detail_from_rule(rule, "active", "rules-ops".into()))
         .collect()
+}
+
+fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailRecord {
+    let active_version = (status == "active").then_some(rule.version);
+    let dsl = serde_json::json!({
+        "conditions": rule.conditions,
+        "action": rule.action
+    });
+    let summary = RuleSummaryRecord {
+        rule_id: rule.rule_id.clone(),
+        name: rule.name.clone(),
+        status: status.into(),
+        owner,
+        active_version,
+        latest_version: rule.version,
+        score: rule.action.score,
+        alert_code: rule.action.alert_code.clone(),
+        recommended_action: rule.action.recommended_action,
+    };
+    let version = RuleVersionRecord {
+        version: rule.version,
+        status: status.into(),
+        dsl,
+        score: rule.action.score,
+        alert_code: rule.action.alert_code,
+        recommended_action: rule.action.recommended_action,
+        reason: rule.action.reason,
+    };
+    RuleDetailRecord {
+        summary,
+        versions: vec![version],
+    }
+}
+
+fn apply_rule_status(detail: &mut RuleDetailRecord, statuses: &HashMap<String, String>) {
+    if let Some(status) = statuses.get(&detail.summary.rule_id) {
+        detail.summary.status = status.clone();
+        detail.summary.active_version =
+            (status == "active").then_some(detail.summary.latest_version);
+        for version in &mut detail.versions {
+            version.status = status.clone();
+        }
+    }
 }
 
 fn parse_recommended_action(value: &str) -> RecommendedAction {

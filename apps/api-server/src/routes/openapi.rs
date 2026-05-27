@@ -375,6 +375,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/candidates": {
+                "post": {
+                    "summary": "Save a discovered candidate rule into the rule library",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SaveRuleCandidateRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Saved draft rule candidate",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleDetailResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/discover": {
                 "post": {
                     "summary": "Discover candidate rules from labeled sample claims",
@@ -957,7 +981,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "rule_id": { "type": "string" },
                         "name": { "type": "string" },
-                        "status": { "type": "string", "enum": ["active", "submitted", "approved"] },
+                        "status": { "type": "string", "enum": ["draft", "active", "submitted", "approved"] },
                         "owner": { "type": "string" },
                         "active_version": { "type": ["integer", "null"] },
                         "latest_version": { "type": "integer" },
@@ -1011,6 +1035,14 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         }
+                    }
+                },
+                "SaveRuleCandidateRequest": {
+                    "type": "object",
+                    "required": ["rule"],
+                    "properties": {
+                        "owner": { "type": "string" },
+                        "rule": { "type": "object" }
                     }
                 },
                 "RuleDiscoveryRequest": {

@@ -198,6 +198,76 @@ async fn discovers_candidate_rules_from_labeled_samples() {
 }
 
 #[tokio::test]
+async fn saves_discovered_candidate_rule_for_lifecycle() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        r#"{
+          "owner": "rule-discovery",
+          "rule": {
+            "rule_id": "candidate_early_high_amount",
+            "version": 1,
+            "name": "Early high amount candidate",
+            "conditions": [
+              {
+                "field": "days_since_policy_start",
+                "operator": "<=",
+                "value": 10
+              },
+              {
+                "field": "claim_amount_to_limit_ratio",
+                "operator": ">=",
+                "value": 0.7
+              }
+            ],
+            "action": {
+              "score": 30,
+              "alert_code": "EARLY_HIGH_AMOUNT_CANDIDATE",
+              "recommended_action": "ManualReview",
+              "reason": "保单生效早期发生高额理赔"
+            }
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["summary"]["rule_id"], "candidate_early_high_amount");
+    assert_eq!(body["summary"]["status"], "draft");
+    assert_eq!(body["summary"]["owner"], "rule-discovery");
+    assert_eq!(
+        body["versions"][0]["alert_code"],
+        "EARLY_HIGH_AMOUNT_CANDIDATE"
+    );
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_early_high_amount/submit",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["status"], "submitted");
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/candidate_early_high_amount",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["summary"]["status"], "submitted");
+}
+
+#[tokio::test]
 async fn advances_rule_lifecycle() {
     let app = build_app(test_config());
 

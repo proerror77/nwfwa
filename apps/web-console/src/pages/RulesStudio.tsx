@@ -7,6 +7,7 @@ import {
   getRule,
   listRules,
   publishRule,
+  saveRuleCandidate,
   submitRule,
 } from "../api";
 
@@ -136,6 +137,20 @@ export function RulesStudio() {
   const discoveryMutation = useMutation({
     mutationFn: () => discoverRules(JSON.parse(discoveryPayload), apiKey),
   });
+  const saveCandidateMutation = useMutation({
+    mutationFn: () => {
+      const discovery = discoveryMutation.data as
+        | { candidates?: Array<{ rule?: unknown }> }
+        | undefined;
+      const rule = discovery?.candidates?.[0]?.rule;
+      if (!rule) throw new Error("No candidate rule available");
+      return saveRuleCandidate({ owner: "rule-discovery", rule }, apiKey);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+      queryClient.invalidateQueries({ queryKey: ["rule"] });
+    },
+  });
 
   return (
     <section className="ops-grid">
@@ -231,7 +246,21 @@ export function RulesStudio() {
           <pre className="error">{String(discoveryMutation.error.message)}</pre>
         ) : null}
         {discoveryMutation.data ? (
-          <pre>{JSON.stringify(discoveryMutation.data, null, 2)}</pre>
+          <div className="result-stack">
+            <button
+              onClick={() => saveCandidateMutation.mutate()}
+              disabled={saveCandidateMutation.isPending}
+            >
+              Save Top Candidate
+            </button>
+            {saveCandidateMutation.error ? (
+              <pre className="error">{String(saveCandidateMutation.error.message)}</pre>
+            ) : null}
+            {saveCandidateMutation.data ? (
+              <pre>{JSON.stringify(saveCandidateMutation.data, null, 2)}</pre>
+            ) : null}
+            <pre>{JSON.stringify(discoveryMutation.data, null, 2)}</pre>
+          </div>
         ) : null}
       </div>
     </section>

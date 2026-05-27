@@ -11,6 +11,7 @@ import {
   listModels,
   listRules,
   publishRule,
+  saveRuleCandidate,
   searchSimilarCases,
   submitRule,
   submitQaResult,
@@ -68,6 +69,7 @@ describe("ops API helpers", () => {
 
     await backtestRule(payload, "dev-secret");
     await discoverRules({ samples: [] }, "dev-secret");
+    await saveRuleCandidate({ rule: { rule_id: "candidate" } }, "dev-secret");
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -83,6 +85,14 @@ describe("ops API helpers", () => {
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify({ samples: [] }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/ops/rules/candidates",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ rule: { rule_id: "candidate" } }),
       }),
     );
   });

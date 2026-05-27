@@ -86,6 +86,12 @@ pub struct RuleDiscoveryCandidate {
     pub explanation: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct SaveRuleCandidateRequest {
+    pub rule: Rule,
+    pub owner: Option<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct RuleLifecycleResponse {
     pub rule_id: String,
@@ -265,6 +271,21 @@ pub async fn discover_rules(
         positive_count,
         candidates,
     }))
+}
+
+pub async fn save_rule_candidate(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<SaveRuleCandidateRequest>,
+) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
+    authorize(&state, &headers)?;
+    let owner = request.owner.unwrap_or_else(|| "rule-discovery".into());
+    let detail = state
+        .repository
+        .save_rule_candidate(request.rule, owner)
+        .await
+        .map_err(internal_error("RULE_CANDIDATE_SAVE_FAILED"))?;
+    Ok(Json(detail))
 }
 
 pub async fn submit_rule(
