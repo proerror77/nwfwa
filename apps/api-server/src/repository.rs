@@ -24,7 +24,12 @@ pub struct PersistedScoringRun {
     pub actor_id: String,
     pub risk_score: u8,
     pub rag: String,
+    pub risk_level: String,
     pub recommended_action: String,
+    pub confidence_score: u8,
+    pub confidence: String,
+    pub routing_reason: String,
+    pub score_breakdown: Value,
     pub feature_values: Vec<Value>,
     pub rule_runs: Vec<Value>,
     pub model_score: Value,
@@ -625,6 +630,29 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()> {
+        self.audit_events.lock().await.push(PersistedAuditEvent {
+            audit_id: run.audit_id.clone(),
+            run_id: run.run_id.clone(),
+            claim_id: run.claim_id.clone(),
+            source_system: run.source_system.clone(),
+            actor_id: run.actor_id.clone(),
+            actor_role: "tpa_system".into(),
+            event_type: run
+                .audit_event
+                .get("event_type")
+                .and_then(Value::as_str)
+                .unwrap_or("scoring.completed")
+                .to_string(),
+            event_status: run
+                .audit_event
+                .get("event_status")
+                .and_then(Value::as_str)
+                .unwrap_or("succeeded")
+                .to_string(),
+            summary: "FWA scoring completed".into(),
+            payload: run.audit_event.clone(),
+            evidence_refs: run.evidence_refs.clone(),
+        });
         self.runs.lock().await.push(run);
         Ok(())
     }
@@ -936,14 +964,33 @@ impl ScoringRepository for InMemoryScoringRepository {
         &self,
         claim_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        Ok(self
-            .pilot_audit_events
+        let mut events = self
+            .audit_events
             .lock()
             .await
             .iter()
-            .filter(|(event_claim_id, _)| event_claim_id == claim_id)
-            .map(|(_, event)| event.clone())
-            .collect())
+            .filter(|event| event.claim_id == claim_id)
+            .map(|event| AuditHistoryEventRecord {
+                audit_id: event.audit_id.clone(),
+                run_id: event.run_id.clone(),
+                event_type: event.event_type.clone(),
+                event_status: event.event_status.clone(),
+                summary: event.summary.clone(),
+                payload: event.payload.clone(),
+                evidence_refs: evidence_values_to_strings(&event.evidence_refs),
+                created_at: None,
+            })
+            .collect::<Vec<_>>();
+
+        events.extend(
+            self.pilot_audit_events
+                .lock()
+                .await
+                .iter()
+                .filter(|(event_claim_id, _)| event_claim_id == claim_id)
+                .map(|(_, event)| event.clone()),
+        );
+        Ok(events)
     }
 
     async fn register_feature_set(
@@ -1245,8 +1292,8 @@ impl ScoringRepository for PostgresScoringRepository {
         let claim_uuid = claim_row.map(|row| row.0);
         sqlx::query(
             "INSERT INTO scoring_runs
-             (run_id, claim_id, source_system, actor_id, status, risk_score, rag, recommended_action, completed_at)
-             VALUES ($1, $2::uuid, $3, $4, 'succeeded', $5, $6, $7, now())",
+             (run_id, claim_id, source_system, actor_id, status, risk_score, rag, risk_level, recommended_action, confidence_score, confidence, routing_reason, score_breakdown, completed_at)
+             VALUES ($1, $2::uuid, $3, $4, 'succeeded', $5, $6, $7, $8, $9, $10, $11, $12, now())",
         )
         .bind(&run.run_id)
         .bind(claim_uuid.as_deref())
@@ -1254,7 +1301,12 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&run.actor_id)
         .bind(run.risk_score as i32)
         .bind(&run.rag)
+        .bind(&run.risk_level)
         .bind(&run.recommended_action)
+        .bind(run.confidence_score as i32)
+        .bind(&run.confidence)
+        .bind(&run.routing_reason)
+        .bind(&run.score_breakdown)
         .execute(&mut *tx)
         .await?;
 
@@ -2587,6 +2639,16 @@ fn json_array_to_strings(value: Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn evidence_values_to_strings(values: &[Value]) -> Vec<String> {
+    values
+        .iter()
+        .map(|value| match value {
+            Value::String(text) => text.clone(),
+            other => other.to_string(),
+        })
+        .collect()
 }
 
 type DatasetRow = (

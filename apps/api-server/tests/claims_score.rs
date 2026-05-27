@@ -129,7 +129,7 @@ async fn scores_spec_style_top_level_full_payload() {
         ))
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
 
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
@@ -154,6 +154,36 @@ async fn scores_spec_style_top_level_full_payload() {
     assert!(body["confidence_score"].as_u64().unwrap() >= 80);
     assert_eq!(body["confidence"], "High");
     assert!(body["routing_reason"]
+        .as_str()
+        .unwrap()
+        .contains("医务复核"));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-TOP-LEVEL")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(scoring_event["run_id"], body["run_id"]);
+    assert_eq!(scoring_event["payload"]["risk_level"], "Critical");
+    assert_eq!(scoring_event["payload"]["confidence"], "High");
+    assert_eq!(
+        scoring_event["payload"]["scores"]["final_score"],
+        body["scores"]["final_score"]
+    );
+    assert!(scoring_event["payload"]["routing_reason"]
         .as_str()
         .unwrap()
         .contains("医务复核"));

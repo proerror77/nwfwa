@@ -258,6 +258,31 @@ pub async fn score_claim(
             rule_version: rule_match.rule_version,
         })
         .collect();
+    let scores = ScoreBreakdown {
+        peer_deviation_score: decision.peer_deviation_score,
+        rule_score: decision.rule_score,
+        anomaly_score: decision.anomaly_score,
+        ml_score: decision.ml_score,
+        medical_reasonableness_score: decision.medical_reasonableness_score,
+        provider_network_score: decision.provider_network_score,
+        similar_case_score: decision.similar_case_score,
+        final_score: decision.risk_score.value(),
+    };
+    let audit_payload = serde_json::json!({
+        "claim_id": context.claim.external_claim_id,
+        "risk_score": decision.risk_score.value(),
+        "rag": format!("{:?}", decision.rag),
+        "risk_level": &decision.risk_level,
+        "recommended_action": format!("{:?}", decision.recommended_action),
+        "confidence_score": decision.confidence_score,
+        "confidence": &decision.confidence,
+        "routing_reason": &decision.routing_reason,
+        "scores": &scores,
+        "top_reasons": &decision.top_reasons,
+        "triggered_rules": &alerts,
+        "event_type": "scoring.completed",
+        "event_status": "succeeded"
+    });
     state
         .repository
         .save_scoring_run(PersistedScoringRun {
@@ -268,7 +293,13 @@ pub async fn score_claim(
             actor_id: actor.actor_id.clone(),
             risk_score: decision.risk_score.value(),
             rag: format!("{:?}", decision.rag),
+            risk_level: decision.risk_level.clone(),
             recommended_action: format!("{:?}", decision.recommended_action),
+            confidence_score: decision.confidence_score,
+            confidence: decision.confidence.clone(),
+            routing_reason: decision.routing_reason.clone(),
+            score_breakdown: serde_json::to_value(&scores)
+                .unwrap_or_else(|_| serde_json::json!({})),
             feature_values: features
                 .values()
                 .map(|feature| {
@@ -284,11 +315,7 @@ pub async fn score_claim(
             model_score: serde_json::to_value(&model_score)
                 .unwrap_or_else(|_| serde_json::json!({})),
             evidence_refs: evidence_refs.clone(),
-            audit_event: serde_json::json!({
-                "audit_id": audit_id.to_string(),
-                "event_type": "scoring.completed",
-                "event_status": "succeeded"
-            }),
+            audit_event: audit_payload,
         })
         .await
         .map_err(internal_error("SCORING_PERSISTENCE_FAILED"))?;
@@ -304,16 +331,7 @@ pub async fn score_claim(
         confidence_score: decision.confidence_score,
         confidence: decision.confidence,
         routing_reason: decision.routing_reason,
-        scores: ScoreBreakdown {
-            peer_deviation_score: decision.peer_deviation_score,
-            rule_score: decision.rule_score,
-            anomaly_score: decision.anomaly_score,
-            ml_score: decision.ml_score,
-            medical_reasonableness_score: decision.medical_reasonableness_score,
-            provider_network_score: decision.provider_network_score,
-            similar_case_score: decision.similar_case_score,
-            final_score: decision.risk_score.value(),
-        },
+        scores,
         alerts,
         top_reasons: decision.top_reasons,
         evidence_refs,
