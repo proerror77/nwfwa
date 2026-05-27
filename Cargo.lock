@@ -51,6 +51,7 @@ dependencies = [
  "async-trait",
  "axum",
  "chrono",
+ "fwa-agent",
  "fwa-audit",
  "fwa-auth",
  "fwa-core",
@@ -628,6 +629,10 @@ dependencies = [
 [[package]]
 name = "fwa-agent"
 version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "fwa-audit"

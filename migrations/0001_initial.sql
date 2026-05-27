@@ -173,3 +173,41 @@ CREATE TABLE IF NOT EXISTS audit_events (
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS knowledge_cases (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id TEXT NOT NULL UNIQUE,
+  title TEXT NOT NULL,
+  fwa_type TEXT NOT NULL,
+  diagnosis_code TEXT NOT NULL,
+  provider_region TEXT NOT NULL,
+  provider_type TEXT NOT NULL,
+  summary TEXT NOT NULL,
+  outcome TEXT NOT NULL,
+  tags JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS agent_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_run_id TEXT NOT NULL UNIQUE,
+  claim_id TEXT NOT NULL,
+  status TEXT NOT NULL,
+  decision_boundary TEXT NOT NULL,
+  output_json JSONB NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS agent_steps (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  step_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  output_json JSONB NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);

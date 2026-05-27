@@ -93,6 +93,50 @@ pub struct ModelPerformanceRecord {
     pub latest_scored_at: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct KnowledgeCaseRecord {
+    pub case_id: String,
+    pub title: String,
+    pub fwa_type: String,
+    pub diagnosis_code: String,
+    pub provider_region: String,
+    pub provider_type: String,
+    pub summary: String,
+    pub outcome: String,
+    pub tags: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarCaseQuery {
+    pub claim_id: Option<String>,
+    pub diagnosis_code: String,
+    pub provider_region: String,
+    pub tags: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SimilarCaseRecord {
+    pub case_id: String,
+    pub title: String,
+    pub similarity_score: f64,
+    pub matched_signals: Vec<String>,
+    pub summary: String,
+    pub outcome: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct PersistedAgentRun {
+    pub agent_run_id: String,
+    pub claim_id: String,
+    pub status: String,
+    pub decision_boundary: String,
+    pub output_json: Value,
+    pub evidence_refs: Vec<Value>,
+    pub steps: Vec<Value>,
+}
+
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
     async fn upsert_claim_context(
@@ -126,6 +170,15 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         model_key: &str,
     ) -> anyhow::Result<Option<ModelPerformanceRecord>>;
+
+    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
+
+    async fn search_similar_cases(
+        &self,
+        query: SimilarCaseQuery,
+    ) -> anyhow::Result<Vec<SimilarCaseRecord>>;
+
+    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -135,6 +188,7 @@ pub struct InMemoryScoringRepository {
     claims: Mutex<HashMap<String, ClaimContext>>,
     runs: Mutex<Vec<PersistedScoringRun>>,
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
+    agent_runs: Mutex<Vec<PersistedAgentRun>>,
     rule_statuses: Mutex<HashMap<String, String>>,
 }
 
@@ -238,6 +292,22 @@ impl ScoringRepository for InMemoryScoringRepository {
         } else {
             Ok(None)
         }
+    }
+
+    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
+        Ok(default_knowledge_cases())
+    }
+
+    async fn search_similar_cases(
+        &self,
+        query: SimilarCaseQuery,
+    ) -> anyhow::Result<Vec<SimilarCaseRecord>> {
+        Ok(search_cases(default_knowledge_cases(), &query))
+    }
+
+    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
+        self.agent_runs.lock().await.push(run);
+        Ok(())
     }
 }
 
@@ -699,6 +769,110 @@ impl ScoringRepository for PostgresScoringRepository {
             latest_scored_at: row.3.map(|timestamp| timestamp.to_rfc3339()),
         }))
     }
+
+    async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
+        ensure_default_knowledge_cases_seeded(&self.pool).await?;
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            Value,
+            Value,
+        )> = sqlx::query_as(
+            "SELECT case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs
+             FROM knowledge_cases
+             ORDER BY case_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    case_id,
+                    title,
+                    fwa_type,
+                    diagnosis_code,
+                    provider_region,
+                    provider_type,
+                    summary,
+                    outcome,
+                    tags,
+                    evidence_refs,
+                )| KnowledgeCaseRecord {
+                    case_id,
+                    title,
+                    fwa_type,
+                    diagnosis_code,
+                    provider_region,
+                    provider_type,
+                    summary,
+                    outcome,
+                    tags: json_array_to_strings(tags),
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                },
+            )
+            .collect())
+    }
+
+    async fn search_similar_cases(
+        &self,
+        query: SimilarCaseQuery,
+    ) -> anyhow::Result<Vec<SimilarCaseRecord>> {
+        let cases = self.list_knowledge_cases().await?;
+        Ok(search_cases(cases, &query))
+    }
+
+    async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "INSERT INTO agent_runs
+             (agent_run_id, claim_id, status, decision_boundary, output_json, evidence_refs, completed_at)
+             VALUES ($1, $2, $3, $4, $5, $6, now())
+             ON CONFLICT (agent_run_id) DO UPDATE
+             SET status = EXCLUDED.status,
+                 decision_boundary = EXCLUDED.decision_boundary,
+                 output_json = EXCLUDED.output_json,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 completed_at = EXCLUDED.completed_at",
+        )
+        .bind(&run.agent_run_id)
+        .bind(&run.claim_id)
+        .bind(&run.status)
+        .bind(&run.decision_boundary)
+        .bind(&run.output_json)
+        .bind(Value::Array(run.evidence_refs.clone()))
+        .execute(&mut *tx)
+        .await?;
+
+        sqlx::query("DELETE FROM agent_steps WHERE agent_run_id = $1")
+            .bind(&run.agent_run_id)
+            .execute(&mut *tx)
+            .await?;
+
+        for step in &run.steps {
+            sqlx::query(
+                "INSERT INTO agent_steps
+                 (agent_run_id, step_name, status, output_json, evidence_refs)
+                 VALUES ($1, $2, 'succeeded', $3, $4)",
+            )
+            .bind(&run.agent_run_id)
+            .bind(step["step_name"].as_str().unwrap_or("investigate"))
+            .bind(step)
+            .bind(step["evidence_refs"].clone())
+            .execute(&mut *tx)
+            .await?;
+        }
+
+        tx.commit().await?;
+        Ok(())
+    }
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
@@ -827,6 +1001,108 @@ fn empty_model_performance(model_key: &str) -> ModelPerformanceRecord {
     }
 }
 
+fn default_knowledge_cases() -> Vec<KnowledgeCaseRecord> {
+    vec![
+        KnowledgeCaseRecord {
+            case_id: "KC-1001".into(),
+            title: "Early high-amount respiratory claim".into(),
+            fwa_type: "Abuse".into(),
+            diagnosis_code: "J10".into(),
+            provider_region: "Shanghai".into(),
+            provider_type: "hospital".into(),
+            summary: "保单生效早期发生高额呼吸系统相关理赔，项目组合与相似已确认案例接近。".into(),
+            outcome: "Manual review confirmed over-treatment pattern".into(),
+            tags: vec![
+                "early_claim".into(),
+                "high_amount".into(),
+                "medical_mismatch".into(),
+            ],
+            evidence_refs: vec![
+                "knowledge_cases:KC-1001".into(),
+                "rule_runs:EARLY_CLAIM".into(),
+            ],
+        },
+        KnowledgeCaseRecord {
+            case_id: "KC-1002".into(),
+            title: "Provider repeated high-cost package pattern".into(),
+            fwa_type: "Waste".into(),
+            diagnosis_code: "M54".into(),
+            provider_region: "Beijing".into(),
+            provider_type: "clinic".into(),
+            summary: "同一 provider 在短期内重复出现高价项目组合，金额分布显著偏离同地区 peer。"
+                .into(),
+            outcome: "Provider education and pre-payment review added".into(),
+            tags: vec!["provider_pattern".into(), "high_amount".into()],
+            evidence_refs: vec![
+                "knowledge_cases:KC-1002".into(),
+                "feature_values:provider_high_cost_item_ratio_30d".into(),
+            ],
+        },
+    ]
+}
+
+fn search_cases(
+    cases: Vec<KnowledgeCaseRecord>,
+    query: &SimilarCaseQuery,
+) -> Vec<SimilarCaseRecord> {
+    let mut results = cases
+        .into_iter()
+        .filter_map(|case| {
+            let mut score: f64 = 0.0;
+            let mut matched_signals = Vec::new();
+
+            if case.diagnosis_code == query.diagnosis_code {
+                score += 0.45;
+                matched_signals.push(format!("diagnosis:{}", query.diagnosis_code));
+            }
+            if case.provider_region == query.provider_region {
+                score += 0.25;
+                matched_signals.push(format!("region:{}", query.provider_region));
+            }
+            for tag in &query.tags {
+                if case.tags.iter().any(|case_tag| case_tag == tag) {
+                    score += 0.15;
+                    matched_signals.push(format!("tag:{tag}"));
+                }
+            }
+
+            if score <= 0.0 {
+                None
+            } else {
+                Some(SimilarCaseRecord {
+                    case_id: case.case_id,
+                    title: case.title,
+                    similarity_score: score.min(1.0),
+                    matched_signals,
+                    summary: case.summary,
+                    outcome: case.outcome,
+                    evidence_refs: case.evidence_refs,
+                })
+            }
+        })
+        .collect::<Vec<_>>();
+
+    results.sort_by(|left, right| {
+        right
+            .similarity_score
+            .partial_cmp(&left.similarity_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    results
+}
+
+fn json_array_to_strings(value: Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
 async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {
     for model in default_model_versions() {
         sqlx::query(
@@ -843,6 +1119,30 @@ async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {
         .bind(&model.endpoint_url)
         .bind(&model.execution_provider)
         .bind(&model.status)
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+async fn ensure_default_knowledge_cases_seeded(pool: &PgPool) -> anyhow::Result<()> {
+    for case in default_knowledge_cases() {
+        sqlx::query(
+            "INSERT INTO knowledge_cases
+             (case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (case_id) DO UPDATE SET updated_at = now()",
+        )
+        .bind(&case.case_id)
+        .bind(&case.title)
+        .bind(&case.fwa_type)
+        .bind(&case.diagnosis_code)
+        .bind(&case.provider_region)
+        .bind(&case.provider_type)
+        .bind(&case.summary)
+        .bind(&case.outcome)
+        .bind(serde_json::json!(case.tags))
+        .bind(serde_json::json!(case.evidence_refs))
         .execute(pool)
         .await?;
     }

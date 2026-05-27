@@ -1,7 +1,7 @@
 use crate::{
     config::AppConfig,
     repository::{InMemoryScoringRepository, SharedRepository},
-    routes::{claims, health, openapi, ops_models, ops_rules},
+    routes::{agent, claims, health, knowledge, openapi, ops_models, ops_rules},
 };
 use axum::{
     routing::{get, post},
@@ -40,6 +40,15 @@ pub fn build_app_with_parts(
         .route("/api/openapi.json", get(openapi::openapi_schema))
         .route("/api/v1/health", get(health::health))
         .route("/api/v1/claims/score", post(claims::score_claim))
+        .route(
+            "/api/v1/agent/cases/investigate",
+            post(agent::investigate_case),
+        )
+        .route("/api/v1/ops/knowledge/cases", get(knowledge::list_cases))
+        .route(
+            "/api/v1/knowledge/search-similar",
+            post(knowledge::search_similar),
+        )
         .route("/api/v1/ops/rules", get(ops_rules::list_rules))
         .route("/api/v1/ops/rules/backtest", post(ops_rules::backtest_rule))
         .route("/api/v1/ops/rules/:rule_id", get(ops_rules::get_rule))
