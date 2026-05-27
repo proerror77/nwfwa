@@ -243,3 +243,38 @@ pre {
 .metric-row strong {
   overflow-wrap: anywhere;
 }
+
+@media (max-width: 760px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+
+  aside {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 6px;
+  }
+
+  aside h1 {
+    grid-column: 1 / -1;
+  }
+
+  aside button {
+    margin: 0;
+  }
+
+  main {
+    padding: 16px;
+  }
+
+  .runtime,
+  .ops-grid,
+  .score-hero,
+  .result-grid,
+  .form-grid,
+  .summary-grid,
+  .compact-list,
+  .metric-row {
+    grid-template-columns: 1fr;
+  }
+}
