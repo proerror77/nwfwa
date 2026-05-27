@@ -38,6 +38,7 @@ pub struct RulePromotionGate {
     pub label: String,
     pub passed: bool,
     pub blocker: String,
+    pub evidence_source: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -334,43 +335,63 @@ fn build_rule_promotion_gates(
     };
     let has_review_evidence = effective_reviewed_count > 0;
     let has_saving_evidence = effective_saving > Decimal::ZERO;
+    let review_evidence_source = review_evidence_source(performance, latest_backtest);
+    let saving_evidence_source = saving_evidence_source(performance, latest_backtest);
+    let approved = latest_review
+        .map(|review| review.decision == "approved")
+        .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active"));
+    let shadow_rollout = performance.trigger_count > 0 && performance.reviewed_count > 0;
+    let rollback_path = rule.latest_version > 0 && rule.active_version.is_some();
     let gates = vec![
         rule_gate(
             "Named owner",
             !rule.owner.trim().is_empty(),
             "owner missing",
+            if rule.owner.trim().is_empty() {
+                "missing"
+            } else {
+                "metadata"
+            },
         ),
         rule_gate(
             "Deterministic backtest evidence",
             has_review_evidence,
             "backtest evidence missing",
+            review_evidence_source,
         ),
         rule_gate(
             "Estimated saving",
             has_saving_evidence,
             "estimated saving missing",
+            saving_evidence_source,
         ),
         rule_gate(
             "False-positive burden",
             has_review_evidence && effective_false_positive_rate <= 0.30,
             "false-positive burden missing",
+            if has_review_evidence && effective_false_positive_rate <= 0.30 {
+                review_evidence_source
+            } else {
+                "missing"
+            },
         ),
         rule_gate(
             "Approval before routing",
-            latest_review
-                .map(|review| review.decision == "approved")
-                .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active")),
+            approved,
             "approval missing",
+            if approved { "approval" } else { "missing" },
         ),
         rule_gate(
             "Shadow or limited rollout",
-            performance.trigger_count > 0 && performance.reviewed_count > 0,
+            shadow_rollout,
             "shadow rollout missing",
+            if shadow_rollout { "runtime" } else { "missing" },
         ),
         rule_gate(
             "Rollback path",
-            rule.latest_version > 0 && rule.active_version.is_some(),
+            rollback_path,
             "rollback path missing",
+            if rollback_path { "metadata" } else { "missing" },
         ),
     ];
     let blockers = gates
@@ -403,11 +424,44 @@ fn decimal_from_string(value: &str) -> Decimal {
     value.parse::<Decimal>().unwrap_or(Decimal::ZERO)
 }
 
-fn rule_gate(label: &str, passed: bool, blocker: &str) -> RulePromotionGate {
+fn review_evidence_source(
+    performance: &RulePerformanceRecord,
+    latest_backtest: Option<&RuleBacktestRecord>,
+) -> &'static str {
+    if performance.reviewed_count > 0 {
+        "runtime"
+    } else if latest_backtest
+        .map(|backtest| backtest.reviewed_count > 0)
+        .unwrap_or(false)
+    {
+        "backtest"
+    } else {
+        "missing"
+    }
+}
+
+fn saving_evidence_source(
+    performance: &RulePerformanceRecord,
+    latest_backtest: Option<&RuleBacktestRecord>,
+) -> &'static str {
+    if decimal_from_string(&performance.saving_amount) > Decimal::ZERO {
+        "runtime"
+    } else if latest_backtest
+        .map(|backtest| decimal_from_string(&backtest.estimated_saving) > Decimal::ZERO)
+        .unwrap_or(false)
+    {
+        "backtest"
+    } else {
+        "missing"
+    }
+}
+
+fn rule_gate(label: &str, passed: bool, blocker: &str, evidence_source: &str) -> RulePromotionGate {
     RulePromotionGate {
         label: label.into(),
         passed,
         blocker: blocker.into(),
+        evidence_source: evidence_source.into(),
     }
 }
 

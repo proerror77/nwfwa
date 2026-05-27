@@ -22,6 +22,10 @@ import {
   buildRuleBacktestSummary,
   type RuleBacktestResponse,
 } from "./ruleBacktestSummary";
+import {
+  buildPromotionGateEvidenceRows,
+  type PromotionGate,
+} from "./promotionGateEvidence";
 
 type RuleSummary = {
   rule_id: string;
@@ -44,11 +48,7 @@ type RulePromotionGatesResponse = {
   false_positive_rate: number;
   saving_amount: string;
   blockers: string[];
-  gates: Array<{
-    label: string;
-    passed: boolean;
-    blocker: string;
-  }>;
+  gates: PromotionGate[];
 };
 
 const defaultBacktest = JSON.stringify(
@@ -201,6 +201,9 @@ export function RulesStudio() {
   const backtestSummary = backtestMutation.data
     ? buildRuleBacktestSummary(backtestMutation.data as RuleBacktestResponse)
     : null;
+  const promotionGateRows = promotionQuery.data
+    ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
+    : [];
   const discoveryMutation = useMutation({
     mutationFn: () => discoverRules(JSON.parse(discoveryPayload), apiKey),
   });
@@ -322,10 +325,11 @@ export function RulesStudio() {
               </div>
             </div>
             <div className="table-list">
-              {promotionQuery.data.gates.map((gate) => (
+              {promotionGateRows.map((gate) => (
                 <div className="metric-row compact-metric-row" key={gate.label}>
                   <span>{gate.label}</span>
-                  <strong>{gate.passed ? "passed" : gate.blocker}</strong>
+                  <strong>{gate.status}</strong>
+                  <small className={gate.evidenceClassName}>{gate.evidenceSource}</small>
                 </div>
               ))}
             </div>

@@ -66,6 +66,18 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
     assert!(
+        schema["components"]["schemas"]["RulePromotionGate"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evidence_source")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RulePromotionGate"]["properties"]["evidence_source"]
+            ["enum"][1],
+        "backtest"
+    );
+    assert!(
         schema["components"]["schemas"]["RuleBacktestResponse"]["required"]
             .as_array()
             .unwrap()

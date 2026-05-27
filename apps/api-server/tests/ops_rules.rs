@@ -443,6 +443,20 @@ async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
     assert!(!blockers.contains(&serde_json::json!("estimated saving missing")));
     assert!(!blockers.contains(&serde_json::json!("false-positive burden missing")));
     assert!(blockers.contains(&serde_json::json!("shadow rollout missing")));
+    let backtest_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Deterministic backtest evidence")
+        .unwrap();
+    assert_eq!(backtest_gate["evidence_source"], "backtest");
+    let shadow_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Shadow or limited rollout")
+        .unwrap();
+    assert_eq!(shadow_gate["evidence_source"], "missing");
 
     let (status, body) = json_request(app, "GET", "/api/v1/ops/rules/rule_early_claim", "{}").await;
 

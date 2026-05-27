@@ -1543,11 +1543,15 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RulePromotionGate": {
                     "type": "object",
-                    "required": ["label", "passed", "blocker"],
+                    "required": ["label", "passed", "blocker", "evidence_source"],
                     "properties": {
                         "label": { "type": "string" },
                         "passed": { "type": "boolean" },
-                        "blocker": { "type": "string" }
+                        "blocker": { "type": "string" },
+                        "evidence_source": {
+                            "type": "string",
+                            "enum": ["runtime", "backtest", "approval", "metadata", "missing"]
+                        }
                     }
                 },
                 "RulePromotionGatesResponse": {
