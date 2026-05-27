@@ -1,0 +1,11 @@
+pyproject.toml
+app/__init__.py
+app/main.py
+app/schemas.py
+app/scorer.py
+fwa_ml_service.egg-info/PKG-INFO
+fwa_ml_service.egg-info/SOURCES.txt
+fwa_ml_service.egg-info/dependency_links.txt
+fwa_ml_service.egg-info/requires.txt
+fwa_ml_service.egg-info/top_level.txt
+tests/test_score.py
