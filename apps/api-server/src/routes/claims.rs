@@ -190,16 +190,17 @@ pub async fn score_claim(
     {
         Ok(score) => score,
         Err(error) => {
-            persist_failed_audit(
-                &state,
-                run_id.clone(),
-                &context,
-                &actor,
-                &request.source_system,
-                "model scoring failed",
-                &error.to_string(),
-                evidence_refs.clone(),
-            )
+            let error_message = error.to_string();
+            persist_failed_audit(FailedAuditInput {
+                state: &state,
+                run_id: run_id.clone(),
+                context: &context,
+                actor: &actor,
+                source_system: &request.source_system,
+                summary: "model scoring failed",
+                error_message: &error_message,
+                evidence_refs: evidence_refs.clone(),
+            })
             .await
             .map_err(internal_error("FAILED_AUDIT_PERSISTENCE_FAILED"))?;
             return Err(model_runtime_error(error));
@@ -295,33 +296,36 @@ fn model_runtime_error(error: ModelRuntimeError) -> ApiError {
     }
 }
 
-async fn persist_failed_audit(
-    state: &AppState,
+struct FailedAuditInput<'a> {
+    state: &'a AppState,
     run_id: ScoringRunId,
-    context: &ClaimContext,
-    actor: &ActorContext,
-    source_system: &str,
-    summary: &str,
-    error_message: &str,
+    context: &'a ClaimContext,
+    actor: &'a ActorContext,
+    source_system: &'a str,
+    summary: &'a str,
+    error_message: &'a str,
     evidence_refs: Vec<serde_json::Value>,
-) -> anyhow::Result<()> {
-    state
+}
+
+async fn persist_failed_audit(input: FailedAuditInput<'_>) -> anyhow::Result<()> {
+    input
+        .state
         .repository
         .save_audit_event(PersistedAuditEvent {
             audit_id: AuditEventId::new().to_string(),
-            run_id: run_id.to_string(),
-            claim_id: context.claim.external_claim_id.clone(),
-            source_system: source_system.to_string(),
-            actor_id: actor.actor_id.clone(),
-            actor_role: actor.actor_role.clone(),
+            run_id: input.run_id.to_string(),
+            claim_id: input.context.claim.external_claim_id.clone(),
+            source_system: input.source_system.to_string(),
+            actor_id: input.actor.actor_id.clone(),
+            actor_role: input.actor.actor_role.clone(),
             event_type: "scoring.failed".into(),
             event_status: "failed".into(),
-            summary: summary.to_string(),
+            summary: input.summary.to_string(),
             payload: serde_json::json!({
-                "claim_id": context.claim.external_claim_id,
-                "error": error_message
+                "claim_id": input.context.claim.external_claim_id,
+                "error": input.error_message
             }),
-            evidence_refs,
+            evidence_refs: input.evidence_refs,
         })
         .await
 }
