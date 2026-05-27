@@ -93,6 +93,7 @@ dependencies = [
  "axum",
  "chrono",
  "fwa-agent",
+ "fwa-anomaly",
  "fwa-audit",
  "fwa-auth",
  "fwa-core",
@@ -854,6 +855,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "fwa-anomaly"
+version = "0.1.0"
+dependencies = [
+ "fwa-features",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "fwa-audit"
 version = "0.1.0"
 dependencies = [
@@ -927,6 +937,7 @@ dependencies = [
 name = "fwa-scoring"
 version = "0.1.0"
 dependencies = [
+ "fwa-anomaly",
  "fwa-core",
  "fwa-features",
  "fwa-ml-runtime",

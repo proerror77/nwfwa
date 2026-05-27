@@ -10,6 +10,7 @@ async-trait.workspace = true
 axum.workspace = true
 chrono.workspace = true
 fwa-audit = { path = "../../crates/fwa-audit" }
+fwa-anomaly = { path = "../../crates/fwa-anomaly" }
 fwa-agent = { path = "../../crates/fwa-agent" }
 fwa-auth = { path = "../../crates/fwa-auth" }
 fwa-core = { path = "../../crates/fwa-core" }

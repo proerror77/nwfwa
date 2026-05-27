@@ -6,6 +6,7 @@ members = [
   "crates/fwa-core",
   "crates/fwa-features",
   "crates/fwa-rules",
+  "crates/fwa-anomaly",
   "crates/fwa-ml-runtime",
   "crates/fwa-scoring",
   "crates/fwa-audit",

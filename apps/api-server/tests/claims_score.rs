@@ -149,6 +149,7 @@ async fn scores_spec_style_top_level_full_payload() {
             "scores should include {score_field}"
         );
     }
+    assert!(body["scores"]["anomaly_score"].as_u64().unwrap() > 0);
 }
 
 #[tokio::test]

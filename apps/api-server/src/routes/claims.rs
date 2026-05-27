@@ -5,6 +5,7 @@ use crate::{
 };
 use axum::{extract::State, http::HeaderMap, Json};
 use chrono::NaiveDate;
+use fwa_anomaly::detect_anomaly;
 use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::*;
@@ -212,6 +213,7 @@ pub async fn score_claim(
         .map_err(internal_error("RULE_LOAD_FAILED"))?;
     let rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
+    let anomaly_score = detect_anomaly(&features);
     let model_score = match state
         .scorer
         .score(ModelScoreRequest {
@@ -240,7 +242,7 @@ pub async fn score_claim(
             return Err(model_runtime_error(error));
         }
     };
-    let decision = fwa_scoring::aggregate(&features, &rule_matches, &model_score);
+    let decision = fwa_scoring::aggregate(&features, &rule_matches, &model_score, &anomaly_score);
     let audit_id = AuditEventId::new();
     let alerts: Vec<AlertResponse> = rule_matches
         .iter()

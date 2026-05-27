@@ -1,3 +1,4 @@
+use fwa_anomaly::AnomalyScore;
 use fwa_core::{RecommendedAction, RiskLevel, RiskScore};
 use fwa_features::FeatureMap;
 use fwa_ml_runtime::ModelScore;
@@ -23,6 +24,7 @@ pub fn aggregate(
     features: &FeatureMap,
     rule_matches: &[RuleMatch],
     model_score: &ModelScore,
+    anomaly_score: &AnomalyScore,
 ) -> ScoringDecision {
     let peer_deviation_score = amount_ratio_score(features);
     let rule_score = rule_matches
@@ -30,13 +32,13 @@ pub fn aggregate(
         .map(|rule_match| rule_match.score_contribution)
         .sum::<u8>()
         .min(100);
-    let anomaly_score = 0;
     let medical_reasonableness_score = medical_reasonableness_score(features);
     let provider_network_score = provider_network_score(features);
     let similar_case_score = 0;
     let final_score_value = weighted_final_score(&[
         (peer_deviation_score, 0.15),
         (rule_score, 0.20),
+        (anomaly_score.score, 0.15),
         (model_score.score, 0.25),
         (medical_reasonableness_score, 0.10),
         (provider_network_score, 0.10),
@@ -62,6 +64,12 @@ pub fn aggregate(
         top_reasons.push("Provider 风险画像偏高".into());
     }
     top_reasons.extend(
+        anomaly_score
+            .explanations
+            .iter()
+            .map(|explanation| explanation.reason.clone()),
+    );
+    top_reasons.extend(
         model_score
             .explanations
             .iter()
@@ -75,7 +83,7 @@ pub fn aggregate(
         recommended_action,
         peer_deviation_score,
         rule_score,
-        anomaly_score,
+        anomaly_score: anomaly_score.score,
         ml_score: model_score.score,
         medical_reasonableness_score,
         provider_network_score,
@@ -147,6 +155,7 @@ fn numeric_feature(features: &FeatureMap, name: &str) -> Option<f64> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use fwa_anomaly::{AnomalyExplanation, AnomalyScore};
     use fwa_features::FeatureValue;
     use fwa_ml_runtime::ModelExplanation;
     use std::collections::BTreeMap;
@@ -241,16 +250,25 @@ mod tests {
             metadata: serde_json::json!({}),
             latency_ms: 0,
         };
+        let anomaly = AnomalyScore {
+            score: 72,
+            anomaly_type: "rare_claim_pattern".into(),
+            explanations: vec![AnomalyExplanation {
+                signal: "high_peer_percentile_with_medical_mismatch".into(),
+                contribution: 0.72,
+                reason: "金额分位和医疗匹配信号组合异常".into(),
+            }],
+        };
 
-        let decision = aggregate(&features, &rules, &model);
+        let decision = aggregate(&features, &rules, &model, &anomaly);
         assert_eq!(decision.peer_deviation_score, 95);
         assert_eq!(decision.rule_score, 80);
-        assert_eq!(decision.anomaly_score, 0);
+        assert_eq!(decision.anomaly_score, 72);
         assert_eq!(decision.ml_score, 90);
         assert_eq!(decision.medical_reasonableness_score, 90);
         assert_eq!(decision.provider_network_score, 80);
         assert_eq!(decision.similar_case_score, 0);
-        assert_eq!(decision.risk_score.value(), 87);
+        assert_eq!(decision.risk_score.value(), 85);
         assert_eq!(decision.rag, RiskLevel::Red);
         assert_eq!(
             decision.recommended_action,
