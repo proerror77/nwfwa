@@ -91,6 +91,118 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 }
+            },
+            "/api/v1/ops/rules": {
+                "get": {
+                    "summary": "List rule library",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Rule summaries",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleListResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/rules/{rule_id}": {
+                "get": {
+                    "summary": "Get rule details and versions",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "rule_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Rule detail",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleDetailResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/rules/backtest": {
+                "post": {
+                    "summary": "Backtest a candidate rule against sample claims",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/RuleBacktestRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Backtest metrics",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleBacktestResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/models": {
+                "get": {
+                    "summary": "List model versions",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Model versions",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/models/{model_key}/performance": {
+                "get": {
+                    "summary": "Get model performance metrics",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model performance metrics",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelPerformanceResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "components": {
@@ -401,6 +513,104 @@ pub async fn openapi_schema() -> Json<Value> {
                         "message": {
                             "type": "string"
                         }
+                    }
+                },
+                "RuleSummary": {
+                    "type": "object",
+                    "required": ["rule_id", "name", "status", "owner", "latest_version", "score", "alert_code", "recommended_action"],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "name": { "type": "string" },
+                        "status": { "type": "string", "enum": ["active", "submitted", "approved"] },
+                        "owner": { "type": "string" },
+                        "active_version": { "type": ["integer", "null"] },
+                        "latest_version": { "type": "integer" },
+                        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "alert_code": { "type": "string" },
+                        "recommended_action": { "type": "string" }
+                    }
+                },
+                "RuleListResponse": {
+                    "type": "object",
+                    "required": ["rules"],
+                    "properties": {
+                        "rules": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RuleSummary" }
+                        }
+                    }
+                },
+                "RuleDetailResponse": {
+                    "type": "object",
+                    "required": ["summary", "versions"],
+                    "properties": {
+                        "summary": { "$ref": "#/components/schemas/RuleSummary" },
+                        "versions": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                        }
+                    }
+                },
+                "RuleBacktestRequest": {
+                    "type": "object",
+                    "required": ["rule", "samples"],
+                    "properties": {
+                        "rule": { "type": "object" },
+                        "samples": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                        }
+                    }
+                },
+                "RuleBacktestResponse": {
+                    "type": "object",
+                    "required": ["sample_count", "matched_count", "match_rate", "average_score_contribution", "estimated_saving", "matched_claim_ids"],
+                    "properties": {
+                        "sample_count": { "type": "integer" },
+                        "matched_count": { "type": "integer" },
+                        "match_rate": { "type": "number" },
+                        "average_score_contribution": { "type": "number" },
+                        "estimated_saving": { "type": "string", "format": "decimal" },
+                        "matched_claim_ids": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "ModelVersion": {
+                    "type": "object",
+                    "required": ["model_key", "version", "model_type", "runtime_kind", "execution_provider", "status"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "version": { "type": "string" },
+                        "model_type": { "type": "string" },
+                        "runtime_kind": { "type": "string" },
+                        "execution_provider": { "type": "string" },
+                        "status": { "type": "string" },
+                        "artifact_uri": { "type": ["string", "null"] },
+                        "endpoint_url": { "type": ["string", "null"] }
+                    }
+                },
+                "ModelListResponse": {
+                    "type": "object",
+                    "required": ["models"],
+                    "properties": {
+                        "models": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ModelVersion" }
+                        }
+                    }
+                },
+                "ModelPerformanceResponse": {
+                    "type": "object",
+                    "required": ["model_key", "data_status", "scored_runs", "average_score", "high_risk_count"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "data_status": { "type": "string", "enum": ["empty", "ready"] },
+                        "scored_runs": { "type": "integer" },
+                        "average_score": { "type": "number" },
+                        "high_risk_count": { "type": "integer" },
+                        "latest_scored_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 }
             }
