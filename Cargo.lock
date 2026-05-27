@@ -42,10 +42,20 @@ name = "api-server"
 version = "0.1.0"
 dependencies = [
  "anyhow",
+ "async-trait",
  "axum",
+ "chrono",
+ "fwa-auth",
+ "fwa-core",
+ "fwa-features",
+ "fwa-ml-runtime",
+ "fwa-rules",
+ "fwa-scoring",
+ "rust_decimal",
  "serde",
  "serde_json",
  "tokio",
+ "tower",
  "tracing",
  "tracing-subscriber",
 ]

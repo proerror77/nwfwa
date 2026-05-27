@@ -6,9 +6,21 @@ publish.workspace = true
 
 [dependencies]
 anyhow.workspace = true
+async-trait.workspace = true
 axum.workspace = true
+chrono.workspace = true
+fwa-auth = { path = "../../crates/fwa-auth" }
+fwa-core = { path = "../../crates/fwa-core" }
+fwa-features = { path = "../../crates/fwa-features" }
+fwa-ml-runtime = { path = "../../crates/fwa-ml-runtime" }
+fwa-rules = { path = "../../crates/fwa-rules" }
+fwa-scoring = { path = "../../crates/fwa-scoring" }
+rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
+
+[dev-dependencies]
+tower = { version = "0.5", features = ["util"] }
