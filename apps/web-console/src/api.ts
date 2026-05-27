@@ -98,6 +98,10 @@ export async function getDashboardSummary(apiKey: string) {
   return requestJson("/api/v1/ops/dashboard/summary", apiKey);
 }
 
+export async function getClaimAuditHistory(claimId: string, apiKey: string) {
+  return requestJson(`/api/v1/audit/claims/${encodeURIComponent(claimId)}`, apiKey);
+}
+
 export async function listLeads(apiKey: string) {
   return requestJson("/api/v1/ops/leads", apiKey);
 }

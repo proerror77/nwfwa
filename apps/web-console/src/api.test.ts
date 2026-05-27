@@ -4,6 +4,7 @@ import {
   backtestRule,
   discoverRules,
   getDashboardSummary,
+  getClaimAuditHistory,
   investigateCase,
   listCases,
   listDatasets,
@@ -142,6 +143,19 @@ describe("ops API helpers", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/dashboard/summary",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls claim audit history endpoint", async () => {
+    const fetchMock = mockFetch({ claim_id: "CLM-0287", events: [] });
+
+    await getClaimAuditHistory("CLM-0287", "dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/audit/claims/CLM-0287",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

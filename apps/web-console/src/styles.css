@@ -305,6 +305,35 @@ pre {
   margin: 0;
 }
 
+.audit-timeline {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding-left: 22px;
+}
+
+.audit-timeline li {
+  border: 1px solid #d8dde4;
+  border-radius: 8px;
+  padding: 12px;
+  background: #fbfcfe;
+}
+
+.audit-timeline div {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.audit-timeline span,
+.audit-timeline small {
+  color: #5f6b7a;
+}
+
+.audit-timeline p {
+  margin: 8px 0;
+}
+
 .metric-row span,
 .metric-row strong {
   overflow-wrap: anywhere;
