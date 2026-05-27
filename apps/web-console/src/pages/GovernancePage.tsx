@@ -28,6 +28,7 @@ type AgentRunLog = {
   context_snapshots: AgentContextSnapshot[];
   tool_calls: AgentToolCall[];
   tool_results: AgentToolResult[];
+  approvals: AgentApproval[];
   created_at?: string | null;
   completed_at?: string | null;
 };
@@ -57,6 +58,17 @@ type AgentToolResult = {
   evidence_refs: string[];
 };
 
+type AgentApproval = {
+  approval_id: string;
+  agent_run_id: string;
+  proposed_action: string;
+  decision: string;
+  approver: string;
+  reason: string;
+  evidence_refs: string[];
+  created_at?: string | null;
+};
+
 type AgentRunLogListResponse = {
   runs: AgentRunLog[];
 };
@@ -75,6 +87,7 @@ export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
   const contextSnapshots = runs.flatMap((run) => run.context_snapshots ?? []);
   const toolCalls = runs.flatMap((run) => run.tool_calls ?? []);
   const toolResults = runs.flatMap((run) => run.tool_results ?? []);
+  const approvals = runs.flatMap((run) => run.approvals ?? []);
   return {
     runCount: runs.length,
     contextSnapshotCount: contextSnapshots.length,
@@ -84,6 +97,8 @@ export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
     toolCallCount: toolCalls.length,
     toolResultCount: toolResults.length,
     failedToolCallCount: toolCalls.filter((call) => call.status === "failed").length,
+    approvalCount: approvals.length,
+    pendingApprovalCount: approvals.filter((approval) => approval.decision === "pending").length,
   };
 }
 
@@ -143,6 +158,10 @@ export function GovernancePage() {
             <span>Contexts</span>
             <strong>{agentSummary.contextSnapshotCount}</strong>
           </div>
+          <div>
+            <span>Approvals</span>
+            <strong>{agentSummary.pendingApprovalCount}</strong>
+          </div>
         </div>
         {auditQuery.error ? <pre className="error">{String(auditQuery.error.message)}</pre> : null}
         {agentRunsQuery.error ? (
@@ -199,10 +218,22 @@ export function GovernancePage() {
                   }{" "}
                   masked
                 </p>
+                <p>
+                  {run.approvals.length} approvals /{" "}
+                  {run.approvals.filter((approval) => approval.decision === "pending").length}{" "}
+                  pending
+                </p>
                 <ul className="result-list">
                   {run.context_snapshots.map((snapshot) => (
                     <li key={snapshot.snapshot_id}>
                       {snapshot.redaction_status}: {snapshot.checksum}
+                    </li>
+                  ))}
+                </ul>
+                <ul className="result-list">
+                  {run.approvals.map((approval) => (
+                    <li key={approval.approval_id}>
+                      {approval.proposed_action}: {approval.decision}
                     </li>
                   ))}
                 </ul>

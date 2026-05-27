@@ -325,6 +325,7 @@ pub struct PersistedAgentRun {
     pub context_snapshots: Vec<AgentContextSnapshotRecord>,
     pub tool_calls: Vec<AgentToolCallRecord>,
     pub tool_results: Vec<AgentToolResultRecord>,
+    pub approvals: Vec<AgentApprovalRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -339,6 +340,7 @@ pub struct AgentRunLogRecord {
     pub context_snapshots: Vec<AgentContextSnapshotRecord>,
     pub tool_calls: Vec<AgentToolCallRecord>,
     pub tool_results: Vec<AgentToolResultRecord>,
+    pub approvals: Vec<AgentApprovalRecord>,
     pub created_at: Option<String>,
     pub completed_at: Option<String>,
 }
@@ -369,6 +371,18 @@ pub struct AgentToolResultRecord {
     pub status: String,
     pub output_json: Value,
     pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentApprovalRecord {
+    pub approval_id: String,
+    pub agent_run_id: String,
+    pub proposed_action: String,
+    pub decision: String,
+    pub approver: String,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -660,6 +674,17 @@ type CaseRow = (
     Value,
 );
 
+#[derive(sqlx::FromRow)]
+struct AgentApprovalRow {
+    approval_id: String,
+    proposed_action: String,
+    decision: String,
+    approver: String,
+    reason: String,
+    evidence_refs: Value,
+    created_at: chrono::DateTime<chrono::Utc>,
+}
+
 trait IntoClaimContext {
     fn into_context(self, items: Vec<ClaimItemRow>) -> ClaimContext;
 }
@@ -853,6 +878,11 @@ pub trait ScoringRepository: Send + Sync {
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
 
     async fn list_agent_runs(&self) -> anyhow::Result<Vec<AgentRunLogRecord>>;
+
+    async fn save_agent_approval(
+        &self,
+        approval: AgentApprovalRecord,
+    ) -> anyhow::Result<AgentApprovalRecord>;
 
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord>;
 
@@ -1501,6 +1531,29 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(runs)
     }
 
+    async fn save_agent_approval(
+        &self,
+        approval: AgentApprovalRecord,
+    ) -> anyhow::Result<AgentApprovalRecord> {
+        let mut runs = self.agent_runs.lock().await;
+        let Some(run) = runs
+            .iter_mut()
+            .find(|run| run.agent_run_id == approval.agent_run_id)
+        else {
+            anyhow::bail!("agent run not found: {}", approval.agent_run_id);
+        };
+        if let Some(existing) = run
+            .approvals
+            .iter_mut()
+            .find(|existing| existing.approval_id == approval.approval_id)
+        {
+            *existing = approval.clone();
+        } else {
+            run.approvals.push(approval.clone());
+        }
+        Ok(approval)
+    }
+
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
         let mut sequence = self.dataset_sequence.lock().await;
         *sequence += 1;
@@ -1890,6 +1943,34 @@ impl PostgresScoringRepository {
                     }
                 },
             )
+            .collect())
+    }
+
+    async fn load_agent_approvals(
+        &self,
+        agent_run_id: &str,
+    ) -> anyhow::Result<Vec<AgentApprovalRecord>> {
+        let rows: Vec<AgentApprovalRow> = sqlx::query_as(
+            "SELECT approval_id, proposed_action, decision, approver, reason, evidence_refs, created_at
+             FROM agent_approvals
+             WHERE agent_run_id = $1
+             ORDER BY created_at, id",
+        )
+        .bind(agent_run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| AgentApprovalRecord {
+                approval_id: row.approval_id,
+                agent_run_id: agent_run_id.to_string(),
+                proposed_action: row.proposed_action,
+                decision: row.decision,
+                approver: row.approver,
+                reason: row.reason,
+                evidence_refs: json_array_to_strings(row.evidence_refs),
+                created_at: Some(row.created_at.to_rfc3339()),
+            })
             .collect())
     }
 }
@@ -3304,6 +3385,10 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&run.agent_run_id)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("DELETE FROM agent_approvals WHERE agent_run_id = $1")
+            .bind(&run.agent_run_id)
+            .execute(&mut *tx)
+            .await?;
 
         for step in &run.steps {
             sqlx::query(
@@ -3364,6 +3449,22 @@ impl ScoringRepository for PostgresScoringRepository {
             .execute(&mut *tx)
             .await?;
         }
+        for approval in &run.approvals {
+            sqlx::query(
+                "INSERT INTO agent_approvals
+                 (approval_id, agent_run_id, proposed_action, decision, approver, reason, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            )
+            .bind(&approval.approval_id)
+            .bind(&run.agent_run_id)
+            .bind(&approval.proposed_action)
+            .bind(&approval.decision)
+            .bind(&approval.approver)
+            .bind(&approval.reason)
+            .bind(string_values(&approval.evidence_refs))
+            .execute(&mut *tx)
+            .await?;
+        }
 
         tx.commit().await?;
         Ok(())
@@ -3411,6 +3512,7 @@ impl ScoringRepository for PostgresScoringRepository {
             let context_snapshots = self.load_agent_context_snapshots(&agent_run_id).await?;
             let tool_calls = self.load_agent_tool_calls(&agent_run_id).await?;
             let tool_results = self.load_agent_tool_results(&agent_run_id).await?;
+            let approvals = self.load_agent_approvals(&agent_run_id).await?;
             runs.push(AgentRunLogRecord {
                 agent_run_id,
                 claim_id,
@@ -3422,12 +3524,39 @@ impl ScoringRepository for PostgresScoringRepository {
                 context_snapshots,
                 tool_calls,
                 tool_results,
+                approvals,
                 created_at: Some(created_at.to_rfc3339()),
                 completed_at: completed_at.map(|value| value.to_rfc3339()),
             });
         }
 
         Ok(runs)
+    }
+
+    async fn save_agent_approval(
+        &self,
+        approval: AgentApprovalRecord,
+    ) -> anyhow::Result<AgentApprovalRecord> {
+        sqlx::query(
+            "INSERT INTO agent_approvals
+             (approval_id, agent_run_id, proposed_action, decision, approver, reason, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (approval_id) DO UPDATE
+             SET decision = EXCLUDED.decision,
+                 approver = EXCLUDED.approver,
+                 reason = EXCLUDED.reason,
+                 evidence_refs = EXCLUDED.evidence_refs",
+        )
+        .bind(&approval.approval_id)
+        .bind(&approval.agent_run_id)
+        .bind(&approval.proposed_action)
+        .bind(&approval.decision)
+        .bind(&approval.approver)
+        .bind(&approval.reason)
+        .bind(string_values(&approval.evidence_refs))
+        .execute(&self.pool)
+        .await?;
+        Ok(approval)
     }
 
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
@@ -4916,6 +5045,7 @@ fn agent_run_log_from_persisted(run: &PersistedAgentRun) -> AgentRunLogRecord {
         context_snapshots: run.context_snapshots.clone(),
         tool_calls: run.tool_calls.clone(),
         tool_results: run.tool_results.clone(),
+        approvals: run.approvals.clone(),
         created_at: None,
         completed_at: None,
     }

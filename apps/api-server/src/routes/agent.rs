@@ -2,8 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AgentContextSnapshotRecord, AgentToolCallRecord, AgentToolResultRecord, PersistedAgentRun,
-        PersistedAuditEvent, SimilarCaseQuery,
+        AgentApprovalRecord, AgentContextSnapshotRecord, AgentToolCallRecord,
+        AgentToolResultRecord, PersistedAgentRun, PersistedAuditEvent, SimilarCaseQuery,
     },
 };
 use axum::{
@@ -168,6 +168,16 @@ pub async fn investigate_case(
                         .collect::<Vec<_>>()
                 }),
                 evidence_refs: result_evidence_refs,
+            }],
+            approvals: vec![AgentApprovalRecord {
+                approval_id: format!("approval_{}", package.agent_run_id),
+                agent_run_id: package.agent_run_id.clone(),
+                proposed_action: "manual_review_required".into(),
+                decision: "pending".into(),
+                approver: "unassigned".into(),
+                reason: "Agent output requires human approval before downstream action.".into(),
+                evidence_refs: package.evidence_refs.clone(),
+                created_at: None,
             }],
         })
         .await

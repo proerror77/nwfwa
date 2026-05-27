@@ -257,6 +257,18 @@ CREATE TABLE IF NOT EXISTS tool_results (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS agent_approvals (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  approval_id TEXT NOT NULL UNIQUE,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  proposed_action TEXT NOT NULL,
+  decision TEXT NOT NULL,
+  approver TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS fwa_leads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   lead_id TEXT NOT NULL UNIQUE,

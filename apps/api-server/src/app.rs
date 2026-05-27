@@ -59,6 +59,10 @@ pub fn build_app_with_parts(
         )
         .route("/api/v1/ops/agent-runs", get(ops_agents::list_agent_runs))
         .route(
+            "/api/v1/ops/agent-runs/:agent_run_id/approvals",
+            post(ops_agents::submit_agent_approval),
+        )
+        .route(
             "/api/v1/agent/cases/investigate",
             post(agent::investigate_case),
         )

@@ -54,6 +54,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/cases",
         "/api/v1/ops/audit-samples",
         "/api/v1/ops/agent-runs",
+        "/api/v1/ops/agent-runs/{agent_run_id}/approvals",
         "/api/v1/ops/knowledge/cases",
         "/api/v1/knowledge/search-similar",
         "/api/v1/agent/cases/investigate",
@@ -122,6 +123,7 @@ async fn openapi_includes_operations_paths() {
     );
     assert!(schema["components"]["schemas"]["AgentToolCallRecord"].is_object());
     assert!(schema["components"]["schemas"]["AgentToolResultRecord"].is_object());
+    assert!(schema["components"]["schemas"]["AgentApprovalRecord"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["tool_calls"]["items"]
             ["$ref"],
@@ -131,6 +133,11 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["tool_results"]["items"]
             ["$ref"],
         "#/components/schemas/AgentToolResultRecord"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["approvals"]["items"]
+            ["$ref"],
+        "#/components/schemas/AgentApprovalRecord"
     );
     assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],

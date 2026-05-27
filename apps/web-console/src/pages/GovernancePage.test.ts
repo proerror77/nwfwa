@@ -74,6 +74,17 @@ describe("buildAgentRunLogSummary", () => {
             evidence_refs: ["knowledge_cases:KC-1001"],
           },
         ],
+        approvals: [
+          {
+            approval_id: "approval_1",
+            agent_run_id: "agent_1",
+            proposed_action: "manual_review_required",
+            decision: "pending",
+            approver: "unassigned",
+            reason: "Agent output requires human approval before downstream action.",
+            evidence_refs: ["agent_run:agent_1"],
+          },
+        ],
       },
     ]);
 
@@ -84,6 +95,8 @@ describe("buildAgentRunLogSummary", () => {
       toolCallCount: 1,
       toolResultCount: 1,
       failedToolCallCount: 0,
+      approvalCount: 1,
+      pendingApprovalCount: 1,
     });
   });
 });

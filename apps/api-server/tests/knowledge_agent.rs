@@ -265,5 +265,76 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert_eq!(tool_result["status"], "succeeded");
     assert!(tool_result["output_json"]["result_count"].as_u64().unwrap() > 0);
     assert!(!tool_result["evidence_refs"].as_array().unwrap().is_empty());
+    let approval = run["approvals"]
+        .as_array()
+        .unwrap()
+        .first()
+        .expect("agent run should create a pending human approval gate");
+    assert_eq!(approval["decision"], "pending");
+    assert_eq!(approval["proposed_action"], "manual_review_required");
+    assert!(!approval["evidence_refs"].as_array().unwrap().is_empty());
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn submits_agent_approval_decision_for_governance_review() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-APPROVAL",
+          "risk_score": 94,
+          "rag": "RED",
+          "top_reasons": ["Agent 建议升级人工审核"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_approval:manual_review_required"]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["approval"]["agent_run_id"], agent_run_id);
+    assert_eq!(body["approval"]["decision"], "approved");
+    assert_eq!(body["approval"]["approver"], "qa-lead");
+    assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|run| run["agent_run_id"] == agent_run_id)
+        .expect("agent run should be listed after approval");
+    let approval = run["approvals"]
+        .as_array()
+        .unwrap()
+        .first()
+        .expect("submitted approval should be included in agent governance logs");
+    assert_eq!(approval["decision"], "approved");
+    assert_eq!(approval["approver"], "qa-lead");
 }

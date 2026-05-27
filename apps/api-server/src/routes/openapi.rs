@@ -549,6 +549,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/agent-runs/{agent_run_id}/approvals": {
+                "post": {
+                    "summary": "Submit a human approval decision for an agent run",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "agent_run_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitAgentApprovalRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Agent approval decision accepted and audited",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/SubmitAgentApprovalResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/backtest": {
                 "post": {
                     "summary": "Backtest a candidate rule against sample claims",
@@ -2172,7 +2204,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AgentRunLogRecord": {
                     "type": "object",
-                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "context_snapshots", "tool_calls", "tool_results"],
+                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "context_snapshots", "tool_calls", "tool_results", "approvals"],
                     "properties": {
                         "agent_run_id": { "type": "string" },
                         "claim_id": { "type": "string" },
@@ -2192,6 +2224,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "tool_results": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/AgentToolResultRecord" }
+                        },
+                        "approvals": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AgentApprovalRecord" }
                         },
                         "created_at": { "type": ["string", "null"] },
                         "completed_at": { "type": ["string", "null"] }
@@ -2229,6 +2265,38 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status": { "type": "string" },
                         "output_json": { "type": "object" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "AgentApprovalRecord": {
+                    "type": "object",
+                    "required": ["approval_id", "agent_run_id", "proposed_action", "decision", "approver", "reason", "evidence_refs"],
+                    "properties": {
+                        "approval_id": { "type": "string" },
+                        "agent_run_id": { "type": "string" },
+                        "proposed_action": { "type": "string" },
+                        "decision": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+                        "approver": { "type": "string" },
+                        "reason": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "created_at": { "type": ["string", "null"] }
+                    }
+                },
+                "SubmitAgentApprovalRequest": {
+                    "type": "object",
+                    "required": ["decision", "approver", "reason", "evidence_refs"],
+                    "properties": {
+                        "decision": { "type": "string", "enum": ["approved", "rejected"] },
+                        "approver": { "type": "string" },
+                        "reason": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "SubmitAgentApprovalResponse": {
+                    "type": "object",
+                    "required": ["approval", "audit_id"],
+                    "properties": {
+                        "approval": { "$ref": "#/components/schemas/AgentApprovalRecord" },
+                        "audit_id": { "type": "string" }
                     }
                 },
                 "AgentRunLogListResponse": {
