@@ -2831,7 +2831,18 @@ async fn insert_audit_event(
     sqlx::query(
         "INSERT INTO audit_events
          (audit_id, run_id, claim_id, actor_id, actor_role, source_system, event_type, event_status, summary, payload, evidence_refs)
-         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11)",
+         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (audit_id) DO UPDATE
+         SET run_id = EXCLUDED.run_id,
+             claim_id = EXCLUDED.claim_id,
+             actor_id = EXCLUDED.actor_id,
+             actor_role = EXCLUDED.actor_role,
+             source_system = EXCLUDED.source_system,
+             event_type = EXCLUDED.event_type,
+             event_status = EXCLUDED.event_status,
+             summary = EXCLUDED.summary,
+             payload = EXCLUDED.payload,
+             evidence_refs = EXCLUDED.evidence_refs",
     )
     .bind(&event.audit_id)
     .bind(&event.run_id)
