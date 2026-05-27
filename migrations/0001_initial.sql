@@ -367,28 +367,3 @@ CREATE TABLE IF NOT EXISTS qa_reviews (
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-
-CREATE TABLE IF NOT EXISTS investigation_results (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  investigation_id TEXT NOT NULL UNIQUE,
-  claim_id TEXT NOT NULL,
-  outcome TEXT NOT NULL,
-  confirmed_fwa BOOLEAN NOT NULL,
-  saving_amount NUMERIC,
-  currency TEXT,
-  notes TEXT NOT NULL,
-  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE TABLE IF NOT EXISTS qa_reviews (
-  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-  qa_case_id TEXT NOT NULL UNIQUE,
-  claim_id TEXT NOT NULL,
-  qa_conclusion TEXT NOT NULL,
-  issue_type TEXT NOT NULL,
-  feedback_target TEXT NOT NULL,
-  notes TEXT NOT NULL,
-  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
-);
