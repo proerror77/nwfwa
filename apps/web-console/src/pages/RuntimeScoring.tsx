@@ -10,8 +10,13 @@ type ScoringResponse = {
   rag: string;
   recommended_action: string;
   scores: {
+    peer_deviation_score: number;
     rule_score: number;
+    anomaly_score: number;
     ml_score: number;
+    medical_reasonableness_score: number;
+    provider_network_score: number;
+    similar_case_score: number;
     final_score: number;
   };
   alerts: Array<{
@@ -95,12 +100,32 @@ export function RuntimeScoring() {
                 <dd>{result.audit_id}</dd>
               </div>
               <div>
+                <dt>Peer Deviation</dt>
+                <dd>{result.scores.peer_deviation_score}</dd>
+              </div>
+              <div>
                 <dt>Rule Score</dt>
                 <dd>{result.scores.rule_score}</dd>
               </div>
               <div>
+                <dt>Anomaly Score</dt>
+                <dd>{result.scores.anomaly_score}</dd>
+              </div>
+              <div>
                 <dt>ML Score</dt>
                 <dd>{result.scores.ml_score}</dd>
+              </div>
+              <div>
+                <dt>Medical Score</dt>
+                <dd>{result.scores.medical_reasonableness_score}</dd>
+              </div>
+              <div>
+                <dt>Provider Score</dt>
+                <dd>{result.scores.provider_network_score}</dd>
+              </div>
+              <div>
+                <dt>Similar Case</dt>
+                <dd>{result.scores.similar_case_score}</dd>
               </div>
               <div>
                 <dt>Final Score</dt>

@@ -928,6 +928,7 @@ name = "fwa-scoring"
 version = "0.1.0"
 dependencies = [
  "fwa-core",
+ "fwa-features",
  "fwa-ml-runtime",
  "fwa-rules",
  "serde",

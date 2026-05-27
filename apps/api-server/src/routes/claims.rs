@@ -91,8 +91,13 @@ pub struct ScoreClaimResponse {
 
 #[derive(Debug, Serialize)]
 pub struct ScoreBreakdown {
+    pub peer_deviation_score: u8,
     pub rule_score: u8,
+    pub anomaly_score: u8,
     pub ml_score: u8,
+    pub medical_reasonableness_score: u8,
+    pub provider_network_score: u8,
+    pub similar_case_score: u8,
     pub final_score: u8,
 }
 
@@ -235,7 +240,7 @@ pub async fn score_claim(
             return Err(model_runtime_error(error));
         }
     };
-    let decision = fwa_scoring::aggregate(&rule_matches, &model_score);
+    let decision = fwa_scoring::aggregate(&features, &rule_matches, &model_score);
     let audit_id = AuditEventId::new();
     let alerts: Vec<AlertResponse> = rule_matches
         .iter()
@@ -290,8 +295,13 @@ pub async fn score_claim(
         rag: decision.rag,
         recommended_action: decision.recommended_action,
         scores: ScoreBreakdown {
+            peer_deviation_score: decision.peer_deviation_score,
             rule_score: decision.rule_score,
+            anomaly_score: decision.anomaly_score,
             ml_score: decision.ml_score,
+            medical_reasonableness_score: decision.medical_reasonableness_score,
+            provider_network_score: decision.provider_network_score,
+            similar_case_score: decision.similar_case_score,
             final_score: decision.risk_score.value(),
         },
         alerts,

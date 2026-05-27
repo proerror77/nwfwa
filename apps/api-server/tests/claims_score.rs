@@ -131,6 +131,24 @@ async fn scores_spec_style_top_level_full_payload() {
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    for score_field in [
+        "peer_deviation_score",
+        "rule_score",
+        "anomaly_score",
+        "ml_score",
+        "medical_reasonableness_score",
+        "provider_network_score",
+        "similar_case_score",
+        "final_score",
+    ] {
+        assert!(
+            body["scores"][score_field].is_number(),
+            "scores should include {score_field}"
+        );
+    }
 }
 
 #[tokio::test]
@@ -316,6 +334,25 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "evidence_refs",
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");
+    }
+
+    let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
+        .as_array()
+        .expect("score required fields");
+    for score_field in [
+        "peer_deviation_score",
+        "rule_score",
+        "anomaly_score",
+        "ml_score",
+        "medical_reasonableness_score",
+        "provider_network_score",
+        "similar_case_score",
+        "final_score",
+    ] {
+        assert!(
+            score_required.iter().any(|field| field == score_field),
+            "ScoreBreakdown should require {score_field}"
+        );
     }
 }
 

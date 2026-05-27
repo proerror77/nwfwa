@@ -810,14 +810,48 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ScoreBreakdown": {
                     "type": "object",
-                    "required": ["rule_score", "ml_score", "final_score"],
+                    "required": [
+                        "peer_deviation_score",
+                        "rule_score",
+                        "anomaly_score",
+                        "ml_score",
+                        "medical_reasonableness_score",
+                        "provider_network_score",
+                        "similar_case_score",
+                        "final_score"
+                    ],
                     "properties": {
+                        "peer_deviation_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        },
                         "rule_score": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 100
                         },
+                        "anomaly_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        },
                         "ml_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        },
+                        "medical_reasonableness_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        },
+                        "provider_network_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        },
+                        "similar_case_score": {
                             "type": "integer",
                             "minimum": 0,
                             "maximum": 100
