@@ -1,5 +1,6 @@
 pub mod agent;
 pub mod claims;
+pub mod dashboard;
 pub mod health;
 pub mod knowledge;
 pub mod openapi;
