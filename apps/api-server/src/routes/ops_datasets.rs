@@ -29,7 +29,7 @@ pub async fn register_dataset(
     Json(request): Json<RegisterDatasetInput>,
 ) -> Result<Json<DatasetRecord>, ApiError> {
     authorize(&state, &headers)?;
-    validate_parquet_dataset(&request.storage_format)?;
+    validate_dataset_contract(&request)?;
     let dataset = state
         .repository
         .register_dataset(request)
@@ -102,6 +102,96 @@ fn validate_parquet_dataset(storage_format: &str) -> Result<(), ApiError> {
             StatusCode::BAD_REQUEST,
             "DATASET_FORMAT_NOT_SUPPORTED",
             "registered analytical datasets must use parquet storage_format",
+        ))
+    }
+}
+
+fn validate_dataset_contract(request: &RegisterDatasetInput) -> Result<(), ApiError> {
+    validate_parquet_dataset(&request.storage_format)?;
+    require_suffix(
+        &request.manifest_uri,
+        "manifest.json",
+        "DATASET_MANIFEST_INVALID",
+    )?;
+    require_suffix(&request.schema_uri, "schema.json", "DATASET_SCHEMA_INVALID")?;
+    require_suffix(
+        &request.profile_uri,
+        "profile.json",
+        "DATASET_PROFILE_INVALID",
+    )?;
+
+    if request
+        .splits
+        .iter()
+        .any(|split| split.data_uri.to_ascii_lowercase().contains(".csv"))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "DATASET_SPLIT_FORMAT_INVALID",
+            "dataset split URIs must point to parquet files or parquet partition directories",
+        ));
+    }
+
+    let split_rows = request
+        .splits
+        .iter()
+        .map(|split| split.row_count)
+        .sum::<u64>();
+    if split_rows != request.row_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "DATASET_ROW_COUNT_MISMATCH",
+            "dataset row_count must equal the sum of split row counts",
+        ));
+    }
+
+    let Some(label_field) = request
+        .fields
+        .iter()
+        .find(|field| field.field_name == request.label_column)
+    else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "DATASET_LABEL_FIELD_MISSING",
+            "label_column must exist in schema fields",
+        ));
+    };
+    if label_field.semantic_role != "label" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "DATASET_LABEL_ROLE_INVALID",
+            "label_column schema field must have semantic_role label",
+        ));
+    }
+
+    for key in &request.entity_keys {
+        let Some(field) = request.fields.iter().find(|field| field.field_name == *key) else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "DATASET_ENTITY_KEY_MISSING",
+                "entity_keys must exist in schema fields",
+            ));
+        };
+        if field.logical_type != "string" {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "DATASET_ENTITY_KEY_TYPE_INVALID",
+                "entity key fields must use string logical_type",
+            ));
+        }
+    }
+
+    Ok(())
+}
+
+fn require_suffix(value: &str, suffix: &str, code: &'static str) -> Result<(), ApiError> {
+    if value.ends_with(suffix) {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            format!("dataset URI must end with {suffix}"),
         ))
     }
 }

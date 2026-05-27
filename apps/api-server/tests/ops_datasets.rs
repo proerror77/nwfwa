@@ -82,6 +82,14 @@ fn renewal_dataset_payload(storage_format: &str) -> String {
               "profile_json": {{"source_type": "legacy_csv_identifier"}}
             }},
             {{
+              "field_name": "order_no",
+              "logical_type": "string",
+              "nullable": false,
+              "semantic_role": "key",
+              "description": "External order number stored as string.",
+              "profile_json": {{"source_type": "legacy_csv_identifier"}}
+            }},
+            {{
               "field_name": "m_2_keep_status",
               "logical_type": "int8",
               "nullable": false,
@@ -112,7 +120,7 @@ async fn registers_and_reads_parquet_dataset_catalog() {
     assert_eq!(created["storage_format"], "parquet");
     assert_eq!(created["entity_keys"][0], "policy_no");
     assert_eq!(created["splits"][0]["split_name"], "train");
-    assert_eq!(created["fields"][1]["semantic_role"], "label");
+    assert_eq!(created["fields"][2]["semantic_role"], "label");
 
     let dataset_id = created["dataset_id"].as_str().unwrap();
     let (status, loaded) = json_request(
@@ -146,6 +154,46 @@ async fn rejects_non_parquet_dataset_registration() {
 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "DATASET_FORMAT_NOT_SUPPORTED");
+}
+
+#[tokio::test]
+async fn rejects_csv_split_uri_even_when_storage_format_says_parquet() {
+    let app = build_app(test_config());
+    let payload = renewal_dataset_payload("parquet").replace(
+        "data/external/renewal_automl_20211105/v1/split=train/",
+        "data/external/renewal_automl_20211105/v1/train.csv",
+    );
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_SPLIT_FORMAT_INVALID");
+}
+
+#[tokio::test]
+async fn requires_split_row_counts_to_match_dataset_total() {
+    let app = build_app(test_config());
+    let payload =
+        renewal_dataset_payload("parquet").replace("\"row_count\": 88622", "\"row_count\": 1");
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_ROW_COUNT_MISMATCH");
+}
+
+#[tokio::test]
+async fn requires_entity_keys_to_be_string_fields() {
+    let app = build_app(test_config());
+    let payload = renewal_dataset_payload("parquet").replace(
+        "\"logical_type\": \"string\"",
+        "\"logical_type\": \"float64\"",
+    );
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_ENTITY_KEY_TYPE_INVALID");
 }
 
 #[tokio::test]
