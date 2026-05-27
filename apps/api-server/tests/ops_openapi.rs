@@ -37,9 +37,16 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/datasets",
         "/api/v1/ops/datasets/{dataset_id}",
         "/api/v1/ops/datasets/{dataset_id}/mappings",
+        "/api/v1/ops/feature-sets",
+        "/api/v1/ops/model-datasets",
+        "/api/v1/ops/model-evaluations",
+        "/api/v1/ops/model-evaluations/{evaluation_run_id}",
         "/api/v1/ops/knowledge/cases",
         "/api/v1/knowledge/search-similar",
         "/api/v1/agent/cases/investigate",
+        "/api/v1/investigations/results",
+        "/api/v1/qa/results",
+        "/api/v1/audit/claims/{claim_id}",
     ] {
         assert!(schema["paths"][path].is_object(), "missing {path}");
     }

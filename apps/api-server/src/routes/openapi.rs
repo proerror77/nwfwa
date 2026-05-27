@@ -242,6 +242,82 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/feature-sets": {
+                "post": {
+                    "summary": "Register a Parquet feature set version",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Registered feature set"
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/model-datasets": {
+                "post": {
+                    "summary": "Register a model dataset version",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Registered model dataset"
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/model-evaluations": {
+                "post": {
+                    "summary": "Register model evaluation metrics for a model dataset",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Registered model evaluation"
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/model-evaluations/{evaluation_run_id}": {
+                "get": {
+                    "summary": "Get model evaluation metrics",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "evaluation_run_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model evaluation metrics"
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/backtest": {
                 "post": {
                     "summary": "Backtest a candidate rule against sample claims",
@@ -364,6 +440,78 @@ pub async fn openapi_schema() -> Json<Value> {
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/AgentInvestigationResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/investigations/results": {
+                "post": {
+                    "summary": "Write back a pilot investigation result",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/InvestigationResultRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Investigation result accepted and audited",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/PilotWritebackResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/qa/results": {
+                "post": {
+                    "summary": "Write back a pilot QA result",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/QaResultRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "QA result accepted and audited",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/PilotWritebackResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/audit/claims/{claim_id}": {
+                "get": {
+                    "summary": "Get pilot audit history for a claim",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "claim_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Claim audit history",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ClaimAuditHistoryResponse" }
                                 }
                             }
                         }
@@ -965,6 +1113,53 @@ pub async fn openapi_schema() -> Json<Value> {
                         "similar_cases": { "type": "array", "items": { "type": "object" } },
                         "qa_opinion_draft": { "type": "string" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "InvestigationResultRequest": {
+                    "type": "object",
+                    "required": ["investigation_id", "claim_id", "outcome", "confirmed_fwa", "notes", "evidence_refs"],
+                    "properties": {
+                        "investigation_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "outcome": { "type": "string" },
+                        "confirmed_fwa": { "type": "boolean" },
+                        "saving_amount": { "type": ["string", "null"], "format": "decimal" },
+                        "currency": { "type": ["string", "null"] },
+                        "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "QaResultRequest": {
+                    "type": "object",
+                    "required": ["qa_case_id", "claim_id", "qa_conclusion", "issue_type", "feedback_target", "notes", "evidence_refs"],
+                    "properties": {
+                        "qa_case_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "qa_conclusion": { "type": "string" },
+                        "issue_type": { "type": "string" },
+                        "feedback_target": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "PilotWritebackResponse": {
+                    "type": "object",
+                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "evidence_refs"],
+                    "properties": {
+                        "claim_id": { "type": "string" },
+                        "event_type": { "type": "string" },
+                        "event_status": { "type": "string" },
+                        "audit_id": { "type": "string" },
+                        "run_id": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "ClaimAuditHistoryResponse": {
+                    "type": "object",
+                    "required": ["claim_id", "events"],
+                    "properties": {
+                        "claim_id": { "type": "string" },
+                        "events": { "type": "array", "items": { "type": "object" } }
                     }
                 }
             }

@@ -82,6 +82,14 @@ fn renewal_dataset_payload(storage_format: &str) -> String {
               "profile_json": {{"source_type": "legacy_csv_identifier"}}
             }},
             {{
+              "field_name": "order_no",
+              "logical_type": "string",
+              "nullable": false,
+              "semantic_role": "key",
+              "description": "External order number stored as string.",
+              "profile_json": {{"source_type": "legacy_csv_identifier"}}
+            }},
+            {{
               "field_name": "m_2_keep_status",
               "logical_type": "int8",
               "nullable": false,
@@ -112,7 +120,7 @@ async fn registers_and_reads_parquet_dataset_catalog() {
     assert_eq!(created["storage_format"], "parquet");
     assert_eq!(created["entity_keys"][0], "policy_no");
     assert_eq!(created["splits"][0]["split_name"], "train");
-    assert_eq!(created["fields"][1]["semantic_role"], "label");
+    assert_eq!(created["fields"][2]["semantic_role"], "label");
 
     let dataset_id = created["dataset_id"].as_str().unwrap();
     let (status, loaded) = json_request(
@@ -149,6 +157,46 @@ async fn rejects_non_parquet_dataset_registration() {
 }
 
 #[tokio::test]
+async fn rejects_csv_split_uri_even_when_storage_format_says_parquet() {
+    let app = build_app(test_config());
+    let payload = renewal_dataset_payload("parquet").replace(
+        "data/external/renewal_automl_20211105/v1/split=train/",
+        "data/external/renewal_automl_20211105/v1/train.csv",
+    );
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_SPLIT_FORMAT_INVALID");
+}
+
+#[tokio::test]
+async fn requires_split_row_counts_to_match_dataset_total() {
+    let app = build_app(test_config());
+    let payload =
+        renewal_dataset_payload("parquet").replace("\"row_count\": 88622", "\"row_count\": 1");
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_ROW_COUNT_MISMATCH");
+}
+
+#[tokio::test]
+async fn requires_entity_keys_to_be_string_fields() {
+    let app = build_app(test_config());
+    let payload = renewal_dataset_payload("parquet").replace(
+        "\"logical_type\": \"string\"",
+        "\"logical_type\": \"float64\"",
+    );
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "DATASET_ENTITY_KEY_TYPE_INVALID");
+}
+
+#[tokio::test]
 async fn adds_external_field_mapping_to_dataset() {
     let app = build_app(test_config());
     let (_, created) = json_request(
@@ -179,4 +227,149 @@ async fn adds_external_field_mapping_to_dataset() {
     assert_eq!(body["mapping"]["dataset_id"], dataset_id);
     assert_eq!(body["mapping"]["external_field"], "sum_premium");
     assert_eq!(body["mapping"]["feature_name"], "sum_premium");
+}
+
+#[tokio::test]
+async fn registers_feature_set_model_dataset_and_evaluation_trace() {
+    let app = build_app(test_config());
+    let (_, created) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/datasets",
+        &renewal_dataset_payload("parquet"),
+    )
+    .await;
+    let dataset_id = created["dataset_id"].as_str().unwrap();
+
+    let (status, feature_set) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": ["member_age", "sum_premium", "issue_rate"],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let feature_set_id = feature_set["feature_set_id"].as_str().unwrap();
+    assert_eq!(feature_set["dataset_id"], dataset_id);
+
+    let (status, model_dataset) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-datasets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "task_type": "binary_classification",
+              "label_name": "renewal_m2_keep_status",
+              "feature_set_id": "{feature_set_id}",
+              "train_uri": "data/features/renewal_automl_20211105/v1/split=train/",
+              "validation_uri": "data/features/renewal_automl_20211105/v1/split=validation/",
+              "test_uri": null,
+              "row_counts_json": {{"train": 68664, "validation": 19958}},
+              "label_distribution_json": {{"train": {{"1": 35837, "0": 32827}}, "validation": {{"1": 9342, "0": 10616}}}},
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let model_dataset_id = model_dataset["model_dataset_id"].as_str().unwrap();
+    assert_eq!(model_dataset["feature_set_id"], feature_set_id);
+
+    let (status, evaluation) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_renewal_v1",
+              "model_key": "renewal_baseline",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/predictions/renewal_automl_20211105/v1/feature_importance.parquet",
+              "metrics_json": {{"data_status": "validation"}}
+            }}"#
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        evaluation["evaluation"]["evaluation_run_id"],
+        "eval_renewal_v1"
+    );
+    assert_eq!(
+        evaluation["evaluation"]["model_dataset_id"],
+        model_dataset_id
+    );
+
+    let (status, loaded) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/model-evaluations/eval_renewal_v1",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(loaded["evaluation"]["model_key"], "renewal_baseline");
+    assert_eq!(loaded["evaluation"]["model_dataset_id"], model_dataset_id);
+}
+
+#[tokio::test]
+async fn rejects_csv_feature_matrix_uri() {
+    let app = build_app(test_config());
+    let (_, created) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/datasets",
+        &renewal_dataset_payload("parquet"),
+    )
+    .await;
+    let dataset_id = created["dataset_id"].as_str().unwrap();
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/features.csv",
+              "feature_list_json": ["member_age"],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "FEATURE_SET_FORMAT_INVALID");
 }
