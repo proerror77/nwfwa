@@ -268,6 +268,65 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
 }
 
 #[tokio::test]
+async fn records_rule_candidate_and_lifecycle_audit_events() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        r#"{
+          "owner": "rule-discovery",
+          "rule": {
+            "rule_id": "candidate_audit_rule",
+            "version": 1,
+            "name": "Audited candidate rule",
+            "conditions": [
+              {
+                "field": "days_since_policy_start",
+                "operator": "<=",
+                "value": 10
+              }
+            ],
+            "action": {
+              "score": 25,
+              "alert_code": "AUDITED_CANDIDATE",
+              "recommended_action": "ManualReview",
+              "reason": "候选规则需要治理审计"
+            }
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_audit_rule/submit",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) =
+        json_request(app, "GET", "/api/v1/ops/rules/candidate_audit_rule", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let audit_events = body["audit_events"].as_array().unwrap();
+    assert_eq!(audit_events.len(), 2);
+    assert_eq!(audit_events[0]["event_type"], "rule.candidate.saved");
+    assert_eq!(
+        audit_events[0]["payload"]["rule_id"],
+        "candidate_audit_rule"
+    );
+    assert_eq!(audit_events[0]["payload"]["to_status"], "draft");
+    assert_eq!(audit_events[1]["event_type"], "rule.status.changed");
+    assert_eq!(audit_events[1]["payload"]["from_status"], "draft");
+    assert_eq!(audit_events[1]["payload"]["to_status"], "submitted");
+}
+
+#[tokio::test]
 async fn advances_rule_lifecycle() {
     let app = build_app(test_config());
 

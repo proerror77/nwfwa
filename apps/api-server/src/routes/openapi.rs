@@ -1000,14 +1000,35 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "AuditHistoryEvent": {
+                    "type": "object",
+                    "required": ["audit_id", "run_id", "event_type", "event_status", "summary", "payload", "evidence_refs"],
+                    "properties": {
+                        "audit_id": { "type": "string" },
+                        "run_id": { "type": "string" },
+                        "event_type": { "type": "string" },
+                        "event_status": { "type": "string" },
+                        "summary": { "type": "string" },
+                        "payload": { "type": "object" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
                 "RuleDetailResponse": {
                     "type": "object",
-                    "required": ["summary", "versions"],
+                    "required": ["summary", "versions", "audit_events"],
                     "properties": {
                         "summary": { "$ref": "#/components/schemas/RuleSummary" },
                         "versions": {
                             "type": "array",
                             "items": { "type": "object" }
+                        },
+                        "audit_events": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AuditHistoryEvent" }
                         }
                     }
                 },

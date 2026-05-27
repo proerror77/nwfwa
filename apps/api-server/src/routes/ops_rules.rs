@@ -1,14 +1,19 @@
-use crate::{app::AppState, error::ApiError};
+use crate::{
+    app::AppState,
+    error::ApiError,
+    repository::{PersistedAuditEvent, RuleSummaryRecord},
+};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
     Json,
 };
 use chrono::NaiveDate;
+use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::{
-    Claim, ClaimContext, ClaimId, Member, MemberId, Money, Policy, PolicyId, Provider, ProviderId,
-    ProviderRiskTier, RecommendedAction,
+    AuditEventId, Claim, ClaimContext, ClaimId, Member, MemberId, Money, Policy, PolicyId,
+    Provider, ProviderId, ProviderRiskTier, RecommendedAction, ScoringRunId,
 };
 use fwa_features::calculate_features;
 use fwa_rules::{evaluate_rules, Condition, Rule, RuleAction};
@@ -278,13 +283,26 @@ pub async fn save_rule_candidate(
     headers: HeaderMap,
     Json(request): Json<SaveRuleCandidateRequest>,
 ) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let owner = request.owner.unwrap_or_else(|| "rule-discovery".into());
     let detail = state
         .repository
         .save_rule_candidate(request.rule, owner)
         .await
         .map_err(internal_error("RULE_CANDIDATE_SAVE_FAILED"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &detail.summary,
+            event_type: "rule.candidate.saved",
+            from_status: None,
+            to_status: &detail.summary.status,
+            summary: "Rule candidate saved",
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
     Ok(Json(detail))
 }
 
@@ -318,13 +336,33 @@ async fn update_status(
     rule_id: String,
     status: &'static str,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
+    let previous = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
     let rule = state
         .repository
         .update_rule_status(&rule_id, status)
         .await
         .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &rule,
+            event_type: "rule.status.changed",
+            from_status: Some(&previous.status),
+            to_status: &rule.status,
+            summary: "Rule status changed",
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
     Ok(Json(RuleLifecycleResponse {
         rule_id: rule.rule_id,
         status: rule.status,
@@ -333,7 +371,7 @@ async fn update_status(
     }))
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
@@ -344,7 +382,6 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
             source_system: state.config.source_system.clone(),
         },
     )
-    .map(|_| ())
     .map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
@@ -352,6 +389,49 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
             "invalid api key",
         )
     })
+}
+
+struct RuleAuditInput<'a> {
+    rule: &'a RuleSummaryRecord,
+    event_type: &'static str,
+    from_status: Option<&'a str>,
+    to_status: &'a str,
+    summary: &'static str,
+}
+
+async fn record_rule_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    input: RuleAuditInput<'_>,
+) -> anyhow::Result<()> {
+    let payload = serde_json::json!({
+        "rule_id": input.rule.rule_id,
+        "rule_version": input.rule.latest_version,
+        "from_status": input.from_status,
+        "to_status": input.to_status,
+        "owner": input.rule.owner,
+        "alert_code": input.rule.alert_code,
+        "recommended_action": input.rule.recommended_action,
+    });
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: input.event_type.to_string(),
+            event_status: "succeeded".into(),
+            summary: input.summary.into(),
+            payload,
+            evidence_refs: vec![serde_json::json!(format!(
+                "rules:{}:v{}",
+                input.rule.rule_id, input.rule.latest_version
+            ))],
+        })
+        .await
 }
 
 fn candidate_rule_templates() -> Vec<Rule> {

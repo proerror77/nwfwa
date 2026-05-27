@@ -80,6 +80,7 @@ pub struct RuleVersionRecord {
 pub struct RuleDetailRecord {
     pub summary: RuleSummaryRecord,
     pub versions: Vec<RuleVersionRecord>,
+    pub audit_events: Vec<AuditHistoryEventRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -508,6 +509,11 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>>;
 
+    async fn rule_audit_history(
+        &self,
+        rule_id: &str,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
+
     async fn save_rule_candidate(
         &self,
         rule: Rule,
@@ -702,13 +708,38 @@ impl ScoringRepository for InMemoryScoringRepository {
         let statuses = self.rule_statuses.lock().await;
         let mut details = default_rule_details();
         details.extend(self.candidate_rules.lock().await.values().cloned());
+        let audit_events = self.rule_audit_history(rule_id).await?;
         Ok(details
             .into_iter()
             .find(|detail| detail.summary.rule_id == rule_id)
             .map(|mut detail| {
                 apply_rule_status(&mut detail, &statuses);
+                detail.audit_events = audit_events;
                 detail
             }))
+    }
+
+    async fn rule_audit_history(
+        &self,
+        rule_id: &str,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        Ok(self
+            .audit_events
+            .lock()
+            .await
+            .iter()
+            .filter(|event| event.payload["rule_id"].as_str() == Some(rule_id))
+            .map(|event| AuditHistoryEventRecord {
+                audit_id: event.audit_id.clone(),
+                run_id: event.run_id.clone(),
+                event_type: event.event_type.clone(),
+                event_status: event.event_status.clone(),
+                summary: event.summary.clone(),
+                payload: event.payload.clone(),
+                evidence_refs: evidence_values_to_strings(&event.evidence_refs),
+                created_at: None,
+            })
+            .collect())
     }
 
     async fn save_rule_candidate(
@@ -1537,7 +1568,54 @@ impl ScoringRepository for PostgresScoringRepository {
             })
             .collect();
 
-        Ok(Some(RuleDetailRecord { summary, versions }))
+        let audit_events = self.rule_audit_history(rule_id).await?;
+
+        Ok(Some(RuleDetailRecord {
+            summary,
+            versions,
+            audit_events,
+        }))
+    }
+
+    async fn rule_audit_history(
+        &self,
+        rule_id: &str,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
+            sqlx::query_as(
+                "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+                 FROM audit_events
+                 WHERE payload ->> 'rule_id' = $1
+                 ORDER BY created_at, audit_id",
+            )
+            .bind(rule_id)
+            .fetch_all(&self.pool)
+            .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    audit_id,
+                    run_id,
+                    event_type,
+                    event_status,
+                    summary,
+                    payload,
+                    evidence_refs,
+                    created_at,
+                )| AuditHistoryEventRecord {
+                    audit_id,
+                    run_id,
+                    event_type,
+                    event_status,
+                    summary,
+                    payload,
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                    created_at: Some(created_at.to_rfc3339()),
+                },
+            )
+            .collect())
     }
 
     async fn save_rule_candidate(
@@ -2499,6 +2577,7 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
     RuleDetailRecord {
         summary,
         versions: vec![version],
+        audit_events: vec![],
     }
 }
 
