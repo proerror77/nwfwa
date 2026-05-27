@@ -66,6 +66,7 @@ pub struct SubmitRulePromotionReviewRequest {
 pub struct RuleBacktestRequest {
     pub rule: Rule,
     pub samples: Vec<RuleBacktestSample>,
+    pub expected_review_capacity: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -74,6 +75,7 @@ pub struct RuleBacktestSample {
     pub claim_amount: Decimal,
     pub currency: String,
     pub service_date: NaiveDate,
+    pub confirmed_fwa: Option<bool>,
     pub policy: RuleBacktestPolicy,
 }
 
@@ -89,10 +91,20 @@ pub struct RuleBacktestPolicy {
 pub struct RuleBacktestResponse {
     pub sample_count: usize,
     pub matched_count: usize,
+    pub reviewed_count: usize,
+    pub confirmed_fwa_count: usize,
+    pub false_positive_count: usize,
     pub match_rate: f64,
+    pub precision: f64,
+    pub recall: f64,
+    pub lift: f64,
+    pub false_positive_rate: f64,
     pub average_score_contribution: f64,
     pub estimated_saving: String,
+    pub promotion_recommendation: String,
+    pub blockers: Vec<String>,
     pub matched_claim_ids: Vec<String>,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -372,6 +384,19 @@ pub async fn backtest_rule(
     let mut matched_claim_ids = Vec::new();
     let mut score_sum = 0_u32;
     let mut saving = Decimal::ZERO;
+    let mut true_positive_count = 0_usize;
+    let mut false_positive_count = 0_usize;
+    let positive_count = request
+        .samples
+        .iter()
+        .filter(|sample| sample.confirmed_fwa == Some(true))
+        .count();
+    let reviewed_count = request
+        .samples
+        .iter()
+        .filter(|sample| sample.confirmed_fwa.is_some())
+        .count();
+    let labeled_backtest = reviewed_count > 0;
 
     for sample in &request.samples {
         let context = sample_context(sample);
@@ -384,7 +409,18 @@ pub async fn backtest_rule(
                 .iter()
                 .map(|rule_match| rule_match.score_contribution as u32)
                 .sum::<u32>();
-            saving += sample.claim_amount * Decimal::new(10, 2);
+            match sample.confirmed_fwa {
+                Some(true) => {
+                    true_positive_count += 1;
+                    saving += sample.claim_amount * Decimal::new(10, 2);
+                }
+                Some(false) => {
+                    false_positive_count += 1;
+                }
+                None => {
+                    saving += sample.claim_amount * Decimal::new(10, 2);
+                }
+            }
         }
     }
 
@@ -400,14 +436,80 @@ pub async fn backtest_rule(
     } else {
         score_sum as f64 / matched_count as f64
     };
+    let precision = if !labeled_backtest || matched_count == 0 {
+        0.0
+    } else {
+        true_positive_count as f64 / matched_count as f64
+    };
+    let recall = if !labeled_backtest || positive_count == 0 {
+        0.0
+    } else {
+        true_positive_count as f64 / positive_count as f64
+    };
+    let false_positive_rate = if !labeled_backtest || matched_count == 0 {
+        0.0
+    } else {
+        false_positive_count as f64 / matched_count as f64
+    };
+    let baseline_rate = if sample_count == 0 {
+        0.0
+    } else {
+        positive_count as f64 / sample_count as f64
+    };
+    let lift = if !labeled_backtest || baseline_rate == 0.0 {
+        0.0
+    } else {
+        precision / baseline_rate
+    };
+    let mut blockers = Vec::new();
+    if !labeled_backtest {
+        blockers.push("labeled outcomes missing".into());
+    }
+    if reviewed_count < 2 {
+        blockers.push("reviewed sample count below 2".into());
+    }
+    if precision < 0.70 {
+        blockers.push("precision below 0.70".into());
+    }
+    if recall < 0.60 {
+        blockers.push("recall below 0.60".into());
+    }
+    if false_positive_rate > 0.30 {
+        blockers.push("false-positive rate above 0.30".into());
+    }
+    if request
+        .expected_review_capacity
+        .map(|capacity| matched_count > capacity)
+        .unwrap_or(false)
+    {
+        blockers.push("review capacity exceeded".into());
+    }
+    let promotion_recommendation = if blockers.is_empty() {
+        "eligible_for_review"
+    } else {
+        "needs_more_evidence"
+    };
 
     Ok(Json(RuleBacktestResponse {
         sample_count,
         matched_count,
+        reviewed_count,
+        confirmed_fwa_count: positive_count,
+        false_positive_count,
         match_rate,
+        precision,
+        recall,
+        lift,
+        false_positive_rate,
         average_score_contribution,
         estimated_saving: format!("{:.2}", saving.round_dp(2)),
+        promotion_recommendation: promotion_recommendation.into(),
+        blockers,
         matched_claim_ids,
+        evidence_refs: vec![format!(
+            "rules:{}:v{}",
+            request.rule.rule_id, request.rule.version
+        )],
     }))
 }
 

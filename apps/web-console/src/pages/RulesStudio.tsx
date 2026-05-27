@@ -18,6 +18,10 @@ import {
   QaFeedbackItem,
   summarizeQaFeedbackItems,
 } from "./qaFeedbackItems";
+import {
+  buildRuleBacktestSummary,
+  type RuleBacktestResponse,
+} from "./ruleBacktestSummary";
 
 type RuleSummary = {
   rule_id: string;
@@ -194,6 +198,9 @@ export function RulesStudio() {
   const backtestMutation = useMutation({
     mutationFn: () => backtestRule(JSON.parse(backtestPayload), apiKey),
   });
+  const backtestSummary = backtestMutation.data
+    ? buildRuleBacktestSummary(backtestMutation.data as RuleBacktestResponse)
+    : null;
   const discoveryMutation = useMutation({
     mutationFn: () => discoverRules(JSON.parse(discoveryPayload), apiKey),
   });
@@ -402,7 +409,52 @@ export function RulesStudio() {
         {backtestMutation.error ? (
           <pre className="error">{String(backtestMutation.error.message)}</pre>
         ) : null}
-        {backtestMutation.data ? <pre>{JSON.stringify(backtestMutation.data, null, 2)}</pre> : null}
+        {backtestSummary ? (
+          <div className="result-stack">
+            <div className="summary-grid">
+              <div>
+                <span>Matched</span>
+                <strong>
+                  {backtestSummary.matchedCount}/{backtestSummary.sampleCount}
+                </strong>
+              </div>
+              <div>
+                <span>Reviewed</span>
+                <strong>{backtestSummary.reviewedCount}</strong>
+              </div>
+              <div>
+                <span>Precision</span>
+                <strong>{backtestSummary.precisionLabel}</strong>
+              </div>
+              <div>
+                <span>Recall</span>
+                <strong>{backtestSummary.recallLabel}</strong>
+              </div>
+              <div>
+                <span>Lift</span>
+                <strong>{backtestSummary.liftLabel}</strong>
+              </div>
+              <div>
+                <span>False Positive</span>
+                <strong>{backtestSummary.falsePositiveRateLabel}</strong>
+              </div>
+              <div>
+                <span>Recommendation</span>
+                <strong>{backtestSummary.recommendation}</strong>
+              </div>
+              <div>
+                <span>Saving</span>
+                <strong>{backtestSummary.estimatedSaving}</strong>
+              </div>
+              <div>
+                <span>Evidence</span>
+                <strong>{backtestSummary.evidenceCount}</strong>
+              </div>
+            </div>
+            <p className="empty">Blockers: {backtestSummary.blockerLabel}</p>
+            <pre>{JSON.stringify(backtestMutation.data, null, 2)}</pre>
+          </div>
+        ) : null}
       </div>
       <div className="panel wide-panel">
         <h2>Rule Discovery</h2>

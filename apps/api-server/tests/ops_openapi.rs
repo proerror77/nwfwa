@@ -65,6 +65,20 @@ async fn openapi_includes_operations_paths() {
     }
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
+    assert!(
+        schema["components"]["schemas"]["RuleBacktestResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "precision")
+    );
+    assert!(
+        schema["components"]["schemas"]["RuleBacktestResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "promotion_recommendation")
+    );
     assert!(schema["components"]["schemas"]["LeadListResponse"].is_object());
     assert!(schema["components"]["schemas"]["CaseListResponse"].is_object());
     assert!(schema["components"]["schemas"]["AuditSampleRecord"].is_object());

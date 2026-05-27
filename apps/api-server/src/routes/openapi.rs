@@ -1645,22 +1645,44 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["rule", "samples"],
                     "properties": {
                         "rule": { "type": "object" },
+                        "expected_review_capacity": { "type": "integer", "minimum": 0 },
                         "samples": {
                             "type": "array",
-                            "items": { "type": "object" }
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "confirmed_fwa": { "type": "boolean" }
+                                }
+                            }
                         }
                     }
                 },
                 "RuleBacktestResponse": {
                     "type": "object",
-                    "required": ["sample_count", "matched_count", "match_rate", "average_score_contribution", "estimated_saving", "matched_claim_ids"],
+                    "required": ["sample_count", "matched_count", "reviewed_count", "confirmed_fwa_count", "false_positive_count", "match_rate", "precision", "recall", "lift", "false_positive_rate", "average_score_contribution", "estimated_saving", "promotion_recommendation", "blockers", "matched_claim_ids", "evidence_refs"],
                     "properties": {
                         "sample_count": { "type": "integer" },
                         "matched_count": { "type": "integer" },
+                        "reviewed_count": { "type": "integer" },
+                        "confirmed_fwa_count": { "type": "integer" },
+                        "false_positive_count": { "type": "integer" },
                         "match_rate": { "type": "number" },
+                        "precision": { "type": "number" },
+                        "recall": { "type": "number" },
+                        "lift": { "type": "number" },
+                        "false_positive_rate": { "type": "number" },
                         "average_score_contribution": { "type": "number" },
                         "estimated_saving": { "type": "string", "format": "decimal" },
+                        "promotion_recommendation": { "type": "string" },
+                        "blockers": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
                         "matched_claim_ids": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "evidence_refs": {
                             "type": "array",
                             "items": { "type": "string" }
                         }

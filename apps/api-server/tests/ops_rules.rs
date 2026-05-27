@@ -200,6 +200,7 @@ async fn backtests_candidate_rule_against_samples() {
               "claim_amount": "8000",
               "currency": "CNY",
               "service_date": "2026-01-06",
+              "confirmed_fwa": true,
               "policy": {
                 "external_policy_id": "POL-MATCH",
                 "coverage_start_date": "2026-01-01",
@@ -212,8 +213,125 @@ async fn backtests_candidate_rule_against_samples() {
               "claim_amount": "500",
               "currency": "CNY",
               "service_date": "2026-02-01",
+              "confirmed_fwa": true,
               "policy": {
                 "external_policy_id": "POL-NO-MATCH",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-NORMAL",
+              "claim_amount": "400",
+              "currency": "CNY",
+              "service_date": "2026-03-01",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-NORMAL",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            }
+          ],
+          "expected_review_capacity": 5
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["sample_count"], 3);
+    assert_eq!(body["matched_count"], 1);
+    assert_eq!(body["reviewed_count"], 3);
+    assert_eq!(body["confirmed_fwa_count"], 2);
+    assert_eq!(body["false_positive_count"], 0);
+    assert!((body["match_rate"].as_f64().unwrap() - (1.0 / 3.0)).abs() < f64::EPSILON);
+    assert_eq!(body["precision"], 1.0);
+    assert_eq!(body["recall"], 0.5);
+    assert!(body["lift"].as_f64().unwrap() > 1.0);
+    assert_eq!(body["false_positive_rate"], 0.0);
+    assert_eq!(body["estimated_saving"], "800.00");
+    assert_eq!(body["promotion_recommendation"], "needs_more_evidence");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("recall below 0.60")));
+    assert_eq!(body["matched_claim_ids"][0], "CLM-MATCH");
+    assert!(body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rules:candidate_early_claim:v1")));
+}
+
+#[tokio::test]
+async fn backtest_recommends_review_when_labeled_metrics_pass() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/backtest",
+        r#"{
+          "rule": {
+            "rule_id": "candidate_early_high_amount",
+            "version": 1,
+            "name": "Candidate early high amount",
+            "conditions": [
+              {
+                "field": "days_since_policy_start",
+                "operator": "<=",
+                "value": 10
+              },
+              {
+                "field": "claim_amount_to_limit_ratio",
+                "operator": ">=",
+                "value": 0.7
+              }
+            ],
+            "action": {
+              "score": 30,
+              "alert_code": "EARLY_HIGH_AMOUNT",
+              "recommended_action": "ManualReview",
+              "reason": "保单生效早期发生高额理赔"
+            }
+          },
+          "samples": [
+            {
+              "external_claim_id": "CLM-TP-1",
+              "claim_amount": "9000",
+              "currency": "CNY",
+              "service_date": "2026-01-05",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-TP-1",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-TP-2",
+              "claim_amount": "8000",
+              "currency": "CNY",
+              "service_date": "2026-01-08",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-TP-2",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-TN",
+              "claim_amount": "500",
+              "currency": "CNY",
+              "service_date": "2026-03-01",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-TN",
                 "coverage_start_date": "2026-01-01",
                 "coverage_end_date": "2026-12-31",
                 "coverage_limit": "10000"
@@ -226,11 +344,12 @@ async fn backtests_candidate_rule_against_samples() {
 
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["sample_count"], 2);
-    assert_eq!(body["matched_count"], 1);
-    assert_eq!(body["match_rate"], 0.5);
-    assert_eq!(body["estimated_saving"], "800.00");
-    assert_eq!(body["matched_claim_ids"][0], "CLM-MATCH");
+    assert_eq!(body["sample_count"], 3);
+    assert_eq!(body["matched_count"], 2);
+    assert_eq!(body["precision"], 1.0);
+    assert_eq!(body["recall"], 1.0);
+    assert_eq!(body["promotion_recommendation"], "eligible_for_review");
+    assert!(body["blockers"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]
