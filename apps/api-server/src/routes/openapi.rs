@@ -533,6 +533,22 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/agent-runs": {
+                "get": {
+                    "summary": "List agent run logs for governance review",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Agent run logs with evidence-backed steps",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/AgentRunLogListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/backtest": {
                 "post": {
                     "summary": "Backtest a candidate rule against sample claims",
@@ -2151,6 +2167,31 @@ pub async fn openapi_schema() -> Json<Value> {
                         "samples": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/AuditSampleRecord" }
+                        }
+                    }
+                },
+                "AgentRunLogRecord": {
+                    "type": "object",
+                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps"],
+                    "properties": {
+                        "agent_run_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "status": { "type": "string" },
+                        "decision_boundary": { "type": "string" },
+                        "output_json": { "type": "object" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "steps": { "type": "array", "items": { "type": "object" } },
+                        "created_at": { "type": ["string", "null"] },
+                        "completed_at": { "type": ["string", "null"] }
+                    }
+                },
+                "AgentRunLogListResponse": {
+                    "type": "object",
+                    "required": ["runs"],
+                    "properties": {
+                        "runs": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AgentRunLogRecord" }
                         }
                     }
                 },

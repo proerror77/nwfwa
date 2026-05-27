@@ -165,6 +165,10 @@ export async function listAuditSamples(apiKey: string) {
   return requestJson("/api/v1/ops/audit-samples", apiKey);
 }
 
+export async function listAgentRuns(apiKey: string) {
+  return requestJson("/api/v1/ops/agent-runs", apiKey);
+}
+
 export async function createAuditSample(payload: unknown, apiKey: string) {
   return requestJson("/api/v1/ops/audit-samples", apiKey, {
     method: "POST",

@@ -192,3 +192,45 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         .all(|finding| !finding["evidence_refs"].as_array().unwrap().is_empty()));
     assert!(!body["evidence_refs"].as_array().unwrap().is_empty());
 }
+
+#[tokio::test]
+async fn lists_agent_run_logs_for_governance_review() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-LOGS",
+          "risk_score": 91,
+          "rag": "RED",
+          "top_reasons": ["Provider 风险画像偏高"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|run| run["agent_run_id"] == agent_run_id)
+        .expect("agent run should be listed for governance review");
+    assert_eq!(run["claim_id"], "CLM-AGENT-LOGS");
+    assert_eq!(run["status"], "succeeded");
+    assert_eq!(run["decision_boundary"], "assistive_only");
+    assert!(!run["steps"].as_array().unwrap().is_empty());
+    assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
+}

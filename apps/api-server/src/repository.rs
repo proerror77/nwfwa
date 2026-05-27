@@ -325,6 +325,19 @@ pub struct PersistedAgentRun {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentRunLogRecord {
+    pub agent_run_id: String,
+    pub claim_id: String,
+    pub status: String,
+    pub decision_boundary: String,
+    pub output_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub steps: Vec<Value>,
+    pub created_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DatasetSplitRecord {
     pub split_name: String,
     pub data_uri: String,
@@ -804,6 +817,8 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<Vec<SimilarCaseRecord>>;
 
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
+
+    async fn list_agent_runs(&self) -> anyhow::Result<Vec<AgentRunLogRecord>>;
 
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord>;
 
@@ -1438,6 +1453,18 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()> {
         self.agent_runs.lock().await.push(run);
         Ok(())
+    }
+
+    async fn list_agent_runs(&self) -> anyhow::Result<Vec<AgentRunLogRecord>> {
+        let mut runs = self
+            .agent_runs
+            .lock()
+            .await
+            .iter()
+            .map(agent_run_log_from_persisted)
+            .collect::<Vec<_>>();
+        runs.sort_by(|left, right| left.agent_run_id.cmp(&right.agent_run_id));
+        Ok(runs)
     }
 
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
@@ -3162,6 +3189,61 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(())
     }
 
+    async fn list_agent_runs(&self) -> anyhow::Result<Vec<AgentRunLogRecord>> {
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            Value,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+            Option<chrono::DateTime<chrono::Utc>>,
+        )> = sqlx::query_as(
+            "SELECT agent_run_id, claim_id, status, decision_boundary, output_json, evidence_refs, created_at, completed_at
+             FROM agent_runs
+             ORDER BY created_at DESC, agent_run_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut runs = Vec::with_capacity(rows.len());
+        for (
+            agent_run_id,
+            claim_id,
+            status,
+            decision_boundary,
+            output_json,
+            evidence_refs,
+            created_at,
+            completed_at,
+        ) in rows
+        {
+            let steps: Vec<(Value,)> = sqlx::query_as(
+                "SELECT output_json
+                 FROM agent_steps
+                 WHERE agent_run_id = $1
+                 ORDER BY created_at, id",
+            )
+            .bind(&agent_run_id)
+            .fetch_all(&self.pool)
+            .await?;
+            runs.push(AgentRunLogRecord {
+                agent_run_id,
+                claim_id,
+                status,
+                decision_boundary,
+                output_json,
+                evidence_refs: json_array_to_strings(evidence_refs),
+                steps: steps.into_iter().map(|row| row.0).collect(),
+                created_at: Some(created_at.to_rfc3339()),
+                completed_at: completed_at.map(|value| value.to_rfc3339()),
+            });
+        }
+
+        Ok(runs)
+    }
+
     async fn register_dataset(&self, input: RegisterDatasetInput) -> anyhow::Result<DatasetRecord> {
         let mut tx = self.pool.begin().await?;
         sqlx::query(
@@ -4634,6 +4716,20 @@ fn search_cases(
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     results
+}
+
+fn agent_run_log_from_persisted(run: &PersistedAgentRun) -> AgentRunLogRecord {
+    AgentRunLogRecord {
+        agent_run_id: run.agent_run_id.clone(),
+        claim_id: run.claim_id.clone(),
+        status: run.status.clone(),
+        decision_boundary: run.decision_boundary.clone(),
+        output_json: run.output_json.clone(),
+        evidence_refs: evidence_values_to_strings(&run.evidence_refs),
+        steps: run.steps.clone(),
+        created_at: None,
+        completed_at: None,
+    }
 }
 
 fn json_array_to_strings(value: Value) -> Vec<String> {

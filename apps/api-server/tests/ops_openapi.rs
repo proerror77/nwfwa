@@ -53,6 +53,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/leads/{lead_id}/triage",
         "/api/v1/ops/cases",
         "/api/v1/ops/audit-samples",
+        "/api/v1/ops/agent-runs",
         "/api/v1/ops/knowledge/cases",
         "/api/v1/knowledge/search-similar",
         "/api/v1/agent/cases/investigate",
@@ -107,6 +108,12 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["components"]["schemas"]["LeadListResponse"].is_object());
     assert!(schema["components"]["schemas"]["CaseListResponse"].is_object());
     assert!(schema["components"]["schemas"]["AuditSampleRecord"].is_object());
+    assert!(schema["components"]["schemas"]["AgentRunLogRecord"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["steps"]["items"]
+            ["type"],
+        "object"
+    );
     assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
         "string"

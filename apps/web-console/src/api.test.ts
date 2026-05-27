@@ -9,6 +9,7 @@ import {
   getRulePromotionGates,
   submitRulePromotionReview,
   investigateCase,
+  listAgentRuns,
   listAuditSamples,
   listCases,
   listDatasets,
@@ -206,12 +207,21 @@ describe("ops API helpers", () => {
   });
 
   it("calls claim audit history endpoint", async () => {
-    const fetchMock = mockFetch({ claim_id: "CLM-0287", events: [] });
+    const fetchMock = mockFetch({ claim_id: "CLM-0287", events: [], runs: [] });
 
     await getClaimAuditHistory("CLM-0287", "dev-secret");
+    await listAgentRuns("dev-secret");
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
       "/api/v1/audit/claims/CLM-0287",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/agent-runs",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
