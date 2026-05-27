@@ -103,8 +103,18 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "schemas": {
                 "ScoreClaimRequest": {
+                    "oneOf": [
+                        {
+                            "$ref": "#/components/schemas/ClaimIdScoreClaimRequest"
+                        },
+                        {
+                            "$ref": "#/components/schemas/FullPayloadScoreClaimRequest"
+                        }
+                    ]
+                },
+                "ClaimIdScoreClaimRequest": {
                     "type": "object",
-                    "required": ["source_system"],
+                    "required": ["source_system", "claim_id"],
                     "properties": {
                         "source_system": {
                             "type": "string",
@@ -112,14 +122,33 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "claim_id": {
                             "type": "string",
-                            "description": "Existing claim id to load from FWA storage. Mutually exclusive with claim payload."
+                            "description": "Existing claim id to load from FWA storage."
+                        }
+                    },
+                    "not": {
+                        "anyOf": [
+                            { "required": ["claim"] },
+                            { "required": ["items"] },
+                            { "required": ["member"] },
+                            { "required": ["policy"] },
+                            { "required": ["provider"] }
+                        ]
+                    }
+                },
+                "FullPayloadScoreClaimRequest": {
+                    "type": "object",
+                    "required": ["source_system", "claim"],
+                    "properties": {
+                        "source_system": {
+                            "type": "string",
+                            "examples": ["tpa-demo"]
                         },
                         "claim": {
                             "$ref": "#/components/schemas/FullClaimPayload"
                         },
                         "items": {
                             "type": "array",
-                            "description": "Top-level claim items for spec-style full payload requests.",
+                            "description": "Top-level claim items for spec-style full payload requests. Do not send the same entity both nested under claim and at the top level.",
                             "items": {
                                 "$ref": "#/components/schemas/ClaimItemPayload"
                             }
@@ -134,14 +163,9 @@ pub async fn openapi_schema() -> Json<Value> {
                             "$ref": "#/components/schemas/ProviderPayload"
                         }
                     },
-                    "oneOf": [
-                        {
-                            "required": ["claim_id"]
-                        },
-                        {
-                            "required": ["claim"]
-                        }
-                    ]
+                    "not": {
+                        "required": ["claim_id"]
+                    }
                 },
                 "FullClaimPayload": {
                     "type": "object",

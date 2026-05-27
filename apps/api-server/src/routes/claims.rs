@@ -163,6 +163,17 @@ pub async fn score_claim(
             })?
     } else {
         let mut payload = request.claim.clone().expect("validated claim payload");
+        let duplicate_fields = duplicate_payload_fields(&request, &payload);
+        if !duplicate_fields.is_empty() {
+            return Err(ApiError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "DUPLICATE_SCORE_PAYLOAD",
+                format!(
+                    "duplicate nested and top-level payload fields: {}",
+                    duplicate_fields.join(", ")
+                ),
+            ));
+        }
         payload.items = payload.items.or_else(|| request.items.clone());
         payload.member = payload.member.or_else(|| request.member.clone());
         payload.policy = payload.policy.or_else(|| request.policy.clone());
@@ -283,6 +294,26 @@ pub async fn score_claim(
         top_reasons: decision.top_reasons,
         evidence_refs,
     }))
+}
+
+fn duplicate_payload_fields(
+    request: &ScoreClaimRequest,
+    payload: &FullClaimPayload,
+) -> Vec<&'static str> {
+    let mut fields = Vec::new();
+    if payload.items.is_some() && request.items.is_some() {
+        fields.push("items");
+    }
+    if payload.member.is_some() && request.member.is_some() {
+        fields.push("member");
+    }
+    if payload.policy.is_some() && request.policy.is_some() {
+        fields.push("policy");
+    }
+    if payload.provider.is_some() && request.provider.is_some() {
+        fields.push("provider");
+    }
+    fields
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

@@ -158,6 +158,41 @@ async fn rejects_claim_id_with_top_level_payload_fields() {
 }
 
 #[tokio::test]
+async fn rejects_duplicate_nested_and_top_level_payload_fields() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-DUPLICATE-MEMBER",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "member": {
+                  "external_member_id": "MBR-NESTED"
+                }
+              },
+              "member": {
+                "external_member_id": "MBR-TOP-LEVEL"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("DUPLICATE_SCORE_PAYLOAD"));
+}
+
+#[tokio::test]
 async fn rejects_missing_api_key() {
     let app = build_app(test_config());
 
@@ -195,6 +230,21 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         schema["components"]["securitySchemes"]["ApiKeyAuth"]["name"],
         "x-api-key"
     );
+    let one_of = schema["components"]["schemas"]["ScoreClaimRequest"]["oneOf"]
+        .as_array()
+        .expect("request schema oneOf");
+    assert_eq!(one_of.len(), 2);
+    let claim_id_mode = &schema["components"]["schemas"]["ClaimIdScoreClaimRequest"];
+    for field in ["claim", "items", "member", "policy", "provider"] {
+        assert!(
+            claim_id_mode["not"]["anyOf"]
+                .as_array()
+                .expect("claim id mode forbidden payload fields")
+                .iter()
+                .any(|schema| schema["required"][0] == field),
+            "claim_id mode should forbid {field}"
+        );
+    }
 
     let response_properties = &schema["components"]["schemas"]["ScoreClaimResponse"]["properties"];
     for field in [
