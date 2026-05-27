@@ -5,12 +5,14 @@ import { RulesStudio } from "./pages/RulesStudio";
 import { ModelOpsPage } from "./pages/ModelOpsPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { AgentInvestigatorPage } from "./pages/AgentInvestigatorPage";
+import { DataSourcesPage } from "./pages/DataSourcesPage";
 
 const modules = [
   "Dashboard",
   "Runtime Scoring",
   "Rules",
   "Models",
+  "Data Sources",
   "Factor Factory",
   "Knowledge Base",
   "Agent Investigator",
@@ -38,11 +40,17 @@ export function App() {
         {active === "Runtime Scoring" ? <RuntimeScoring /> : null}
         {active === "Rules" ? <RulesStudio /> : null}
         {active === "Models" ? <ModelOpsPage /> : null}
+        {active === "Data Sources" ? <DataSourcesPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
-        {!["Runtime Scoring", "Rules", "Models", "Knowledge Base", "Agent Investigator"].includes(
-          active,
-        ) ? (
+        {![
+          "Runtime Scoring",
+          "Rules",
+          "Models",
+          "Data Sources",
+          "Knowledge Base",
+          "Agent Investigator",
+        ].includes(active) ? (
           <PlannedModulePage title={active} />
         ) : null}
       </main>

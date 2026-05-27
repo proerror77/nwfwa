@@ -103,7 +103,9 @@ pre {
 }
 
 .score-hero > div,
-.result-grid > div {
+.result-grid > div,
+.summary-grid > div,
+.metric-row {
   border: 1px solid #d8dde4;
   border-radius: 6px;
   padding: 12px;
@@ -111,7 +113,9 @@ pre {
 }
 
 .score-hero span,
-.result-grid dt {
+.result-grid dt,
+.summary-grid span,
+.metric-row small {
   display: block;
   color: #5f6b7a;
   font-size: 12px;
@@ -142,6 +146,17 @@ pre {
   overflow-wrap: anywhere;
 }
 
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.summary-grid strong {
+  display: block;
+  margin-top: 4px;
+}
+
 .result-list {
   display: grid;
   gap: 8px;
@@ -150,6 +165,13 @@ pre {
 
 .result-list li {
   overflow-wrap: anywhere;
+}
+
+.compact-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding-left: 0;
+  list-style: none;
 }
 
 .result-list strong {
@@ -208,4 +230,16 @@ pre {
   border: 1px solid #aeb7c4;
   border-radius: 6px;
   background: #ffffff;
+}
+
+.metric-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr) auto auto;
+  gap: 10px;
+  align-items: center;
+}
+
+.metric-row span,
+.metric-row strong {
+  overflow-wrap: anywhere;
 }

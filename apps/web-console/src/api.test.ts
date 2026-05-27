@@ -3,7 +3,9 @@ import {
   approveRule,
   backtestRule,
   investigateCase,
+  listDatasets,
   listKnowledgeCases,
+  listModelEvaluations,
   listModels,
   listRules,
   publishRule,
@@ -79,6 +81,28 @@ describe("ops API helpers", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls dataset lineage endpoints", async () => {
+    const fetchMock = mockFetch({ datasets: [], evaluations: [] });
+
+    await listDatasets("dev-secret");
+    await listModelEvaluations("dev-secret");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/ops/datasets",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/model-evaluations",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
