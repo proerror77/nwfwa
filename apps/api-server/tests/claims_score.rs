@@ -5,12 +5,17 @@ use axum::{
 };
 use tower::ServiceExt;
 
-#[tokio::test]
-async fn scores_full_payload_with_api_key() {
-    let app = build_app(AppConfig {
+fn test_config() -> AppConfig {
+    AppConfig {
         api_key: "dev-secret".into(),
         source_system: "tpa-demo".into(),
-    });
+        database_url: "postgres://unused".into(),
+    }
+}
+
+#[tokio::test]
+async fn scores_full_payload_with_api_key() {
+    let app = build_app(test_config());
 
     let request = Request::builder()
         .method("POST")
@@ -35,10 +40,7 @@ async fn scores_full_payload_with_api_key() {
 
 #[tokio::test]
 async fn rejects_missing_api_key() {
-    let app = build_app(AppConfig {
-        api_key: "dev-secret".into(),
-        source_system: "tpa-demo".into(),
-    });
+    let app = build_app(test_config());
 
     let request = Request::builder()
         .method("POST")
@@ -55,10 +57,7 @@ async fn rejects_missing_api_key() {
 
 #[tokio::test]
 async fn scores_existing_claim_after_full_payload_upsert() {
-    let app = build_app(AppConfig {
-        api_key: "dev-secret".into(),
-        source_system: "tpa-demo".into(),
-    });
+    let app = build_app(test_config());
 
     let first = Request::builder()
         .method("POST")

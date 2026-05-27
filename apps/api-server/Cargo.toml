@@ -18,6 +18,7 @@ fwa-scoring = { path = "../../crates/fwa-scoring" }
 rust_decimal.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+sqlx.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 tracing-subscriber.workspace = true
