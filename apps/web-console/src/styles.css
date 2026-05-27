@@ -43,6 +43,16 @@ main {
   gap: 20px;
 }
 
+.ops-grid {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(0, 1.2fr);
+  gap: 20px;
+}
+
+.wide-panel {
+  grid-column: 1 / -1;
+}
+
 .panel {
   background: white;
   border: 1px solid #d8dde4;
@@ -146,4 +156,50 @@ pre {
 
 .empty {
   color: #6b7280;
+}
+
+.table-list {
+  display: grid;
+  gap: 8px;
+}
+
+.row-button {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 4px 10px;
+  width: 100%;
+  padding: 12px;
+  text-align: left;
+  border: 1px solid #d8dde4;
+  border-radius: 6px;
+  background: #fbfcfe;
+  color: #171717;
+}
+
+.row-button.active {
+  border-color: #2f6fed;
+  background: #eef4ff;
+}
+
+.row-button span,
+.row-button small {
+  overflow-wrap: anywhere;
+}
+
+.row-button small {
+  color: #5f6b7a;
+}
+
+.button-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.button-row button,
+.panel > button {
+  padding: 10px 12px;
+  border: 1px solid #aeb7c4;
+  border-radius: 6px;
+  background: #ffffff;
 }
