@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveRule,
   backtestRule,
+  getDashboardSummary,
   investigateCase,
   listDatasets,
   listKnowledgeCases,
@@ -103,6 +104,19 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/v1/ops/model-evaluations",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls dashboard summary endpoint", async () => {
+    const fetchMock = mockFetch({ suspected_claims: 0 });
+
+    await getDashboardSummary("dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/dashboard/summary",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

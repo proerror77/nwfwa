@@ -6,6 +6,7 @@ import { ModelOpsPage } from "./pages/ModelOpsPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { AgentInvestigatorPage } from "./pages/AgentInvestigatorPage";
 import { DataSourcesPage } from "./pages/DataSourcesPage";
+import { DashboardPage } from "./pages/DashboardPage";
 
 const modules = [
   "Dashboard",
@@ -21,7 +22,7 @@ const modules = [
 ];
 
 export function App() {
-  const [active, setActive] = useState("Runtime Scoring");
+  const [active, setActive] = useState("Dashboard");
   return (
     <div className="app">
       <aside>
@@ -37,6 +38,7 @@ export function App() {
         ))}
       </aside>
       <main>
+        {active === "Dashboard" ? <DashboardPage /> : null}
         {active === "Runtime Scoring" ? <RuntimeScoring /> : null}
         {active === "Rules" ? <RulesStudio /> : null}
         {active === "Models" ? <ModelOpsPage /> : null}
@@ -45,6 +47,7 @@ export function App() {
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
         {![
           "Runtime Scoring",
+          "Dashboard",
           "Rules",
           "Models",
           "Data Sources",

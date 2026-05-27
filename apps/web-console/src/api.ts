@@ -80,6 +80,10 @@ export async function listModelEvaluations(apiKey: string) {
   return requestJson("/api/v1/ops/model-evaluations", apiKey);
 }
 
+export async function getDashboardSummary(apiKey: string) {
+  return requestJson("/api/v1/ops/dashboard/summary", apiKey);
+}
+
 export async function listKnowledgeCases(apiKey: string) {
   return requestJson("/api/v1/ops/knowledge/cases", apiKey);
 }
