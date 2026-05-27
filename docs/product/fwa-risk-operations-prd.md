@@ -193,6 +193,81 @@ Core rule evaluation, scoring aggregation, audit, and model governance must stay
 inside the FWA platform. External systems provide data, documents, workflow
 destinations, and outcome feedback.
 
+## Review Mode Strategy
+
+The platform must distinguish pre-payment and post-payment workflows because
+they have different risk tolerance, review capacity, and ROI logic.
+
+Pre-payment review happens before money leaves the payer. It should optimize for
+high precision, clear explanations, and low operational harm. Recommended
+actions may include manual review, request evidence, hold for reviewer, or allow
+with audit flag. A pre-payment intervention must have strong evidence and a
+customer-controlled review path.
+
+Post-payment audit happens after payment. It can optimize for broader recall,
+pattern discovery, recovery opportunities, and rule improvement. Recommended
+actions may include audit queue, provider review, recovery review, rule tuning,
+or model evaluation. Post-payment findings may be used for training labels only
+after QA or investigation confirms the outcome.
+
+Every rule, model, threshold, and routing policy must declare whether it applies
+to pre-payment, post-payment, or both.
+
+## Clinical Evidence And Medical Necessity
+
+FWA scoring must cover more than amount anomalies. Many high-value cases depend
+on whether the billed service was medically necessary and supported by
+documentation.
+
+Required capabilities:
+
+- compare diagnosis, procedure, medication, and service location for basic
+  clinical consistency;
+- detect claim items that need additional medical records, invoices,
+  prescriptions, discharge summaries, or lab results;
+- link document evidence to claim items and rule/model findings through evidence
+  refs;
+- flag missing or contradictory evidence without making an autonomous clinical
+  judgment;
+- route clinically sensitive cases to medical or QA reviewers;
+- use OCR and LLM assistance only for extraction, summarization, evidence
+  organization, and checklist generation.
+
+Clinical review output must remain structured. Free-text notes can explain the
+case, but model training and rule tuning must use controlled outcome fields such
+as `documentation_issue`, `medical_necessity_review_required`, and
+`insufficient_evidence`.
+
+## Promotion Gates
+
+Rules and models must earn the right to affect routing. The product should make
+promotion gates visible in Operations Studio instead of treating configuration
+changes as immediate production behavior.
+
+Rule promotion requires:
+
+- named owner and applicability scope;
+- deterministic backtest against representative samples;
+- estimated saving and expected false-positive burden;
+- evidence refs for the pattern the rule claims to detect;
+- approval before publish;
+- shadow or limited rollout for high-impact rules;
+- rollback path to the previous active version.
+
+Model promotion requires:
+
+- immutable dataset and feature-set versions;
+- leakage checks across member, policy, provider, and related-case groups;
+- holdout and out-of-time metrics;
+- threshold selection tied to review capacity;
+- explanation artifact such as feature importance or SHAP-style analysis;
+- shadow-mode comparison against rules, previous model, and QA outcomes;
+- approval before the model affects recommended actions.
+
+Promotion gates apply separately to pre-payment and post-payment use. A rule or
+model may be acceptable for post-payment audit while still being too risky for
+pre-payment routing.
+
 ## Modeling Strategy
 
 The core FWA decision surface should be rule-first and explainable-model-first.
@@ -304,6 +379,7 @@ Reference anchors:
 - No automatic model retraining loop before pilot labels and QA governance exist.
 - No production model promotion without dataset, feature, metric, and shadow-mode
   evidence.
+- No pre-payment routing impact without explicit promotion gates and rollback.
 
 ## Acceptance Criteria
 
@@ -313,5 +389,9 @@ Reference anchors:
 - Model versions are tied to immutable datasets, feature sets, evaluation runs,
   and runtime metadata.
 - Candidate models have explicit anti-overfitting gates before production use.
+- Pre-payment and post-payment policies are explicit for rules, models,
+  thresholds, and recommended actions.
+- Clinically sensitive findings are backed by structured evidence and routed to
+  reviewers instead of being treated as autonomous conclusions.
 - Kaggle-inspired work remains an offline research input until validated on
   customer or pilot data.
