@@ -332,6 +332,21 @@ impl ScoringRepository for PostgresScoringRepository {
                 .bind(&event.claim_id)
                 .fetch_optional(&mut *tx)
                 .await?;
+        sqlx::query(
+            "INSERT INTO scoring_runs
+             (run_id, claim_id, source_system, actor_id, status, completed_at, error_code, error_message)
+             VALUES ($1, $2::uuid, $3, $4, $5, now(), $6, $7)
+             ON CONFLICT (run_id) DO NOTHING",
+        )
+        .bind(&event.run_id)
+        .bind(claim_row.as_ref().map(|row| row.0.as_str()))
+        .bind(&event.source_system)
+        .bind(&event.actor_id)
+        .bind(&event.event_status)
+        .bind(&event.event_type)
+        .bind(event.payload["error"].as_str())
+        .execute(&mut *tx)
+        .await?;
         insert_audit_event(
             &mut tx,
             &event,
