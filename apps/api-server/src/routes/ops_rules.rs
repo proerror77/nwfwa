@@ -25,6 +25,11 @@ pub struct RuleListResponse {
     pub rules: Vec<crate::repository::RuleSummaryRecord>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct RulePerformanceResponse {
+    pub rules: Vec<crate::repository::RulePerformanceRecord>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct RuleBacktestRequest {
     pub rule: Rule,
@@ -116,6 +121,19 @@ pub async fn list_rules(
         .await
         .map_err(internal_error("RULE_LIST_FAILED"))?;
     Ok(Json(RuleListResponse { rules }))
+}
+
+pub async fn rule_performance(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<RulePerformanceResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let rules = state
+        .repository
+        .rule_performance()
+        .await
+        .map_err(internal_error("RULE_PERFORMANCE_FAILED"))?;
+    Ok(Json(RulePerformanceResponse { rules }))
 }
 
 pub async fn get_rule(

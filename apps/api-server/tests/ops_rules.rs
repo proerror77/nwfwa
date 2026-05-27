@@ -360,6 +360,132 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
 }
 
 #[tokio::test]
+async fn returns_rule_performance_metrics_from_scoring_and_outcomes() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-RULE-TRUE",
+            "claim_amount": "8000",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "policy": {
+            "external_policy_id": "POL-RULE-TRUE",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000"
+          },
+          "member": {
+            "external_member_id": "MBR-RULE-TRUE"
+          },
+          "provider": {
+            "external_provider_id": "PRV-RULE-TRUE",
+            "name": "Northwind Hospital",
+            "provider_type": "hospital",
+            "region": "SH"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-RULE-FALSE",
+            "claim_amount": "100",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "policy": {
+            "external_policy_id": "POL-RULE-FALSE",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000"
+          },
+          "member": {
+            "external_member_id": "MBR-RULE-FALSE"
+          },
+          "provider": {
+            "external_provider_id": "PRV-RULE-FALSE",
+            "name": "Northwind Clinic",
+            "provider_type": "clinic",
+            "region": "SH"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-RULE-TRUE",
+          "investigation_id": "INV-RULE-TRUE",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA.",
+          "evidence_refs": ["rule_runs:EARLY_CLAIM"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-RULE-FALSE",
+          "investigation_id": "INV-RULE-FALSE",
+          "outcome": "cleared",
+          "confirmed_fwa": false,
+          "saving_amount": "0.00",
+          "currency": "CNY",
+          "notes": "Cleared after investigation.",
+          "evidence_refs": ["rule_runs:EARLY_CLAIM"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/rules/performance", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let rules = body["rules"].as_array().unwrap();
+    let early_claim = rules
+        .iter()
+        .find(|rule| rule["rule_id"] == "rule_early_claim")
+        .expect("early claim rule performance");
+    assert_eq!(early_claim["trigger_count"], 2);
+    assert_eq!(early_claim["reviewed_count"], 2);
+    assert_eq!(early_claim["confirmed_fwa_count"], 1);
+    assert_eq!(early_claim["false_positive_count"], 1);
+    assert_eq!(early_claim["saving_amount"], "8200.00");
+    assert_eq!(early_claim["precision"], 0.5);
+    assert_eq!(early_claim["false_positive_rate"], 0.5);
+    assert_eq!(early_claim["mark_rate"], 1.0);
+    assert!(early_claim["roi"].as_f64().unwrap() > 0.0);
+}
+
+#[tokio::test]
 async fn advances_rule_lifecycle() {
     let app = build_app(test_config());
 

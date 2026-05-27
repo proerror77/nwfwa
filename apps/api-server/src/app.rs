@@ -68,6 +68,10 @@ pub fn build_app_with_parts(
         .route("/api/v1/ops/rules", get(ops_rules::list_rules))
         .route("/api/v1/ops/rules/backtest", post(ops_rules::backtest_rule))
         .route(
+            "/api/v1/ops/rules/performance",
+            get(ops_rules::rule_performance),
+        )
+        .route(
             "/api/v1/ops/rules/candidates",
             post(ops_rules::save_rule_candidate),
         )

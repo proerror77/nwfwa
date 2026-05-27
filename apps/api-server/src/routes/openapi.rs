@@ -116,6 +116,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/performance": {
+                "get": {
+                    "summary": "Get rule performance and ROI metrics",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Per-rule operational performance metrics",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RulePerformanceResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/{rule_id}": {
                 "get": {
                     "summary": "Get rule details and versions",
@@ -997,6 +1021,45 @@ pub async fn openapi_schema() -> Json<Value> {
                         "rules": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/RuleSummary" }
+                        }
+                    }
+                },
+                "RulePerformanceRecord": {
+                    "type": "object",
+                    "required": [
+                        "rule_id",
+                        "alert_code",
+                        "trigger_count",
+                        "reviewed_count",
+                        "confirmed_fwa_count",
+                        "false_positive_count",
+                        "mark_rate",
+                        "precision",
+                        "false_positive_rate",
+                        "saving_amount",
+                        "roi"
+                    ],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "alert_code": { "type": "string" },
+                        "trigger_count": { "type": "integer", "minimum": 0 },
+                        "reviewed_count": { "type": "integer", "minimum": 0 },
+                        "confirmed_fwa_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_count": { "type": "integer", "minimum": 0 },
+                        "mark_rate": { "type": "number", "minimum": 0 },
+                        "precision": { "type": "number", "minimum": 0 },
+                        "false_positive_rate": { "type": "number", "minimum": 0 },
+                        "saving_amount": { "type": "string", "format": "decimal" },
+                        "roi": { "type": "number" }
+                    }
+                },
+                "RulePerformanceResponse": {
+                    "type": "object",
+                    "required": ["rules"],
+                    "properties": {
+                        "rules": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RulePerformanceRecord" }
                         }
                     }
                 },

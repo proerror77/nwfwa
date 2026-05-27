@@ -10,7 +10,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::{
-    collections::{BTreeMap, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
 };
 use tokio::sync::Mutex;
@@ -81,6 +81,21 @@ pub struct RuleDetailRecord {
     pub summary: RuleSummaryRecord,
     pub versions: Vec<RuleVersionRecord>,
     pub audit_events: Vec<AuditHistoryEventRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RulePerformanceRecord {
+    pub rule_id: String,
+    pub alert_code: String,
+    pub trigger_count: u32,
+    pub reviewed_count: u32,
+    pub confirmed_fwa_count: u32,
+    pub false_positive_count: u32,
+    pub mark_rate: f64,
+    pub precision: f64,
+    pub false_positive_rate: f64,
+    pub saving_amount: String,
+    pub roi: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -526,6 +541,8 @@ pub trait ScoringRepository: Send + Sync {
         status: &str,
     ) -> anyhow::Result<Option<RuleSummaryRecord>>;
 
+    async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>>;
+
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
     async fn model_performance(
@@ -768,6 +785,48 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .insert(rule_id.to_string(), status.to_string());
         Ok(self.get_rule(rule_id).await?.map(|detail| detail.summary))
+    }
+
+    async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>> {
+        let rules = self.list_rules().await?;
+        let runs = self.runs.lock().await;
+        let pilot_events = self.pilot_audit_events.lock().await;
+        let mut outcomes = HashMap::new();
+        for (_, event) in pilot_events.iter() {
+            if event.event_type != "investigation.result.received" {
+                continue;
+            }
+            let Some(claim_id) = event.payload["claim_id"].as_str() else {
+                continue;
+            };
+            outcomes.insert(
+                claim_id.to_string(),
+                InvestigationOutcome {
+                    confirmed_fwa: event.payload["confirmed_fwa"].as_bool().unwrap_or(false),
+                    saving_amount: decimal_from_json(&event.payload["saving_amount"]),
+                },
+            );
+        }
+
+        let mut accumulators = rule_accumulators_from_rules(&rules);
+        for run in runs.iter() {
+            for rule_run in &run.rule_runs {
+                let Some(rule_id) = rule_run["rule_id"].as_str() else {
+                    continue;
+                };
+                let Some(accumulator) = accumulators.get_mut(rule_id) else {
+                    continue;
+                };
+                accumulator.trigger_count += 1;
+                accumulator.triggered_claim_ids.insert(run.claim_id.clone());
+            }
+        }
+
+        Ok(rule_performance_records(
+            accumulators,
+            &outcomes,
+            runs.len() as u32,
+        ))
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
@@ -1375,10 +1434,26 @@ impl ScoringRepository for PostgresScoringRepository {
         for rule_run in &run.rule_runs {
             sqlx::query(
                 "INSERT INTO rule_runs
-                 (run_id, matched, score_contribution, alert_code, reason, evidence_json)
-                 VALUES ($1, true, $2, $3, $4, '[]'::jsonb)",
+                 (run_id, rule_id, rule_version_id, matched, score_contribution, alert_code, reason, evidence_json)
+                 VALUES (
+                   $1,
+                   (SELECT id FROM rules WHERE rule_key = $2),
+                   (
+                     SELECT rv.id
+                     FROM rule_versions rv
+                     JOIN rules r ON r.id = rv.rule_id
+                     WHERE r.rule_key = $2 AND rv.version = $3
+                   ),
+                   true,
+                   $4,
+                   $5,
+                   $6,
+                   '[]'::jsonb
+                 )",
             )
             .bind(&run.run_id)
+            .bind(rule_run["rule_id"].as_str())
+            .bind(rule_run["rule_version"].as_i64().unwrap_or(1) as i32)
             .bind(rule_run["score_contribution"].as_i64().unwrap_or(0) as i32)
             .bind(rule_run["alert_code"].as_str())
             .bind(rule_run["reason"].as_str())
@@ -1685,6 +1760,72 @@ impl ScoringRepository for PostgresScoringRepository {
             .await?
             .into_iter()
             .find(|rule| rule.rule_id == rule_id))
+    }
+
+    async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>> {
+        ensure_default_rules_seeded(&self.pool).await?;
+        let rules = self.list_rules().await?;
+        let total_runs: (i64,) =
+            sqlx::query_as("SELECT COUNT(*)::bigint FROM scoring_runs WHERE status = 'succeeded'")
+                .fetch_one(&self.pool)
+                .await?;
+
+        let rule_run_rows: Vec<(Option<String>, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT r.rule_key, rr.alert_code, c.external_claim_id
+             FROM rule_runs rr
+             JOIN scoring_runs sr ON sr.run_id = rr.run_id
+             LEFT JOIN rules r ON r.id = rr.rule_id
+             LEFT JOIN claims c ON c.id = sr.claim_id
+             WHERE rr.matched = true",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let outcome_rows: Vec<(String, bool, Option<Decimal>)> = sqlx::query_as(
+            "SELECT claim_id, confirmed_fwa, saving_amount
+             FROM investigation_results",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let outcomes = outcome_rows
+            .into_iter()
+            .map(|(claim_id, confirmed_fwa, saving_amount)| {
+                (
+                    claim_id,
+                    InvestigationOutcome {
+                        confirmed_fwa,
+                        saving_amount: saving_amount.unwrap_or(Decimal::ZERO),
+                    },
+                )
+            })
+            .collect::<HashMap<_, _>>();
+
+        let alert_to_rule = rules
+            .iter()
+            .map(|rule| (rule.alert_code.clone(), rule.rule_id.clone()))
+            .collect::<HashMap<_, _>>();
+        let mut accumulators = rule_accumulators_from_rules(&rules);
+        for (rule_id, alert_code, claim_id) in rule_run_rows {
+            let rule_id = rule_id.or_else(|| {
+                alert_code
+                    .as_ref()
+                    .and_then(|alert_code| alert_to_rule.get(alert_code).cloned())
+            });
+            let (Some(rule_id), Some(claim_id)) = (rule_id, claim_id) else {
+                continue;
+            };
+            let Some(accumulator) = accumulators.get_mut(&rule_id) else {
+                continue;
+            };
+            accumulator.trigger_count += 1;
+            accumulator.triggered_claim_ids.insert(claim_id);
+        }
+
+        Ok(rule_performance_records(
+            accumulators,
+            &outcomes,
+            total_runs.0.max(0) as u32,
+        ))
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
@@ -2521,6 +2662,113 @@ impl ScoringRepository for PostgresScoringRepository {
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
+
+const RULE_REVIEW_COST_AMOUNT: f64 = 100.0;
+
+#[derive(Debug, Clone)]
+struct InvestigationOutcome {
+    confirmed_fwa: bool,
+    saving_amount: Decimal,
+}
+
+#[derive(Debug, Clone)]
+struct RulePerformanceAccumulator {
+    rule_id: String,
+    alert_code: String,
+    trigger_count: u32,
+    triggered_claim_ids: BTreeSet<String>,
+}
+
+fn rule_accumulators_from_rules(
+    rules: &[RuleSummaryRecord],
+) -> BTreeMap<String, RulePerformanceAccumulator> {
+    rules
+        .iter()
+        .map(|rule| {
+            (
+                rule.rule_id.clone(),
+                RulePerformanceAccumulator {
+                    rule_id: rule.rule_id.clone(),
+                    alert_code: rule.alert_code.clone(),
+                    trigger_count: 0,
+                    triggered_claim_ids: BTreeSet::new(),
+                },
+            )
+        })
+        .collect()
+}
+
+fn rule_performance_records(
+    accumulators: BTreeMap<String, RulePerformanceAccumulator>,
+    outcomes: &HashMap<String, InvestigationOutcome>,
+    total_scoring_runs: u32,
+) -> Vec<RulePerformanceRecord> {
+    accumulators
+        .into_values()
+        .map(|accumulator| {
+            let mut reviewed_count = 0_u32;
+            let mut confirmed_fwa_count = 0_u32;
+            let mut false_positive_count = 0_u32;
+            let mut saving_amount = Decimal::ZERO;
+
+            for claim_id in &accumulator.triggered_claim_ids {
+                let Some(outcome) = outcomes.get(claim_id) else {
+                    continue;
+                };
+                reviewed_count += 1;
+                if outcome.confirmed_fwa {
+                    confirmed_fwa_count += 1;
+                    saving_amount += outcome.saving_amount;
+                } else {
+                    false_positive_count += 1;
+                }
+            }
+
+            let trigger_count = accumulator.trigger_count;
+            let mark_rate = ratio(trigger_count, total_scoring_runs);
+            let precision = ratio(confirmed_fwa_count, reviewed_count);
+            let false_positive_rate = ratio(false_positive_count, reviewed_count);
+            let roi = if trigger_count == 0 {
+                0.0
+            } else {
+                let saving = saving_amount.to_string().parse::<f64>().unwrap_or(0.0);
+                saving / (trigger_count as f64 * RULE_REVIEW_COST_AMOUNT)
+            };
+
+            RulePerformanceRecord {
+                rule_id: accumulator.rule_id,
+                alert_code: accumulator.alert_code,
+                trigger_count,
+                reviewed_count,
+                confirmed_fwa_count,
+                false_positive_count,
+                mark_rate,
+                precision,
+                false_positive_rate,
+                saving_amount: format!("{:.2}", saving_amount.round_dp(2)),
+                roi,
+            }
+        })
+        .collect()
+}
+
+fn ratio(numerator: u32, denominator: u32) -> f64 {
+    if denominator == 0 {
+        0.0
+    } else {
+        numerator as f64 / denominator as f64
+    }
+}
+
+fn decimal_from_json(value: &Value) -> Decimal {
+    if let Some(value) = value.as_str() {
+        return value.parse::<Decimal>().unwrap_or(Decimal::ZERO);
+    }
+    if let Some(value) = value.as_f64() {
+        return Decimal::from_f64_retain(value).unwrap_or(Decimal::ZERO);
+    }
+    Decimal::ZERO
+}
 
 pub fn default_runtime_rules() -> Vec<Rule> {
     vec![
