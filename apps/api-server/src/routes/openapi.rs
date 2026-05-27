@@ -2172,7 +2172,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AgentRunLogRecord": {
                     "type": "object",
-                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps"],
+                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "tool_calls", "tool_results"],
                     "properties": {
                         "agent_run_id": { "type": "string" },
                         "claim_id": { "type": "string" },
@@ -2181,8 +2181,39 @@ pub async fn openapi_schema() -> Json<Value> {
                         "output_json": { "type": "object" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "steps": { "type": "array", "items": { "type": "object" } },
+                        "tool_calls": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AgentToolCallRecord" }
+                        },
+                        "tool_results": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AgentToolResultRecord" }
+                        },
                         "created_at": { "type": ["string", "null"] },
                         "completed_at": { "type": ["string", "null"] }
+                    }
+                },
+                "AgentToolCallRecord": {
+                    "type": "object",
+                    "required": ["tool_call_id", "tool_name", "status", "input_json", "evidence_refs"],
+                    "properties": {
+                        "tool_call_id": { "type": "string" },
+                        "tool_name": { "type": "string" },
+                        "status": { "type": "string" },
+                        "input_json": { "type": "object" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "AgentToolResultRecord": {
+                    "type": "object",
+                    "required": ["tool_result_id", "tool_call_id", "tool_name", "status", "output_json", "evidence_refs"],
+                    "properties": {
+                        "tool_result_id": { "type": "string" },
+                        "tool_call_id": { "type": "string" },
+                        "tool_name": { "type": "string" },
+                        "status": { "type": "string" },
+                        "output_json": { "type": "object" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "AgentRunLogListResponse": {

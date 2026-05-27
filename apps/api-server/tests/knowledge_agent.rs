@@ -232,5 +232,23 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert_eq!(run["status"], "succeeded");
     assert_eq!(run["decision_boundary"], "assistive_only");
     assert!(!run["steps"].as_array().unwrap().is_empty());
+    let tool_call = run["tool_calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|call| call["tool_name"] == "knowledge.search_similar")
+        .expect("similar-case search tool call should be audited");
+    assert_eq!(tool_call["status"], "succeeded");
+    assert!(!tool_call["input_json"].as_object().unwrap().is_empty());
+    assert!(!tool_call["evidence_refs"].as_array().unwrap().is_empty());
+    let tool_result = run["tool_results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|result| result["tool_name"] == "knowledge.search_similar")
+        .expect("similar-case search tool result should be audited");
+    assert_eq!(tool_result["status"], "succeeded");
+    assert!(tool_result["output_json"]["result_count"].as_u64().unwrap() > 0);
+    assert!(!tool_result["evidence_refs"].as_array().unwrap().is_empty());
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
 }

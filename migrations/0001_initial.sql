@@ -223,6 +223,29 @@ CREATE TABLE IF NOT EXISTS agent_steps (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS tool_calls (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tool_call_id TEXT NOT NULL UNIQUE,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  tool_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  input_json JSONB NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS tool_results (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  tool_result_id TEXT NOT NULL UNIQUE,
+  tool_call_id TEXT NOT NULL REFERENCES tool_calls(tool_call_id) ON DELETE CASCADE,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  tool_name TEXT NOT NULL,
+  status TEXT NOT NULL,
+  output_json JSONB NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS fwa_leads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   lead_id TEXT NOT NULL UNIQUE,

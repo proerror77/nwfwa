@@ -322,6 +322,8 @@ pub struct PersistedAgentRun {
     pub output_json: Value,
     pub evidence_refs: Vec<Value>,
     pub steps: Vec<Value>,
+    pub tool_calls: Vec<AgentToolCallRecord>,
+    pub tool_results: Vec<AgentToolResultRecord>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -333,8 +335,29 @@ pub struct AgentRunLogRecord {
     pub output_json: Value,
     pub evidence_refs: Vec<String>,
     pub steps: Vec<Value>,
+    pub tool_calls: Vec<AgentToolCallRecord>,
+    pub tool_results: Vec<AgentToolResultRecord>,
     pub created_at: Option<String>,
     pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentToolCallRecord {
+    pub tool_call_id: String,
+    pub tool_name: String,
+    pub status: String,
+    pub input_json: Value,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentToolResultRecord {
+    pub tool_result_id: String,
+    pub tool_call_id: String,
+    pub tool_name: String,
+    pub status: String,
+    pub output_json: Value,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1770,6 +1793,65 @@ impl PostgresScoringRepository {
             .await?;
         Ok(Self { pool })
     }
+
+    async fn load_agent_tool_calls(
+        &self,
+        agent_run_id: &str,
+    ) -> anyhow::Result<Vec<AgentToolCallRecord>> {
+        let rows: Vec<(String, String, String, Value, Value)> = sqlx::query_as(
+            "SELECT tool_call_id, tool_name, status, input_json, evidence_refs
+             FROM tool_calls
+             WHERE agent_run_id = $1
+             ORDER BY created_at, id",
+        )
+        .bind(agent_run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(tool_call_id, tool_name, status, input_json, evidence_refs)| {
+                    AgentToolCallRecord {
+                        tool_call_id,
+                        tool_name,
+                        status,
+                        input_json,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                    }
+                },
+            )
+            .collect())
+    }
+
+    async fn load_agent_tool_results(
+        &self,
+        agent_run_id: &str,
+    ) -> anyhow::Result<Vec<AgentToolResultRecord>> {
+        let rows: Vec<(String, String, String, String, Value, Value)> = sqlx::query_as(
+            "SELECT tool_result_id, tool_call_id, tool_name, status, output_json, evidence_refs
+             FROM tool_results
+             WHERE agent_run_id = $1
+             ORDER BY created_at, id",
+        )
+        .bind(agent_run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(tool_result_id, tool_call_id, tool_name, status, output_json, evidence_refs)| {
+                    AgentToolResultRecord {
+                        tool_result_id,
+                        tool_call_id,
+                        tool_name,
+                        status,
+                        output_json,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                    }
+                },
+            )
+            .collect())
+    }
 }
 
 #[async_trait]
@@ -3170,6 +3252,14 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&run.agent_run_id)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("DELETE FROM tool_results WHERE agent_run_id = $1")
+            .bind(&run.agent_run_id)
+            .execute(&mut *tx)
+            .await?;
+        sqlx::query("DELETE FROM tool_calls WHERE agent_run_id = $1")
+            .bind(&run.agent_run_id)
+            .execute(&mut *tx)
+            .await?;
 
         for step in &run.steps {
             sqlx::query(
@@ -3181,6 +3271,37 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(step["step_name"].as_str().unwrap_or("investigate"))
             .bind(step)
             .bind(step["evidence_refs"].clone())
+            .execute(&mut *tx)
+            .await?;
+        }
+        for call in &run.tool_calls {
+            sqlx::query(
+                "INSERT INTO tool_calls
+                 (tool_call_id, agent_run_id, tool_name, status, input_json, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6)",
+            )
+            .bind(&call.tool_call_id)
+            .bind(&run.agent_run_id)
+            .bind(&call.tool_name)
+            .bind(&call.status)
+            .bind(&call.input_json)
+            .bind(string_values(&call.evidence_refs))
+            .execute(&mut *tx)
+            .await?;
+        }
+        for result in &run.tool_results {
+            sqlx::query(
+                "INSERT INTO tool_results
+                 (tool_result_id, tool_call_id, agent_run_id, tool_name, status, output_json, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7)",
+            )
+            .bind(&result.tool_result_id)
+            .bind(&result.tool_call_id)
+            .bind(&run.agent_run_id)
+            .bind(&result.tool_name)
+            .bind(&result.status)
+            .bind(&result.output_json)
+            .bind(string_values(&result.evidence_refs))
             .execute(&mut *tx)
             .await?;
         }
@@ -3228,6 +3349,8 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&agent_run_id)
             .fetch_all(&self.pool)
             .await?;
+            let tool_calls = self.load_agent_tool_calls(&agent_run_id).await?;
+            let tool_results = self.load_agent_tool_results(&agent_run_id).await?;
             runs.push(AgentRunLogRecord {
                 agent_run_id,
                 claim_id,
@@ -3236,6 +3359,8 @@ impl ScoringRepository for PostgresScoringRepository {
                 output_json,
                 evidence_refs: json_array_to_strings(evidence_refs),
                 steps: steps.into_iter().map(|row| row.0).collect(),
+                tool_calls,
+                tool_results,
                 created_at: Some(created_at.to_rfc3339()),
                 completed_at: completed_at.map(|value| value.to_rfc3339()),
             });
@@ -4727,6 +4852,8 @@ fn agent_run_log_from_persisted(run: &PersistedAgentRun) -> AgentRunLogRecord {
         output_json: run.output_json.clone(),
         evidence_refs: evidence_values_to_strings(&run.evidence_refs),
         steps: run.steps.clone(),
+        tool_calls: run.tool_calls.clone(),
+        tool_results: run.tool_results.clone(),
         created_at: None,
         completed_at: None,
     }
@@ -4742,6 +4869,10 @@ fn json_array_to_strings(value: Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn string_values(values: &[String]) -> Value {
+    Value::Array(values.iter().cloned().map(Value::String).collect())
 }
 
 fn evidence_values_to_strings(values: &[Value]) -> Vec<String> {

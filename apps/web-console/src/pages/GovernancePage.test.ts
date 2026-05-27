@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAuditSummary } from "./GovernancePage";
+import { buildAgentRunLogSummary, buildAuditSummary } from "./GovernancePage";
 
 describe("buildAuditSummary", () => {
   it("summarizes claim audit events for governance review", () => {
@@ -32,6 +32,47 @@ describe("buildAuditSummary", () => {
       succeededEvents: 1,
       failedEvents: 1,
       latestEventType: "qa.result.received",
+    });
+  });
+});
+
+describe("buildAgentRunLogSummary", () => {
+  it("summarizes audited agent tool activity", () => {
+    const summary = buildAgentRunLogSummary([
+      {
+        agent_run_id: "agent_1",
+        claim_id: "CLM-1",
+        status: "succeeded",
+        decision_boundary: "assistive_only",
+        evidence_refs: ["agent_run:agent_1"],
+        steps: [{ step_name: "evidence_finding" }],
+        tool_calls: [
+          {
+            tool_call_id: "tool_call_1",
+            tool_name: "knowledge.search_similar",
+            status: "succeeded",
+            input_json: { diagnosis_code: "J10" },
+            evidence_refs: ["knowledge_query:CLM-1"],
+          },
+        ],
+        tool_results: [
+          {
+            tool_result_id: "tool_result_1",
+            tool_call_id: "tool_call_1",
+            tool_name: "knowledge.search_similar",
+            status: "succeeded",
+            output_json: { result_count: 2 },
+            evidence_refs: ["knowledge_cases:KC-1001"],
+          },
+        ],
+      },
+    ]);
+
+    expect(summary).toEqual({
+      runCount: 1,
+      toolCallCount: 1,
+      toolResultCount: 1,
+      failedToolCallCount: 0,
     });
   });
 });

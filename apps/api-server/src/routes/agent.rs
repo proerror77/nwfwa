@@ -1,7 +1,10 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{PersistedAgentRun, PersistedAuditEvent, SimilarCaseQuery},
+    repository::{
+        AgentToolCallRecord, AgentToolResultRecord, PersistedAgentRun, PersistedAuditEvent,
+        SimilarCaseQuery,
+    },
 };
 use axum::{
     extract::State,
@@ -47,13 +50,22 @@ pub async fn investigate_case(
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
     authorize(&state, &headers)?;
+    let tool_call_id = format!("tool_call_{}", request.claim_id);
+    let tool_result_id = format!("tool_result_{}", request.claim_id);
+    let tool_input = serde_json::json!({
+        "claim_id": request.claim_id,
+        "diagnosis_code": request.similar_case_query.diagnosis_code,
+        "provider_region": request.similar_case_query.provider_region,
+        "tags": request.similar_case_query.tags,
+    });
+    let query_evidence_refs = vec![format!("knowledge_query:{}", request.claim_id)];
     let similar_cases = state
         .repository
         .search_similar_cases(SimilarCaseQuery {
             claim_id: Some(request.claim_id.clone()),
-            diagnosis_code: request.similar_case_query.diagnosis_code,
-            provider_region: request.similar_case_query.provider_region,
-            tags: request.similar_case_query.tags,
+            diagnosis_code: request.similar_case_query.diagnosis_code.clone(),
+            provider_region: request.similar_case_query.provider_region.clone(),
+            tags: request.similar_case_query.tags.clone(),
         })
         .await
         .map_err(internal_error("AGENT_SIMILAR_CASE_SEARCH_FAILED"))?
@@ -64,6 +76,10 @@ pub async fn investigate_case(
             matched_signals: case.matched_signals,
             evidence_refs: case.evidence_refs,
         })
+        .collect::<Vec<_>>();
+    let result_evidence_refs = similar_cases
+        .iter()
+        .flat_map(|case| case.evidence_refs.iter().cloned())
         .collect::<Vec<_>>();
 
     let package = DeterministicInvestigator.investigate(InvestigationRequest {
@@ -107,6 +123,28 @@ pub async fn investigate_case(
             output_json: output_json.clone(),
             evidence_refs: evidence_refs.clone(),
             steps,
+            tool_calls: vec![AgentToolCallRecord {
+                tool_call_id: tool_call_id.clone(),
+                tool_name: "knowledge.search_similar".into(),
+                status: "succeeded".into(),
+                input_json: tool_input,
+                evidence_refs: query_evidence_refs,
+            }],
+            tool_results: vec![AgentToolResultRecord {
+                tool_result_id,
+                tool_call_id,
+                tool_name: "knowledge.search_similar".into(),
+                status: "succeeded".into(),
+                output_json: serde_json::json!({
+                    "result_count": package.similar_cases.len(),
+                    "case_ids": package
+                        .similar_cases
+                        .iter()
+                        .map(|case| case.case_id.clone())
+                        .collect::<Vec<_>>()
+                }),
+                evidence_refs: result_evidence_refs,
+            }],
         })
         .await
         .map_err(internal_error("AGENT_RUN_SAVE_FAILED"))?;

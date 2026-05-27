@@ -114,6 +114,18 @@ async fn openapi_includes_operations_paths() {
             ["type"],
         "object"
     );
+    assert!(schema["components"]["schemas"]["AgentToolCallRecord"].is_object());
+    assert!(schema["components"]["schemas"]["AgentToolResultRecord"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["tool_calls"]["items"]
+            ["$ref"],
+        "#/components/schemas/AgentToolCallRecord"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["tool_results"]["items"]
+            ["$ref"],
+        "#/components/schemas/AgentToolResultRecord"
+    );
     assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
         "string"

@@ -25,8 +25,27 @@ type AgentRunLog = {
   decision_boundary: string;
   evidence_refs: string[];
   steps: Array<Record<string, unknown>>;
+  tool_calls: AgentToolCall[];
+  tool_results: AgentToolResult[];
   created_at?: string | null;
   completed_at?: string | null;
+};
+
+type AgentToolCall = {
+  tool_call_id: string;
+  tool_name: string;
+  status: string;
+  input_json: Record<string, unknown>;
+  evidence_refs: string[];
+};
+
+type AgentToolResult = {
+  tool_result_id: string;
+  tool_call_id: string;
+  tool_name: string;
+  status: string;
+  output_json: Record<string, unknown>;
+  evidence_refs: string[];
 };
 
 type AgentRunLogListResponse = {
@@ -43,6 +62,17 @@ export function buildAuditSummary(data?: ClaimAuditHistoryResponse) {
   };
 }
 
+export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
+  const toolCalls = runs.flatMap((run) => run.tool_calls ?? []);
+  const toolResults = runs.flatMap((run) => run.tool_results ?? []);
+  return {
+    runCount: runs.length,
+    toolCallCount: toolCalls.length,
+    toolResultCount: toolResults.length,
+    failedToolCallCount: toolCalls.filter((call) => call.status === "failed").length,
+  };
+}
+
 export function GovernancePage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
@@ -56,6 +86,7 @@ export function GovernancePage() {
     queryFn: () => listAgentRuns(apiKey) as Promise<AgentRunLogListResponse>,
   });
   const summary = buildAuditSummary(auditQuery.data);
+  const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
 
   return (
     <section className="ops-grid">
@@ -88,7 +119,11 @@ export function GovernancePage() {
           </div>
           <div>
             <span>Agent Runs</span>
-            <strong>{agentRunsQuery.data?.runs.length ?? 0}</strong>
+            <strong>{agentSummary.runCount}</strong>
+          </div>
+          <div>
+            <span>Tool Calls</span>
+            <strong>{agentSummary.toolCallCount}</strong>
           </div>
         </div>
         {auditQuery.error ? <pre className="error">{String(auditQuery.error.message)}</pre> : null}
@@ -134,6 +169,16 @@ export function GovernancePage() {
                 <small>{run.completed_at || run.created_at || run.claim_id}</small>
                 <p>{run.decision_boundary}</p>
                 <p>{run.steps.length} evidence-backed steps</p>
+                <p>
+                  {run.tool_calls.length} tool calls / {run.tool_results.length} tool results
+                </p>
+                <ul className="result-list">
+                  {run.tool_calls.map((call) => (
+                    <li key={call.tool_call_id}>
+                      {call.tool_name}: {call.status}
+                    </li>
+                  ))}
+                </ul>
                 <ul className="result-list">
                   {run.evidence_refs.map((reference) => (
                     <li key={reference}>{reference}</li>
