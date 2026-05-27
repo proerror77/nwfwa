@@ -71,3 +71,21 @@ export async function getModelPerformance(modelKey: string, apiKey: string) {
     apiKey,
   );
 }
+
+export async function listKnowledgeCases(apiKey: string) {
+  return requestJson("/api/v1/ops/knowledge/cases", apiKey);
+}
+
+export async function searchSimilarCases(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/knowledge/search-similar", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function investigateCase(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/agent/cases/investigate", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
