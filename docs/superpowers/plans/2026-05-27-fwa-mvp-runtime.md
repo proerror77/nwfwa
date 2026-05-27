@@ -1,6 +1,15 @@
 # FWA MVP Runtime Implementation Plan
 
-> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
+> **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use Markdown checkbox syntax for tracking.
+
+Status: completed on integration branch `develop`.
+
+Completion evidence:
+
+- Local verification: `cargo test --workspace`, `cargo fmt --all -- --check`, `git diff --check`.
+- Frontend verification: `npm run lint`, `npm test -- --run`, `npm run build` in `apps/web-console`.
+- Repository verification: `bash scripts/ci/check_repo.sh`.
+- Recent CI baseline: GitHub Actions run `26502948637` passed `repository-health`, `rust`, `migrations`, `python`, and `frontend` jobs for commit `c98a50d81d0882890cb44b427e2ecdf37d9819f6`.
 
 **Goal:** Build the production-style Rust modular monolith skeleton and the first executable FWA scoring path from TPA request to audit-backed response and Runtime Scoring UI.
 
@@ -111,7 +120,7 @@ Modify:
 - Create: each crate/app `Cargo.toml` and `src/lib.rs` or `src/main.rs` listed in File Structure
 - Modify: `scripts/ci/check_repo.sh`
 
-- [ ] **Step 1: Write the failing workspace health expectation**
+- [x] **Step 1: Write the failing workspace health expectation**
 
 Add these lines to `scripts/ci/check_repo.sh` after the current `required_files` list:
 
@@ -140,7 +149,7 @@ for path in "${workspace_files[@]}"; do
 done
 ```
 
-- [ ] **Step 2: Run health check to verify it fails**
+- [x] **Step 2: Run health check to verify it fails**
 
 Run:
 
@@ -150,7 +159,7 @@ bash scripts/ci/check_repo.sh
 
 Expected: FAIL with `missing workspace file: Cargo.toml`.
 
-- [ ] **Step 3: Create root workspace files**
+- [x] **Step 3: Create root workspace files**
 
 Create `Cargo.toml`:
 
@@ -204,7 +213,7 @@ channel = "stable"
 components = ["rustfmt", "clippy"]
 ```
 
-- [ ] **Step 4: Create minimal crate manifests and entrypoints**
+- [x] **Step 4: Create minimal crate manifests and entrypoints**
 
 For each library crate, create `Cargo.toml` with its package name and dependencies.
 
@@ -291,7 +300,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-- [ ] **Step 5: Run workspace checks**
+- [x] **Step 5: Run workspace checks**
 
 Run:
 
@@ -303,7 +312,7 @@ cargo test --workspace
 
 Expected: all commands PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add Cargo.toml rust-toolchain.toml crates apps scripts/ci/check_repo.sh
@@ -321,7 +330,7 @@ git commit -m "chore: scaffold Rust workspace"
 - Create: `crates/fwa-core/src/risk.rs`
 - Create: `crates/fwa-core/src/domain.rs`
 
-- [ ] **Step 1: Replace `fwa-core` skeleton with module exports**
+- [x] **Step 1: Replace `fwa-core` skeleton with module exports**
 
 Edit `crates/fwa-core/src/lib.rs`:
 
@@ -337,7 +346,7 @@ pub use money::*;
 pub use risk::*;
 ```
 
-- [ ] **Step 2: Add ID types with tests**
+- [x] **Step 2: Add ID types with tests**
 
 Create `crates/fwa-core/src/ids.rs`:
 
@@ -404,7 +413,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Add Money and Risk types**
+- [x] **Step 3: Add Money and Risk types**
 
 Create `crates/fwa-core/src/money.rs`:
 
@@ -494,7 +503,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 4: Add domain structs**
+- [x] **Step 4: Add domain structs**
 
 Create `crates/fwa-core/src/domain.rs`:
 
@@ -570,7 +579,7 @@ pub struct ClaimContext {
 }
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 cargo test -p fwa-core
@@ -578,7 +587,7 @@ cargo test -p fwa-core
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add crates/fwa-core
@@ -593,7 +602,7 @@ git commit -m "feat: add FWA core domain types"
 - Modify: `crates/fwa-features/Cargo.toml`
 - Modify: `crates/fwa-features/src/lib.rs`
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 Edit `crates/fwa-features/Cargo.toml`:
 
@@ -612,7 +621,7 @@ serde.workspace = true
 serde_json.workspace = true
 ```
 
-- [ ] **Step 2: Add feature calculator with tests**
+- [x] **Step 2: Add feature calculator with tests**
 
 Replace `crates/fwa-features/src/lib.rs`:
 
@@ -794,7 +803,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test -p fwa-features
@@ -802,7 +811,7 @@ cargo test -p fwa-features
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add crates/fwa-features
@@ -817,7 +826,7 @@ git commit -m "feat: calculate MVP FWA features"
 - Modify: `crates/fwa-rules/Cargo.toml`
 - Modify: `crates/fwa-rules/src/lib.rs`
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 Edit `crates/fwa-rules/Cargo.toml`:
 
@@ -836,7 +845,7 @@ serde_json.workspace = true
 thiserror.workspace = true
 ```
 
-- [ ] **Step 2: Add rule engine**
+- [x] **Step 2: Add rule engine**
 
 Replace `crates/fwa-rules/src/lib.rs`:
 
@@ -972,7 +981,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test -p fwa-rules
@@ -980,7 +989,7 @@ cargo test -p fwa-rules
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add crates/fwa-rules
@@ -995,7 +1004,7 @@ git commit -m "feat: add rule DSL evaluation"
 - Modify: `crates/fwa-ml-runtime/Cargo.toml`
 - Modify: `crates/fwa-ml-runtime/src/lib.rs`
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 Edit `crates/fwa-ml-runtime/Cargo.toml`:
 
@@ -1017,7 +1026,7 @@ thiserror.workspace = true
 tokio.workspace = true
 ```
 
-- [ ] **Step 2: Add scorer trait and heuristic implementation**
+- [x] **Step 2: Add scorer trait and heuristic implementation**
 
 Replace `crates/fwa-ml-runtime/src/lib.rs`:
 
@@ -1135,7 +1144,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test -p fwa-ml-runtime
@@ -1143,7 +1152,7 @@ cargo test -p fwa-ml-runtime
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add crates/fwa-ml-runtime
@@ -1158,7 +1167,7 @@ git commit -m "feat: define model runtime contract"
 - Modify: `crates/fwa-scoring/Cargo.toml`
 - Modify: `crates/fwa-scoring/src/lib.rs`
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 Edit `crates/fwa-scoring/Cargo.toml`:
 
@@ -1176,7 +1185,7 @@ fwa-rules = { path = "../fwa-rules" }
 serde.workspace = true
 ```
 
-- [ ] **Step 2: Add aggregation logic**
+- [x] **Step 2: Add aggregation logic**
 
 Replace `crates/fwa-scoring/src/lib.rs`:
 
@@ -1266,7 +1275,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test -p fwa-scoring
@@ -1274,7 +1283,7 @@ cargo test -p fwa-scoring
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add crates/fwa-scoring
@@ -1289,7 +1298,7 @@ git commit -m "feat: aggregate FWA risk scores"
 - Modify: `crates/fwa-audit/Cargo.toml`
 - Modify: `crates/fwa-audit/src/lib.rs`
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 Edit `crates/fwa-audit/Cargo.toml`:
 
@@ -1307,7 +1316,7 @@ serde.workspace = true
 serde_json.workspace = true
 ```
 
-- [ ] **Step 2: Add audit event type**
+- [x] **Step 2: Add audit event type**
 
 Replace `crates/fwa-audit/src/lib.rs`:
 
@@ -1405,7 +1414,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test -p fwa-audit
@@ -1413,7 +1422,7 @@ cargo test -p fwa-audit
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add crates/fwa-audit
@@ -1428,7 +1437,7 @@ git commit -m "feat: add audit event model"
 - Modify: `crates/fwa-auth/Cargo.toml`
 - Modify: `crates/fwa-auth/src/lib.rs`
 
-- [ ] **Step 1: Add dependencies**
+- [x] **Step 1: Add dependencies**
 
 Edit `crates/fwa-auth/Cargo.toml`:
 
@@ -1444,7 +1453,7 @@ fwa-audit = { path = "../fwa-audit" }
 thiserror.workspace = true
 ```
 
-- [ ] **Step 2: Add validator**
+- [x] **Step 2: Add validator**
 
 Replace `crates/fwa-auth/src/lib.rs`:
 
@@ -1506,7 +1515,7 @@ mod tests {
 }
 ```
 
-- [ ] **Step 3: Run tests**
+- [x] **Step 3: Run tests**
 
 ```bash
 cargo test -p fwa-auth
@@ -1514,7 +1523,7 @@ cargo test -p fwa-auth
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add crates/fwa-auth
@@ -1528,7 +1537,7 @@ git commit -m "feat: add API key auth"
 **Files:**
 - Create: `migrations/0001_initial.sql`
 
-- [ ] **Step 1: Create migration**
+- [x] **Step 1: Create migration**
 
 Create `migrations/0001_initial.sql`:
 
@@ -1710,7 +1719,7 @@ CREATE TABLE audit_events (
 );
 ```
 
-- [ ] **Step 2: Run SQL parse check**
+- [x] **Step 2: Run SQL parse check**
 
 Run:
 
@@ -1720,7 +1729,7 @@ psql --version
 
 Expected: command exists. If Postgres client is unavailable, skip parse locally and rely on migration check task after Docker Compose is added.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add migrations/0001_initial.sql
@@ -1738,7 +1747,7 @@ git commit -m "feat: add initial database schema"
 - Create: `apps/ml-service/app/scorer.py`
 - Create: `apps/ml-service/tests/test_score.py`
 
-- [ ] **Step 1: Create Python package config**
+- [x] **Step 1: Create Python package config**
 
 Create `apps/ml-service/pyproject.toml`:
 
@@ -1760,7 +1769,7 @@ dev = [
 ]
 ```
 
-- [ ] **Step 2: Add schemas**
+- [x] **Step 2: Add schemas**
 
 Create `apps/ml-service/app/schemas.py`:
 
@@ -1790,7 +1799,7 @@ class ScoreResponse(BaseModel):
     explanations: list[ModelExplanation]
 ```
 
-- [ ] **Step 3: Add deterministic scorer**
+- [x] **Step 3: Add deterministic scorer**
 
 Create `apps/ml-service/app/scorer.py`:
 
@@ -1820,7 +1829,7 @@ def score_claim(request: ScoreRequest) -> ScoreResponse:
     )
 ```
 
-- [ ] **Step 4: Add FastAPI app and tests**
+- [x] **Step 4: Add FastAPI app and tests**
 
 Create `apps/ml-service/app/main.py`:
 
@@ -1875,7 +1884,7 @@ def test_score_returns_high_risk_for_large_amount_ratio():
     assert payload["model_version"] == "0.1.0"
 ```
 
-- [ ] **Step 5: Run tests**
+- [x] **Step 5: Run tests**
 
 ```bash
 cd apps/ml-service
@@ -1885,7 +1894,7 @@ pytest
 
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add apps/ml-service
@@ -1908,7 +1917,7 @@ git commit -m "feat: add baseline Python ML service"
 - Modify: `apps/api-server/src/main.rs`
 - Create: `apps/api-server/tests/claims_score.rs`
 
-- [ ] **Step 1: Add API server dependencies**
+- [x] **Step 1: Add API server dependencies**
 
 Edit `apps/api-server/Cargo.toml`:
 
@@ -1942,7 +1951,7 @@ tracing-subscriber.workspace = true
 tower = "0.5"
 ```
 
-- [ ] **Step 2: Add app state and health route**
+- [x] **Step 2: Add app state and health route**
 
 Create `apps/api-server/src/config.rs`:
 
@@ -2014,7 +2023,7 @@ pub mod config;
 pub mod routes;
 ```
 
-- [ ] **Step 3: Add claims scoring route**
+- [x] **Step 3: Add claims scoring route**
 
 Create `apps/api-server/src/routes/claims.rs`:
 
@@ -2180,7 +2189,7 @@ fn demo_rules() -> Vec<Rule> {
 }
 ```
 
-- [ ] **Step 4: Wire modules and main**
+- [x] **Step 4: Wire modules and main**
 
 Create `apps/api-server/src/routes/mod.rs`:
 
@@ -2206,7 +2215,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-- [ ] **Step 5: Add integration test**
+- [x] **Step 5: Add integration test**
 
 Create `apps/api-server/tests/claims_score.rs`:
 
@@ -2264,7 +2273,7 @@ async fn rejects_missing_api_key() {
 }
 ```
 
-- [ ] **Step 6: Run tests**
+- [x] **Step 6: Run tests**
 
 ```bash
 cargo fmt --all
@@ -2273,7 +2282,7 @@ cargo test -p api-server
 
 Expected: PASS.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add apps/api-server crates/fwa-*
@@ -2291,7 +2300,7 @@ git commit -m "feat: add scoring API vertical slice"
 - Modify: `apps/api-server/src/routes/claims.rs`
 - Modify: `apps/api-server/src/config.rs`
 
-- [ ] **Step 1: Add SQLx dependency**
+- [x] **Step 1: Add SQLx dependency**
 
 Ensure `apps/api-server/Cargo.toml` includes:
 
@@ -2299,7 +2308,7 @@ Ensure `apps/api-server/Cargo.toml` includes:
 sqlx.workspace = true
 ```
 
-- [ ] **Step 2: Extend config**
+- [x] **Step 2: Extend config**
 
 Modify `apps/api-server/src/config.rs`:
 
@@ -2330,7 +2339,7 @@ impl Default for AppConfig {
 }
 ```
 
-- [ ] **Step 3: Add repository API**
+- [x] **Step 3: Add repository API**
 
 Create `apps/api-server/src/repository.rs`:
 
@@ -2361,7 +2370,7 @@ impl Repository {
 }
 ```
 
-- [ ] **Step 4: Wire pool into app state**
+- [x] **Step 4: Wire pool into app state**
 
 Modify `apps/api-server/src/app.rs` so `AppState` includes `Repository` and `build_app` accepts it:
 
@@ -2388,7 +2397,7 @@ pub fn build_app(config: AppConfig, repository: Repository) -> Router {
 }
 ```
 
-- [ ] **Step 5: Update main**
+- [x] **Step 5: Update main**
 
 Modify `apps/api-server/src/main.rs`:
 
@@ -2419,7 +2428,7 @@ async fn main() -> anyhow::Result<()> {
 }
 ```
 
-- [ ] **Step 6: Persist scoring run from route**
+- [x] **Step 6: Persist scoring run from route**
 
 In `apps/api-server/src/routes/claims.rs`, after `run_id` is created and before returning, call:
 
@@ -2436,7 +2445,7 @@ state
     })?;
 ```
 
-- [ ] **Step 7: Run tests**
+- [x] **Step 7: Run tests**
 
 ```bash
 cargo fmt --all
@@ -2445,7 +2454,7 @@ cargo test -p api-server
 
 Expected: PASS for compile/unit tests. Database integration requires Docker Compose in Task 13.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add apps/api-server
@@ -2460,7 +2469,7 @@ git commit -m "feat: add SQLx repository boundary"
 - Modify: `apps/api-server/src/repository.rs`
 - Modify: `apps/api-server/src/routes/claims.rs`
 
-- [ ] **Step 1: Extend repository with runtime record methods**
+- [x] **Step 1: Extend repository with runtime record methods**
 
 Add these methods inside `impl Repository` in `apps/api-server/src/repository.rs`:
 
@@ -2574,7 +2583,7 @@ pub async fn insert_audit_event(
 }
 ```
 
-- [ ] **Step 2: Persist feature values from the route**
+- [x] **Step 2: Persist feature values from the route**
 
 In `apps/api-server/src/routes/claims.rs`, move `let run_id = ScoringRunId::new();` so it appears immediately after `let context = demo_context(request.claim_id, request.claim);`. Then insert feature persistence immediately after `let features = calculate_features(&context);`:
 
@@ -2599,7 +2608,7 @@ for feature in features.values() {
 }
 ```
 
-- [ ] **Step 3: Persist rule runs, model score, and audit event**
+- [x] **Step 3: Persist rule runs, model score, and audit event**
 
 In `apps/api-server/src/routes/claims.rs`, after rule evaluation and model scoring, insert:
 
@@ -2668,7 +2677,7 @@ state
     })?;
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 cargo fmt --all
@@ -2677,7 +2686,7 @@ cargo test -p api-server
 
 Expected: PASS for compile/unit tests. End-to-end persistence is verified after Docker Compose is available.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api-server
@@ -2692,7 +2701,7 @@ git commit -m "feat: persist scoring lineage records"
 - Modify: `apps/api-server/src/repository.rs`
 - Modify: `apps/api-server/src/routes/claims.rs`
 
-- [ ] **Step 1: Add repository methods for full payload upsert and claim loading**
+- [x] **Step 1: Add repository methods for full payload upsert and claim loading**
 
 Add these method signatures and implementations to `apps/api-server/src/repository.rs`. Keep the first implementation focused on the MVP demo payload fields; extend the payload DTO in the same task only for fields required by `ClaimContext`.
 
@@ -2811,7 +2820,7 @@ pub async fn load_claim_context(&self, external_claim_id: &str) -> Result<Option
 }
 ```
 
-- [ ] **Step 2: Store full payload requests**
+- [x] **Step 2: Store full payload requests**
 
 In `apps/api-server/src/routes/claims.rs`, after building `context` for full payload mode and before feature calculation, call:
 
@@ -2828,7 +2837,7 @@ state
     })?;
 ```
 
-- [ ] **Step 3: Load existing claim requests**
+- [x] **Step 3: Load existing claim requests**
 
 Replace the `claim_id` branch that currently calls `demo_context` with:
 
@@ -2861,7 +2870,7 @@ let context = if let Some(claim_id) = request.claim_id.clone() {
 };
 ```
 
-- [ ] **Step 4: Run tests**
+- [x] **Step 4: Run tests**
 
 ```bash
 cargo fmt --all
@@ -2870,7 +2879,7 @@ cargo test -p api-server
 
 Expected: PASS for compile/unit tests. A follow-up end-to-end run against Postgres must verify both full payload and `claim_id` modes.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add apps/api-server
@@ -2885,7 +2894,7 @@ git commit -m "feat: persist and load claim context"
 - Create: `infra/docker-compose.yml`
 - Modify: `README.md`
 
-- [ ] **Step 1: Add Docker Compose**
+- [x] **Step 1: Add Docker Compose**
 
 Create `infra/docker-compose.yml`:
 
@@ -2931,7 +2940,7 @@ EXPOSE 8001
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8001"]
 ```
 
-- [ ] **Step 2: Update README**
+- [x] **Step 2: Update README**
 
 Add:
 
@@ -2958,7 +2967,7 @@ cd apps/ml-service && pytest
 ```
 ```
 
-- [ ] **Step 3: Run compose config check**
+- [x] **Step 3: Run compose config check**
 
 ```bash
 docker compose -f infra/docker-compose.yml config
@@ -2966,7 +2975,7 @@ docker compose -f infra/docker-compose.yml config
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add infra/docker-compose.yml apps/ml-service/Dockerfile README.md
@@ -2987,7 +2996,7 @@ git commit -m "chore: add local runtime compose"
 - Create: `apps/web-console/src/pages/PlannedModulePage.tsx`
 - Create: `apps/web-console/src/styles.css`
 
-- [ ] **Step 1: Create package config**
+- [x] **Step 1: Create package config**
 
 Create `apps/web-console/package.json`:
 
@@ -3017,7 +3026,7 @@ Create `apps/web-console/package.json`:
 }
 ```
 
-- [ ] **Step 2: Create app files**
+- [x] **Step 2: Create app files**
 
 Create `apps/web-console/index.html`:
 
@@ -3253,7 +3262,7 @@ pre {
 }
 ```
 
-- [ ] **Step 3: Run frontend checks**
+- [x] **Step 3: Run frontend checks**
 
 ```bash
 cd apps/web-console
@@ -3263,7 +3272,7 @@ npm run build
 
 Expected: PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add apps/web-console
@@ -3278,7 +3287,7 @@ git commit -m "feat: add Operations Studio runtime scoring UI"
 - Modify: `.github/workflows/ci.yml`
 - Modify: `scripts/ci/check_repo.sh`
 
-- [ ] **Step 1: Add required files to health check**
+- [x] **Step 1: Add required files to health check**
 
 Add these paths to `required_files` in `scripts/ci/check_repo.sh`:
 
@@ -3289,7 +3298,7 @@ Add these paths to `required_files` in `scripts/ci/check_repo.sh`:
   "migrations/0001_initial.sql"
 ```
 
-- [ ] **Step 2: Replace CI workflow**
+- [x] **Step 2: Replace CI workflow**
 
 Replace `.github/workflows/ci.yml` with:
 
@@ -3364,7 +3373,7 @@ jobs:
       - run: npm run build
 ```
 
-- [ ] **Step 3: Run local checks**
+- [x] **Step 3: Run local checks**
 
 ```bash
 bash scripts/ci/check_repo.sh
@@ -3376,7 +3385,7 @@ cd ../web-console && npm run build
 
 Expected: all PASS.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add .github/workflows/ci.yml scripts/ci/check_repo.sh
@@ -3390,7 +3399,7 @@ git commit -m "ci: check Rust Python and frontend stacks"
 **Files:**
 - Modify only if verification exposes a defect.
 
-- [ ] **Step 1: Run full local verification**
+- [x] **Step 1: Run full local verification**
 
 ```bash
 git status --short --branch
@@ -3404,13 +3413,13 @@ cd ../web-console && npm run build
 
 Expected: all PASS and worktree clean after committed changes.
 
-- [ ] **Step 2: Push branch**
+- [x] **Step 2: Push branch**
 
 ```bash
 git push origin main
 ```
 
-- [ ] **Step 3: Check GitHub Actions**
+- [x] **Step 3: Check GitHub Actions**
 
 ```bash
 gh run list --repo proerror77/nwfwa --limit 5
@@ -3418,7 +3427,7 @@ gh run list --repo proerror77/nwfwa --limit 5
 
 Expected: latest CI run is `completed success`.
 
-- [ ] **Step 4: Report evidence**
+- [x] **Step 4: Report evidence**
 
 Final response must include:
 
