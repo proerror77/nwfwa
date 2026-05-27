@@ -424,6 +424,10 @@ dependencies = [
 [[package]]
 name = "fwa-auth"
 version = "0.1.0"
+dependencies = [
+ "fwa-audit",
+ "thiserror",
+]
 
 [[package]]
 name = "fwa-connectors"
