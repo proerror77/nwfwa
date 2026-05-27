@@ -223,6 +223,46 @@ CREATE TABLE IF NOT EXISTS agent_steps (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS fwa_leads (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  lead_id TEXT NOT NULL UNIQUE,
+  run_id TEXT NOT NULL REFERENCES scoring_runs(run_id) ON DELETE CASCADE,
+  claim_id TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  source_system TEXT NOT NULL,
+  scheme_family TEXT NOT NULL,
+  lead_source TEXT NOT NULL,
+  status TEXT NOT NULL,
+  disposition TEXT NOT NULL,
+  risk_score INTEGER NOT NULL,
+  rag TEXT NOT NULL,
+  reason TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS investigation_cases (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  case_id TEXT NOT NULL UNIQUE,
+  lead_id TEXT NOT NULL REFERENCES fwa_leads(lead_id),
+  claim_id TEXT NOT NULL,
+  member_id TEXT NOT NULL,
+  provider_id TEXT NOT NULL,
+  source_system TEXT NOT NULL,
+  scheme_family TEXT NOT NULL,
+  lead_source TEXT NOT NULL,
+  status TEXT NOT NULL,
+  assignee TEXT NOT NULL,
+  reviewer TEXT NOT NULL,
+  priority TEXT NOT NULL,
+  routing_reason TEXT NOT NULL,
+  evidence_package_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS external_data_sources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   source_key TEXT NOT NULL UNIQUE,

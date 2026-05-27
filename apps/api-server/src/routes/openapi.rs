@@ -375,6 +375,70 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/leads": {
+                "get": {
+                    "summary": "List FWA leads generated from scoring signals",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Lead lifecycle records",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/LeadListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/leads/{lead_id}/triage": {
+                "post": {
+                    "summary": "Triage a lead into an investigation case",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "lead_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/TriageLeadRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Created or updated investigation case",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/TriageLeadResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/cases": {
+                "get": {
+                    "summary": "List FWA investigation cases",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Investigation case records",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/CaseListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/backtest": {
                 "post": {
                     "summary": "Backtest a candidate rule against sample claims",
@@ -1351,6 +1415,85 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
+                    }
+                },
+                "Lead": {
+                    "type": "object",
+                    "required": ["lead_id", "run_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "disposition", "risk_score", "rag", "reason", "evidence_refs"],
+                    "properties": {
+                        "lead_id": { "type": "string" },
+                        "run_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "member_id": { "type": "string" },
+                        "provider_id": { "type": "string" },
+                        "source_system": { "type": "string" },
+                        "scheme_family": { "type": "string" },
+                        "lead_source": { "type": "string" },
+                        "status": { "type": "string" },
+                        "disposition": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "rag": { "type": "string" },
+                        "reason": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "LeadListResponse": {
+                    "type": "object",
+                    "required": ["leads"],
+                    "properties": {
+                        "leads": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/Lead" }
+                        }
+                    }
+                },
+                "Case": {
+                    "type": "object",
+                    "required": ["case_id", "lead_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "assignee", "reviewer", "priority", "routing_reason", "evidence_package"],
+                    "properties": {
+                        "case_id": { "type": "string" },
+                        "lead_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "member_id": { "type": "string" },
+                        "provider_id": { "type": "string" },
+                        "source_system": { "type": "string" },
+                        "scheme_family": { "type": "string" },
+                        "lead_source": { "type": "string" },
+                        "status": { "type": "string" },
+                        "assignee": { "type": "string" },
+                        "reviewer": { "type": "string" },
+                        "priority": { "type": "string" },
+                        "routing_reason": { "type": "string" },
+                        "evidence_package": { "type": "object" }
+                    }
+                },
+                "CaseListResponse": {
+                    "type": "object",
+                    "required": ["cases"],
+                    "properties": {
+                        "cases": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/Case" }
+                        }
+                    }
+                },
+                "TriageLeadRequest": {
+                    "type": "object",
+                    "required": ["decision", "assignee", "reviewer", "priority", "notes"],
+                    "properties": {
+                        "decision": { "type": "string" },
+                        "assignee": { "type": "string" },
+                        "reviewer": { "type": "string" },
+                        "priority": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                },
+                "TriageLeadResponse": {
+                    "type": "object",
+                    "required": ["case", "audit_id"],
+                    "properties": {
+                        "case": { "$ref": "#/components/schemas/Case" },
+                        "audit_id": { "type": "string" }
                     }
                 },
                 "KnowledgeCase": {

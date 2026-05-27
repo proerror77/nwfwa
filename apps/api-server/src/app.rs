@@ -2,8 +2,8 @@ use crate::{
     config::AppConfig,
     repository::{InMemoryScoringRepository, SharedRepository},
     routes::{
-        agent, claims, dashboard, health, knowledge, openapi, ops_datasets, ops_models, ops_rules,
-        pilot_loop,
+        agent, claims, dashboard, health, knowledge, openapi, ops_cases, ops_datasets, ops_models,
+        ops_rules, pilot_loop,
     },
 };
 use axum::{
@@ -47,6 +47,12 @@ pub fn build_app_with_parts(
             "/api/v1/ops/dashboard/summary",
             get(dashboard::dashboard_summary),
         )
+        .route("/api/v1/ops/leads", get(ops_cases::list_leads))
+        .route(
+            "/api/v1/ops/leads/:lead_id/triage",
+            post(ops_cases::triage_lead),
+        )
+        .route("/api/v1/ops/cases", get(ops_cases::list_cases))
         .route(
             "/api/v1/agent/cases/investigate",
             post(agent::investigate_case),

@@ -1,14 +1,14 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use fwa_core::{
-    Claim, ClaimContext, ClaimId, ClaimItem, Member, MemberId, Money, Policy, PolicyId, Provider,
-    ProviderId, ProviderRiskTier, RecommendedAction,
+    AuditEventId, Claim, ClaimContext, ClaimId, ClaimItem, Member, MemberId, Money, Policy,
+    PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction,
 };
 use fwa_rules::{Condition, Rule, RuleAction};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{postgres::PgPoolOptions, PgPool};
+use sqlx::{postgres::PgPoolOptions, PgPool, Postgres, Transaction};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     sync::Arc,
@@ -96,6 +96,57 @@ pub struct RulePerformanceRecord {
     pub false_positive_rate: f64,
     pub saving_amount: String,
     pub roi: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LeadRecord {
+    pub lead_id: String,
+    pub run_id: String,
+    pub claim_id: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub source_system: String,
+    pub scheme_family: String,
+    pub lead_source: String,
+    pub status: String,
+    pub disposition: String,
+    pub risk_score: u8,
+    pub rag: String,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct CaseRecord {
+    pub case_id: String,
+    pub lead_id: String,
+    pub claim_id: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub source_system: String,
+    pub scheme_family: String,
+    pub lead_source: String,
+    pub status: String,
+    pub assignee: String,
+    pub reviewer: String,
+    pub priority: String,
+    pub routing_reason: String,
+    pub evidence_package: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriageLeadInput {
+    pub decision: String,
+    pub assignee: String,
+    pub reviewer: String,
+    pub priority: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TriageLeadRecord {
+    pub case: CaseRecord,
+    pub audit_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -423,6 +474,38 @@ struct ClaimContextRow {
 }
 
 type ClaimItemRow = (String, String, String, i32, Decimal, Decimal, String);
+type LeadRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    i32,
+    String,
+    String,
+    Value,
+);
+type CaseRow = (
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    String,
+    Value,
+);
 
 trait IntoClaimContext {
     fn into_context(self, items: Vec<ClaimItemRow>) -> ClaimContext;
@@ -543,6 +626,16 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>>;
 
+    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>>;
+
+    async fn triage_lead(
+        &self,
+        lead_id: &str,
+        input: TriageLeadInput,
+    ) -> anyhow::Result<Option<TriageLeadRecord>>;
+
+    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>>;
+
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
     async fn model_performance(
@@ -619,6 +712,8 @@ pub struct InMemoryScoringRepository {
     runs: Mutex<Vec<PersistedScoringRun>>,
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
+    leads: Mutex<HashMap<String, LeadRecord>>,
+    cases: Mutex<HashMap<String, CaseRecord>>,
     candidate_rules: Mutex<HashMap<String, RuleDetailRecord>>,
     rule_statuses: Mutex<HashMap<String, String>>,
     datasets: Mutex<HashMap<String, DatasetRecord>>,
@@ -660,6 +755,10 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()> {
+        let context = self.claims.lock().await.get(&run.claim_id).cloned();
+        if let Some(lead) = lead_from_scoring_run(&run, context.as_ref()) {
+            self.leads.lock().await.insert(lead.lead_id.clone(), lead);
+        }
         self.audit_events.lock().await.push(PersistedAuditEvent {
             audit_id: run.audit_id.clone(),
             run_id: run.run_id.clone(),
@@ -827,6 +926,72 @@ impl ScoringRepository for InMemoryScoringRepository {
             &outcomes,
             runs.len() as u32,
         ))
+    }
+
+    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>> {
+        let mut leads = self
+            .leads
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        leads.sort_by(|left, right| left.lead_id.cmp(&right.lead_id));
+        Ok(leads)
+    }
+
+    async fn triage_lead(
+        &self,
+        lead_id: &str,
+        input: TriageLeadInput,
+    ) -> anyhow::Result<Option<TriageLeadRecord>> {
+        let mut leads = self.leads.lock().await;
+        let Some(lead) = leads.get_mut(lead_id) else {
+            return Ok(None);
+        };
+        lead.status = "triaged".into();
+        lead.disposition = input.decision.clone();
+        let case = case_from_lead(lead, &input);
+        self.cases
+            .lock()
+            .await
+            .insert(case.case_id.clone(), case.clone());
+        let audit_id = AuditEventId::new().to_string();
+        self.audit_events.lock().await.push(PersistedAuditEvent {
+            audit_id: audit_id.clone(),
+            run_id: lead.run_id.clone(),
+            claim_id: lead.claim_id.clone(),
+            source_system: lead.source_system.clone(),
+            actor_id: input.assignee.clone(),
+            actor_role: "fwa_operator".into(),
+            event_type: "lead.triaged".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Lead triaged: {}", input.decision),
+            payload: serde_json::json!({
+                "lead_id": lead.lead_id.clone(),
+                "case_id": case.case_id.clone(),
+                "decision": input.decision.clone(),
+                "notes": input.notes.clone()
+            }),
+            evidence_refs: lead
+                .evidence_refs
+                .iter()
+                .map(|value| Value::String(value.clone()))
+                .collect(),
+        });
+        Ok(Some(TriageLeadRecord { case, audit_id }))
+    }
+
+    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
+        let mut cases = self
+            .cases
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
+        Ok(cases)
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
@@ -1477,6 +1642,52 @@ impl ScoringRepository for PostgresScoringRepository {
         .execute(&mut *tx)
         .await?;
 
+        if let Some(mut lead) = lead_from_scoring_run(&run, None) {
+            if let Some((member_id, provider_id)) = sqlx::query_as::<_, (String, String)>(
+                "SELECT m.external_member_id, pr.external_provider_id
+                 FROM claims c
+                 JOIN members m ON m.id = c.member_id
+                 JOIN providers pr ON pr.id = c.provider_id
+                 WHERE c.external_claim_id = $1",
+            )
+            .bind(&run.claim_id)
+            .fetch_optional(&mut *tx)
+            .await?
+            {
+                lead.member_id = member_id;
+                lead.provider_id = provider_id;
+            }
+            sqlx::query(
+                "INSERT INTO fwa_leads
+                 (lead_id, run_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                 ON CONFLICT (lead_id) DO UPDATE
+                 SET status = EXCLUDED.status,
+                     disposition = EXCLUDED.disposition,
+                     risk_score = EXCLUDED.risk_score,
+                     rag = EXCLUDED.rag,
+                     reason = EXCLUDED.reason,
+                     evidence_refs = EXCLUDED.evidence_refs,
+                     updated_at = now()",
+            )
+            .bind(&lead.lead_id)
+            .bind(&lead.run_id)
+            .bind(&lead.claim_id)
+            .bind(&lead.member_id)
+            .bind(&lead.provider_id)
+            .bind(&lead.source_system)
+            .bind(&lead.scheme_family)
+            .bind(&lead.lead_source)
+            .bind(&lead.status)
+            .bind(&lead.disposition)
+            .bind(lead.risk_score as i32)
+            .bind(&lead.rag)
+            .bind(&lead.reason)
+            .bind(serde_json::json!(lead.evidence_refs))
+            .execute(&mut *tx)
+            .await?;
+        }
+
         insert_audit_event(
             &mut tx,
             &PersistedAuditEvent {
@@ -1826,6 +2037,99 @@ impl ScoringRepository for PostgresScoringRepository {
             &outcomes,
             total_runs.0.max(0) as u32,
         ))
+    }
+
+    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>> {
+        load_leads(&self.pool).await
+    }
+
+    async fn triage_lead(
+        &self,
+        lead_id: &str,
+        input: TriageLeadInput,
+    ) -> anyhow::Result<Option<TriageLeadRecord>> {
+        let mut tx = self.pool.begin().await?;
+        let lead = load_lead_in_tx(&mut tx, lead_id).await?;
+        let Some(mut lead) = lead else {
+            return Ok(None);
+        };
+        lead.status = "triaged".into();
+        lead.disposition = input.decision.clone();
+        let case = case_from_lead(&lead, &input);
+        sqlx::query(
+            "UPDATE fwa_leads
+             SET status = $2, disposition = $3, updated_at = now()
+             WHERE lead_id = $1",
+        )
+        .bind(&lead.lead_id)
+        .bind(&lead.status)
+        .bind(&lead.disposition)
+        .execute(&mut *tx)
+        .await?;
+        sqlx::query(
+            "INSERT INTO investigation_cases
+             (case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             ON CONFLICT (case_id) DO UPDATE
+             SET status = EXCLUDED.status,
+                 assignee = EXCLUDED.assignee,
+                 reviewer = EXCLUDED.reviewer,
+                 priority = EXCLUDED.priority,
+                 routing_reason = EXCLUDED.routing_reason,
+                 evidence_package_json = EXCLUDED.evidence_package_json,
+                 updated_at = now()",
+        )
+        .bind(&case.case_id)
+        .bind(&case.lead_id)
+        .bind(&case.claim_id)
+        .bind(&case.member_id)
+        .bind(&case.provider_id)
+        .bind(&case.source_system)
+        .bind(&case.scheme_family)
+        .bind(&case.lead_source)
+        .bind(&case.status)
+        .bind(&case.assignee)
+        .bind(&case.reviewer)
+        .bind(&case.priority)
+        .bind(&case.routing_reason)
+        .bind(&case.evidence_package)
+        .execute(&mut *tx)
+        .await?;
+
+        let audit_id = AuditEventId::new().to_string();
+        insert_audit_event(
+            &mut tx,
+            &PersistedAuditEvent {
+                audit_id: audit_id.clone(),
+                run_id: lead.run_id.clone(),
+                claim_id: lead.claim_id.clone(),
+                source_system: lead.source_system.clone(),
+                actor_id: input.assignee.clone(),
+                actor_role: "fwa_operator".into(),
+                event_type: "lead.triaged".into(),
+                event_status: "succeeded".into(),
+                summary: format!("Lead triaged: {}", input.decision),
+                payload: serde_json::json!({
+                    "lead_id": lead.lead_id.clone(),
+                    "case_id": case.case_id.clone(),
+                    "decision": input.decision.clone(),
+                    "notes": input.notes.clone()
+                }),
+                evidence_refs: lead
+                    .evidence_refs
+                    .iter()
+                    .map(|value| Value::String(value.clone()))
+                    .collect(),
+            },
+            None,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(Some(TriageLeadRecord { case, audit_id }))
+    }
+
+    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
+        load_cases(&self.pool).await
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
@@ -2768,6 +3072,192 @@ fn decimal_from_json(value: &Value) -> Decimal {
         return Decimal::from_f64_retain(value).unwrap_or(Decimal::ZERO);
     }
     Decimal::ZERO
+}
+
+fn lead_from_scoring_run(
+    run: &PersistedScoringRun,
+    context: Option<&ClaimContext>,
+) -> Option<LeadRecord> {
+    if run.risk_score < 70 {
+        return None;
+    }
+    let evidence_refs = evidence_values_to_strings(&run.evidence_refs);
+    Some(LeadRecord {
+        lead_id: format!("lead_{}", run.claim_id),
+        run_id: run.run_id.clone(),
+        claim_id: run.claim_id.clone(),
+        member_id: context
+            .map(|context| context.member.external_member_id.clone())
+            .unwrap_or_default(),
+        provider_id: context
+            .map(|context| context.provider.external_provider_id.clone())
+            .unwrap_or_default(),
+        source_system: run.source_system.clone(),
+        scheme_family: scheme_family_from_rule_runs(&run.rule_runs),
+        lead_source: "scoring_run".into(),
+        status: "new".into(),
+        disposition: "pending_triage".into(),
+        risk_score: run.risk_score,
+        rag: run.rag.clone(),
+        reason: run.routing_reason.clone(),
+        evidence_refs,
+    })
+}
+
+fn scheme_family_from_rule_runs(rule_runs: &[Value]) -> String {
+    let alert_codes = rule_runs
+        .iter()
+        .filter_map(|run| run["alert_code"].as_str())
+        .collect::<Vec<_>>();
+    if alert_codes
+        .iter()
+        .any(|code| code.contains("DIAGNOSIS") || code.contains("MEDICAL"))
+    {
+        "diagnosis_procedure_mismatch".into()
+    } else if alert_codes.iter().any(|code| code.contains("PROVIDER")) {
+        "provider_peer_outlier".into()
+    } else if alert_codes
+        .iter()
+        .any(|code| code.contains("EARLY") || code.contains("LIMIT"))
+    {
+        "early_high_value_claim".into()
+    } else {
+        "high_risk_claim".into()
+    }
+}
+
+fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
+    CaseRecord {
+        case_id: format!("case_{}", lead.claim_id),
+        lead_id: lead.lead_id.clone(),
+        claim_id: lead.claim_id.clone(),
+        member_id: lead.member_id.clone(),
+        provider_id: lead.provider_id.clone(),
+        source_system: lead.source_system.clone(),
+        scheme_family: lead.scheme_family.clone(),
+        lead_source: lead.lead_source.clone(),
+        status: "triage".into(),
+        assignee: input.assignee.clone(),
+        reviewer: input.reviewer.clone(),
+        priority: input.priority.clone(),
+        routing_reason: lead.reason.clone(),
+        evidence_package: serde_json::json!({
+            "lead_id": lead.lead_id.clone(),
+            "claim_id": lead.claim_id.clone(),
+            "risk_score": lead.risk_score,
+            "rag": lead.rag.clone(),
+            "reason": lead.reason.clone(),
+            "triage_notes": input.notes.clone(),
+            "evidence_refs": lead.evidence_refs.clone()
+        }),
+    }
+}
+
+async fn load_leads(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
+    let rows: Vec<LeadRow> = sqlx::query_as(
+        "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
+         FROM fwa_leads
+         ORDER BY created_at, lead_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(lead_from_row).collect())
+}
+
+async fn load_lead_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    lead_id: &str,
+) -> anyhow::Result<Option<LeadRecord>> {
+    let row: Option<LeadRow> = sqlx::query_as(
+        "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
+         FROM fwa_leads
+         WHERE lead_id = $1",
+    )
+    .bind(lead_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(lead_from_row))
+}
+
+fn lead_from_row(row: LeadRow) -> LeadRecord {
+    let (
+        lead_id,
+        run_id,
+        claim_id,
+        member_id,
+        provider_id,
+        source_system,
+        scheme_family,
+        lead_source,
+        status,
+        disposition,
+        risk_score,
+        rag,
+        reason,
+        evidence_refs,
+    ) = row;
+    LeadRecord {
+        lead_id,
+        run_id,
+        claim_id,
+        member_id,
+        provider_id,
+        source_system,
+        scheme_family,
+        lead_source,
+        status,
+        disposition,
+        risk_score: risk_score.clamp(0, 100) as u8,
+        rag,
+        reason,
+        evidence_refs: json_array_to_strings(evidence_refs),
+    }
+}
+
+async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
+    let rows: Vec<CaseRow> = sqlx::query_as(
+        "SELECT case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json
+         FROM investigation_cases
+         ORDER BY created_at, case_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows
+        .into_iter()
+        .map(
+            |(
+                case_id,
+                lead_id,
+                claim_id,
+                member_id,
+                provider_id,
+                source_system,
+                scheme_family,
+                lead_source,
+                status,
+                assignee,
+                reviewer,
+                priority,
+                routing_reason,
+                evidence_package,
+            )| CaseRecord {
+                case_id,
+                lead_id,
+                claim_id,
+                member_id,
+                provider_id,
+                source_system,
+                scheme_family,
+                lead_source,
+                status,
+                assignee,
+                reviewer,
+                priority,
+                routing_reason,
+                evidence_package,
+            },
+        )
+        .collect())
 }
 
 pub fn default_runtime_rules() -> Vec<Rule> {
