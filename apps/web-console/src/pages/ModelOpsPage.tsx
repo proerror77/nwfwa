@@ -1,6 +1,10 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getModelPerformance, listModels } from "../api";
+import { getModelPerformance, listModelEvaluations, listModels } from "../api";
+import {
+  buildModelPromotionGateSummary,
+  type PromotionModelEvaluation,
+} from "./modelPromotionGates";
 
 type ModelVersion = {
   model_key: string;
@@ -10,6 +14,13 @@ type ModelVersion = {
   execution_provider: string;
   status: string;
   endpoint_url: string | null;
+};
+
+type ModelEvaluationRecord = PromotionModelEvaluation & {
+  ks: string | null;
+  f1: string | null;
+  accuracy: string | null;
+  confusion_matrix_json?: Record<string, unknown>;
 };
 
 export function ModelOpsPage() {
@@ -30,6 +41,16 @@ export function ModelOpsPage() {
     queryFn: () => getModelPerformance(selectedModel!.model_key, apiKey),
     enabled: Boolean(selectedModel?.model_key),
   });
+  const evaluationsQuery = useQuery({
+    queryKey: ["model-evaluations", apiKey],
+    queryFn: () =>
+      listModelEvaluations(apiKey) as Promise<{ evaluations: ModelEvaluationRecord[] }>,
+  });
+  const promotionSummary = buildModelPromotionGateSummary(
+    selectedModel,
+    performanceQuery.data,
+    evaluationsQuery.data?.evaluations ?? [],
+  );
 
   return (
     <section className="ops-grid">
@@ -116,6 +137,48 @@ export function ModelOpsPage() {
         ) : (
           <p className="empty">No performance data loaded</p>
         )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Promotion Gates</h2>
+        {evaluationsQuery.error ? (
+          <pre className="error">{String(evaluationsQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Routing Decision</span>
+            <strong>{promotionSummary.decision}</strong>
+          </div>
+          <div>
+            <span>Gates Passed</span>
+            <strong>
+              {promotionSummary.passedCount}/{promotionSummary.totalCount}
+            </strong>
+          </div>
+          <div>
+            <span>Latest Evaluation</span>
+            <strong>{promotionSummary.latestEvaluationId}</strong>
+          </div>
+          <div>
+            <span>Runtime Data</span>
+            <strong>{promotionSummary.dataStatus}</strong>
+          </div>
+          <div>
+            <span>Scored Runs</span>
+            <strong>{promotionSummary.scoredRuns}</strong>
+          </div>
+          <div>
+            <span>Blockers</span>
+            <strong>{promotionSummary.blockers.length}</strong>
+          </div>
+        </div>
+        <div className="table-list">
+          {promotionSummary.gates.map((gate) => (
+            <div className="metric-row compact-metric-row" key={gate.label}>
+              <span>{gate.label}</span>
+              <strong>{gate.passed ? "passed" : gate.blocker}</strong>
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
