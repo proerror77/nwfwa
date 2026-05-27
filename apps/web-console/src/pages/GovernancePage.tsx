@@ -25,10 +25,19 @@ type AgentRunLog = {
   decision_boundary: string;
   evidence_refs: string[];
   steps: Array<Record<string, unknown>>;
+  context_snapshots: AgentContextSnapshot[];
   tool_calls: AgentToolCall[];
   tool_results: AgentToolResult[];
   created_at?: string | null;
   completed_at?: string | null;
+};
+
+type AgentContextSnapshot = {
+  snapshot_id: string;
+  redaction_status: string;
+  context_json: Record<string, unknown>;
+  source_refs: string[];
+  checksum: string;
 };
 
 type AgentToolCall = {
@@ -63,10 +72,15 @@ export function buildAuditSummary(data?: ClaimAuditHistoryResponse) {
 }
 
 export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
+  const contextSnapshots = runs.flatMap((run) => run.context_snapshots ?? []);
   const toolCalls = runs.flatMap((run) => run.tool_calls ?? []);
   const toolResults = runs.flatMap((run) => run.tool_results ?? []);
   return {
     runCount: runs.length,
+    contextSnapshotCount: contextSnapshots.length,
+    piiMaskedContextCount: contextSnapshots.filter(
+      (snapshot) => snapshot.redaction_status === "pii_masked",
+    ).length,
     toolCallCount: toolCalls.length,
     toolResultCount: toolResults.length,
     failedToolCallCount: toolCalls.filter((call) => call.status === "failed").length,
@@ -125,6 +139,10 @@ export function GovernancePage() {
             <span>Tool Calls</span>
             <strong>{agentSummary.toolCallCount}</strong>
           </div>
+          <div>
+            <span>Contexts</span>
+            <strong>{agentSummary.contextSnapshotCount}</strong>
+          </div>
         </div>
         {auditQuery.error ? <pre className="error">{String(auditQuery.error.message)}</pre> : null}
         {agentRunsQuery.error ? (
@@ -172,6 +190,22 @@ export function GovernancePage() {
                 <p>
                   {run.tool_calls.length} tool calls / {run.tool_results.length} tool results
                 </p>
+                <p>
+                  {run.context_snapshots.length} context snapshots /{" "}
+                  {
+                    run.context_snapshots.filter(
+                      (snapshot) => snapshot.redaction_status === "pii_masked",
+                    ).length
+                  }{" "}
+                  masked
+                </p>
+                <ul className="result-list">
+                  {run.context_snapshots.map((snapshot) => (
+                    <li key={snapshot.snapshot_id}>
+                      {snapshot.redaction_status}: {snapshot.checksum}
+                    </li>
+                  ))}
+                </ul>
                 <ul className="result-list">
                   {run.tool_calls.map((call) => (
                     <li key={call.tool_call_id}>

@@ -223,6 +223,17 @@ CREATE TABLE IF NOT EXISTS agent_steps (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS agent_context_snapshots (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  snapshot_id TEXT NOT NULL UNIQUE,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  redaction_status TEXT NOT NULL,
+  context_json JSONB NOT NULL,
+  source_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  checksum TEXT NOT NULL,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS tool_calls (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   tool_call_id TEXT NOT NULL UNIQUE,

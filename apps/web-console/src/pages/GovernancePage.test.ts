@@ -46,6 +46,15 @@ describe("buildAgentRunLogSummary", () => {
         decision_boundary: "assistive_only",
         evidence_refs: ["agent_run:agent_1"],
         steps: [{ step_name: "evidence_finding" }],
+        context_snapshots: [
+          {
+            snapshot_id: "snapshot_1",
+            redaction_status: "pii_masked",
+            context_json: { claim_id: "CLM-1" },
+            source_refs: ["claims:CLM-1"],
+            checksum: "snapshot:abc123",
+          },
+        ],
         tool_calls: [
           {
             tool_call_id: "tool_call_1",
@@ -70,6 +79,8 @@ describe("buildAgentRunLogSummary", () => {
 
     expect(summary).toEqual({
       runCount: 1,
+      contextSnapshotCount: 1,
+      piiMaskedContextCount: 1,
       toolCallCount: 1,
       toolResultCount: 1,
       failedToolCallCount: 0,

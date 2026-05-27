@@ -2172,7 +2172,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AgentRunLogRecord": {
                     "type": "object",
-                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "tool_calls", "tool_results"],
+                    "required": ["agent_run_id", "claim_id", "status", "decision_boundary", "output_json", "evidence_refs", "steps", "context_snapshots", "tool_calls", "tool_results"],
                     "properties": {
                         "agent_run_id": { "type": "string" },
                         "claim_id": { "type": "string" },
@@ -2181,6 +2181,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "output_json": { "type": "object" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "steps": { "type": "array", "items": { "type": "object" } },
+                        "context_snapshots": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AgentContextSnapshotRecord" }
+                        },
                         "tool_calls": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/AgentToolCallRecord" }
@@ -2191,6 +2195,17 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "created_at": { "type": ["string", "null"] },
                         "completed_at": { "type": ["string", "null"] }
+                    }
+                },
+                "AgentContextSnapshotRecord": {
+                    "type": "object",
+                    "required": ["snapshot_id", "redaction_status", "context_json", "source_refs", "checksum"],
+                    "properties": {
+                        "snapshot_id": { "type": "string" },
+                        "redaction_status": { "type": "string" },
+                        "context_json": { "type": "object" },
+                        "source_refs": { "type": "array", "items": { "type": "string" } },
+                        "checksum": { "type": "string" }
                     }
                 },
                 "AgentToolCallRecord": {

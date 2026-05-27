@@ -114,6 +114,12 @@ async fn openapi_includes_operations_paths() {
             ["type"],
         "object"
     );
+    assert!(schema["components"]["schemas"]["AgentContextSnapshotRecord"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["context_snapshots"]
+            ["items"]["$ref"],
+        "#/components/schemas/AgentContextSnapshotRecord"
+    );
     assert!(schema["components"]["schemas"]["AgentToolCallRecord"].is_object());
     assert!(schema["components"]["schemas"]["AgentToolResultRecord"].is_object());
     assert_eq!(

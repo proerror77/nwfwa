@@ -322,6 +322,7 @@ pub struct PersistedAgentRun {
     pub output_json: Value,
     pub evidence_refs: Vec<Value>,
     pub steps: Vec<Value>,
+    pub context_snapshots: Vec<AgentContextSnapshotRecord>,
     pub tool_calls: Vec<AgentToolCallRecord>,
     pub tool_results: Vec<AgentToolResultRecord>,
 }
@@ -335,10 +336,20 @@ pub struct AgentRunLogRecord {
     pub output_json: Value,
     pub evidence_refs: Vec<String>,
     pub steps: Vec<Value>,
+    pub context_snapshots: Vec<AgentContextSnapshotRecord>,
     pub tool_calls: Vec<AgentToolCallRecord>,
     pub tool_results: Vec<AgentToolResultRecord>,
     pub created_at: Option<String>,
     pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AgentContextSnapshotRecord {
+    pub snapshot_id: String,
+    pub redaction_status: String,
+    pub context_json: Value,
+    pub source_refs: Vec<String>,
+    pub checksum: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1823,6 +1834,35 @@ impl PostgresScoringRepository {
             .collect())
     }
 
+    async fn load_agent_context_snapshots(
+        &self,
+        agent_run_id: &str,
+    ) -> anyhow::Result<Vec<AgentContextSnapshotRecord>> {
+        let rows: Vec<(String, String, Value, Value, String)> = sqlx::query_as(
+            "SELECT snapshot_id, redaction_status, context_json, source_refs, checksum
+             FROM agent_context_snapshots
+             WHERE agent_run_id = $1
+             ORDER BY created_at, id",
+        )
+        .bind(agent_run_id)
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(snapshot_id, redaction_status, context_json, source_refs, checksum)| {
+                    AgentContextSnapshotRecord {
+                        snapshot_id,
+                        redaction_status,
+                        context_json,
+                        source_refs: json_array_to_strings(source_refs),
+                        checksum,
+                    }
+                },
+            )
+            .collect())
+    }
+
     async fn load_agent_tool_results(
         &self,
         agent_run_id: &str,
@@ -3252,6 +3292,10 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&run.agent_run_id)
             .execute(&mut *tx)
             .await?;
+        sqlx::query("DELETE FROM agent_context_snapshots WHERE agent_run_id = $1")
+            .bind(&run.agent_run_id)
+            .execute(&mut *tx)
+            .await?;
         sqlx::query("DELETE FROM tool_results WHERE agent_run_id = $1")
             .bind(&run.agent_run_id)
             .execute(&mut *tx)
@@ -3271,6 +3315,21 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(step["step_name"].as_str().unwrap_or("investigate"))
             .bind(step)
             .bind(step["evidence_refs"].clone())
+            .execute(&mut *tx)
+            .await?;
+        }
+        for snapshot in &run.context_snapshots {
+            sqlx::query(
+                "INSERT INTO agent_context_snapshots
+                 (snapshot_id, agent_run_id, redaction_status, context_json, source_refs, checksum)
+                 VALUES ($1, $2, $3, $4, $5, $6)",
+            )
+            .bind(&snapshot.snapshot_id)
+            .bind(&run.agent_run_id)
+            .bind(&snapshot.redaction_status)
+            .bind(&snapshot.context_json)
+            .bind(string_values(&snapshot.source_refs))
+            .bind(&snapshot.checksum)
             .execute(&mut *tx)
             .await?;
         }
@@ -3349,6 +3408,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&agent_run_id)
             .fetch_all(&self.pool)
             .await?;
+            let context_snapshots = self.load_agent_context_snapshots(&agent_run_id).await?;
             let tool_calls = self.load_agent_tool_calls(&agent_run_id).await?;
             let tool_results = self.load_agent_tool_results(&agent_run_id).await?;
             runs.push(AgentRunLogRecord {
@@ -3359,6 +3419,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 output_json,
                 evidence_refs: json_array_to_strings(evidence_refs),
                 steps: steps.into_iter().map(|row| row.0).collect(),
+                context_snapshots,
                 tool_calls,
                 tool_results,
                 created_at: Some(created_at.to_rfc3339()),
@@ -4852,6 +4913,7 @@ fn agent_run_log_from_persisted(run: &PersistedAgentRun) -> AgentRunLogRecord {
         output_json: run.output_json.clone(),
         evidence_refs: evidence_values_to_strings(&run.evidence_refs),
         steps: run.steps.clone(),
+        context_snapshots: run.context_snapshots.clone(),
         tool_calls: run.tool_calls.clone(),
         tool_results: run.tool_results.clone(),
         created_at: None,

@@ -232,6 +232,21 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert_eq!(run["status"], "succeeded");
     assert_eq!(run["decision_boundary"], "assistive_only");
     assert!(!run["steps"].as_array().unwrap().is_empty());
+    let context_snapshot = run["context_snapshots"]
+        .as_array()
+        .unwrap()
+        .first()
+        .expect("agent context snapshot should be audited");
+    assert_eq!(context_snapshot["redaction_status"], "pii_masked");
+    assert!(context_snapshot["checksum"]
+        .as_str()
+        .unwrap()
+        .starts_with("snapshot:"));
+    assert!(context_snapshot["context_json"]["claim_id"].is_string());
+    assert!(!context_snapshot["source_refs"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     let tool_call = run["tool_calls"]
         .as_array()
         .unwrap()

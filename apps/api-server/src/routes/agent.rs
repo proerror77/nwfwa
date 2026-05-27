@@ -2,8 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AgentToolCallRecord, AgentToolResultRecord, PersistedAgentRun, PersistedAuditEvent,
-        SimilarCaseQuery,
+        AgentContextSnapshotRecord, AgentToolCallRecord, AgentToolResultRecord, PersistedAgentRun,
+        PersistedAuditEvent, SimilarCaseQuery,
     },
 };
 use axum::{
@@ -15,6 +15,7 @@ use fwa_agent::{DeterministicInvestigator, InvestigationRequest, SimilarCaseInpu
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::hash::{Hash, Hasher};
 
 #[derive(Debug, Deserialize)]
 pub struct AgentInvestigationRequest {
@@ -81,6 +82,22 @@ pub async fn investigate_case(
         .iter()
         .flat_map(|case| case.evidence_refs.iter().cloned())
         .collect::<Vec<_>>();
+    let context_json = serde_json::json!({
+        "claim_id": request.claim_id,
+        "risk_score": request.risk_score,
+        "rag": request.rag.clone(),
+        "top_reasons": request.top_reasons.clone(),
+        "similar_case_query": {
+            "diagnosis_code": request.similar_case_query.diagnosis_code.clone(),
+            "provider_region": request.similar_case_query.provider_region.clone(),
+            "tags": request.similar_case_query.tags.clone(),
+        }
+    });
+    let context_source_refs = vec![
+        format!("claims:{}", request.claim_id),
+        format!("risk_summary:{}", request.claim_id),
+        format!("knowledge_query:{}", request.claim_id),
+    ];
 
     let package = DeterministicInvestigator.investigate(InvestigationRequest {
         claim_id: request.claim_id.clone(),
@@ -123,6 +140,13 @@ pub async fn investigate_case(
             output_json: output_json.clone(),
             evidence_refs: evidence_refs.clone(),
             steps,
+            context_snapshots: vec![AgentContextSnapshotRecord {
+                snapshot_id: format!("snapshot_{}", package.agent_run_id),
+                redaction_status: "pii_masked".into(),
+                checksum: context_checksum(&context_json),
+                context_json,
+                source_refs: context_source_refs,
+            }],
             tool_calls: vec![AgentToolCallRecord {
                 tool_call_id: tool_call_id.clone(),
                 tool_name: "knowledge.search_similar".into(),
@@ -177,6 +201,12 @@ pub async fn investigate_case(
         qa_opinion_draft: package.qa_opinion_draft,
         evidence_refs: package.evidence_refs,
     }))
+}
+
+fn context_checksum(context_json: &Value) -> String {
+    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    context_json.to_string().hash(&mut hasher);
+    format!("snapshot:{:016x}", hasher.finish())
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
