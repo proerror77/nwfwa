@@ -441,6 +441,8 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         evaluation_run_id: &str,
     ) -> anyhow::Result<Option<ModelEvaluationRecord>>;
+
+    async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -819,6 +821,18 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .get(evaluation_run_id)
             .cloned())
+    }
+
+    async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
+        let mut evaluations = self
+            .model_evaluations
+            .lock()
+            .await
+            .values()
+            .cloned()
+            .collect::<Vec<_>>();
+        evaluations.sort_by(|left, right| left.evaluation_run_id.cmp(&right.evaluation_run_id));
+        Ok(evaluations)
     }
 }
 
@@ -1874,6 +1888,68 @@ impl ScoringRepository for PostgresScoringRepository {
                 metrics_json,
             },
         ))
+    }
+
+    async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>> {
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Option<Decimal>,
+            Value,
+            Option<String>,
+            Value,
+        )> = sqlx::query_as(
+            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
+             FROM model_evaluation_runs
+             ORDER BY evaluation_run_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    evaluation_run_id,
+                    model_key,
+                    model_version,
+                    model_dataset_id,
+                    auc,
+                    ks,
+                    precision,
+                    recall,
+                    f1,
+                    accuracy,
+                    threshold,
+                    confusion_matrix_json,
+                    feature_importance_uri,
+                    metrics_json,
+                )| ModelEvaluationRecord {
+                    evaluation_run_id,
+                    model_key,
+                    model_version,
+                    model_dataset_id,
+                    auc,
+                    ks,
+                    precision,
+                    recall,
+                    f1,
+                    accuracy,
+                    threshold,
+                    confusion_matrix_json,
+                    feature_importance_uri,
+                    metrics_json,
+                },
+            )
+            .collect())
     }
 }
 

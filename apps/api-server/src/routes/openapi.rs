@@ -281,6 +281,15 @@ pub async fn openapi_schema() -> Json<Value> {
                 }
             },
             "/api/v1/ops/model-evaluations": {
+                "get": {
+                    "summary": "List model evaluation metrics",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Model evaluation metric list"
+                        }
+                    }
+                },
                 "post": {
                     "summary": "Register model evaluation metrics for a model dataset",
                     "security": [{ "ApiKeyAuth": [] }],

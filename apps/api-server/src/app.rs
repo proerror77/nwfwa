@@ -85,7 +85,7 @@ pub fn build_app_with_parts(
         )
         .route(
             "/api/v1/ops/model-evaluations",
-            post(ops_datasets::register_model_evaluation),
+            get(ops_datasets::list_model_evaluations).post(ops_datasets::register_model_evaluation),
         )
         .route(
             "/api/v1/ops/model-evaluations/:evaluation_run_id",

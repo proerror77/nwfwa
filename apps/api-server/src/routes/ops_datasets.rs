@@ -30,6 +30,11 @@ pub struct ModelEvaluationResponse {
     pub evaluation: ModelEvaluationRecord,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ModelEvaluationListResponse {
+    pub evaluations: Vec<ModelEvaluationRecord>,
+}
+
 pub async fn register_dataset(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -189,6 +194,19 @@ pub async fn get_model_evaluation(
             )
         })?;
     Ok(Json(ModelEvaluationResponse { evaluation }))
+}
+
+pub async fn list_model_evaluations(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<ModelEvaluationListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let evaluations = state
+        .repository
+        .list_model_evaluations()
+        .await
+        .map_err(internal_error("MODEL_EVALUATION_LIST_FAILED"))?;
+    Ok(Json(ModelEvaluationListResponse { evaluations }))
 }
 
 fn validate_parquet_dataset(storage_format: &str) -> Result<(), ApiError> {
