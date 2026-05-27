@@ -275,6 +275,30 @@ pre {
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
+.factor-card-grid {
+  display: grid;
+  gap: 12px;
+}
+
+.factor-card {
+  display: grid;
+  gap: 12px;
+  border: 1px solid #d8dde4;
+  border-radius: 8px;
+  padding: 14px;
+  background: #fbfcfe;
+}
+
+.factor-card > div:first-child span,
+.factor-card small {
+  display: block;
+  color: #5f6b7a;
+}
+
+.factor-card p {
+  margin: 0;
+}
+
 .metric-row span,
 .metric-row strong {
   overflow-wrap: anywhere;
