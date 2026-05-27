@@ -157,6 +157,18 @@ async fn scores_spec_style_top_level_full_payload() {
         .as_str()
         .unwrap()
         .contains("医务复核"));
+    let layers = body["layers"]
+        .as_array()
+        .expect("response should include layers");
+    assert_eq!(layers.len(), 7);
+    assert_eq!(layers[0]["layer_id"], "L1_PEER_BENCHMARK");
+    assert_eq!(layers[1]["layer_id"], "L2_RULE_DETECTION");
+    assert_eq!(layers[2]["layer_id"], "L3_UNSUPERVISED_ANOMALY");
+    assert_eq!(layers[3]["layer_id"], "L4_SUPERVISED_ML");
+    assert_eq!(layers[4]["layer_id"], "L5_MEDICAL_REASONABLENESS");
+    assert_eq!(layers[5]["layer_id"], "L6_PROVIDER_GRAPH_RISK");
+    assert_eq!(layers[6]["layer_id"], "L7_RISK_FUSION_ROUTING");
+    assert_eq!(layers[6]["score"], body["scores"]["final_score"]);
 
     let audit_request = Request::builder()
         .method("GET")
@@ -183,6 +195,7 @@ async fn scores_spec_style_top_level_full_payload() {
         scoring_event["payload"]["scores"]["final_score"],
         body["scores"]["final_score"]
     );
+    assert_eq!(scoring_event["payload"]["layers"][6], body["layers"][6]);
     assert!(scoring_event["payload"]["routing_reason"]
         .as_str()
         .unwrap()
@@ -606,6 +619,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "evidence_refs",
         "clinical_evidence",
         "provider_profile",
+        "layers",
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");
     }

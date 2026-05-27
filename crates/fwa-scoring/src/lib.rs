@@ -6,6 +6,15 @@ use fwa_rules::RuleMatch;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct DetectionLayerScore {
+    pub layer_id: String,
+    pub name: String,
+    pub score: u8,
+    pub status: String,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScoringDecision {
     pub risk_score: RiskScore,
     pub rag: RiskLevel,
@@ -21,6 +30,7 @@ pub struct ScoringDecision {
     pub medical_reasonableness_score: u8,
     pub provider_network_score: u8,
     pub similar_case_score: u8,
+    pub layers: Vec<DetectionLayerScore>,
     pub top_reasons: Vec<String>,
 }
 
@@ -54,6 +64,57 @@ pub fn aggregate(
     let confidence = confidence_level(confidence_score).to_string();
     let recommended_action = recommended_action(&risk_level, confidence_score);
     let routing_reason = routing_reason(&risk_level, confidence_score).to_string();
+    let layers = vec![
+        layer(
+            "L1_PEER_BENCHMARK",
+            "Peer Benchmark",
+            peer_deviation_score,
+            "active",
+            "统计偏离检测：同类金额、频次或费用结构偏离",
+        ),
+        layer(
+            "L2_RULE_DETECTION",
+            "Rule Detection",
+            rule_score,
+            "active",
+            "规则命中检测：确定性业务规则和规则版本贡献",
+        ),
+        layer(
+            "L3_UNSUPERVISED_ANOMALY",
+            "Unsupervised Anomaly",
+            anomaly_score.score,
+            "baseline",
+            "无监督异常检测：当前使用可解释启发式异常信号",
+        ),
+        layer(
+            "L4_SUPERVISED_ML",
+            "Supervised ML",
+            model_score.score,
+            "active",
+            "监督式 ML 分类：模型运行时返回的风险分",
+        ),
+        layer(
+            "L5_MEDICAL_REASONABLENESS",
+            "Medical Reasonableness",
+            medical_reasonableness_score,
+            "baseline",
+            "医疗合理性检测：诊断、项目和证据支持度",
+        ),
+        layer(
+            "L6_PROVIDER_GRAPH_RISK",
+            "Provider / Graph Risk",
+            provider_network_score,
+            "baseline",
+            "Provider / 图谱风险：Provider 画像和关系风险基线",
+        ),
+        layer(
+            "L7_RISK_FUSION_ROUTING",
+            "Risk Fusion & Routing",
+            risk_score.value(),
+            "active",
+            &routing_reason,
+        ),
+    ];
     let mut top_reasons: Vec<String> = rule_matches
         .iter()
         .map(|rule_match| rule_match.reason.clone())
@@ -96,7 +157,18 @@ pub fn aggregate(
         medical_reasonableness_score,
         provider_network_score,
         similar_case_score,
+        layers,
         top_reasons,
+    }
+}
+
+fn layer(layer_id: &str, name: &str, score: u8, status: &str, reason: &str) -> DetectionLayerScore {
+    DetectionLayerScore {
+        layer_id: layer_id.into(),
+        name: name.into(),
+        score,
+        status: status.into(),
+        reason: reason.into(),
     }
 }
 
@@ -326,6 +398,26 @@ mod tests {
         assert_eq!(decision.medical_reasonableness_score, 90);
         assert_eq!(decision.provider_network_score, 80);
         assert_eq!(decision.similar_case_score, 0);
+        let layer_ids = decision
+            .layers
+            .iter()
+            .map(|layer| layer.layer_id.as_str())
+            .collect::<Vec<_>>();
+        assert_eq!(
+            layer_ids,
+            vec![
+                "L1_PEER_BENCHMARK",
+                "L2_RULE_DETECTION",
+                "L3_UNSUPERVISED_ANOMALY",
+                "L4_SUPERVISED_ML",
+                "L5_MEDICAL_REASONABLENESS",
+                "L6_PROVIDER_GRAPH_RISK",
+                "L7_RISK_FUSION_ROUTING",
+            ]
+        );
+        assert_eq!(decision.layers[0].score, 95);
+        assert_eq!(decision.layers[6].score, decision.risk_score.value());
+        assert_eq!(decision.layers[6].status, "active");
         assert_eq!(decision.risk_score.value(), 85);
         assert_eq!(decision.rag, RiskLevel::Red);
         assert_eq!(decision.risk_level, "Critical");

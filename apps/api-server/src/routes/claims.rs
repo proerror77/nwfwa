@@ -18,6 +18,7 @@ use fwa_provider::{
     assess_provider_profile, ProviderProfileAssessment, ProviderProfileInput, ProviderProfileWindow,
 };
 use fwa_rules::evaluate_rules;
+use fwa_scoring::DetectionLayerScore;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -128,6 +129,7 @@ pub struct ScoreClaimResponse {
     pub scores: ScoreBreakdown,
     pub alerts: Vec<AlertResponse>,
     pub top_reasons: Vec<String>,
+    pub layers: Vec<DetectionLayerScore>,
     pub clinical_evidence: ClinicalEvidenceAssessment,
     pub provider_profile: ProviderProfileAssessment,
     pub evidence_refs: Vec<serde_json::Value>,
@@ -353,6 +355,7 @@ pub async fn score_claim(
         "routing_reason": &decision.routing_reason,
         "scores": &scores,
         "top_reasons": &decision.top_reasons,
+        "layers": &decision.layers,
         "clinical_evidence": &clinical_evidence,
         "provider_profile": &provider_profile,
         "triggered_rules": &alerts,
@@ -410,6 +413,7 @@ pub async fn score_claim(
         scores,
         alerts,
         top_reasons: decision.top_reasons,
+        layers: decision.layers,
         clinical_evidence,
         provider_profile,
         evidence_refs,

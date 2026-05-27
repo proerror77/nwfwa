@@ -1154,6 +1154,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "scores",
                         "alerts",
                         "top_reasons",
+                        "layers",
                         "clinical_evidence",
                         "provider_profile",
                         "evidence_refs"
@@ -1212,6 +1213,12 @@ pub async fn openapi_schema() -> Json<Value> {
                                 "type": "string"
                             }
                         },
+                        "layers": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/components/schemas/DetectionLayerScore"
+                            }
+                        },
                         "clinical_evidence": {
                             "$ref": "#/components/schemas/ClinicalEvidenceAssessment"
                         },
@@ -1227,6 +1234,35 @@ pub async fn openapi_schema() -> Json<Value> {
                                 ]
                             }
                         }
+                    }
+                },
+                "DetectionLayerScore": {
+                    "type": "object",
+                    "required": ["layer_id", "name", "score", "status", "reason"],
+                    "properties": {
+                        "layer_id": {
+                            "type": "string",
+                            "enum": [
+                                "L1_PEER_BENCHMARK",
+                                "L2_RULE_DETECTION",
+                                "L3_UNSUPERVISED_ANOMALY",
+                                "L4_SUPERVISED_ML",
+                                "L5_MEDICAL_REASONABLENESS",
+                                "L6_PROVIDER_GRAPH_RISK",
+                                "L7_RISK_FUSION_ROUTING"
+                            ]
+                        },
+                        "name": { "type": "string" },
+                        "score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["active", "baseline", "no_data"]
+                        },
+                        "reason": { "type": "string" }
                     }
                 },
                 "ProviderProfileAssessment": {
