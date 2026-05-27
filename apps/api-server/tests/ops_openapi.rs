@@ -107,6 +107,15 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["components"]["schemas"]["LeadListResponse"].is_object());
     assert!(schema["components"]["schemas"]["CaseListResponse"].is_object());
     assert!(schema["components"]["schemas"]["AuditSampleRecord"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
+        "string"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SimilarCase"]["properties"]["provenance_refs"]["items"]
+            ["type"],
+        "string"
+    );
     assert!(schema["components"]["schemas"]["DashboardLayerScore"].is_object());
     assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]

@@ -306,6 +306,8 @@ pub struct SimilarCaseRecord {
     pub title: String,
     pub similarity_score: f64,
     pub matched_signals: Vec<String>,
+    pub retrieval_method: String,
+    pub provenance_refs: Vec<String>,
     pub summary: String,
     pub outcome: String,
     pub evidence_refs: Vec<String>,
@@ -4597,11 +4599,26 @@ fn search_cases(
             if score <= 0.0 {
                 None
             } else {
+                let mut provenance_refs = vec![
+                    format!("knowledge_cases:{}", case.case_id),
+                    "retrieval:structured_signal_overlap".into(),
+                ];
+                if let Some(claim_id) = &query.claim_id {
+                    provenance_refs.push(format!("query_claim:{claim_id}"));
+                }
+                provenance_refs.extend(
+                    matched_signals
+                        .iter()
+                        .map(|signal| format!("matched_signal:{signal}")),
+                );
+
                 Some(SimilarCaseRecord {
                     case_id: case.case_id,
                     title: case.title,
                     similarity_score: score.min(1.0),
                     matched_signals,
+                    retrieval_method: "structured_signal_overlap".into(),
+                    provenance_refs,
                     summary: case.summary,
                     outcome: case.outcome,
                     evidence_refs: case.evidence_refs,

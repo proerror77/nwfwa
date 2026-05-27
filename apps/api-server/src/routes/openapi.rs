@@ -2215,13 +2215,28 @@ pub async fn openapi_schema() -> Json<Value> {
                         "tags": { "type": "array", "items": { "type": "string" } }
                     }
                 },
+                "SimilarCase": {
+                    "type": "object",
+                    "required": ["case_id", "title", "similarity_score", "matched_signals", "retrieval_method", "provenance_refs", "summary", "outcome", "evidence_refs"],
+                    "properties": {
+                        "case_id": { "type": "string" },
+                        "title": { "type": "string" },
+                        "similarity_score": { "type": "number" },
+                        "matched_signals": { "type": "array", "items": { "type": "string" } },
+                        "retrieval_method": { "type": "string" },
+                        "provenance_refs": { "type": "array", "items": { "type": "string" } },
+                        "summary": { "type": "string" },
+                        "outcome": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
                 "SimilarCaseSearchResponse": {
                     "type": "object",
                     "required": ["results"],
                     "properties": {
                         "results": {
                             "type": "array",
-                            "items": { "type": "object" }
+                            "items": { "$ref": "#/components/schemas/SimilarCase" }
                         }
                     }
                 },

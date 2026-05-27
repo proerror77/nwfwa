@@ -20,6 +20,8 @@ type SimilarCase = {
   title: string;
   similarity_score: number;
   matched_signals: string[];
+  retrieval_method: string;
+  provenance_refs: string[];
   summary: string;
   outcome: string;
   evidence_refs: string[];
@@ -169,7 +171,9 @@ export function KnowledgeBasePage() {
                 <strong>
                   {item.case_id} · {(item.similarity_score * 100).toFixed(0)}%
                 </strong>
+                <small>{item.retrieval_method}</small>
                 <span>{item.matched_signals.join(", ")}</span>
+                <span>{item.provenance_refs.join(", ")}</span>
               </li>
             ))}
           </ul>

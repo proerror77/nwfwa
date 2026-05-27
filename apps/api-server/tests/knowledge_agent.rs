@@ -78,6 +78,14 @@ async fn searches_similar_knowledge_cases_with_evidence() {
         .as_array()
         .unwrap()
         .is_empty());
+    assert_eq!(
+        body["results"][0]["retrieval_method"],
+        "structured_signal_overlap"
+    );
+    assert!(body["results"][0]["provenance_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
 }
 
 #[tokio::test]
