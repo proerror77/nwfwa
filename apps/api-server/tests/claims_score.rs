@@ -150,6 +150,13 @@ async fn scores_spec_style_top_level_full_payload() {
         );
     }
     assert!(body["scores"]["anomaly_score"].as_u64().unwrap() > 0);
+    assert_eq!(body["risk_level"], "Critical");
+    assert!(body["confidence_score"].as_u64().unwrap() >= 80);
+    assert_eq!(body["confidence"], "High");
+    assert!(body["routing_reason"]
+        .as_str()
+        .unwrap()
+        .contains("医务复核"));
 }
 
 #[tokio::test]
@@ -330,7 +337,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "audit_id",
         "risk_score",
         "rag",
+        "risk_level",
         "recommended_action",
+        "confidence_score",
+        "confidence",
+        "routing_reason",
         "top_reasons",
         "evidence_refs",
     ] {

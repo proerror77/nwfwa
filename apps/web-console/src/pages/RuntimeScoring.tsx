@@ -8,7 +8,11 @@ type ScoringResponse = {
   claim_id: string;
   risk_score: number;
   rag: string;
+  risk_level: string;
   recommended_action: string;
+  confidence_score: number;
+  confidence: string;
+  routing_reason: string;
   scores: {
     peer_deviation_score: number;
     rule_score: number;
@@ -82,6 +86,10 @@ export function RuntimeScoring() {
                 <strong>{result.rag}</strong>
               </div>
               <div>
+                <span>Risk Level</span>
+                <strong>{result.risk_level}</strong>
+              </div>
+              <div>
                 <span>Action</span>
                 <strong>{result.recommended_action}</strong>
               </div>
@@ -98,6 +106,16 @@ export function RuntimeScoring() {
               <div>
                 <dt>Audit</dt>
                 <dd>{result.audit_id}</dd>
+              </div>
+              <div>
+                <dt>Confidence</dt>
+                <dd>
+                  {result.confidence} ({result.confidence_score})
+                </dd>
+              </div>
+              <div>
+                <dt>Routing</dt>
+                <dd>{result.routing_reason}</dd>
               </div>
               <div>
                 <dt>Peer Deviation</dt>

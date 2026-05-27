@@ -9,7 +9,11 @@ use serde::{Deserialize, Serialize};
 pub struct ScoringDecision {
     pub risk_score: RiskScore,
     pub rag: RiskLevel,
+    pub risk_level: String,
     pub recommended_action: RecommendedAction,
+    pub confidence_score: u8,
+    pub confidence: String,
+    pub routing_reason: String,
     pub peer_deviation_score: u8,
     pub rule_score: u8,
     pub anomaly_score: u8,
@@ -45,11 +49,11 @@ pub fn aggregate(
     ]);
     let risk_score = RiskScore::new(final_score_value).expect("clamped score is valid");
     let rag = RiskLevel::from_score(risk_score);
-    let recommended_action = match rag {
-        RiskLevel::Green => RecommendedAction::AutoApprove,
-        RiskLevel::Amber => RecommendedAction::ManualReview,
-        RiskLevel::Red => RecommendedAction::EscalateInvestigation,
-    };
+    let risk_level = risk_level(risk_score.value()).to_string();
+    let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);
+    let confidence = confidence_level(confidence_score).to_string();
+    let recommended_action = recommended_action(&risk_level, confidence_score);
+    let routing_reason = routing_reason(&risk_level, confidence_score).to_string();
     let mut top_reasons: Vec<String> = rule_matches
         .iter()
         .map(|rule_match| rule_match.reason.clone())
@@ -80,7 +84,11 @@ pub fn aggregate(
     ScoringDecision {
         risk_score,
         rag,
+        risk_level,
         recommended_action,
+        confidence_score,
+        confidence,
+        routing_reason,
         peer_deviation_score,
         rule_score,
         anomaly_score: anomaly_score.score,
@@ -89,6 +97,56 @@ pub fn aggregate(
         provider_network_score,
         similar_case_score,
         top_reasons,
+    }
+}
+
+fn risk_level(score: u8) -> &'static str {
+    match score {
+        0..=39 => "Low",
+        40..=69 => "Medium",
+        70..=84 => "High",
+        _ => "Critical",
+    }
+}
+
+fn confidence_score(rule_score: u8, anomaly_score: u8, ml_score: u8) -> u8 {
+    let supporting_layers = [rule_score, anomaly_score, ml_score]
+        .into_iter()
+        .filter(|score| *score >= 60)
+        .count() as u8;
+    (55 + supporting_layers * 15).min(100)
+}
+
+fn confidence_level(score: u8) -> &'static str {
+    match score {
+        0..=59 => "Low",
+        60..=79 => "Medium",
+        _ => "High",
+    }
+}
+
+fn recommended_action(risk_level: &str, confidence_score: u8) -> RecommendedAction {
+    if confidence_score < 60 {
+        return RecommendedAction::ManualReview;
+    }
+    match risk_level {
+        "Low" => RecommendedAction::AutoApprove,
+        "Medium" | "High" => RecommendedAction::ManualReview,
+        "Critical" => RecommendedAction::EscalateInvestigation,
+        _ => RecommendedAction::ManualReview,
+    }
+}
+
+fn routing_reason(risk_level: &str, confidence_score: u8) -> &'static str {
+    if confidence_score < 60 {
+        return "置信度偏低，建议补材料或二审";
+    }
+    match risk_level {
+        "Low" => "低风险且置信度充足，建议自动通过",
+        "Medium" => "中风险，建议进入 QA 抽样",
+        "High" => "高风险，建议人工审核",
+        "Critical" => "关键风险，建议人工审核、医务复核并升级调查",
+        _ => "风险等级未知，建议人工审核",
     }
 }
 
@@ -270,6 +328,10 @@ mod tests {
         assert_eq!(decision.similar_case_score, 0);
         assert_eq!(decision.risk_score.value(), 85);
         assert_eq!(decision.rag, RiskLevel::Red);
+        assert_eq!(decision.risk_level, "Critical");
+        assert_eq!(decision.confidence_score, 100);
+        assert_eq!(decision.confidence, "High");
+        assert!(decision.routing_reason.contains("医务复核"));
         assert_eq!(
             decision.recommended_action,
             RecommendedAction::EscalateInvestigation

@@ -761,7 +761,22 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ScoreClaimResponse": {
                     "type": "object",
-                    "required": ["run_id", "audit_id", "claim_id", "risk_score", "rag", "recommended_action", "scores", "alerts", "top_reasons", "evidence_refs"],
+                    "required": [
+                        "run_id",
+                        "audit_id",
+                        "claim_id",
+                        "risk_score",
+                        "rag",
+                        "risk_level",
+                        "recommended_action",
+                        "confidence_score",
+                        "confidence",
+                        "routing_reason",
+                        "scores",
+                        "alerts",
+                        "top_reasons",
+                        "evidence_refs"
+                    ],
                     "properties": {
                         "run_id": {
                             "type": "string"
@@ -781,9 +796,25 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["Green", "Amber", "Red"]
                         },
+                        "risk_level": {
+                            "type": "string",
+                            "enum": ["Low", "Medium", "High", "Critical"]
+                        },
                         "recommended_action": {
                             "type": "string",
                             "enum": ["AutoApprove", "ManualReview", "EscalateInvestigation"]
+                        },
+                        "confidence_score": {
+                            "type": "integer",
+                            "minimum": 0,
+                            "maximum": 100
+                        },
+                        "confidence": {
+                            "type": "string",
+                            "enum": ["Low", "Medium", "High"]
+                        },
+                        "routing_reason": {
+                            "type": "string"
                         },
                         "scores": {
                             "$ref": "#/components/schemas/ScoreBreakdown"
