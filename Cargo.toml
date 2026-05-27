@@ -1,0 +1,39 @@
+[workspace]
+resolver = "2"
+members = [
+  "apps/api-server",
+  "apps/worker",
+  "crates/fwa-core",
+  "crates/fwa-features",
+  "crates/fwa-rules",
+  "crates/fwa-ml-runtime",
+  "crates/fwa-scoring",
+  "crates/fwa-audit",
+  "crates/fwa-auth",
+  "crates/fwa-connectors",
+  "crates/fwa-agent",
+]
+
+[workspace.package]
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+rust-version = "1.82"
+
+[workspace.dependencies]
+anyhow = "1"
+async-trait = "0.1"
+axum = "0.7"
+chrono = { version = "0.4", features = ["serde"] }
+reqwest = { version = "0.12", features = ["json"] }
+rust_decimal = { version = "1", features = ["serde"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+sqlx = { version = "0.8", features = ["runtime-tokio", "tls-rustls", "postgres", "uuid", "chrono", "json", "rust_decimal"] }
+thiserror = "2"
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "signal"] }
+tower-http = { version = "0.6", features = ["cors", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
+ulid = { version = "1", features = ["serde"] }
+uuid = { version = "1", features = ["serde", "v7"] }
