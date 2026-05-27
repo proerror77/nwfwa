@@ -71,6 +71,28 @@ pub struct RuleDetailRecord {
     pub versions: Vec<RuleVersionRecord>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelVersionRecord {
+    pub model_key: String,
+    pub version: String,
+    pub model_type: String,
+    pub runtime_kind: String,
+    pub execution_provider: String,
+    pub status: String,
+    pub artifact_uri: Option<String>,
+    pub endpoint_url: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelPerformanceRecord {
+    pub model_key: String,
+    pub data_status: String,
+    pub scored_runs: u32,
+    pub average_score: f64,
+    pub high_risk_count: u32,
+    pub latest_scored_at: Option<String>,
+}
+
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
     async fn upsert_claim_context(
@@ -97,6 +119,13 @@ pub trait ScoringRepository: Send + Sync {
         rule_id: &str,
         status: &str,
     ) -> anyhow::Result<Option<RuleSummaryRecord>>;
+
+    async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
+
+    async fn model_performance(
+        &self,
+        model_key: &str,
+    ) -> anyhow::Result<Option<ModelPerformanceRecord>>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -191,6 +220,24 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .insert(rule_id.to_string(), status.to_string());
         Ok(self.get_rule(rule_id).await?.map(|detail| detail.summary))
+    }
+
+    async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
+        Ok(default_model_versions())
+    }
+
+    async fn model_performance(
+        &self,
+        model_key: &str,
+    ) -> anyhow::Result<Option<ModelPerformanceRecord>> {
+        if default_model_versions()
+            .iter()
+            .any(|model| model.model_key == model_key)
+        {
+            Ok(Some(empty_model_performance(model_key)))
+        } else {
+            Ok(None)
+        }
     }
 }
 
@@ -558,6 +605,100 @@ impl ScoringRepository for PostgresScoringRepository {
             .into_iter()
             .find(|rule| rule.rule_id == rule_id))
     }
+
+    async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
+        ensure_default_models_seeded(&self.pool).await?;
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+        )> = sqlx::query_as(
+            "SELECT model_key, version, model_type, runtime_kind, execution_provider, status, artifact_uri, endpoint_url
+             FROM model_versions
+             ORDER BY model_key, version DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    model_key,
+                    version,
+                    model_type,
+                    runtime_kind,
+                    execution_provider,
+                    status,
+                    artifact_uri,
+                    endpoint_url,
+                )| ModelVersionRecord {
+                    model_key,
+                    version,
+                    model_type,
+                    runtime_kind,
+                    execution_provider,
+                    status,
+                    artifact_uri,
+                    endpoint_url,
+                },
+            )
+            .collect())
+    }
+
+    async fn model_performance(
+        &self,
+        model_key: &str,
+    ) -> anyhow::Result<Option<ModelPerformanceRecord>> {
+        ensure_default_models_seeded(&self.pool).await?;
+        let known = self
+            .list_models()
+            .await?
+            .into_iter()
+            .any(|model| model.model_key == model_key);
+        if !known {
+            return Ok(None);
+        }
+
+        let row: (
+            i64,
+            Option<Decimal>,
+            Option<i64>,
+            Option<chrono::DateTime<chrono::Utc>>,
+        ) = sqlx::query_as(
+            "SELECT
+                   COUNT(*)::bigint,
+                   AVG(score),
+                   SUM(CASE WHEN score >= 70 THEN 1 ELSE 0 END)::bigint,
+                   MAX(created_at)
+                 FROM model_scores
+                 WHERE model_key = $1",
+        )
+        .bind(model_key)
+        .fetch_one(&self.pool)
+        .await?;
+
+        let scored_runs = row.0 as u32;
+        if scored_runs == 0 {
+            return Ok(Some(empty_model_performance(model_key)));
+        }
+
+        Ok(Some(ModelPerformanceRecord {
+            model_key: model_key.to_string(),
+            data_status: "ready".into(),
+            scored_runs,
+            average_score: row
+                .1
+                .map(|value| value.to_string().parse().unwrap_or(0.0))
+                .unwrap_or(0.0),
+            high_risk_count: row.2.unwrap_or(0) as u32,
+            latest_scored_at: row.3.map(|timestamp| timestamp.to_rfc3339()),
+        }))
+    }
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
@@ -658,6 +799,52 @@ async fn ensure_default_rules_seeded(pool: &PgPool) -> anyhow::Result<()> {
         }
 
         tx.commit().await?;
+    }
+    Ok(())
+}
+
+fn default_model_versions() -> Vec<ModelVersionRecord> {
+    vec![ModelVersionRecord {
+        model_key: "baseline_fwa".into(),
+        version: "0.1.0".into(),
+        model_type: "baseline_classifier".into(),
+        runtime_kind: "python_http".into(),
+        execution_provider: "cpu".into(),
+        status: "active".into(),
+        artifact_uri: None,
+        endpoint_url: Some("http://127.0.0.1:8001/score".into()),
+    }]
+}
+
+fn empty_model_performance(model_key: &str) -> ModelPerformanceRecord {
+    ModelPerformanceRecord {
+        model_key: model_key.to_string(),
+        data_status: "empty".into(),
+        scored_runs: 0,
+        average_score: 0.0,
+        high_risk_count: 0,
+        latest_scored_at: None,
+    }
+}
+
+async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {
+    for model in default_model_versions() {
+        sqlx::query(
+            "INSERT INTO model_versions
+             (model_key, version, model_type, runtime_kind, artifact_uri, endpoint_url, execution_provider, status, metrics, activated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '{}'::jsonb, now())
+             ON CONFLICT (model_key, version) DO UPDATE SET status = EXCLUDED.status",
+        )
+        .bind(&model.model_key)
+        .bind(&model.version)
+        .bind(&model.model_type)
+        .bind(&model.runtime_kind)
+        .bind(&model.artifact_uri)
+        .bind(&model.endpoint_url)
+        .bind(&model.execution_provider)
+        .bind(&model.status)
+        .execute(pool)
+        .await?;
     }
     Ok(())
 }
