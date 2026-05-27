@@ -1,6 +1,10 @@
 import { useState } from "react";
 import { useMutation } from "@tanstack/react-query";
 import { scoreClaim } from "../api";
+import {
+  buildProviderProfileInspection,
+  type ProviderProfileAssessment,
+} from "./providerProfileInspection";
 
 type ScoringResponse = {
   run_id: string;
@@ -31,6 +35,7 @@ type ScoringResponse = {
     rule_version: number;
   }>;
   top_reasons: string[];
+  provider_profile?: ProviderProfileAssessment;
   evidence_refs: unknown[];
 };
 
@@ -41,6 +46,30 @@ const defaultPayload = JSON.stringify(
       external_claim_id: "CLM-0287",
       claim_amount: "8000",
       currency: "CNY",
+      provider: {
+        external_provider_id: "PRV-DEMO",
+        name: "Demo Hospital",
+        provider_type: "hospital",
+        region: "SH",
+        risk_tier: "Medium",
+      },
+      provider_profile: {
+        specialty: "imaging",
+        network_status: "in_network",
+        windows: [
+          {
+            window_days: 90,
+            claim_count: 126,
+            total_claim_amount: "420000",
+            high_cost_item_ratio: 0.72,
+            diagnosis_procedure_mismatch_rate: 0.38,
+            peer_amount_percentile: 97,
+            peer_frequency_percentile: 96,
+            confirmed_fwa_count: 4,
+            false_positive_count: 1,
+          },
+        ],
+      },
     },
   },
   null,
@@ -54,6 +83,10 @@ export function RuntimeScoring() {
     mutationFn: () => scoreClaim(JSON.parse(payload), apiKey) as Promise<ScoringResponse>,
   });
   const result = mutation.data;
+  const providerInspection = result
+    ? buildProviderProfileInspection(result.provider_profile)
+    : null;
+  const providerProfile = result?.provider_profile;
 
   return (
     <section className="runtime">
@@ -172,6 +205,65 @@ export function RuntimeScoring() {
                   <li key={reason}>{reason}</li>
                 ))}
               </ul>
+            </section>
+            <section>
+              <h3>Provider Risk Profile</h3>
+              {providerInspection && providerProfile ? (
+                <div className="factor-card provider-profile-card">
+                  <div>
+                    <span>Provider</span>
+                    <strong>{providerInspection.providerId}</strong>
+                  </div>
+                  <dl className="result-grid">
+                    <div>
+                      <dt>Provider Score</dt>
+                      <dd>{providerProfile.risk_score}</dd>
+                    </div>
+                    <div>
+                      <dt>Review Route</dt>
+                      <dd>{providerInspection.routeLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Review Status</dt>
+                      <dd>{providerInspection.reviewLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Max Window</dt>
+                      <dd>{providerInspection.maxWindowLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Specialty</dt>
+                      <dd>{providerProfile.specialty ?? "Unspecified"}</dd>
+                    </div>
+                    <div>
+                      <dt>Network</dt>
+                      <dd>{providerProfile.network_status ?? "Unspecified"}</dd>
+                    </div>
+                  </dl>
+                  <div>
+                    <span>Outlier Flags</span>
+                    <p>{providerInspection.outlierSummary}</p>
+                  </div>
+                  {providerProfile.window_findings.length > 0 ? (
+                    <ul className="result-list compact-list">
+                      {providerProfile.window_findings.map((finding) => (
+                        <li key={`${finding.window_days}-${finding.risk_score}`}>
+                          <strong>
+                            {finding.window_days}d / {finding.risk_score}
+                          </strong>
+                          <span>{finding.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty">No provider profile windows</p>
+                  )}
+                  <div>
+                    <span>Evidence Refs</span>
+                    <p>{providerInspection.evidenceSummary}</p>
+                  </div>
+                </div>
+              ) : null}
             </section>
             <section>
               <h3>Evidence Refs</h3>
