@@ -1,6 +1,9 @@
 use async_trait::async_trait;
-use fwa_core::ClaimContext;
-use fwa_core::RecommendedAction;
+use chrono::NaiveDate;
+use fwa_core::{
+    Claim, ClaimContext, ClaimId, ClaimItem, Member, MemberId, Money, Policy, PolicyId, Provider,
+    ProviderId, ProviderRiskTier, RecommendedAction,
+};
 use fwa_rules::{Condition, Rule, RuleAction};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -373,6 +376,108 @@ pub struct RegisterModelEvaluationInput {
     pub confusion_matrix_json: Value,
     pub feature_importance_uri: Option<String>,
     pub metrics_json: Value,
+}
+
+#[derive(sqlx::FromRow)]
+struct ClaimContextRow {
+    external_claim_id: String,
+    diagnosis_code: String,
+    service_date: NaiveDate,
+    claim_amount: Decimal,
+    claim_currency: String,
+    external_member_id: String,
+    dob: Option<NaiveDate>,
+    gender: Option<String>,
+    external_policy_id: String,
+    product_code: String,
+    coverage_start_date: NaiveDate,
+    coverage_end_date: NaiveDate,
+    coverage_limit_amount: Decimal,
+    policy_currency: String,
+    external_provider_id: String,
+    provider_name: String,
+    provider_type: String,
+    provider_region: String,
+    provider_risk_tier: String,
+}
+
+type ClaimItemRow = (String, String, String, i32, Decimal, Decimal, String);
+
+trait IntoClaimContext {
+    fn into_context(self, items: Vec<ClaimItemRow>) -> ClaimContext;
+}
+
+impl IntoClaimContext for ClaimContextRow {
+    fn into_context(self, items: Vec<ClaimItemRow>) -> ClaimContext {
+        let member_id = MemberId::from_external(self.external_member_id.clone());
+        let policy_id = PolicyId::from_external(self.external_policy_id.clone());
+        let provider_id = ProviderId::from_external(self.external_provider_id.clone());
+
+        ClaimContext {
+            claim: Claim {
+                id: ClaimId::from_external(self.external_claim_id.clone()),
+                external_claim_id: self.external_claim_id,
+                member_id: member_id.clone(),
+                policy_id: policy_id.clone(),
+                provider_id: provider_id.clone(),
+                diagnosis_code: self.diagnosis_code,
+                service_date: self.service_date,
+                amount: Money::new(self.claim_amount, self.claim_currency),
+            },
+            items: items
+                .into_iter()
+                .map(
+                    |(
+                        item_code,
+                        item_type,
+                        description,
+                        quantity,
+                        unit_amount,
+                        total_amount,
+                        currency,
+                    )| ClaimItem {
+                        item_code,
+                        item_type,
+                        description,
+                        quantity: quantity.max(0) as u32,
+                        unit_amount: Money::new(unit_amount, currency.clone()),
+                        total_amount: Money::new(total_amount, currency),
+                    },
+                )
+                .collect(),
+            member: Member {
+                id: member_id.clone(),
+                external_member_id: self.external_member_id,
+                dob: self.dob,
+                gender: self.gender,
+            },
+            policy: Policy {
+                id: policy_id,
+                external_policy_id: self.external_policy_id,
+                member_id,
+                product_code: self.product_code,
+                coverage_start_date: self.coverage_start_date,
+                coverage_end_date: self.coverage_end_date,
+                coverage_limit: Money::new(self.coverage_limit_amount, self.policy_currency),
+            },
+            provider: Provider {
+                id: provider_id,
+                external_provider_id: self.external_provider_id,
+                name: self.provider_name,
+                provider_type: self.provider_type,
+                region: self.provider_region,
+                risk_tier: provider_risk_tier_from_text(&self.provider_risk_tier),
+            },
+        }
+    }
+}
+
+fn provider_risk_tier_from_text(value: &str) -> ProviderRiskTier {
+    match value {
+        "Low" => ProviderRiskTier::Low,
+        "High" => ProviderRiskTier::High,
+        _ => ProviderRiskTier::Medium,
+    }
 }
 
 #[async_trait]
@@ -1081,15 +1186,52 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         external_claim_id: &str,
     ) -> anyhow::Result<Option<ClaimContext>> {
-        let raw_payload: Option<(Value,)> =
-            sqlx::query_as("SELECT raw_payload FROM claims WHERE external_claim_id = $1")
-                .bind(external_claim_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let row: Option<ClaimContextRow> = sqlx::query_as(
+            "SELECT c.external_claim_id,
+                    c.diagnosis_code,
+                    c.service_date,
+                    c.claim_amount,
+                    c.currency AS claim_currency,
+                    m.external_member_id,
+                    m.dob,
+                    m.gender,
+                    p.external_policy_id,
+                    p.product_code,
+                    p.coverage_start_date,
+                    p.coverage_end_date,
+                    p.coverage_limit_amount,
+                    p.currency AS policy_currency,
+                    pr.external_provider_id,
+                    pr.name AS provider_name,
+                    pr.provider_type,
+                    pr.region AS provider_region,
+                    pr.risk_tier AS provider_risk_tier
+             FROM claims c
+             JOIN members m ON m.id = c.member_id
+             JOIN policies p ON p.id = c.policy_id
+             JOIN providers pr ON pr.id = c.provider_id
+             WHERE c.external_claim_id = $1",
+        )
+        .bind(external_claim_id)
+        .fetch_optional(&self.pool)
+        .await?;
 
-        raw_payload
-            .map(|(value,)| serde_json::from_value(value).map_err(Into::into))
-            .transpose()
+        let Some(row) = row else {
+            return Ok(None);
+        };
+
+        let item_rows: Vec<ClaimItemRow> = sqlx::query_as(
+            "SELECT ci.item_code, ci.item_type, ci.description, ci.quantity, ci.unit_amount, ci.total_amount, ci.currency
+             FROM claim_items ci
+             JOIN claims c ON c.id = ci.claim_id
+             WHERE c.external_claim_id = $1
+             ORDER BY ci.created_at, ci.item_code",
+        )
+        .bind(external_claim_id)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(Some(row.into_context(item_rows)))
     }
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()> {
@@ -1881,10 +2023,11 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
         let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as(
-                "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
-                 FROM audit_events
-                 WHERE payload ->> 'claim_id' = $1
-                 ORDER BY created_at, audit_id",
+                "SELECT ae.audit_id, ae.run_id, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
+                 FROM audit_events ae
+                 LEFT JOIN claims c ON c.id = ae.claim_id
+                 WHERE payload ->> 'claim_id' = $1 OR c.external_claim_id = $1
+                 ORDER BY ae.created_at, ae.audit_id",
             )
             .bind(claim_id)
             .fetch_all(&self.pool)
@@ -2688,7 +2831,18 @@ async fn insert_audit_event(
     sqlx::query(
         "INSERT INTO audit_events
          (audit_id, run_id, claim_id, actor_id, actor_role, source_system, event_type, event_status, summary, payload, evidence_refs)
-         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11)",
+         VALUES ($1, $2, $3::uuid, $4, $5, $6, $7, $8, $9, $10, $11)
+         ON CONFLICT (audit_id) DO UPDATE
+         SET run_id = EXCLUDED.run_id,
+             claim_id = EXCLUDED.claim_id,
+             actor_id = EXCLUDED.actor_id,
+             actor_role = EXCLUDED.actor_role,
+             source_system = EXCLUDED.source_system,
+             event_type = EXCLUDED.event_type,
+             event_status = EXCLUDED.event_status,
+             summary = EXCLUDED.summary,
+             payload = EXCLUDED.payload,
+             evidence_refs = EXCLUDED.evidence_refs",
     )
     .bind(&event.audit_id)
     .bind(&event.run_id)
