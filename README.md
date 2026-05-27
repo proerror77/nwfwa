@@ -15,6 +15,12 @@ See `AGENTS.md` for project-level agent working instructions.
 
 - [FWA Risk And Operations Platform PRD](docs/product/fwa-risk-operations-prd.md)
 
+## Engineering Docs
+
+- [Infrastructure Architecture](docs/engineering/infrastructure-architecture.md)
+- [Pilot Demo Runbook](docs/engineering/demo-runbook.md)
+- [Pilot Readiness](docs/engineering/pilot-readiness.md)
+
 ## Local Development
 
 Start Postgres and the baseline ML service:

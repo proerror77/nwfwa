@@ -239,6 +239,52 @@ Partner collaboration must be privacy-preserving and evidence-controlled. Shared
 signals should use approved identifiers, aggregated patterns, hashed references,
 or customer-approved exchange formats rather than raw PII.
 
+## Infrastructure And Agentic Operating Model
+
+The platform needs a staged infrastructure foundation before it needs a large
+collection of specialist databases. The detailed engineering baseline is
+documented in `docs/engineering/infrastructure-architecture.md`.
+
+Required infrastructure principles:
+
+- PostgreSQL is the transactional source of truth for claims, providers,
+  policies, rules, models, cases, labels, jobs, audit events, and agent run
+  metadata.
+- Object storage is required for durable artifacts such as Parquet datasets,
+  feature matrices, document evidence, OCR output, model artifacts, backtest
+  reports, and evidence packages.
+- Async worker jobs are first-class product infrastructure for imports,
+  backtests, embeddings, graph projections, model evaluations, exports, and
+  agent-run continuation.
+- Agentic workflows must operate through governed platform tools, context
+  snapshots, evidence refs, audit events, and approval gates. Agents may prepare
+  evidence and propose actions, but they must not autonomously deny claims,
+  publish rules, promote models, delete audit records, or export sensitive data.
+- Optional infrastructure such as Redis, ClickHouse, Neo4j, OpenSearch, Qdrant,
+  LanceDB, or Kubernetes is adopted only when a defined workload requires it.
+
+Staged infrastructure roadmap:
+
+- MVP: PostgreSQL, Rust API server, Rust worker, Python ML service, React
+  console, migrations, seed scripts, and CI checks.
+- Pilot foundation: object storage, durable job state, backups, structured
+  logs, minimum metrics, secret management, data masking, retention policy, and
+  customer network controls.
+- AI evidence foundation: document registry, chunk registry, embedding jobs,
+  retrieval audit, vector search starting with `pgvector` where sufficient, and
+  agent run/step/context/approval records.
+- Analytics scale: derived analytical event store, optionally ClickHouse, for
+  high-volume scoring, rule, model, case, graph, SLA, and ROI reporting.
+- Production hardening: infrastructure as code, SSO/RBAC, managed secrets,
+  network isolation, OpenTelemetry dashboards, alerting, disaster recovery, and
+  release/rollback runbooks.
+
+The system should support agent-native operation by giving agents parity with
+operator-readable capabilities through approved tools, while reserving
+high-impact writes for human approval. This keeps the architecture compatible
+with modern agentic workflows without turning the FWA platform into an
+uncontrolled autonomous adjudication system.
+
 ## Lead Generation Lifecycle
 
 Analytics creates leads. It does not directly create fraud conclusions.
