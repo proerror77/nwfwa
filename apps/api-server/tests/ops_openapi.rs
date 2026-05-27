@@ -50,4 +50,6 @@ async fn openapi_includes_operations_paths() {
     ] {
         assert!(schema["paths"][path].is_object(), "missing {path}");
     }
+    assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["get"].is_object());
+    assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["post"].is_object());
 }
