@@ -2,7 +2,9 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        CreateFieldMappingInput, DatasetRecord, FieldMappingRecord, RegisterDatasetInput,
+        CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, FieldMappingRecord,
+        ModelDatasetRecord, ModelEvaluationRecord, RegisterDatasetInput, RegisterFeatureSetInput,
+        RegisterModelDatasetInput, RegisterModelEvaluationInput,
     },
 };
 use axum::{
@@ -21,6 +23,11 @@ pub struct DatasetListResponse {
 #[derive(Debug, Serialize)]
 pub struct FieldMappingResponse {
     pub mapping: FieldMappingRecord,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelEvaluationResponse {
+    pub evaluation: ModelEvaluationRecord,
 }
 
 pub async fn register_dataset(
@@ -92,6 +99,96 @@ pub async fn add_field_mapping(
             )
         })?;
     Ok(Json(FieldMappingResponse { mapping }))
+}
+
+pub async fn register_feature_set(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<RegisterFeatureSetInput>,
+) -> Result<Json<FeatureSetRecord>, ApiError> {
+    authorize(&state, &headers)?;
+    validate_parquet_uri(&request.features_uri, "FEATURE_SET_FORMAT_INVALID")?;
+    let feature_set = state
+        .repository
+        .register_feature_set(request)
+        .await
+        .map_err(internal_error("FEATURE_SET_REGISTER_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "DATASET_NOT_FOUND",
+                "feature set dataset was not found",
+            )
+        })?;
+    Ok(Json(feature_set))
+}
+
+pub async fn register_model_dataset(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<RegisterModelDatasetInput>,
+) -> Result<Json<ModelDatasetRecord>, ApiError> {
+    authorize(&state, &headers)?;
+    validate_parquet_uri(&request.train_uri, "MODEL_DATASET_FORMAT_INVALID")?;
+    validate_parquet_uri(&request.validation_uri, "MODEL_DATASET_FORMAT_INVALID")?;
+    if let Some(test_uri) = &request.test_uri {
+        validate_parquet_uri(test_uri, "MODEL_DATASET_FORMAT_INVALID")?;
+    }
+    let model_dataset = state
+        .repository
+        .register_model_dataset(request)
+        .await
+        .map_err(internal_error("MODEL_DATASET_REGISTER_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "FEATURE_SET_NOT_FOUND",
+                "model dataset feature set was not found",
+            )
+        })?;
+    Ok(Json(model_dataset))
+}
+
+pub async fn register_model_evaluation(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<RegisterModelEvaluationInput>,
+) -> Result<Json<ModelEvaluationResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let evaluation = state
+        .repository
+        .register_model_evaluation(request)
+        .await
+        .map_err(internal_error("MODEL_EVALUATION_REGISTER_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_DATASET_NOT_FOUND",
+                "model evaluation dataset was not found",
+            )
+        })?;
+    Ok(Json(ModelEvaluationResponse { evaluation }))
+}
+
+pub async fn get_model_evaluation(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(evaluation_run_id): Path<String>,
+) -> Result<Json<ModelEvaluationResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let evaluation = state
+        .repository
+        .get_model_evaluation(&evaluation_run_id)
+        .await
+        .map_err(internal_error("MODEL_EVALUATION_LOAD_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_EVALUATION_NOT_FOUND",
+                "model evaluation was not found",
+            )
+        })?;
+    Ok(Json(ModelEvaluationResponse { evaluation }))
 }
 
 fn validate_parquet_dataset(storage_format: &str) -> Result<(), ApiError> {
@@ -193,6 +290,18 @@ fn require_suffix(value: &str, suffix: &str, code: &'static str) -> Result<(), A
             code,
             format!("dataset URI must end with {suffix}"),
         ))
+    }
+}
+
+fn validate_parquet_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    if value.to_ascii_lowercase().contains(".csv") {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "dataset artifact URIs must point to parquet files or parquet partition directories",
+        ))
+    } else {
+        Ok(())
     }
 }
 

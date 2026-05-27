@@ -75,6 +75,22 @@ pub fn build_app_with_parts(
             "/api/v1/ops/datasets/:dataset_id/mappings",
             post(ops_datasets::add_field_mapping),
         )
+        .route(
+            "/api/v1/ops/feature-sets",
+            post(ops_datasets::register_feature_set),
+        )
+        .route(
+            "/api/v1/ops/model-datasets",
+            post(ops_datasets::register_model_dataset),
+        )
+        .route(
+            "/api/v1/ops/model-evaluations",
+            post(ops_datasets::register_model_evaluation),
+        )
+        .route(
+            "/api/v1/ops/model-evaluations/:evaluation_run_id",
+            get(ops_datasets::get_model_evaluation),
+        )
         .route("/api/v1/ops/models", get(ops_models::list_models))
         .route(
             "/api/v1/ops/models/:model_key/performance",

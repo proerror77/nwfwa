@@ -242,6 +242,82 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/feature-sets": {
+                "post": {
+                    "summary": "Register a Parquet feature set version",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Registered feature set"
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/model-datasets": {
+                "post": {
+                    "summary": "Register a model dataset version",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Registered model dataset"
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/model-evaluations": {
+                "post": {
+                    "summary": "Register model evaluation metrics for a model dataset",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Registered model evaluation"
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/model-evaluations/{evaluation_run_id}": {
+                "get": {
+                    "summary": "Get model evaluation metrics",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "evaluation_run_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model evaluation metrics"
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/backtest": {
                 "post": {
                     "summary": "Backtest a candidate rule against sample claims",
