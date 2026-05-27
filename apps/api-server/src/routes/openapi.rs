@@ -203,6 +203,70 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 }
+            },
+            "/api/v1/ops/knowledge/cases": {
+                "get": {
+                    "summary": "List FWA knowledge cases",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Knowledge case summaries",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/KnowledgeCaseListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/knowledge/search-similar": {
+                "post": {
+                    "summary": "Search similar FWA knowledge cases",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SimilarCaseSearchRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Similar knowledge cases",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/SimilarCaseSearchResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/agent/cases/investigate": {
+                "post": {
+                    "summary": "Generate an assistive agent investigation package",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/AgentInvestigationRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Evidence-backed assistive investigation package",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/AgentInvestigationResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
             }
         },
         "components": {
@@ -611,6 +675,77 @@ pub async fn openapi_schema() -> Json<Value> {
                         "average_score": { "type": "number" },
                         "high_risk_count": { "type": "integer" },
                         "latest_scored_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "KnowledgeCase": {
+                    "type": "object",
+                    "required": ["case_id", "title", "fwa_type", "diagnosis_code", "provider_region", "summary", "outcome", "tags", "evidence_refs"],
+                    "properties": {
+                        "case_id": { "type": "string" },
+                        "title": { "type": "string" },
+                        "fwa_type": { "type": "string" },
+                        "diagnosis_code": { "type": "string" },
+                        "provider_region": { "type": "string" },
+                        "provider_type": { "type": "string" },
+                        "summary": { "type": "string" },
+                        "outcome": { "type": "string" },
+                        "tags": { "type": "array", "items": { "type": "string" } },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "KnowledgeCaseListResponse": {
+                    "type": "object",
+                    "required": ["cases"],
+                    "properties": {
+                        "cases": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/KnowledgeCase" }
+                        }
+                    }
+                },
+                "SimilarCaseSearchRequest": {
+                    "type": "object",
+                    "required": ["diagnosis_code", "provider_region", "tags"],
+                    "properties": {
+                        "claim_id": { "type": ["string", "null"] },
+                        "diagnosis_code": { "type": "string" },
+                        "provider_region": { "type": "string" },
+                        "tags": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "SimilarCaseSearchResponse": {
+                    "type": "object",
+                    "required": ["results"],
+                    "properties": {
+                        "results": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                        }
+                    }
+                },
+                "AgentInvestigationRequest": {
+                    "type": "object",
+                    "required": ["claim_id", "risk_score", "rag", "top_reasons", "similar_case_query"],
+                    "properties": {
+                        "claim_id": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "rag": { "type": "string" },
+                        "top_reasons": { "type": "array", "items": { "type": "string" } },
+                        "similar_case_query": { "$ref": "#/components/schemas/SimilarCaseSearchRequest" }
+                    }
+                },
+                "AgentInvestigationResponse": {
+                    "type": "object",
+                    "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_refs"],
+                    "properties": {
+                        "agent_run_id": { "type": "string" },
+                        "decision_boundary": { "type": "string", "const": "assistive_only" },
+                        "risk_summary": { "type": "string" },
+                        "findings": { "type": "array", "items": { "type": "object" } },
+                        "investigation_checklist": { "type": "array", "items": { "type": "string" } },
+                        "similar_cases": { "type": "array", "items": { "type": "object" } },
+                        "qa_opinion_draft": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 }
             }
