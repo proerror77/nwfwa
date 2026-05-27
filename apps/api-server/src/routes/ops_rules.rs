@@ -2,7 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        PersistedAuditEvent, RulePerformanceRecord, RulePromotionReviewRecord, RuleSummaryRecord,
+        PersistedAuditEvent, RuleBacktestRecord, RulePerformanceRecord, RulePromotionReviewRecord,
+        RuleSummaryRecord,
     },
 };
 use axum::{
@@ -87,7 +88,7 @@ pub struct RuleBacktestPolicy {
     pub coverage_limit: Decimal,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize)]
 pub struct RuleBacktestResponse {
     pub sample_count: usize,
     pub matched_count: usize,
@@ -105,6 +106,29 @@ pub struct RuleBacktestResponse {
     pub blockers: Vec<String>,
     pub matched_claim_ids: Vec<String>,
     pub evidence_refs: Vec<String>,
+}
+
+impl RuleBacktestRecord {
+    fn from_response(rule_id: &str, rule_version: u32, response: &RuleBacktestResponse) -> Self {
+        Self {
+            rule_id: rule_id.into(),
+            rule_version,
+            sample_count: response.sample_count as u32,
+            matched_count: response.matched_count as u32,
+            reviewed_count: response.reviewed_count as u32,
+            confirmed_fwa_count: response.confirmed_fwa_count as u32,
+            false_positive_count: response.false_positive_count as u32,
+            precision: response.precision,
+            recall: response.recall,
+            lift: response.lift,
+            false_positive_rate: response.false_positive_rate,
+            estimated_saving: response.estimated_saving.clone(),
+            promotion_recommendation: response.promotion_recommendation.clone(),
+            blockers: response.blockers.clone(),
+            evidence_refs: response.evidence_refs.clone(),
+            created_at: None,
+        }
+    }
 }
 
 #[derive(Debug, Deserialize)]
@@ -206,10 +230,16 @@ pub async fn rule_promotion_gates(
         .latest_rule_promotion_review(&rule.rule_id, rule.latest_version)
         .await
         .map_err(internal_error("RULE_PROMOTION_REVIEW_LOAD_FAILED"))?;
+    let latest_backtest = state
+        .repository
+        .latest_rule_backtest(&rule.rule_id, rule.latest_version)
+        .await
+        .map_err(internal_error("RULE_BACKTEST_LOAD_FAILED"))?;
 
     Ok(Json(build_rule_promotion_gates(
         &rule,
         &performance,
+        latest_backtest.as_ref(),
         latest_review.as_ref(),
     )))
 }
@@ -278,14 +308,32 @@ pub async fn get_rule(
 fn build_rule_promotion_gates(
     rule: &RuleSummaryRecord,
     performance: &RulePerformanceRecord,
+    latest_backtest: Option<&RuleBacktestRecord>,
     latest_review: Option<&RulePromotionReviewRecord>,
 ) -> RulePromotionGatesResponse {
-    let has_review_evidence = performance.reviewed_count > 0;
-    let has_saving_evidence = performance
-        .saving_amount
-        .parse::<Decimal>()
-        .map(|amount| amount > Decimal::ZERO)
-        .unwrap_or(false);
+    let effective_reviewed_count = performance.reviewed_count.max(
+        latest_backtest
+            .map(|backtest| backtest.reviewed_count)
+            .unwrap_or(0),
+    );
+    let effective_false_positive_rate = if performance.reviewed_count > 0 {
+        performance.false_positive_rate
+    } else {
+        latest_backtest
+            .map(|backtest| backtest.false_positive_rate)
+            .unwrap_or(0.0)
+    };
+    let performance_saving = decimal_from_string(&performance.saving_amount);
+    let backtest_saving = latest_backtest
+        .map(|backtest| decimal_from_string(&backtest.estimated_saving))
+        .unwrap_or(Decimal::ZERO);
+    let effective_saving = if performance_saving > Decimal::ZERO {
+        performance_saving
+    } else {
+        backtest_saving
+    };
+    let has_review_evidence = effective_reviewed_count > 0;
+    let has_saving_evidence = effective_saving > Decimal::ZERO;
     let gates = vec![
         rule_gate(
             "Named owner",
@@ -304,7 +352,7 @@ fn build_rule_promotion_gates(
         ),
         rule_gate(
             "False-positive burden",
-            has_review_evidence && performance.false_positive_rate <= 0.30,
+            has_review_evidence && effective_false_positive_rate <= 0.30,
             "false-positive burden missing",
         ),
         rule_gate(
@@ -343,12 +391,16 @@ fn build_rule_promotion_gates(
         passed_count: gates.len() - blockers.len(),
         total_count: gates.len(),
         trigger_count: performance.trigger_count,
-        reviewed_count: performance.reviewed_count,
-        false_positive_rate: performance.false_positive_rate,
-        saving_amount: performance.saving_amount.clone(),
+        reviewed_count: effective_reviewed_count,
+        false_positive_rate: effective_false_positive_rate,
+        saving_amount: format!("{:.2}", effective_saving.round_dp(2)),
         gates,
         blockers,
     }
+}
+
+fn decimal_from_string(value: &str) -> Decimal {
+    value.parse::<Decimal>().unwrap_or(Decimal::ZERO)
 }
 
 fn rule_gate(label: &str, passed: bool, blocker: &str) -> RulePromotionGate {
@@ -380,7 +432,7 @@ pub async fn backtest_rule(
     headers: HeaderMap,
     Json(request): Json<RuleBacktestRequest>,
 ) -> Result<Json<RuleBacktestResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let mut matched_claim_ids = Vec::new();
     let mut score_sum = 0_u32;
     let mut saving = Decimal::ZERO;
@@ -490,7 +542,7 @@ pub async fn backtest_rule(
         "needs_more_evidence"
     };
 
-    Ok(Json(RuleBacktestResponse {
+    let response = RuleBacktestResponse {
         sample_count,
         matched_count,
         reviewed_count,
@@ -510,7 +562,21 @@ pub async fn backtest_rule(
             "rules:{}:v{}",
             request.rule.rule_id, request.rule.version
         )],
-    }))
+    };
+    let record = state
+        .repository
+        .save_rule_backtest(RuleBacktestRecord::from_response(
+            &request.rule.rule_id,
+            request.rule.version,
+            &response,
+        ))
+        .await
+        .map_err(internal_error("RULE_BACKTEST_SAVE_FAILED"))?;
+    record_rule_backtest_audit(&state, &actor, &record)
+        .await
+        .map_err(internal_error("RULE_BACKTEST_AUDIT_SAVE_FAILED"))?;
+
+    Ok(Json(response))
 }
 
 pub async fn discover_rules(
@@ -762,6 +828,34 @@ async fn record_rule_audit(
                 "rules:{}:v{}",
                 input.rule.rule_id, input.rule.latest_version
             ))],
+        })
+        .await
+}
+
+async fn record_rule_backtest_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    record: &RuleBacktestRecord,
+) -> anyhow::Result<()> {
+    let payload = serde_json::to_value(record)?;
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "rule.backtest.completed".into(),
+            event_status: "succeeded".into(),
+            summary: "Rule backtest completed".into(),
+            payload,
+            evidence_refs: record
+                .evidence_refs
+                .iter()
+                .map(|reference| serde_json::json!(reference))
+                .collect(),
         })
         .await
 }

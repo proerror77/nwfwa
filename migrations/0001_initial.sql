@@ -431,6 +431,26 @@ CREATE TABLE IF NOT EXISTS rule_promotion_reviews (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS rule_backtest_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  rule_id TEXT NOT NULL,
+  rule_version INTEGER NOT NULL,
+  sample_count INTEGER NOT NULL,
+  matched_count INTEGER NOT NULL,
+  reviewed_count INTEGER NOT NULL,
+  confirmed_fwa_count INTEGER NOT NULL,
+  false_positive_count INTEGER NOT NULL,
+  precision_value DOUBLE PRECISION NOT NULL,
+  recall_value DOUBLE PRECISION NOT NULL,
+  lift DOUBLE PRECISION NOT NULL,
+  false_positive_rate DOUBLE PRECISION NOT NULL,
+  estimated_saving TEXT NOT NULL,
+  promotion_recommendation TEXT NOT NULL,
+  blockers JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS investigation_results (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   investigation_id TEXT NOT NULL UNIQUE,

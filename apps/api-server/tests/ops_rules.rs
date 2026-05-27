@@ -353,6 +353,109 @@ async fn backtest_recommends_review_when_labeled_metrics_pass() {
 }
 
 #[tokio::test]
+async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/backtest",
+        r#"{
+          "rule": {
+            "rule_id": "rule_early_claim",
+            "version": 1,
+            "name": "Early claim after policy start",
+            "conditions": [
+              {
+                "field": "days_since_policy_start",
+                "operator": "<=",
+                "value": 7
+              }
+            ],
+            "action": {
+              "score": 25,
+              "alert_code": "EARLY_CLAIM",
+              "recommended_action": "ManualReview",
+              "reason": "保单生效后 7 天内发生理赔"
+            }
+          },
+          "samples": [
+            {
+              "external_claim_id": "CLM-BT-TP-1",
+              "claim_amount": "8000",
+              "currency": "CNY",
+              "service_date": "2026-01-06",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-BT-TP-1",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-BT-TP-2",
+              "claim_amount": "7000",
+              "currency": "CNY",
+              "service_date": "2026-01-07",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-BT-TP-2",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-BT-TN",
+              "claim_amount": "500",
+              "currency": "CNY",
+              "service_date": "2026-03-01",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-BT-TN",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            }
+          ],
+          "expected_review_capacity": 5
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["reviewed_count"], 3);
+    assert_eq!(body["saving_amount"], "1500.00");
+    let blockers = body["blockers"].as_array().unwrap();
+    assert!(!blockers.contains(&serde_json::json!("backtest evidence missing")));
+    assert!(!blockers.contains(&serde_json::json!("estimated saving missing")));
+    assert!(!blockers.contains(&serde_json::json!("false-positive burden missing")));
+    assert!(blockers.contains(&serde_json::json!("shadow rollout missing")));
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/rules/rule_early_claim", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(body["audit_events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "rule.backtest.completed"));
+}
+
+#[tokio::test]
 async fn discovers_candidate_rules_from_labeled_samples() {
     let app = build_app(test_config());
 

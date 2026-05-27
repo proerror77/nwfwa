@@ -110,6 +110,26 @@ pub struct RulePromotionReviewRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleBacktestRecord {
+    pub rule_id: String,
+    pub rule_version: u32,
+    pub sample_count: u32,
+    pub matched_count: u32,
+    pub reviewed_count: u32,
+    pub confirmed_fwa_count: u32,
+    pub false_positive_count: u32,
+    pub precision: f64,
+    pub recall: f64,
+    pub lift: f64,
+    pub false_positive_rate: f64,
+    pub estimated_saving: String,
+    pub promotion_recommendation: String,
+    pub blockers: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeadRecord {
     pub lead_id: String,
     pub run_id: String,
@@ -710,6 +730,17 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>>;
 
+    async fn save_rule_backtest(
+        &self,
+        record: RuleBacktestRecord,
+    ) -> anyhow::Result<RuleBacktestRecord>;
+
+    async fn latest_rule_backtest(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RuleBacktestRecord>>;
+
     async fn save_rule_promotion_review(
         &self,
         record: RulePromotionReviewRecord,
@@ -833,6 +864,7 @@ pub struct InMemoryScoringRepository {
     audit_sample_sequence: Mutex<u64>,
     candidate_rules: Mutex<HashMap<String, RuleDetailRecord>>,
     rule_statuses: Mutex<HashMap<String, String>>,
+    rule_backtests: Mutex<Vec<RuleBacktestRecord>>,
     rule_promotion_reviews: Mutex<Vec<RulePromotionReviewRecord>>,
     datasets: Mutex<HashMap<String, DatasetRecord>>,
     dataset_sequence: Mutex<u64>,
@@ -1045,6 +1077,30 @@ impl ScoringRepository for InMemoryScoringRepository {
             &outcomes,
             runs.len() as u32,
         ))
+    }
+
+    async fn save_rule_backtest(
+        &self,
+        mut record: RuleBacktestRecord,
+    ) -> anyhow::Result<RuleBacktestRecord> {
+        record.created_at = Some(chrono::Utc::now().to_rfc3339());
+        self.rule_backtests.lock().await.push(record.clone());
+        Ok(record)
+    }
+
+    async fn latest_rule_backtest(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RuleBacktestRecord>> {
+        Ok(self
+            .rule_backtests
+            .lock()
+            .await
+            .iter()
+            .rev()
+            .find(|record| record.rule_id == rule_id && record.rule_version == rule_version)
+            .cloned())
     }
 
     async fn save_rule_promotion_review(
@@ -2299,6 +2355,118 @@ impl ScoringRepository for PostgresScoringRepository {
             accumulators,
             &outcomes,
             total_runs.0.max(0) as u32,
+        ))
+    }
+
+    async fn save_rule_backtest(
+        &self,
+        record: RuleBacktestRecord,
+    ) -> anyhow::Result<RuleBacktestRecord> {
+        let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
+            "INSERT INTO rule_backtest_runs
+             (rule_id, rule_version, sample_count, matched_count, reviewed_count,
+              confirmed_fwa_count, false_positive_count, precision_value, recall_value,
+              lift, false_positive_rate, estimated_saving, promotion_recommendation,
+              blockers, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+             RETURNING created_at",
+        )
+        .bind(&record.rule_id)
+        .bind(record.rule_version as i32)
+        .bind(record.sample_count as i32)
+        .bind(record.matched_count as i32)
+        .bind(record.reviewed_count as i32)
+        .bind(record.confirmed_fwa_count as i32)
+        .bind(record.false_positive_count as i32)
+        .bind(record.precision)
+        .bind(record.recall)
+        .bind(record.lift)
+        .bind(record.false_positive_rate)
+        .bind(&record.estimated_saving)
+        .bind(&record.promotion_recommendation)
+        .bind(serde_json::json!(record.blockers))
+        .bind(serde_json::json!(record.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(RuleBacktestRecord {
+            created_at: Some(row.0.to_rfc3339()),
+            ..record
+        })
+    }
+
+    async fn latest_rule_backtest(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RuleBacktestRecord>> {
+        let row: Option<(
+            String,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            i32,
+            f64,
+            f64,
+            f64,
+            f64,
+            String,
+            String,
+            Value,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT rule_id, rule_version, sample_count, matched_count, reviewed_count,
+                    confirmed_fwa_count, false_positive_count, precision_value, recall_value,
+                    lift, false_positive_rate, estimated_saving, promotion_recommendation,
+                    blockers, evidence_refs, created_at
+             FROM rule_backtest_runs
+             WHERE rule_id = $1 AND rule_version = $2
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1",
+        )
+        .bind(rule_id)
+        .bind(rule_version as i32)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(
+            |(
+                rule_id,
+                rule_version,
+                sample_count,
+                matched_count,
+                reviewed_count,
+                confirmed_fwa_count,
+                false_positive_count,
+                precision,
+                recall,
+                lift,
+                false_positive_rate,
+                estimated_saving,
+                promotion_recommendation,
+                blockers,
+                evidence_refs,
+                created_at,
+            )| RuleBacktestRecord {
+                rule_id,
+                rule_version: rule_version as u32,
+                sample_count: sample_count.max(0) as u32,
+                matched_count: matched_count.max(0) as u32,
+                reviewed_count: reviewed_count.max(0) as u32,
+                confirmed_fwa_count: confirmed_fwa_count.max(0) as u32,
+                false_positive_count: false_positive_count.max(0) as u32,
+                precision,
+                recall,
+                lift,
+                false_positive_rate,
+                estimated_saving,
+                promotion_recommendation,
+                blockers: json_array_to_strings(blockers),
+                evidence_refs: json_array_to_strings(evidence_refs),
+                created_at: Some(created_at.to_rfc3339()),
+            },
         ))
     }
 
