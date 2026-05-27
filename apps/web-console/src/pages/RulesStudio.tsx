@@ -6,12 +6,18 @@ import {
   discoverRules,
   getRule,
   getRulePromotionGates,
+  listQaFeedbackItems,
   listRules,
   publishRule,
   saveRuleCandidate,
   submitRule,
   submitRulePromotionReview,
 } from "../api";
+import {
+  filterQaFeedbackItems,
+  QaFeedbackItem,
+  summarizeQaFeedbackItems,
+} from "./qaFeedbackItems";
 
 type RuleSummary = {
   rule_id: string;
@@ -148,6 +154,18 @@ export function RulesStudio() {
       ) as Promise<RulePromotionGatesResponse>,
     enabled: Boolean(selectedRule?.rule_id),
   });
+  const qaFeedbackQuery = useQuery({
+    queryKey: ["qa-feedback-items", apiKey],
+    queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
+  });
+  const ruleFeedbackItems = useMemo(
+    () => filterQaFeedbackItems(qaFeedbackQuery.data?.items ?? [], "rules"),
+    [qaFeedbackQuery.data?.items],
+  );
+  const ruleFeedbackSummary = useMemo(
+    () => summarizeQaFeedbackItems(ruleFeedbackItems),
+    [ruleFeedbackItems],
+  );
   const lifecycleMutation = useMutation({
     mutationFn: (action: "submit" | "approve" | "publish") => {
       if (!selectedRule) throw new Error("No rule selected");
@@ -338,6 +356,39 @@ export function RulesStudio() {
         ) : (
           <p className="empty">No promotion gate data loaded</p>
         )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>QA Feedback</h2>
+        {qaFeedbackQuery.error ? (
+          <pre className="error">{String(qaFeedbackQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Open Items</span>
+            <strong>{ruleFeedbackSummary.openCount}</strong>
+          </div>
+          <div>
+            <span>Highest Priority</span>
+            <strong>{ruleFeedbackSummary.highestPriority}</strong>
+          </div>
+          <div>
+            <span>Evidence Backed</span>
+            <strong>{ruleFeedbackSummary.evidenceBackedCount}</strong>
+          </div>
+        </div>
+        <div className="table-list">
+          {ruleFeedbackItems.map((item) => (
+            <div className="metric-row compact-metric-row" key={item.feedback_id}>
+              <span>{item.summary}</span>
+              <strong>{item.issue_type}</strong>
+              <small>
+                {item.priority} · {item.status}
+              </small>
+              <small>{item.evidence_refs.length} evidence refs</small>
+            </div>
+          ))}
+        </div>
+        {ruleFeedbackItems.length === 0 ? <p className="empty">No rule feedback items</p> : null}
       </div>
       <div className="panel wide-panel">
         <h2>Rule Backtest</h2>

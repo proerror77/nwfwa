@@ -3,9 +3,15 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getModelPerformance,
   getModelPromotionGates,
+  listQaFeedbackItems,
   listModels,
   submitModelPromotionReview,
 } from "../api";
+import {
+  filterQaFeedbackItems,
+  QaFeedbackItem,
+  summarizeQaFeedbackItems,
+} from "./qaFeedbackItems";
 
 type ModelVersion = {
   model_key: string;
@@ -62,6 +68,18 @@ export function ModelOpsPage() {
       ) as Promise<ModelPromotionGatesResponse>,
     enabled: Boolean(selectedModel?.model_key),
   });
+  const qaFeedbackQuery = useQuery({
+    queryKey: ["qa-feedback-items", apiKey],
+    queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
+  });
+  const modelFeedbackItems = useMemo(
+    () => filterQaFeedbackItems(qaFeedbackQuery.data?.items ?? [], "models"),
+    [qaFeedbackQuery.data?.items],
+  );
+  const modelFeedbackSummary = useMemo(
+    () => summarizeQaFeedbackItems(modelFeedbackItems),
+    [modelFeedbackItems],
+  );
   const reviewMutation = useMutation({
     mutationFn: (decision: "approved" | "rejected") => {
       if (!selectedModel) throw new Error("No model selected");
@@ -161,6 +179,39 @@ export function ModelOpsPage() {
         ) : (
           <p className="empty">No performance data loaded</p>
         )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>QA Feedback</h2>
+        {qaFeedbackQuery.error ? (
+          <pre className="error">{String(qaFeedbackQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Open Items</span>
+            <strong>{modelFeedbackSummary.openCount}</strong>
+          </div>
+          <div>
+            <span>Highest Priority</span>
+            <strong>{modelFeedbackSummary.highestPriority}</strong>
+          </div>
+          <div>
+            <span>Evidence Backed</span>
+            <strong>{modelFeedbackSummary.evidenceBackedCount}</strong>
+          </div>
+        </div>
+        <div className="table-list">
+          {modelFeedbackItems.map((item) => (
+            <div className="metric-row compact-metric-row" key={item.feedback_id}>
+              <span>{item.summary}</span>
+              <strong>{item.issue_type}</strong>
+              <small>
+                {item.priority} · {item.status}
+              </small>
+              <small>{item.evidence_refs.length} evidence refs</small>
+            </div>
+          ))}
+        </div>
+        {modelFeedbackItems.length === 0 ? <p className="empty">No model feedback items</p> : null}
       </div>
       <div className="panel wide-panel">
         <h2>Promotion Gates</h2>
