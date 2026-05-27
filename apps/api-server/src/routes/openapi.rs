@@ -589,6 +589,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/promotion-gates": {
+                "get": {
+                    "summary": "Get model promotion gates before routing impact",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model promotion gate summary",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelPromotionGatesResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/knowledge/cases": {
                 "get": {
                     "summary": "List FWA knowledge cases",
@@ -1635,6 +1659,37 @@ pub async fn openapi_schema() -> Json<Value> {
                         "average_score": { "type": "number" },
                         "high_risk_count": { "type": "integer" },
                         "latest_scored_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "ModelPromotionGate": {
+                    "type": "object",
+                    "required": ["label", "passed", "blocker"],
+                    "properties": {
+                        "label": { "type": "string" },
+                        "passed": { "type": "boolean" },
+                        "blocker": { "type": "string" }
+                    }
+                },
+                "ModelPromotionGatesResponse": {
+                    "type": "object",
+                    "required": ["model_key", "model_version", "decision", "passed_count", "total_count", "latest_evaluation_id", "data_status", "scored_runs", "gates", "blockers"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "decision": { "type": "string", "enum": ["routing_allowed", "routing_blocked"] },
+                        "passed_count": { "type": "integer" },
+                        "total_count": { "type": "integer" },
+                        "latest_evaluation_id": { "type": "string" },
+                        "data_status": { "type": "string" },
+                        "scored_runs": { "type": "integer" },
+                        "gates": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ModelPromotionGate" }
+                        },
+                        "blockers": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
                     }
                 },
                 "DashboardModelScore": {

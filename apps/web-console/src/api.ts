@@ -86,6 +86,13 @@ export async function getModelPerformance(modelKey: string, apiKey: string) {
   );
 }
 
+export async function getModelPromotionGates(modelKey: string, apiKey: string) {
+  return requestJson(
+    `/api/v1/ops/models/${encodeURIComponent(modelKey)}/promotion-gates`,
+    apiKey,
+  );
+}
+
 export async function listDatasets(apiKey: string) {
   return requestJson("/api/v1/ops/datasets", apiKey);
 }

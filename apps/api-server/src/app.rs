@@ -124,6 +124,10 @@ pub fn build_app_with_parts(
             get(ops_models::model_performance),
         )
         .route(
+            "/api/v1/ops/models/:model_key/promotion-gates",
+            get(ops_models::model_promotion_gates),
+        )
+        .route(
             "/api/v1/ops/rules/:rule_id/submit",
             post(ops_rules::submit_rule),
         )

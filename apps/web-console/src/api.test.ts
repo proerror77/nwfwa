@@ -14,6 +14,7 @@ import {
   listKnowledgeCases,
   listModelEvaluations,
   listModels,
+  getModelPromotionGates,
   listRules,
   publishRule,
   saveRuleCandidate,
@@ -107,9 +108,16 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ models: [] });
 
     await listModels("dev-secret");
+    await getModelPromotionGates("baseline_fwa", "dev-secret");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/promotion-gates",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

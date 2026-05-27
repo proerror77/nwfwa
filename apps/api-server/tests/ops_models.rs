@@ -56,12 +56,49 @@ async fn returns_empty_model_performance_without_scores() {
 }
 
 #[tokio::test]
+async fn returns_model_promotion_gates_without_evaluation_evidence() {
+    let app = build_app(test_config());
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["model_key"], "baseline_fwa");
+    assert_eq!(body["model_version"], "0.1.0");
+    assert_eq!(body["decision"], "routing_blocked");
+    assert_eq!(body["latest_evaluation_id"], "none");
+    assert_eq!(body["passed_count"], 1);
+    assert_eq!(body["total_count"], 9);
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("dataset version missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("shadow comparison missing")));
+}
+
+#[tokio::test]
 async fn rejects_missing_api_key_for_model_ops() {
     let app = build_app(test_config());
 
     let request = Request::builder()
         .method("GET")
         .uri("/api/v1/ops/models")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
+async fn rejects_missing_api_key_for_model_promotion_gates() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/ops/models/baseline_fwa/promotion-gates")
         .body(Body::empty())
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
