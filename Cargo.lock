@@ -359,6 +359,13 @@ dependencies = [
 [[package]]
 name = "fwa-features"
 version = "0.1.0"
+dependencies = [
+ "chrono",
+ "fwa-core",
+ "rust_decimal",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "fwa-ml-runtime"
