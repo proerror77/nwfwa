@@ -51,6 +51,14 @@ pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
         &claim_id,
         "claim_amount",
     );
+    insert_number(
+        &mut features,
+        "claim_amount_peer_percentile",
+        peer_percentile_from_amount_ratio(ratio),
+        "claim",
+        &claim_id,
+        "claim_amount",
+    );
 
     insert_number(
         &mut features,
@@ -59,6 +67,22 @@ pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
         "claim",
         &claim_id,
         "claim_items",
+    );
+    insert_number(
+        &mut features,
+        "high_cost_item_ratio",
+        high_cost_item_ratio(context),
+        "claim",
+        &claim_id,
+        "claim_items",
+    );
+    insert_number(
+        &mut features,
+        "diagnosis_procedure_match_score",
+        diagnosis_procedure_match_score(context),
+        "claim",
+        &claim_id,
+        "diagnosis_code",
     );
 
     let provider_risk = match context.provider.risk_tier {
@@ -74,8 +98,70 @@ pub fn calculate_features(context: &ClaimContext) -> FeatureMap {
         &context.provider.external_provider_id,
         "risk_tier",
     );
+    insert_number(
+        &mut features,
+        "provider_profile_score",
+        provider_profile_score(context.provider.risk_tier),
+        "provider",
+        &context.provider.external_provider_id,
+        "risk_tier",
+    );
 
     features
+}
+
+fn peer_percentile_from_amount_ratio(ratio: f64) -> u8 {
+    if ratio >= 1.0 {
+        99
+    } else if ratio >= 0.8 {
+        95
+    } else if ratio >= 0.5 {
+        80
+    } else if ratio >= 0.25 {
+        60
+    } else {
+        40
+    }
+}
+
+fn high_cost_item_ratio(context: &ClaimContext) -> f64 {
+    if context.items.is_empty() || context.claim.amount.amount.is_zero() {
+        return 0.0;
+    }
+    let claim_amount = context.claim.amount.amount;
+    let high_cost_items = context
+        .items
+        .iter()
+        .filter(|item| {
+            (item.total_amount.amount / claim_amount)
+                .to_f64()
+                .unwrap_or(0.0)
+                >= 0.5
+        })
+        .count();
+    high_cost_items as f64 / context.items.len() as f64
+}
+
+fn diagnosis_procedure_match_score(context: &ClaimContext) -> f64 {
+    let has_imaging = context.items.iter().any(|item| {
+        item.item_type.eq_ignore_ascii_case("procedure")
+            && item.description.to_ascii_lowercase().contains("imaging")
+    });
+    if has_imaging && context.claim.diagnosis_code.starts_with('J') {
+        0.35
+    } else if has_imaging {
+        0.55
+    } else {
+        0.80
+    }
+}
+
+fn provider_profile_score(risk_tier: ProviderRiskTier) -> u8 {
+    match risk_tier {
+        ProviderRiskTier::Low => 10,
+        ProviderRiskTier::Medium => 45,
+        ProviderRiskTier::High => 80,
+    }
 }
 
 fn insert_number(
@@ -145,7 +231,14 @@ mod tests {
                 service_date: chrono::NaiveDate::from_ymd_opt(2026, 1, 6).unwrap(),
                 amount: Money::new(Decimal::new(8000, 0), "CNY"),
             },
-            items: vec![],
+            items: vec![ClaimItem {
+                item_code: "IMG-001".into(),
+                item_type: "procedure".into(),
+                description: "High cost imaging".into(),
+                quantity: 1,
+                unit_amount: Money::new(Decimal::new(8000, 0), "CNY"),
+                total_amount: Money::new(Decimal::new(8000, 0), "CNY"),
+            }],
             member: Member {
                 id: member_id.clone(),
                 external_member_id: "MBR-1".into(),
@@ -191,5 +284,27 @@ mod tests {
         let risk = &features["provider_risk_tier"];
         assert_eq!(risk.value, serde_json::json!("MEDIUM"));
         assert_eq!(risk.evidence_refs[0].entity_type, "provider");
+    }
+
+    #[test]
+    fn calculates_peer_medical_and_provider_layer_features() {
+        let features = calculate_features(&context());
+
+        assert_eq!(
+            features["claim_amount_peer_percentile"].value,
+            serde_json::json!(95)
+        );
+        assert_eq!(
+            features["high_cost_item_ratio"].value,
+            serde_json::json!(1.0)
+        );
+        assert_eq!(
+            features["diagnosis_procedure_match_score"].value,
+            serde_json::json!(0.35)
+        );
+        assert_eq!(
+            features["provider_profile_score"].value,
+            serde_json::json!(45)
+        );
     }
 }

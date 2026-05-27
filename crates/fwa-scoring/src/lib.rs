@@ -100,17 +100,30 @@ fn weighted_final_score(available_scores: &[(u8, f64)]) -> u8 {
 }
 
 fn amount_ratio_score(features: &FeatureMap) -> u8 {
+    if let Some(percentile) = numeric_feature(features, "claim_amount_peer_percentile") {
+        return percentile.round().clamp(0.0, 100.0) as u8;
+    }
     numeric_feature(features, "claim_amount_to_limit_ratio")
         .map(|ratio| (ratio * 100.0).round().clamp(0.0, 100.0) as u8)
         .unwrap_or(0)
 }
 
 fn medical_reasonableness_score(features: &FeatureMap) -> u8 {
+    if let Some(match_score) = numeric_feature(features, "diagnosis_procedure_match_score") {
+        let mismatch_risk = ((1.0 - match_score) * 100.0).round().clamp(0.0, 100.0);
+        let high_cost_risk = numeric_feature(features, "high_cost_item_ratio")
+            .map(|ratio| (ratio * 25.0).round().clamp(0.0, 25.0))
+            .unwrap_or(0.0);
+        return (mismatch_risk + high_cost_risk).round().clamp(0.0, 100.0) as u8;
+    }
     let item_count = numeric_feature(features, "claim_item_count").unwrap_or(0.0);
     (item_count * 12.0).round().clamp(0.0, 60.0) as u8
 }
 
 fn provider_network_score(features: &FeatureMap) -> u8 {
+    if let Some(score) = numeric_feature(features, "provider_profile_score") {
+        return score.round().clamp(0.0, 100.0) as u8;
+    }
     match features
         .get("provider_risk_tier")
         .and_then(|feature| feature.value.as_str())
@@ -151,6 +164,15 @@ mod tests {
             },
         );
         features.insert(
+            "claim_amount_peer_percentile".into(),
+            FeatureValue {
+                name: "claim_amount_peer_percentile".into(),
+                version: 1,
+                value: serde_json::json!(95),
+                evidence_refs: vec![],
+            },
+        );
+        features.insert(
             "claim_item_count".into(),
             FeatureValue {
                 name: "claim_item_count".into(),
@@ -160,11 +182,38 @@ mod tests {
             },
         );
         features.insert(
+            "high_cost_item_ratio".into(),
+            FeatureValue {
+                name: "high_cost_item_ratio".into(),
+                version: 1,
+                value: serde_json::json!(1.0),
+                evidence_refs: vec![],
+            },
+        );
+        features.insert(
+            "diagnosis_procedure_match_score".into(),
+            FeatureValue {
+                name: "diagnosis_procedure_match_score".into(),
+                version: 1,
+                value: serde_json::json!(0.35),
+                evidence_refs: vec![],
+            },
+        );
+        features.insert(
             "provider_risk_tier".into(),
             FeatureValue {
                 name: "provider_risk_tier".into(),
                 version: 1,
                 value: serde_json::json!("HIGH"),
+                evidence_refs: vec![],
+            },
+        );
+        features.insert(
+            "provider_profile_score".into(),
+            FeatureValue {
+                name: "provider_profile_score".into(),
+                version: 1,
+                value: serde_json::json!(80),
                 evidence_refs: vec![],
             },
         );
@@ -194,14 +243,14 @@ mod tests {
         };
 
         let decision = aggregate(&features, &rules, &model);
-        assert_eq!(decision.peer_deviation_score, 80);
+        assert_eq!(decision.peer_deviation_score, 95);
         assert_eq!(decision.rule_score, 80);
         assert_eq!(decision.anomaly_score, 0);
         assert_eq!(decision.ml_score, 90);
-        assert_eq!(decision.medical_reasonableness_score, 12);
+        assert_eq!(decision.medical_reasonableness_score, 90);
         assert_eq!(decision.provider_network_score, 80);
         assert_eq!(decision.similar_case_score, 0);
-        assert_eq!(decision.risk_score.value(), 75);
+        assert_eq!(decision.risk_score.value(), 87);
         assert_eq!(decision.rag, RiskLevel::Red);
         assert_eq!(
             decision.recommended_action,
