@@ -1,3 +1,155 @@
-pub fn crate_ready() -> bool {
-    true
+use fwa_core::RecommendedAction;
+use fwa_features::FeatureMap;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use thiserror::Error;
+
+#[derive(Debug, Error)]
+pub enum RuleError {
+    #[error("unsupported operator: {0}")]
+    UnsupportedOperator(String),
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Rule {
+    pub rule_id: String,
+    pub version: u32,
+    pub name: String,
+    pub conditions: Vec<Condition>,
+    pub action: RuleAction,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Condition {
+    pub field: String,
+    pub operator: String,
+    pub value: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleAction {
+    pub score: u8,
+    pub alert_code: String,
+    pub recommended_action: RecommendedAction,
+    pub reason: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct RuleMatch {
+    pub rule_id: String,
+    pub rule_version: u32,
+    pub score_contribution: u8,
+    pub alert_code: String,
+    pub reason: String,
+    pub recommended_action: RecommendedAction,
+}
+
+pub fn evaluate_rules(rules: &[Rule], features: &FeatureMap) -> Result<Vec<RuleMatch>, RuleError> {
+    let mut matches = Vec::new();
+    for rule in rules {
+        let matched = rule
+            .conditions
+            .iter()
+            .map(|condition| evaluate_condition(condition, features))
+            .collect::<Result<Vec<_>, _>>()?
+            .into_iter()
+            .all(|value| value);
+
+        if matched {
+            matches.push(RuleMatch {
+                rule_id: rule.rule_id.clone(),
+                rule_version: rule.version,
+                score_contribution: rule.action.score,
+                alert_code: rule.action.alert_code.clone(),
+                reason: rule.action.reason.clone(),
+                recommended_action: rule.action.recommended_action,
+            });
+        }
+    }
+    Ok(matches)
+}
+
+fn evaluate_condition(condition: &Condition, features: &FeatureMap) -> Result<bool, RuleError> {
+    let Some(feature) = features.get(&condition.field) else {
+        return Ok(false);
+    };
+
+    match condition.operator.as_str() {
+        "<=" => Ok(as_f64(&feature.value) <= as_f64(&condition.value)),
+        ">=" => Ok(as_f64(&feature.value) >= as_f64(&condition.value)),
+        "==" => Ok(feature.value == condition.value),
+        other => Err(RuleError::UnsupportedOperator(other.to_string())),
+    }
+}
+
+fn as_f64(value: &Value) -> f64 {
+    value
+        .as_f64()
+        .or_else(|| value.as_i64().map(|v| v as f64))
+        .unwrap_or(0.0)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fwa_features::FeatureValue;
+    use std::collections::BTreeMap;
+
+    #[test]
+    fn matches_rule_when_all_conditions_match() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "days_since_policy_start".into(),
+            FeatureValue {
+                name: "days_since_policy_start".into(),
+                version: 1,
+                value: serde_json::json!(5),
+                evidence_refs: vec![],
+            },
+        );
+
+        let rules = vec![Rule {
+            rule_id: "rule_early_claim".into(),
+            version: 1,
+            name: "Early claim".into(),
+            conditions: vec![Condition {
+                field: "days_since_policy_start".into(),
+                operator: "<=".into(),
+                value: serde_json::json!(7),
+            }],
+            action: RuleAction {
+                score: 25,
+                alert_code: "EARLY_CLAIM".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "保单生效后 7 天内发生理赔".into(),
+            },
+        }];
+
+        let matches = evaluate_rules(&rules, &features).unwrap();
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].alert_code, "EARLY_CLAIM");
+    }
+
+    #[test]
+    fn missing_feature_does_not_match() {
+        let rules = vec![Rule {
+            rule_id: "rule_missing".into(),
+            version: 1,
+            name: "Missing".into(),
+            conditions: vec![Condition {
+                field: "unknown_feature".into(),
+                operator: "==".into(),
+                value: serde_json::json!(1),
+            }],
+            action: RuleAction {
+                score: 10,
+                alert_code: "MISSING".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "missing".into(),
+            },
+        }];
+
+        let matches = evaluate_rules(&rules, &BTreeMap::new()).unwrap();
+        assert!(matches.is_empty());
+    }
 }

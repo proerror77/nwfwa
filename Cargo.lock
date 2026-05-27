@@ -374,6 +374,13 @@ version = "0.1.0"
 [[package]]
 name = "fwa-rules"
 version = "0.1.0"
+dependencies = [
+ "fwa-core",
+ "fwa-features",
+ "serde",
+ "serde_json",
+ "thiserror",
+]
 
 [[package]]
 name = "fwa-scoring"
