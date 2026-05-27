@@ -19,6 +19,10 @@ pub struct ScoreClaimRequest {
     pub source_system: String,
     pub claim_id: Option<String>,
     pub claim: Option<FullClaimPayload>,
+    pub items: Option<Vec<ClaimItemPayload>>,
+    pub member: Option<MemberPayload>,
+    pub policy: Option<PolicyPayload>,
+    pub provider: Option<ProviderPayload>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -124,11 +128,16 @@ pub async fn score_claim(
         )
     })?;
 
-    if request.claim_id.is_some() && request.claim.is_some() {
+    let has_full_payload = request.claim.is_some()
+        || request.items.is_some()
+        || request.member.is_some()
+        || request.policy.is_some()
+        || request.provider.is_some();
+    if request.claim_id.is_some() && has_full_payload {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "AMBIGUOUS_SCORE_REQUEST",
-            "claim_id and claim payload are mutually exclusive",
+            "claim_id and full claim payload are mutually exclusive",
         ));
     }
     if request.claim_id.is_none() && request.claim.is_none() {
@@ -153,7 +162,12 @@ pub async fn score_claim(
                 )
             })?
     } else {
-        let context = demo_context(request.claim.clone().expect("validated claim payload"));
+        let mut payload = request.claim.clone().expect("validated claim payload");
+        payload.items = payload.items.or_else(|| request.items.clone());
+        payload.member = payload.member.or_else(|| request.member.clone());
+        payload.policy = payload.policy.or_else(|| request.policy.clone());
+        payload.provider = payload.provider.or_else(|| request.provider.clone());
+        let context = demo_context(payload);
         state
             .repository
             .upsert_claim_context(

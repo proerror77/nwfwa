@@ -79,6 +79,85 @@ async fn scores_full_payload_with_api_key() {
 }
 
 #[tokio::test]
+async fn scores_spec_style_top_level_full_payload() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-TOP-LEVEL",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "PROC-001",
+                  "item_type": "procedure",
+                  "description": "Imaging",
+                  "quantity": 1,
+                  "unit_amount": "8000",
+                  "total_amount": "8000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-TOP-LEVEL"
+              },
+              "policy": {
+                "external_policy_id": "POL-TOP-LEVEL",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-TOP-LEVEL",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "High"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn rejects_claim_id_with_top_level_payload_fields() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim_id": "CLM-LOAD",
+              "member": {
+                "external_member_id": "MBR-LOAD"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+}
+
+#[tokio::test]
 async fn rejects_missing_api_key() {
     let app = build_app(test_config());
 
