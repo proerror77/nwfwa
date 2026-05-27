@@ -5,3 +5,7 @@ edition.workspace = true
 publish.workspace = true
 
 [dependencies]
+fwa-core = { path = "../fwa-core" }
+fwa-ml-runtime = { path = "../fwa-ml-runtime" }
+fwa-rules = { path = "../fwa-rules" }
+serde.workspace = true
