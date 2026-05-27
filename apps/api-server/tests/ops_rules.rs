@@ -93,6 +93,35 @@ async fn returns_rule_detail_with_versions() {
 }
 
 #[tokio::test]
+async fn returns_rule_promotion_gates_for_unreviewed_rule() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["rule_id"], "rule_early_claim");
+    assert_eq!(body["rule_version"], 1);
+    assert_eq!(body["decision"], "routing_blocked");
+    assert_eq!(body["total_count"], 7);
+    assert_eq!(body["passed_count"], 3);
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("backtest evidence missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("shadow rollout missing")));
+}
+
+#[tokio::test]
 async fn backtests_candidate_rule_against_samples() {
     let app = build_app(test_config());
 

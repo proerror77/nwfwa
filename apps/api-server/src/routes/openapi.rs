@@ -140,6 +140,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/{rule_id}/promotion-gates": {
+                "get": {
+                    "summary": "Get rule promotion gates before routing impact",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "rule_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Rule promotion gate summary",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RulePromotionGatesResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/{rule_id}": {
                 "get": {
                     "summary": "Get rule details and versions",
@@ -1398,6 +1422,52 @@ pub async fn openapi_schema() -> Json<Value> {
                         "rules": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/RulePerformanceRecord" }
+                        }
+                    }
+                },
+                "RulePromotionGate": {
+                    "type": "object",
+                    "required": ["label", "passed", "blocker"],
+                    "properties": {
+                        "label": { "type": "string" },
+                        "passed": { "type": "boolean" },
+                        "blocker": { "type": "string" }
+                    }
+                },
+                "RulePromotionGatesResponse": {
+                    "type": "object",
+                    "required": [
+                        "rule_id",
+                        "rule_version",
+                        "decision",
+                        "status",
+                        "passed_count",
+                        "total_count",
+                        "trigger_count",
+                        "reviewed_count",
+                        "false_positive_rate",
+                        "saving_amount",
+                        "gates",
+                        "blockers"
+                    ],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "rule_version": { "type": "integer" },
+                        "decision": { "type": "string", "enum": ["routing_allowed", "routing_blocked"] },
+                        "status": { "type": "string" },
+                        "passed_count": { "type": "integer" },
+                        "total_count": { "type": "integer" },
+                        "trigger_count": { "type": "integer", "minimum": 0 },
+                        "reviewed_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_rate": { "type": "number", "minimum": 0 },
+                        "saving_amount": { "type": "string", "format": "decimal" },
+                        "gates": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RulePromotionGate" }
+                        },
+                        "blockers": {
+                            "type": "array",
+                            "items": { "type": "string" }
                         }
                     }
                 },

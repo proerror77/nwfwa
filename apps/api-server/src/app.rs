@@ -82,6 +82,10 @@ pub fn build_app_with_parts(
             get(ops_rules::rule_performance),
         )
         .route(
+            "/api/v1/ops/rules/:rule_id/promotion-gates",
+            get(ops_rules::rule_promotion_gates),
+        )
+        .route(
             "/api/v1/ops/rules/candidates",
             post(ops_rules::save_rule_candidate),
         )

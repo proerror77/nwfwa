@@ -1,7 +1,7 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{PersistedAuditEvent, RuleSummaryRecord},
+    repository::{PersistedAuditEvent, RulePerformanceRecord, RuleSummaryRecord},
 };
 use axum::{
     extract::{Path, State},
@@ -28,6 +28,29 @@ pub struct RuleListResponse {
 #[derive(Debug, Serialize)]
 pub struct RulePerformanceResponse {
     pub rules: Vec<crate::repository::RulePerformanceRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RulePromotionGate {
+    pub label: String,
+    pub passed: bool,
+    pub blocker: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RulePromotionGatesResponse {
+    pub rule_id: String,
+    pub rule_version: u32,
+    pub decision: String,
+    pub status: String,
+    pub passed_count: usize,
+    pub total_count: usize,
+    pub trigger_count: u32,
+    pub reviewed_count: u32,
+    pub false_positive_rate: f64,
+    pub saving_amount: String,
+    pub gates: Vec<RulePromotionGate>,
+    pub blockers: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -136,6 +159,31 @@ pub async fn rule_performance(
     Ok(Json(RulePerformanceResponse { rules }))
 }
 
+pub async fn rule_promotion_gates(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(rule_id): Path<String>,
+) -> Result<Json<RulePromotionGatesResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let rule = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    let performance = state
+        .repository
+        .rule_performance()
+        .await
+        .map_err(internal_error("RULE_PERFORMANCE_FAILED"))?
+        .into_iter()
+        .find(|record| record.rule_id == rule_id)
+        .unwrap_or_else(|| empty_rule_performance(&rule));
+
+    Ok(Json(build_rule_promotion_gates(&rule, &performance)))
+}
+
 pub async fn get_rule(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -149,6 +197,103 @@ pub async fn get_rule(
         .map_err(internal_error("RULE_LOAD_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
     Ok(Json(rule))
+}
+
+fn build_rule_promotion_gates(
+    rule: &RuleSummaryRecord,
+    performance: &RulePerformanceRecord,
+) -> RulePromotionGatesResponse {
+    let has_review_evidence = performance.reviewed_count > 0;
+    let has_saving_evidence = performance
+        .saving_amount
+        .parse::<Decimal>()
+        .map(|amount| amount > Decimal::ZERO)
+        .unwrap_or(false);
+    let gates = vec![
+        rule_gate(
+            "Named owner",
+            !rule.owner.trim().is_empty(),
+            "owner missing",
+        ),
+        rule_gate(
+            "Deterministic backtest evidence",
+            has_review_evidence,
+            "backtest evidence missing",
+        ),
+        rule_gate(
+            "Estimated saving",
+            has_saving_evidence,
+            "estimated saving missing",
+        ),
+        rule_gate(
+            "False-positive burden",
+            has_review_evidence && performance.false_positive_rate <= 0.30,
+            "false-positive burden missing",
+        ),
+        rule_gate(
+            "Approval before routing",
+            matches!(rule.status.as_str(), "approved" | "active"),
+            "approval missing",
+        ),
+        rule_gate(
+            "Shadow or limited rollout",
+            performance.trigger_count > 0 && performance.reviewed_count > 0,
+            "shadow rollout missing",
+        ),
+        rule_gate(
+            "Rollback path",
+            rule.latest_version > 0 && rule.active_version.is_some(),
+            "rollback path missing",
+        ),
+    ];
+    let blockers = gates
+        .iter()
+        .filter(|gate| !gate.passed)
+        .map(|gate| gate.blocker.clone())
+        .collect::<Vec<_>>();
+
+    RulePromotionGatesResponse {
+        rule_id: rule.rule_id.clone(),
+        rule_version: rule.latest_version,
+        decision: if blockers.is_empty() {
+            "routing_allowed".into()
+        } else {
+            "routing_blocked".into()
+        },
+        status: rule.status.clone(),
+        passed_count: gates.len() - blockers.len(),
+        total_count: gates.len(),
+        trigger_count: performance.trigger_count,
+        reviewed_count: performance.reviewed_count,
+        false_positive_rate: performance.false_positive_rate,
+        saving_amount: performance.saving_amount.clone(),
+        gates,
+        blockers,
+    }
+}
+
+fn rule_gate(label: &str, passed: bool, blocker: &str) -> RulePromotionGate {
+    RulePromotionGate {
+        label: label.into(),
+        passed,
+        blocker: blocker.into(),
+    }
+}
+
+fn empty_rule_performance(rule: &RuleSummaryRecord) -> RulePerformanceRecord {
+    RulePerformanceRecord {
+        rule_id: rule.rule_id.clone(),
+        alert_code: rule.alert_code.clone(),
+        trigger_count: 0,
+        reviewed_count: 0,
+        confirmed_fwa_count: 0,
+        false_positive_count: 0,
+        mark_rate: 0.0,
+        precision: 0.0,
+        false_positive_rate: 0.0,
+        saving_amount: "0.00".into(),
+        roi: 0.0,
+    }
 }
 
 pub async fn backtest_rule(

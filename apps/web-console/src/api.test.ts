@@ -6,6 +6,7 @@ import {
   discoverRules,
   getDashboardSummary,
   getClaimAuditHistory,
+  getRulePromotionGates,
   investigateCase,
   listAuditSamples,
   listCases,
@@ -42,6 +43,7 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ rules: [] });
 
     await listRules("dev-secret");
+    await getRulePromotionGates("rule_early_claim", "dev-secret");
     await submitRule("rule_early_claim", "dev-secret");
     await approveRule("rule_early_claim", "dev-secret");
     await publishRule("rule_early_claim", "dev-secret");
@@ -55,16 +57,23 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       "/api/v1/ops/rules/rule_early_claim/submit",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      4,
       "/api/v1/ops/rules/rule_early_claim/approve",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       "/api/v1/ops/rules/rule_early_claim/publish",
       expect.objectContaining({ method: "POST" }),
     );

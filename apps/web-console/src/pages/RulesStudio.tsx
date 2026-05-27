@@ -5,6 +5,7 @@ import {
   backtestRule,
   discoverRules,
   getRule,
+  getRulePromotionGates,
   listRules,
   publishRule,
   saveRuleCandidate,
@@ -21,6 +22,22 @@ type RuleSummary = {
   score: number;
   alert_code: string;
   recommended_action: string;
+};
+
+type RulePromotionGatesResponse = {
+  decision: string;
+  passed_count: number;
+  total_count: number;
+  trigger_count: number;
+  reviewed_count: number;
+  false_positive_rate: number;
+  saving_amount: string;
+  blockers: string[];
+  gates: Array<{
+    label: string;
+    passed: boolean;
+    blocker: string;
+  }>;
 };
 
 const defaultBacktest = JSON.stringify(
@@ -117,6 +134,15 @@ export function RulesStudio() {
   const detailQuery = useQuery({
     queryKey: ["rule", selectedRule?.rule_id, apiKey],
     queryFn: () => getRule(selectedRule!.rule_id, apiKey),
+    enabled: Boolean(selectedRule?.rule_id),
+  });
+  const promotionQuery = useQuery({
+    queryKey: ["rule-promotion-gates", selectedRule?.rule_id, apiKey],
+    queryFn: () =>
+      getRulePromotionGates(
+        selectedRule!.rule_id,
+        apiKey,
+      ) as Promise<RulePromotionGatesResponse>,
     enabled: Boolean(selectedRule?.rule_id),
   });
   const lifecycleMutation = useMutation({
@@ -217,6 +243,54 @@ export function RulesStudio() {
           </div>
         ) : (
           <p className="empty">No rules available</p>
+        )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Rule Promotion Gates</h2>
+        {promotionQuery.error ? (
+          <pre className="error">{String(promotionQuery.error.message)}</pre>
+        ) : null}
+        {promotionQuery.data ? (
+          <>
+            <div className="summary-grid">
+              <div>
+                <span>Routing Decision</span>
+                <strong>{promotionQuery.data.decision}</strong>
+              </div>
+              <div>
+                <span>Gates Passed</span>
+                <strong>
+                  {promotionQuery.data.passed_count}/{promotionQuery.data.total_count}
+                </strong>
+              </div>
+              <div>
+                <span>Triggered</span>
+                <strong>{promotionQuery.data.trigger_count}</strong>
+              </div>
+              <div>
+                <span>Reviewed</span>
+                <strong>{promotionQuery.data.reviewed_count}</strong>
+              </div>
+              <div>
+                <span>False Positive</span>
+                <strong>{promotionQuery.data.false_positive_rate.toFixed(2)}</strong>
+              </div>
+              <div>
+                <span>Saving</span>
+                <strong>{promotionQuery.data.saving_amount}</strong>
+              </div>
+            </div>
+            <div className="table-list">
+              {promotionQuery.data.gates.map((gate) => (
+                <div className="metric-row compact-metric-row" key={gate.label}>
+                  <span>{gate.label}</span>
+                  <strong>{gate.passed ? "passed" : gate.blocker}</strong>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="empty">No promotion gate data loaded</p>
         )}
       </div>
       <div className="panel wide-panel">
