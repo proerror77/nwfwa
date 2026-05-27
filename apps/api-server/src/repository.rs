@@ -2023,11 +2023,11 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
         let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as(
-                "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+                "SELECT ae.audit_id, ae.run_id, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
                  FROM audit_events ae
                  LEFT JOIN claims c ON c.id = ae.claim_id
                  WHERE payload ->> 'claim_id' = $1 OR c.external_claim_id = $1
-                 ORDER BY created_at, audit_id",
+                 ORDER BY ae.created_at, ae.audit_id",
             )
             .bind(claim_id)
             .fetch_all(&self.pool)
