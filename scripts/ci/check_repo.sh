@@ -6,6 +6,9 @@ required_files=(
   "AGENTS.md"
   "docs/engineering/git-flow.md"
   "docs/engineering/ci-cd.md"
+  "apps/ml-service/pyproject.toml"
+  "apps/web-console/package.json"
+  "migrations/0001_initial.sql"
 )
 
 workspace_files=(
