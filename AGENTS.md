@@ -5,6 +5,7 @@
 - Prefer evidence over assumption; verify before claiming completion.
 - Preserve unrelated user changes and avoid broad cleanup unless requested.
 - Use project-local `AGENTS.md` files when present.
+- Make atomic commits for every coherent change. Each commit should contain one logical unit of work with a focused message.
 
 # Skills
 
