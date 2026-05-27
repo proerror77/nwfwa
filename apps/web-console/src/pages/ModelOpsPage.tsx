@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getModelPerformance, getModelPromotionGates, listModels } from "../api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  getModelPerformance,
+  getModelPromotionGates,
+  listModels,
+  submitModelPromotionReview,
+} from "../api";
 
 type ModelVersion = {
   model_key: string;
@@ -30,6 +35,9 @@ type ModelPromotionGatesResponse = {
 export function ModelOpsPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedModelKey, setSelectedModelKey] = useState("baseline_fwa");
+  const [reviewer, setReviewer] = useState("model-governance");
+  const [notes, setNotes] = useState("Approved for continued shadow evaluation only.");
+  const queryClient = useQueryClient();
   const modelsQuery = useQuery({
     queryKey: ["models", apiKey],
     queryFn: () => listModels(apiKey) as Promise<{ models: ModelVersion[] }>,
@@ -53,6 +61,19 @@ export function ModelOpsPage() {
         apiKey,
       ) as Promise<ModelPromotionGatesResponse>,
     enabled: Boolean(selectedModel?.model_key),
+  });
+  const reviewMutation = useMutation({
+    mutationFn: (decision: "approved" | "rejected") => {
+      if (!selectedModel) throw new Error("No model selected");
+      return submitModelPromotionReview(
+        selectedModel.model_key,
+        { decision, reviewer, notes },
+        apiKey,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
+    },
   });
 
   return (
@@ -183,6 +204,33 @@ export function ModelOpsPage() {
                   <strong>{gate.passed ? "passed" : gate.blocker}</strong>
                 </div>
               ))}
+            </div>
+            <div className="result-stack">
+              <label>
+                Reviewer
+                <input value={reviewer} onChange={(event) => setReviewer(event.target.value)} />
+              </label>
+              <label>
+                Governance Note
+                <textarea value={notes} onChange={(event) => setNotes(event.target.value)} />
+              </label>
+              <div className="button-row">
+                <button
+                  onClick={() => reviewMutation.mutate("approved")}
+                  disabled={reviewMutation.isPending}
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => reviewMutation.mutate("rejected")}
+                  disabled={reviewMutation.isPending}
+                >
+                  Reject
+                </button>
+              </div>
+              {reviewMutation.error ? (
+                <pre className="error">{String(reviewMutation.error.message)}</pre>
+              ) : null}
             </div>
           </>
         ) : (

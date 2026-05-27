@@ -100,6 +100,21 @@ export async function getModelPromotionGates(modelKey: string, apiKey: string) {
   );
 }
 
+export async function submitModelPromotionReview(
+  modelKey: string,
+  payload: unknown,
+  apiKey: string,
+) {
+  return requestJson(
+    `/api/v1/ops/models/${encodeURIComponent(modelKey)}/promotion-reviews`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function listDatasets(apiKey: string) {
   return requestJson("/api/v1/ops/datasets", apiKey);
 }

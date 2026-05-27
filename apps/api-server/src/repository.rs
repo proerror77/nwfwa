@@ -210,6 +210,16 @@ pub struct ModelPerformanceRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelPromotionReviewRecord {
+    pub model_key: String,
+    pub model_version: String,
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardModelScoreRecord {
     pub scored_runs: u32,
     pub average_score: f64,
@@ -688,6 +698,17 @@ pub trait ScoringRepository: Send + Sync {
         model_key: &str,
     ) -> anyhow::Result<Option<ModelPerformanceRecord>>;
 
+    async fn save_model_promotion_review(
+        &self,
+        record: ModelPromotionReviewRecord,
+    ) -> anyhow::Result<ModelPromotionReviewRecord>;
+
+    async fn latest_model_promotion_review(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ModelPromotionReviewRecord>>;
+
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord>;
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
@@ -772,6 +793,7 @@ pub struct InMemoryScoringRepository {
     model_datasets: Mutex<HashMap<String, ModelDatasetRecord>>,
     model_dataset_sequence: Mutex<u64>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
+    model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
 }
 
 impl InMemoryScoringRepository {
@@ -1085,6 +1107,33 @@ impl ScoringRepository for InMemoryScoringRepository {
         } else {
             Ok(None)
         }
+    }
+
+    async fn save_model_promotion_review(
+        &self,
+        mut record: ModelPromotionReviewRecord,
+    ) -> anyhow::Result<ModelPromotionReviewRecord> {
+        record.created_at = Some(chrono::Utc::now().to_rfc3339());
+        self.model_promotion_reviews
+            .lock()
+            .await
+            .push(record.clone());
+        Ok(record)
+    }
+
+    async fn latest_model_promotion_review(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ModelPromotionReviewRecord>> {
+        Ok(self
+            .model_promotion_reviews
+            .lock()
+            .await
+            .iter()
+            .rev()
+            .find(|review| review.model_key == model_key && review.model_version == model_version)
+            .cloned())
     }
 
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
@@ -2386,6 +2435,66 @@ impl ScoringRepository for PostgresScoringRepository {
             high_risk_count: row.2.unwrap_or(0) as u32,
             latest_scored_at: row.3.map(|timestamp| timestamp.to_rfc3339()),
         }))
+    }
+
+    async fn save_model_promotion_review(
+        &self,
+        record: ModelPromotionReviewRecord,
+    ) -> anyhow::Result<ModelPromotionReviewRecord> {
+        let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
+            "INSERT INTO model_promotion_reviews
+             (model_key, model_version, decision, reviewer, notes)
+             VALUES ($1, $2, $3, $4, $5)
+             RETURNING created_at",
+        )
+        .bind(&record.model_key)
+        .bind(&record.model_version)
+        .bind(&record.decision)
+        .bind(&record.reviewer)
+        .bind(&record.notes)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(ModelPromotionReviewRecord {
+            created_at: Some(row.0.to_rfc3339()),
+            ..record
+        })
+    }
+
+    async fn latest_model_promotion_review(
+        &self,
+        model_key: &str,
+        model_version: &str,
+    ) -> anyhow::Result<Option<ModelPromotionReviewRecord>> {
+        let row: Option<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT model_key, model_version, decision, reviewer, notes, created_at
+                 FROM model_promotion_reviews
+                 WHERE model_key = $1 AND model_version = $2
+                 ORDER BY created_at DESC
+                 LIMIT 1",
+        )
+        .bind(model_key)
+        .bind(model_version)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(
+            |(model_key, model_version, decision, reviewer, notes, created_at)| {
+                ModelPromotionReviewRecord {
+                    model_key,
+                    model_version,
+                    decision,
+                    reviewer,
+                    notes,
+                    created_at: Some(created_at.to_rfc3339()),
+                }
+            },
+        ))
     }
 
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {

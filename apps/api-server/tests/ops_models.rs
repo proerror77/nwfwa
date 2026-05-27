@@ -28,6 +28,26 @@ async fn get_json(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Valu
     (status, body)
 }
 
+async fn json_request(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+) -> (StatusCode, serde_json::Value) {
+    let request = Request::builder()
+        .method(method)
+        .uri(uri)
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(body.to_string()))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
+    (status, body)
+}
+
 #[tokio::test]
 async fn lists_baseline_model_versions() {
     let app = build_app(test_config());
@@ -76,6 +96,46 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("shadow comparison missing")));
+}
+
+#[tokio::test]
+async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
+          "notes": "Approved for continued shadow evaluation only."
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["model_key"], "baseline_fwa");
+    assert_eq!(body["model_version"], "0.1.0");
+    assert_eq!(body["decision"], "approved");
+    assert_eq!(body["reviewer"], "model-governance");
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["decision"], "routing_blocked");
+    assert_eq!(body["passed_count"], 2);
+    assert!(!body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("approval missing")));
+    let approval_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Approval")
+        .unwrap();
+    assert_eq!(approval_gate["passed"], true);
 }
 
 #[tokio::test]

@@ -16,6 +16,7 @@ import {
   listModelEvaluations,
   listModels,
   getModelPromotionGates,
+  submitModelPromotionReview,
   listRules,
   publishRule,
   saveRuleCandidate,
@@ -118,6 +119,11 @@ describe("ops API helpers", () => {
 
     await listModels("dev-secret");
     await getModelPromotionGates("baseline_fwa", "dev-secret");
+    await submitModelPromotionReview(
+      "baseline_fwa",
+      { decision: "approved", reviewer: "model-governance", notes: "shadow only" },
+      "dev-secret",
+    );
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/models",
@@ -129,6 +135,17 @@ describe("ops API helpers", () => {
       "/api/v1/ops/models/baseline_fwa/promotion-gates",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          decision: "approved",
+          reviewer: "model-governance",
+          notes: "shadow only",
+        }),
       }),
     );
   });

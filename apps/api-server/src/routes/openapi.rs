@@ -637,6 +637,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/promotion-reviews": {
+                "post": {
+                    "summary": "Record a model promotion review decision",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitModelPromotionReviewRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded model promotion review",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelPromotionReview" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/knowledge/cases": {
                 "get": {
                     "summary": "List FWA knowledge cases",
@@ -1760,6 +1792,27 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         }
+                    }
+                },
+                "SubmitModelPromotionReviewRequest": {
+                    "type": "object",
+                    "required": ["decision", "reviewer", "notes"],
+                    "properties": {
+                        "decision": { "type": "string", "enum": ["approved", "rejected"] },
+                        "reviewer": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                },
+                "ModelPromotionReview": {
+                    "type": "object",
+                    "required": ["model_key", "model_version", "decision", "reviewer", "notes"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "decision": { "type": "string", "enum": ["approved", "rejected"] },
+                        "reviewer": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 },
                 "DashboardModelScore": {

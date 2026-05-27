@@ -39,6 +39,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/models",
         "/api/v1/ops/models/{model_key}/performance",
         "/api/v1/ops/models/{model_key}/promotion-gates",
+        "/api/v1/ops/models/{model_key}/promotion-reviews",
         "/api/v1/ops/datasets",
         "/api/v1/ops/datasets/{dataset_id}",
         "/api/v1/ops/datasets/{dataset_id}/mappings",
