@@ -11,6 +11,10 @@ This repository is the project workspace for a health-insurance FWA risk and ope
 
 See `AGENTS.md` for project-level agent working instructions.
 
+## Product Docs
+
+- [FWA Risk And Operations Platform PRD](docs/product/fwa-risk-operations-prd.md)
+
 ## Local Development
 
 Start Postgres and the baseline ML service:
