@@ -1,6 +1,7 @@
 /target/
 node_modules/
 dist/
+.playwright-mcp/
 .venv/
 __pycache__/
 *.pyc
