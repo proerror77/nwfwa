@@ -10,7 +10,7 @@ use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::*;
 use fwa_features::calculate_features;
 use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
-use fwa_rules::{evaluate_rules, Condition, Rule, RuleAction};
+use fwa_rules::evaluate_rules;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -200,7 +200,11 @@ pub async fn score_claim(
             })
         })
         .collect::<Vec<_>>();
-    let rules = demo_rules();
+    let rules = state
+        .repository
+        .list_active_rules()
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?;
     let rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
     let model_score = match state
@@ -463,23 +467,4 @@ fn demo_context(payload: FullClaimPayload) -> ClaimContext {
                 .unwrap_or(ProviderRiskTier::Medium),
         },
     }
-}
-
-fn demo_rules() -> Vec<Rule> {
-    vec![Rule {
-        rule_id: "rule_early_claim".into(),
-        version: 1,
-        name: "Early claim".into(),
-        conditions: vec![Condition {
-            field: "days_since_policy_start".into(),
-            operator: "<=".into(),
-            value: serde_json::json!(7),
-        }],
-        action: RuleAction {
-            score: 75,
-            alert_code: "EARLY_CLAIM".into(),
-            recommended_action: RecommendedAction::ManualReview,
-            reason: "保单生效后 7 天内发生理赔".into(),
-        },
-    }]
 }

@@ -12,15 +12,23 @@ CI runs on:
 - pull requests into `main` or `develop`
 - manual dispatch
 
-Current required check:
+Current checks:
 
 - repository health check through `scripts/ci/check_repo.sh`
+- Rust: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
+- PostgreSQL migration idempotency
+- Python ML service install and `pytest`
+- Web console `npm ci`, TypeScript lint, Vitest, and production build
 
-Language-specific build checks should be added when those project files exist:
+## GitHub Actions Runtime
 
-- Rust: `cargo fmt --all -- --check` and `cargo test --all --locked`
-- Node: `npm ci`, lint, and tests
-- Python: install project dependencies and run tests
+GitHub announced Node.js 20 deprecation for JavaScript actions and migration toward Node.js 24. Workflows use Node 24-compatible action majors:
+
+- `actions/checkout@v6`
+- `actions/setup-python@v6`
+- `actions/setup-node@v6`
+
+Keep hosted runners on GitHub-managed `ubuntu-latest`. If self-hosted runners are introduced, they must be at least runner `v2.327.1` before using the v6 setup actions.
 
 ## CD
 

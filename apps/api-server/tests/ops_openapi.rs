@@ -41,6 +41,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/model-datasets",
         "/api/v1/ops/model-evaluations",
         "/api/v1/ops/model-evaluations/{evaluation_run_id}",
+        "/api/v1/ops/dashboard/summary",
         "/api/v1/ops/knowledge/cases",
         "/api/v1/knowledge/search-similar",
         "/api/v1/agent/cases/investigate",

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveRule,
   backtestRule,
+  getDashboardSummary,
   investigateCase,
   listDatasets,
   listKnowledgeCases,
@@ -11,6 +12,7 @@ import {
   publishRule,
   searchSimilarCases,
   submitRule,
+  submitQaResult,
 } from "./api";
 
 function mockFetch(body: unknown, ok = true) {
@@ -105,6 +107,42 @@ describe("ops API helpers", () => {
       "/api/v1/ops/model-evaluations",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls dashboard summary endpoint", async () => {
+    const fetchMock = mockFetch({ suspected_claims: 0 });
+
+    await getDashboardSummary("dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/dashboard/summary",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("posts QA review results", async () => {
+    const fetchMock = mockFetch({ event_status: "accepted" });
+    const payload = {
+      qa_case_id: "QA-9001",
+      claim_id: "CLM-0287",
+      qa_conclusion: "issue_found_escalate",
+      issue_type: "alert_handling_incomplete",
+      feedback_target: "rules",
+      notes: "Reviewer should attach provider history evidence.",
+      evidence_refs: ["audit:scoring.completed"],
+    };
+
+    await submitQaResult(payload, "dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/qa/results",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
     );
   });

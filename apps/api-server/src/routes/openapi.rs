@@ -327,6 +327,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/dashboard/summary": {
+                "get": {
+                    "summary": "Get management dashboard summary metrics",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Dashboard summary metrics for FWA operations",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/DashboardSummaryResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/backtest": {
                 "post": {
                     "summary": "Backtest a candidate rule against sample claims",
@@ -1051,6 +1075,36 @@ pub async fn openapi_schema() -> Json<Value> {
                         "average_score": { "type": "number" },
                         "high_risk_count": { "type": "integer" },
                         "latest_scored_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "DashboardModelScore": {
+                    "type": "object",
+                    "required": ["scored_runs", "average_score", "high_risk_count"],
+                    "properties": {
+                        "scored_runs": { "type": "integer" },
+                        "average_score": { "type": "number" },
+                        "high_risk_count": { "type": "integer" }
+                    }
+                },
+                "DashboardSummaryResponse": {
+                    "type": "object",
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "investigation_results", "qa_reviews"],
+                    "properties": {
+                        "suspected_claims": { "type": "integer" },
+                        "confirmed_fwa": { "type": "integer" },
+                        "risk_amount": { "type": "string", "format": "decimal" },
+                        "saving_amount": { "type": "string", "format": "decimal" },
+                        "rag_distribution": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                        },
+                        "rule_hits": { "type": "integer" },
+                        "model_scores": {
+                            "type": "object",
+                            "additionalProperties": { "$ref": "#/components/schemas/DashboardModelScore" }
+                        },
+                        "investigation_results": { "type": "integer" },
+                        "qa_reviews": { "type": "integer" }
                     }
                 },
                 "KnowledgeCase": {

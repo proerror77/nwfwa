@@ -80,6 +80,10 @@ export async function listModelEvaluations(apiKey: string) {
   return requestJson("/api/v1/ops/model-evaluations", apiKey);
 }
 
+export async function getDashboardSummary(apiKey: string) {
+  return requestJson("/api/v1/ops/dashboard/summary", apiKey);
+}
+
 export async function listKnowledgeCases(apiKey: string) {
   return requestJson("/api/v1/ops/knowledge/cases", apiKey);
 }
@@ -93,6 +97,13 @@ export async function searchSimilarCases(payload: unknown, apiKey: string) {
 
 export async function investigateCase(payload: unknown, apiKey: string) {
   return requestJson("/api/v1/agent/cases/investigate", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function submitQaResult(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/qa/results", apiKey, {
     method: "POST",
     body: JSON.stringify(payload),
   });

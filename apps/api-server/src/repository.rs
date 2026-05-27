@@ -6,7 +6,10 @@ use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{postgres::PgPoolOptions, PgPool};
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{BTreeMap, HashMap},
+    sync::Arc,
+};
 use tokio::sync::Mutex;
 
 #[derive(Debug, Clone)]
@@ -91,6 +94,26 @@ pub struct ModelPerformanceRecord {
     pub average_score: f64,
     pub high_risk_count: u32,
     pub latest_scored_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardModelScoreRecord {
+    pub scored_runs: u32,
+    pub average_score: f64,
+    pub high_risk_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardSummaryRecord {
+    pub suspected_claims: u32,
+    pub confirmed_fwa: u32,
+    pub risk_amount: String,
+    pub saving_amount: String,
+    pub rag_distribution: BTreeMap<String, u32>,
+    pub rule_hits: u32,
+    pub model_scores: BTreeMap<String, DashboardModelScoreRecord>,
+    pub investigation_results: u32,
+    pub qa_reviews: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -371,6 +394,8 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>>;
 
+    async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>>;
+
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>>;
 
     async fn update_rule_status(
@@ -385,6 +410,8 @@ pub trait ScoringRepository: Send + Sync {
         &self,
         model_key: &str,
     ) -> anyhow::Result<Option<ModelPerformanceRecord>>;
+
+    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord>;
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
@@ -518,6 +545,23 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect())
     }
 
+    async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>> {
+        let statuses = self.rule_statuses.lock().await;
+        default_rule_details()
+            .into_iter()
+            .filter_map(|mut detail| {
+                if let Some(status) = statuses.get(&detail.summary.rule_id) {
+                    detail.summary.status = status.clone();
+                    for version in &mut detail.versions {
+                        version.status = status.clone();
+                    }
+                }
+                (detail.summary.status == "active").then_some(detail)
+            })
+            .map(runtime_rule_from_detail)
+            .collect()
+    }
+
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>> {
         let statuses = self.rule_statuses.lock().await;
         Ok(default_rule_details()
@@ -565,6 +609,91 @@ impl ScoringRepository for InMemoryScoringRepository {
         } else {
             Ok(None)
         }
+    }
+
+    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
+        let runs = self.runs.lock().await;
+        let claims = self.claims.lock().await;
+        let pilot_events = self.pilot_audit_events.lock().await;
+
+        let mut risk_amount = Decimal::ZERO;
+        let mut rag_distribution = BTreeMap::new();
+        let mut model_accumulators = BTreeMap::<String, (u32, u32, u32)>::new();
+        let mut rule_hits = 0_u32;
+
+        for run in runs.iter() {
+            if run.risk_score >= 70 {
+                if let Some(context) = claims.get(&run.claim_id) {
+                    risk_amount += context.claim.amount.amount;
+                }
+            }
+            *rag_distribution.entry(run.rag.clone()).or_insert(0) += 1;
+            rule_hits += run.rule_runs.len() as u32;
+
+            let model_key = run.model_score["model_key"]
+                .as_str()
+                .unwrap_or("unknown")
+                .to_string();
+            let score = run.model_score["score"].as_u64().unwrap_or(0) as u32;
+            let entry = model_accumulators.entry(model_key).or_insert((0, 0, 0));
+            entry.0 += 1;
+            entry.1 += score;
+            if score >= 70 {
+                entry.2 += 1;
+            }
+        }
+
+        let mut saving_amount = Decimal::ZERO;
+        let mut confirmed_fwa = 0_u32;
+        let mut investigation_results = 0_u32;
+        let mut qa_reviews = 0_u32;
+
+        for (_, event) in pilot_events.iter() {
+            match event.event_type.as_str() {
+                "investigation.result.received" => {
+                    investigation_results += 1;
+                    if event.payload["confirmed_fwa"].as_bool().unwrap_or(false) {
+                        confirmed_fwa += 1;
+                    }
+                    if let Some(value) = event.payload["saving_amount"].as_str() {
+                        saving_amount += value.parse::<Decimal>().unwrap_or(Decimal::ZERO);
+                    }
+                }
+                "qa.result.received" => {
+                    qa_reviews += 1;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(DashboardSummaryRecord {
+            suspected_claims: runs.iter().filter(|run| run.risk_score >= 70).count() as u32,
+            confirmed_fwa,
+            risk_amount: risk_amount.to_string(),
+            saving_amount: saving_amount.to_string(),
+            rag_distribution,
+            rule_hits,
+            model_scores: model_accumulators
+                .into_iter()
+                .map(|(model_key, (scored_runs, score_sum, high_risk_count))| {
+                    let average_score = if scored_runs == 0 {
+                        0.0
+                    } else {
+                        score_sum as f64 / scored_runs as f64
+                    };
+                    (
+                        model_key,
+                        DashboardModelScoreRecord {
+                            scored_runs,
+                            average_score,
+                            high_risk_count,
+                        },
+                    )
+                })
+                .collect(),
+            investigation_results,
+            qa_reviews,
+        })
     }
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
@@ -1135,6 +1264,31 @@ impl ScoringRepository for PostgresScoringRepository {
             .collect())
     }
 
+    async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>> {
+        ensure_default_rules_seeded(&self.pool).await?;
+        let rows: Vec<(String, String, i32, Value)> = sqlx::query_as(
+            "SELECT r.rule_key, r.name, rv.version, rv.dsl
+             FROM rules r
+             JOIN LATERAL (
+               SELECT version, dsl
+               FROM rule_versions
+               WHERE rule_id = r.id
+               ORDER BY version DESC
+               LIMIT 1
+             ) rv ON true
+             WHERE r.status = 'active'
+             ORDER BY r.rule_key",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|(rule_id, name, version, dsl)| {
+                runtime_rule_from_parts(rule_id, name, version as u32, dsl)
+            })
+            .collect()
+    }
+
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>> {
         ensure_default_rules_seeded(&self.pool).await?;
         let summary = self
@@ -1293,6 +1447,86 @@ impl ScoringRepository for PostgresScoringRepository {
             high_risk_count: row.2.unwrap_or(0) as u32,
             latest_scored_at: row.3.map(|timestamp| timestamp.to_rfc3339()),
         }))
+    }
+
+    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
+        let suspected: (i64, Option<Decimal>) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint, COALESCE(SUM(c.claim_amount), 0)
+             FROM scoring_runs sr
+             LEFT JOIN claims c ON c.id = sr.claim_id
+             WHERE sr.risk_score >= 70",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let rag_rows: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT COALESCE(rag, 'UNKNOWN'), COUNT(*)::bigint
+             FROM scoring_runs
+             WHERE rag IS NOT NULL
+             GROUP BY rag
+             ORDER BY rag",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let rule_hits: (i64,) =
+            sqlx::query_as("SELECT COUNT(*)::bigint FROM rule_runs WHERE matched = true")
+                .fetch_one(&self.pool)
+                .await?;
+
+        let model_rows: Vec<(String, i64, Option<Decimal>, Option<i64>)> = sqlx::query_as(
+            "SELECT model_key,
+                    COUNT(*)::bigint,
+                    AVG(score),
+                    SUM(CASE WHEN score >= 70 THEN 1 ELSE 0 END)::bigint
+             FROM model_scores
+             GROUP BY model_key
+             ORDER BY model_key",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let investigation: (i64, i64, Option<Decimal>) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint,
+                    COALESCE(SUM(CASE WHEN confirmed_fwa THEN 1 ELSE 0 END), 0)::bigint,
+                    COALESCE(SUM(saving_amount), 0)
+             FROM investigation_results",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+
+        let qa_reviews: (i64,) = sqlx::query_as("SELECT COUNT(*)::bigint FROM qa_reviews")
+            .fetch_one(&self.pool)
+            .await?;
+
+        Ok(DashboardSummaryRecord {
+            suspected_claims: suspected.0 as u32,
+            confirmed_fwa: investigation.1 as u32,
+            risk_amount: suspected.1.unwrap_or(Decimal::ZERO).to_string(),
+            saving_amount: investigation.2.unwrap_or(Decimal::ZERO).to_string(),
+            rag_distribution: rag_rows
+                .into_iter()
+                .map(|(rag, count)| (rag, count as u32))
+                .collect(),
+            rule_hits: rule_hits.0 as u32,
+            model_scores: model_rows
+                .into_iter()
+                .map(|(model_key, scored_runs, average_score, high_risk_count)| {
+                    (
+                        model_key,
+                        DashboardModelScoreRecord {
+                            scored_runs: scored_runs as u32,
+                            average_score: average_score
+                                .map(|value| value.to_string().parse().unwrap_or(0.0))
+                                .unwrap_or(0.0),
+                            high_risk_count: high_risk_count.unwrap_or(0) as u32,
+                        },
+                    )
+                })
+                .collect(),
+            investigation_results: investigation.0 as u32,
+            qa_reviews: qa_reviews.0 as u32,
+        })
     }
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
@@ -2016,6 +2250,37 @@ fn parse_recommended_action(value: &str) -> RecommendedAction {
         "EscalateInvestigation" => RecommendedAction::EscalateInvestigation,
         _ => RecommendedAction::ManualReview,
     }
+}
+
+fn runtime_rule_from_detail(detail: RuleDetailRecord) -> anyhow::Result<Rule> {
+    let version = detail
+        .versions
+        .into_iter()
+        .find(|version| Some(version.version) == detail.summary.active_version)
+        .ok_or_else(|| {
+            anyhow::anyhow!("active version missing for rule {}", detail.summary.rule_id)
+        })?;
+    runtime_rule_from_parts(
+        detail.summary.rule_id,
+        detail.summary.name,
+        version.version,
+        version.dsl,
+    )
+}
+
+fn runtime_rule_from_parts(
+    rule_id: String,
+    name: String,
+    version: u32,
+    dsl: Value,
+) -> anyhow::Result<Rule> {
+    Ok(Rule {
+        rule_id,
+        version,
+        name,
+        conditions: serde_json::from_value(dsl["conditions"].clone())?,
+        action: serde_json::from_value(dsl["action"].clone())?,
+    })
 }
 
 async fn ensure_default_rules_seeded(pool: &PgPool) -> anyhow::Result<()> {

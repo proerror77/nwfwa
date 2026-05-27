@@ -134,6 +134,65 @@ async fn scores_spec_style_top_level_full_payload() {
 }
 
 #[tokio::test]
+async fn scoring_uses_only_active_rule_versions() {
+    let app = build_app(test_config());
+
+    let submit_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/ops/rules/rule_early_claim/submit")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from("{}"))
+        .unwrap();
+    let submit_response = app.clone().oneshot(submit_request).await.unwrap();
+    assert_eq!(submit_response.status(), StatusCode::OK);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-INACTIVE-RULE",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "policy": {
+                "external_policy_id": "POL-INACTIVE-RULE",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              },
+              "member": {
+                "external_member_id": "MBR-INACTIVE-RULE"
+              },
+              "provider": {
+                "external_provider_id": "PRV-INACTIVE-RULE",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let score_response = app.oneshot(score_request).await.unwrap();
+    assert_eq!(score_response.status(), StatusCode::OK);
+    let body = to_bytes(score_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["alerts"].as_array().unwrap().len(), 0);
+    assert_eq!(body["scores"]["rule_score"], 0);
+}
+
+#[tokio::test]
 async fn rejects_claim_id_with_top_level_payload_fields() {
     let app = build_app(test_config());
 

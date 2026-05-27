@@ -6,6 +6,9 @@ import { ModelOpsPage } from "./pages/ModelOpsPage";
 import { KnowledgeBasePage } from "./pages/KnowledgeBasePage";
 import { AgentInvestigatorPage } from "./pages/AgentInvestigatorPage";
 import { DataSourcesPage } from "./pages/DataSourcesPage";
+import { DashboardPage } from "./pages/DashboardPage";
+import { QAReviewPage } from "./pages/QAReviewPage";
+import { FactorFactoryPage } from "./pages/FactorFactoryPage";
 
 const modules = [
   "Dashboard",
@@ -21,7 +24,7 @@ const modules = [
 ];
 
 export function App() {
-  const [active, setActive] = useState("Runtime Scoring");
+  const [active, setActive] = useState("Dashboard");
   return (
     <div className="app">
       <aside>
@@ -37,19 +40,25 @@ export function App() {
         ))}
       </aside>
       <main>
+        {active === "Dashboard" ? <DashboardPage /> : null}
         {active === "Runtime Scoring" ? <RuntimeScoring /> : null}
         {active === "Rules" ? <RulesStudio /> : null}
         {active === "Models" ? <ModelOpsPage /> : null}
         {active === "Data Sources" ? <DataSourcesPage /> : null}
+        {active === "Factor Factory" ? <FactorFactoryPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
+        {active === "QA Review" ? <QAReviewPage /> : null}
         {![
           "Runtime Scoring",
+          "Dashboard",
           "Rules",
           "Models",
           "Data Sources",
+          "Factor Factory",
           "Knowledge Base",
           "Agent Investigator",
+          "QA Review",
         ].includes(active) ? (
           <PlannedModulePage title={active} />
         ) : null}
