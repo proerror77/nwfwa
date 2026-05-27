@@ -765,7 +765,8 @@ pub async fn openapi_schema() -> Json<Value> {
                             { "required": ["member"] },
                             { "required": ["policy"] },
                             { "required": ["provider"] },
-                            { "required": ["documents"] }
+                            { "required": ["documents"] },
+                            { "required": ["provider_profile"] }
                         ]
                     }
                 },
@@ -802,6 +803,9 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": {
                                 "$ref": "#/components/schemas/DocumentPayload"
                             }
+                        },
+                        "provider_profile": {
+                            "$ref": "#/components/schemas/ProviderProfilePayload"
                         }
                     },
                     "not": {
@@ -849,6 +853,9 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": {
                                 "$ref": "#/components/schemas/DocumentPayload"
                             }
+                        },
+                        "provider_profile": {
+                            "$ref": "#/components/schemas/ProviderProfilePayload"
                         }
                     }
                 },
@@ -966,6 +973,43 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "ProviderProfilePayload": {
+                    "type": "object",
+                    "required": ["windows"],
+                    "properties": {
+                        "specialty": { "type": "string" },
+                        "network_status": { "type": "string" },
+                        "windows": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ProviderProfileWindowPayload" }
+                        }
+                    }
+                },
+                "ProviderProfileWindowPayload": {
+                    "type": "object",
+                    "required": [
+                        "window_days",
+                        "claim_count",
+                        "total_claim_amount",
+                        "high_cost_item_ratio",
+                        "diagnosis_procedure_mismatch_rate",
+                        "peer_amount_percentile",
+                        "peer_frequency_percentile",
+                        "confirmed_fwa_count",
+                        "false_positive_count"
+                    ],
+                    "properties": {
+                        "window_days": { "type": "integer", "enum": [30, 90, 180] },
+                        "claim_count": { "type": "integer", "minimum": 0 },
+                        "total_claim_amount": { "type": "string", "format": "decimal" },
+                        "high_cost_item_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "diagnosis_procedure_mismatch_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "peer_amount_percentile": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "peer_frequency_percentile": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "confirmed_fwa_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_count": { "type": "integer", "minimum": 0 }
+                    }
+                },
                 "ScoreClaimResponse": {
                     "type": "object",
                     "required": [
@@ -983,6 +1027,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "alerts",
                         "top_reasons",
                         "clinical_evidence",
+                        "provider_profile",
                         "evidence_refs"
                     ],
                     "properties": {
@@ -1042,6 +1087,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         "clinical_evidence": {
                             "$ref": "#/components/schemas/ClinicalEvidenceAssessment"
                         },
+                        "provider_profile": {
+                            "$ref": "#/components/schemas/ProviderProfileAssessment"
+                        },
                         "evidence_refs": {
                             "type": "array",
                             "items": {
@@ -1051,6 +1099,60 @@ pub async fn openapi_schema() -> Json<Value> {
                                 ]
                             }
                         }
+                    }
+                },
+                "ProviderProfileAssessment": {
+                    "type": "object",
+                    "required": [
+                        "provider_id",
+                        "risk_score",
+                        "risk_tier",
+                        "review_required",
+                        "review_route",
+                        "outlier_flags",
+                        "window_findings",
+                        "evidence_refs"
+                    ],
+                    "properties": {
+                        "provider_id": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "risk_tier": { "type": "string", "enum": ["low", "medium", "high"] },
+                        "review_required": { "type": "boolean" },
+                        "review_route": { "type": "string", "enum": ["none", "provider_review"] },
+                        "specialty": { "type": ["string", "null"] },
+                        "network_status": { "type": ["string", "null"] },
+                        "outlier_flags": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "window_findings": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ProviderProfileWindowFinding" }
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "ProviderProfileWindowFinding": {
+                    "type": "object",
+                    "required": [
+                        "window_days",
+                        "risk_score",
+                        "outlier_flags",
+                        "reason",
+                        "evidence_ref"
+                    ],
+                    "properties": {
+                        "window_days": { "type": "integer" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "outlier_flags": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "reason": { "type": "string" },
+                        "evidence_ref": { "type": "string" }
                     }
                 },
                 "ClinicalEvidenceAssessment": {

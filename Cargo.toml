@@ -9,6 +9,7 @@ members = [
   "crates/fwa-anomaly",
   "crates/fwa-clinical",
   "crates/fwa-ml-runtime",
+  "crates/fwa-provider",
   "crates/fwa-scoring",
   "crates/fwa-audit",
   "crates/fwa-auth",

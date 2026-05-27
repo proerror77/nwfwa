@@ -17,6 +17,7 @@ fwa-clinical = { path = "../../crates/fwa-clinical" }
 fwa-core = { path = "../../crates/fwa-core" }
 fwa-features = { path = "../../crates/fwa-features" }
 fwa-ml-runtime = { path = "../../crates/fwa-ml-runtime" }
+fwa-provider = { path = "../../crates/fwa-provider" }
 fwa-rules = { path = "../../crates/fwa-rules" }
 fwa-scoring = { path = "../../crates/fwa-scoring" }
 rust_decimal.workspace = true

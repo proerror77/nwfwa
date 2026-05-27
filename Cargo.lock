@@ -100,6 +100,7 @@ dependencies = [
  "fwa-core",
  "fwa-features",
  "fwa-ml-runtime",
+ "fwa-provider",
  "fwa-rules",
  "fwa-scoring",
  "rust_decimal",
@@ -931,6 +932,15 @@ dependencies = [
  "serde_json",
  "thiserror",
  "tokio",
+]
+
+[[package]]
+name = "fwa-provider"
+version = "0.1.0"
+dependencies = [
+ "fwa-core",
+ "rust_decimal",
+ "serde",
 ]
 
 [[package]]

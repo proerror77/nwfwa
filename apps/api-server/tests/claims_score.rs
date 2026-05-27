@@ -290,6 +290,123 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
 }
 
 #[tokio::test]
+async fn returns_provider_profile_outlier_evidence_for_network_risk() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PROVIDER-1",
+                "claim_amount": "18000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-901",
+                  "item_type": "procedure",
+                  "description": "High cost imaging",
+                  "quantity": 1,
+                  "unit_amount": "18000",
+                  "total_amount": "18000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-PROVIDER-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-PROVIDER-1",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "20000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PROVIDER-1",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              },
+              "provider_profile": {
+                "specialty": "imaging",
+                "network_status": "in_network",
+                "windows": [
+                  {
+                    "window_days": 90,
+                    "claim_count": 126,
+                    "total_claim_amount": "420000",
+                    "high_cost_item_ratio": 0.72,
+                    "diagnosis_procedure_mismatch_rate": 0.38,
+                    "peer_amount_percentile": 97,
+                    "peer_frequency_percentile": 96,
+                    "confirmed_fwa_count": 4,
+                    "false_positive_count": 1
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let profile = &body["provider_profile"];
+    assert_eq!(profile["provider_id"], "PRV-PROVIDER-1");
+    assert_eq!(profile["review_required"], true);
+    assert_eq!(profile["review_route"], "provider_review");
+    assert!(profile["risk_score"].as_u64().unwrap() >= 80);
+    assert_eq!(
+        body["scores"]["provider_network_score"],
+        profile["risk_score"]
+    );
+    assert!(profile["outlier_flags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "peer_amount_p97"));
+    assert!(profile["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "provider_profile:PRV-PROVIDER-1:90d"));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-PROVIDER-1")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(
+        scoring_event["payload"]["provider_profile"]["review_route"],
+        "provider_review"
+    );
+}
+
+#[tokio::test]
 async fn scoring_uses_only_active_rule_versions() {
     let app = build_app(test_config());
 
@@ -462,6 +579,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "policy",
         "provider",
         "documents",
+        "provider_profile",
     ] {
         assert!(
             claim_id_mode["not"]["anyOf"]
@@ -487,10 +605,12 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "top_reasons",
         "evidence_refs",
         "clinical_evidence",
+        "provider_profile",
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");
     }
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
+    assert!(schema["components"]["schemas"]["ProviderProfileAssessment"].is_object());
 
     let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
         .as_array()

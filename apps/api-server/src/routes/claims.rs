@@ -12,8 +12,11 @@ use fwa_clinical::{
     assess_clinical_evidence, ClinicalDocumentEvidence, ClinicalEvidenceAssessment,
 };
 use fwa_core::*;
-use fwa_features::calculate_features;
+use fwa_features::{calculate_features, EvidenceRef, FeatureValue};
 use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
+use fwa_provider::{
+    assess_provider_profile, ProviderProfileAssessment, ProviderProfileInput, ProviderProfileWindow,
+};
 use fwa_rules::evaluate_rules;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -28,6 +31,7 @@ pub struct ScoreClaimRequest {
     pub policy: Option<PolicyPayload>,
     pub provider: Option<ProviderPayload>,
     pub documents: Option<Vec<DocumentPayload>>,
+    pub provider_profile: Option<ProviderProfilePayload>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -42,6 +46,7 @@ pub struct FullClaimPayload {
     pub policy: Option<PolicyPayload>,
     pub provider: Option<ProviderPayload>,
     pub documents: Option<Vec<DocumentPayload>>,
+    pub provider_profile: Option<ProviderProfilePayload>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -88,6 +93,26 @@ pub struct DocumentPayload {
     pub linked_item_codes: Option<Vec<String>>,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderProfilePayload {
+    pub specialty: Option<String>,
+    pub network_status: Option<String>,
+    pub windows: Vec<ProviderProfileWindowPayload>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderProfileWindowPayload {
+    pub window_days: u16,
+    pub claim_count: u32,
+    pub total_claim_amount: Decimal,
+    pub high_cost_item_ratio: f64,
+    pub diagnosis_procedure_mismatch_rate: f64,
+    pub peer_amount_percentile: u8,
+    pub peer_frequency_percentile: u8,
+    pub confirmed_fwa_count: u32,
+    pub false_positive_count: u32,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ScoreClaimResponse {
     pub run_id: String,
@@ -104,6 +129,7 @@ pub struct ScoreClaimResponse {
     pub alerts: Vec<AlertResponse>,
     pub top_reasons: Vec<String>,
     pub clinical_evidence: ClinicalEvidenceAssessment,
+    pub provider_profile: ProviderProfileAssessment,
     pub evidence_refs: Vec<serde_json::Value>,
 }
 
@@ -156,7 +182,8 @@ pub async fn score_claim(
         || request.member.is_some()
         || request.policy.is_some()
         || request.provider.is_some()
-        || request.documents.is_some();
+        || request.documents.is_some()
+        || request.provider_profile.is_some();
     if request.claim_id.is_some() && has_full_payload {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
@@ -172,60 +199,71 @@ pub async fn score_claim(
         ));
     }
 
-    let (context, clinical_documents) = if let Some(claim_id) = request.claim_id.clone() {
-        let context = state
-            .repository
-            .load_claim_context(&claim_id)
-            .await
-            .map_err(internal_error("CLAIM_LOAD_FAILED"))?
-            .ok_or_else(|| {
-                ApiError::new(
-                    axum::http::StatusCode::NOT_FOUND,
-                    "CLAIM_NOT_FOUND",
-                    "claim_id was not found",
+    let (context, clinical_documents, provider_profile_input) =
+        if let Some(claim_id) = request.claim_id.clone() {
+            let context = state
+                .repository
+                .load_claim_context(&claim_id)
+                .await
+                .map_err(internal_error("CLAIM_LOAD_FAILED"))?
+                .ok_or_else(|| {
+                    ApiError::new(
+                        axum::http::StatusCode::NOT_FOUND,
+                        "CLAIM_NOT_FOUND",
+                        "claim_id was not found",
+                    )
+                })?;
+            (context, Vec::new(), None)
+        } else {
+            let mut payload = request.claim.clone().expect("validated claim payload");
+            let duplicate_fields = duplicate_payload_fields(&request, &payload);
+            if !duplicate_fields.is_empty() {
+                return Err(ApiError::new(
+                    axum::http::StatusCode::BAD_REQUEST,
+                    "DUPLICATE_SCORE_PAYLOAD",
+                    format!(
+                        "duplicate nested and top-level payload fields: {}",
+                        duplicate_fields.join(", ")
+                    ),
+                ));
+            }
+            payload.items = payload.items.or_else(|| request.items.clone());
+            payload.member = payload.member.or_else(|| request.member.clone());
+            payload.policy = payload.policy.or_else(|| request.policy.clone());
+            payload.provider = payload.provider.or_else(|| request.provider.clone());
+            payload.documents = payload.documents.or_else(|| request.documents.clone());
+            payload.provider_profile = payload
+                .provider_profile
+                .or_else(|| request.provider_profile.clone());
+            let clinical_documents = payload
+                .documents
+                .clone()
+                .unwrap_or_default()
+                .into_iter()
+                .map(ClinicalDocumentEvidence::from)
+                .collect::<Vec<_>>();
+            let provider_profile_input = payload
+                .provider_profile
+                .clone()
+                .map(ProviderProfileInput::from);
+            let context = demo_context(payload);
+            state
+                .repository
+                .upsert_claim_context(
+                    context.clone(),
+                    serde_json::to_value(&context).unwrap_or_else(|_| serde_json::json!({})),
                 )
-            })?;
-        (context, Vec::new())
-    } else {
-        let mut payload = request.claim.clone().expect("validated claim payload");
-        let duplicate_fields = duplicate_payload_fields(&request, &payload);
-        if !duplicate_fields.is_empty() {
-            return Err(ApiError::new(
-                axum::http::StatusCode::BAD_REQUEST,
-                "DUPLICATE_SCORE_PAYLOAD",
-                format!(
-                    "duplicate nested and top-level payload fields: {}",
-                    duplicate_fields.join(", ")
-                ),
-            ));
-        }
-        payload.items = payload.items.or_else(|| request.items.clone());
-        payload.member = payload.member.or_else(|| request.member.clone());
-        payload.policy = payload.policy.or_else(|| request.policy.clone());
-        payload.provider = payload.provider.or_else(|| request.provider.clone());
-        payload.documents = payload.documents.or_else(|| request.documents.clone());
-        let clinical_documents = payload
-            .documents
-            .clone()
-            .unwrap_or_default()
-            .into_iter()
-            .map(ClinicalDocumentEvidence::from)
-            .collect::<Vec<_>>();
-        let context = demo_context(payload);
-        state
-            .repository
-            .upsert_claim_context(
-                context.clone(),
-                serde_json::to_value(&context).unwrap_or_else(|_| serde_json::json!({})),
-            )
-            .await
-            .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
-        (context, clinical_documents)
-    };
+                .await
+                .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
+            (context, clinical_documents, provider_profile_input)
+        };
 
     let run_id = ScoringRunId::new();
-    let features = calculate_features(&context);
+    let mut features = calculate_features(&context);
     let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
+    let provider_profile =
+        assess_provider_profile(&context.provider, provider_profile_input.as_ref());
+    apply_provider_profile_features(&mut features, &context, &provider_profile);
     let mut evidence_refs = features
         .values()
         .flat_map(|feature| {
@@ -236,6 +274,12 @@ pub async fn score_claim(
         .collect::<Vec<_>>();
     evidence_refs.extend(
         clinical_evidence
+            .evidence_refs
+            .iter()
+            .map(|evidence| serde_json::json!(evidence)),
+    );
+    evidence_refs.extend(
+        provider_profile
             .evidence_refs
             .iter()
             .map(|evidence| serde_json::json!(evidence)),
@@ -310,6 +354,7 @@ pub async fn score_claim(
         "scores": &scores,
         "top_reasons": &decision.top_reasons,
         "clinical_evidence": &clinical_evidence,
+        "provider_profile": &provider_profile,
         "triggered_rules": &alerts,
         "event_type": "scoring.completed",
         "event_status": "succeeded"
@@ -366,6 +411,7 @@ pub async fn score_claim(
         alerts,
         top_reasons: decision.top_reasons,
         clinical_evidence,
+        provider_profile,
         evidence_refs,
     }))
 }
@@ -390,6 +436,9 @@ fn duplicate_payload_fields(
     if payload.documents.is_some() && request.documents.is_some() {
         fields.push("documents");
     }
+    if payload.provider_profile.is_some() && request.provider_profile.is_some() {
+        fields.push("provider_profile");
+    }
     fields
 }
 
@@ -401,6 +450,79 @@ impl From<DocumentPayload> for ClinicalDocumentEvidence {
             linked_item_codes: value.linked_item_codes.unwrap_or_default(),
         }
     }
+}
+
+impl From<ProviderProfilePayload> for ProviderProfileInput {
+    fn from(value: ProviderProfilePayload) -> Self {
+        Self {
+            specialty: value.specialty,
+            network_status: value.network_status,
+            windows: value
+                .windows
+                .into_iter()
+                .map(ProviderProfileWindow::from)
+                .collect(),
+        }
+    }
+}
+
+impl From<ProviderProfileWindowPayload> for ProviderProfileWindow {
+    fn from(value: ProviderProfileWindowPayload) -> Self {
+        Self {
+            window_days: value.window_days,
+            claim_count: value.claim_count,
+            total_claim_amount: value.total_claim_amount,
+            high_cost_item_ratio: value.high_cost_item_ratio,
+            diagnosis_procedure_mismatch_rate: value.diagnosis_procedure_mismatch_rate,
+            peer_amount_percentile: value.peer_amount_percentile,
+            peer_frequency_percentile: value.peer_frequency_percentile,
+            confirmed_fwa_count: value.confirmed_fwa_count,
+            false_positive_count: value.false_positive_count,
+        }
+    }
+}
+
+fn apply_provider_profile_features(
+    features: &mut fwa_features::FeatureMap,
+    context: &ClaimContext,
+    provider_profile: &ProviderProfileAssessment,
+) {
+    features.insert(
+        "provider_profile_score".into(),
+        FeatureValue {
+            name: "provider_profile_score".into(),
+            version: 1,
+            value: serde_json::json!(provider_profile.risk_score),
+            evidence_refs: vec![EvidenceRef {
+                entity_type: "provider".into(),
+                entity_id: context.provider.external_provider_id.clone(),
+                field: "provider_profile_score".into(),
+            }],
+        },
+    );
+    features.insert(
+        "provider_peer_amount_percentile".into(),
+        FeatureValue {
+            name: "provider_peer_amount_percentile".into(),
+            version: 1,
+            value: serde_json::json!(provider_profile
+                .window_findings
+                .iter()
+                .filter_map(|finding| {
+                    finding.outlier_flags.iter().find_map(|flag| {
+                        flag.strip_prefix("peer_amount_p")
+                            .and_then(|value| value.parse::<u8>().ok())
+                    })
+                })
+                .max()
+                .unwrap_or(0)),
+            evidence_refs: vec![EvidenceRef {
+                entity_type: "provider".into(),
+                entity_id: context.provider.external_provider_id.clone(),
+                field: "peer_amount_percentile".into(),
+            }],
+        },
+    );
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
