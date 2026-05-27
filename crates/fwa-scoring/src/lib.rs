@@ -33,9 +33,9 @@ pub fn aggregate(
     let peer_deviation_score = amount_ratio_score(features);
     let rule_score = rule_matches
         .iter()
-        .map(|rule_match| rule_match.score_contribution)
-        .sum::<u8>()
-        .min(100);
+        .map(|rule_match| rule_match.score_contribution as u32)
+        .sum::<u32>()
+        .min(100) as u8;
     let medical_reasonableness_score = medical_reasonableness_score(features);
     let provider_network_score = provider_network_score(features);
     let similar_case_score = 0;

@@ -2523,22 +2523,175 @@ impl ScoringRepository for PostgresScoringRepository {
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
 
 pub fn default_runtime_rules() -> Vec<Rule> {
-    vec![Rule {
-        rule_id: "rule_early_claim".into(),
-        version: 1,
-        name: "Early claim".into(),
-        conditions: vec![Condition {
-            field: "days_since_policy_start".into(),
-            operator: "<=".into(),
-            value: serde_json::json!(7),
-        }],
-        action: RuleAction {
-            score: 75,
-            alert_code: "EARLY_CLAIM".into(),
-            recommended_action: RecommendedAction::ManualReview,
-            reason: "保单生效后 7 天内发生理赔".into(),
+    vec![
+        Rule {
+            rule_id: "rule_early_claim".into(),
+            version: 1,
+            name: "Early claim".into(),
+            conditions: vec![Condition {
+                field: "days_since_policy_start".into(),
+                operator: "<=".into(),
+                value: serde_json::json!(7),
+            }],
+            action: RuleAction {
+                score: 75,
+                alert_code: "EARLY_CLAIM".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "保单生效后 7 天内发生理赔".into(),
+            },
         },
-    }]
+        Rule {
+            rule_id: "rule_early_high_amount".into(),
+            version: 1,
+            name: "Early high amount".into(),
+            conditions: vec![
+                Condition {
+                    field: "days_since_policy_start".into(),
+                    operator: "<=".into(),
+                    value: serde_json::json!(10),
+                },
+                Condition {
+                    field: "claim_amount_to_limit_ratio".into(),
+                    operator: ">=".into(),
+                    value: serde_json::json!(0.7),
+                },
+            ],
+            action: RuleAction {
+                score: 45,
+                alert_code: "EARLY_HIGH_AMOUNT".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "保单生效早期发生高额理赔".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_high_cost_single_item".into(),
+            version: 1,
+            name: "High cost single item".into(),
+            conditions: vec![Condition {
+                field: "high_cost_item_ratio".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(0.5),
+            }],
+            action: RuleAction {
+                score: 25,
+                alert_code: "HIGH_COST_SINGLE_ITEM".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "单个高价项目占理赔金额比例偏高".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_large_limit_usage".into(),
+            version: 1,
+            name: "Large limit usage".into(),
+            conditions: vec![Condition {
+                field: "claim_amount_to_limit_ratio".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(0.8),
+            }],
+            action: RuleAction {
+                score: 35,
+                alert_code: "LARGE_LIMIT_USAGE".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "理赔金额接近保障额度".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_low_medical_match".into(),
+            version: 1,
+            name: "Low medical match".into(),
+            conditions: vec![Condition {
+                field: "diagnosis_procedure_match_score".into(),
+                operator: "<=".into(),
+                value: serde_json::json!(0.4),
+            }],
+            action: RuleAction {
+                score: 30,
+                alert_code: "LOW_MEDICAL_MATCH".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "诊断与项目匹配度偏低".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_many_claim_items".into(),
+            version: 1,
+            name: "Many claim items".into(),
+            conditions: vec![Condition {
+                field: "claim_item_count".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(5),
+            }],
+            action: RuleAction {
+                score: 20,
+                alert_code: "MANY_CLAIM_ITEMS".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "理赔明细项目数量偏多".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_peer_p95_amount".into(),
+            version: 1,
+            name: "Peer P95 amount".into(),
+            conditions: vec![Condition {
+                field: "claim_amount_peer_percentile".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(95),
+            }],
+            action: RuleAction {
+                score: 25,
+                alert_code: "PEER_P95_AMOUNT".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "理赔金额高于同类样本 P95".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_peer_p99_amount".into(),
+            version: 1,
+            name: "Peer P99 amount".into(),
+            conditions: vec![Condition {
+                field: "claim_amount_peer_percentile".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(99),
+            }],
+            action: RuleAction {
+                score: 40,
+                alert_code: "PEER_P99_AMOUNT".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "理赔金额高于同类样本 P99".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_provider_high_risk_tier".into(),
+            version: 1,
+            name: "Provider high risk tier".into(),
+            conditions: vec![Condition {
+                field: "provider_risk_tier".into(),
+                operator: "==".into(),
+                value: serde_json::json!("HIGH"),
+            }],
+            action: RuleAction {
+                score: 30,
+                alert_code: "PROVIDER_HIGH_RISK_TIER".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "Provider 风险等级较高".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_provider_profile_high".into(),
+            version: 1,
+            name: "Provider profile high".into(),
+            conditions: vec![Condition {
+                field: "provider_profile_score".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(70),
+            }],
+            action: RuleAction {
+                score: 30,
+                alert_code: "PROVIDER_PROFILE_HIGH".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "Provider 风险画像分偏高".into(),
+            },
+        },
+    ]
 }
 
 fn default_rule_details() -> Vec<RuleDetailRecord> {

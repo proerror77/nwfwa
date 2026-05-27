@@ -47,6 +47,39 @@ async fn lists_rule_library() {
 }
 
 #[tokio::test]
+async fn ships_minimum_mvp_default_rule_set() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/rules", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let rules = body["rules"].as_array().unwrap();
+    assert!(
+        rules.len() >= 10,
+        "MVP should ship at least 10 executable default rules"
+    );
+    let alert_codes = rules
+        .iter()
+        .map(|rule| rule["alert_code"].as_str().unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
+    for expected in [
+        "EARLY_CLAIM",
+        "LARGE_LIMIT_USAGE",
+        "PEER_P95_AMOUNT",
+        "PEER_P99_AMOUNT",
+        "EARLY_HIGH_AMOUNT",
+        "LOW_MEDICAL_MATCH",
+        "MANY_CLAIM_ITEMS",
+        "HIGH_COST_SINGLE_ITEM",
+        "PROVIDER_HIGH_RISK_TIER",
+        "PROVIDER_PROFILE_HIGH",
+    ] {
+        assert!(alert_codes.contains(expected), "missing {expected}");
+    }
+}
+
+#[tokio::test]
 async fn returns_rule_detail_with_versions() {
     let app = build_app(test_config());
 

@@ -244,8 +244,13 @@ async fn scoring_uses_only_active_rule_versions() {
         .unwrap();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
-    assert_eq!(body["alerts"].as_array().unwrap().len(), 0);
-    assert_eq!(body["scores"]["rule_score"], 0);
+    let alert_codes = body["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|alert| alert["alert_code"].as_str().unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(!alert_codes.contains("EARLY_CLAIM"));
 }
 
 #[tokio::test]

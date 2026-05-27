@@ -130,7 +130,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["risk_amount"], "8000");
     assert_eq!(dashboard["saving_amount"], "8200.00");
     assert_eq!(dashboard["rag_distribution"]["Red"], 1);
-    assert_eq!(dashboard["rule_hits"], 1);
+    assert!(dashboard["rule_hits"].as_u64().unwrap() >= 1);
     assert_eq!(dashboard["model_scores"]["baseline_fwa"]["scored_runs"], 1);
     assert!(
         dashboard["model_scores"]["baseline_fwa"]["average_score"]
