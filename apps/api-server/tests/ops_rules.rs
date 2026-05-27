@@ -126,6 +126,78 @@ async fn backtests_candidate_rule_against_samples() {
 }
 
 #[tokio::test]
+async fn discovers_candidate_rules_from_labeled_samples() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/discover",
+        r#"{
+          "min_support": 1,
+          "samples": [
+            {
+              "external_claim_id": "CLM-FWA-EARLY-HIGH",
+              "claim_amount": "9000",
+              "currency": "CNY",
+              "service_date": "2026-01-05",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-FWA-EARLY-HIGH",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-NORMAL-LATE-LOW",
+              "claim_amount": "500",
+              "currency": "CNY",
+              "service_date": "2026-03-01",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-NORMAL-LATE-LOW",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-NORMAL-LATE-HIGH",
+              "claim_amount": "9000",
+              "currency": "CNY",
+              "service_date": "2026-03-01",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-NORMAL-LATE-HIGH",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            }
+          ]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["sample_count"], 3);
+    assert_eq!(body["positive_count"], 1);
+    let candidate = &body["candidates"][0];
+    assert_eq!(candidate["rule"]["rule_id"], "candidate_early_high_amount");
+    assert_eq!(candidate["support"], 1);
+    assert_eq!(candidate["precision"], 1.0);
+    assert!(candidate["lift"].as_f64().unwrap() > 1.0);
+    assert_eq!(candidate["false_positive_rate"], 0.0);
+    assert_eq!(candidate["estimated_saving"], "900.00");
+    assert!(candidate["explanation"]
+        .as_str()
+        .unwrap()
+        .contains("保单生效"));
+}
+
+#[tokio::test]
 async fn advances_rule_lifecycle() {
     let app = build_app(test_config());
 

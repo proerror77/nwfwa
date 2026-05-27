@@ -375,6 +375,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/discover": {
+                "post": {
+                    "summary": "Discover candidate rules from labeled sample claims",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/RuleDiscoveryRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Candidate rules and backtest-style discovery metrics",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleDiscoveryResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models": {
                 "get": {
                     "summary": "List model versions",
@@ -986,6 +1010,47 @@ pub async fn openapi_schema() -> Json<Value> {
                         "matched_claim_ids": {
                             "type": "array",
                             "items": { "type": "string" }
+                        }
+                    }
+                },
+                "RuleDiscoveryRequest": {
+                    "type": "object",
+                    "required": ["samples"],
+                    "properties": {
+                        "min_support": { "type": "integer", "minimum": 1 },
+                        "samples": {
+                            "type": "array",
+                            "items": { "type": "object" }
+                        }
+                    }
+                },
+                "RuleDiscoveryCandidate": {
+                    "type": "object",
+                    "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation"],
+                    "properties": {
+                        "rule": { "type": "object" },
+                        "support": { "type": "integer" },
+                        "precision": { "type": "number" },
+                        "recall": { "type": "number" },
+                        "lift": { "type": "number" },
+                        "estimated_saving": { "type": "string", "format": "decimal" },
+                        "false_positive_rate": { "type": "number" },
+                        "matched_claim_ids": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "explanation": { "type": "string" }
+                    }
+                },
+                "RuleDiscoveryResponse": {
+                    "type": "object",
+                    "required": ["sample_count", "positive_count", "candidates"],
+                    "properties": {
+                        "sample_count": { "type": "integer" },
+                        "positive_count": { "type": "integer" },
+                        "candidates": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RuleDiscoveryCandidate" }
                         }
                     }
                 },

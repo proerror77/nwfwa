@@ -32,6 +32,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/rules",
         "/api/v1/ops/rules/{rule_id}",
         "/api/v1/ops/rules/backtest",
+        "/api/v1/ops/rules/discover",
         "/api/v1/ops/models",
         "/api/v1/ops/models/{model_key}/performance",
         "/api/v1/ops/datasets",
@@ -51,6 +52,7 @@ async fn openapi_includes_operations_paths() {
     ] {
         assert!(schema["paths"][path].is_object(), "missing {path}");
     }
+    assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["get"].is_object());
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["post"].is_object());
 }

@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveRule,
   backtestRule,
+  discoverRules,
   getDashboardSummary,
   investigateCase,
   listDatasets,
@@ -66,12 +67,22 @@ describe("ops API helpers", () => {
     const payload = { rule: { rule_id: "candidate" }, samples: [] };
 
     await backtestRule(payload, "dev-secret");
+    await discoverRules({ samples: [] }, "dev-secret");
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
       "/api/v1/ops/rules/backtest",
       expect.objectContaining({
         method: "POST",
         body: JSON.stringify(payload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/rules/discover",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ samples: [] }),
       }),
     );
   });

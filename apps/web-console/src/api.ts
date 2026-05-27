@@ -40,6 +40,13 @@ export async function backtestRule(payload: unknown, apiKey: string) {
   });
 }
 
+export async function discoverRules(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/ops/rules/discover", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function submitRule(ruleId: string, apiKey: string) {
   return requestJson(`/api/v1/ops/rules/${encodeURIComponent(ruleId)}/submit`, apiKey, {
     method: "POST",

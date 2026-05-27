@@ -1,6 +1,14 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { approveRule, backtestRule, getRule, listRules, publishRule, submitRule } from "../api";
+import {
+  approveRule,
+  backtestRule,
+  discoverRules,
+  getRule,
+  listRules,
+  publishRule,
+  submitRule,
+} from "../api";
 
 type RuleSummary = {
   rule_id: string;
@@ -53,10 +61,47 @@ const defaultBacktest = JSON.stringify(
   2,
 );
 
+const defaultDiscovery = JSON.stringify(
+  {
+    min_support: 1,
+    samples: [
+      {
+        external_claim_id: "CLM-FWA-EARLY-HIGH",
+        claim_amount: "9000",
+        currency: "CNY",
+        service_date: "2026-01-05",
+        confirmed_fwa: true,
+        policy: {
+          external_policy_id: "POL-FWA-EARLY-HIGH",
+          coverage_start_date: "2026-01-01",
+          coverage_end_date: "2026-12-31",
+          coverage_limit: "10000",
+        },
+      },
+      {
+        external_claim_id: "CLM-NORMAL-LATE-LOW",
+        claim_amount: "500",
+        currency: "CNY",
+        service_date: "2026-03-01",
+        confirmed_fwa: false,
+        policy: {
+          external_policy_id: "POL-NORMAL-LATE-LOW",
+          coverage_start_date: "2026-01-01",
+          coverage_end_date: "2026-12-31",
+          coverage_limit: "10000",
+        },
+      },
+    ],
+  },
+  null,
+  2,
+);
+
 export function RulesStudio() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedRuleId, setSelectedRuleId] = useState("rule_early_claim");
   const [backtestPayload, setBacktestPayload] = useState(defaultBacktest);
+  const [discoveryPayload, setDiscoveryPayload] = useState(defaultDiscovery);
   const queryClient = useQueryClient();
   const rulesQuery = useQuery({
     queryKey: ["rules", apiKey],
@@ -87,6 +132,9 @@ export function RulesStudio() {
   });
   const backtestMutation = useMutation({
     mutationFn: () => backtestRule(JSON.parse(backtestPayload), apiKey),
+  });
+  const discoveryMutation = useMutation({
+    mutationFn: () => discoverRules(JSON.parse(discoveryPayload), apiKey),
   });
 
   return (
@@ -169,6 +217,22 @@ export function RulesStudio() {
           <pre className="error">{String(backtestMutation.error.message)}</pre>
         ) : null}
         {backtestMutation.data ? <pre>{JSON.stringify(backtestMutation.data, null, 2)}</pre> : null}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Rule Discovery</h2>
+        <textarea
+          value={discoveryPayload}
+          onChange={(event) => setDiscoveryPayload(event.target.value)}
+        />
+        <button onClick={() => discoveryMutation.mutate()} disabled={discoveryMutation.isPending}>
+          Discover Candidates
+        </button>
+        {discoveryMutation.error ? (
+          <pre className="error">{String(discoveryMutation.error.message)}</pre>
+        ) : null}
+        {discoveryMutation.data ? (
+          <pre>{JSON.stringify(discoveryMutation.data, null, 2)}</pre>
+        ) : null}
       </div>
     </section>
   );

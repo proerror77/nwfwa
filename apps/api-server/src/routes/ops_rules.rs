@@ -8,10 +8,10 @@ use chrono::NaiveDate;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::{
     Claim, ClaimContext, ClaimId, Member, MemberId, Money, Policy, PolicyId, Provider, ProviderId,
-    ProviderRiskTier,
+    ProviderRiskTier, RecommendedAction,
 };
 use fwa_features::calculate_features;
-use fwa_rules::{evaluate_rules, Rule};
+use fwa_rules::{evaluate_rules, Condition, Rule, RuleAction};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
@@ -51,6 +51,39 @@ pub struct RuleBacktestResponse {
     pub average_score_contribution: f64,
     pub estimated_saving: String,
     pub matched_claim_ids: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RuleDiscoveryRequest {
+    pub min_support: Option<usize>,
+    pub samples: Vec<RuleDiscoverySample>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RuleDiscoverySample {
+    #[serde(flatten)]
+    pub sample: RuleBacktestSample,
+    pub confirmed_fwa: bool,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RuleDiscoveryResponse {
+    pub sample_count: usize,
+    pub positive_count: usize,
+    pub candidates: Vec<RuleDiscoveryCandidate>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RuleDiscoveryCandidate {
+    pub rule: Rule,
+    pub support: usize,
+    pub precision: f64,
+    pub recall: f64,
+    pub lift: f64,
+    pub estimated_saving: String,
+    pub false_positive_rate: f64,
+    pub matched_claim_ids: Vec<String>,
+    pub explanation: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -137,6 +170,103 @@ pub async fn backtest_rule(
     }))
 }
 
+pub async fn discover_rules(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<RuleDiscoveryRequest>,
+) -> Result<Json<RuleDiscoveryResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let min_support = request.min_support.unwrap_or(1);
+    let sample_count = request.samples.len();
+    let positive_count = request
+        .samples
+        .iter()
+        .filter(|sample| sample.confirmed_fwa)
+        .count();
+    let baseline_rate = if sample_count == 0 {
+        0.0
+    } else {
+        positive_count as f64 / sample_count as f64
+    };
+
+    let mut candidates = Vec::new();
+    for rule in candidate_rule_templates() {
+        let mut matched_claim_ids = Vec::new();
+        let mut true_positive_count = 0_usize;
+        let mut false_positive_count = 0_usize;
+        let mut saving = Decimal::ZERO;
+
+        for labeled_sample in &request.samples {
+            let context = sample_context(&labeled_sample.sample);
+            let features = calculate_features(&context);
+            let matches = evaluate_rules(std::slice::from_ref(&rule), &features)
+                .map_err(internal_error("RULE_DISCOVERY_FAILED"))?;
+            if matches.is_empty() {
+                continue;
+            }
+
+            matched_claim_ids.push(labeled_sample.sample.external_claim_id.clone());
+            if labeled_sample.confirmed_fwa {
+                true_positive_count += 1;
+                saving += labeled_sample.sample.claim_amount * Decimal::new(10, 2);
+            } else {
+                false_positive_count += 1;
+            }
+        }
+
+        let support = matched_claim_ids.len();
+        if support < min_support {
+            continue;
+        }
+        let precision = if support == 0 {
+            0.0
+        } else {
+            true_positive_count as f64 / support as f64
+        };
+        let recall = if positive_count == 0 {
+            0.0
+        } else {
+            true_positive_count as f64 / positive_count as f64
+        };
+        let lift = if baseline_rate == 0.0 {
+            0.0
+        } else {
+            precision / baseline_rate
+        };
+        let false_positive_rate = if support == 0 {
+            0.0
+        } else {
+            false_positive_count as f64 / support as f64
+        };
+
+        candidates.push(RuleDiscoveryCandidate {
+            explanation: explanation_for_candidate(&rule),
+            rule,
+            support,
+            precision,
+            recall,
+            lift,
+            estimated_saving: format!("{:.2}", saving.round_dp(2)),
+            false_positive_rate,
+            matched_claim_ids,
+        });
+    }
+
+    candidates.sort_by(|left, right| {
+        right
+            .precision
+            .partial_cmp(&left.precision)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| right.support.cmp(&left.support))
+    });
+
+    Ok(Json(RuleDiscoveryResponse {
+        sample_count,
+        positive_count,
+        candidates,
+    }))
+}
+
 pub async fn submit_rule(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -201,6 +331,62 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
             "invalid api key",
         )
     })
+}
+
+fn candidate_rule_templates() -> Vec<Rule> {
+    vec![
+        Rule {
+            rule_id: "candidate_early_high_amount".into(),
+            version: 1,
+            name: "Early high amount candidate".into(),
+            conditions: vec![
+                Condition {
+                    field: "days_since_policy_start".into(),
+                    operator: "<=".into(),
+                    value: serde_json::json!(10),
+                },
+                Condition {
+                    field: "claim_amount_to_limit_ratio".into(),
+                    operator: ">=".into(),
+                    value: serde_json::json!(0.7),
+                },
+            ],
+            action: RuleAction {
+                score: 30,
+                alert_code: "EARLY_HIGH_AMOUNT_CANDIDATE".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "保单生效早期发生高额理赔".into(),
+            },
+        },
+        Rule {
+            rule_id: "candidate_high_amount_ratio".into(),
+            version: 1,
+            name: "High amount ratio candidate".into(),
+            conditions: vec![Condition {
+                field: "claim_amount_to_limit_ratio".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(0.8),
+            }],
+            action: RuleAction {
+                score: 20,
+                alert_code: "HIGH_AMOUNT_RATIO_CANDIDATE".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "理赔金额接近保障额度".into(),
+            },
+        },
+    ]
+}
+
+fn explanation_for_candidate(rule: &Rule) -> String {
+    match rule.rule_id.as_str() {
+        "candidate_early_high_amount" => {
+            "保单生效早期且理赔金额接近保障额度，历史样本中与确认 FWA 标签更集中".into()
+        }
+        "candidate_high_amount_ratio" => {
+            "理赔金额与保障额度比例偏高，可作为金额偏离类候选规则".into()
+        }
+        _ => "基于历史标签和可解释特征生成的候选规则".into(),
+    }
 }
 
 fn sample_context(sample: &RuleBacktestSample) -> ClaimContext {
