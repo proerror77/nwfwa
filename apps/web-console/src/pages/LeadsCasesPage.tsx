@@ -41,6 +41,14 @@ type CaseRecord = {
   evidence_package?: Record<string, unknown>;
 };
 
+type EvidenceSufficiency = {
+  scheme_family: string;
+  status: string;
+  minimum_evidence: string[];
+  present_evidence: string[];
+  missing_evidence: string[];
+};
+
 type LeadListResponse = {
   leads: LeadRecord[];
 };
@@ -65,6 +73,47 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
     highPriorityCases: cases.filter((item) => item.priority === "high").length,
     topScheme,
   };
+}
+
+export function caseEvidenceSufficiencyFromPackage(
+  evidencePackage?: Record<string, unknown>,
+): EvidenceSufficiency | null {
+  const sufficiency = evidencePackage?.evidence_sufficiency;
+  if (!isRecord(sufficiency)) return null;
+  if (
+    typeof sufficiency.scheme_family !== "string" ||
+    typeof sufficiency.status !== "string" ||
+    !isStringArray(sufficiency.minimum_evidence) ||
+    !isStringArray(sufficiency.present_evidence) ||
+    !isStringArray(sufficiency.missing_evidence)
+  ) {
+    return null;
+  }
+  return {
+    scheme_family: sufficiency.scheme_family,
+    status: sufficiency.status,
+    minimum_evidence: sufficiency.minimum_evidence,
+    present_evidence: sufficiency.present_evidence,
+    missing_evidence: sufficiency.missing_evidence,
+  };
+}
+
+export function buildCaseEvidenceSufficiencyRows(
+  sufficiency?: EvidenceSufficiency | null,
+) {
+  const present = new Set(sufficiency?.present_evidence ?? []);
+  return (sufficiency?.minimum_evidence ?? []).map((item) => ({
+    item,
+    status: present.has(item) ? "present" : "missing",
+  }));
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
 export function LeadsCasesPage() {
@@ -336,36 +385,58 @@ export function LeadsCasesPage() {
           <pre>{JSON.stringify(caseStatusMutation.data, null, 2)}</pre>
         ) : null}
         <div className="case-grid">
-          {casesQuery.data?.cases.map((item) => (
-            <div className="factor-card" key={item.case_id}>
-              <div>
-                <strong>{item.case_id}</strong>
-                <small>{item.claim_id}</small>
+          {casesQuery.data?.cases.map((item) => {
+            const evidenceSufficiency = caseEvidenceSufficiencyFromPackage(item.evidence_package);
+            const evidenceRows = buildCaseEvidenceSufficiencyRows(evidenceSufficiency);
+            return (
+              <div className="factor-card" key={item.case_id}>
+                <div>
+                  <strong>{item.case_id}</strong>
+                  <small>{item.claim_id}</small>
+                </div>
+                <dl className="result-grid">
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{item.status}</dd>
+                  </div>
+                  <div>
+                    <dt>Priority</dt>
+                    <dd>{item.priority}</dd>
+                  </div>
+                  <div>
+                    <dt>Scheme</dt>
+                    <dd>{formatFwaSchemeLabel(item.scheme_family ?? "-", schemeLabelMap)}</dd>
+                  </div>
+                  <div>
+                    <dt>Evidence Status</dt>
+                    <dd>{evidenceSufficiency?.status ?? "not_available"}</dd>
+                  </div>
+                  <div>
+                    <dt>Missing Evidence</dt>
+                    <dd>{evidenceSufficiency?.missing_evidence.length ?? 0}</dd>
+                  </div>
+                  <div>
+                    <dt>Assignee</dt>
+                    <dd>{item.assignee}</dd>
+                  </div>
+                  <div>
+                    <dt>Reviewer</dt>
+                    <dd>{item.reviewer}</dd>
+                  </div>
+                </dl>
+                {evidenceRows.length ? (
+                  <ul className="result-list compact-list">
+                    {evidenceRows.map((row) => (
+                      <li key={row.item}>
+                        <strong>{row.item}</strong>
+                        <span>{row.status}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
-              <dl className="result-grid">
-                <div>
-                  <dt>Status</dt>
-                  <dd>{item.status}</dd>
-                </div>
-                <div>
-                  <dt>Priority</dt>
-                  <dd>{item.priority}</dd>
-                </div>
-                <div>
-                  <dt>Scheme</dt>
-                  <dd>{formatFwaSchemeLabel(item.scheme_family ?? "-", schemeLabelMap)}</dd>
-                </div>
-                <div>
-                  <dt>Assignee</dt>
-                  <dd>{item.assignee}</dd>
-                </div>
-                <div>
-                  <dt>Reviewer</dt>
-                  <dd>{item.reviewer}</dd>
-                </div>
-              </dl>
-            </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </section>

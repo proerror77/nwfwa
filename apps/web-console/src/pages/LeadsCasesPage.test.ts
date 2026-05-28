@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildLeadSummary } from "./LeadsCasesPage";
+import {
+  buildCaseEvidenceSufficiencyRows,
+  buildLeadSummary,
+  caseEvidenceSufficiencyFromPackage,
+} from "./LeadsCasesPage";
 
 describe("buildLeadSummary", () => {
   it("summarizes lead lifecycle and case workload for operations", () => {
@@ -50,5 +54,40 @@ describe("buildLeadSummary", () => {
       highPriorityCases: 1,
       topScheme: "early_high_value_claim",
     });
+  });
+});
+
+describe("caseEvidenceSufficiencyFromPackage", () => {
+  it("extracts case evidence sufficiency from the evidence package", () => {
+    const sufficiency = caseEvidenceSufficiencyFromPackage({
+      evidence_sufficiency: {
+        scheme_family: "provider_peer_outlier",
+        status: "needs_more_evidence",
+        minimum_evidence: ["peer_group_definition", "specialty", "statistical_deviation"],
+        present_evidence: ["peer_group_definition"],
+        missing_evidence: ["specialty", "statistical_deviation"],
+      },
+    });
+
+    expect(sufficiency?.status).toBe("needs_more_evidence");
+    expect(buildCaseEvidenceSufficiencyRows(sufficiency)).toEqual([
+      { item: "peer_group_definition", status: "present" },
+      { item: "specialty", status: "missing" },
+      { item: "statistical_deviation", status: "missing" },
+    ]);
+  });
+
+  it("ignores malformed evidence sufficiency payloads", () => {
+    expect(
+      caseEvidenceSufficiencyFromPackage({
+        evidence_sufficiency: {
+          scheme_family: "provider_peer_outlier",
+          status: "needs_more_evidence",
+          minimum_evidence: "peer_group_definition",
+          present_evidence: [],
+          missing_evidence: [],
+        },
+      }),
+    ).toBeNull();
   });
 });
