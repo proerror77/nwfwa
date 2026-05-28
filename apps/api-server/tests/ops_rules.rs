@@ -109,8 +109,8 @@ async fn returns_rule_promotion_gates_for_unreviewed_rule() {
     assert_eq!(body["rule_id"], "rule_early_claim");
     assert_eq!(body["rule_version"], 1);
     assert_eq!(body["decision"], "routing_blocked");
-    assert_eq!(body["total_count"], 7);
-    assert_eq!(body["passed_count"], 3);
+    assert_eq!(body["total_count"], 8);
+    assert_eq!(body["passed_count"], 4);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -467,6 +467,52 @@ async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
         .unwrap()
         .iter()
         .any(|event| event["event_type"] == "rule.backtest.completed"));
+}
+
+#[tokio::test]
+async fn rule_promotion_gates_include_rule_feedback_labels() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-RULE-GATE-1",
+          "claim_id": "CLM-RULE-GATE-1",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "QA found a rule handling issue that must be reviewed before routing impact.",
+          "evidence_refs": ["qa_reviews:QA-RULE-GATE-1", "rule_runs:EARLY_CLAIM"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let feedback_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Rule feedback governance")
+        .expect("rule promotion gates should include rule feedback governance");
+    assert_eq!(feedback_gate["passed"], false);
+    assert_eq!(feedback_gate["evidence_source"], "labels");
+    assert_eq!(feedback_gate["blocker"], "rule feedback labels need review");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rule feedback labels need review")));
 }
 
 #[tokio::test]

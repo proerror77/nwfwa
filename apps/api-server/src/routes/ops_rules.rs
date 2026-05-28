@@ -236,11 +236,17 @@ pub async fn rule_promotion_gates(
         .latest_rule_backtest(&rule.rule_id, rule.latest_version)
         .await
         .map_err(internal_error("RULE_BACKTEST_LOAD_FAILED"))?;
+    let outcome_labels = state
+        .repository
+        .list_outcome_labels()
+        .await
+        .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
 
     Ok(Json(build_rule_promotion_gates(
         &rule,
         &performance,
         latest_backtest.as_ref(),
+        &outcome_labels,
         latest_review.as_ref(),
     )))
 }
@@ -310,6 +316,7 @@ fn build_rule_promotion_gates(
     rule: &RuleSummaryRecord,
     performance: &RulePerformanceRecord,
     latest_backtest: Option<&RuleBacktestRecord>,
+    outcome_labels: &[crate::repository::OutcomeLabelRecord],
     latest_review: Option<&RulePromotionReviewRecord>,
 ) -> RulePromotionGatesResponse {
     let effective_reviewed_count = performance.reviewed_count.max(
@@ -342,6 +349,14 @@ fn build_rule_promotion_gates(
         .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active"));
     let shadow_rollout = performance.trigger_count > 0 && performance.reviewed_count > 0;
     let rollback_path = rule.latest_version > 0 && rule.active_version.is_some();
+    let rule_feedback_labels = outcome_labels
+        .iter()
+        .filter(|label| label.feedback_target == "rules")
+        .collect::<Vec<_>>();
+    let unresolved_rule_feedback = rule_feedback_labels
+        .iter()
+        .any(|label| label.governance_status == "needs_review");
+    let rule_feedback_governance = !unresolved_rule_feedback;
     let gates = vec![
         rule_gate(
             "Named owner",
@@ -380,6 +395,16 @@ fn build_rule_promotion_gates(
             approved,
             "approval missing",
             if approved { "approval" } else { "missing" },
+        ),
+        rule_gate(
+            "Rule feedback governance",
+            rule_feedback_governance,
+            "rule feedback labels need review",
+            if rule_feedback_labels.is_empty() {
+                "missing"
+            } else {
+                "labels"
+            },
         ),
         rule_gate(
             "Shadow or limited rollout",

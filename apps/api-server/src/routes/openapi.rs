@@ -1707,7 +1707,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "blocker": { "type": "string" },
                         "evidence_source": {
                             "type": "string",
-                            "enum": ["runtime", "backtest", "approval", "metadata", "missing"]
+                            "enum": ["runtime", "backtest", "approval", "labels", "metadata", "missing"]
                         }
                     }
                 },
