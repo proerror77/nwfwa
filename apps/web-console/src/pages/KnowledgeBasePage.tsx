@@ -1,6 +1,12 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listKnowledgeCases, publishKnowledgeCase, searchSimilarCases } from "../api";
+import {
+  listFwaSchemes,
+  listKnowledgeCases,
+  publishKnowledgeCase,
+  searchSimilarCases,
+} from "../api";
+import { buildFwaSchemeOptions, type FwaSchemeDefinition } from "./fwaSchemeOptions";
 
 type KnowledgeCase = {
   case_id: string;
@@ -38,6 +44,7 @@ export function KnowledgeBasePage() {
   const [publishCaseId, setPublishCaseId] = useState("KC-PILOT-001");
   const [publishTitle, setPublishTitle] = useState("Confirmed pilot FWA case");
   const [publishSourceClaimId, setPublishSourceClaimId] = useState("CLM-0287");
+  const [publishSchemeFamily, setPublishSchemeFamily] = useState("early_high_value_claim");
   const [lastSearch, setLastSearch] = useState<SimilarCase[] | null>(null);
   const queryClient = useQueryClient();
 
@@ -45,6 +52,11 @@ export function KnowledgeBasePage() {
     queryKey: ["knowledge-cases", apiKey],
     queryFn: () => listKnowledgeCases(apiKey) as Promise<{ cases: KnowledgeCase[] }>,
   });
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
+  const schemeOptions = buildFwaSchemeOptions(schemesQuery.data?.schemes, publishSchemeFamily);
   const selectedCase = useMemo(
     () =>
       casesQuery.data?.cases.find((item) => item.case_id === selectedCaseId) ??
@@ -73,7 +85,7 @@ export function KnowledgeBasePage() {
           case_id: publishCaseId,
           title: publishTitle,
           fwa_type: "Waste",
-          scheme_family: "early_high_value_claim",
+          scheme_family: publishSchemeFamily,
           diagnosis_code: diagnosisCode,
           provider_region: providerRegion,
           provider_type: "provider",
@@ -102,6 +114,9 @@ export function KnowledgeBasePage() {
           <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
         </label>
         {casesQuery.error ? <pre className="error">{String(casesQuery.error.message)}</pre> : null}
+        {schemesQuery.error ? (
+          <pre className="error">{String(schemesQuery.error.message)}</pre>
+        ) : null}
         <div className="table-list">
           {casesQuery.data?.cases.map((item) => (
             <button
@@ -211,6 +226,19 @@ export function KnowledgeBasePage() {
               value={publishSourceClaimId}
               onChange={(event) => setPublishSourceClaimId(event.target.value)}
             />
+          </label>
+          <label>
+            Scheme
+            <select
+              value={publishSchemeFamily}
+              onChange={(event) => setPublishSchemeFamily(event.target.value)}
+            >
+              {schemeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
         <button onClick={() => publishMutation.mutate()} disabled={publishMutation.isPending}>

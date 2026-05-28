@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { investigateCase } from "../api";
+import { useQuery } from "@tanstack/react-query";
+import { investigateCase, listFwaSchemes } from "../api";
+import { buildFwaSchemeOptions, type FwaSchemeDefinition } from "./fwaSchemeOptions";
 
 type InvestigationResponse = {
   agent_run_id: string;
@@ -43,6 +45,11 @@ export function AgentInvestigatorPage() {
   const [tags, setTags] = useState("early_claim, high_amount");
   const [result, setResult] = useState<InvestigationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
+  const schemeOptions = buildFwaSchemeOptions(schemesQuery.data?.schemes, schemeFamily);
   const evidenceRows = buildEvidenceSufficiencyRows(result?.evidence_sufficiency);
 
   async function runInvestigation() {
@@ -102,9 +109,19 @@ export function AgentInvestigatorPage() {
           </label>
           <label>
             Scheme
-            <input value={schemeFamily} onChange={(event) => setSchemeFamily(event.target.value)} />
+            <select
+              value={schemeFamily}
+              onChange={(event) => setSchemeFamily(event.target.value)}
+            >
+              {schemeOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
           </label>
         </div>
+        {schemesQuery.error ? <pre className="error">{String(schemesQuery.error.message)}</pre> : null}
         <label>
           Top Reasons
           <textarea value={topReasons} onChange={(event) => setTopReasons(event.target.value)} />
