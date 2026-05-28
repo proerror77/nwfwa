@@ -7,6 +7,7 @@ import {
   getRulePromotionGates,
   listAuditEvents,
   listAgentRuns,
+  listFwaSchemes,
   listGovernanceChangeEvents,
   listModels,
   listOpsAlerts,
@@ -230,6 +231,31 @@ type PromotionGateGovernanceResponse = {
   rows: PromotionGateGovernanceRow[];
 };
 
+type FwaSchemeDefinition = {
+  scheme_family: string;
+  display_name: string;
+  risk_domain: string;
+  description: string;
+  minimum_evidence: string[];
+  default_review_route: string;
+  primary_layers: string[];
+};
+
+type FwaSchemeListResponse = {
+  schemes: FwaSchemeDefinition[];
+  scheme_count: number;
+};
+
+export type FwaSchemeGovernanceRow = {
+  schemeFamily: string;
+  displayName: string;
+  riskDomain: string;
+  defaultReviewRoute: string;
+  evidenceCount: number;
+  minimumEvidence: string;
+  primaryLayers: string;
+};
+
 export type GovernanceChangeTimelineRow = {
   auditId: string;
   domain: string;
@@ -418,6 +444,36 @@ export function buildPromotionGateGovernanceSummary(
     passedGateCount: rows.reduce((total, row) => total + row.passedCount, 0),
     totalGateCount: rows.reduce((total, row) => total + row.totalCount, 0),
     blockerCount: rows.reduce((total, row) => total + row.blockerCount, 0),
+  };
+}
+
+export function buildFwaSchemeGovernanceRows(
+  schemes: FwaSchemeDefinition[] = [],
+): FwaSchemeGovernanceRow[] {
+  return [...schemes]
+    .sort(
+      (left, right) =>
+        left.risk_domain.localeCompare(right.risk_domain) ||
+        left.scheme_family.localeCompare(right.scheme_family),
+    )
+    .map((scheme) => ({
+      schemeFamily: scheme.scheme_family,
+      displayName: scheme.display_name,
+      riskDomain: scheme.risk_domain,
+      defaultReviewRoute: scheme.default_review_route,
+      evidenceCount: scheme.minimum_evidence.length,
+      minimumEvidence: scheme.minimum_evidence.join(", "),
+      primaryLayers: scheme.primary_layers.join(", "),
+    }));
+}
+
+export function buildFwaSchemeGovernanceSummary(rows: FwaSchemeGovernanceRow[] = []) {
+  return {
+    schemeCount: rows.length,
+    domainCount: new Set(rows.map((row) => row.riskDomain)).size,
+    evidenceRequirementCount: rows.reduce((total, row) => total + row.evidenceCount, 0),
+    medicalReviewCount: rows.filter((row) => row.defaultReviewRoute === "medical_review").length,
+    providerReviewCount: rows.filter((row) => row.defaultReviewRoute === "provider_review").length,
   };
 }
 
@@ -613,6 +669,10 @@ export function GovernancePage() {
     queryKey: ["promotion-gate-governance", apiKey],
     queryFn: () => loadPromotionGateGovernance(apiKey),
   });
+  const fwaSchemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<FwaSchemeListResponse>,
+  });
   const summary = buildAuditSummary(auditQuery.data);
   const globalAuditSummary = buildAuditSummary(globalAuditQuery.data);
   const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
@@ -625,6 +685,8 @@ export function GovernancePage() {
   const promotionGateSummary = buildPromotionGateGovernanceSummary(
     promotionGateGovernanceQuery.data?.rows,
   );
+  const fwaSchemeRows = buildFwaSchemeGovernanceRows(fwaSchemesQuery.data?.schemes);
+  const fwaSchemeSummary = buildFwaSchemeGovernanceSummary(fwaSchemeRows);
   const agentApprovalMutation = useMutation({
     mutationFn: ({
       run,
@@ -776,6 +838,51 @@ export function GovernancePage() {
         {promotionGateGovernanceQuery.error ? (
           <pre className="error">{String(promotionGateGovernanceQuery.error.message)}</pre>
         ) : null}
+        {fwaSchemesQuery.error ? (
+          <pre className="error">{String(fwaSchemesQuery.error.message)}</pre>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <h2>FWA Scheme Taxonomy</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Schemes</span>
+            <strong>{fwaSchemeSummary.schemeCount}</strong>
+          </div>
+          <div>
+            <span>Domains</span>
+            <strong>{fwaSchemeSummary.domainCount}</strong>
+          </div>
+          <div>
+            <span>Evidence Items</span>
+            <strong>{fwaSchemeSummary.evidenceRequirementCount}</strong>
+          </div>
+          <div>
+            <span>Medical Review</span>
+            <strong>{fwaSchemeSummary.medicalReviewCount}</strong>
+          </div>
+          <div>
+            <span>Provider Review</span>
+            <strong>{fwaSchemeSummary.providerReviewCount}</strong>
+          </div>
+        </div>
+        {fwaSchemeRows.length ? (
+          <div className="table-list">
+            {fwaSchemeRows.map((row) => (
+              <div className="metric-row compact-metric-row" key={row.schemeFamily}>
+                <span>
+                  {row.riskDomain} / {row.displayName}
+                </span>
+                <strong>{row.defaultReviewRoute}</strong>
+                <small>{row.primaryLayers}</small>
+                <small>{row.minimumEvidence}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty">No FWA scheme taxonomy loaded</p>
+        )}
       </div>
 
       <div className="panel">

@@ -4,7 +4,7 @@ use crate::{
     routes::{
         agent, claims, dashboard, health, knowledge, openapi, ops_agents, ops_audit, ops_cases,
         ops_datasets, ops_models, ops_providers, ops_routing_policies, ops_rules, ops_sampling,
-        pilot_loop,
+        ops_schemes, pilot_loop,
     },
 };
 use axum::{
@@ -199,6 +199,10 @@ pub fn build_app_with_parts(
         .route(
             "/api/v1/ops/providers/risk-summary",
             get(ops_providers::provider_risk_summary),
+        )
+        .route(
+            "/api/v1/ops/fwa-schemes",
+            get(ops_schemes::list_fwa_schemes),
         )
         .route(
             "/api/v1/ops/models/:model_key/performance",

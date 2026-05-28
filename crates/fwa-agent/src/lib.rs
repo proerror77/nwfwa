@@ -1,3 +1,4 @@
+use fwa_core::minimum_evidence_for_scheme;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -144,113 +145,6 @@ fn build_evidence_sufficiency(request: &InvestigationRequest) -> EvidenceSuffici
         present_evidence,
         missing_evidence,
     }
-}
-
-fn minimum_evidence_for_scheme(scheme_family: &str) -> Vec<String> {
-    let items = match scheme_family {
-        "duplicate_billing" => &[
-            "same_member",
-            "provider",
-            "service_date",
-            "procedure",
-            "amount",
-            "claim_lineage",
-        ][..],
-        "upcoding" => &[
-            "diagnosis",
-            "billed_code",
-            "lower_complexity_comparator",
-            "medical_record",
-            "coding_rationale",
-        ],
-        "unbundling" => &[
-            "component_codes",
-            "bundled_code_comparator",
-            "same_episode",
-            "billing_timeline",
-        ],
-        "medically_unnecessary_service" | "medical_necessity" => &[
-            "diagnosis",
-            "order",
-            "chart_note",
-            "treatment_context",
-            "reviewer_finding",
-            "policy_rule",
-        ],
-        "laboratory_testing_abuse" | "lab_overuse" => &[
-            "ordering_pattern",
-            "diagnosis_match",
-            "frequency",
-            "peer_benchmark",
-            "ordering_provider",
-        ],
-        "excessive_utilization" => &[
-            "member_history",
-            "service_frequency",
-            "peer_benchmark",
-            "time_window",
-            "clinical_rationale",
-        ],
-        "provider_peer_outlier" => &[
-            "peer_group_definition",
-            "time_window",
-            "specialty",
-            "region",
-            "statistical_deviation",
-        ],
-        "telehealth_abuse" => &[
-            "visit_mode",
-            "provider_member_location",
-            "visit_frequency",
-            "documentation",
-            "policy_rule",
-        ],
-        "pharmacy_controlled_substance_abuse" | "pharmacy_or_opioid_abuse" => &[
-            "prescription",
-            "prescriber",
-            "fill_pattern",
-            "dosage",
-            "member_history",
-            "policy_rule",
-        ],
-        "genetic_testing_abuse" => &[
-            "test_order",
-            "diagnosis",
-            "policy_rule",
-            "medical_record",
-            "lab_provider",
-        ],
-        "dme_home_health_hospice_rehab_risk" => &[
-            "order",
-            "supplier_provider",
-            "medical_record",
-            "delivery_or_service_proof",
-            "policy_rule",
-        ],
-        "relationship_concentration" => &[
-            "relationship_graph",
-            "provider_member_link",
-            "referral_pattern",
-            "ownership_or_affiliation",
-            "time_window",
-        ],
-        "early_high_value_claim" => &[
-            "policy_start_date",
-            "service_date",
-            "claim_amount",
-            "coverage_limit",
-            "medical_record",
-        ],
-        "diagnosis_procedure_mismatch" => &[
-            "diagnosis",
-            "procedure",
-            "medical_record",
-            "clinical_rationale",
-            "policy_rule",
-        ],
-        _ => &["claim_context", "risk_reason", "evidence_refs"],
-    };
-    items.iter().map(|item| (*item).to_string()).collect()
 }
 
 fn evidence_text(request: &InvestigationRequest) -> String {

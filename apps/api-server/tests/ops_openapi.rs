@@ -74,6 +74,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/audit-events",
         "/api/v1/ops/agent-runs",
         "/api/v1/ops/agent-runs/{agent_run_id}/approvals",
+        "/api/v1/ops/fwa-schemes",
         "/api/v1/ops/knowledge/cases",
         "/api/v1/knowledge/search-similar",
         "/api/v1/agent/cases/investigate",
@@ -222,6 +223,28 @@ async fn openapi_includes_operations_paths() {
     assert_eq!(
         schema["components"]["schemas"]["FwaSchemeFamily"]["enum"][0],
         "duplicate_billing"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/fwa-schemes"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/FwaSchemeListResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FwaSchemeListResponse"]["properties"]["schemes"]["items"]
+            ["$ref"],
+        "#/components/schemas/FwaSchemeDefinition"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FwaSchemeDefinition"]["properties"]["scheme_family"]
+            ["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
+    assert!(
+        schema["components"]["schemas"]["FwaSchemeDefinition"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "minimum_evidence")
     );
     assert!(schema["components"]["schemas"]["RuleVersion"]["required"]
         .as_array()

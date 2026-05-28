@@ -1125,6 +1125,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/fwa-schemes": {
+                "get": {
+                    "summary": "List governed FWA scheme taxonomy and evidence requirements",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "FWA scheme taxonomy",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/FwaSchemeListResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/performance": {
                 "get": {
                     "summary": "Get model performance metrics",
@@ -2537,6 +2561,30 @@ pub async fn openapi_schema() -> Json<Value> {
                         "early_high_value_claim",
                         "high_risk_claim"
                     ]
+                },
+                "FwaSchemeDefinition": {
+                    "type": "object",
+                    "required": ["scheme_family", "display_name", "risk_domain", "description", "minimum_evidence", "default_review_route", "primary_layers"],
+                    "properties": {
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
+                        "display_name": { "type": "string" },
+                        "risk_domain": { "type": "string" },
+                        "description": { "type": "string" },
+                        "minimum_evidence": { "type": "array", "items": { "type": "string" } },
+                        "default_review_route": { "type": "string" },
+                        "primary_layers": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "FwaSchemeListResponse": {
+                    "type": "object",
+                    "required": ["schemes", "scheme_count"],
+                    "properties": {
+                        "schemes": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/FwaSchemeDefinition" }
+                        },
+                        "scheme_count": { "type": "integer", "minimum": 0 }
+                    }
                 },
                 "RuleVersion": {
                     "type": "object",

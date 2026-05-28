@@ -19,6 +19,7 @@ import {
   listCases,
   listDatasets,
   listFactorReadiness,
+  listFwaSchemes,
   listGovernanceChangeEvents,
   listLeads,
   listKnowledgeCases,
@@ -481,6 +482,7 @@ describe("ops API helpers", () => {
     await listGovernanceChangeEvents("dev-secret", 100);
     await listAgentRuns("dev-secret");
     await listOpsAlerts("dev-secret");
+    await listFwaSchemes("dev-secret");
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -513,6 +515,13 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
       "/api/v1/ops/alerts",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "/api/v1/ops/fwa-schemes",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

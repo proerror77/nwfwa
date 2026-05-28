@@ -13,4 +13,5 @@ pub mod ops_providers;
 pub mod ops_routing_policies;
 pub mod ops_rules;
 pub mod ops_sampling;
+pub mod ops_schemes;
 pub mod pilot_loop;

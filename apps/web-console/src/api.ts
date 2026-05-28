@@ -286,6 +286,10 @@ export async function getProviderRiskSummary(apiKey: string) {
   return requestJson("/api/v1/ops/providers/risk-summary", apiKey);
 }
 
+export async function listFwaSchemes(apiKey: string) {
+  return requestJson("/api/v1/ops/fwa-schemes", apiKey);
+}
+
 export async function getClaimAuditHistory(claimId: string, apiKey: string) {
   return requestJson(`/api/v1/audit/claims/${encodeURIComponent(claimId)}`, apiKey);
 }

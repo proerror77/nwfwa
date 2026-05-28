@@ -852,6 +852,7 @@ dependencies = [
 name = "fwa-agent"
 version = "0.1.0"
 dependencies = [
+ "fwa-core",
  "serde",
  "serde_json",
 ]

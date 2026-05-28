@@ -3,6 +3,8 @@ import {
   buildAgentRunLogSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
+  buildFwaSchemeGovernanceRows,
+  buildFwaSchemeGovernanceSummary,
   buildGovernanceChangeTimelineRows,
   buildOpsAlertSummary,
   buildOutcomeLabelSummary,
@@ -197,6 +199,59 @@ describe("buildGovernanceChangeTimelineRows", () => {
         evidenceRefs: ["datasets:claims_training:v1"],
       },
     ]);
+  });
+});
+
+describe("FWA scheme governance helpers", () => {
+  it("summarizes scheme taxonomy evidence requirements and review routes", () => {
+    const rows = buildFwaSchemeGovernanceRows([
+      {
+        scheme_family: "provider_peer_outlier",
+        display_name: "Provider peer outlier",
+        risk_domain: "Provider",
+        description: "Provider deviates from peer group.",
+        minimum_evidence: ["peer_group_definition", "time_window", "statistical_deviation"],
+        default_review_route: "provider_review",
+        primary_layers: ["L1_PEER_BENCHMARK", "L6_PROVIDER_GRAPH_RISK"],
+      },
+      {
+        scheme_family: "medically_unnecessary_service",
+        display_name: "Medically unnecessary service",
+        risk_domain: "Clinical",
+        description: "Medical necessity needs review.",
+        minimum_evidence: ["diagnosis", "order"],
+        default_review_route: "medical_review",
+        primary_layers: ["L5_MEDICAL_REASONABLENESS"],
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        schemeFamily: "medically_unnecessary_service",
+        displayName: "Medically unnecessary service",
+        riskDomain: "Clinical",
+        defaultReviewRoute: "medical_review",
+        evidenceCount: 2,
+        minimumEvidence: "diagnosis, order",
+        primaryLayers: "L5_MEDICAL_REASONABLENESS",
+      },
+      {
+        schemeFamily: "provider_peer_outlier",
+        displayName: "Provider peer outlier",
+        riskDomain: "Provider",
+        defaultReviewRoute: "provider_review",
+        evidenceCount: 3,
+        minimumEvidence: "peer_group_definition, time_window, statistical_deviation",
+        primaryLayers: "L1_PEER_BENCHMARK, L6_PROVIDER_GRAPH_RISK",
+      },
+    ]);
+    expect(buildFwaSchemeGovernanceSummary(rows)).toEqual({
+      schemeCount: 2,
+      domainCount: 2,
+      evidenceRequirementCount: 5,
+      medicalReviewCount: 1,
+      providerReviewCount: 1,
+    });
   });
 });
 
