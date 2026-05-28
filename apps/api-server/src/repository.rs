@@ -98,6 +98,11 @@ pub struct AuditEventListFilter {
 }
 
 const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
+    "dataset.registered",
+    "dataset.field_mapping.added",
+    "feature_set.registered",
+    "model_dataset.registered",
+    "model_evaluation.registered",
     "rule.candidate.saved",
     "rule.status.changed",
     "rule.rollback.completed",
@@ -5987,6 +5992,11 @@ impl ScoringRepository for PostgresScoringRepository {
                  OR (
                    $13 = 'governance'
                    AND ae.event_type IN (
+                     'dataset.registered',
+                     'dataset.field_mapping.added',
+                     'feature_set.registered',
+                     'model_dataset.registered',
+                     'model_evaluation.registered',
                      'rule.candidate.saved',
                      'rule.status.changed',
                      'rule.rollback.completed',

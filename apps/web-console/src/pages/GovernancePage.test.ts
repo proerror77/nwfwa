@@ -124,6 +124,20 @@ describe("buildGovernanceChangeTimelineRows", () => {
         evidence_refs: ["routing_policies:fwa_risk_fusion_routing:v3:post_payment"],
       },
       {
+        audit_id: "audit_dataset",
+        run_id: "run_dataset",
+        event_type: "dataset.registered",
+        event_status: "succeeded",
+        summary: "Dataset registered",
+        payload: {
+          dataset_key: "claims_training",
+          dataset_version: "v1",
+          to_status: "registered",
+          owner: "data-ops",
+        },
+        evidence_refs: ["datasets:claims_training:v1"],
+      },
+      {
         audit_id: "audit_scoring",
         run_id: "run_scoring",
         event_type: "scoring.completed",
@@ -169,6 +183,18 @@ describe("buildGovernanceChangeTimelineRows", () => {
         summary: "Routing policy approved",
         createdAt: "run_routing",
         evidenceRefs: ["routing_policies:fwa_risk_fusion_routing:v3:post_payment"],
+      },
+      {
+        auditId: "audit_dataset",
+        domain: "Data",
+        eventType: "dataset.registered",
+        targetId: "claims_training@v1",
+        statusTransition: "- -> registered",
+        actor: "data-ops",
+        decision: "registered",
+        summary: "Dataset registered",
+        createdAt: "run_dataset",
+        evidenceRefs: ["datasets:claims_training:v1"],
       },
     ]);
   });

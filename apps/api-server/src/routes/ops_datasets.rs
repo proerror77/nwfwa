@@ -3,8 +3,8 @@ use crate::{
     error::ApiError,
     repository::{
         CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, FieldMappingRecord,
-        ModelDatasetRecord, ModelEvaluationRecord, RegisterDatasetInput, RegisterFeatureSetInput,
-        RegisterModelDatasetInput, RegisterModelEvaluationInput,
+        ModelDatasetRecord, ModelEvaluationRecord, PersistedAuditEvent, RegisterDatasetInput,
+        RegisterFeatureSetInput, RegisterModelDatasetInput, RegisterModelEvaluationInput,
     },
 };
 use axum::{
@@ -12,9 +12,11 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_core::{AuditEventId, ScoringRunId};
 use serde::Serialize;
-use serde_json::Value;
+use serde_json::{json, Value};
 
 #[derive(Debug, Serialize)]
 pub struct DatasetListResponse {
@@ -89,13 +91,38 @@ pub async fn register_dataset(
     headers: HeaderMap,
     Json(request): Json<RegisterDatasetInput>,
 ) -> Result<Json<DatasetRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_dataset_contract(&request)?;
     let dataset = state
         .repository
         .register_dataset(request)
         .await
         .map_err(internal_error("DATASET_REGISTER_FAILED"))?;
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "dataset.registered",
+            summary: "Dataset registered",
+            payload: json!({
+                "dataset_id": dataset.dataset_id,
+                "dataset_key": dataset.dataset_key,
+                "dataset_version": dataset.dataset_version,
+                "business_domain": dataset.business_domain,
+                "source_key": dataset.source_key,
+                "storage_format": dataset.storage_format,
+                "row_count": dataset.row_count,
+                "to_status": dataset.status,
+                "owner": actor.actor_id.clone(),
+            }),
+            evidence_refs: vec![format!(
+                "datasets:{}:{}",
+                dataset.dataset_key, dataset.dataset_version
+            )],
+        },
+    )
+    .await
+    .map_err(internal_error("DATASET_AUDIT_SAVE_FAILED"))?;
     Ok(Json(dataset))
 }
 
@@ -153,7 +180,7 @@ pub async fn add_field_mapping(
     Path(dataset_id): Path<String>,
     Json(request): Json<CreateFieldMappingInput>,
 ) -> Result<Json<FieldMappingResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let mapping = state
         .repository
         .add_field_mapping(&dataset_id, request)
@@ -166,6 +193,29 @@ pub async fn add_field_mapping(
                 "dataset not found",
             )
         })?;
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "dataset.field_mapping.added",
+            summary: "Dataset field mapping added",
+            payload: json!({
+                "dataset_id": mapping.dataset_id,
+                "external_field": mapping.external_field,
+                "canonical_target": mapping.canonical_target,
+                "feature_name": mapping.feature_name,
+                "transform_kind": mapping.transform_kind,
+                "to_status": mapping.status,
+                "owner": actor.actor_id.clone(),
+            }),
+            evidence_refs: vec![format!(
+                "dataset_field_mappings:{}:{}",
+                mapping.dataset_id, mapping.external_field
+            )],
+        },
+    )
+    .await
+    .map_err(internal_error("FIELD_MAPPING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(FieldMappingResponse { mapping }))
 }
 
@@ -174,7 +224,7 @@ pub async fn register_feature_set(
     headers: HeaderMap,
     Json(request): Json<RegisterFeatureSetInput>,
 ) -> Result<Json<FeatureSetRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_parquet_uri(&request.features_uri, "FEATURE_SET_FORMAT_INVALID")?;
     let feature_set = state
         .repository
@@ -188,6 +238,31 @@ pub async fn register_feature_set(
                 "feature set dataset was not found",
             )
         })?;
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "feature_set.registered",
+            summary: "Feature set registered",
+            payload: json!({
+                "feature_set_id": feature_set.feature_set_id,
+                "feature_set_key": feature_set.feature_set_key,
+                "version": feature_set.version,
+                "dataset_id": feature_set.dataset_id,
+                "business_domain": feature_set.business_domain,
+                "row_count": feature_set.row_count,
+                "label_column": feature_set.label_column,
+                "to_status": feature_set.status,
+                "owner": actor.actor_id.clone(),
+            }),
+            evidence_refs: vec![format!(
+                "feature_sets:{}:{}",
+                feature_set.feature_set_key, feature_set.version
+            )],
+        },
+    )
+    .await
+    .map_err(internal_error("FEATURE_SET_AUDIT_SAVE_FAILED"))?;
     Ok(Json(feature_set))
 }
 
@@ -196,7 +271,7 @@ pub async fn register_model_dataset(
     headers: HeaderMap,
     Json(request): Json<RegisterModelDatasetInput>,
 ) -> Result<Json<ModelDatasetRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_parquet_uri(&request.train_uri, "MODEL_DATASET_FORMAT_INVALID")?;
     validate_parquet_uri(&request.validation_uri, "MODEL_DATASET_FORMAT_INVALID")?;
     if let Some(test_uri) = &request.test_uri {
@@ -214,6 +289,26 @@ pub async fn register_model_dataset(
                 "model dataset feature set was not found",
             )
         })?;
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "model_dataset.registered",
+            summary: "Model dataset registered",
+            payload: json!({
+                "model_dataset_id": model_dataset.model_dataset_id,
+                "feature_set_id": model_dataset.feature_set_id,
+                "business_domain": model_dataset.business_domain,
+                "task_type": model_dataset.task_type,
+                "label_name": model_dataset.label_name,
+                "to_status": model_dataset.status,
+                "owner": actor.actor_id.clone(),
+            }),
+            evidence_refs: vec![format!("model_datasets:{}", model_dataset.model_dataset_id)],
+        },
+    )
+    .await
+    .map_err(internal_error("MODEL_DATASET_AUDIT_SAVE_FAILED"))?;
     Ok(Json(model_dataset))
 }
 
@@ -222,7 +317,7 @@ pub async fn register_model_evaluation(
     headers: HeaderMap,
     Json(request): Json<RegisterModelEvaluationInput>,
 ) -> Result<Json<ModelEvaluationResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let evaluation = state
         .repository
         .register_model_evaluation(request)
@@ -235,6 +330,28 @@ pub async fn register_model_evaluation(
                 "model evaluation dataset was not found",
             )
         })?;
+    record_data_lineage_audit(
+        &state,
+        &actor,
+        DataLineageAuditInput {
+            event_type: "model_evaluation.registered",
+            summary: "Model evaluation registered",
+            payload: json!({
+                "evaluation_run_id": evaluation.evaluation_run_id,
+                "model_key": evaluation.model_key,
+                "model_version": evaluation.model_version,
+                "model_dataset_id": evaluation.model_dataset_id,
+                "to_status": "registered",
+                "owner": actor.actor_id.clone(),
+            }),
+            evidence_refs: vec![format!(
+                "model_evaluations:{}",
+                evaluation.evaluation_run_id
+            )],
+        },
+    )
+    .await
+    .map_err(internal_error("MODEL_EVALUATION_AUDIT_SAVE_FAILED"))?;
     Ok(Json(ModelEvaluationResponse { evaluation }))
 }
 
@@ -591,7 +708,41 @@ fn validate_parquet_uri(value: &str, code: &'static str) -> Result<(), ApiError>
     }
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+struct DataLineageAuditInput {
+    event_type: &'static str,
+    summary: &'static str,
+    payload: Value,
+    evidence_refs: Vec<String>,
+}
+
+async fn record_data_lineage_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    input: DataLineageAuditInput,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: input.event_type.into(),
+            event_status: "succeeded".into(),
+            summary: input.summary.into(),
+            payload: input.payload,
+            evidence_refs: input
+                .evidence_refs
+                .into_iter()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
@@ -602,7 +753,6 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
             source_system: state.config.source_system.clone(),
         },
     )
-    .map(|_| ())
     .map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,

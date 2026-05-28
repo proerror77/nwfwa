@@ -299,7 +299,7 @@ async fn adds_external_field_mapping_to_dataset() {
     let dataset_id = created["dataset_id"].as_str().unwrap();
 
     let (status, body) = json_request(
-        app,
+        app.clone(),
         "POST",
         &format!("/api/v1/ops/datasets/{dataset_id}/mappings"),
         r#"{
@@ -317,6 +317,23 @@ async fn adds_external_field_mapping_to_dataset() {
     assert_eq!(body["mapping"]["dataset_id"], dataset_id);
     assert_eq!(body["mapping"]["external_field"], "sum_premium");
     assert_eq!(body["mapping"]["feature_name"], "sum_premium");
+
+    let (status, audit_events) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_type=dataset.field_mapping.added&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        audit_events["events"][0]["payload"]["external_field"],
+        "sum_premium"
+    );
+    assert_eq!(
+        audit_events["events"][0]["payload"]["feature_name"],
+        "sum_premium"
+    );
 }
 
 #[tokio::test]
@@ -427,7 +444,8 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     assert_eq!(loaded["evaluation"]["model_key"], "renewal_baseline");
     assert_eq!(loaded["evaluation"]["model_dataset_id"], model_dataset_id);
 
-    let (status, listed) = json_request(app, "GET", "/api/v1/ops/model-evaluations", "{}").await;
+    let (status, listed) =
+        json_request(app.clone(), "GET", "/api/v1/ops/model-evaluations", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
@@ -447,6 +465,46 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     );
     assert_eq!(listed["lineage"][0]["source_dataset_version"], "v1");
     assert_eq!(listed["lineage"][0]["source_data_quality_status"], "watch");
+
+    let (status, audit_events) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_group=governance&limit=20",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let audit_event_types = audit_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["event_type"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    for event_type in [
+        "dataset.registered",
+        "feature_set.registered",
+        "model_dataset.registered",
+        "model_evaluation.registered",
+    ] {
+        assert!(
+            audit_event_types.contains(&event_type),
+            "missing governance audit event {event_type}"
+        );
+    }
+    let model_evaluation_event = audit_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "model_evaluation.registered")
+        .unwrap();
+    assert_eq!(
+        model_evaluation_event["payload"]["evaluation_run_id"],
+        "eval_renewal_v1"
+    );
+    assert_eq!(
+        model_evaluation_event["evidence_refs"][0],
+        "model_evaluations:eval_renewal_v1"
+    );
 }
 
 #[tokio::test]

@@ -244,6 +244,11 @@ export type GovernanceChangeTimelineRow = {
 };
 
 const governanceChangeEventTypes = new Set([
+  "dataset.registered",
+  "dataset.field_mapping.added",
+  "feature_set.registered",
+  "model_dataset.registered",
+  "model_evaluation.registered",
   "rule.candidate.saved",
   "rule.status.changed",
   "rule.rollback.completed",
@@ -280,6 +285,14 @@ function payloadString(payload: Record<string, unknown> | undefined, key: string
 }
 
 function governanceChangeDomain(eventType: string) {
+  if (
+    eventType.startsWith("dataset.") ||
+    eventType.startsWith("feature_set.") ||
+    eventType.startsWith("model_dataset.") ||
+    eventType.startsWith("model_evaluation.")
+  ) {
+    return "Data";
+  }
   if (eventType.startsWith("rule.")) return "Rule";
   if (eventType.startsWith("model.")) return "Model";
   if (eventType.startsWith("routing_policy.")) return "Routing";
@@ -288,6 +301,36 @@ function governanceChangeDomain(eventType: string) {
 
 function governanceChangeTargetId(event: AuditEvent) {
   const payload = event.payload;
+  if (event.event_type === "dataset.registered") {
+    const datasetKey = payloadString(payload, "dataset_key");
+    const version = payloadString(payload, "dataset_version");
+    return version ? `${datasetKey}@${version}` : datasetKey;
+  }
+  if (event.event_type === "dataset.field_mapping.added") {
+    return [
+      payloadString(payload, "dataset_id"),
+      payloadString(payload, "feature_name") || payloadString(payload, "external_field"),
+    ]
+      .filter(Boolean)
+      .join(" / ");
+  }
+  if (event.event_type === "feature_set.registered") {
+    const featureSetKey = payloadString(payload, "feature_set_key");
+    const version = payloadString(payload, "version");
+    return version ? `${featureSetKey}@${version}` : featureSetKey;
+  }
+  if (event.event_type === "model_dataset.registered") {
+    return payloadString(payload, "model_dataset_id");
+  }
+  if (event.event_type === "model_evaluation.registered") {
+    return [
+      payloadString(payload, "model_key"),
+      payloadString(payload, "model_version"),
+      payloadString(payload, "evaluation_run_id"),
+    ]
+      .filter(Boolean)
+      .join(" / ");
+  }
   if (event.event_type.startsWith("rule.")) {
     const ruleId = payloadString(payload, "rule_id");
     const version = payloadString(payload, "rule_version");
