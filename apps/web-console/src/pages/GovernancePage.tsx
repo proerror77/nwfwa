@@ -153,7 +153,7 @@ type WebhookEventListResponse = {
   events: WebhookEvent[];
 };
 
-type OutcomeLabel = {
+export type OutcomeLabel = {
   label_id: string;
   claim_id: string;
   label_name: string;
@@ -164,6 +164,12 @@ type OutcomeLabel = {
   feedback_target: string;
   currency?: string | null;
   evidence_refs: string[];
+};
+
+export type OutcomeLabelFilters = {
+  sourceType?: string;
+  feedbackTarget?: string;
+  governanceStatus?: string;
 };
 
 type OutcomeLabelListResponse = {
@@ -616,10 +622,34 @@ export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
   };
 }
 
+export function filterOutcomeLabels(
+  labels: OutcomeLabel[] = [],
+  filters: OutcomeLabelFilters = {},
+) {
+  const sourceType = filters.sourceType?.trim();
+  const feedbackTarget = filters.feedbackTarget?.trim();
+  const governanceStatus = filters.governanceStatus?.trim();
+  return labels.filter(
+    (label) =>
+      (!sourceType || label.source_type === sourceType) &&
+      (!feedbackTarget || label.feedback_target === feedbackTarget) &&
+      (!governanceStatus || label.governance_status === governanceStatus),
+  );
+}
+
+function sortedUniqueLabels(labels: OutcomeLabel[], field: keyof OutcomeLabel) {
+  return Array.from(new Set(labels.map((label) => String(label[field])).filter(Boolean))).sort();
+}
+
 export function GovernancePage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
   const [agentApprover, setAgentApprover] = useState("qa-lead");
+  const [outcomeLabelFilters, setOutcomeLabelFilters] = useState<OutcomeLabelFilters>({
+    sourceType: "",
+    feedbackTarget: "",
+    governanceStatus: "",
+  });
   const [auditEventFilters, setAuditEventFilters] = useState({
     eventType: "",
     actorId: "",
@@ -688,7 +718,13 @@ export function GovernancePage() {
   const globalAuditSummary = buildAuditSummary(globalAuditQuery.data);
   const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
   const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
-  const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
+  const outcomeLabels = labelsQuery.data?.labels ?? [];
+  const filteredOutcomeLabels = filterOutcomeLabels(outcomeLabels, outcomeLabelFilters);
+  const labelSummary = buildOutcomeLabelSummary(outcomeLabels);
+  const filteredLabelSummary = buildOutcomeLabelSummary(filteredOutcomeLabels);
+  const outcomeLabelSourceTypes = sortedUniqueLabels(outcomeLabels, "source_type");
+  const outcomeLabelFeedbackTargets = sortedUniqueLabels(outcomeLabels, "feedback_target");
+  const outcomeLabelGovernanceStatuses = sortedUniqueLabels(outcomeLabels, "governance_status");
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
   const governanceChangeTimelineRows = buildGovernanceChangeTimelineRows(
     governanceChangeEventsQuery.data?.events,
@@ -1232,50 +1268,114 @@ export function GovernancePage() {
       </div>
       <div className="panel">
         <h2>Outcome Labels</h2>
+        <label>
+          Source Type
+          <select
+            value={outcomeLabelFilters.sourceType}
+            onChange={(event) =>
+              setOutcomeLabelFilters((filters) => ({
+                ...filters,
+                sourceType: event.target.value,
+              }))
+            }
+          >
+            <option value="">All sources</option>
+            {outcomeLabelSourceTypes.map((sourceType) => (
+              <option key={sourceType} value={sourceType}>
+                {sourceType}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Feedback Target
+          <select
+            value={outcomeLabelFilters.feedbackTarget}
+            onChange={(event) =>
+              setOutcomeLabelFilters((filters) => ({
+                ...filters,
+                feedbackTarget: event.target.value,
+              }))
+            }
+          >
+            <option value="">All targets</option>
+            {outcomeLabelFeedbackTargets.map((feedbackTarget) => (
+              <option key={feedbackTarget} value={feedbackTarget}>
+                {feedbackTarget}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Governance Status
+          <select
+            value={outcomeLabelFilters.governanceStatus}
+            onChange={(event) =>
+              setOutcomeLabelFilters((filters) => ({
+                ...filters,
+                governanceStatus: event.target.value,
+              }))
+            }
+          >
+            <option value="">All statuses</option>
+            {outcomeLabelGovernanceStatuses.map((governanceStatus) => (
+              <option key={governanceStatus} value={governanceStatus}>
+                {governanceStatus}
+              </option>
+            ))}
+          </select>
+        </label>
         <div className="summary-grid">
           <div>
+            <span>Matching</span>
+            <strong>
+              {filteredLabelSummary.labelCount}/{labelSummary.labelCount}
+            </strong>
+          </div>
+          <div>
             <span>Needs Review</span>
-            <strong>{labelSummary.needsReviewCount}</strong>
+            <strong>{filteredLabelSummary.needsReviewCount}</strong>
           </div>
           <div>
             <span>Model Feedback</span>
-            <strong>{labelSummary.modelFeedbackCount}</strong>
+            <strong>{filteredLabelSummary.modelFeedbackCount}</strong>
           </div>
           <div>
             <span>Rule Feedback</span>
-            <strong>{labelSummary.ruleFeedbackCount}</strong>
+            <strong>{filteredLabelSummary.ruleFeedbackCount}</strong>
           </div>
           <div>
             <span>Case Status Labels</span>
-            <strong>{labelSummary.caseStatusLabelCount}</strong>
+            <strong>{filteredLabelSummary.caseStatusLabelCount}</strong>
           </div>
           <div>
             <span>False Positives</span>
-            <strong>{labelSummary.falsePositiveCount}</strong>
+            <strong>{filteredLabelSummary.falsePositiveCount}</strong>
           </div>
           <div>
             <span>Evidence Backed</span>
             <strong>
-              {labelSummary.evidenceBackedCount}/{labelSummary.labelCount}
+              {filteredLabelSummary.evidenceBackedCount}/{filteredLabelSummary.labelCount}
             </strong>
           </div>
           <div>
             <span>Prevented</span>
             <strong>
-              {labelSummary.amountPreventedCurrency} {labelSummary.amountPreventedTotal}
+              {filteredLabelSummary.amountPreventedCurrency}{" "}
+              {filteredLabelSummary.amountPreventedTotal}
             </strong>
           </div>
         </div>
-        {labelSummary.sourceTypeRows.length ? (
+        {filteredLabelSummary.sourceTypeRows.length ? (
           <ul className="result-list compact-list">
-            {labelSummary.sourceTypeRows.map((row) => (
+            {filteredLabelSummary.sourceTypeRows.map((row) => (
               <li key={row}>{row}</li>
             ))}
           </ul>
         ) : null}
-        {labelsQuery.data?.labels.length ? (
+        {filteredOutcomeLabels.length ? (
           <ol className="audit-timeline">
-            {labelsQuery.data.labels.map((label) => (
+            {filteredOutcomeLabels.map((label) => (
               <li key={label.label_id}>
                 <div>
                   <strong>{label.label_name}</strong>

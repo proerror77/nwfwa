@@ -119,6 +119,10 @@ async fn openapi_includes_operations_paths() {
         qa_feedback_targets
     );
     assert_eq!(
+        schema["components"]["schemas"]["OutcomeLabel"]["properties"]["source_type"]["enum"],
+        serde_json::json!(["investigation_result", "qa_review", "case_status"])
+    );
+    assert_eq!(
         schema["components"]["schemas"]["QaQueueItem"]["properties"]["feedback_target"]["enum"],
         serde_json::json!([
             "rules",

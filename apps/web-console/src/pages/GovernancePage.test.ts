@@ -12,6 +12,7 @@ import {
   buildPromotionGateGovernanceSummary,
   buildWebhookDeliverySummary,
   canRecordWebhookDeliveryAttempt,
+  filterOutcomeLabels,
   hasPendingAgentApproval,
 } from "./GovernancePage";
 
@@ -625,6 +626,59 @@ describe("buildOutcomeLabelSummary", () => {
       amountPreventedTotal: 8200,
       amountPreventedCurrency: "CNY",
     });
+  });
+});
+
+describe("filterOutcomeLabels", () => {
+  it("filters governed labels by source target and status", () => {
+    const labels = [
+      {
+        label_id: "label_1",
+        claim_id: "CLM-1",
+        label_name: "confirmed_fwa",
+        label_value: "true",
+        source_type: "investigation_result",
+        source_id: "INV-1",
+        governance_status: "approved_for_training",
+        feedback_target: "models",
+        currency: null,
+        evidence_refs: ["investigation_results:INV-1"],
+      },
+      {
+        label_id: "label_2",
+        claim_id: "CLM-2",
+        label_name: "false_positive",
+        label_value: "true",
+        source_type: "case_status",
+        source_id: "case_CLM-2",
+        governance_status: "needs_review",
+        feedback_target: "rules",
+        currency: null,
+        evidence_refs: ["investigation_cases:case_CLM-2"],
+      },
+      {
+        label_id: "label_3",
+        claim_id: "CLM-3",
+        label_name: "medical_necessity_issue",
+        label_value: "true",
+        source_type: "qa_review",
+        source_id: "QA-1",
+        governance_status: "needs_review",
+        feedback_target: "models",
+        currency: null,
+        evidence_refs: ["qa_reviews:QA-1"],
+      },
+    ];
+
+    expect(
+      filterOutcomeLabels(labels, {
+        sourceType: "case_status",
+        feedbackTarget: "rules",
+        governanceStatus: "needs_review",
+      }).map((label) => label.label_id),
+    ).toEqual(["label_2"]);
+    expect(filterOutcomeLabels(labels, { feedbackTarget: "models" })).toHaveLength(2);
+    expect(filterOutcomeLabels(labels, {})).toHaveLength(3);
   });
 });
 
