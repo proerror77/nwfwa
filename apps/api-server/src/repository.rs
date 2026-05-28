@@ -3149,11 +3149,26 @@ impl ScoringRepository for PostgresScoringRepository {
 
         sqlx::query(
             "INSERT INTO model_scores
-             (run_id, model_key, runtime_kind, execution_provider, score, label, explanation_json, latency_ms)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)",
+             (run_id, model_version_id, model_key, runtime_kind, execution_provider, score, label, explanation_json, latency_ms)
+             VALUES (
+               $1,
+               (
+                 SELECT id
+                 FROM model_versions
+                 WHERE model_key = $2 AND version = $3
+               ),
+               $2,
+               $4,
+               $5,
+               $6,
+               $7,
+               $8,
+               $9
+             )",
         )
         .bind(&run.run_id)
         .bind(run.model_score["model_key"].as_str().unwrap_or("unknown"))
+        .bind(run.model_score["model_version"].as_str().unwrap_or("unknown"))
         .bind(run.model_score["runtime_kind"].as_str().unwrap_or("unknown"))
         .bind(run.model_score["execution_provider"].as_str().unwrap_or("cpu"))
         .bind(run.model_score["score"].as_i64().unwrap_or(0) as i32)
