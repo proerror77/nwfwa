@@ -52,7 +52,21 @@ type ScoringResponse = {
   provider_profile?: ProviderProfileAssessment;
   provider_relationships?: ProviderRelationshipGraphAssessment;
   similar_cases: SimilarCase[];
+  feature_values: FeatureTraceValue[];
   evidence_refs: unknown[];
+};
+
+type FeatureEvidenceRef = {
+  entity_type: string;
+  entity_id: string;
+  field: string;
+};
+
+type FeatureTraceValue = {
+  name: string;
+  version: number;
+  value: unknown;
+  evidence_refs: FeatureEvidenceRef[];
 };
 
 type RoutingPolicy = {
@@ -84,6 +98,31 @@ export function buildRoutingPolicySummary(policy?: RoutingPolicy | null) {
     confidenceThresholdLabel: `Low < ${policy.confidence_thresholds.low_confidence_below}, High >= ${policy.confidence_thresholds.high_confidence_min}`,
     providerThresholdLabel: `Provider review >= ${policy.provider_review_threshold}`,
   };
+}
+
+export function buildFeatureTraceRows(featureValues: FeatureTraceValue[] = []) {
+  return featureValues.map((feature) => ({
+    key: `${feature.name}:${feature.version}`,
+    name: feature.name,
+    versionLabel: `v${feature.version}`,
+    valueLabel: formatFeatureValue(feature.value),
+    evidenceLabel:
+      feature.evidence_refs.length === 0
+        ? "No evidence refs"
+        : feature.evidence_refs
+            .map((evidence) => `${evidence.entity_type}:${evidence.entity_id}.${evidence.field}`)
+            .join(", "),
+  }));
+}
+
+function formatFeatureValue(value: unknown) {
+  if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
+    return String(value);
+  }
+  if (value === null || value === undefined) {
+    return "-";
+  }
+  return JSON.stringify(value);
 }
 
 const defaultPayload = JSON.stringify(
@@ -198,6 +237,7 @@ export function RuntimeScoring() {
   const routingPolicySummary = result
     ? buildRoutingPolicySummary(result.routing_policy)
     : null;
+  const featureTraceRows = result ? buildFeatureTraceRows(result.feature_values) : [];
 
   return (
     <section className="runtime">
@@ -616,6 +656,23 @@ export function RuntimeScoring() {
                   )}
                 </div>
               ) : null}
+            </section>
+            <section>
+              <h3>Feature Trace</h3>
+              {featureTraceRows.length > 0 ? (
+                <ul className="result-list compact-list">
+                  {featureTraceRows.map((feature) => (
+                    <li key={feature.key}>
+                      <strong>
+                        {feature.name} · {feature.versionLabel} · {feature.valueLabel}
+                      </strong>
+                      <small>{feature.evidenceLabel}</small>
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="empty">No feature trace</p>
+              )}
             </section>
             <section>
               <h3>Evidence Refs</h3>

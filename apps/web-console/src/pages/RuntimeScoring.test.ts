@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildClaimIdScorePayload, buildRoutingPolicySummary } from "./RuntimeScoring";
+import {
+  buildClaimIdScorePayload,
+  buildFeatureTraceRows,
+  buildRoutingPolicySummary,
+} from "./RuntimeScoring";
 import { buildProviderProfileInspection } from "./providerProfileInspection";
 import {
   buildClinicalEvidenceInspection,
@@ -43,6 +47,35 @@ describe("buildRoutingPolicySummary", () => {
       confidenceThresholdLabel: "Low < 60, High >= 80",
       providerThresholdLabel: "Provider review >= 70",
     });
+  });
+});
+
+describe("buildFeatureTraceRows", () => {
+  it("formats feature values with evidence refs for score traceability", () => {
+    expect(
+      buildFeatureTraceRows([
+        {
+          name: "claim_amount_to_limit_ratio",
+          version: 1,
+          value: 0.8,
+          evidence_refs: [
+            {
+              entity_type: "claim",
+              entity_id: "CLM-0287",
+              field: "claim_amount",
+            },
+          ],
+        },
+      ]),
+    ).toEqual([
+      {
+        key: "claim_amount_to_limit_ratio:1",
+        name: "claim_amount_to_limit_ratio",
+        versionLabel: "v1",
+        valueLabel: "0.8",
+        evidenceLabel: "claim:CLM-0287.claim_amount",
+      },
+    ]);
   });
 });
 

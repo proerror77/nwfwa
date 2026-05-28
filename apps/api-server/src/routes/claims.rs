@@ -156,6 +156,7 @@ pub struct ScoreClaimResponse {
     pub provider_profile: ProviderProfileAssessment,
     pub provider_relationships: ProviderRelationshipGraphAssessment,
     pub similar_cases: Vec<SimilarCaseRecord>,
+    pub feature_values: Vec<FeatureValue>,
     pub evidence_refs: Vec<serde_json::Value>,
 }
 
@@ -435,6 +436,7 @@ pub async fn score_claim(
         similar_case_score: decision.similar_case_score,
         final_score: decision.risk_score.value(),
     };
+    let feature_values = features.values().cloned().collect::<Vec<_>>();
     let audit_payload = serde_json::json!({
         "claim_id": context.claim.external_claim_id,
         "review_mode": &review_mode,
@@ -453,6 +455,7 @@ pub async fn score_claim(
         "provider_profile": &provider_profile,
         "provider_relationships": &provider_relationships,
         "similar_cases": &similar_cases,
+        "feature_values": &feature_values,
         "model_score": &model_score,
         "triggered_rules": &alerts,
         "event_type": "scoring.completed",
@@ -477,8 +480,8 @@ pub async fn score_claim(
                 .unwrap_or_else(|_| serde_json::json!({})),
             score_breakdown: serde_json::to_value(&scores)
                 .unwrap_or_else(|_| serde_json::json!({})),
-            feature_values: features
-                .values()
+            feature_values: feature_values
+                .iter()
                 .map(|feature| {
                     serde_json::to_value(feature).unwrap_or_else(|_| serde_json::json!({}))
                 })
@@ -518,6 +521,7 @@ pub async fn score_claim(
         provider_profile,
         provider_relationships,
         similar_cases,
+        feature_values,
         evidence_refs,
     }))
 }

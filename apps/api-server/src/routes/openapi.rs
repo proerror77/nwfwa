@@ -2027,6 +2027,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "provider_profile",
                         "provider_relationships",
                         "similar_cases",
+                        "feature_values",
                         "evidence_refs"
                     ],
                     "properties": {
@@ -2120,6 +2121,12 @@ pub async fn openapi_schema() -> Json<Value> {
                                 "$ref": "#/components/schemas/SimilarCase"
                             }
                         },
+                        "feature_values": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/components/schemas/FeatureValue"
+                            }
+                        },
                         "evidence_refs": {
                             "type": "array",
                             "items": {
@@ -2129,6 +2136,28 @@ pub async fn openapi_schema() -> Json<Value> {
                                 ]
                             }
                         }
+                    }
+                },
+                "FeatureValue": {
+                    "type": "object",
+                    "required": ["name", "version", "value", "evidence_refs"],
+                    "properties": {
+                        "name": { "type": "string" },
+                        "version": { "type": "integer", "minimum": 0 },
+                        "value": {},
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/EvidenceRef" }
+                        }
+                    }
+                },
+                "EvidenceRef": {
+                    "type": "object",
+                    "required": ["entity_type", "entity_id", "field"],
+                    "properties": {
+                        "entity_type": { "type": "string" },
+                        "entity_id": { "type": "string" },
+                        "field": { "type": "string" }
                     }
                 },
                 "DetectionLayerScore": {

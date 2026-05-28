@@ -285,6 +285,23 @@ async fn scores_spec_style_top_level_full_payload() {
         .expect("response should include evidence refs");
     assert!(evidence_refs.contains(&serde_json::json!("rule_runs:EARLY_HIGH_AMOUNT")));
     assert!(evidence_refs.contains(&serde_json::json!("model_scores:baseline_fwa")));
+    let feature_values = body["feature_values"]
+        .as_array()
+        .expect("response should include feature values");
+    let amount_ratio_feature = feature_values
+        .iter()
+        .find(|feature| feature["name"] == "claim_amount_to_limit_ratio")
+        .expect("feature trace should include claim amount ratio");
+    assert_eq!(amount_ratio_feature["version"], 1);
+    assert_eq!(amount_ratio_feature["value"], serde_json::json!(0.8));
+    assert!(amount_ratio_feature["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "entity_type": "claim",
+            "entity_id": "CLM-TOP-LEVEL",
+            "field": "claim_amount"
+        })));
 
     let audit_request = Request::builder()
         .method("GET")
@@ -315,6 +332,10 @@ async fn scores_spec_style_top_level_full_payload() {
     assert_eq!(
         scoring_event["payload"]["routing_policy"],
         body["routing_policy"]
+    );
+    assert_eq!(
+        scoring_event["payload"]["feature_values"],
+        body["feature_values"]
     );
     assert!(scoring_event["payload"]["routing_reason"]
         .as_str()
@@ -1204,6 +1225,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "provider_profile",
         "provider_relationships",
         "similar_cases",
+        "feature_values",
         "layers",
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");
@@ -1243,6 +1265,15 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderProfileAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphAssessment"].is_object());
+    assert_eq!(
+        response_properties["feature_values"]["items"]["$ref"],
+        "#/components/schemas/FeatureValue"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FeatureValue"]["properties"]["evidence_refs"]["items"]
+            ["$ref"],
+        "#/components/schemas/EvidenceRef"
+    );
 
     let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
         .as_array()
