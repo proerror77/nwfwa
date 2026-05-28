@@ -1,11 +1,12 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getClaimAuditHistory,
   listAgentRuns,
   listOpsAlerts,
   listOutcomeLabels,
   listWebhookEvents,
+  submitWebhookDeliveryAttempt,
 } from "../api";
 
 type AuditEvent = {
@@ -208,6 +209,10 @@ export function buildWebhookDeliverySummary(events: WebhookEvent[] = []) {
   };
 }
 
+export function canRecordWebhookDeliveryAttempt(event: WebhookEvent) {
+  return event.delivery_status === "pending" || event.delivery_status === "retry_wait";
+}
+
 export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
   const amountPreventedLabels = labels.filter((label) => label.label_name === "amount_prevented");
   const amountPreventedTotal = amountPreventedLabels.reduce((total, label) => {
@@ -230,6 +235,7 @@ export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
 export function GovernancePage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
+  const queryClient = useQueryClient();
   const auditQuery = useQuery({
     queryKey: ["claim-audit-history", apiKey, claimId],
     queryFn: () => getClaimAuditHistory(claimId, apiKey) as Promise<ClaimAuditHistoryResponse>,
@@ -256,6 +262,30 @@ export function GovernancePage() {
   const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
+  const deliveryAttemptMutation = useMutation({
+    mutationFn: ({
+      eventId,
+      deliveryStatus,
+    }: {
+      eventId: string;
+      deliveryStatus: "delivered" | "failed";
+    }) =>
+      submitWebhookDeliveryAttempt(
+        eventId,
+        {
+          delivery_status: deliveryStatus,
+          response_status_code: deliveryStatus === "delivered" ? 200 : 503,
+          error_message:
+            deliveryStatus === "failed"
+              ? "Manual delivery check failed from Governance."
+              : null,
+        },
+        apiKey,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["webhook-events"] });
+    },
+  });
 
   return (
     <section className="ops-grid">
@@ -337,6 +367,9 @@ export function GovernancePage() {
         {labelsQuery.error ? <pre className="error">{String(labelsQuery.error.message)}</pre> : null}
         {webhookQuery.error ? (
           <pre className="error">{String(webhookQuery.error.message)}</pre>
+        ) : null}
+        {deliveryAttemptMutation.error ? (
+          <pre className="error">{String(deliveryAttemptMutation.error.message)}</pre>
         ) : null}
       </div>
 
@@ -422,6 +455,34 @@ export function GovernancePage() {
                   {event.signature_algorithm} / {event.signature_key_id}
                 </p>
                 {event.last_error_message ? <p>{event.last_error_message}</p> : null}
+                {canRecordWebhookDeliveryAttempt(event) ? (
+                  <div className="button-row">
+                    <button
+                      disabled={deliveryAttemptMutation.isPending}
+                      onClick={() =>
+                        deliveryAttemptMutation.mutate({
+                          eventId: event.event_id,
+                          deliveryStatus: "delivered",
+                        })
+                      }
+                      type="button"
+                    >
+                      Mark Delivered
+                    </button>
+                    <button
+                      disabled={deliveryAttemptMutation.isPending}
+                      onClick={() =>
+                        deliveryAttemptMutation.mutate({
+                          eventId: event.event_id,
+                          deliveryStatus: "failed",
+                        })
+                      }
+                      type="button"
+                    >
+                      Mark Failed
+                    </button>
+                  </div>
+                ) : null}
                 <ul className="result-list">
                   {event.evidence_refs.map((reference) => (
                     <li key={reference}>{reference}</li>

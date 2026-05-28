@@ -5,6 +5,7 @@ import {
   buildOpsAlertSummary,
   buildOutcomeLabelSummary,
   buildWebhookDeliverySummary,
+  canRecordWebhookDeliveryAttempt,
 } from "./GovernancePage";
 
 describe("buildAuditSummary", () => {
@@ -261,5 +262,36 @@ describe("buildWebhookDeliverySummary", () => {
       failedCount: 0,
       signedCount: 2,
     });
+  });
+
+  it("allows delivery attempts only while webhook events are still actionable", () => {
+    const baseEvent = {
+      event_id: "webhook_1",
+      event_type: "fwa.score.completed",
+      source_event_type: "scoring.completed",
+      source_audit_id: "audit_1",
+      claim_id: "CLM-1",
+      run_id: "run_1",
+      retry_count: 0,
+      max_attempts: 3,
+      idempotency_key: "fwa-webhook:fwa.score.completed:audit_1",
+      signature_key_id: "tpa-webhook-v1",
+      signature_algorithm: "hmac-sha256",
+      signature_base_string: "fwa.score.completed.audit_1.run_1.CLM-1",
+      evidence_refs: ["audit:scoring.completed"],
+    };
+
+    expect(canRecordWebhookDeliveryAttempt({ ...baseEvent, delivery_status: "pending" })).toBe(
+      true,
+    );
+    expect(canRecordWebhookDeliveryAttempt({ ...baseEvent, delivery_status: "retry_wait" })).toBe(
+      true,
+    );
+    expect(canRecordWebhookDeliveryAttempt({ ...baseEvent, delivery_status: "delivered" })).toBe(
+      false,
+    );
+    expect(canRecordWebhookDeliveryAttempt({ ...baseEvent, delivery_status: "failed" })).toBe(
+      false,
+    );
   });
 });
