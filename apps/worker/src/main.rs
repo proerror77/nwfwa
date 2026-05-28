@@ -42,6 +42,25 @@ async fn main() -> anyhow::Result<()> {
             .await?;
             println!("{}", serde_json::to_string_pretty(&job)?);
         }
+        "run-retraining-job" => {
+            let api_url = take_flag_value(&mut args, "--api-url")?;
+            let api_key = take_flag_value(&mut args, "--api-key")?;
+            let actor = take_flag_value(&mut args, "--actor")?;
+            let artifact_base_uri = take_flag_value(&mut args, "--artifact-base-uri")?;
+            let model_key = take_optional_flag_value(&mut args, "--model-key")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let result = worker::run_one_retraining_job(
+                &api_url,
+                &api_key,
+                &actor,
+                model_key.as_deref(),
+                &artifact_base_uri,
+            )
+            .await?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
         command => anyhow::bail!("unknown worker command: {command}"),
     }
     Ok(())

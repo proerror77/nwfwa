@@ -25,6 +25,34 @@ struct ClaimRetrainingJobPayload<'a> {
     model_key: Option<&'a str>,
 }
 
+#[derive(Debug, Serialize)]
+struct UpdateRetrainingJobStatusPayload<'a> {
+    status: &'a str,
+    actor: &'a str,
+    notes: &'a str,
+}
+
+#[derive(Debug, Clone, Serialize)]
+struct CompleteRetrainingJobPayload {
+    actor: String,
+    notes: String,
+    candidate_model_version: String,
+    artifact_uri: String,
+    endpoint_url: Option<String>,
+    validation_report_uri: String,
+    evaluation_run_id: String,
+    auc: Option<String>,
+    ks: Option<String>,
+    precision: Option<String>,
+    recall: Option<String>,
+    f1: Option<String>,
+    accuracy: Option<String>,
+    threshold: Option<String>,
+    confusion_matrix_json: serde_json::Value,
+    feature_importance_uri: Option<String>,
+    metrics_json: serde_json::Value,
+}
+
 pub async fn claim_next_retraining_job(
     api_base_url: &str,
     api_key: &str,
@@ -55,6 +83,102 @@ pub async fn claim_next_retraining_job(
         .json::<ClaimedRetrainingJob>()
         .await
         .context("parse claimed retraining job response")
+}
+
+pub async fn update_retraining_job_status(
+    api_base_url: &str,
+    api_key: &str,
+    job_id: &str,
+    status: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<ClaimedRetrainingJob> {
+    let response = reqwest::Client::new()
+        .post(api_url(api_base_url, &retraining_job_status_path(job_id)))
+        .header("x-api-key", api_key)
+        .json(&UpdateRetrainingJobStatusPayload {
+            status,
+            actor,
+            notes,
+        })
+        .send()
+        .await
+        .with_context(|| format!("update model retraining job {job_id} status"))?;
+    let response_status = response.status();
+    if !response_status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("update model retraining job {job_id} status failed with {response_status}: {body}");
+    }
+    response
+        .json::<ClaimedRetrainingJob>()
+        .await
+        .context("parse retraining job status response")
+}
+
+pub async fn complete_retraining_job_with_mock_output(
+    api_base_url: &str,
+    api_key: &str,
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+    artifact_base_uri: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let output = build_mock_retraining_output(job, actor, artifact_base_uri)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            &retraining_job_output_path(&job.job_id),
+        ))
+        .header("x-api-key", api_key)
+        .json(&output)
+        .send()
+        .await
+        .with_context(|| format!("register model retraining job {} output", job.job_id))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!(
+            "register model retraining job {} output failed with {status}: {body}",
+            job.job_id
+        );
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse retraining job output response")
+}
+
+pub async fn run_one_retraining_job(
+    api_base_url: &str,
+    api_key: &str,
+    actor: &str,
+    model_key: Option<&str>,
+    artifact_base_uri: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let job = claim_next_retraining_job(
+        api_base_url,
+        api_key,
+        actor,
+        model_key,
+        "Worker claimed retraining job.",
+    )
+    .await?;
+    let validation_job = update_retraining_job_status(
+        api_base_url,
+        api_key,
+        &job.job_id,
+        "validation",
+        actor,
+        "Mock retraining completed; validation metrics are ready.",
+    )
+    .await?;
+    complete_retraining_job_with_mock_output(
+        api_base_url,
+        api_key,
+        &validation_job,
+        actor,
+        artifact_base_uri,
+    )
+    .await
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -457,6 +581,106 @@ fn api_url(base_url: &str, path: &str) -> String {
     format!("{}{}", base_url.trim_end_matches('/'), path)
 }
 
+fn retraining_job_status_path(job_id: &str) -> String {
+    format!("/api/v1/ops/model-retraining-jobs/{job_id}/status")
+}
+
+fn retraining_job_output_path(job_id: &str) -> String {
+    format!("/api/v1/ops/model-retraining-jobs/{job_id}/output")
+}
+
+fn build_mock_retraining_output(
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+    artifact_base_uri: &str,
+) -> anyhow::Result<CompleteRetrainingJobPayload> {
+    if artifact_base_uri.trim().is_empty() {
+        bail!("artifact_base_uri is required");
+    }
+    let safe_model_key = safe_path_segment(&job.model_key);
+    let candidate_model_version = format!(
+        "{}-candidate-{}",
+        safe_path_segment(&job.model_version),
+        safe_path_segment(&job.job_id)
+    );
+    let artifact_root = artifact_base_uri.trim().trim_end_matches('/');
+    let artifact_uri =
+        format!("{artifact_root}/{safe_model_key}/{candidate_model_version}/model.onnx");
+    let validation_report_uri =
+        format!("{artifact_root}/{safe_model_key}/{candidate_model_version}/validation.json");
+    let feature_importance_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/feature_importance.parquet"
+    );
+    let evaluation_run_id = format!(
+        "eval_{}_{}",
+        safe_id_segment(&job.model_key),
+        safe_id_segment(&candidate_model_version)
+    );
+
+    Ok(CompleteRetrainingJobPayload {
+        actor: actor.to_string(),
+        notes: "Candidate model and validation report registered by worker.".into(),
+        candidate_model_version,
+        artifact_uri,
+        endpoint_url: None,
+        validation_report_uri,
+        evaluation_run_id,
+        auc: Some("0.86".into()),
+        ks: Some("0.48".into()),
+        precision: Some("0.78".into()),
+        recall: Some("0.71".into()),
+        f1: Some("0.74".into()),
+        accuracy: Some("0.79".into()),
+        threshold: Some("0.52".into()),
+        confusion_matrix_json: serde_json::json!({
+            "tp": 24,
+            "fp": 6,
+            "tn": 52,
+            "fn": 8
+        }),
+        feature_importance_uri: Some(feature_importance_uri),
+        metrics_json: serde_json::json!({
+            "score_psi": 0.04,
+            "shadow_comparison_status": "passed",
+            "review_capacity_threshold_status": "passed"
+        }),
+    })
+}
+
+fn safe_path_segment(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '-' | '_' | '.') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+    if sanitized.is_empty() {
+        "unknown".into()
+    } else {
+        sanitized
+    }
+}
+
+fn safe_id_segment(value: &str) -> String {
+    let sanitized = value
+        .chars()
+        .map(|ch| if ch.is_ascii_alphanumeric() { ch } else { '_' })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+    if sanitized.is_empty() {
+        "unknown".into()
+    } else {
+        sanitized
+    }
+}
+
 fn resolve_parquet_files(base_dir: &Path, data_uri: &str) -> anyhow::Result<Vec<PathBuf>> {
     let path = PathBuf::from(data_uri);
     let path = if path.is_absolute() {
@@ -641,6 +865,73 @@ mod tests {
             ),
             "http://127.0.0.1:8080/api/v1/ops/model-retraining-jobs/claim-next"
         );
+        assert_eq!(
+            api_url(
+                "http://127.0.0.1:8080/",
+                &retraining_job_status_path("model_retraining_job_1")
+            ),
+            "http://127.0.0.1:8080/api/v1/ops/model-retraining-jobs/model_retraining_job_1/status"
+        );
+        assert_eq!(
+            api_url(
+                "http://127.0.0.1:8080/",
+                &retraining_job_output_path("model_retraining_job_1")
+            ),
+            "http://127.0.0.1:8080/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
+        );
+    }
+
+    #[test]
+    fn builds_deterministic_mock_retraining_output() {
+        let job = ClaimedRetrainingJob {
+            job_id: "model retraining/job#1".into(),
+            model_key: "baseline/fwa".into(),
+            model_version: "0.1.0".into(),
+            status: "validation".into(),
+            updated_by: "trainer-worker".into(),
+            status_note: "Validation metrics are ready.".into(),
+        };
+
+        let output = build_mock_retraining_output(&job, "trainer-worker", "s3://fwa-models/")
+            .expect("mock retraining output");
+
+        assert_eq!(output.actor, "trainer-worker");
+        assert_eq!(
+            output.candidate_model_version,
+            "0.1.0-candidate-model_retraining_job_1"
+        );
+        assert_eq!(
+            output.artifact_uri,
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/model.onnx"
+        );
+        assert_eq!(
+            output.validation_report_uri,
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/validation.json"
+        );
+        assert_eq!(
+            output.evaluation_run_id,
+            "eval_baseline_fwa_0_1_0_candidate_model_retraining_job_1"
+        );
+        assert_eq!(output.auc.as_deref(), Some("0.86"));
+        assert_eq!(output.endpoint_url, None);
+        assert_eq!(output.confusion_matrix_json["tp"], 24);
+        assert_eq!(output.metrics_json["shadow_comparison_status"], "passed");
+    }
+
+    #[test]
+    fn rejects_empty_artifact_base_uri_for_mock_retraining_output() {
+        let job = ClaimedRetrainingJob {
+            job_id: "model_retraining_job_1".into(),
+            model_key: "baseline_fwa".into(),
+            model_version: "0.1.0".into(),
+            status: "validation".into(),
+            updated_by: "trainer-worker".into(),
+            status_note: "Validation metrics are ready.".into(),
+        };
+
+        let error = build_mock_retraining_output(&job, "trainer-worker", " ").unwrap_err();
+
+        assert!(error.to_string().contains("artifact_base_uri"));
     }
 
     #[test]
