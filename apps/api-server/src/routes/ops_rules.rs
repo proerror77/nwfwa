@@ -2,8 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        PersistedAuditEvent, RuleBacktestRecord, RulePerformanceRecord, RulePromotionReviewRecord,
-        RuleSummaryRecord,
+        PersistedAuditEvent, QaFeedbackItemRecord, RuleBacktestRecord, RulePerformanceRecord,
+        RulePromotionReviewRecord, RuleSummaryRecord,
     },
 };
 use axum::{
@@ -54,6 +54,7 @@ pub struct RulePromotionGatesResponse {
     pub reviewed_count: u32,
     pub false_positive_rate: f64,
     pub saving_amount: String,
+    pub open_rule_feedback_count: usize,
     pub approved_label_count: usize,
     pub needs_review_label_count: usize,
     pub gates: Vec<RulePromotionGate>,
@@ -251,12 +252,18 @@ async fn load_rule_promotion_gates(
         .list_outcome_labels()
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
+    let feedback_items = state
+        .repository
+        .list_qa_feedback_items()
+        .await
+        .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
 
     Ok(build_rule_promotion_gates(
         &rule,
         &performance,
         latest_backtest.as_ref(),
         &outcome_labels,
+        &feedback_items,
         latest_review.as_ref(),
     ))
 }
@@ -327,6 +334,7 @@ fn build_rule_promotion_gates(
     performance: &RulePerformanceRecord,
     latest_backtest: Option<&RuleBacktestRecord>,
     outcome_labels: &[crate::repository::OutcomeLabelRecord],
+    feedback_items: &[QaFeedbackItemRecord],
     latest_review: Option<&RulePromotionReviewRecord>,
 ) -> RulePromotionGatesResponse {
     let effective_reviewed_count = performance.reviewed_count.max(
@@ -358,6 +366,10 @@ fn build_rule_promotion_gates(
         .map(|review| review.decision == "approved")
         .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active"));
     let shadow_rollout = performance.trigger_count > 0 && performance.reviewed_count > 0;
+    let open_rule_feedback_count = feedback_items
+        .iter()
+        .filter(|item| item.feedback_target == "rules" && item.status == "open")
+        .count();
     let rule_feedback_labels = outcome_labels
         .iter()
         .filter(|label| label.feedback_target == "rules")
@@ -462,6 +474,7 @@ fn build_rule_promotion_gates(
         reviewed_count: effective_reviewed_count,
         false_positive_rate: effective_false_positive_rate,
         saving_amount: format!("{:.2}", effective_saving.round_dp(2)),
+        open_rule_feedback_count,
         approved_label_count: approved_rule_feedback,
         needs_review_label_count: needs_review_rule_feedback,
         gates,

@@ -2687,6 +2687,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "reviewed_count",
                         "false_positive_rate",
                         "saving_amount",
+                        "open_rule_feedback_count",
                         "approved_label_count",
                         "needs_review_label_count",
                         "gates",
@@ -2704,6 +2705,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "reviewed_count": { "type": "integer", "minimum": 0 },
                         "false_positive_rate": { "type": "number", "minimum": 0 },
                         "saving_amount": { "type": "string", "format": "decimal" },
+                        "open_rule_feedback_count": { "type": "integer" },
                         "approved_label_count": { "type": "integer" },
                         "needs_review_label_count": { "type": "integer" },
                         "gates": {

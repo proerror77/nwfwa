@@ -647,6 +647,7 @@ async fn rule_promotion_gates_include_rule_feedback_labels() {
     assert_eq!(feedback_gate["passed"], false);
     assert_eq!(feedback_gate["evidence_source"], "labels");
     assert_eq!(feedback_gate["blocker"], "rule feedback labels need review");
+    assert_eq!(body["open_rule_feedback_count"], 1);
     assert_eq!(body["approved_label_count"], 0);
     assert_eq!(body["needs_review_label_count"], 1);
     assert!(body["blockers"]

@@ -122,7 +122,11 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["OutcomeLabel"]["properties"]["source_type"]["enum"],
         serde_json::json!(["investigation_result", "qa_review", "case_status"])
     );
-    for field in ["approved_label_count", "needs_review_label_count"] {
+    for field in [
+        "open_rule_feedback_count",
+        "approved_label_count",
+        "needs_review_label_count",
+    ] {
         assert!(
             schema["components"]["schemas"]["RulePromotionGatesResponse"]["required"]
                 .as_array()

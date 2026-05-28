@@ -60,6 +60,7 @@ type RulePromotionGatesResponse = {
   reviewed_count: number;
   false_positive_rate: number;
   saving_amount: string;
+  open_rule_feedback_count: number;
   approved_label_count: number;
   needs_review_label_count: number;
   blockers: string[];
@@ -462,6 +463,10 @@ export function RulesStudio() {
               <div>
                 <span>Saving</span>
                 <strong>{promotionQuery.data.saving_amount}</strong>
+              </div>
+              <div>
+                <span>Open Feedback</span>
+                <strong>{promotionQuery.data.open_rule_feedback_count}</strong>
               </div>
               <div>
                 <span>Approved Labels</span>
