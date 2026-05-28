@@ -6,6 +6,7 @@ import {
   getModelPerformance,
   getModelPromotionGates,
   getModelRetrainingReadiness,
+  listAuditEvents,
   listModelRetrainingJobs,
   listOutcomeLabels,
   listQaFeedbackItems,
@@ -109,6 +110,16 @@ type OutcomeLabel = {
   evidence_refs: string[];
 };
 
+type AuditEvent = {
+  audit_id: string;
+  run_id: string;
+  event_type: string;
+  event_status: string;
+  summary: string;
+  evidence_refs: string[];
+  created_at?: string | null;
+};
+
 export function buildModelLabelReadinessSummary(labels: OutcomeLabel[] = []) {
   const modelLabels = labels.filter((label) => label.feedback_target === "models");
   return {
@@ -122,6 +133,14 @@ export function buildModelLabelReadinessSummary(labels: OutcomeLabel[] = []) {
     confirmedFwaCount: modelLabels.filter(
       (label) => label.label_name === "confirmed_fwa" && label.label_value === "true",
     ).length,
+  };
+}
+
+export function buildModelAuditFilters(model: ModelVersion, limit = 25) {
+  return {
+    limit,
+    model_key: model.model_key,
+    model_version: model.version,
   };
 }
 
@@ -199,6 +218,20 @@ export function ModelOpsPage() {
       ) as Promise<ModelPromotionGatesResponse>,
     enabled: Boolean(selectedModel?.model_key),
   });
+  const auditQuery = useQuery({
+    queryKey: [
+      "model-audit-events",
+      selectedModel?.model_key,
+      selectedModel?.version,
+      apiKey,
+    ],
+    queryFn: () =>
+      listAuditEvents(
+        apiKey,
+        buildModelAuditFilters(selectedModel!),
+      ) as Promise<{ events: AuditEvent[] }>,
+    enabled: Boolean(selectedModel?.model_key),
+  });
   const retrainingQuery = useQuery({
     queryKey: ["model-retraining-readiness", selectedModel?.model_key, apiKey],
     queryFn: () =>
@@ -248,6 +281,7 @@ export function ModelOpsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
+      queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
     },
   });
   const rollbackMutation = useMutation({
@@ -258,6 +292,7 @@ export function ModelOpsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
+      queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
     },
   });
   const retrainingCreateMutation = useMutation({
@@ -272,6 +307,7 @@ export function ModelOpsPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
       queryClient.invalidateQueries({ queryKey: ["model-retraining-readiness"] });
+      queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
     },
   });
   const retrainingStatusMutation = useMutation({
@@ -283,6 +319,7 @@ export function ModelOpsPage() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
     },
   });
   const retrainingCompleteMutation = useMutation({
@@ -318,6 +355,7 @@ export function ModelOpsPage() {
       queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
       queryClient.invalidateQueries({ queryKey: ["model-evaluations"] });
+      queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
     },
   });
   const promotionGateRows = promotionQuery.data
@@ -424,6 +462,33 @@ export function ModelOpsPage() {
           </dl>
         ) : (
           <p className="empty">No performance data loaded</p>
+        )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Model Audit Trail</h2>
+        {auditQuery.error ? (
+          <pre className="error">{String(auditQuery.error.message)}</pre>
+        ) : null}
+        {auditQuery.data?.events.length ? (
+          <ol className="audit-timeline">
+            {auditQuery.data.events.map((event) => (
+              <li key={event.audit_id}>
+                <div>
+                  <strong>{event.event_type}</strong>
+                  <span>{event.event_status}</span>
+                </div>
+                <small>{event.created_at || event.run_id}</small>
+                <p>{event.summary}</p>
+                <ul className="result-list">
+                  {event.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No model audit events loaded</p>
         )}
       </div>
       <div className="panel wide-panel">

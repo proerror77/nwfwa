@@ -743,6 +743,30 @@ pub async fn openapi_schema() -> Json<Value> {
                             "schema": { "type": "string" }
                         },
                         {
+                            "name": "rule_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "rule_version",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "model_key",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "model_version",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
                             "name": "routing_policy_id",
                             "in": "query",
                             "required": false,

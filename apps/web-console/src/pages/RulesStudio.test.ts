@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildRuleLabelReadinessSummary } from "./RulesStudio";
+import { buildRuleAuditFilters, buildRuleLabelReadinessSummary } from "./RulesStudio";
 
 describe("buildRuleLabelReadinessSummary", () => {
   it("summarizes rule-governance labels from human outcomes", () => {
@@ -48,6 +48,30 @@ describe("buildRuleLabelReadinessSummary", () => {
       needsReviewCount: 1,
       evidenceBackedCount: 2,
       confirmedFwaCount: 1,
+    });
+  });
+});
+
+describe("buildRuleAuditFilters", () => {
+  it("targets the selected rule version for lifecycle audit history", () => {
+    expect(
+      buildRuleAuditFilters({
+        rule_id: "candidate_early_claim",
+        name: "Candidate early claim",
+        status: "submitted",
+        owner: "rule-discovery",
+        active_version: null,
+        latest_version: 2,
+        review_mode: "pre_payment",
+        scheme_family: "rule",
+        score: 25,
+        alert_code: "EARLY_CLAIM",
+        recommended_action: "ManualReview",
+      }),
+    ).toEqual({
+      limit: 25,
+      rule_id: "candidate_early_claim",
+      rule_version: 2,
     });
   });
 });

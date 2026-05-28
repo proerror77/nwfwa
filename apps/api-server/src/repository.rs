@@ -88,6 +88,10 @@ pub struct AuditEventListFilter {
     pub actor_id: Option<String>,
     pub run_id: Option<String>,
     pub claim_id: Option<String>,
+    pub rule_id: Option<String>,
+    pub rule_version: Option<String>,
+    pub model_key: Option<String>,
+    pub model_version: Option<String>,
     pub routing_policy_id: Option<String>,
     pub routing_policy_version: Option<String>,
     pub review_mode: Option<String>,
@@ -5974,10 +5978,14 @@ impl ScoringRepository for PostgresScoringRepository {
                AND ($6::text IS NULL OR ae.payload ->> 'policy_id' = $6)
                AND ($7::text IS NULL OR ae.payload ->> 'version' = $7)
                AND ($8::text IS NULL OR ae.payload ->> 'review_mode' = $8)
+               AND ($9::text IS NULL OR ae.payload ->> 'rule_id' = $9)
+               AND ($10::text IS NULL OR ae.payload ->> 'rule_version' = $10)
+               AND ($11::text IS NULL OR ae.payload ->> 'model_key' = $11)
+               AND ($12::text IS NULL OR ae.payload ->> 'model_version' = $12)
                AND (
-                 $9::text IS NULL
+                 $13::text IS NULL
                  OR (
-                   $9 = 'governance'
+                   $13 = 'governance'
                    AND ae.event_type IN (
                      'rule.candidate.saved',
                      'rule.status.changed',
@@ -6004,6 +6012,10 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.routing_policy_id.as_deref())
         .bind(filter.routing_policy_version.as_deref())
         .bind(filter.review_mode.as_deref())
+        .bind(filter.rule_id.as_deref())
+        .bind(filter.rule_version.as_deref())
+        .bind(filter.model_key.as_deref())
+        .bind(filter.model_version.as_deref())
         .bind(filter.event_group.as_deref())
         .fetch_all(&self.pool)
         .await?;
@@ -7007,6 +7019,12 @@ fn persisted_audit_event_matches_filter(
     if !audit_event_payload_matches_routing_policy_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_rule_filter(&event.payload, filter) {
+        return false;
+    }
+    if !audit_event_payload_matches_model_filter(&event.payload, filter) {
+        return false;
+    }
     true
 }
 
@@ -7044,6 +7062,12 @@ fn pilot_audit_event_matches_filter(
     if !audit_event_payload_matches_routing_policy_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_rule_filter(&event.payload, filter) {
+        return false;
+    }
+    if !audit_event_payload_matches_model_filter(&event.payload, filter) {
+        return false;
+    }
     true
 }
 
@@ -7053,6 +7077,45 @@ fn audit_event_matches_group(event_type: &str, filter: &AuditEventListFilter) ->
         Some("governance") => GOVERNANCE_AUDIT_EVENT_TYPES.contains(&event_type),
         Some(_) => false,
     }
+}
+
+fn audit_event_payload_matches_rule_filter(payload: &Value, filter: &AuditEventListFilter) -> bool {
+    if filter
+        .rule_id
+        .as_deref()
+        .is_some_and(|rule_id| payload["rule_id"].as_str() != Some(rule_id))
+    {
+        return false;
+    }
+    if filter
+        .rule_version
+        .as_deref()
+        .is_some_and(|version| !payload_field_matches_text(payload, "rule_version", version))
+    {
+        return false;
+    }
+    true
+}
+
+fn audit_event_payload_matches_model_filter(
+    payload: &Value,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter
+        .model_key
+        .as_deref()
+        .is_some_and(|model_key| payload["model_key"].as_str() != Some(model_key))
+    {
+        return false;
+    }
+    if filter
+        .model_version
+        .as_deref()
+        .is_some_and(|version| payload["model_version"].as_str() != Some(version))
+    {
+        return false;
+    }
+    true
 }
 
 fn audit_event_payload_matches_routing_policy_filter(
@@ -7069,13 +7132,7 @@ fn audit_event_payload_matches_routing_policy_filter(
     if filter
         .routing_policy_version
         .as_deref()
-        .is_some_and(|version| {
-            payload["version"]
-                .as_u64()
-                .map(|value| value.to_string())
-                .as_deref()
-                != Some(version)
-        })
+        .is_some_and(|version| !payload_field_matches_text(payload, "version", version))
     {
         return false;
     }
@@ -7087,6 +7144,15 @@ fn audit_event_payload_matches_routing_policy_filter(
         return false;
     }
     true
+}
+
+fn payload_field_matches_text(payload: &Value, field: &str, expected: &str) -> bool {
+    payload[field].as_str() == Some(expected)
+        || payload[field]
+            .as_u64()
+            .map(|value| value.to_string())
+            .as_deref()
+            == Some(expected)
 }
 
 fn webhook_event_from_audit(

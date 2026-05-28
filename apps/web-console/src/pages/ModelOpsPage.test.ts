@@ -1,10 +1,33 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildModelAuditFilters,
   buildModelLabelReadinessSummary,
   buildModelRetrainingJobSummary,
   buildModelRetrainingSummary,
   formatSourceDataQuality,
 } from "./ModelOpsPage";
+
+describe("buildModelAuditFilters", () => {
+  it("targets the selected model version for lifecycle audit history", () => {
+    expect(
+      buildModelAuditFilters({
+        model_key: "baseline_fwa",
+        version: "0.2.0-candidate",
+        model_type: "baseline_classifier",
+        runtime_kind: "python_http",
+        execution_provider: "cpu",
+        status: "approved",
+        review_mode: "pre_payment",
+        artifact_uri: "s3://models/baseline_fwa/model.onnx",
+        endpoint_url: null,
+      }),
+    ).toEqual({
+      limit: 25,
+      model_key: "baseline_fwa",
+      model_version: "0.2.0-candidate",
+    });
+  });
+});
 
 describe("buildModelLabelReadinessSummary", () => {
   it("summarizes model-governance labels from human outcomes", () => {

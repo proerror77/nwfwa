@@ -6,6 +6,7 @@ import {
   discoverRules,
   getRule,
   getRulePromotionGates,
+  listAuditEvents,
   listOutcomeLabels,
   listQaFeedbackItems,
   listRules,
@@ -70,6 +71,16 @@ type OutcomeLabel = {
   evidence_refs: string[];
 };
 
+type AuditEvent = {
+  audit_id: string;
+  run_id: string;
+  event_type: string;
+  event_status: string;
+  summary: string;
+  evidence_refs: string[];
+  created_at?: string | null;
+};
+
 export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
   const ruleLabels = labels.filter((label) => label.feedback_target === "rules");
   return {
@@ -83,6 +94,14 @@ export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
     confirmedFwaCount: ruleLabels.filter(
       (label) => label.label_name === "confirmed_fwa" && label.label_value === "true",
     ).length,
+  };
+}
+
+export function buildRuleAuditFilters(rule: RuleSummary, limit = 25) {
+  return {
+    limit,
+    rule_id: rule.rule_id,
+    rule_version: rule.latest_version,
   };
 }
 
@@ -193,6 +212,15 @@ export function RulesStudio() {
       ) as Promise<RulePromotionGatesResponse>,
     enabled: Boolean(selectedRule?.rule_id),
   });
+  const auditQuery = useQuery({
+    queryKey: ["rule-audit-events", selectedRule?.rule_id, selectedRule?.latest_version, apiKey],
+    queryFn: () =>
+      listAuditEvents(
+        apiKey,
+        buildRuleAuditFilters(selectedRule!),
+      ) as Promise<{ events: AuditEvent[] }>,
+    enabled: Boolean(selectedRule?.rule_id),
+  });
   const qaFeedbackQuery = useQuery({
     queryKey: ["qa-feedback-items", apiKey],
     queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
@@ -224,6 +252,7 @@ export function RulesStudio() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
       queryClient.invalidateQueries({ queryKey: ["rule"] });
+      queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
     },
   });
   const reviewMutation = useMutation({
@@ -237,10 +266,14 @@ export function RulesStudio() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rule-promotion-gates"] });
+      queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
     },
   });
   const backtestMutation = useMutation({
     mutationFn: () => backtestRule(JSON.parse(backtestPayload), apiKey),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
+    },
   });
   const backtestSummary = backtestMutation.data
     ? buildRuleBacktestSummary(backtestMutation.data as RuleBacktestResponse)
@@ -263,6 +296,7 @@ export function RulesStudio() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
       queryClient.invalidateQueries({ queryKey: ["rule"] });
+      queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
     },
   });
 
@@ -338,10 +372,37 @@ export function RulesStudio() {
             {lifecycleMutation.error ? (
               <pre className="error">{String(lifecycleMutation.error.message)}</pre>
             ) : null}
+            {auditQuery.error ? (
+              <pre className="error">{String(auditQuery.error.message)}</pre>
+            ) : null}
             <pre>{JSON.stringify(detailQuery.data, null, 2)}</pre>
           </div>
         ) : (
           <p className="empty">No rules available</p>
+        )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Rule Audit Trail</h2>
+        {auditQuery.data?.events.length ? (
+          <ol className="audit-timeline">
+            {auditQuery.data.events.map((event) => (
+              <li key={event.audit_id}>
+                <div>
+                  <strong>{event.event_type}</strong>
+                  <span>{event.event_status}</span>
+                </div>
+                <small>{event.created_at || event.run_id}</small>
+                <p>{event.summary}</p>
+                <ul className="result-list">
+                  {event.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No rule audit events loaded</p>
         )}
       </div>
       <div className="panel wide-panel">

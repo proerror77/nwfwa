@@ -297,6 +297,10 @@ export type AuditEventListFilters = {
   actor_id?: string;
   run_id?: string;
   claim_id?: string;
+  rule_id?: string;
+  rule_version?: number | string;
+  model_key?: string;
+  model_version?: string;
   routing_policy_id?: string;
   routing_policy_version?: number | string;
   review_mode?: string;
