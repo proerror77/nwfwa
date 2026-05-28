@@ -369,6 +369,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["model_key"], "baseline_fwa");
     assert_eq!(body["model_version"], "0.1.0");
+    assert_eq!(body["review_mode"], "both");
     assert_eq!(body["decision"], "routing_blocked");
     assert_eq!(body["latest_evaluation_id"], "none");
     assert_eq!(body["passed_count"], 1);

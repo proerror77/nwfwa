@@ -91,6 +91,30 @@ async fn openapi_includes_operations_paths() {
         "both"
     );
     assert!(
+        schema["components"]["schemas"]["RulePromotionGatesResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "review_mode")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RulePromotionGatesResponse"]["properties"]["review_mode"]
+            ["enum"][1],
+        "post_payment"
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelPromotionGatesResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "review_mode")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelPromotionGatesResponse"]["properties"]["review_mode"]
+            ["enum"][0],
+        "pre_payment"
+    );
+    assert!(
         schema["components"]["schemas"]["RulePromotionGate"]["required"]
             .as_array()
             .unwrap()

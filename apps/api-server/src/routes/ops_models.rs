@@ -33,6 +33,7 @@ pub struct ModelPromotionGate {
 pub struct ModelPromotionGatesResponse {
     pub model_key: String,
     pub model_version: String,
+    pub review_mode: String,
     pub decision: String,
     pub passed_count: usize,
     pub total_count: usize,
@@ -337,6 +338,7 @@ fn build_model_promotion_gates(
     ModelPromotionGatesResponse {
         model_key: model.model_key.clone(),
         model_version: model.version.clone(),
+        review_mode: model.review_mode.clone(),
         decision: if blockers.is_empty() {
             "routing_allowed".into()
         } else {

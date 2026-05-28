@@ -45,6 +45,7 @@ pub struct RulePromotionGate {
 pub struct RulePromotionGatesResponse {
     pub rule_id: String,
     pub rule_version: u32,
+    pub review_mode: String,
     pub decision: String,
     pub status: String,
     pub passed_count: usize,
@@ -428,6 +429,7 @@ fn build_rule_promotion_gates(
     RulePromotionGatesResponse {
         rule_id: rule.rule_id.clone(),
         rule_version: rule.latest_version,
+        review_mode: rule.review_mode.clone(),
         decision: if blockers.is_empty() {
             "routing_allowed".into()
         } else {

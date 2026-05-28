@@ -43,6 +43,7 @@ type RuleSummary = {
 };
 
 type RulePromotionGatesResponse = {
+  review_mode: string;
   decision: string;
   passed_count: number;
   total_count: number;
@@ -346,6 +347,10 @@ export function RulesStudio() {
               <div>
                 <span>Routing Decision</span>
                 <strong>{promotionQuery.data.decision}</strong>
+              </div>
+              <div>
+                <span>Review Mode</span>
+                <strong>{formatReviewModeLabel(promotionQuery.data.review_mode)}</strong>
               </div>
               <div>
                 <span>Gates Passed</span>

@@ -1809,6 +1809,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": [
                         "rule_id",
                         "rule_version",
+                        "review_mode",
                         "decision",
                         "status",
                         "passed_count",
@@ -1823,6 +1824,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "rule_id": { "type": "string" },
                         "rule_version": { "type": "integer" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "decision": { "type": "string", "enum": ["routing_allowed", "routing_blocked"] },
                         "status": { "type": "string" },
                         "passed_count": { "type": "integer" },
@@ -2178,10 +2180,11 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelPromotionGatesResponse": {
                     "type": "object",
-                    "required": ["model_key", "model_version", "decision", "passed_count", "total_count", "latest_evaluation_id", "data_status", "scored_runs", "gates", "blockers"],
+                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "data_status", "scored_runs", "gates", "blockers"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "decision": { "type": "string", "enum": ["routing_allowed", "routing_blocked"] },
                         "passed_count": { "type": "integer" },
                         "total_count": { "type": "integer" },

@@ -111,6 +111,7 @@ async fn returns_rule_promotion_gates_for_unreviewed_rule() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["rule_id"], "rule_early_claim");
     assert_eq!(body["rule_version"], 1);
+    assert_eq!(body["review_mode"], "both");
     assert_eq!(body["decision"], "routing_blocked");
     assert_eq!(body["total_count"], 8);
     assert_eq!(body["passed_count"], 4);
