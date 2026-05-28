@@ -17,6 +17,22 @@ type DatasetRecord = {
   fields: Array<{ field_name: string; semantic_role: string }>;
 };
 
+export type DatasetHealthRecord = {
+  dataset_id: string;
+  dataset_key: string;
+  dataset_version: string;
+  data_quality_score: number;
+  data_quality_status: string;
+  field_count: number;
+  label_count: number;
+  entity_key_count: number;
+  high_missing_count: number;
+  unstable_field_count: number;
+  unowned_field_count: number;
+  online_ready_count: number;
+  issue_count: number;
+};
+
 type ModelEvaluationRecord = {
   evaluation_run_id: string;
   model_key: string;
@@ -31,12 +47,43 @@ type ModelEvaluationRecord = {
   threshold: string | null;
 };
 
+export function buildDatasetHealthSummary(health?: DatasetHealthRecord | null) {
+  if (!health) {
+    return {
+      dataQualityScoreLabel: "-",
+      dataQualityStatus: "empty",
+      issueCount: 0,
+      highMissingCount: 0,
+      unstableFieldCount: 0,
+      unownedFieldCount: 0,
+      onlineReadyRateLabel: "-",
+    };
+  }
+
+  const onlineReadyRate =
+    health.field_count === 0 ? 0 : health.online_ready_count / health.field_count;
+
+  return {
+    dataQualityScoreLabel: `${(health.data_quality_score * 100).toFixed(1)}%`,
+    dataQualityStatus: health.data_quality_status,
+    issueCount: health.issue_count,
+    highMissingCount: health.high_missing_count,
+    unstableFieldCount: health.unstable_field_count,
+    unownedFieldCount: health.unowned_field_count,
+    onlineReadyRateLabel: `${(onlineReadyRate * 100).toFixed(1)}%`,
+  };
+}
+
 export function DataSourcesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const datasetsQuery = useQuery({
     queryKey: ["datasets", apiKey],
-    queryFn: () => listDatasets(apiKey) as Promise<{ datasets: DatasetRecord[] }>,
+    queryFn: () =>
+      listDatasets(apiKey) as Promise<{
+        datasets: DatasetRecord[];
+        health: DatasetHealthRecord[];
+      }>,
   });
   const evaluationsQuery = useQuery({
     queryKey: ["model-evaluations", apiKey],
@@ -49,6 +96,14 @@ export function DataSourcesPage() {
       datasetsQuery.data?.datasets[0],
     [datasetsQuery.data?.datasets, selectedDatasetId],
   );
+  const selectedDatasetHealth = useMemo(
+    () =>
+      datasetsQuery.data?.health.find(
+        (health) => health.dataset_id === selectedDataset?.dataset_id,
+      ),
+    [datasetsQuery.data?.health, selectedDataset?.dataset_id],
+  );
+  const healthSummary = buildDatasetHealthSummary(selectedDatasetHealth);
 
   return (
     <section className="ops-grid">
@@ -109,6 +164,38 @@ export function DataSourcesPage() {
               <div>
                 <dt>Format</dt>
                 <dd>{selectedDataset.storage_format}</dd>
+              </div>
+            </dl>
+            <div className="summary-grid">
+              <div>
+                <span>DQ Score</span>
+                <strong>{healthSummary.dataQualityScoreLabel}</strong>
+              </div>
+              <div>
+                <span>DQ Status</span>
+                <strong>{healthSummary.dataQualityStatus}</strong>
+              </div>
+              <div>
+                <span>Issue Count</span>
+                <strong>{healthSummary.issueCount}</strong>
+              </div>
+              <div>
+                <span>Online Ready</span>
+                <strong>{healthSummary.onlineReadyRateLabel}</strong>
+              </div>
+            </div>
+            <dl className="result-grid">
+              <div>
+                <dt>High Missing</dt>
+                <dd>{healthSummary.highMissingCount}</dd>
+              </div>
+              <div>
+                <dt>Unstable Fields</dt>
+                <dd>{healthSummary.unstableFieldCount}</dd>
+              </div>
+              <div>
+                <dt>Unowned Fields</dt>
+                <dd>{healthSummary.unownedFieldCount}</dd>
               </div>
             </dl>
             <div className="summary-grid">

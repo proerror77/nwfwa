@@ -138,6 +138,10 @@ async fn registers_and_reads_parquet_dataset_catalog() {
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(listed["datasets"][0]["dataset_id"], dataset_id);
+    assert_eq!(listed["health"][0]["dataset_id"], dataset_id);
+    assert_eq!(listed["health"][0]["field_count"], 3);
+    assert_eq!(listed["health"][0]["label_count"], 1);
+    assert_eq!(listed["health"][0]["entity_key_count"], 2);
 }
 
 #[tokio::test]
@@ -185,6 +189,45 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
     assert_eq!(readiness["mapped_factor_count"], 1);
     assert_eq!(readiness["high_missing_count"], 0);
     assert_eq!(readiness["unowned_factor_count"], 3);
+}
+
+#[tokio::test]
+async fn returns_dataset_health_from_profiled_fields() {
+    let app = build_app(test_config());
+    let (_, created) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/datasets",
+        &renewal_dataset_payload("parquet").replace(
+            r#""profile_json": {"allowed_values": [0, 1]}"#,
+            r#""profile_json": {"allowed_values": [0, 1], "missing_rate": 0.0}"#,
+        ),
+    )
+    .await;
+    let dataset_id = created["dataset_id"].as_str().unwrap();
+
+    let (status, listed) = json_request(app, "GET", "/api/v1/ops/datasets", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(listed["health"][0]["dataset_id"], dataset_id);
+    assert_eq!(
+        listed["health"][0]["dataset_key"],
+        "renewal_automl_20211105"
+    );
+    assert_eq!(listed["health"][0]["dataset_version"], "v1");
+    assert_eq!(
+        listed["health"][0]["data_quality_score"],
+        0.6666666666666667
+    );
+    assert_eq!(listed["health"][0]["data_quality_status"], "watch");
+    assert_eq!(listed["health"][0]["field_count"], 3);
+    assert_eq!(listed["health"][0]["label_count"], 1);
+    assert_eq!(listed["health"][0]["entity_key_count"], 2);
+    assert_eq!(listed["health"][0]["high_missing_count"], 0);
+    assert_eq!(listed["health"][0]["unstable_field_count"], 0);
+    assert_eq!(listed["health"][0]["unowned_field_count"], 3);
+    assert_eq!(listed["health"][0]["online_ready_count"], 2);
+    assert_eq!(listed["health"][0]["issue_count"], 3);
 }
 
 #[tokio::test]

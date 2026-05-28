@@ -2387,12 +2387,35 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DatasetListResponse": {
                     "type": "object",
-                    "required": ["datasets"],
+                    "required": ["datasets", "health"],
                     "properties": {
                         "datasets": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/DatasetRecord" }
+                        },
+                        "health": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/DatasetHealth" }
                         }
+                    }
+                },
+                "DatasetHealth": {
+                    "type": "object",
+                    "required": ["dataset_id", "dataset_key", "dataset_version", "data_quality_score", "data_quality_status", "field_count", "label_count", "entity_key_count", "high_missing_count", "unstable_field_count", "unowned_field_count", "online_ready_count", "issue_count"],
+                    "properties": {
+                        "dataset_id": { "type": "string" },
+                        "dataset_key": { "type": "string" },
+                        "dataset_version": { "type": "string" },
+                        "data_quality_score": { "type": "number" },
+                        "data_quality_status": { "type": "string", "enum": ["empty", "ready", "watch", "blocked"] },
+                        "field_count": { "type": "integer" },
+                        "label_count": { "type": "integer" },
+                        "entity_key_count": { "type": "integer" },
+                        "high_missing_count": { "type": "integer" },
+                        "unstable_field_count": { "type": "integer" },
+                        "unowned_field_count": { "type": "integer" },
+                        "online_ready_count": { "type": "integer" },
+                        "issue_count": { "type": "integer" }
                     }
                 },
                 "FieldMappingRequest": {

@@ -19,6 +19,24 @@ use serde_json::Value;
 #[derive(Debug, Serialize)]
 pub struct DatasetListResponse {
     pub datasets: Vec<DatasetRecord>,
+    pub health: Vec<DatasetHealthRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct DatasetHealthRecord {
+    pub dataset_id: String,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub data_quality_score: f64,
+    pub data_quality_status: String,
+    pub field_count: u32,
+    pub label_count: u32,
+    pub entity_key_count: u32,
+    pub high_missing_count: u32,
+    pub unstable_field_count: u32,
+    pub unowned_field_count: u32,
+    pub online_ready_count: u32,
+    pub issue_count: u32,
 }
 
 #[derive(Debug, Serialize)]
@@ -77,7 +95,8 @@ pub async fn list_datasets(
         .list_datasets()
         .await
         .map_err(internal_error("DATASET_LIST_FAILED"))?;
-    Ok(Json(DatasetListResponse { datasets }))
+    let health = build_dataset_health(&datasets);
+    Ok(Json(DatasetListResponse { datasets, health }))
 }
 
 pub async fn factor_readiness(
@@ -315,16 +334,84 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
     response
 }
 
+fn build_dataset_health(datasets: &[DatasetRecord]) -> Vec<DatasetHealthRecord> {
+    datasets
+        .iter()
+        .map(|dataset| {
+            let mut record = DatasetHealthRecord {
+                dataset_id: dataset.dataset_id.clone(),
+                dataset_key: dataset.dataset_key.clone(),
+                dataset_version: dataset.dataset_version.clone(),
+                data_quality_score: 0.0,
+                data_quality_status: "empty".into(),
+                field_count: dataset.fields.len() as u32,
+                label_count: 0,
+                entity_key_count: 0,
+                high_missing_count: 0,
+                unstable_field_count: 0,
+                unowned_field_count: 0,
+                online_ready_count: 0,
+                issue_count: 0,
+            };
+
+            for field in &dataset.fields {
+                let is_label = field.semantic_role == "label";
+                let is_entity_key = dataset.entity_keys.contains(&field.field_name);
+                let missing_rate = numeric_profile_value(&field.profile_json, "missing_rate");
+                if is_label {
+                    record.label_count += 1;
+                }
+                if is_entity_key {
+                    record.entity_key_count += 1;
+                }
+                if !is_label && !field.nullable && missing_rate.unwrap_or(0.0) <= 0.05 {
+                    record.online_ready_count += 1;
+                }
+                if missing_rate.unwrap_or(0.0) > 0.20 {
+                    record.high_missing_count += 1;
+                }
+                if numeric_profile_value(&field.profile_json, "psi").unwrap_or(0.0) >= 0.25 {
+                    record.unstable_field_count += 1;
+                }
+                if field
+                    .profile_json
+                    .get("owner")
+                    .and_then(Value::as_str)
+                    .is_none_or(str::is_empty)
+                {
+                    record.unowned_field_count += 1;
+                }
+            }
+
+            record.issue_count = record.high_missing_count
+                + record.unstable_field_count
+                + record.unowned_field_count;
+            if record.field_count > 0 {
+                record.data_quality_score =
+                    dataset_data_quality_score(record.field_count, record.issue_count);
+                record.data_quality_status =
+                    factor_data_quality_status(record.data_quality_score).into();
+            }
+
+            record
+        })
+        .collect()
+}
+
+fn dataset_data_quality_score(field_count: u32, issue_count: u32) -> f64 {
+    let max_issue_count = field_count * 3;
+    let score = 1.0 - (issue_count as f64 / max_issue_count as f64);
+    score.clamp(0.0, 1.0)
+}
+
 fn factor_data_quality_score(response: &FactorReadinessResponse) -> f64 {
     if response.factor_count == 0 {
         return 0.0;
     }
-    let max_issue_count = response.factor_count * 3;
     let issue_count = response.high_missing_count
         + response.unstable_factor_count
         + response.unowned_factor_count;
-    let score = 1.0 - (issue_count as f64 / max_issue_count as f64);
-    score.clamp(0.0, 1.0)
+    dataset_data_quality_score(response.factor_count, issue_count)
 }
 
 fn factor_data_quality_status(score: f64) -> &'static str {

@@ -84,6 +84,23 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "data_quality_score")
     );
+    assert!(
+        schema["components"]["schemas"]["DatasetListResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "health")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["DatasetListResponse"]["properties"]["health"]["items"]
+            ["$ref"],
+        "#/components/schemas/DatasetHealth"
+    );
+    assert!(schema["components"]["schemas"]["DatasetHealth"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "issue_count"));
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
             ["data_quality_status"]["enum"][1],
