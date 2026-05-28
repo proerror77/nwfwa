@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDashboardAgentGovernanceSummary,
   buildDashboardLabelPoolSummary,
+  buildDashboardModelGovernanceSummary,
   buildDashboardQaQueueSummary,
   buildProviderRiskSummary,
 } from "./DashboardPage";
@@ -96,6 +97,29 @@ describe("buildDashboardAgentGovernanceSummary", () => {
       rejectedApprovals: 1,
       successRateLabel: "80.0%",
       approvalRateLabel: "75.0%",
+    });
+  });
+});
+
+describe("buildDashboardModelGovernanceSummary", () => {
+  it("summarizes model evaluation and drift coverage", () => {
+    const summary = buildDashboardModelGovernanceSummary({
+      total_models: 4,
+      evaluated_models: 3,
+      drift_watch_count: 1,
+      drift_detected_count: 1,
+      average_precision: 0.7123,
+      average_recall: 0.6345,
+    });
+
+    expect(summary).toEqual({
+      totalModels: 4,
+      evaluatedModels: 3,
+      driftWatchCount: 1,
+      driftDetectedCount: 1,
+      evaluationCoverageLabel: "75.0%",
+      averagePrecisionLabel: "71.2%",
+      averageRecallLabel: "63.5%",
     });
   });
 });

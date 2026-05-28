@@ -2250,7 +2250,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "model_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2276,6 +2276,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },
                         "qa_queue": { "$ref": "#/components/schemas/DashboardQaQueue" },
                         "agent_governance": { "$ref": "#/components/schemas/DashboardAgentGovernance" },
+                        "model_governance": { "$ref": "#/components/schemas/DashboardModelGovernance" },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
                     }
@@ -2310,6 +2311,18 @@ pub async fn openapi_schema() -> Json<Value> {
                         "pending_approvals": { "type": "integer" },
                         "approved_approvals": { "type": "integer" },
                         "rejected_approvals": { "type": "integer" }
+                    }
+                },
+                "DashboardModelGovernance": {
+                    "type": "object",
+                    "required": ["total_models", "evaluated_models", "drift_watch_count", "drift_detected_count", "average_precision", "average_recall"],
+                    "properties": {
+                        "total_models": { "type": "integer" },
+                        "evaluated_models": { "type": "integer" },
+                        "drift_watch_count": { "type": "integer" },
+                        "drift_detected_count": { "type": "integer" },
+                        "average_precision": { "type": ["number", "null"] },
+                        "average_recall": { "type": ["number", "null"] }
                     }
                 },
                 "Lead": {

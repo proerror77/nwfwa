@@ -363,6 +363,16 @@ pub struct DashboardAgentGovernanceRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardModelGovernanceRecord {
+    pub total_models: u32,
+    pub evaluated_models: u32,
+    pub drift_watch_count: u32,
+    pub drift_detected_count: u32,
+    pub average_precision: Option<f64>,
+    pub average_recall: Option<f64>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -376,6 +386,7 @@ pub struct DashboardSummaryRecord {
     pub label_pool: DashboardLabelPoolRecord,
     pub qa_queue: DashboardQaQueueRecord,
     pub agent_governance: DashboardAgentGovernanceRecord,
+    pub model_governance: DashboardModelGovernanceRecord,
     pub investigation_results: u32,
     pub qa_reviews: u32,
 }
@@ -1698,6 +1709,8 @@ impl ScoringRepository for InMemoryScoringRepository {
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
         let agent_runs = self.list_agent_runs().await?;
+        let models = self.list_models().await?;
+        let model_evaluations = self.list_model_evaluations().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims,
@@ -1749,6 +1762,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
+            model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
             investigation_results,
             qa_reviews,
         })
@@ -3714,6 +3728,8 @@ impl ScoringRepository for PostgresScoringRepository {
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
         let agent_runs = self.list_agent_runs().await?;
+        let models = self.list_models().await?;
+        let model_evaluations = self.list_model_evaluations().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims: suspected.0 as u32,
@@ -3781,6 +3797,7 @@ impl ScoringRepository for PostgresScoringRepository {
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
+            model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
             investigation_results: investigation.0 as u32,
             qa_reviews: qa_reviews.0 as u32,
         })
@@ -5327,6 +5344,74 @@ fn summarize_dashboard_agent_governance(
         pending_approvals,
         approved_approvals,
         rejected_approvals,
+    }
+}
+
+fn summarize_dashboard_model_governance(
+    models: &[ModelVersionRecord],
+    evaluations: &[ModelEvaluationRecord],
+) -> DashboardModelGovernanceRecord {
+    let known_models = models
+        .iter()
+        .map(|model| (model.model_key.as_str(), model.version.as_str()))
+        .collect::<BTreeSet<_>>();
+    let mut latest_evaluations = BTreeMap::<(&str, &str), &ModelEvaluationRecord>::new();
+    for evaluation in evaluations {
+        let key = (
+            evaluation.model_key.as_str(),
+            evaluation.model_version.as_str(),
+        );
+        if !known_models.contains(&key) {
+            continue;
+        }
+        latest_evaluations
+            .entry(key)
+            .and_modify(|existing| {
+                if evaluation.evaluation_run_id > existing.evaluation_run_id {
+                    *existing = evaluation;
+                }
+            })
+            .or_insert(evaluation);
+    }
+
+    let mut drift_watch_count = 0_u32;
+    let mut drift_detected_count = 0_u32;
+    let mut precision_values = Vec::new();
+    let mut recall_values = Vec::new();
+
+    for evaluation in latest_evaluations.values() {
+        match drift_summary(&evaluation.metrics_json).1.as_str() {
+            "watch" => drift_watch_count += 1,
+            "drift" => drift_detected_count += 1,
+            _ => {}
+        }
+        if let Some(precision) = evaluation.precision.as_ref() {
+            precision_values.push(decimal_to_f64(precision));
+        }
+        if let Some(recall) = evaluation.recall.as_ref() {
+            recall_values.push(decimal_to_f64(recall));
+        }
+    }
+
+    DashboardModelGovernanceRecord {
+        total_models: models.len() as u32,
+        evaluated_models: latest_evaluations.len() as u32,
+        drift_watch_count,
+        drift_detected_count,
+        average_precision: average_f64(&precision_values),
+        average_recall: average_f64(&recall_values),
+    }
+}
+
+fn decimal_to_f64(value: &Decimal) -> f64 {
+    value.to_string().parse().unwrap_or(0.0)
+}
+
+fn average_f64(values: &[f64]) -> Option<f64> {
+    if values.is_empty() {
+        None
+    } else {
+        Some(values.iter().sum::<f64>() / values.len() as f64)
     }
 }
 

@@ -199,6 +199,19 @@ async fn openapi_includes_operations_paths() {
             ["agent_governance"]["$ref"],
         "#/components/schemas/DashboardAgentGovernance"
     );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "model_governance")
+    );
+    assert!(schema["components"]["schemas"]["DashboardModelGovernance"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
+            ["model_governance"]["$ref"],
+        "#/components/schemas/DashboardModelGovernance"
+    );
     assert!(schema["components"]["schemas"]["SavingAttributionSummary"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]

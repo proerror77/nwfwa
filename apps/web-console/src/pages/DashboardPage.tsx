@@ -36,6 +36,15 @@ type DashboardAgentGovernance = {
   rejected_approvals: number;
 };
 
+type DashboardModelGovernance = {
+  total_models: number;
+  evaluated_models: number;
+  drift_watch_count: number;
+  drift_detected_count: number;
+  average_precision: number | null;
+  average_recall: number | null;
+};
+
 type DashboardSummary = {
   suspected_claims: number;
   confirmed_fwa: number;
@@ -49,6 +58,7 @@ type DashboardSummary = {
   label_pool: DashboardLabelPool;
   qa_queue: DashboardQaQueue;
   agent_governance: DashboardAgentGovernance;
+  model_governance: DashboardModelGovernance;
   investigation_results: number;
   qa_reviews: number;
 };
@@ -76,6 +86,11 @@ function formatScore(score: number) {
   return score.toFixed(1);
 }
 
+function formatPercent(value: number) {
+  const percentage = Math.round((value * 100 + 1e-9) * 10) / 10;
+  return `${percentage.toFixed(1)}%`;
+}
+
 export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
   const totalLabels = labelPool?.total_labels ?? 0;
   const approvedForTraining = labelPool?.approved_for_training ?? 0;
@@ -87,7 +102,7 @@ export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
     modelFeedback: labelPool?.model_feedback ?? 0,
     workflowFeedback: labelPool?.workflow_feedback ?? 0,
     trainingReadyRateLabel:
-      totalLabels === 0 ? "0.0%" : `${((approvedForTraining / totalLabels) * 100).toFixed(1)}%`,
+      totalLabels === 0 ? "0.0%" : formatPercent(approvedForTraining / totalLabels),
   };
 }
 
@@ -99,7 +114,7 @@ export function buildDashboardQaQueueSummary(queue?: DashboardQaQueue) {
     openCases: queue?.open_cases ?? 0,
     reviewedCases,
     reviewedRateLabel:
-      sampledCases === 0 ? "0.0%" : `${((reviewedCases / sampledCases) * 100).toFixed(1)}%`,
+      sampledCases === 0 ? "0.0%" : formatPercent(reviewedCases / sampledCases),
   };
 }
 
@@ -116,11 +131,26 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
     approvedApprovals,
     rejectedApprovals,
     successRateLabel:
-      totalRuns === 0 ? "0.0%" : `${((successfulRuns / totalRuns) * 100).toFixed(1)}%`,
+      totalRuns === 0 ? "0.0%" : formatPercent(successfulRuns / totalRuns),
     approvalRateLabel:
-      decidedApprovals === 0
-        ? "0.0%"
-        : `${((approvedApprovals / decidedApprovals) * 100).toFixed(1)}%`,
+      decidedApprovals === 0 ? "0.0%" : formatPercent(approvedApprovals / decidedApprovals),
+  };
+}
+
+export function buildDashboardModelGovernanceSummary(governance?: DashboardModelGovernance) {
+  const totalModels = governance?.total_models ?? 0;
+  const evaluatedModels = governance?.evaluated_models ?? 0;
+  const averagePrecision = governance?.average_precision ?? null;
+  const averageRecall = governance?.average_recall ?? null;
+  return {
+    totalModels,
+    evaluatedModels,
+    driftWatchCount: governance?.drift_watch_count ?? 0,
+    driftDetectedCount: governance?.drift_detected_count ?? 0,
+    evaluationCoverageLabel:
+      totalModels === 0 ? "0.0%" : formatPercent(evaluatedModels / totalModels),
+    averagePrecisionLabel: averagePrecision === null ? "n/a" : formatPercent(averagePrecision),
+    averageRecallLabel: averageRecall === null ? "n/a" : formatPercent(averageRecall),
   };
 }
 
@@ -133,7 +163,7 @@ export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
     reviewRequiredCount,
     highRiskCount: summary?.high_risk_count ?? 0,
     reviewRateLabel:
-      providerCount === 0 ? "0.0%" : `${((reviewRequiredCount / providerCount) * 100).toFixed(1)}%`,
+      providerCount === 0 ? "0.0%" : formatPercent(reviewRequiredCount / providerCount),
     topProviderId: topProvider?.provider_id ?? "none",
     topProviderScore: topProvider?.risk_score ?? 0,
   };
@@ -158,6 +188,7 @@ export function DashboardPage() {
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
   const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
   const agentGovernanceSummary = buildDashboardAgentGovernanceSummary(summary?.agent_governance);
+  const modelGovernanceSummary = buildDashboardModelGovernanceSummary(summary?.model_governance);
   const providerRiskSummary = buildProviderRiskSummary(providerRisk);
 
   return (
@@ -240,6 +271,38 @@ export function DashboardPage() {
           {!dashboardQuery.isLoading && modelRows.length === 0 ? (
             <p className="empty">No model scores</p>
           ) : null}
+        </div>
+
+        <div className="panel">
+          <h2>Model Governance</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Models</span>
+              <strong>{modelGovernanceSummary.totalModels}</strong>
+            </div>
+            <div>
+              <span>Evaluated</span>
+              <strong>{modelGovernanceSummary.evaluationCoverageLabel}</strong>
+            </div>
+            <div>
+              <span>Precision</span>
+              <strong>{modelGovernanceSummary.averagePrecisionLabel}</strong>
+            </div>
+            <div>
+              <span>Recall</span>
+              <strong>{modelGovernanceSummary.averageRecallLabel}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Drift Watch</span>
+              <strong>{modelGovernanceSummary.driftWatchCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Drift Detected</span>
+              <strong>{modelGovernanceSummary.driftDetectedCount}</strong>
+            </div>
+          </div>
         </div>
 
         <div className="panel">
