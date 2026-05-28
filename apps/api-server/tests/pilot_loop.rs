@@ -104,6 +104,30 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
 }
 
 #[tokio::test]
+async fn rejects_unsupported_qa_feedback_target() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-UNSUPPORTED-TARGET",
+          "claim_id": "CLM-0287",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "unknown_target",
+          "notes": "Unsupported feedback target should not enter QA governance.",
+          "evidence_refs": ["audit:scoring.completed"]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "UNSUPPORTED_FEEDBACK_TARGET");
+}
+
+#[tokio::test]
 async fn lists_webhook_events_for_tpa_integrations() {
     let app = build_app(test_config());
 

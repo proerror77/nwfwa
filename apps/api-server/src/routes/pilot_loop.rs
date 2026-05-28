@@ -157,6 +157,7 @@ pub async fn write_qa_result(
     Json(request): Json<QaReviewRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
     authorize(&state, &headers)?;
+    validate_qa_review_request(&request)?;
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -171,6 +172,20 @@ pub async fn write_qa_result(
         run_id: event.run_id,
         evidence_refs: event.evidence_refs,
     }))
+}
+
+fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> {
+    if !matches!(
+        request.feedback_target.as_str(),
+        "rules" | "models" | "features" | "provider_profile" | "workflow" | "tpa"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_FEEDBACK_TARGET",
+            "feedback_target must be rules, models, features, provider_profile, workflow, or tpa",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn list_qa_feedback_items(

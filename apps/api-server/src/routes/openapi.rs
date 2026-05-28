@@ -4170,7 +4170,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_id": { "type": "string" },
                         "qa_conclusion": { "type": "string" },
                         "issue_type": { "type": "string" },
-                        "feedback_target": { "type": "string" },
+                        "feedback_target": {
+                            "type": "string",
+                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                        },
                         "notes": { "type": "string" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
@@ -4210,7 +4213,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "feedback_id": { "type": "string" },
                         "qa_case_id": { "type": "string" },
                         "claim_id": { "type": "string" },
-                        "feedback_target": { "type": "string" },
+                        "feedback_target": {
+                            "type": "string",
+                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                        },
                         "issue_type": { "type": "string" },
                         "qa_conclusion": { "type": "string" },
                         "source": { "type": "string", "const": "qa_review" },
@@ -4248,7 +4254,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status": { "type": "string", "enum": ["open", "reviewed"] },
                         "qa_conclusion": { "type": ["string", "null"] },
                         "issue_type": { "type": ["string", "null"] },
-                        "feedback_target": { "type": ["string", "null"] },
+                        "feedback_target": {
+                            "type": ["string", "null"],
+                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa", null]
+                        },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
@@ -4286,7 +4295,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "source_type": { "type": "string", "enum": ["investigation_result", "qa_review"] },
                         "source_id": { "type": "string" },
                         "governance_status": { "type": "string", "enum": ["approved_for_training", "needs_review"] },
-                        "feedback_target": { "type": "string" },
+                        "feedback_target": {
+                            "type": "string",
+                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                        },
                         "currency": { "type": ["string", "null"] },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
