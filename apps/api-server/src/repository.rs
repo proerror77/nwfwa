@@ -81,6 +81,20 @@ pub struct PersistedAuditEvent {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RoutingPolicyRecord {
+    pub policy_id: String,
+    pub version: u32,
+    pub review_mode: String,
+    pub status: String,
+    pub owner: String,
+    pub risk_thresholds: fwa_scoring::RiskThresholds,
+    pub confidence_thresholds: fwa_scoring::ConfidenceThresholds,
+    pub provider_review_threshold: u8,
+    pub activated_at: Option<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuleSummaryRecord {
     pub rule_id: String,
     pub name: String,
@@ -1115,6 +1129,8 @@ pub trait ScoringRepository: Send + Sync {
         review_mode: &str,
     ) -> anyhow::Result<Option<RoutingPolicy>>;
 
+    async fn list_routing_policies(&self) -> anyhow::Result<Vec<RoutingPolicyRecord>>;
+
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>>;
 
     async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>>;
@@ -1481,6 +1497,19 @@ impl ScoringRepository for InMemoryScoringRepository {
             .filter(|policy| routing_policy_review_mode_applies(&policy.review_mode, review_mode))
             .max_by_key(|policy| policy.version)
             .cloned())
+    }
+
+    async fn list_routing_policies(&self) -> anyhow::Result<Vec<RoutingPolicyRecord>> {
+        let policies = self.routing_policies.lock().await;
+        let source = if policies.is_empty() {
+            default_routing_policies()
+        } else {
+            policies.clone()
+        };
+        Ok(source
+            .into_iter()
+            .map(|policy| routing_policy_record(policy, "active", "system", None, None))
+            .collect())
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -3330,6 +3359,30 @@ impl ScoringRepository for PostgresScoringRepository {
         row.map(|row| serde_json::from_value(row.0))
             .transpose()
             .map_err(Into::into)
+    }
+
+    async fn list_routing_policies(&self) -> anyhow::Result<Vec<RoutingPolicyRecord>> {
+        ensure_default_routing_policies_seeded(&self.pool).await?;
+        let rows: Vec<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT policy_json, status, owner, activated_at::text, created_at::text
+             FROM routing_policies
+             ORDER BY policy_key, review_mode, version DESC",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        rows.into_iter()
+            .map(|(policy_json, status, owner, activated_at, created_at)| {
+                let policy: RoutingPolicy = serde_json::from_value(policy_json)?;
+                Ok(routing_policy_record(
+                    policy,
+                    &status,
+                    &owner,
+                    activated_at,
+                    created_at,
+                ))
+            })
+            .collect()
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -7732,6 +7785,27 @@ fn default_routing_policies() -> Vec<RoutingPolicy> {
         .into_iter()
         .map(fwa_scoring::default_routing_policy)
         .collect()
+}
+
+fn routing_policy_record(
+    policy: RoutingPolicy,
+    status: &str,
+    owner: &str,
+    activated_at: Option<String>,
+    created_at: Option<String>,
+) -> RoutingPolicyRecord {
+    RoutingPolicyRecord {
+        policy_id: policy.policy_id,
+        version: policy.version,
+        review_mode: policy.review_mode,
+        status: status.into(),
+        owner: owner.into(),
+        risk_thresholds: policy.risk_thresholds,
+        confidence_thresholds: policy.confidence_thresholds,
+        provider_review_threshold: policy.provider_review_threshold,
+        activated_at,
+        created_at,
+    }
 }
 
 fn runtime_rule_from_detail(detail: RuleDetailRecord) -> anyhow::Result<Rule> {

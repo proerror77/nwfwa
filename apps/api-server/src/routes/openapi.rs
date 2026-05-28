@@ -837,6 +837,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/routing-policies": {
+                "get": {
+                    "summary": "List active routing policy versions",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Routing policy versions and thresholds",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RoutingPolicyListResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/providers/risk-summary": {
                 "get": {
                     "summary": "Summarize Provider profile and graph-risk review signals",
@@ -2847,6 +2871,32 @@ pub async fn openapi_schema() -> Json<Value> {
                         "models": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ModelVersion" }
+                        }
+                    }
+                },
+                "RoutingPolicyRecord": {
+                    "type": "object",
+                    "required": ["policy_id", "version", "review_mode", "status", "owner", "risk_thresholds", "confidence_thresholds", "provider_review_threshold", "activated_at", "created_at"],
+                    "properties": {
+                        "policy_id": { "type": "string" },
+                        "version": { "type": "integer", "minimum": 1 },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "status": { "type": "string", "enum": ["draft", "submitted", "approved", "active", "retired"] },
+                        "owner": { "type": "string" },
+                        "risk_thresholds": { "$ref": "#/components/schemas/RiskThresholds" },
+                        "confidence_thresholds": { "$ref": "#/components/schemas/ConfidenceThresholds" },
+                        "provider_review_threshold": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "activated_at": { "type": ["string", "null"], "format": "date-time" },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "RoutingPolicyListResponse": {
+                    "type": "object",
+                    "required": ["policies"],
+                    "properties": {
+                        "policies": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RoutingPolicyRecord" }
                         }
                     }
                 },

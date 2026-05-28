@@ -39,6 +39,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/rules/discover",
         "/api/v1/ops/rules/{rule_id}/rollback",
         "/api/v1/ops/models",
+        "/api/v1/ops/routing-policies",
         "/api/v1/ops/models/{model_key}/performance",
         "/api/v1/ops/models/{model_key}/promotion-gates",
         "/api/v1/ops/models/{model_key}/retraining-readiness",
@@ -227,6 +228,26 @@ async fn openapi_includes_operations_paths() {
     assert_eq!(
         schema["components"]["schemas"]["ModelVersion"]["properties"]["review_mode"]["enum"][2],
         "both"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/routing-policies"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/RoutingPolicyListResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicyListResponse"]["properties"]["policies"]
+            ["items"]["$ref"],
+        "#/components/schemas/RoutingPolicyRecord"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicyRecord"]["properties"]["review_mode"]["enum"]
+            [2],
+        "both"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicyRecord"]["properties"]["risk_thresholds"]
+            ["$ref"],
+        "#/components/schemas/RiskThresholds"
     );
     assert_eq!(
         schema["paths"]["/api/v1/ops/models/{model_key}/activate"]["post"]["responses"]["200"]
