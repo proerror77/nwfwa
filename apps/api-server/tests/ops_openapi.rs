@@ -312,6 +312,13 @@ async fn openapi_includes_operations_paths() {
             .any(|field| field == "qa_queue")
     );
     assert!(schema["components"]["schemas"]["DashboardQaQueue"].is_object());
+    assert!(
+        schema["components"]["schemas"]["DashboardQaQueue"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "disagreement_rate")
+    );
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["qa_queue"]
             ["$ref"],

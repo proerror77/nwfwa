@@ -26,6 +26,8 @@ type DashboardQaQueue = {
   sampled_cases: number;
   open_cases: number;
   reviewed_cases: number;
+  disagreement_cases: number;
+  disagreement_rate: number;
 };
 
 type DashboardAgentGovernance = {
@@ -141,8 +143,10 @@ export function buildDashboardQaQueueSummary(queue?: DashboardQaQueue) {
     sampledCases,
     openCases: queue?.open_cases ?? 0,
     reviewedCases,
+    disagreementCases: queue?.disagreement_cases ?? 0,
     reviewedRateLabel:
       sampledCases === 0 ? "0.0%" : formatPercent(reviewedCases / sampledCases),
+    disagreementRateLabel: formatPercent(queue?.disagreement_rate ?? 0),
   };
 }
 
@@ -482,6 +486,16 @@ export function DashboardPage() {
             <div>
               <span>Review Rate</span>
               <strong>{qaQueueSummary.reviewedRateLabel}</strong>
+            </div>
+            <div>
+              <span>Disagreement</span>
+              <strong>{qaQueueSummary.disagreementRateLabel}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Disagreement Cases</span>
+              <strong>{qaQueueSummary.disagreementCases}</strong>
             </div>
           </div>
         </div>

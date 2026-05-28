@@ -356,6 +356,8 @@ pub struct DashboardQaQueueRecord {
     pub sampled_cases: u32,
     pub open_cases: u32,
     pub reviewed_cases: u32,
+    pub disagreement_cases: u32,
+    pub disagreement_rate: f64,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5579,24 +5581,43 @@ fn summarize_dashboard_qa_queue(
         .iter()
         .map(|review| review.qa_case_id.as_str())
         .collect::<BTreeSet<_>>();
+    let disagreement_case_ids = reviews
+        .iter()
+        .filter(|review| review.qa_conclusion != "pass")
+        .map(|review| review.qa_case_id.as_str())
+        .collect::<BTreeSet<_>>();
     let sampled_cases = samples
         .iter()
         .map(|sample| sample.selected_leads.len() as u32)
         .sum::<u32>();
-    let reviewed_cases = samples
+    let sampled_qa_case_ids = samples
         .iter()
         .flat_map(|sample| {
             sample.selected_leads.iter().map(move |lead| {
                 format!("qa_{}_{}", sample.sample_id.as_str(), lead.lead_id.as_str())
             })
         })
+        .collect::<Vec<_>>();
+    let reviewed_cases = sampled_qa_case_ids
+        .iter()
         .filter(|qa_case_id| reviewed_case_ids.contains(qa_case_id.as_str()))
         .count() as u32;
+    let disagreement_cases = sampled_qa_case_ids
+        .iter()
+        .filter(|qa_case_id| disagreement_case_ids.contains(qa_case_id.as_str()))
+        .count() as u32;
+    let disagreement_rate = if reviewed_cases == 0 {
+        0.0
+    } else {
+        disagreement_cases as f64 / reviewed_cases as f64
+    };
 
     DashboardQaQueueRecord {
         sampled_cases,
         open_cases: sampled_cases.saturating_sub(reviewed_cases),
         reviewed_cases,
+        disagreement_cases,
+        disagreement_rate,
     }
 }
 

@@ -71,13 +71,17 @@ describe("buildDashboardQaQueueSummary", () => {
       sampled_cases: 8,
       open_cases: 3,
       reviewed_cases: 5,
+      disagreement_cases: 2,
+      disagreement_rate: 0.4,
     });
 
     expect(summary).toEqual({
       sampledCases: 8,
       openCases: 3,
       reviewedCases: 5,
+      disagreementCases: 2,
       reviewedRateLabel: "62.5%",
+      disagreementRateLabel: "40.0%",
     });
   });
 });

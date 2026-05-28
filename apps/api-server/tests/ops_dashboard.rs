@@ -328,6 +328,8 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["qa_queue"]["sampled_cases"], 1);
     assert_eq!(dashboard["qa_queue"]["open_cases"], 0);
     assert_eq!(dashboard["qa_queue"]["reviewed_cases"], 1);
+    assert_eq!(dashboard["qa_queue"]["disagreement_cases"], 1);
+    assert_eq!(dashboard["qa_queue"]["disagreement_rate"], 1.0);
     assert_eq!(dashboard["agent_governance"]["total_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["successful_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["pending_approvals"], 0);

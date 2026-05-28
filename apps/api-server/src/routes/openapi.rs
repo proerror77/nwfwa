@@ -2373,11 +2373,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardQaQueue": {
                     "type": "object",
-                    "required": ["sampled_cases", "open_cases", "reviewed_cases"],
+                    "required": ["sampled_cases", "open_cases", "reviewed_cases", "disagreement_cases", "disagreement_rate"],
                     "properties": {
                         "sampled_cases": { "type": "integer" },
                         "open_cases": { "type": "integer" },
-                        "reviewed_cases": { "type": "integer" }
+                        "reviewed_cases": { "type": "integer" },
+                        "disagreement_cases": { "type": "integer" },
+                        "disagreement_rate": { "type": "number" }
                     }
                 },
                 "DashboardAgentGovernance": {
