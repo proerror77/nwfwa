@@ -22,6 +22,12 @@ type DashboardLabelPool = {
   workflow_feedback: number;
 };
 
+type DashboardQaQueue = {
+  sampled_cases: number;
+  open_cases: number;
+  reviewed_cases: number;
+};
+
 type DashboardSummary = {
   suspected_claims: number;
   confirmed_fwa: number;
@@ -33,6 +39,7 @@ type DashboardSummary = {
   layer_scores: Record<string, DashboardLayerScore>;
   saving_attributions: SavingAttributionSummary[];
   label_pool: DashboardLabelPool;
+  qa_queue: DashboardQaQueue;
   investigation_results: number;
   qa_reviews: number;
 };
@@ -75,6 +82,18 @@ export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
   };
 }
 
+export function buildDashboardQaQueueSummary(queue?: DashboardQaQueue) {
+  const sampledCases = queue?.sampled_cases ?? 0;
+  const reviewedCases = queue?.reviewed_cases ?? 0;
+  return {
+    sampledCases,
+    openCases: queue?.open_cases ?? 0,
+    reviewedCases,
+    reviewedRateLabel:
+      sampledCases === 0 ? "0.0%" : `${((reviewedCases / sampledCases) * 100).toFixed(1)}%`,
+  };
+}
+
 export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
@@ -107,6 +126,7 @@ export function DashboardPage() {
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
+  const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
   const providerRiskSummary = buildProviderRiskSummary(providerRisk);
 
   return (
@@ -189,6 +209,28 @@ export function DashboardPage() {
           {!dashboardQuery.isLoading && modelRows.length === 0 ? (
             <p className="empty">No model scores</p>
           ) : null}
+        </div>
+
+        <div className="panel">
+          <h2>QA Queue</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Sampled</span>
+              <strong>{qaQueueSummary.sampledCases}</strong>
+            </div>
+            <div>
+              <span>Open</span>
+              <strong>{qaQueueSummary.openCases}</strong>
+            </div>
+            <div>
+              <span>Reviewed</span>
+              <strong>{qaQueueSummary.reviewedCases}</strong>
+            </div>
+            <div>
+              <span>Review Rate</span>
+              <strong>{qaQueueSummary.reviewedRateLabel}</strong>
+            </div>
+          </div>
         </div>
 
         <div className="panel">

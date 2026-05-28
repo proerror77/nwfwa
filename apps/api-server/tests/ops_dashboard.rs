@@ -103,19 +103,44 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, sample) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "qa_calibration",
+          "population_definition": "High risk claims for QA dashboard",
+          "inclusion_criteria": { "min_risk_score": 70 },
+          "deterministic_seed": "dashboard-qa",
+          "sample_size": 1,
+          "reviewer": "qa-reviewer-1",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let selected_lead = &sample["selected_leads"].as_array().unwrap()[0];
+    let qa_case_id = format!(
+        "qa_{}_{}",
+        sample["sample_id"].as_str().unwrap(),
+        selected_lead["lead_id"].as_str().unwrap()
+    );
+
     let (status, _) = json_request(
         app.clone(),
         "POST",
         "/api/v1/qa/results",
-        r#"{
-          "qa_case_id": "QA-9001",
+        &format!(
+            r#"{{
+          "qa_case_id": "{qa_case_id}",
           "claim_id": "CLM-0287",
           "qa_conclusion": "issue_found_escalate",
           "issue_type": "alert_handling_incomplete",
           "feedback_target": "rules",
           "notes": "Reviewer should attach provider history evidence.",
           "evidence_refs": ["audit:investigation.result.received", "rule_runs:EARLY_CLAIM"]
-        }"#,
+        }}"#
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -127,6 +152,9 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["confirmed_fwa"], 1);
     assert_eq!(dashboard["qa_reviews"], 1);
     assert_eq!(dashboard["investigation_results"], 1);
+    assert_eq!(dashboard["qa_queue"]["sampled_cases"], 1);
+    assert_eq!(dashboard["qa_queue"]["open_cases"], 0);
+    assert_eq!(dashboard["qa_queue"]["reviewed_cases"], 1);
     assert_eq!(dashboard["risk_amount"], "8000");
     assert_eq!(dashboard["saving_amount"], "8200.00");
     let attributions = dashboard["saving_attributions"].as_array().unwrap();

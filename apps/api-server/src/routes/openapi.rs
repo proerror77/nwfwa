@@ -2250,7 +2250,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2274,6 +2274,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": { "$ref": "#/components/schemas/SavingAttributionSummary" }
                         },
                         "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },
+                        "qa_queue": { "$ref": "#/components/schemas/DashboardQaQueue" },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
                     }
@@ -2288,6 +2289,15 @@ pub async fn openapi_schema() -> Json<Value> {
                         "rule_feedback": { "type": "integer" },
                         "model_feedback": { "type": "integer" },
                         "workflow_feedback": { "type": "integer" }
+                    }
+                },
+                "DashboardQaQueue": {
+                    "type": "object",
+                    "required": ["sampled_cases", "open_cases", "reviewed_cases"],
+                    "properties": {
+                        "sampled_cases": { "type": "integer" },
+                        "open_cases": { "type": "integer" },
+                        "reviewed_cases": { "type": "integer" }
                     }
                 },
                 "Lead": {

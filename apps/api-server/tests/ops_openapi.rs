@@ -173,6 +173,19 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "saving_attributions")
     );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "qa_queue")
+    );
+    assert!(schema["components"]["schemas"]["DashboardQaQueue"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["qa_queue"]
+            ["$ref"],
+        "#/components/schemas/DashboardQaQueue"
+    );
     assert!(schema["components"]["schemas"]["SavingAttributionSummary"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]

@@ -347,6 +347,13 @@ pub struct DashboardLabelPoolRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardQaQueueRecord {
+    pub sampled_cases: u32,
+    pub open_cases: u32,
+    pub reviewed_cases: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -358,6 +365,7 @@ pub struct DashboardSummaryRecord {
     pub layer_scores: BTreeMap<String, DashboardLayerScoreRecord>,
     pub saving_attributions: Vec<DashboardSavingAttributionRecord>,
     pub label_pool: DashboardLabelPoolRecord,
+    pub qa_queue: DashboardQaQueueRecord,
     pub investigation_results: u32,
     pub qa_reviews: u32,
 }
@@ -1670,9 +1678,18 @@ impl ScoringRepository for InMemoryScoringRepository {
                 _ => {}
             }
         }
+        let suspected_claims = runs.iter().filter(|run| run.risk_score >= 70).count() as u32;
+        let saving_attributions = summarize_saving_attributions(&saving_attribution_records);
+        drop(saving_attribution_records);
+        drop(pilot_events);
+        drop(claims);
+        drop(runs);
+
+        let audit_samples = self.list_audit_samples().await?;
+        let qa_review_records = self.list_qa_reviews().await?;
 
         Ok(DashboardSummaryRecord {
-            suspected_claims: runs.iter().filter(|run| run.risk_score >= 70).count() as u32,
+            suspected_claims,
             confirmed_fwa,
             risk_amount: risk_amount.to_string(),
             saving_amount: saving_amount.to_string(),
@@ -1717,8 +1734,9 @@ impl ScoringRepository for InMemoryScoringRepository {
                     },
                 )
                 .collect(),
-            saving_attributions: summarize_saving_attributions(&saving_attribution_records),
+            saving_attributions,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
+            qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             investigation_results,
             qa_reviews,
         })
@@ -3681,6 +3699,8 @@ impl ScoringRepository for PostgresScoringRepository {
             .fetch_all(&self.pool)
             .await?;
         let outcome_labels = self.list_outcome_labels().await?;
+        let audit_samples = self.list_audit_samples().await?;
+        let qa_review_records = self.list_qa_reviews().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims: suspected.0 as u32,
@@ -3746,6 +3766,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )
                 .collect(),
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
+            qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             investigation_results: investigation.0 as u32,
             qa_reviews: qa_reviews.0 as u32,
         })
@@ -5238,6 +5259,35 @@ fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLab
             .iter()
             .filter(|label| label.feedback_target == "workflow")
             .count() as u32,
+    }
+}
+
+fn summarize_dashboard_qa_queue(
+    samples: &[AuditSampleRecord],
+    reviews: &[QaReviewRecord],
+) -> DashboardQaQueueRecord {
+    let reviewed_case_ids = reviews
+        .iter()
+        .map(|review| review.qa_case_id.as_str())
+        .collect::<BTreeSet<_>>();
+    let sampled_cases = samples
+        .iter()
+        .map(|sample| sample.selected_leads.len() as u32)
+        .sum::<u32>();
+    let reviewed_cases = samples
+        .iter()
+        .flat_map(|sample| {
+            sample.selected_leads.iter().map(move |lead| {
+                format!("qa_{}_{}", sample.sample_id.as_str(), lead.lead_id.as_str())
+            })
+        })
+        .filter(|qa_case_id| reviewed_case_ids.contains(qa_case_id.as_str()))
+        .count() as u32;
+
+    DashboardQaQueueRecord {
+        sampled_cases,
+        open_cases: sampled_cases.saturating_sub(reviewed_cases),
+        reviewed_cases,
     }
 }
 

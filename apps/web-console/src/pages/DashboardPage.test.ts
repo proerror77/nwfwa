@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildDashboardLabelPoolSummary, buildProviderRiskSummary } from "./DashboardPage";
+import {
+  buildDashboardLabelPoolSummary,
+  buildDashboardQaQueueSummary,
+  buildProviderRiskSummary,
+} from "./DashboardPage";
 
 describe("buildDashboardLabelPoolSummary", () => {
   it("summarizes governed label pool readiness for dashboard display", () => {
@@ -52,6 +56,23 @@ describe("buildProviderRiskSummary", () => {
       reviewRateLabel: "50.0%",
       topProviderId: "PRV-1",
       topProviderScore: 91,
+    });
+  });
+});
+
+describe("buildDashboardQaQueueSummary", () => {
+  it("summarizes QA sampled queue completion", () => {
+    const summary = buildDashboardQaQueueSummary({
+      sampled_cases: 8,
+      open_cases: 3,
+      reviewed_cases: 5,
+    });
+
+    expect(summary).toEqual({
+      sampledCases: 8,
+      openCases: 3,
+      reviewedCases: 5,
+      reviewedRateLabel: "62.5%",
     });
   });
 });
