@@ -594,6 +594,20 @@ pub struct QaFeedbackItemRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct OutcomeLabelRecord {
+    pub label_id: String,
+    pub claim_id: String,
+    pub label_name: String,
+    pub label_value: String,
+    pub source_type: String,
+    pub source_id: String,
+    pub governance_status: String,
+    pub feedback_target: String,
+    pub currency: Option<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditHistoryEventRecord {
     pub audit_id: String,
     pub run_id: String,
@@ -1010,6 +1024,8 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<AuditHistoryEventRecord>;
 
     async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
+
+    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
 
     async fn claim_audit_history(
         &self,
@@ -1865,6 +1881,31 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect::<Vec<_>>();
         sort_qa_feedback_items(&mut items);
         Ok(items)
+    }
+
+    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+        let mut labels = self
+            .pilot_audit_events
+            .lock()
+            .await
+            .iter()
+            .filter_map(|(_, event)| match event.event_type.as_str() {
+                "investigation.result.received" => {
+                    serde_json::from_value::<InvestigationResultRecord>(event.payload.clone())
+                        .ok()
+                        .map(labels_from_investigation_result)
+                }
+                "qa.result.received" => {
+                    serde_json::from_value::<QaReviewRecord>(event.payload.clone())
+                        .ok()
+                        .map(|review| vec![label_from_qa_review(review)])
+                }
+                _ => None,
+            })
+            .flatten()
+            .collect::<Vec<_>>();
+        sort_outcome_labels(&mut labels);
+        Ok(labels)
     }
 
     async fn claim_audit_history(
@@ -4282,6 +4323,83 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(items)
     }
 
+    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+        let investigation_rows: Vec<(
+            String,
+            String,
+            String,
+            bool,
+            Option<Decimal>,
+            Option<String>,
+            String,
+            Value,
+        )> = sqlx::query_as(
+            "SELECT investigation_id, claim_id, outcome, confirmed_fwa, saving_amount, currency, notes, evidence_refs
+             FROM investigation_results
+             ORDER BY created_at, investigation_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let qa_rows: Vec<(String, String, String, String, String, String, Value)> =
+            sqlx::query_as(
+                "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs
+                 FROM qa_reviews
+                 ORDER BY created_at, qa_case_id",
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
+        let mut labels = investigation_rows
+            .into_iter()
+            .flat_map(
+                |(
+                    investigation_id,
+                    claim_id,
+                    outcome,
+                    confirmed_fwa,
+                    saving_amount,
+                    currency,
+                    notes,
+                    evidence_refs,
+                )| {
+                    labels_from_investigation_result(InvestigationResultRecord {
+                        investigation_id,
+                        claim_id,
+                        outcome,
+                        confirmed_fwa,
+                        saving_amount,
+                        currency,
+                        notes,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                    })
+                },
+            )
+            .chain(qa_rows.into_iter().map(
+                |(
+                    qa_case_id,
+                    claim_id,
+                    qa_conclusion,
+                    issue_type,
+                    feedback_target,
+                    notes,
+                    evidence_refs,
+                )| {
+                    label_from_qa_review(QaReviewRecord {
+                        qa_case_id,
+                        claim_id,
+                        qa_conclusion,
+                        issue_type,
+                        feedback_target,
+                        notes,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                    })
+                },
+            ))
+            .collect::<Vec<_>>();
+        sort_outcome_labels(&mut labels);
+        Ok(labels)
+    }
+
     async fn claim_audit_history(
         &self,
         claim_id: &str,
@@ -4891,6 +5009,91 @@ fn feedback_target_rank(target: &str) -> u8 {
         "models" => 1,
         _ => 2,
     }
+}
+
+fn labels_from_investigation_result(record: InvestigationResultRecord) -> Vec<OutcomeLabelRecord> {
+    let mut labels = vec![OutcomeLabelRecord {
+        label_id: format!(
+            "label_investigation_{}_confirmed_fwa",
+            record.investigation_id
+        ),
+        claim_id: record.claim_id.clone(),
+        label_name: "confirmed_fwa".into(),
+        label_value: record.confirmed_fwa.to_string(),
+        source_type: "investigation_result".into(),
+        source_id: record.investigation_id.clone(),
+        governance_status: if record.confirmed_fwa {
+            "approved_for_training".into()
+        } else {
+            "needs_review".into()
+        },
+        feedback_target: "models".into(),
+        currency: None,
+        evidence_refs: record.evidence_refs.clone(),
+    }];
+
+    if !record.confirmed_fwa {
+        labels.push(OutcomeLabelRecord {
+            label_id: format!(
+                "label_investigation_{}_false_positive",
+                record.investigation_id
+            ),
+            claim_id: record.claim_id.clone(),
+            label_name: "false_positive".into(),
+            label_value: "true".into(),
+            source_type: "investigation_result".into(),
+            source_id: record.investigation_id.clone(),
+            governance_status: "needs_review".into(),
+            feedback_target: "rules".into(),
+            currency: None,
+            evidence_refs: record.evidence_refs.clone(),
+        });
+    }
+
+    if let Some(saving_amount) = record.saving_amount {
+        labels.push(OutcomeLabelRecord {
+            label_id: format!(
+                "label_investigation_{}_amount_prevented",
+                record.investigation_id
+            ),
+            claim_id: record.claim_id,
+            label_name: "amount_prevented".into(),
+            label_value: saving_amount.to_string(),
+            source_type: "investigation_result".into(),
+            source_id: record.investigation_id,
+            governance_status: "approved_for_training".into(),
+            feedback_target: "workflow".into(),
+            currency: record.currency,
+            evidence_refs: record.evidence_refs,
+        });
+    }
+
+    labels
+}
+
+fn label_from_qa_review(record: QaReviewRecord) -> OutcomeLabelRecord {
+    OutcomeLabelRecord {
+        label_id: format!("label_qa_{}_{}", record.qa_case_id, record.issue_type),
+        claim_id: record.claim_id,
+        label_name: record.issue_type,
+        label_value: "true".into(),
+        source_type: "qa_review".into(),
+        source_id: record.qa_case_id,
+        governance_status: "needs_review".into(),
+        feedback_target: record.feedback_target,
+        currency: None,
+        evidence_refs: record.evidence_refs,
+    }
+}
+
+fn sort_outcome_labels(labels: &mut [OutcomeLabelRecord]) {
+    labels.sort_by(|left, right| {
+        left.claim_id
+            .cmp(&right.claim_id)
+            .then_with(|| left.source_type.cmp(&right.source_type))
+            .then_with(|| left.source_id.cmp(&right.source_id))
+            .then_with(|| left.label_name.cmp(&right.label_name))
+    });
 }
 
 fn selection_method_for_mode(sample_mode: &str) -> &'static str {

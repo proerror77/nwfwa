@@ -157,6 +157,75 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
 }
 
 #[tokio::test]
+async fn lists_governed_outcome_labels_from_investigation_and_qa() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-LABEL-1001",
+          "investigation_id": "INV-LABEL-1001",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "Confirmed over-treatment after manual investigation.",
+          "evidence_refs": ["investigation_results:INV-LABEL-1001", "knowledge_cases:KC-1001"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-LABEL-1001",
+          "claim_id": "CLM-LABEL-1001",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "medical_necessity_issue",
+          "feedback_target": "models",
+          "notes": "QA found missing clinical support and model under-scored the claim.",
+          "evidence_refs": ["qa_reviews:QA-LABEL-1001", "model_scores:baseline_fwa"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let labels = labels["labels"].as_array().unwrap();
+    assert!(labels.iter().any(|label| {
+        label["claim_id"] == "CLM-LABEL-1001"
+            && label["label_name"] == "confirmed_fwa"
+            && label["label_value"] == "true"
+            && label["source_type"] == "investigation_result"
+            && label["governance_status"] == "approved_for_training"
+    }));
+    assert!(labels.iter().any(|label| {
+        label["claim_id"] == "CLM-LABEL-1001"
+            && label["label_name"] == "amount_prevented"
+            && label["label_value"] == "8200.00"
+            && label["currency"] == "CNY"
+    }));
+    assert!(labels.iter().any(|label| {
+        label["claim_id"] == "CLM-LABEL-1001"
+            && label["label_name"] == "medical_necessity_issue"
+            && label["label_value"] == "true"
+            && label["source_type"] == "qa_review"
+            && label["feedback_target"] == "models"
+            && label["governance_status"] == "needs_review"
+    }));
+    assert!(labels
+        .iter()
+        .all(|label| !label["evidence_refs"].as_array().unwrap().is_empty()));
+}
+
+#[tokio::test]
 async fn returns_member_profile_summary_from_scored_claims() {
     let app = build_app(test_config());
 

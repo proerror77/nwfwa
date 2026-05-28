@@ -2,7 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        InvestigationResultRecord, MemberProfileSummaryRecord, QaFeedbackItemRecord, QaReviewRecord,
+        InvestigationResultRecord, MemberProfileSummaryRecord, OutcomeLabelRecord,
+        QaFeedbackItemRecord, QaReviewRecord,
     },
 };
 use axum::{
@@ -32,6 +33,11 @@ pub struct ClaimAuditHistoryResponse {
 #[derive(Debug, Serialize)]
 pub struct QaFeedbackItemListResponse {
     pub items: Vec<QaFeedbackItemRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OutcomeLabelListResponse {
+    pub labels: Vec<OutcomeLabelRecord>,
 }
 
 pub async fn member_profile_summary(
@@ -110,6 +116,19 @@ pub async fn list_qa_feedback_items(
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     Ok(Json(QaFeedbackItemListResponse { items }))
+}
+
+pub async fn list_outcome_labels(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<OutcomeLabelListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let labels = state
+        .repository
+        .list_outcome_labels()
+        .await
+        .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
+    Ok(Json(OutcomeLabelListResponse { labels }))
 }
 
 pub async fn claim_audit_history(

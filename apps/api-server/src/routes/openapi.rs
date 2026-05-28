@@ -963,6 +963,22 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/labels": {
+                "get": {
+                    "summary": "List governed outcome labels from investigation and QA writeback",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Governed labels derived from human review outcomes",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/OutcomeLabelListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/audit/claims/{claim_id}": {
                 "get": {
                     "summary": "Get pilot audit history for a claim",
@@ -2630,6 +2646,32 @@ pub async fn openapi_schema() -> Json<Value> {
                         "items": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/QaFeedbackItem" }
+                        }
+                    }
+                },
+                "OutcomeLabel": {
+                    "type": "object",
+                    "required": ["label_id", "claim_id", "label_name", "label_value", "source_type", "source_id", "governance_status", "feedback_target", "evidence_refs"],
+                    "properties": {
+                        "label_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "label_name": { "type": "string" },
+                        "label_value": { "type": "string" },
+                        "source_type": { "type": "string", "enum": ["investigation_result", "qa_review"] },
+                        "source_id": { "type": "string" },
+                        "governance_status": { "type": "string", "enum": ["approved_for_training", "needs_review"] },
+                        "feedback_target": { "type": "string" },
+                        "currency": { "type": ["string", "null"] },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "OutcomeLabelListResponse": {
+                    "type": "object",
+                    "required": ["labels"],
+                    "properties": {
+                        "labels": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/OutcomeLabel" }
                         }
                     }
                 },

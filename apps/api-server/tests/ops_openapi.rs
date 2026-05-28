@@ -62,6 +62,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/investigations/results",
         "/api/v1/qa/results",
         "/api/v1/ops/qa/feedback-items",
+        "/api/v1/ops/labels",
         "/api/v1/audit/claims/{claim_id}",
     ] {
         assert!(schema["paths"][path].is_object(), "missing {path}");
@@ -196,6 +197,8 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["get"].is_object());
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["post"].is_object());
     assert!(schema["paths"]["/api/v1/members/{member_id}/profile-summary"]["get"].is_object());
+    assert!(schema["components"]["schemas"]["OutcomeLabel"].is_object());
+    assert!(schema["components"]["schemas"]["OutcomeLabelListResponse"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["MemberProfileSummaryResponse"]["properties"]
             ["evidence_refs"]["items"]["type"],
