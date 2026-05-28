@@ -54,6 +54,8 @@ pub struct RulePromotionGatesResponse {
     pub reviewed_count: u32,
     pub false_positive_rate: f64,
     pub saving_amount: String,
+    pub approved_label_count: usize,
+    pub needs_review_label_count: usize,
     pub gates: Vec<RulePromotionGate>,
     pub blockers: Vec<String>,
 }
@@ -360,6 +362,14 @@ fn build_rule_promotion_gates(
         .iter()
         .filter(|label| label.feedback_target == "rules")
         .collect::<Vec<_>>();
+    let approved_rule_feedback = rule_feedback_labels
+        .iter()
+        .filter(|label| label.governance_status == "approved_for_training")
+        .count();
+    let needs_review_rule_feedback = rule_feedback_labels
+        .iter()
+        .filter(|label| label.governance_status == "needs_review")
+        .count();
     let unresolved_rule_feedback = rule_feedback_labels
         .iter()
         .any(|label| label.governance_status == "needs_review");
@@ -452,6 +462,8 @@ fn build_rule_promotion_gates(
         reviewed_count: effective_reviewed_count,
         false_positive_rate: effective_false_positive_rate,
         saving_amount: format!("{:.2}", effective_saving.round_dp(2)),
+        approved_label_count: approved_rule_feedback,
+        needs_review_label_count: needs_review_rule_feedback,
         gates,
         blockers,
     }

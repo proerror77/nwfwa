@@ -122,6 +122,16 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["OutcomeLabel"]["properties"]["source_type"]["enum"],
         serde_json::json!(["investigation_result", "qa_review", "case_status"])
     );
+    for field in ["approved_label_count", "needs_review_label_count"] {
+        assert!(
+            schema["components"]["schemas"]["RulePromotionGatesResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["QaQueueItem"]["properties"]["feedback_target"]["enum"],
         serde_json::json!([
