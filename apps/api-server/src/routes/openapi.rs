@@ -3384,7 +3384,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelPromotionGatesResponse": {
                     "type": "object",
-                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "data_status", "scored_runs", "gates", "blockers"],
+                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "data_status", "scored_runs", "approved_label_count", "needs_review_label_count", "gates", "blockers"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
@@ -3398,6 +3398,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "source_data_quality_status": { "type": "string", "enum": ["missing", "ready", "watch", "blocked"] },
                         "data_status": { "type": "string" },
                         "scored_runs": { "type": "integer" },
+                        "approved_label_count": { "type": "integer" },
+                        "needs_review_label_count": { "type": "integer" },
                         "gates": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ModelPromotionGate" }

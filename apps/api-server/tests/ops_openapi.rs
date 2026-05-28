@@ -220,6 +220,16 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "source_data_quality_score")
     );
+    for field in ["approved_label_count", "needs_review_label_count"] {
+        assert!(
+            schema["components"]["schemas"]["ModelPromotionGatesResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing {field}"
+        );
+    }
     assert!(
         schema["components"]["schemas"]["ModelPromotionGate"]["properties"]["evidence_source"]
             ["enum"]

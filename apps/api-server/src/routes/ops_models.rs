@@ -48,6 +48,8 @@ pub struct ModelPromotionGatesResponse {
     pub source_data_quality_status: String,
     pub data_status: String,
     pub scored_runs: u32,
+    pub approved_label_count: usize,
+    pub needs_review_label_count: usize,
     pub gates: Vec<ModelPromotionGate>,
     pub blockers: Vec<String>,
 }
@@ -1050,6 +1052,8 @@ fn build_model_promotion_gates(
         source_data_quality_status: source_data_quality.status,
         data_status: performance.data_status.clone(),
         scored_runs: performance.scored_runs,
+        approved_label_count: approved_model_labels,
+        needs_review_label_count: needs_review_model_labels,
         gates,
         blockers,
     }

@@ -741,6 +741,8 @@ async fn model_promotion_gates_include_label_governance_evidence() {
     assert_eq!(label_gate["passed"], false);
     assert_eq!(label_gate["evidence_source"], "labels");
     assert_eq!(label_gate["blocker"], "model outcome labels need review");
+    assert_eq!(body["approved_label_count"], 1);
+    assert_eq!(body["needs_review_label_count"], 1);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
