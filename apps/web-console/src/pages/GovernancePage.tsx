@@ -295,6 +295,13 @@ const governanceChangeEventTypes = new Set([
   "routing_policy.rollback.completed",
 ]);
 
+export const auditEventFilterShortcuts = [
+  { label: "Scoring", eventType: "scoring.completed" },
+  { label: "QA Results", eventType: "qa.result.received" },
+  { label: "Case Status", eventType: "case.status.updated" },
+  { label: "Rule Candidates", eventType: "rule.candidate.saved" },
+];
+
 export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
   const events = data?.events ?? [];
   const latestDatedEvent = events.filter((event) => event.created_at).reduce<
@@ -1140,6 +1147,33 @@ export function GovernancePage() {
 
       <div className="panel">
         <h2>Global Audit Events</h2>
+        <div className="button-row">
+          {auditEventFilterShortcuts.map((shortcut) => (
+            <button
+              key={shortcut.eventType}
+              onClick={() =>
+                setAuditEventFilters((filters) => ({
+                  ...filters,
+                  eventType: shortcut.eventType,
+                }))
+              }
+              type="button"
+            >
+              {shortcut.label}
+            </button>
+          ))}
+          <button
+            onClick={() =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                eventType: "",
+              }))
+            }
+            type="button"
+          >
+            All Events
+          </button>
+        </div>
         <label>
           Event Type
           <input

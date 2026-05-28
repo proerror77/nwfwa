@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  auditEventFilterShortcuts,
   buildAgentRunLogSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
@@ -15,6 +16,17 @@ import {
   filterOutcomeLabels,
   hasPendingAgentApproval,
 } from "./GovernancePage";
+
+describe("auditEventFilterShortcuts", () => {
+  it("covers common governance audit filters", () => {
+    expect(auditEventFilterShortcuts).toEqual([
+      { label: "Scoring", eventType: "scoring.completed" },
+      { label: "QA Results", eventType: "qa.result.received" },
+      { label: "Case Status", eventType: "case.status.updated" },
+      { label: "Rule Candidates", eventType: "rule.candidate.saved" },
+    ]);
+  });
+});
 
 describe("buildAuditSummary", () => {
   it("summarizes claim audit events for governance review", () => {
