@@ -122,6 +122,13 @@ export async function getModelPromotionGates(modelKey: string, apiKey: string) {
   );
 }
 
+export async function getModelRetrainingReadiness(modelKey: string, apiKey: string) {
+  return requestJson(
+    `/api/v1/ops/models/${encodeURIComponent(modelKey)}/retraining-readiness`,
+    apiKey,
+  );
+}
+
 export async function submitModelPromotionReview(
   modelKey: string,
   payload: unknown,

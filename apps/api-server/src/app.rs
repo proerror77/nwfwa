@@ -179,6 +179,10 @@ pub fn build_app_with_parts(
             get(ops_models::model_promotion_gates),
         )
         .route(
+            "/api/v1/ops/models/:model_key/retraining-readiness",
+            get(ops_models::model_retraining_readiness),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/promotion-reviews",
             post(ops_models::submit_model_promotion_review),
         )

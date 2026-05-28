@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getModelPerformance,
   getModelPromotionGates,
+  getModelRetrainingReadiness,
   listOutcomeLabels,
   listQaFeedbackItems,
   listModels,
@@ -55,6 +56,20 @@ type ModelPerformanceResponse = {
   drift_status: string;
 };
 
+type ModelRetrainingReadinessResponse = {
+  recommendation: string;
+  latest_evaluation_id: string;
+  drift_status: string;
+  source_dataset_id: string;
+  source_data_quality_score: number | null;
+  source_data_quality_status: string;
+  open_model_feedback_count: number;
+  approved_label_count: number;
+  needs_review_label_count: number;
+  retraining_triggers: string[];
+  blockers: string[];
+};
+
 type OutcomeLabel = {
   label_id: string;
   claim_id: string;
@@ -86,6 +101,20 @@ export function buildModelLabelReadinessSummary(labels: OutcomeLabel[] = []) {
 
 export function formatSourceDataQuality(score?: number | null) {
   return score == null ? "-" : `${(score * 100).toFixed(1)}%`;
+}
+
+export function buildModelRetrainingSummary(
+  readiness?: ModelRetrainingReadinessResponse | null,
+) {
+  return {
+    recommendation: readiness?.recommendation ?? "not_loaded",
+    triggerCount: readiness?.retraining_triggers.length ?? 0,
+    blockerCount: readiness?.blockers.length ?? 0,
+    openFeedbackCount: readiness?.open_model_feedback_count ?? 0,
+    approvedLabelCount: readiness?.approved_label_count ?? 0,
+    sourceDataQualityLabel: formatSourceDataQuality(readiness?.source_data_quality_score),
+    sourceDataQualityStatus: readiness?.source_data_quality_status ?? "missing",
+  };
 }
 
 export function ModelOpsPage() {
@@ -120,6 +149,15 @@ export function ModelOpsPage() {
         selectedModel!.model_key,
         apiKey,
       ) as Promise<ModelPromotionGatesResponse>,
+    enabled: Boolean(selectedModel?.model_key),
+  });
+  const retrainingQuery = useQuery({
+    queryKey: ["model-retraining-readiness", selectedModel?.model_key, apiKey],
+    queryFn: () =>
+      getModelRetrainingReadiness(
+        selectedModel!.model_key,
+        apiKey,
+      ) as Promise<ModelRetrainingReadinessResponse>,
     enabled: Boolean(selectedModel?.model_key),
   });
   const qaFeedbackQuery = useQuery({
@@ -168,6 +206,7 @@ export function ModelOpsPage() {
   const promotionGateRows = promotionQuery.data
     ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
     : [];
+  const retrainingSummary = buildModelRetrainingSummary(retrainingQuery.data);
 
   return (
     <section className="ops-grid">
@@ -267,6 +306,62 @@ export function ModelOpsPage() {
           </dl>
         ) : (
           <p className="empty">No performance data loaded</p>
+        )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Retraining Readiness</h2>
+        {retrainingQuery.error ? (
+          <pre className="error">{String(retrainingQuery.error.message)}</pre>
+        ) : null}
+        {retrainingQuery.data ? (
+          <>
+            <div className="summary-grid">
+              <div>
+                <span>Recommendation</span>
+                <strong>{retrainingSummary.recommendation}</strong>
+              </div>
+              <div>
+                <span>Triggers</span>
+                <strong>{retrainingSummary.triggerCount}</strong>
+              </div>
+              <div>
+                <span>Blockers</span>
+                <strong>{retrainingSummary.blockerCount}</strong>
+              </div>
+              <div>
+                <span>Open Feedback</span>
+                <strong>{retrainingSummary.openFeedbackCount}</strong>
+              </div>
+              <div>
+                <span>Training Labels</span>
+                <strong>{retrainingSummary.approvedLabelCount}</strong>
+              </div>
+              <div>
+                <span>Source DQ</span>
+                <strong>{retrainingSummary.sourceDataQualityLabel}</strong>
+              </div>
+              <div>
+                <span>Source DQ Status</span>
+                <strong>{retrainingSummary.sourceDataQualityStatus}</strong>
+              </div>
+            </div>
+            <div className="table-list">
+              {retrainingQuery.data.retraining_triggers.map((trigger) => (
+                <div className="metric-row compact-metric-row" key={trigger}>
+                  <span>{trigger}</span>
+                  <strong>trigger</strong>
+                </div>
+              ))}
+              {retrainingQuery.data.blockers.map((blocker) => (
+                <div className="metric-row compact-metric-row" key={blocker}>
+                  <span>{blocker}</span>
+                  <strong>blocker</strong>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="empty">No retraining readiness loaded</p>
         )}
       </div>
       <div className="panel wide-panel">

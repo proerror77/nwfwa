@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildModelLabelReadinessSummary, formatSourceDataQuality } from "./ModelOpsPage";
+import {
+  buildModelLabelReadinessSummary,
+  buildModelRetrainingSummary,
+  formatSourceDataQuality,
+} from "./ModelOpsPage";
 
 describe("buildModelLabelReadinessSummary", () => {
   it("summarizes model-governance labels from human outcomes", () => {
@@ -56,5 +60,33 @@ describe("formatSourceDataQuality", () => {
   it("formats nullable model source data quality scores", () => {
     expect(formatSourceDataQuality(0.875)).toBe("87.5%");
     expect(formatSourceDataQuality(null)).toBe("-");
+  });
+});
+
+describe("buildModelRetrainingSummary", () => {
+  it("summarizes retraining readiness for model operators", () => {
+    const summary = buildModelRetrainingSummary({
+      recommendation: "prepare_retraining",
+      latest_evaluation_id: "eval_1",
+      drift_status: "drift",
+      source_dataset_id: "dataset_1",
+      source_data_quality_score: 0.91,
+      source_data_quality_status: "ready",
+      open_model_feedback_count: 2,
+      approved_label_count: 5,
+      needs_review_label_count: 0,
+      retraining_triggers: ["score drift status: drift", "approved model labels available"],
+      blockers: [],
+    });
+
+    expect(summary).toEqual({
+      recommendation: "prepare_retraining",
+      triggerCount: 2,
+      blockerCount: 0,
+      openFeedbackCount: 2,
+      approvedLabelCount: 5,
+      sourceDataQualityLabel: "91.0%",
+      sourceDataQualityStatus: "ready",
+    });
   });
 });

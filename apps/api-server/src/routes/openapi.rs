@@ -901,6 +901,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/retraining-readiness": {
+                "get": {
+                    "summary": "Get model retraining readiness from drift, labels, feedback, and source data quality",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model retraining readiness summary",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelRetrainingReadinessResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/promotion-reviews": {
                 "post": {
                     "summary": "Record a model promotion review decision",
@@ -2535,6 +2559,31 @@ pub async fn openapi_schema() -> Json<Value> {
                         "gates": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ModelPromotionGate" }
+                        },
+                        "blockers": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "ModelRetrainingReadinessResponse": {
+                    "type": "object",
+                    "required": ["model_key", "model_version", "recommendation", "latest_evaluation_id", "drift_status", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "open_model_feedback_count", "approved_label_count", "needs_review_label_count", "retraining_triggers", "blockers"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "recommendation": { "type": "string", "enum": ["monitor", "prepare_retraining", "blocked"] },
+                        "latest_evaluation_id": { "type": "string" },
+                        "drift_status": { "type": "string", "enum": ["not_available", "stable", "watch", "drift"] },
+                        "source_dataset_id": { "type": "string" },
+                        "source_data_quality_score": { "type": ["number", "null"] },
+                        "source_data_quality_status": { "type": "string", "enum": ["missing", "ready", "watch", "blocked"] },
+                        "open_model_feedback_count": { "type": "integer" },
+                        "approved_label_count": { "type": "integer" },
+                        "needs_review_label_count": { "type": "integer" },
+                        "retraining_triggers": {
+                            "type": "array",
+                            "items": { "type": "string" }
                         },
                         "blockers": {
                             "type": "array",

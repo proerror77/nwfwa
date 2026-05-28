@@ -3,7 +3,7 @@ use crate::{
     error::ApiError,
     repository::{
         DatasetRecord, ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
-        ModelVersionRecord, PersistedAuditEvent,
+        ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
     },
     routes::ops_datasets::build_dataset_health_record,
 };
@@ -45,6 +45,23 @@ pub struct ModelPromotionGatesResponse {
     pub data_status: String,
     pub scored_runs: u32,
     pub gates: Vec<ModelPromotionGate>,
+    pub blockers: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelRetrainingReadinessResponse {
+    pub model_key: String,
+    pub model_version: String,
+    pub recommendation: String,
+    pub latest_evaluation_id: String,
+    pub drift_status: String,
+    pub source_dataset_id: String,
+    pub source_data_quality_score: Option<f64>,
+    pub source_data_quality_status: String,
+    pub open_model_feedback_count: usize,
+    pub approved_label_count: usize,
+    pub needs_review_label_count: usize,
+    pub retraining_triggers: Vec<String>,
     pub blockers: Vec<String>,
 }
 
@@ -165,6 +182,74 @@ pub async fn model_promotion_gates(
         &evaluations,
         &outcome_labels,
         latest_review.as_ref(),
+        source_dataset.as_ref(),
+    )))
+}
+
+pub async fn model_retraining_readiness(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+) -> Result<Json<ModelRetrainingReadinessResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let model = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == model_key)
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    let performance = state
+        .repository
+        .model_performance(&model_key)
+        .await
+        .map_err(internal_error("MODEL_PERFORMANCE_FAILED"))?
+        .unwrap_or_else(|| ModelPerformanceRecord {
+            model_key: model_key.clone(),
+            data_status: "unknown".into(),
+            scored_runs: 0,
+            average_score: 0.0,
+            high_risk_count: 0,
+            score_psi: None,
+            drift_status: "not_available".into(),
+            latest_scored_at: None,
+        });
+    let evaluations = state
+        .repository
+        .list_model_evaluations()
+        .await
+        .map_err(internal_error("MODEL_EVALUATION_LIST_FAILED"))?;
+    let latest_evaluation = evaluations.iter().find(|evaluation| {
+        evaluation.model_key == model.model_key && evaluation.model_version == model.version
+    });
+    let source_dataset = match latest_evaluation {
+        Some(evaluation) => state
+            .repository
+            .get_model_dataset_source_dataset(&evaluation.model_dataset_id)
+            .await
+            .map_err(internal_error("MODEL_DATASET_LINEAGE_FAILED"))?,
+        None => None,
+    };
+    let outcome_labels = state
+        .repository
+        .list_outcome_labels()
+        .await
+        .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
+    let feedback_items = state
+        .repository
+        .list_qa_feedback_items()
+        .await
+        .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
+
+    Ok(Json(build_model_retraining_readiness(
+        &model,
+        &performance,
+        latest_evaluation,
+        &outcome_labels,
+        &feedback_items,
         source_dataset.as_ref(),
     )))
 }
@@ -469,6 +554,87 @@ fn build_model_promotion_gates(
         data_status: performance.data_status.clone(),
         scored_runs: performance.scored_runs,
         gates,
+        blockers,
+    }
+}
+
+fn build_model_retraining_readiness(
+    model: &ModelVersionRecord,
+    performance: &ModelPerformanceRecord,
+    latest_evaluation: Option<&ModelEvaluationRecord>,
+    outcome_labels: &[crate::repository::OutcomeLabelRecord],
+    feedback_items: &[QaFeedbackItemRecord],
+    source_dataset: Option<&DatasetRecord>,
+) -> ModelRetrainingReadinessResponse {
+    let metrics = latest_evaluation
+        .map(|evaluation| &evaluation.metrics_json)
+        .unwrap_or(&serde_json::Value::Null);
+    let source_data_quality = source_data_quality_gate(metrics, source_dataset);
+    let open_model_feedback_count = feedback_items
+        .iter()
+        .filter(|item| item.feedback_target == "models" && item.status == "open")
+        .count();
+    let model_labels = outcome_labels
+        .iter()
+        .filter(|label| label.feedback_target == "models")
+        .collect::<Vec<_>>();
+    let approved_label_count = model_labels
+        .iter()
+        .filter(|label| label.governance_status == "approved_for_training")
+        .count();
+    let needs_review_label_count = model_labels
+        .iter()
+        .filter(|label| label.governance_status == "needs_review")
+        .count();
+
+    let mut retraining_triggers = Vec::new();
+    if matches!(performance.drift_status.as_str(), "watch" | "drift") {
+        retraining_triggers.push(format!("score drift status: {}", performance.drift_status));
+    }
+    if open_model_feedback_count > 0 {
+        retraining_triggers.push("open model QA feedback".into());
+    }
+    if approved_label_count > 0 {
+        retraining_triggers.push("approved model labels available".into());
+    }
+
+    let mut blockers = Vec::new();
+    if latest_evaluation.is_none() {
+        blockers.push("latest model evaluation missing".into());
+    }
+    if !source_data_quality.passed {
+        blockers.push(source_data_quality.blocker.into());
+    }
+    if approved_label_count == 0 {
+        blockers.push("approved model outcome labels missing".into());
+    }
+    if needs_review_label_count > 0 {
+        blockers.push("model outcome labels need review".into());
+    }
+
+    let recommendation = if !blockers.is_empty() {
+        "blocked"
+    } else if retraining_triggers.is_empty() {
+        "monitor"
+    } else {
+        "prepare_retraining"
+    };
+
+    ModelRetrainingReadinessResponse {
+        model_key: model.model_key.clone(),
+        model_version: model.version.clone(),
+        recommendation: recommendation.into(),
+        latest_evaluation_id: latest_evaluation
+            .map(|evaluation| evaluation.evaluation_run_id.clone())
+            .unwrap_or_else(|| "none".into()),
+        drift_status: performance.drift_status.clone(),
+        source_dataset_id: source_data_quality.dataset_id,
+        source_data_quality_score: source_data_quality.score,
+        source_data_quality_status: source_data_quality.status,
+        open_model_feedback_count,
+        approved_label_count,
+        needs_review_label_count,
+        retraining_triggers,
         blockers,
     }
 }

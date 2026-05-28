@@ -26,6 +26,7 @@ import {
   listModelEvaluations,
   listModels,
   getModelPromotionGates,
+  getModelRetrainingReadiness,
   submitModelPromotionReview,
   listRules,
   publishKnowledgeCase,
@@ -156,6 +157,7 @@ describe("ops API helpers", () => {
 
     await listModels("dev-secret");
     await getModelPromotionGates("baseline_fwa", "dev-secret");
+    await getModelRetrainingReadiness("baseline_fwa", "dev-secret");
     await submitModelPromotionReview(
       "baseline_fwa",
       { decision: "approved", reviewer: "model-governance", notes: "shadow only" },
@@ -171,6 +173,12 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/models/baseline_fwa/promotion-gates",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/retraining-readiness",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
