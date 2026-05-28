@@ -399,6 +399,7 @@ pub struct DashboardSummaryRecord {
     pub risk_amount: String,
     pub saving_amount: String,
     pub rag_distribution: BTreeMap<String, u32>,
+    pub scheme_distribution: BTreeMap<String, u32>,
     pub rule_hits: u32,
     pub model_scores: BTreeMap<String, DashboardModelScoreRecord>,
     pub layer_scores: BTreeMap<String, DashboardLayerScoreRecord>,
@@ -1736,6 +1737,14 @@ impl ScoringRepository for InMemoryScoringRepository {
         let model_evaluations = self.list_model_evaluations().await?;
         let rules = self.list_rules().await?;
         let rule_performance = self.rule_performance().await?;
+        let scheme_distribution =
+            self.list_leads()
+                .await?
+                .into_iter()
+                .fold(BTreeMap::new(), |mut distribution, lead| {
+                    *distribution.entry(lead.scheme_family).or_insert(0) += 1;
+                    distribution
+                });
 
         Ok(DashboardSummaryRecord {
             suspected_claims,
@@ -1743,6 +1752,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             risk_amount: risk_amount.to_string(),
             saving_amount: saving_amount.to_string(),
             rag_distribution,
+            scheme_distribution,
             rule_hits,
             model_scores: model_accumulators
                 .into_iter()
@@ -3743,6 +3753,15 @@ impl ScoringRepository for PostgresScoringRepository {
             .fetch_one(&self.pool)
             .await?;
 
+        let scheme_rows: Vec<(String, i64)> = sqlx::query_as(
+            "SELECT scheme_family, COUNT(*)::bigint
+             FROM fwa_leads
+             GROUP BY scheme_family
+             ORDER BY scheme_family",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
         let saving_attributions: Vec<(String, String, String, Option<Decimal>, String, i64)> =
             sqlx::query_as(
                 "SELECT source_type,
@@ -3774,6 +3793,10 @@ impl ScoringRepository for PostgresScoringRepository {
             rag_distribution: rag_rows
                 .into_iter()
                 .map(|(rag, count)| (rag, count as u32))
+                .collect(),
+            scheme_distribution: scheme_rows
+                .into_iter()
+                .map(|(scheme_family, count)| (scheme_family, count as u32))
                 .collect(),
             rule_hits: rule_hits.0 as u32,
             model_scores: model_rows

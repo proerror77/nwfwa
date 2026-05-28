@@ -5,6 +5,7 @@ import {
   buildDashboardModelGovernanceSummary,
   buildDashboardQaQueueSummary,
   buildDashboardRuleGovernanceSummary,
+  buildDashboardSchemeRows,
   buildProviderRiskSummary,
 } from "./DashboardPage";
 
@@ -154,5 +155,21 @@ describe("buildDashboardRuleGovernanceSummary", () => {
       savingAmount: "8200.00",
       roiLabel: "6.8x",
     });
+  });
+});
+
+describe("buildDashboardSchemeRows", () => {
+  it("orders FWA scheme distribution by count then scheme name", () => {
+    expect(
+      buildDashboardSchemeRows({
+        provider_peer_outlier: 1,
+        early_high_value_claim: 3,
+        diagnosis_procedure_mismatch: 3,
+      }),
+    ).toEqual([
+      { schemeFamily: "diagnosis_procedure_mismatch", count: 3 },
+      { schemeFamily: "early_high_value_claim", count: 3 },
+      { schemeFamily: "provider_peer_outlier", count: 1 },
+    ]);
   });
 });

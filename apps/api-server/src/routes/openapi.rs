@@ -2308,13 +2308,17 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
                         "risk_amount": { "type": "string", "format": "decimal" },
                         "saving_amount": { "type": "string", "format": "decimal" },
                         "rag_distribution": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                        },
+                        "scheme_distribution": {
                             "type": "object",
                             "additionalProperties": { "type": "integer" }
                         },

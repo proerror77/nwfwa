@@ -232,6 +232,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     .await;
     assert_eq!(status, StatusCode::OK);
     let selected_lead = &sample["selected_leads"].as_array().unwrap()[0];
+    let selected_scheme = selected_lead["scheme_family"].as_str().unwrap().to_string();
     let qa_case_id = format!(
         "qa_{}_{}",
         sample["sample_id"].as_str().unwrap(),
@@ -340,6 +341,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["model_governance"]["average_recall"], 0.6);
     assert_eq!(dashboard["risk_amount"], "8000");
     assert_eq!(dashboard["saving_amount"], "8200.00");
+    assert_eq!(dashboard["scheme_distribution"][selected_scheme], 1);
     let attributions = dashboard["saving_attributions"].as_array().unwrap();
     assert_eq!(attributions.len(), 2);
     assert!(attributions.iter().any(|attribution| {

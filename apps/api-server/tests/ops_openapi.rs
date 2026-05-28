@@ -247,6 +247,18 @@ async fn openapi_includes_operations_paths() {
             .as_array()
             .unwrap()
             .iter()
+            .any(|field| field == "scheme_distribution")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
+            ["scheme_distribution"]["additionalProperties"]["type"],
+        "integer"
+    );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
             .any(|field| field == "layer_scores")
     );
     assert!(

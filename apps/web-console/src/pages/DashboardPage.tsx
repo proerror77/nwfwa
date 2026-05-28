@@ -65,6 +65,7 @@ type DashboardSummary = {
   risk_amount: string;
   saving_amount: string;
   rag_distribution: Record<string, number>;
+  scheme_distribution: Record<string, number>;
   rule_hits: number;
   model_scores: Record<string, DashboardModelScore>;
   layer_scores: Record<string, DashboardLayerScore>;
@@ -187,6 +188,15 @@ export function buildDashboardRuleGovernanceSummary(governance?: DashboardRuleGo
   };
 }
 
+export function buildDashboardSchemeRows(distribution: Record<string, number> = {}) {
+  return Object.entries(distribution)
+    .map(([schemeFamily, count]) => ({ schemeFamily, count }))
+    .sort(
+      (left, right) =>
+        right.count - left.count || left.schemeFamily.localeCompare(right.schemeFamily),
+    );
+}
+
 export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
@@ -215,6 +225,7 @@ export function DashboardPage() {
   const summary = dashboardQuery.data;
   const providerRisk = providerRiskQuery.data;
   const ragRows = Object.entries(summary?.rag_distribution ?? {});
+  const schemeRows = buildDashboardSchemeRows(summary?.scheme_distribution ?? {});
   const modelRows = Object.entries(summary?.model_scores ?? {});
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
@@ -287,6 +298,21 @@ export function DashboardPage() {
           </div>
           {!dashboardQuery.isLoading && ragRows.length === 0 ? (
             <p className="empty">No scored claims</p>
+          ) : null}
+        </div>
+
+        <div className="panel">
+          <h2>FWA Scheme Distribution</h2>
+          <div className="table-list">
+            {schemeRows.map((scheme) => (
+              <div className="metric-row compact-metric-row" key={scheme.schemeFamily}>
+                <span>{scheme.schemeFamily}</span>
+                <strong>{scheme.count}</strong>
+              </div>
+            ))}
+          </div>
+          {!dashboardQuery.isLoading && schemeRows.length === 0 ? (
+            <p className="empty">No scheme distribution</p>
           ) : null}
         </div>
 
