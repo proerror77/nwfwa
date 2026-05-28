@@ -2652,6 +2652,12 @@ impl ScoringRepository for InMemoryScoringRepository {
             })
             .flatten()
             .collect::<Vec<_>>();
+        labels.extend(
+            self.list_cases()
+                .await?
+                .into_iter()
+                .flat_map(labels_from_case_status),
+        );
         sort_outcome_labels(&mut labels);
         Ok(labels)
     }
@@ -5893,6 +5899,12 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             ))
             .collect::<Vec<_>>();
+        labels.extend(
+            self.list_cases()
+                .await?
+                .into_iter()
+                .flat_map(labels_from_case_status),
+        );
         sort_outcome_labels(&mut labels);
         Ok(labels)
     }
@@ -7438,6 +7450,54 @@ fn label_from_qa_review(record: QaReviewRecord) -> OutcomeLabelRecord {
         currency: None,
         evidence_refs: record.evidence_refs,
     }
+}
+
+fn labels_from_case_status(record: CaseRecord) -> Vec<OutcomeLabelRecord> {
+    let confirmed_fwa = match record.status.as_str() {
+        "confirmed" => true,
+        "rejected" => false,
+        _ => return Vec::new(),
+    };
+    let evidence_refs = case_label_evidence_refs(&record);
+    let mut labels = vec![OutcomeLabelRecord {
+        label_id: format!("label_case_{}_confirmed_fwa", record.case_id),
+        claim_id: record.claim_id.clone(),
+        label_name: "confirmed_fwa".into(),
+        label_value: confirmed_fwa.to_string(),
+        source_type: "case_status".into(),
+        source_id: record.case_id.clone(),
+        governance_status: if confirmed_fwa {
+            "approved_for_training".into()
+        } else {
+            "needs_review".into()
+        },
+        feedback_target: "models".into(),
+        currency: None,
+        evidence_refs: evidence_refs.clone(),
+    }];
+
+    if !confirmed_fwa {
+        labels.push(OutcomeLabelRecord {
+            label_id: format!("label_case_{}_false_positive", record.case_id),
+            claim_id: record.claim_id,
+            label_name: "false_positive".into(),
+            label_value: "true".into(),
+            source_type: "case_status".into(),
+            source_id: record.case_id,
+            governance_status: "needs_review".into(),
+            feedback_target: "rules".into(),
+            currency: None,
+            evidence_refs,
+        });
+    }
+
+    labels
+}
+
+fn case_label_evidence_refs(record: &CaseRecord) -> Vec<String> {
+    let mut refs = json_array_to_strings(record.evidence_package["evidence_refs"].clone());
+    refs.push(format!("investigation_cases:{}", record.case_id));
+    refs
 }
 
 fn sort_outcome_labels(labels: &mut [OutcomeLabelRecord]) {

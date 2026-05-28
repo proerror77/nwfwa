@@ -790,6 +790,119 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
 }
 
 #[tokio::test]
+async fn lists_governed_outcome_labels_from_terminal_case_status() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-CASE-LABEL-1",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-01-05",
+            "diagnosis_code": "J10",
+            "member": {
+              "external_member_id": "MBR-CASE-LABEL-1"
+            },
+            "policy": {
+              "external_policy_id": "POL-CASE-LABEL-1",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": "10000",
+              "currency": "CNY"
+            },
+            "provider": {
+              "external_provider_id": "PRV-CASE-LABEL-1",
+              "name": "Northwind Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "items": [
+              {
+                "item_code": "PROC-001",
+                "item_type": "procedure",
+                "description": "Imaging",
+                "quantity": 1,
+                "unit_amount": "9000",
+                "total_amount": "9000",
+                "currency": "CNY"
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let lead_id = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-CASE-LABEL-1")
+        .unwrap()["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let (status, triage) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "siu-case-label-owner",
+          "reviewer": "medical-case-label-owner",
+          "priority": "high",
+          "notes": "Open case for terminal status label generation."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let case_id = triage["case"]["case_id"].as_str().unwrap();
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        r#"{
+          "status": "confirmed",
+          "actor_id": "siu-case-label-owner",
+          "notes": "Case reviewer confirmed FWA.",
+          "evidence_refs": ["case_workflow:confirmed"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(labels["labels"].as_array().unwrap().iter().any(|label| {
+        label["claim_id"] == "CLM-CASE-LABEL-1"
+            && label["label_name"] == "confirmed_fwa"
+            && label["label_value"] == "true"
+            && label["source_type"] == "case_status"
+            && label["source_id"] == case_id
+            && label["governance_status"] == "approved_for_training"
+            && label["feedback_target"] == "models"
+            && label["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|reference| {
+                    reference == &serde_json::json!(format!("investigation_cases:{case_id}"))
+                })
+    }));
+}
+
+#[tokio::test]
 async fn returns_member_profile_summary_from_scored_claims() {
     let app = build_app(test_config());
 
