@@ -512,9 +512,20 @@ CREATE TABLE IF NOT EXISTS model_retraining_jobs (
   source_data_quality_status TEXT NOT NULL,
   trigger_summary_json JSONB NOT NULL DEFAULT '[]'::jsonb,
   blocker_summary_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  candidate_model_version TEXT,
+  candidate_artifact_uri TEXT,
+  candidate_endpoint_url TEXT,
+  validation_report_uri TEXT,
+  output_evaluation_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE model_retraining_jobs ADD COLUMN IF NOT EXISTS candidate_model_version TEXT;
+ALTER TABLE model_retraining_jobs ADD COLUMN IF NOT EXISTS candidate_artifact_uri TEXT;
+ALTER TABLE model_retraining_jobs ADD COLUMN IF NOT EXISTS candidate_endpoint_url TEXT;
+ALTER TABLE model_retraining_jobs ADD COLUMN IF NOT EXISTS validation_report_uri TEXT;
+ALTER TABLE model_retraining_jobs ADD COLUMN IF NOT EXISTS output_evaluation_id TEXT;
 
 CREATE TABLE IF NOT EXISTS rule_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

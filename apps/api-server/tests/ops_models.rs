@@ -745,7 +745,7 @@ async fn blocks_model_retraining_job_when_readiness_is_blocked() {
 }
 
 #[tokio::test]
-async fn queues_and_updates_model_retraining_job_from_readiness() {
+async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     let app = build_app(test_config());
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "retraining_job").await;
 
@@ -824,7 +824,7 @@ async fn queues_and_updates_model_retraining_job_from_readiness() {
     assert_eq!(jobs["jobs"][0]["job_id"], job_id);
 
     let (status, updated) = json_request(
-        app,
+        app.clone(),
         "POST",
         &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
         r#"{
@@ -840,6 +840,74 @@ async fn queues_and_updates_model_retraining_job_from_readiness() {
     assert_eq!(updated["status"], "running");
     assert_eq!(updated["updated_by"], "trainer-worker");
     assert_eq!(updated["status_note"], "Training worker picked up the job.");
+
+    let (status, updated) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
+        r#"{
+          "status": "validation",
+          "actor": "trainer-worker",
+          "notes": "Validation metrics are ready."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["status"], "validation");
+
+    let (status, completed) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
+        r#"{
+          "actor": "trainer-worker",
+          "notes": "Candidate model and validation report registered.",
+          "candidate_model_version": "0.2.0-candidate",
+          "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
+          "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+          "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+          "auc": "0.86",
+          "ks": "0.48",
+          "precision": "0.78",
+          "recall": "0.71",
+          "f1": "0.74",
+          "accuracy": "0.79",
+          "threshold": "0.52",
+          "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
+          "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+          "metrics_json": {
+            "score_psi": 0.04,
+            "shadow_comparison_status": "passed",
+            "review_capacity_threshold_status": "passed"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(completed["job"]["status"], "completed");
+    assert_eq!(
+        completed["job"]["candidate_model_version"],
+        "0.2.0-candidate"
+    );
+    assert_eq!(
+        completed["job"]["output_evaluation_id"],
+        "eval_baseline_retraining_job_candidate"
+    );
+    assert_eq!(completed["candidate_model"]["status"], "candidate");
+    assert_eq!(
+        completed["candidate_model"]["artifact_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx"
+    );
+    assert_eq!(completed["evaluation"]["model_version"], "0.2.0-candidate");
+
+    let (status, models) = get_json(app, "/api/v1/ops/models").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(models["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|model| model["version"] == "0.2.0-candidate" && model["status"] == "candidate"));
 }
 
 #[tokio::test]

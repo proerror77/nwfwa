@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  completeModelRetrainingJob,
   createModelRetrainingJob,
   getModelPerformance,
   getModelPromotionGates,
@@ -32,6 +33,7 @@ type ModelVersion = {
   execution_provider: string;
   status: string;
   review_mode: string;
+  artifact_uri: string | null;
   endpoint_url: string | null;
 };
 
@@ -85,6 +87,11 @@ type ModelRetrainingJob = {
   readiness_recommendation: string;
   trigger_summary: string[];
   blocker_summary: string[];
+  candidate_model_version: string | null;
+  candidate_artifact_uri: string | null;
+  candidate_endpoint_url: string | null;
+  validation_report_uri: string | null;
+  output_evaluation_id: string | null;
   created_at: string | null;
   updated_at: string | null;
 };
@@ -141,6 +148,7 @@ export function buildModelRetrainingJobSummary(jobs: ModelRetrainingJob[] = []) 
     jobCount: jobs.length,
     queuedCount: jobs.filter((job) => job.status === "queued").length,
     runningCount: jobs.filter((job) => job.status === "running").length,
+    completedCount: jobs.filter((job) => job.status === "completed").length,
     latestStatus: jobs[0]?.status ?? "none",
   };
 }
@@ -152,6 +160,16 @@ export function ModelOpsPage() {
   const [notes, setNotes] = useState("Approved for continued shadow evaluation only.");
   const [retrainingRequester, setRetrainingRequester] = useState("model-ops");
   const [retrainingNotes, setRetrainingNotes] = useState("Queue retraining from readiness.");
+  const [candidateVersion, setCandidateVersion] = useState("0.2.0-candidate");
+  const [candidateArtifactUri, setCandidateArtifactUri] = useState(
+    "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+  );
+  const [validationReportUri, setValidationReportUri] = useState(
+    "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+  );
+  const [evaluationRunId, setEvaluationRunId] = useState(
+    "eval_baseline_fwa_0_2_0_candidate",
+  );
   const queryClient = useQueryClient();
   const modelsQuery = useQuery({
     queryKey: ["models", apiKey],
@@ -265,6 +283,41 @@ export function ModelOpsPage() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
+    },
+  });
+  const retrainingCompleteMutation = useMutation({
+    mutationFn: ({ jobId }: { jobId: string }) =>
+      completeModelRetrainingJob(
+        jobId,
+        {
+          actor: retrainingRequester,
+          notes: "Candidate model and validation report registered.",
+          candidate_model_version: candidateVersion,
+          artifact_uri: candidateArtifactUri,
+          validation_report_uri: validationReportUri,
+          evaluation_run_id: evaluationRunId,
+          auc: "0.84",
+          ks: "0.45",
+          precision: "0.76",
+          recall: "0.70",
+          f1: "0.73",
+          accuracy: "0.78",
+          threshold: "0.50",
+          confusion_matrix_json: { tp: 24, fp: 6, tn: 52, fn: 8 },
+          feature_importance_uri:
+            "s3://fwa-models/baseline_fwa/0.2.0-candidate/feature_importance.parquet",
+          metrics_json: {
+            score_psi: 0.04,
+            review_capacity_threshold_status: "passed",
+            shadow_comparison_status: "passed",
+          },
+        },
+        apiKey,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["model-evaluations"] });
     },
   });
   const promotionGateRows = promotionQuery.data
@@ -448,6 +501,10 @@ export function ModelOpsPage() {
             <strong>{retrainingJobSummary.runningCount}</strong>
           </div>
           <div>
+            <span>Completed</span>
+            <strong>{retrainingJobSummary.completedCount}</strong>
+          </div>
+          <div>
             <span>Latest Status</span>
             <strong>{retrainingJobSummary.latestStatus}</strong>
           </div>
@@ -477,6 +534,39 @@ export function ModelOpsPage() {
             <pre className="error">{String(retrainingCreateMutation.error.message)}</pre>
           ) : null}
         </div>
+        <div className="result-stack">
+          <label>
+            Candidate Version
+            <input
+              value={candidateVersion}
+              onChange={(event) => setCandidateVersion(event.target.value)}
+            />
+          </label>
+          <label>
+            Artifact URI
+            <input
+              value={candidateArtifactUri}
+              onChange={(event) => setCandidateArtifactUri(event.target.value)}
+            />
+          </label>
+          <label>
+            Validation Report URI
+            <input
+              value={validationReportUri}
+              onChange={(event) => setValidationReportUri(event.target.value)}
+            />
+          </label>
+          <label>
+            Evaluation Run
+            <input
+              value={evaluationRunId}
+              onChange={(event) => setEvaluationRunId(event.target.value)}
+            />
+          </label>
+          {retrainingCompleteMutation.error ? (
+            <pre className="error">{String(retrainingCompleteMutation.error.message)}</pre>
+          ) : null}
+        </div>
         <div className="table-list">
           {(retrainingJobsQuery.data?.jobs ?? []).map((job) => (
             <div className="metric-row compact-metric-row" key={job.job_id}>
@@ -486,6 +576,11 @@ export function ModelOpsPage() {
                 {job.model_version} · {job.requested_by}
               </small>
               <small>{job.trigger_summary.length} triggers</small>
+              {job.candidate_model_version ? (
+                <small>
+                  {job.candidate_model_version} · {job.output_evaluation_id ?? "no eval"}
+                </small>
+              ) : null}
               <div className="button-row">
                 <button
                   onClick={() =>
@@ -508,6 +603,16 @@ export function ModelOpsPage() {
                   disabled={retrainingStatusMutation.isPending || job.status !== "running"}
                 >
                   Validate
+                </button>
+                <button
+                  onClick={() =>
+                    retrainingCompleteMutation.mutate({
+                      jobId: job.job_id,
+                    })
+                  }
+                  disabled={retrainingCompleteMutation.isPending || job.status !== "validation"}
+                >
+                  Complete
                 </button>
               </div>
             </div>

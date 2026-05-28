@@ -316,8 +316,25 @@ pub struct ModelRetrainingJobRecord {
     pub source_data_quality_status: String,
     pub trigger_summary: Vec<String>,
     pub blocker_summary: Vec<String>,
+    pub candidate_model_version: Option<String>,
+    pub candidate_artifact_uri: Option<String>,
+    pub candidate_endpoint_url: Option<String>,
+    pub validation_report_uri: Option<String>,
+    pub output_evaluation_id: Option<String>,
     pub created_at: Option<String>,
     pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone)]
+pub struct CompleteModelRetrainingJobInput<'a> {
+    pub job_id: &'a str,
+    pub actor: &'a str,
+    pub status_note: &'a str,
+    pub candidate_model_version: &'a str,
+    pub candidate_artifact_uri: &'a str,
+    pub candidate_endpoint_url: Option<&'a str>,
+    pub validation_report_uri: &'a str,
+    pub output_evaluation_id: &'a str,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1161,6 +1178,11 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
+    async fn save_model_version(
+        &self,
+        record: ModelVersionRecord,
+    ) -> anyhow::Result<ModelVersionRecord>;
+
     async fn update_model_status(
         &self,
         model_key: &str,
@@ -1194,12 +1216,22 @@ pub trait ScoringRepository: Send + Sync {
         model_key: &str,
     ) -> anyhow::Result<Vec<ModelRetrainingJobRecord>>;
 
+    async fn get_model_retraining_job(
+        &self,
+        job_id: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
+
     async fn update_model_retraining_job_status(
         &self,
         job_id: &str,
         status: &str,
         actor: &str,
         status_note: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
+
+    async fn complete_model_retraining_job(
+        &self,
+        input: CompleteModelRetrainingJobInput<'_>,
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
 
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord>;
@@ -1320,6 +1352,7 @@ pub struct InMemoryScoringRepository {
     feature_set_sequence: Mutex<u64>,
     model_datasets: Mutex<HashMap<String, ModelDatasetRecord>>,
     model_dataset_sequence: Mutex<u64>,
+    model_versions: Mutex<HashMap<String, ModelVersionRecord>>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
     model_retraining_jobs: Mutex<HashMap<String, ModelRetrainingJobRecord>>,
@@ -1744,7 +1777,14 @@ impl ScoringRepository for InMemoryScoringRepository {
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
         let statuses = self.model_statuses.lock().await;
-        Ok(default_model_versions()
+        let mut models = default_model_versions();
+        models.extend(self.model_versions.lock().await.values().cloned());
+        models.sort_by(|left, right| {
+            left.model_key
+                .cmp(&right.model_key)
+                .then_with(|| right.version.cmp(&left.version))
+        });
+        Ok(models
             .into_iter()
             .map(|mut model| {
                 if let Some(status) =
@@ -1755,6 +1795,17 @@ impl ScoringRepository for InMemoryScoringRepository {
                 model
             })
             .collect())
+    }
+
+    async fn save_model_version(
+        &self,
+        record: ModelVersionRecord,
+    ) -> anyhow::Result<ModelVersionRecord> {
+        self.model_versions.lock().await.insert(
+            model_version_key(&record.model_key, &record.version),
+            record.clone(),
+        );
+        Ok(record)
     }
 
     async fn update_model_status(
@@ -1862,6 +1913,13 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(jobs)
     }
 
+    async fn get_model_retraining_job(
+        &self,
+        job_id: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        Ok(self.model_retraining_jobs.lock().await.get(job_id).cloned())
+    }
+
     async fn update_model_retraining_job_status(
         &self,
         job_id: &str,
@@ -1876,6 +1934,26 @@ impl ScoringRepository for InMemoryScoringRepository {
         job.status = status.to_string();
         job.updated_by = actor.to_string();
         job.status_note = status_note.to_string();
+        job.updated_at = Some(chrono::Utc::now().to_rfc3339());
+        Ok(Some(job.clone()))
+    }
+
+    async fn complete_model_retraining_job(
+        &self,
+        input: CompleteModelRetrainingJobInput<'_>,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        let mut jobs = self.model_retraining_jobs.lock().await;
+        let Some(job) = jobs.get_mut(input.job_id) else {
+            return Ok(None);
+        };
+        job.status = "completed".into();
+        job.updated_by = input.actor.to_string();
+        job.status_note = input.status_note.to_string();
+        job.candidate_model_version = Some(input.candidate_model_version.to_string());
+        job.candidate_artifact_uri = Some(input.candidate_artifact_uri.to_string());
+        job.candidate_endpoint_url = input.candidate_endpoint_url.map(ToString::to_string);
+        job.validation_report_uri = Some(input.validation_report_uri.to_string());
+        job.output_evaluation_id = Some(input.output_evaluation_id.to_string());
         job.updated_at = Some(chrono::Utc::now().to_rfc3339());
         Ok(Some(job.clone()))
     }
@@ -3894,6 +3972,38 @@ impl ScoringRepository for PostgresScoringRepository {
             .collect())
     }
 
+    async fn save_model_version(
+        &self,
+        record: ModelVersionRecord,
+    ) -> anyhow::Result<ModelVersionRecord> {
+        sqlx::query(
+            "INSERT INTO model_versions
+             (model_key, version, model_type, runtime_kind, artifact_uri, endpoint_url, execution_provider, status, metrics, activated_at)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, CASE WHEN $8 = 'active' THEN now() ELSE NULL END)
+             ON CONFLICT (model_key, version) DO UPDATE
+             SET model_type = EXCLUDED.model_type,
+                 runtime_kind = EXCLUDED.runtime_kind,
+                 artifact_uri = EXCLUDED.artifact_uri,
+                 endpoint_url = EXCLUDED.endpoint_url,
+                 execution_provider = EXCLUDED.execution_provider,
+                 status = EXCLUDED.status,
+                 metrics = model_versions.metrics || EXCLUDED.metrics,
+                 activated_at = CASE WHEN EXCLUDED.status = 'active' THEN now() ELSE model_versions.activated_at END",
+        )
+        .bind(&record.model_key)
+        .bind(&record.version)
+        .bind(&record.model_type)
+        .bind(&record.runtime_kind)
+        .bind(&record.artifact_uri)
+        .bind(&record.endpoint_url)
+        .bind(&record.execution_provider)
+        .bind(&record.status)
+        .bind(serde_json::json!({ "review_mode": record.review_mode }))
+        .execute(&self.pool)
+        .await?;
+        Ok(record)
+    }
+
     async fn update_model_status(
         &self,
         model_key: &str,
@@ -4131,7 +4241,9 @@ impl ScoringRepository for PostgresScoringRepository {
             "SELECT id::text AS job_id, model_key, model_version, status, requested_by, request_notes,
                     status_note, updated_by, readiness_recommendation, latest_evaluation_id,
                     source_dataset_id, source_data_quality_score, source_data_quality_status,
-                    trigger_summary_json, blocker_summary_json, created_at, updated_at
+                    trigger_summary_json, blocker_summary_json, candidate_model_version,
+                    candidate_artifact_uri, candidate_endpoint_url, validation_report_uri,
+                    output_evaluation_id, created_at, updated_at
              FROM model_retraining_jobs
              WHERE model_key = $1
              ORDER BY created_at DESC",
@@ -4144,6 +4256,27 @@ impl ScoringRepository for PostgresScoringRepository {
             .into_iter()
             .map(model_retraining_job_from_pg_row)
             .collect())
+    }
+
+    async fn get_model_retraining_job(
+        &self,
+        job_id: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        let row = sqlx::query(
+            "SELECT id::text AS job_id, model_key, model_version, status, requested_by, request_notes,
+                    status_note, updated_by, readiness_recommendation, latest_evaluation_id,
+                    source_dataset_id, source_data_quality_score, source_data_quality_status,
+                    trigger_summary_json, blocker_summary_json, candidate_model_version,
+                    candidate_artifact_uri, candidate_endpoint_url, validation_report_uri,
+                    output_evaluation_id, created_at, updated_at
+             FROM model_retraining_jobs
+             WHERE id = $1::uuid",
+        )
+        .bind(job_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(model_retraining_job_from_pg_row))
     }
 
     async fn update_model_retraining_job_status(
@@ -4160,12 +4293,51 @@ impl ScoringRepository for PostgresScoringRepository {
              RETURNING id::text AS job_id, model_key, model_version, status, requested_by, request_notes,
                        status_note, updated_by, readiness_recommendation, latest_evaluation_id,
                        source_dataset_id, source_data_quality_score, source_data_quality_status,
-                       trigger_summary_json, blocker_summary_json, created_at, updated_at",
+                       trigger_summary_json, blocker_summary_json, candidate_model_version,
+                       candidate_artifact_uri, candidate_endpoint_url, validation_report_uri,
+                       output_evaluation_id, created_at, updated_at",
         )
         .bind(job_id)
         .bind(status)
         .bind(actor)
         .bind(status_note)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(model_retraining_job_from_pg_row))
+    }
+
+    async fn complete_model_retraining_job(
+        &self,
+        input: CompleteModelRetrainingJobInput<'_>,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        let row = sqlx::query(
+            "UPDATE model_retraining_jobs
+             SET status = 'completed',
+                 updated_by = $2,
+                 status_note = $3,
+                 candidate_model_version = $4,
+                 candidate_artifact_uri = $5,
+                 candidate_endpoint_url = $6,
+                 validation_report_uri = $7,
+                 output_evaluation_id = $8,
+                 updated_at = now()
+             WHERE id = $1::uuid
+             RETURNING id::text AS job_id, model_key, model_version, status, requested_by, request_notes,
+                       status_note, updated_by, readiness_recommendation, latest_evaluation_id,
+                       source_dataset_id, source_data_quality_score, source_data_quality_status,
+                       trigger_summary_json, blocker_summary_json, candidate_model_version,
+                       candidate_artifact_uri, candidate_endpoint_url, validation_report_uri,
+                       output_evaluation_id, created_at, updated_at",
+        )
+        .bind(input.job_id)
+        .bind(input.actor)
+        .bind(input.status_note)
+        .bind(input.candidate_model_version)
+        .bind(input.candidate_artifact_uri)
+        .bind(input.candidate_endpoint_url)
+        .bind(input.validation_report_uri)
+        .bind(input.output_evaluation_id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -6408,6 +6580,11 @@ fn model_retraining_job_from_pg_row(row: PgRow) -> ModelRetrainingJobRecord {
         source_data_quality_status: row.get("source_data_quality_status"),
         trigger_summary: json_string_array(trigger_summary_json),
         blocker_summary: json_string_array(blocker_summary_json),
+        candidate_model_version: row.get("candidate_model_version"),
+        candidate_artifact_uri: row.get("candidate_artifact_uri"),
+        candidate_endpoint_url: row.get("candidate_endpoint_url"),
+        validation_report_uri: row.get("validation_report_uri"),
+        output_evaluation_id: row.get("output_evaluation_id"),
         created_at: Some(created_at.to_rfc3339()),
         updated_at: Some(updated_at.to_rfc3339()),
     }

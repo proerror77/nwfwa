@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveRule,
   backtestRule,
+  completeModelRetrainingJob,
   createAuditSample,
   discoverRules,
   createModelRetrainingJob,
@@ -172,6 +173,20 @@ describe("ops API helpers", () => {
       { status: "running", actor: "trainer-worker", notes: "started" },
       "dev-secret",
     );
+    await completeModelRetrainingJob(
+      "job_1",
+      {
+        actor: "trainer-worker",
+        notes: "done",
+        candidate_model_version: "0.2.0-candidate",
+        artifact_uri: "s3://models/baseline_fwa/0.2.0-candidate/model.onnx",
+        validation_report_uri: "s3://models/baseline_fwa/0.2.0-candidate/validation.json",
+        evaluation_run_id: "eval_candidate",
+        confusion_matrix_json: {},
+        metrics_json: {},
+      },
+      "dev-secret",
+    );
     await submitModelPromotionReview(
       "baseline_fwa",
       { decision: "approved", reviewer: "model-governance", notes: "shadow only" },
@@ -218,6 +233,22 @@ describe("ops API helpers", () => {
           status: "running",
           actor: "trainer-worker",
           notes: "started",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/model-retraining-jobs/job_1/output",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          actor: "trainer-worker",
+          notes: "done",
+          candidate_model_version: "0.2.0-candidate",
+          artifact_uri: "s3://models/baseline_fwa/0.2.0-candidate/model.onnx",
+          validation_report_uri: "s3://models/baseline_fwa/0.2.0-candidate/validation.json",
+          evaluation_run_id: "eval_candidate",
+          confusion_matrix_json: {},
+          metrics_json: {},
         }),
       }),
     );

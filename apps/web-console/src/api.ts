@@ -166,6 +166,21 @@ export async function updateModelRetrainingJobStatus(
   );
 }
 
+export async function completeModelRetrainingJob(
+  jobId: string,
+  payload: unknown,
+  apiKey: string,
+) {
+  return requestJson(
+    `/api/v1/ops/model-retraining-jobs/${encodeURIComponent(jobId)}/output`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function submitModelPromotionReview(
   modelKey: string,
   payload: unknown,

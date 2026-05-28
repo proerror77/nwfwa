@@ -1011,6 +1011,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/model-retraining-jobs/{job_id}/output": {
+                "post": {
+                    "summary": "Register model retraining output, candidate version, and validation evaluation",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "job_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/CompleteModelRetrainingJobRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Completed model retraining job output",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/CompleteModelRetrainingJobResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/promotion-reviews": {
                 "post": {
                     "summary": "Record a model promotion review decision",
@@ -2580,6 +2612,26 @@ pub async fn openapi_schema() -> Json<Value> {
                         "endpoint_url": { "type": ["string", "null"] }
                     }
                 },
+                "ModelEvaluation": {
+                    "type": "object",
+                    "required": ["evaluation_run_id", "model_key", "model_version", "model_dataset_id", "confusion_matrix_json", "metrics_json"],
+                    "properties": {
+                        "evaluation_run_id": { "type": "string" },
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "model_dataset_id": { "type": "string" },
+                        "auc": { "type": ["string", "null"] },
+                        "ks": { "type": ["string", "null"] },
+                        "precision": { "type": ["string", "null"] },
+                        "recall": { "type": ["string", "null"] },
+                        "f1": { "type": ["string", "null"] },
+                        "accuracy": { "type": ["string", "null"] },
+                        "threshold": { "type": ["string", "null"] },
+                        "confusion_matrix_json": { "type": "object" },
+                        "feature_importance_uri": { "type": ["string", "null"] },
+                        "metrics_json": { "type": "object" }
+                    }
+                },
                 "ModelListResponse": {
                     "type": "object",
                     "required": ["models"],
@@ -2702,6 +2754,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         },
+                        "candidate_model_version": { "type": ["string", "null"] },
+                        "candidate_artifact_uri": { "type": ["string", "null"] },
+                        "candidate_endpoint_url": { "type": ["string", "null"] },
+                        "validation_report_uri": { "type": ["string", "null"] },
+                        "output_evaluation_id": { "type": ["string", "null"] },
                         "created_at": { "type": ["string", "null"], "format": "date-time" },
                         "updated_at": { "type": ["string", "null"], "format": "date-time" }
                     }
@@ -2731,6 +2788,38 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
                         "actor": { "type": "string" },
                         "notes": { "type": "string" }
+                    }
+                },
+                "CompleteModelRetrainingJobRequest": {
+                    "type": "object",
+                    "required": ["actor", "notes", "candidate_model_version", "artifact_uri", "validation_report_uri", "evaluation_run_id", "confusion_matrix_json", "metrics_json"],
+                    "properties": {
+                        "actor": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "candidate_model_version": { "type": "string" },
+                        "artifact_uri": { "type": "string" },
+                        "endpoint_url": { "type": ["string", "null"] },
+                        "validation_report_uri": { "type": "string" },
+                        "evaluation_run_id": { "type": "string" },
+                        "auc": { "type": ["string", "null"] },
+                        "ks": { "type": ["string", "null"] },
+                        "precision": { "type": ["string", "null"] },
+                        "recall": { "type": ["string", "null"] },
+                        "f1": { "type": ["string", "null"] },
+                        "accuracy": { "type": ["string", "null"] },
+                        "threshold": { "type": ["string", "null"] },
+                        "confusion_matrix_json": { "type": "object" },
+                        "feature_importance_uri": { "type": ["string", "null"] },
+                        "metrics_json": { "type": "object" }
+                    }
+                },
+                "CompleteModelRetrainingJobResponse": {
+                    "type": "object",
+                    "required": ["job", "candidate_model", "evaluation"],
+                    "properties": {
+                        "job": { "$ref": "#/components/schemas/ModelRetrainingJob" },
+                        "candidate_model": { "$ref": "#/components/schemas/ModelVersion" },
+                        "evaluation": { "$ref": "#/components/schemas/ModelEvaluation" }
                     }
                 },
                 "SubmitModelPromotionReviewRequest": {

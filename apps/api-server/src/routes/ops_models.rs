@@ -2,8 +2,10 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        DatasetRecord, ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
-        ModelRetrainingJobRecord, ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
+        CompleteModelRetrainingJobInput, DatasetRecord, ModelEvaluationRecord,
+        ModelPerformanceRecord, ModelPromotionReviewRecord, ModelRetrainingJobRecord,
+        ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
+        RegisterModelEvaluationInput,
     },
     routes::ops_datasets::build_dataset_health_record,
 };
@@ -15,7 +17,9 @@ use axum::{
 use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::{AuditEventId, ScoringRunId};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Serialize)]
 pub struct ModelListResponse {
@@ -97,6 +101,34 @@ pub struct UpdateModelRetrainingJobStatusRequest {
     pub status: String,
     pub actor: String,
     pub notes: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CompleteModelRetrainingJobRequest {
+    pub actor: String,
+    pub notes: String,
+    pub candidate_model_version: String,
+    pub artifact_uri: String,
+    pub endpoint_url: Option<String>,
+    pub validation_report_uri: String,
+    pub evaluation_run_id: String,
+    pub auc: Option<Decimal>,
+    pub ks: Option<Decimal>,
+    pub precision: Option<Decimal>,
+    pub recall: Option<Decimal>,
+    pub f1: Option<Decimal>,
+    pub accuracy: Option<Decimal>,
+    pub threshold: Option<Decimal>,
+    pub confusion_matrix_json: Value,
+    pub feature_importance_uri: Option<String>,
+    pub metrics_json: Value,
+}
+
+#[derive(Debug, Serialize)]
+pub struct CompleteModelRetrainingJobResponse {
+    pub job: ModelRetrainingJobRecord,
+    pub candidate_model: ModelVersionRecord,
+    pub evaluation: ModelEvaluationRecord,
 }
 
 #[derive(Debug, Serialize)]
@@ -272,6 +304,11 @@ pub async fn create_model_retraining_job(
             source_data_quality_status: readiness.source_data_quality_status,
             trigger_summary: readiness.retraining_triggers,
             blocker_summary: readiness.blockers,
+            candidate_model_version: None,
+            candidate_artifact_uri: None,
+            candidate_endpoint_url: None,
+            validation_report_uri: None,
+            output_evaluation_id: None,
             created_at: None,
             updated_at: None,
         })
@@ -328,6 +365,137 @@ pub async fn update_model_retraining_job_status(
         .await
         .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(job))
+}
+
+pub async fn complete_model_retraining_job(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(job_id): Path<String>,
+    Json(request): Json<CompleteModelRetrainingJobRequest>,
+) -> Result<Json<CompleteModelRetrainingJobResponse>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    validate_retraining_output_request(&request)?;
+    let job = state
+        .repository
+        .get_model_retraining_job(&job_id)
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_JOB_LOAD_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_RETRAINING_JOB_NOT_FOUND",
+                "model retraining job not found",
+            )
+        })?;
+    if job.status != "validation" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "MODEL_RETRAINING_JOB_NOT_IN_VALIDATION",
+            "model retraining output can only be registered from validation status",
+        ));
+    }
+    let base_evaluation = state
+        .repository
+        .get_model_evaluation(&job.latest_evaluation_id)
+        .await
+        .map_err(internal_error(
+            "MODEL_RETRAINING_BASE_EVALUATION_LOAD_FAILED",
+        ))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "MODEL_RETRAINING_BASE_EVALUATION_MISSING",
+                "base model evaluation is required before registering retraining output",
+            )
+        })?;
+    let base_model = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == job.model_key && model.version == job.model_version)
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    let candidate_model = state
+        .repository
+        .save_model_version(ModelVersionRecord {
+            model_key: job.model_key.clone(),
+            version: request.candidate_model_version.clone(),
+            model_type: base_model.model_type,
+            runtime_kind: base_model.runtime_kind,
+            execution_provider: base_model.execution_provider,
+            status: "candidate".into(),
+            review_mode: base_model.review_mode,
+            artifact_uri: Some(request.artifact_uri.clone()),
+            endpoint_url: request.endpoint_url.clone(),
+        })
+        .await
+        .map_err(internal_error("MODEL_VERSION_SAVE_FAILED"))?;
+    let evaluation = state
+        .repository
+        .register_model_evaluation(RegisterModelEvaluationInput {
+            evaluation_run_id: request.evaluation_run_id.clone(),
+            model_key: candidate_model.model_key.clone(),
+            model_version: candidate_model.version.clone(),
+            model_dataset_id: base_evaluation.model_dataset_id,
+            auc: request.auc,
+            ks: request.ks,
+            precision: request.precision,
+            recall: request.recall,
+            f1: request.f1,
+            accuracy: request.accuracy,
+            threshold: request.threshold,
+            confusion_matrix_json: request.confusion_matrix_json,
+            feature_importance_uri: request.feature_importance_uri,
+            metrics_json: request.metrics_json,
+        })
+        .await
+        .map_err(internal_error(
+            "MODEL_RETRAINING_EVALUATION_REGISTER_FAILED",
+        ))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_DATASET_NOT_FOUND",
+                "model evaluation dataset was not found",
+            )
+        })?;
+    let completed_job = state
+        .repository
+        .complete_model_retraining_job(CompleteModelRetrainingJobInput {
+            job_id: &job_id,
+            actor: &request.actor,
+            status_note: &request.notes,
+            candidate_model_version: &candidate_model.version,
+            candidate_artifact_uri: request.artifact_uri.as_str(),
+            candidate_endpoint_url: request.endpoint_url.as_deref(),
+            validation_report_uri: request.validation_report_uri.as_str(),
+            output_evaluation_id: &evaluation.evaluation_run_id,
+        })
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_JOB_COMPLETE_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_RETRAINING_JOB_NOT_FOUND",
+                "model retraining job not found",
+            )
+        })?;
+    record_model_retraining_audit(
+        &state,
+        &actor,
+        &completed_job,
+        "model.retraining.output_registered",
+    )
+    .await
+    .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(CompleteModelRetrainingJobResponse {
+        job: completed_job,
+        candidate_model,
+        evaluation,
+    }))
 }
 
 async fn load_model_retraining_readiness(
@@ -413,6 +581,43 @@ async fn ensure_model_exists(state: &AppState, model_key: &str) -> Result<(), Ap
             "model not found",
         ))
     }
+}
+
+fn validate_retraining_output_request(
+    request: &CompleteModelRetrainingJobRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_RETRAINING_OUTPUT_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.candidate_model_version.as_str(),
+            "INVALID_CANDIDATE_MODEL_VERSION",
+            "candidate_model_version is required",
+        ),
+        (
+            request.artifact_uri.as_str(),
+            "INVALID_MODEL_ARTIFACT_URI",
+            "artifact_uri is required",
+        ),
+        (
+            request.validation_report_uri.as_str(),
+            "INVALID_VALIDATION_REPORT_URI",
+            "validation_report_uri is required",
+        ),
+        (
+            request.evaluation_run_id.as_str(),
+            "INVALID_EVALUATION_RUN_ID",
+            "evaluation_run_id is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    Ok(())
 }
 
 pub async fn submit_model_promotion_review(
@@ -972,6 +1177,10 @@ async fn record_model_retraining_audit(
                 "requested_by": job.requested_by,
                 "trigger_count": job.trigger_summary.len(),
                 "blocker_count": job.blocker_summary.len(),
+                "candidate_model_version": &job.candidate_model_version,
+                "candidate_artifact_uri": &job.candidate_artifact_uri,
+                "validation_report_uri": &job.validation_report_uri,
+                "output_evaluation_id": &job.output_evaluation_id,
             }),
             evidence_refs: vec![serde_json::json!(format!(
                 "model_retraining_jobs:{}",
