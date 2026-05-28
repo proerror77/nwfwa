@@ -28,6 +28,7 @@ type ScoringResponse = {
   confidence_score: number;
   confidence: string;
   routing_reason: string;
+  routing_policy: RoutingPolicy;
   scores: {
     peer_deviation_score: number;
     rule_score: number;
@@ -53,6 +54,37 @@ type ScoringResponse = {
   similar_cases: SimilarCase[];
   evidence_refs: unknown[];
 };
+
+type RoutingPolicy = {
+  policy_id: string;
+  version: number;
+  review_mode: string;
+  risk_thresholds: {
+    low_max: number;
+    medium_min: number;
+    high_min: number;
+    critical_min: number;
+  };
+  confidence_thresholds: {
+    low_confidence_below: number;
+    high_confidence_min: number;
+  };
+  provider_review_threshold: number;
+};
+
+export function buildRoutingPolicySummary(policy?: RoutingPolicy | null) {
+  if (!policy) {
+    return null;
+  }
+
+  return {
+    policyLabel: `${policy.policy_id} v${policy.version}`,
+    reviewModeLabel: formatReviewModeLabel(policy.review_mode),
+    riskThresholdLabel: `Low <= ${policy.risk_thresholds.low_max}, Medium >= ${policy.risk_thresholds.medium_min}, High >= ${policy.risk_thresholds.high_min}, Critical >= ${policy.risk_thresholds.critical_min}`,
+    confidenceThresholdLabel: `Low < ${policy.confidence_thresholds.low_confidence_below}, High >= ${policy.confidence_thresholds.high_confidence_min}`,
+    providerThresholdLabel: `Provider review >= ${policy.provider_review_threshold}`,
+  };
+}
 
 const defaultPayload = JSON.stringify(
   {
@@ -163,6 +195,9 @@ export function RuntimeScoring() {
     ? buildSimilarCaseInspection(result.similar_cases)
     : null;
   const layerSummary = result ? buildScoringLayerSummary(result.layers) : null;
+  const routingPolicySummary = result
+    ? buildRoutingPolicySummary(result.routing_policy)
+    : null;
 
   return (
     <section className="runtime">
@@ -291,6 +326,35 @@ export function RuntimeScoring() {
                 <dd>{result.scores.final_score}</dd>
               </div>
             </dl>
+            <section>
+              <h3>Routing Policy</h3>
+              {routingPolicySummary ? (
+                <dl className="result-grid">
+                  <div>
+                    <dt>Policy</dt>
+                    <dd>{routingPolicySummary.policyLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Mode</dt>
+                    <dd>{routingPolicySummary.reviewModeLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Risk Thresholds</dt>
+                    <dd>{routingPolicySummary.riskThresholdLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Confidence Thresholds</dt>
+                    <dd>{routingPolicySummary.confidenceThresholdLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Provider Threshold</dt>
+                    <dd>{routingPolicySummary.providerThresholdLabel}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="empty">No routing policy</p>
+              )}
+            </section>
             <section>
               <h3>Seven Layer Detection</h3>
               {layerSummary ? (

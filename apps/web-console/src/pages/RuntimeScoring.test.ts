@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildClaimIdScorePayload } from "./RuntimeScoring";
+import { buildClaimIdScorePayload, buildRoutingPolicySummary } from "./RuntimeScoring";
 import { buildProviderProfileInspection } from "./providerProfileInspection";
 import {
   buildClinicalEvidenceInspection,
@@ -13,6 +13,35 @@ describe("buildClaimIdScorePayload", () => {
       source_system: "tpa-demo",
       claim_id: "CLM-0287",
       review_mode: "post_payment",
+    });
+  });
+});
+
+describe("buildRoutingPolicySummary", () => {
+  it("summarizes the auditable routing thresholds", () => {
+    expect(
+      buildRoutingPolicySummary({
+        policy_id: "fwa_risk_fusion_routing",
+        version: 1,
+        review_mode: "post_payment",
+        risk_thresholds: {
+          low_max: 39,
+          medium_min: 40,
+          high_min: 70,
+          critical_min: 85,
+        },
+        confidence_thresholds: {
+          low_confidence_below: 60,
+          high_confidence_min: 80,
+        },
+        provider_review_threshold: 70,
+      }),
+    ).toEqual({
+      policyLabel: "fwa_risk_fusion_routing v1",
+      reviewModeLabel: "Post-payment",
+      riskThresholdLabel: "Low <= 39, Medium >= 40, High >= 70, Critical >= 85",
+      confidenceThresholdLabel: "Low < 60, High >= 80",
+      providerThresholdLabel: "Provider review >= 70",
     });
   });
 });
