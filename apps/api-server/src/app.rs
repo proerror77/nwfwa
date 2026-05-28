@@ -105,6 +105,10 @@ pub fn build_app_with_parts(
             "/api/v1/ops/qa/feedback-items",
             get(pilot_loop::list_qa_feedback_items),
         )
+        .route(
+            "/api/v1/ops/qa/feedback-items/:feedback_id/status",
+            post(pilot_loop::update_qa_feedback_status),
+        )
         .route("/api/v1/ops/qa/queue", get(pilot_loop::list_qa_queue))
         .route(
             "/api/v1/ops/qa/queue-summary",

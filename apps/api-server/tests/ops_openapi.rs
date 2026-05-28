@@ -81,6 +81,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/investigations/results",
         "/api/v1/qa/results",
         "/api/v1/ops/qa/feedback-items",
+        "/api/v1/ops/qa/feedback-items/{feedback_id}/status",
         "/api/v1/ops/qa/queue",
         "/api/v1/ops/qa/queue-summary",
         "/api/v1/ops/labels",
@@ -927,6 +928,13 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["paths"]["/api/v1/members/{member_id}/profile-summary"]["get"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabel"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabelListResponse"].is_object());
+    assert!(schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]["status"]
+            ["enum"],
+        serde_json::json!(["open", "in_progress", "resolved", "dismissed"])
+    );
+    assert!(schema["components"]["schemas"]["UpdateQaFeedbackStatusResponse"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationResponse"]["properties"]
             ["similar_cases"]["items"]["$ref"],

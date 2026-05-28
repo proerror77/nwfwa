@@ -1633,6 +1633,46 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/qa/feedback-items/{feedback_id}/status": {
+                "post": {
+                    "summary": "Update QA feedback item status",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "feedback_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/UpdateQaFeedbackStatusRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "QA feedback item status updated and audited",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/UpdateQaFeedbackStatusResponse" }
+                                }
+                            }
+                        },
+                        "404": {
+                            "description": "QA feedback item was not found",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/qa/queue": {
                 "get": {
                     "summary": "List QA review queue items from audit samples",
@@ -4303,6 +4343,27 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/QaFeedbackItem" }
                         }
+                    }
+                },
+                "UpdateQaFeedbackStatusRequest": {
+                    "type": "object",
+                    "required": ["status", "actor_id", "notes", "evidence_refs"],
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["open", "in_progress", "resolved", "dismissed"]
+                        },
+                        "actor_id": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "UpdateQaFeedbackStatusResponse": {
+                    "type": "object",
+                    "required": ["item", "audit_id"],
+                    "properties": {
+                        "item": { "$ref": "#/components/schemas/QaFeedbackItem" },
+                        "audit_id": { "type": "string" }
                     }
                 },
                 "QaQueueItem": {

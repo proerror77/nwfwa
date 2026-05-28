@@ -4,8 +4,8 @@ use crate::{
     repository::{
         AuditSampleLeadRecord, AuditSampleRecord, CaseRecord, InvestigationResultRecord,
         LeadRecord, MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord,
-        QaReviewRecord, WebhookDeliveryAttemptInput, WebhookDeliveryAttemptRecord,
-        WebhookEventRecord,
+        QaReviewRecord, UpdateQaFeedbackStatusInput, UpdateQaFeedbackStatusRecord,
+        WebhookDeliveryAttemptInput, WebhookDeliveryAttemptRecord, WebhookEventRecord,
     },
 };
 use axum::{
@@ -229,6 +229,45 @@ pub async fn list_qa_feedback_items(
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     Ok(Json(QaFeedbackItemListResponse { items }))
+}
+
+pub async fn update_qa_feedback_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(feedback_id): Path<String>,
+    Json(request): Json<UpdateQaFeedbackStatusInput>,
+) -> Result<Json<UpdateQaFeedbackStatusRecord>, ApiError> {
+    authorize(&state, &headers)?;
+    if !matches!(
+        request.status.as_str(),
+        "open" | "in_progress" | "resolved" | "dismissed"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_QA_FEEDBACK_STATUS",
+            "feedback status must be one of open, in_progress, resolved, dismissed",
+        ));
+    }
+    if request.actor_id.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_QA_FEEDBACK_STATUS_UPDATE",
+            "actor_id is required",
+        ));
+    }
+    let record = state
+        .repository
+        .update_qa_feedback_status(&feedback_id, request)
+        .await
+        .map_err(internal_error("QA_FEEDBACK_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "QA_FEEDBACK_NOT_FOUND",
+                "QA feedback item not found",
+            )
+        })?;
+    Ok(Json(record))
 }
 
 pub async fn list_qa_queue(

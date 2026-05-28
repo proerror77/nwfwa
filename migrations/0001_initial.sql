@@ -610,7 +610,11 @@ CREATE TABLE IF NOT EXISTS qa_reviews (
   qa_conclusion TEXT NOT NULL,
   issue_type TEXT NOT NULL,
   feedback_target TEXT NOT NULL,
+  feedback_status TEXT NOT NULL DEFAULT 'open',
   notes TEXT NOT NULL,
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE qa_reviews
+  ADD COLUMN IF NOT EXISTS feedback_status TEXT NOT NULL DEFAULT 'open';

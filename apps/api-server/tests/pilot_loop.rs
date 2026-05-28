@@ -507,6 +507,68 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
 }
 
 #[tokio::test]
+async fn updates_qa_feedback_item_status_with_audit_trail() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-FEEDBACK-STATUS-1",
+          "claim_id": "CLM-FEEDBACK-STATUS-1",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "Rule feedback should be worked by rule ops.",
+          "evidence_refs": ["audit:scoring.completed", "rule_runs:EARLY_CLAIM"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, update) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-FEEDBACK-STATUS-1/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "rule-ops",
+          "notes": "Rule threshold reviewed and accepted.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-FEEDBACK-STATUS-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(update["item"]["status"], "resolved");
+    assert_eq!(
+        update["item"]["feedback_id"],
+        "qa_feedback_QA-FEEDBACK-STATUS-1"
+    );
+    assert!(!update["audit_id"].as_str().unwrap().is_empty());
+
+    let (status, feedback) =
+        json_request(app.clone(), "GET", "/api/v1/ops/qa/feedback-items", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(feedback["items"][0]["status"], "resolved");
+
+    let (status, audit) = json_request(
+        app,
+        "GET",
+        "/api/v1/audit/claims/CLM-FEEDBACK-STATUS-1",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "qa.feedback.status.updated"
+            && event["payload"]["to_status"] == "resolved"));
+}
+
+#[tokio::test]
 async fn summarizes_qa_feedback_queue_for_review_operations() {
     let app = build_app(test_config());
 

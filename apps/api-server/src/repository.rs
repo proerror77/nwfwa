@@ -821,6 +821,20 @@ pub struct QaFeedbackItemRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateQaFeedbackStatusInput {
+    pub status: String,
+    pub actor_id: String,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateQaFeedbackStatusRecord {
+    pub item: QaFeedbackItemRecord,
+    pub audit_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutcomeLabelRecord {
     pub label_id: String,
     pub claim_id: String,
@@ -1382,6 +1396,12 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<AuditHistoryEventRecord>;
 
     async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
+
+    async fn update_qa_feedback_status(
+        &self,
+        feedback_id: &str,
+        input: UpdateQaFeedbackStatusInput,
+    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>>;
 
     async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>>;
 
@@ -2601,10 +2621,9 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
-        let mut items = self
-            .pilot_audit_events
-            .lock()
-            .await
+        let events = self.pilot_audit_events.lock().await.clone();
+        let feedback_statuses = latest_qa_feedback_statuses(&events);
+        let mut items = events
             .iter()
             .filter_map(|(_, event)| {
                 (event.event_type == "qa.result.received")
@@ -2612,10 +2631,62 @@ impl ScoringRepository for InMemoryScoringRepository {
                     .flatten()
             })
             .filter(|review| review.qa_conclusion != "pass")
-            .map(|review| qa_review_to_feedback_item(review, None))
+            .map(|review| {
+                let feedback_id = qa_feedback_id(&review.qa_case_id);
+                let status = feedback_statuses
+                    .get(&feedback_id)
+                    .map(String::as_str)
+                    .unwrap_or("open");
+                qa_review_to_feedback_item(review, None, status)
+            })
             .collect::<Vec<_>>();
         sort_qa_feedback_items(&mut items);
         Ok(items)
+    }
+
+    async fn update_qa_feedback_status(
+        &self,
+        feedback_id: &str,
+        input: UpdateQaFeedbackStatusInput,
+    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
+        let Some(mut item) = self
+            .list_qa_feedback_items()
+            .await?
+            .into_iter()
+            .find(|item| item.feedback_id == feedback_id)
+        else {
+            return Ok(None);
+        };
+        let from_status = item.status.clone();
+        item.status = input.status.clone();
+        let audit_id = AuditEventId::new().to_string();
+        let event = AuditHistoryEventRecord {
+            audit_id: audit_id.clone(),
+            run_id: format!("qa_feedback_status_{}", item.feedback_id),
+            event_type: "qa.feedback.status.updated".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "QA feedback status updated: {} -> {}",
+                from_status, item.status
+            ),
+            payload: serde_json::json!({
+                "feedback_id": item.feedback_id,
+                "qa_case_id": item.qa_case_id,
+                "claim_id": item.claim_id,
+                "feedback_target": item.feedback_target,
+                "from_status": from_status,
+                "to_status": item.status,
+                "actor_id": input.actor_id,
+                "notes": input.notes
+            }),
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+        };
+        self.pilot_audit_events
+            .lock()
+            .await
+            .push((item.claim_id.clone(), event));
+        Ok(Some(UpdateQaFeedbackStatusRecord { item, audit_id }))
     }
 
     async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
@@ -5710,12 +5781,13 @@ impl ScoringRepository for PostgresScoringRepository {
         let mut tx = self.pool.begin().await?;
         sqlx::query(
             "INSERT INTO qa_reviews
-             (qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs)
-             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             (qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, feedback_status, notes, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, 'open', $6, $7)
              ON CONFLICT (qa_case_id) DO UPDATE
              SET qa_conclusion = EXCLUDED.qa_conclusion,
                  issue_type = EXCLUDED.issue_type,
                  feedback_target = EXCLUDED.feedback_target,
+                 feedback_status = EXCLUDED.feedback_status,
                  notes = EXCLUDED.notes,
                  evidence_refs = EXCLUDED.evidence_refs",
         )
@@ -5752,10 +5824,11 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs, created_at
+            "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, feedback_status, notes, evidence_refs, created_at
              FROM qa_reviews
              WHERE qa_conclusion <> 'pass'
              ORDER BY created_at, qa_case_id",
@@ -5771,6 +5844,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     qa_conclusion,
                     issue_type,
                     feedback_target,
+                    feedback_status,
                     notes,
                     evidence_refs,
                     created_at,
@@ -5786,12 +5860,119 @@ impl ScoringRepository for PostgresScoringRepository {
                             evidence_refs: json_array_to_strings(evidence_refs),
                         },
                         Some(created_at.to_rfc3339()),
+                        &feedback_status,
                     )
                 },
             )
             .collect::<Vec<_>>();
         sort_qa_feedback_items(&mut items);
         Ok(items)
+    }
+
+    async fn update_qa_feedback_status(
+        &self,
+        feedback_id: &str,
+        input: UpdateQaFeedbackStatusInput,
+    ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
+        let Some(qa_case_id) = qa_case_id_from_feedback_id(feedback_id) else {
+            return Ok(None);
+        };
+        let mut tx = self.pool.begin().await?;
+        let row: Option<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "WITH existing AS (
+                 SELECT qa_case_id, feedback_status AS from_status
+                 FROM qa_reviews
+                 WHERE qa_case_id = $1 AND qa_conclusion <> 'pass'
+             ),
+             updated AS (
+                 UPDATE qa_reviews
+                 SET feedback_status = $2
+                 FROM existing
+                 WHERE qa_reviews.qa_case_id = existing.qa_case_id
+                 RETURNING existing.from_status,
+                           qa_reviews.qa_case_id,
+                           qa_reviews.claim_id,
+                           qa_reviews.qa_conclusion,
+                           qa_reviews.issue_type,
+                           qa_reviews.feedback_target,
+                           qa_reviews.feedback_status,
+                           qa_reviews.notes,
+                           qa_reviews.evidence_refs,
+                           qa_reviews.created_at
+             )
+             SELECT * FROM updated",
+        )
+        .bind(qa_case_id)
+        .bind(&input.status)
+        .fetch_optional(&mut *tx)
+        .await?;
+        let Some((
+            from_status,
+            qa_case_id,
+            claim_id,
+            qa_conclusion,
+            issue_type,
+            feedback_target,
+            feedback_status,
+            notes,
+            evidence_refs,
+            created_at,
+        )) = row
+        else {
+            return Ok(None);
+        };
+        let item = qa_review_to_feedback_item(
+            QaReviewRecord {
+                qa_case_id,
+                claim_id: claim_id.clone(),
+                qa_conclusion,
+                issue_type,
+                feedback_target,
+                notes,
+                evidence_refs: json_array_to_strings(evidence_refs),
+            },
+            Some(created_at.to_rfc3339()),
+            &feedback_status,
+        );
+        let audit_id = AuditEventId::new().to_string();
+        insert_pilot_audit_event(
+            &mut tx,
+            &claim_id,
+            &AuditHistoryEventRecord {
+                audit_id: audit_id.clone(),
+                run_id: format!("qa_feedback_status_{}", item.feedback_id),
+                event_type: "qa.feedback.status.updated".into(),
+                event_status: "succeeded".into(),
+                summary: format!("QA feedback status updated: {}", item.status),
+                payload: serde_json::json!({
+                    "feedback_id": item.feedback_id,
+                    "qa_case_id": item.qa_case_id,
+                    "claim_id": item.claim_id,
+                    "feedback_target": item.feedback_target,
+                    "from_status": from_status,
+                    "to_status": item.status,
+                    "actor_id": input.actor_id,
+                    "notes": input.notes
+                }),
+                evidence_refs: input.evidence_refs,
+                created_at: None,
+            },
+            "qa_operator",
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(Some(UpdateQaFeedbackStatusRecord { item, audit_id }))
     }
 
     async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
@@ -6955,6 +7136,7 @@ fn audit_sample_outcome_distribution(
 fn qa_review_to_feedback_item(
     review: QaReviewRecord,
     created_at: Option<String>,
+    status: &str,
 ) -> QaFeedbackItemRecord {
     let priority = if review.qa_conclusion.contains("escalate") {
         "high"
@@ -6964,14 +7146,14 @@ fn qa_review_to_feedback_item(
         "low"
     };
     QaFeedbackItemRecord {
-        feedback_id: format!("qa_feedback_{}", review.qa_case_id),
+        feedback_id: qa_feedback_id(&review.qa_case_id),
         qa_case_id: review.qa_case_id.clone(),
         claim_id: review.claim_id.clone(),
         feedback_target: review.feedback_target.clone(),
         issue_type: review.issue_type.clone(),
         qa_conclusion: review.qa_conclusion.clone(),
         source: "qa_review".into(),
-        status: "open".into(),
+        status: status.into(),
         priority: priority.into(),
         summary: format!(
             "QA {} flagged {} feedback for claim {}",
@@ -6981,6 +7163,40 @@ fn qa_review_to_feedback_item(
         evidence_refs: review.evidence_refs,
         created_at,
     }
+}
+
+fn qa_feedback_id(qa_case_id: &str) -> String {
+    format!("qa_feedback_{qa_case_id}")
+}
+
+fn qa_case_id_from_feedback_id(feedback_id: &str) -> Option<&str> {
+    feedback_id.strip_prefix("qa_feedback_")
+}
+
+fn latest_qa_feedback_statuses(
+    events: &[(String, AuditHistoryEventRecord)],
+) -> HashMap<String, String> {
+    let mut statuses = HashMap::new();
+    for (_, event) in events {
+        if event.event_type == "qa.result.received" {
+            if let Ok(review) = serde_json::from_value::<QaReviewRecord>(event.payload.clone()) {
+                if review.qa_conclusion != "pass" {
+                    statuses.insert(qa_feedback_id(&review.qa_case_id), "open".into());
+                }
+            }
+            continue;
+        }
+        if event.event_type == "qa.feedback.status.updated" {
+            let Some(feedback_id) = event.payload["feedback_id"].as_str() else {
+                continue;
+            };
+            let Some(status) = event.payload["to_status"].as_str() else {
+                continue;
+            };
+            statuses.insert(feedback_id.to_string(), status.to_string());
+        }
+    }
+    statuses
 }
 
 fn sla_target_hours_for_priority(priority: &str) -> u32 {
