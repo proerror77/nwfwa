@@ -168,6 +168,25 @@ export async function getClaimAuditHistory(claimId: string, apiKey: string) {
   return requestJson(`/api/v1/audit/claims/${encodeURIComponent(claimId)}`, apiKey);
 }
 
+export async function listWebhookEvents(apiKey: string) {
+  return requestJson("/api/v1/ops/webhook-events", apiKey);
+}
+
+export async function submitWebhookDeliveryAttempt(
+  eventId: string,
+  payload: unknown,
+  apiKey: string,
+) {
+  return requestJson(
+    `/api/v1/ops/webhook-events/${encodeURIComponent(eventId)}/delivery-attempts`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function listLeads(apiKey: string) {
   return requestJson("/api/v1/ops/leads", apiKey);
 }

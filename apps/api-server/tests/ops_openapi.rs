@@ -52,6 +52,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/model-evaluations/{evaluation_run_id}",
         "/api/v1/ops/dashboard/summary",
         "/api/v1/ops/webhook-events",
+        "/api/v1/ops/webhook-events/{event_id}/delivery-attempts",
         "/api/v1/ops/alerts",
         "/api/v1/ops/leads",
         "/api/v1/ops/leads/{lead_id}/triage",
@@ -345,6 +346,21 @@ async fn openapi_includes_operations_paths() {
             .any(|field| field == "false_positive_operational_cost")
     );
     assert!(schema["components"]["schemas"]["WebhookEvent"].is_object());
+    assert!(schema["components"]["schemas"]["WebhookEvent"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "idempotency_key"));
+    assert_eq!(
+        schema["components"]["schemas"]["WebhookEvent"]["properties"]["delivery_status"]["enum"][1],
+        "retry_wait"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/webhook-events/{event_id}/delivery-attempts"]["post"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/WebhookDeliveryAttempt"
+    );
+    assert!(schema["components"]["schemas"]["SubmitWebhookDeliveryAttemptRequest"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["WebhookEventListResponse"]["properties"]["events"]
             ["items"]["$ref"],

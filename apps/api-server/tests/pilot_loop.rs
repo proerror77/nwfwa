@@ -215,7 +215,8 @@ async fn lists_webhook_events_for_tpa_integrations() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, webhooks) = json_request(app, "GET", "/api/v1/ops/webhook-events", "{}").await;
+    let (status, webhooks) =
+        json_request(app.clone(), "GET", "/api/v1/ops/webhook-events", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     let events = webhooks["events"].as_array().unwrap();
@@ -230,11 +231,59 @@ async fn lists_webhook_events_for_tpa_integrations() {
                 event["event_type"] == expected
                     && event["claim_id"] == "CLM-WEBHOOK-1"
                     && event["delivery_status"] == "pending"
+                    && event["retry_count"] == 0
+                    && event["max_attempts"] == 3
+                    && event["signature_algorithm"] == "hmac-sha256"
+                    && event["idempotency_key"]
+                        .as_str()
+                        .unwrap()
+                        .starts_with("fwa-webhook:")
                     && !event["source_audit_id"].as_str().unwrap().is_empty()
             }),
             "missing webhook event {expected}"
         );
     }
+    let score_event_id = events
+        .iter()
+        .find(|event| event["event_type"] == "fwa.score.completed")
+        .unwrap()["event_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let (status, attempt) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/webhook-events/{score_event_id}/delivery-attempts"),
+        r#"{
+          "delivery_status": "failed",
+          "response_status_code": 503,
+          "error_message": "TPA webhook endpoint unavailable"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(attempt["event_id"], score_event_id);
+    assert_eq!(attempt["attempt_number"], 1);
+    assert_eq!(attempt["delivery_status"], "failed");
+    assert!(attempt["next_attempt_at"].is_string());
+
+    let (status, webhooks) = json_request(app, "GET", "/api/v1/ops/webhook-events", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let score_event = webhooks["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_id"] == score_event_id)
+        .unwrap();
+    assert_eq!(score_event["delivery_status"], "retry_wait");
+    assert_eq!(score_event["retry_count"], 1);
+    assert_eq!(score_event["last_response_status_code"], 503);
+    assert_eq!(
+        score_event["last_error_message"],
+        "TPA webhook endpoint unavailable"
+    );
+    assert!(score_event["next_attempt_at"].is_string());
 }
 
 #[tokio::test]
@@ -763,6 +812,12 @@ async fn pilot_loop_endpoints_require_api_key() {
         ),
         ("GET", "/api/v1/audit/claims/CLM-0287", "{}"),
         ("GET", "/api/v1/members/MBR-PROFILE-1/profile-summary", "{}"),
+        ("GET", "/api/v1/ops/webhook-events", "{}"),
+        (
+            "POST",
+            "/api/v1/ops/webhook-events/webhook_audit_1/delivery-attempts",
+            r#"{"delivery_status":"failed"}"#,
+        ),
     ] {
         let status = unauthenticated_request(method, uri, body).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);

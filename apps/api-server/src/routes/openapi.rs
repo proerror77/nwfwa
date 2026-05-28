@@ -481,7 +481,7 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "/api/v1/ops/webhook-events": {
                 "get": {
-                    "summary": "List pending webhook events for TPA and operations integrations",
+                    "summary": "List webhook events for TPA and operations integrations",
                     "security": [{ "ApiKeyAuth": [] }],
                     "responses": {
                         "200": {
@@ -489,6 +489,46 @@ pub async fn openapi_schema() -> Json<Value> {
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/WebhookEventListResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/webhook-events/{event_id}/delivery-attempts": {
+                "post": {
+                    "summary": "Record a webhook delivery attempt",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "event_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitWebhookDeliveryAttemptRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded webhook delivery attempt",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/WebhookDeliveryAttempt" }
                                 }
                             }
                         },
@@ -2050,7 +2090,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "WebhookEvent": {
                     "type": "object",
-                    "required": ["event_id", "event_type", "source_event_type", "source_audit_id", "claim_id", "run_id", "delivery_status", "payload", "evidence_refs", "occurred_at"],
+                    "required": ["event_id", "event_type", "source_event_type", "source_audit_id", "claim_id", "run_id", "delivery_status", "retry_count", "max_attempts", "next_attempt_at", "last_attempt_at", "last_response_status_code", "last_error_message", "idempotency_key", "signature_key_id", "signature_algorithm", "signature_base_string", "payload", "evidence_refs", "occurred_at"],
                     "properties": {
                         "event_id": { "type": "string" },
                         "event_type": {
@@ -2061,10 +2101,42 @@ pub async fn openapi_schema() -> Json<Value> {
                         "source_audit_id": { "type": "string" },
                         "claim_id": { "type": "string" },
                         "run_id": { "type": "string" },
-                        "delivery_status": { "type": "string", "enum": ["pending"] },
+                        "delivery_status": { "type": "string", "enum": ["pending", "retry_wait", "delivered", "failed"] },
+                        "retry_count": { "type": "integer" },
+                        "max_attempts": { "type": "integer" },
+                        "next_attempt_at": { "type": ["string", "null"], "format": "date-time" },
+                        "last_attempt_at": { "type": ["string", "null"], "format": "date-time" },
+                        "last_response_status_code": { "type": ["integer", "null"] },
+                        "last_error_message": { "type": ["string", "null"] },
+                        "idempotency_key": { "type": "string" },
+                        "signature_key_id": { "type": "string" },
+                        "signature_algorithm": { "type": "string", "enum": ["hmac-sha256"] },
+                        "signature_base_string": { "type": "string" },
                         "payload": { "type": "object" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "occurred_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "SubmitWebhookDeliveryAttemptRequest": {
+                    "type": "object",
+                    "required": ["delivery_status"],
+                    "properties": {
+                        "delivery_status": { "type": "string", "enum": ["delivered", "failed"] },
+                        "response_status_code": { "type": ["integer", "null"] },
+                        "error_message": { "type": ["string", "null"] }
+                    }
+                },
+                "WebhookDeliveryAttempt": {
+                    "type": "object",
+                    "required": ["event_id", "attempt_number", "delivery_status", "response_status_code", "error_message", "next_attempt_at", "attempted_at"],
+                    "properties": {
+                        "event_id": { "type": "string" },
+                        "attempt_number": { "type": "integer" },
+                        "delivery_status": { "type": "string", "enum": ["delivered", "failed"] },
+                        "response_status_code": { "type": ["integer", "null"] },
+                        "error_message": { "type": ["string", "null"] },
+                        "next_attempt_at": { "type": ["string", "null"], "format": "date-time" },
+                        "attempted_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 },
                 "WebhookEventListResponse": {

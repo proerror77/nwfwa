@@ -51,6 +51,10 @@ pub fn build_app_with_parts(
             "/api/v1/ops/webhook-events",
             get(pilot_loop::list_webhook_events),
         )
+        .route(
+            "/api/v1/ops/webhook-events/:event_id/delivery-attempts",
+            post(pilot_loop::submit_webhook_delivery_attempt),
+        )
         .route("/api/v1/ops/alerts", get(pilot_loop::list_ops_alerts))
         .route("/api/v1/ops/leads", get(ops_cases::list_leads))
         .route(

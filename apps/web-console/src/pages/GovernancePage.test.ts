@@ -4,6 +4,7 @@ import {
   buildAuditSummary,
   buildOpsAlertSummary,
   buildOutcomeLabelSummary,
+  buildWebhookDeliverySummary,
 } from "./GovernancePage";
 
 describe("buildAuditSummary", () => {
@@ -210,6 +211,55 @@ describe("buildOutcomeLabelSummary", () => {
       ruleFeedbackCount: 0,
       amountPreventedTotal: 8200,
       amountPreventedCurrency: "CNY",
+    });
+  });
+});
+
+describe("buildWebhookDeliverySummary", () => {
+  it("summarizes webhook delivery and signature readiness", () => {
+    const summary = buildWebhookDeliverySummary([
+      {
+        event_id: "webhook_1",
+        event_type: "fwa.score.completed",
+        source_event_type: "scoring.completed",
+        source_audit_id: "audit_1",
+        claim_id: "CLM-1",
+        run_id: "run_1",
+        delivery_status: "pending",
+        retry_count: 0,
+        max_attempts: 3,
+        idempotency_key: "fwa-webhook:fwa.score.completed:audit_1",
+        signature_key_id: "tpa-webhook-v1",
+        signature_algorithm: "hmac-sha256",
+        signature_base_string: "fwa.score.completed.audit_1.run_1.CLM-1",
+        evidence_refs: ["audit:scoring.completed"],
+      },
+      {
+        event_id: "webhook_2",
+        event_type: "fwa.qa.reviewed",
+        source_event_type: "qa.result.received",
+        source_audit_id: "audit_2",
+        claim_id: "CLM-2",
+        run_id: "run_2",
+        delivery_status: "retry_wait",
+        retry_count: 1,
+        max_attempts: 3,
+        last_error_message: "TPA unavailable",
+        idempotency_key: "fwa-webhook:fwa.qa.reviewed:audit_2",
+        signature_key_id: "tpa-webhook-v1",
+        signature_algorithm: "hmac-sha256",
+        signature_base_string: "fwa.qa.reviewed.audit_2.run_2.CLM-2",
+        evidence_refs: ["audit:qa.result.received"],
+      },
+    ]);
+
+    expect(summary).toEqual({
+      eventCount: 2,
+      pendingCount: 1,
+      retryWaitCount: 1,
+      deliveredCount: 0,
+      failedCount: 0,
+      signedCount: 2,
     });
   });
 });

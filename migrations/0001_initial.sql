@@ -185,6 +185,18 @@ CREATE TABLE IF NOT EXISTS audit_events (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS webhook_delivery_attempts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  event_id TEXT NOT NULL,
+  attempt_number INTEGER NOT NULL,
+  delivery_status TEXT NOT NULL,
+  response_status_code INTEGER,
+  error_message TEXT,
+  next_attempt_at TIMESTAMPTZ,
+  attempted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(event_id, attempt_number)
+);
+
 CREATE TABLE IF NOT EXISTS knowledge_cases (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   case_id TEXT NOT NULL UNIQUE,

@@ -4,7 +4,8 @@ use crate::{
     repository::{
         AuditSampleLeadRecord, AuditSampleRecord, CaseRecord, InvestigationResultRecord,
         LeadRecord, MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord,
-        QaReviewRecord, WebhookEventRecord,
+        QaReviewRecord, WebhookDeliveryAttemptInput, WebhookDeliveryAttemptRecord,
+        WebhookEventRecord,
     },
 };
 use axum::{
@@ -13,7 +14,7 @@ use axum::{
     Json,
 };
 use fwa_auth::{validate_api_key, ApiKeyConfig};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
 pub struct PilotWritebackResponse {
@@ -34,6 +35,13 @@ pub struct ClaimAuditHistoryResponse {
 #[derive(Debug, Serialize)]
 pub struct WebhookEventListResponse {
     pub events: Vec<WebhookEventRecord>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitWebhookDeliveryAttemptRequest {
+    pub delivery_status: String,
+    pub response_status_code: Option<u16>,
+    pub error_message: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -249,6 +257,47 @@ pub async fn list_webhook_events(
         .await
         .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?;
     Ok(Json(WebhookEventListResponse { events }))
+}
+
+pub async fn submit_webhook_delivery_attempt(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(event_id): Path<String>,
+    Json(request): Json<SubmitWebhookDeliveryAttemptRequest>,
+) -> Result<Json<WebhookDeliveryAttemptRecord>, ApiError> {
+    authorize(&state, &headers)?;
+    if !matches!(request.delivery_status.as_str(), "delivered" | "failed") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_WEBHOOK_DELIVERY_STATUS",
+            "delivery_status must be delivered or failed",
+        ));
+    }
+    let known_event = state
+        .repository
+        .list_webhook_events()
+        .await
+        .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?
+        .into_iter()
+        .any(|event| event.event_id == event_id);
+    if !known_event {
+        return Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "WEBHOOK_EVENT_NOT_FOUND",
+            "webhook event not found",
+        ));
+    }
+    let attempt = state
+        .repository
+        .save_webhook_delivery_attempt(WebhookDeliveryAttemptInput {
+            event_id,
+            delivery_status: request.delivery_status,
+            response_status_code: request.response_status_code,
+            error_message: request.error_message,
+        })
+        .await
+        .map_err(internal_error("WEBHOOK_DELIVERY_ATTEMPT_SAVE_FAILED"))?;
+    Ok(Json(attempt))
 }
 
 pub async fn list_ops_alerts(

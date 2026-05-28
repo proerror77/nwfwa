@@ -22,6 +22,7 @@ import {
   listQaFeedbackItems,
   listQaQueue,
   listQaQueueSummary,
+  listWebhookEvents,
   listModelEvaluations,
   listModels,
   getModelPromotionGates,
@@ -35,6 +36,7 @@ import {
   searchSimilarCases,
   submitRule,
   submitQaResult,
+  submitWebhookDeliveryAttempt,
   triageLead,
 } from "./api";
 
@@ -219,6 +221,39 @@ describe("ops API helpers", () => {
       "/api/v1/ops/model-evaluations",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls webhook delivery endpoints", async () => {
+    const fetchMock = mockFetch({ events: [] });
+
+    await listWebhookEvents("dev-secret");
+    await submitWebhookDeliveryAttempt(
+      "webhook_audit_1",
+      {
+        delivery_status: "failed",
+        response_status_code: 503,
+        error_message: "TPA unavailable",
+      },
+      "dev-secret",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/webhook-events",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/webhook-events/webhook_audit_1/delivery-attempts",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          delivery_status: "failed",
+          response_status_code: 503,
+          error_message: "TPA unavailable",
+        }),
       }),
     );
   });

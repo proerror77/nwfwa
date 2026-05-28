@@ -1,6 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getClaimAuditHistory, listAgentRuns, listOpsAlerts, listOutcomeLabels } from "../api";
+import {
+  getClaimAuditHistory,
+  listAgentRuns,
+  listOpsAlerts,
+  listOutcomeLabels,
+  listWebhookEvents,
+} from "../api";
 
 type AuditEvent = {
   audit_id: string;
@@ -104,6 +110,32 @@ type OpsAlertListResponse = {
   alerts: OpsAlert[];
 };
 
+type WebhookEvent = {
+  event_id: string;
+  event_type: string;
+  source_event_type: string;
+  source_audit_id: string;
+  claim_id: string;
+  run_id: string;
+  delivery_status: string;
+  retry_count: number;
+  max_attempts: number;
+  next_attempt_at?: string | null;
+  last_attempt_at?: string | null;
+  last_response_status_code?: number | null;
+  last_error_message?: string | null;
+  idempotency_key: string;
+  signature_key_id: string;
+  signature_algorithm: string;
+  signature_base_string: string;
+  evidence_refs: string[];
+  occurred_at?: string | null;
+};
+
+type WebhookEventListResponse = {
+  events: WebhookEvent[];
+};
+
 type OutcomeLabel = {
   label_id: string;
   claim_id: string;
@@ -163,6 +195,19 @@ export function buildOpsAlertSummary(alerts: OpsAlert[] = []) {
   };
 }
 
+export function buildWebhookDeliverySummary(events: WebhookEvent[] = []) {
+  return {
+    eventCount: events.length,
+    pendingCount: events.filter((event) => event.delivery_status === "pending").length,
+    retryWaitCount: events.filter((event) => event.delivery_status === "retry_wait").length,
+    deliveredCount: events.filter((event) => event.delivery_status === "delivered").length,
+    failedCount: events.filter((event) => event.delivery_status === "failed").length,
+    signedCount: events.filter(
+      (event) => event.signature_algorithm === "hmac-sha256" && event.signature_key_id.length > 0,
+    ).length,
+  };
+}
+
 export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
   const amountPreventedLabels = labels.filter((label) => label.label_name === "amount_prevented");
   const amountPreventedTotal = amountPreventedLabels.reduce((total, label) => {
@@ -202,10 +247,15 @@ export function GovernancePage() {
     queryKey: ["outcome-labels", apiKey],
     queryFn: () => listOutcomeLabels(apiKey) as Promise<OutcomeLabelListResponse>,
   });
+  const webhookQuery = useQuery({
+    queryKey: ["webhook-events", apiKey],
+    queryFn: () => listWebhookEvents(apiKey) as Promise<WebhookEventListResponse>,
+  });
   const summary = buildAuditSummary(auditQuery.data);
   const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
   const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
+  const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
 
   return (
     <section className="ops-grid">
@@ -269,6 +319,10 @@ export function GovernancePage() {
             <strong>{labelSummary.labelCount}</strong>
           </div>
           <div>
+            <span>Webhooks</span>
+            <strong>{webhookSummary.eventCount}</strong>
+          </div>
+          <div>
             <span>Training Ready</span>
             <strong>{labelSummary.approvedForTrainingCount}</strong>
           </div>
@@ -281,6 +335,9 @@ export function GovernancePage() {
           <pre className="error">{String(alertsQuery.error.message)}</pre>
         ) : null}
         {labelsQuery.error ? <pre className="error">{String(labelsQuery.error.message)}</pre> : null}
+        {webhookQuery.error ? (
+          <pre className="error">{String(webhookQuery.error.message)}</pre>
+        ) : null}
       </div>
 
       <div className="panel">
@@ -322,6 +379,59 @@ export function GovernancePage() {
           </ol>
         ) : (
           <p className="empty">No operations alerts loaded</p>
+        )}
+      </div>
+
+      <div className="panel">
+        <h2>Webhook Delivery</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Pending</span>
+            <strong>{webhookSummary.pendingCount}</strong>
+          </div>
+          <div>
+            <span>Retry Wait</span>
+            <strong>{webhookSummary.retryWaitCount}</strong>
+          </div>
+          <div>
+            <span>Delivered</span>
+            <strong>{webhookSummary.deliveredCount}</strong>
+          </div>
+          <div>
+            <span>Failed</span>
+            <strong>{webhookSummary.failedCount}</strong>
+          </div>
+          <div>
+            <span>Signed</span>
+            <strong>{webhookSummary.signedCount}</strong>
+          </div>
+        </div>
+        {webhookQuery.data?.events.length ? (
+          <ol className="audit-timeline">
+            {webhookQuery.data.events.map((event) => (
+              <li key={event.event_id}>
+                <div>
+                  <strong>{event.event_type}</strong>
+                  <span>{event.delivery_status}</span>
+                </div>
+                <small>
+                  {event.claim_id} / retry {event.retry_count}/{event.max_attempts}
+                </small>
+                <p>{event.idempotency_key}</p>
+                <p>
+                  {event.signature_algorithm} / {event.signature_key_id}
+                </p>
+                {event.last_error_message ? <p>{event.last_error_message}</p> : null}
+                <ul className="result-list">
+                  {event.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No webhook events loaded</p>
         )}
       </div>
 

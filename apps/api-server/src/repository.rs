@@ -747,9 +747,38 @@ pub struct WebhookEventRecord {
     pub claim_id: String,
     pub run_id: String,
     pub delivery_status: String,
+    pub retry_count: u32,
+    pub max_attempts: u32,
+    pub next_attempt_at: Option<String>,
+    pub last_attempt_at: Option<String>,
+    pub last_response_status_code: Option<u16>,
+    pub last_error_message: Option<String>,
+    pub idempotency_key: String,
+    pub signature_key_id: String,
+    pub signature_algorithm: String,
+    pub signature_base_string: String,
     pub payload: Value,
     pub evidence_refs: Vec<String>,
     pub occurred_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookDeliveryAttemptInput {
+    pub event_id: String,
+    pub delivery_status: String,
+    pub response_status_code: Option<u16>,
+    pub error_message: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookDeliveryAttemptRecord {
+    pub event_id: String,
+    pub attempt_number: u32,
+    pub delivery_status: String,
+    pub response_status_code: Option<u16>,
+    pub error_message: Option<String>,
+    pub next_attempt_at: Option<String>,
+    pub attempted_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1182,6 +1211,11 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>>;
 
+    async fn save_webhook_delivery_attempt(
+        &self,
+        input: WebhookDeliveryAttemptInput,
+    ) -> anyhow::Result<WebhookDeliveryAttemptRecord>;
+
     async fn register_feature_set(
         &self,
         input: RegisterFeatureSetInput,
@@ -1233,6 +1267,7 @@ pub struct InMemoryScoringRepository {
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
     model_statuses: Mutex<HashMap<String, String>>,
+    webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
 }
 
@@ -2238,8 +2273,42 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .iter()
                 .filter_map(|(claim_id, event)| webhook_event_from_audit(Some(claim_id), event)),
         );
+        let attempts = self
+            .webhook_delivery_attempts
+            .lock()
+            .await
+            .values()
+            .flat_map(|records| records.iter().cloned())
+            .collect::<Vec<_>>();
+        apply_webhook_delivery_state(&mut events, &attempts);
         sort_webhook_events(&mut events);
         Ok(events)
+    }
+
+    async fn save_webhook_delivery_attempt(
+        &self,
+        input: WebhookDeliveryAttemptInput,
+    ) -> anyhow::Result<WebhookDeliveryAttemptRecord> {
+        let attempted_at = chrono::Utc::now();
+        let mut attempts = self.webhook_delivery_attempts.lock().await;
+        let event_attempts = attempts.entry(input.event_id.clone()).or_default();
+        let attempt_number = event_attempts.len() as u32 + 1;
+        let record = WebhookDeliveryAttemptRecord {
+            event_id: input.event_id,
+            attempt_number,
+            delivery_status: input.delivery_status.clone(),
+            response_status_code: input.response_status_code,
+            error_message: input.error_message,
+            next_attempt_at: next_webhook_attempt_at(
+                &input.delivery_status,
+                attempt_number,
+                attempted_at,
+            )
+            .map(|timestamp| timestamp.to_rfc3339()),
+            attempted_at: Some(attempted_at.to_rfc3339()),
+        };
+        event_attempts.push(record.clone());
+        Ok(record)
     }
 
     async fn register_feature_set(
@@ -4970,8 +5039,87 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect::<Vec<_>>();
+        let attempt_rows: Vec<(
+            String,
+            i32,
+            String,
+            Option<i32>,
+            Option<String>,
+            Option<chrono::DateTime<chrono::Utc>>,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT event_id, attempt_number, delivery_status, response_status_code, error_message, next_attempt_at, attempted_at
+             FROM webhook_delivery_attempts
+             ORDER BY event_id, attempt_number",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        let attempts = attempt_rows
+            .into_iter()
+            .map(
+                |(
+                    event_id,
+                    attempt_number,
+                    delivery_status,
+                    response_status_code,
+                    error_message,
+                    next_attempt_at,
+                    attempted_at,
+                )| WebhookDeliveryAttemptRecord {
+                    event_id,
+                    attempt_number: attempt_number.max(0) as u32,
+                    delivery_status,
+                    response_status_code: response_status_code.map(|value| value.max(0) as u16),
+                    error_message,
+                    next_attempt_at: next_attempt_at.map(|timestamp| timestamp.to_rfc3339()),
+                    attempted_at: Some(attempted_at.to_rfc3339()),
+                },
+            )
+            .collect::<Vec<_>>();
+        apply_webhook_delivery_state(&mut events, &attempts);
         sort_webhook_events(&mut events);
         Ok(events)
+    }
+
+    async fn save_webhook_delivery_attempt(
+        &self,
+        input: WebhookDeliveryAttemptInput,
+    ) -> anyhow::Result<WebhookDeliveryAttemptRecord> {
+        let row: (Option<i32>,) = sqlx::query_as(
+            "SELECT MAX(attempt_number)
+             FROM webhook_delivery_attempts
+             WHERE event_id = $1",
+        )
+        .bind(&input.event_id)
+        .fetch_one(&self.pool)
+        .await?;
+        let attempt_number = row.0.unwrap_or(0) + 1;
+        let attempted_at = chrono::Utc::now();
+        let next_attempt_at =
+            next_webhook_attempt_at(&input.delivery_status, attempt_number as u32, attempted_at);
+        let inserted: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
+            "INSERT INTO webhook_delivery_attempts
+             (event_id, attempt_number, delivery_status, response_status_code, error_message, next_attempt_at)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             RETURNING attempted_at",
+        )
+        .bind(&input.event_id)
+        .bind(attempt_number)
+        .bind(&input.delivery_status)
+        .bind(input.response_status_code.map(i32::from))
+        .bind(&input.error_message)
+        .bind(next_attempt_at)
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(WebhookDeliveryAttemptRecord {
+            event_id: input.event_id,
+            attempt_number: attempt_number as u32,
+            delivery_status: input.delivery_status,
+            response_status_code: input.response_status_code,
+            error_message: input.error_message,
+            next_attempt_at: next_attempt_at.map(|timestamp| timestamp.to_rfc3339()),
+            attempted_at: Some(inserted.0.to_rfc3339()),
+        })
     }
 
     async fn register_feature_set(
@@ -5694,18 +5842,80 @@ fn webhook_event_from_audit(
     if claim_id.is_empty() {
         return None;
     }
+    let event_id = format!("webhook_{}", event.audit_id);
+    let idempotency_key = format!("fwa-webhook:{}:{}", event_type, event.audit_id);
+    let signature_base_string = format!(
+        "{}.{}.{}.{}",
+        event_type, event.audit_id, event.run_id, claim_id
+    );
     Some(WebhookEventRecord {
-        event_id: format!("webhook_{}", event.audit_id),
+        event_id,
         event_type: event_type.into(),
         source_event_type: event.event_type.clone(),
         source_audit_id: event.audit_id.clone(),
         claim_id,
         run_id: event.run_id.clone(),
         delivery_status: "pending".into(),
+        retry_count: 0,
+        max_attempts: WEBHOOK_MAX_ATTEMPTS,
+        next_attempt_at: event.created_at.clone(),
+        last_attempt_at: None,
+        last_response_status_code: None,
+        last_error_message: None,
+        idempotency_key,
+        signature_key_id: "tpa-webhook-v1".into(),
+        signature_algorithm: "hmac-sha256".into(),
+        signature_base_string,
         payload: event.payload.clone(),
         evidence_refs: event.evidence_refs.clone(),
         occurred_at: event.created_at.clone(),
     })
+}
+
+const WEBHOOK_MAX_ATTEMPTS: u32 = 3;
+
+fn apply_webhook_delivery_state(
+    events: &mut [WebhookEventRecord],
+    attempts: &[WebhookDeliveryAttemptRecord],
+) {
+    for event in events {
+        let mut event_attempts = attempts
+            .iter()
+            .filter(|attempt| attempt.event_id == event.event_id)
+            .collect::<Vec<_>>();
+        event_attempts.sort_by_key(|attempt| attempt.attempt_number);
+        let Some(latest) = event_attempts.last() else {
+            continue;
+        };
+        event.retry_count = event_attempts.len() as u32;
+        event.last_attempt_at = latest.attempted_at.clone();
+        event.last_response_status_code = latest.response_status_code;
+        event.last_error_message = latest.error_message.clone();
+        event.next_attempt_at = latest.next_attempt_at.clone();
+        event.delivery_status = if latest.delivery_status == "delivered" {
+            "delivered".into()
+        } else if event.retry_count >= event.max_attempts {
+            "failed".into()
+        } else {
+            "retry_wait".into()
+        };
+    }
+}
+
+fn next_webhook_attempt_at(
+    delivery_status: &str,
+    attempt_number: u32,
+    attempted_at: chrono::DateTime<chrono::Utc>,
+) -> Option<chrono::DateTime<chrono::Utc>> {
+    if delivery_status != "failed" || attempt_number >= WEBHOOK_MAX_ATTEMPTS {
+        return None;
+    }
+    let delay_minutes = match attempt_number {
+        1 => 5,
+        2 => 15,
+        _ => 60,
+    };
+    Some(attempted_at + chrono::Duration::minutes(delay_minutes))
 }
 
 fn sort_webhook_events(events: &mut [WebhookEventRecord]) {
