@@ -199,7 +199,7 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     ));
     assert!(triage["audit_id"].as_str().unwrap().starts_with("aud_"));
 
-    let (status, cases) = json_request(app, "GET", "/api/v1/ops/cases", "{}").await;
+    let (status, cases) = json_request(app.clone(), "GET", "/api/v1/ops/cases", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     assert!(cases["cases"]
@@ -207,6 +207,20 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
         .unwrap()
         .iter()
         .any(|case| case["lead_id"] == lead_id));
+
+    let (status, audit) =
+        json_request(app, "GET", "/api/v1/audit/claims/CLM-LEAD-1001", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let triage_event = audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "lead.triaged")
+        .expect("open-case triage should be audited");
+    assert_eq!(
+        triage_event["payload"]["evidence_sufficiency"],
+        triage["case"]["evidence_package"]["evidence_sufficiency"]
+    );
 }
 
 #[tokio::test]

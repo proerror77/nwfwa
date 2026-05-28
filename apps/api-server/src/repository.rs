@@ -1904,15 +1904,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             event_type: "lead.triaged".into(),
             event_status: "succeeded".into(),
             summary: format!("Lead triaged: {}", input.decision),
-            payload: serde_json::json!({
-                "claim_id": lead.claim_id.clone(),
-                "lead_id": lead.lead_id.clone(),
-                "case_id": case.as_ref().map(|case| case.case_id.clone()),
-                "decision": input.decision.clone(),
-                "disposition": lead.disposition.clone(),
-                "merge_target_lead_id": input.merge_target_lead_id.clone(),
-                "notes": input.notes.clone()
-            }),
+            payload: triage_audit_payload(&lead, &input, case.as_ref()),
             evidence_refs: lead
                 .evidence_refs
                 .iter()
@@ -4224,15 +4216,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 event_type: "lead.triaged".into(),
                 event_status: "succeeded".into(),
                 summary: format!("Lead triaged: {}", input.decision),
-                payload: serde_json::json!({
-                    "claim_id": lead.claim_id.clone(),
-                    "lead_id": lead.lead_id.clone(),
-                    "case_id": case.as_ref().map(|case| case.case_id.clone()),
-                    "decision": input.decision.clone(),
-                    "disposition": lead.disposition.clone(),
-                    "merge_target_lead_id": input.merge_target_lead_id.clone(),
-                    "notes": input.notes.clone()
-                }),
+                payload: triage_audit_payload(&lead, &input, case.as_ref()),
                 evidence_refs: lead
                     .evidence_refs
                     .iter()
@@ -6772,6 +6756,26 @@ fn case_evidence_text(lead: &LeadRecord, input: &TriageLeadInput) -> String {
     ];
     parts.extend(lead.evidence_refs.clone());
     parts.join(" ")
+}
+
+fn triage_audit_payload(
+    lead: &LeadRecord,
+    input: &TriageLeadInput,
+    case: Option<&CaseRecord>,
+) -> Value {
+    let evidence_sufficiency = case
+        .and_then(|case| case.evidence_package.get("evidence_sufficiency"))
+        .cloned();
+    serde_json::json!({
+        "claim_id": lead.claim_id.clone(),
+        "lead_id": lead.lead_id.clone(),
+        "case_id": case.map(|case| case.case_id.clone()),
+        "decision": input.decision.clone(),
+        "disposition": lead.disposition.clone(),
+        "merge_target_lead_id": input.merge_target_lead_id.clone(),
+        "notes": input.notes.clone(),
+        "evidence_sufficiency": evidence_sufficiency
+    })
 }
 
 fn triage_status_for_decision(decision: &str) -> &'static str {
