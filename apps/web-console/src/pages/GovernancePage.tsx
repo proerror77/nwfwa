@@ -274,6 +274,17 @@ export function GovernancePage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
   const [agentApprover, setAgentApprover] = useState("qa-lead");
+  const [auditEventFilters, setAuditEventFilters] = useState({
+    eventType: "",
+    actorId: "",
+    runId: "",
+    claimId: "",
+    limit: "50",
+  });
+  const parsedAuditEventLimit = Number.parseInt(auditEventFilters.limit, 10);
+  const auditEventLimit = Number.isFinite(parsedAuditEventLimit)
+    ? Math.min(Math.max(parsedAuditEventLimit, 1), 200)
+    : 50;
   const queryClient = useQueryClient();
   const auditQuery = useQuery({
     queryKey: ["claim-audit-history", apiKey, claimId],
@@ -281,8 +292,23 @@ export function GovernancePage() {
     enabled: claimId.trim().length > 0,
   });
   const globalAuditQuery = useQuery({
-    queryKey: ["global-audit-events", apiKey],
-    queryFn: () => listAuditEvents(apiKey, 50) as Promise<AuditEventListResponse>,
+    queryKey: [
+      "global-audit-events",
+      apiKey,
+      auditEventLimit,
+      auditEventFilters.eventType,
+      auditEventFilters.actorId,
+      auditEventFilters.runId,
+      auditEventFilters.claimId,
+    ],
+    queryFn: () =>
+      listAuditEvents(apiKey, {
+        limit: auditEventLimit,
+        event_type: auditEventFilters.eventType,
+        actor_id: auditEventFilters.actorId,
+        run_id: auditEventFilters.runId,
+        claim_id: auditEventFilters.claimId,
+      }) as Promise<AuditEventListResponse>,
   });
   const agentRunsQuery = useQuery({
     queryKey: ["agent-run-logs", apiKey],
@@ -578,6 +604,67 @@ export function GovernancePage() {
 
       <div className="panel">
         <h2>Global Audit Events</h2>
+        <label>
+          Event Type
+          <input
+            value={auditEventFilters.eventType}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                eventType: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Actor ID
+          <input
+            value={auditEventFilters.actorId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                actorId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Run ID
+          <input
+            value={auditEventFilters.runId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                runId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Audit Claim ID
+          <input
+            value={auditEventFilters.claimId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                claimId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Limit
+          <input
+            inputMode="numeric"
+            value={auditEventFilters.limit}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                limit: event.target.value,
+              }))
+            }
+          />
+        </label>
         <div className="summary-grid">
           <div>
             <span>Total</span>

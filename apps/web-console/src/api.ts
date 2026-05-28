@@ -290,8 +290,29 @@ export async function getClaimAuditHistory(claimId: string, apiKey: string) {
   return requestJson(`/api/v1/audit/claims/${encodeURIComponent(claimId)}`, apiKey);
 }
 
-export async function listAuditEvents(apiKey: string, limit = 50) {
-  return requestJson(`/api/v1/ops/audit-events?limit=${encodeURIComponent(limit)}`, apiKey);
+export type AuditEventListFilters = {
+  limit?: number;
+  event_type?: string;
+  actor_id?: string;
+  run_id?: string;
+  claim_id?: string;
+};
+
+export async function listAuditEvents(
+  apiKey: string,
+  filters: AuditEventListFilters | number = 50,
+) {
+  const query =
+    typeof filters === "number"
+      ? { limit: filters }
+      : { limit: 50, ...filters };
+  const params = new URLSearchParams();
+  Object.entries(query).forEach(([key, value]) => {
+    if (value !== undefined && String(value).trim().length > 0) {
+      params.set(key, String(value));
+    }
+  });
+  return requestJson(`/api/v1/ops/audit-events?${params.toString()}`, apiKey);
 }
 
 export async function listWebhookEvents(apiKey: string) {

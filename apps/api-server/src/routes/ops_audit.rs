@@ -1,4 +1,8 @@
-use crate::{app::AppState, error::ApiError, repository::AuditHistoryEventRecord};
+use crate::{
+    app::AppState,
+    error::ApiError,
+    repository::{AuditEventListFilter, AuditHistoryEventRecord},
+};
 use axum::{
     extract::{Query, State},
     http::{HeaderMap, StatusCode},
@@ -10,6 +14,10 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 pub struct AuditEventListQuery {
     pub limit: Option<u32>,
+    pub event_type: Option<String>,
+    pub actor_id: Option<String>,
+    pub run_id: Option<String>,
+    pub claim_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -23,13 +31,30 @@ pub async fn list_audit_events(
     Query(query): Query<AuditEventListQuery>,
 ) -> Result<Json<AuditEventListResponse>, ApiError> {
     authorize(&state, &headers)?;
-    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let filter = AuditEventListFilter {
+        limit: query.limit.unwrap_or(50).clamp(1, 200),
+        event_type: normalize_filter(query.event_type),
+        actor_id: normalize_filter(query.actor_id),
+        run_id: normalize_filter(query.run_id),
+        claim_id: normalize_filter(query.claim_id),
+    };
     let events = state
         .repository
-        .list_audit_events(limit)
+        .list_audit_events(filter)
         .await
         .map_err(internal_error("AUDIT_EVENT_LIST_FAILED"))?;
     Ok(Json(AuditEventListResponse { events }))
+}
+
+fn normalize_filter(value: Option<String>) -> Option<String> {
+    value.and_then(|value| {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            None
+        } else {
+            Some(trimmed.to_owned())
+        }
+    })
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {

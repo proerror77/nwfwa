@@ -463,7 +463,13 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ claim_id: "CLM-0287", events: [], runs: [] });
 
     await getClaimAuditHistory("CLM-0287", "dev-secret");
-    await listAuditEvents("dev-secret", 25);
+    await listAuditEvents("dev-secret", {
+      limit: 25,
+      event_type: "qa.result.received",
+      actor_id: "qa_reviewer",
+      run_id: "pilot_qa_QA-1",
+      claim_id: "CLM-1",
+    });
     await listAgentRuns("dev-secret");
     await listOpsAlerts("dev-secret");
 
@@ -476,7 +482,7 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/api/v1/ops/audit-events?limit=25",
+      "/api/v1/ops/audit-events?limit=25&event_type=qa.result.received&actor_id=qa_reviewer&run_id=pilot_qa_QA-1&claim_id=CLM-1",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

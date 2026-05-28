@@ -711,6 +711,30 @@ pub async fn openapi_schema() -> Json<Value> {
                             "in": "query",
                             "required": false,
                             "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+                        },
+                        {
+                            "name": "event_type",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "actor_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "run_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "claim_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
                         }
                     ],
                     "responses": {

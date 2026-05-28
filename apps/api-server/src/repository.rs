@@ -80,6 +80,15 @@ pub struct PersistedAuditEvent {
     pub evidence_refs: Vec<Value>,
 }
 
+#[derive(Debug, Clone, Default)]
+pub struct AuditEventListFilter {
+    pub limit: u32,
+    pub event_type: Option<String>,
+    pub actor_id: Option<String>,
+    pub run_id: Option<String>,
+    pub claim_id: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutingPolicyRecord {
     pub policy_id: String,
@@ -1352,7 +1361,10 @@ pub trait ScoringRepository: Send + Sync {
         claim_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
 
-    async fn list_audit_events(&self, limit: u32) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
+    async fn list_audit_events(
+        &self,
+        filter: AuditEventListFilter,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
 
     async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>>;
 
@@ -2657,12 +2669,16 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(events)
     }
 
-    async fn list_audit_events(&self, limit: u32) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+    async fn list_audit_events(
+        &self,
+        filter: AuditEventListFilter,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
         let mut events = self
             .audit_events
             .lock()
             .await
             .iter()
+            .filter(|event| persisted_audit_event_matches_filter(event, &filter))
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
@@ -2679,10 +2695,13 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .lock()
                 .await
                 .iter()
+                .filter(|(claim_id, event)| {
+                    pilot_audit_event_matches_filter(claim_id, event, &filter)
+                })
                 .map(|(_, event)| event.clone()),
         );
         events.reverse();
-        events.truncate(limit as usize);
+        events.truncate(filter.limit as usize);
         Ok(events)
     }
 
@@ -5908,7 +5927,10 @@ impl ScoringRepository for PostgresScoringRepository {
             .collect())
     }
 
-    async fn list_audit_events(&self, limit: u32) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+    async fn list_audit_events(
+        &self,
+        filter: AuditEventListFilter,
+    ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
         let rows: Vec<(
             String,
             String,
@@ -5919,12 +5941,26 @@ impl ScoringRepository for PostgresScoringRepository {
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
-             FROM audit_events
-             ORDER BY created_at DESC, audit_id DESC
+            "SELECT ae.audit_id, ae.run_id, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
+             FROM audit_events ae
+             LEFT JOIN claims c ON c.id = ae.claim_id
+             WHERE ($2::text IS NULL OR ae.event_type = $2)
+               AND ($3::text IS NULL OR ae.actor_id = $3)
+               AND ($4::text IS NULL OR ae.run_id = $4)
+               AND (
+                 $5::text IS NULL
+                 OR ae.payload ->> 'claim_id' = $5
+                 OR c.external_claim_id = $5
+                 OR ae.claim_id::text = $5
+               )
+             ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
-        .bind(limit as i64)
+        .bind(filter.limit as i64)
+        .bind(filter.event_type.as_deref())
+        .bind(filter.actor_id.as_deref())
+        .bind(filter.run_id.as_deref())
+        .bind(filter.claim_id.as_deref())
         .fetch_all(&self.pool)
         .await?;
 
@@ -6888,6 +6924,71 @@ fn case_sla_status(status: &str, sla_target_hours: u32, elapsed_hours: f64) -> S
     } else {
         "on_track".into()
     }
+}
+
+fn persisted_audit_event_matches_filter(
+    event: &PersistedAuditEvent,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter
+        .event_type
+        .as_deref()
+        .is_some_and(|event_type| event.event_type != event_type)
+    {
+        return false;
+    }
+    if filter
+        .actor_id
+        .as_deref()
+        .is_some_and(|actor_id| event.actor_id != actor_id)
+    {
+        return false;
+    }
+    if filter
+        .run_id
+        .as_deref()
+        .is_some_and(|run_id| event.run_id != run_id)
+    {
+        return false;
+    }
+    if let Some(claim_id) = filter.claim_id.as_deref() {
+        let payload_claim_id = event.payload["claim_id"].as_str();
+        if event.claim_id != claim_id && payload_claim_id != Some(claim_id) {
+            return false;
+        }
+    }
+    true
+}
+
+fn pilot_audit_event_matches_filter(
+    claim_id: &str,
+    event: &AuditHistoryEventRecord,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter
+        .event_type
+        .as_deref()
+        .is_some_and(|event_type| event.event_type != event_type)
+    {
+        return false;
+    }
+    if filter.actor_id.is_some() {
+        return false;
+    }
+    if filter
+        .run_id
+        .as_deref()
+        .is_some_and(|run_id| event.run_id != run_id)
+    {
+        return false;
+    }
+    if let Some(filter_claim_id) = filter.claim_id.as_deref() {
+        let payload_claim_id = event.payload["claim_id"].as_str();
+        if claim_id != filter_claim_id && payload_claim_id != Some(filter_claim_id) {
+            return false;
+        }
+    }
+    true
 }
 
 fn webhook_event_from_audit(

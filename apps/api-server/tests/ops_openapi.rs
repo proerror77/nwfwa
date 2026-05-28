@@ -383,6 +383,17 @@ async fn openapi_includes_operations_paths() {
             ["application/json"]["schema"]["$ref"],
         "#/components/schemas/AuditEventListResponse"
     );
+    let audit_event_parameters = schema["paths"]["/api/v1/ops/audit-events"]["get"]["parameters"]
+        .as_array()
+        .unwrap();
+    for parameter_name in ["limit", "event_type", "actor_id", "run_id", "claim_id"] {
+        assert!(
+            audit_event_parameters
+                .iter()
+                .any(|parameter| parameter["name"] == parameter_name),
+            "missing audit event query parameter {parameter_name}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["AuditEventListResponse"]["properties"]["events"]["items"]
             ["$ref"],
