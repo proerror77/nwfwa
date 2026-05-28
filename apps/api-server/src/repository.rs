@@ -373,6 +373,21 @@ pub struct DashboardModelGovernanceRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardRuleGovernanceRecord {
+    pub total_rules: u32,
+    pub active_rules: u32,
+    pub triggered_rules: u32,
+    pub total_trigger_count: u32,
+    pub reviewed_count: u32,
+    pub confirmed_fwa_count: u32,
+    pub false_positive_count: u32,
+    pub precision: f64,
+    pub false_positive_rate: f64,
+    pub saving_amount: String,
+    pub roi: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -387,6 +402,7 @@ pub struct DashboardSummaryRecord {
     pub qa_queue: DashboardQaQueueRecord,
     pub agent_governance: DashboardAgentGovernanceRecord,
     pub model_governance: DashboardModelGovernanceRecord,
+    pub rule_governance: DashboardRuleGovernanceRecord,
     pub investigation_results: u32,
     pub qa_reviews: u32,
 }
@@ -1711,6 +1727,8 @@ impl ScoringRepository for InMemoryScoringRepository {
         let agent_runs = self.list_agent_runs().await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
+        let rules = self.list_rules().await?;
+        let rule_performance = self.rule_performance().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims,
@@ -1763,6 +1781,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
+            rule_governance: summarize_dashboard_rule_governance(&rules, &rule_performance),
             investigation_results,
             qa_reviews,
         })
@@ -3730,6 +3749,8 @@ impl ScoringRepository for PostgresScoringRepository {
         let agent_runs = self.list_agent_runs().await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
+        let rules = self.list_rules().await?;
+        let rule_performance = self.rule_performance().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims: suspected.0 as u32,
@@ -3798,6 +3819,7 @@ impl ScoringRepository for PostgresScoringRepository {
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
+            rule_governance: summarize_dashboard_rule_governance(&rules, &rule_performance),
             investigation_results: investigation.0 as u32,
             qa_reviews: qa_reviews.0 as u32,
         })
@@ -5400,6 +5422,60 @@ fn summarize_dashboard_model_governance(
         drift_detected_count,
         average_precision: average_f64(&precision_values),
         average_recall: average_f64(&recall_values),
+    }
+}
+
+fn summarize_dashboard_rule_governance(
+    rules: &[RuleSummaryRecord],
+    performance: &[RulePerformanceRecord],
+) -> DashboardRuleGovernanceRecord {
+    let total_trigger_count = performance
+        .iter()
+        .map(|record| record.trigger_count)
+        .sum::<u32>();
+    let reviewed_count = performance
+        .iter()
+        .map(|record| record.reviewed_count)
+        .sum::<u32>();
+    let confirmed_fwa_count = performance
+        .iter()
+        .map(|record| record.confirmed_fwa_count)
+        .sum::<u32>();
+    let false_positive_count = performance
+        .iter()
+        .map(|record| record.false_positive_count)
+        .sum::<u32>();
+    let saving_amount = performance
+        .iter()
+        .map(|record| {
+            record
+                .saving_amount
+                .parse::<Decimal>()
+                .unwrap_or(Decimal::ZERO)
+        })
+        .sum::<Decimal>();
+    let saving = decimal_to_f64(&saving_amount);
+    let review_cost = total_trigger_count as f64 * RULE_REVIEW_COST_AMOUNT;
+
+    DashboardRuleGovernanceRecord {
+        total_rules: rules.len() as u32,
+        active_rules: rules.iter().filter(|rule| rule.status == "active").count() as u32,
+        triggered_rules: performance
+            .iter()
+            .filter(|record| record.trigger_count > 0)
+            .count() as u32,
+        total_trigger_count,
+        reviewed_count,
+        confirmed_fwa_count,
+        false_positive_count,
+        precision: ratio(confirmed_fwa_count, reviewed_count),
+        false_positive_rate: ratio(false_positive_count, reviewed_count),
+        saving_amount: format_decimal_cents(saving_amount),
+        roi: if review_cost == 0.0 {
+            0.0
+        } else {
+            saving / review_cost
+        },
     }
 }
 

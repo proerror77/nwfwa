@@ -212,6 +212,19 @@ async fn openapi_includes_operations_paths() {
             ["model_governance"]["$ref"],
         "#/components/schemas/DashboardModelGovernance"
     );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "rule_governance")
+    );
+    assert!(schema["components"]["schemas"]["DashboardRuleGovernance"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
+            ["rule_governance"]["$ref"],
+        "#/components/schemas/DashboardRuleGovernance"
+    );
     assert!(schema["components"]["schemas"]["SavingAttributionSummary"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]

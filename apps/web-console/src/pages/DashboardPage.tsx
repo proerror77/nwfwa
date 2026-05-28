@@ -45,6 +45,20 @@ type DashboardModelGovernance = {
   average_recall: number | null;
 };
 
+type DashboardRuleGovernance = {
+  total_rules: number;
+  active_rules: number;
+  triggered_rules: number;
+  total_trigger_count: number;
+  reviewed_count: number;
+  confirmed_fwa_count: number;
+  false_positive_count: number;
+  precision: number;
+  false_positive_rate: number;
+  saving_amount: string;
+  roi: number;
+};
+
 type DashboardSummary = {
   suspected_claims: number;
   confirmed_fwa: number;
@@ -59,6 +73,7 @@ type DashboardSummary = {
   qa_queue: DashboardQaQueue;
   agent_governance: DashboardAgentGovernance;
   model_governance: DashboardModelGovernance;
+  rule_governance: DashboardRuleGovernance;
   investigation_results: number;
   qa_reviews: number;
 };
@@ -154,6 +169,24 @@ export function buildDashboardModelGovernanceSummary(governance?: DashboardModel
   };
 }
 
+export function buildDashboardRuleGovernanceSummary(governance?: DashboardRuleGovernance) {
+  return {
+    totalRules: governance?.total_rules ?? 0,
+    activeRules: governance?.active_rules ?? 0,
+    triggeredRules: governance?.triggered_rules ?? 0,
+    totalTriggerCount: governance?.total_trigger_count ?? 0,
+    reviewedCount: governance?.reviewed_count ?? 0,
+    confirmedFwaCount: governance?.confirmed_fwa_count ?? 0,
+    falsePositiveCount: governance?.false_positive_count ?? 0,
+    precisionLabel: governance ? formatPercent(governance.precision) : "0.0%",
+    falsePositiveRateLabel: governance
+      ? formatPercent(governance.false_positive_rate)
+      : "0.0%",
+    savingAmount: governance?.saving_amount ?? "0.00",
+    roiLabel: `${(governance?.roi ?? 0).toFixed(1)}x`,
+  };
+}
+
 export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
@@ -189,6 +222,7 @@ export function DashboardPage() {
   const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
   const agentGovernanceSummary = buildDashboardAgentGovernanceSummary(summary?.agent_governance);
   const modelGovernanceSummary = buildDashboardModelGovernanceSummary(summary?.model_governance);
+  const ruleGovernanceSummary = buildDashboardRuleGovernanceSummary(summary?.rule_governance);
   const providerRiskSummary = buildProviderRiskSummary(providerRisk);
 
   return (
@@ -301,6 +335,46 @@ export function DashboardPage() {
             <div className="metric-row compact-metric-row">
               <span>Drift Detected</span>
               <strong>{modelGovernanceSummary.driftDetectedCount}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <h2>Rule Governance</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Rules</span>
+              <strong>{ruleGovernanceSummary.totalRules}</strong>
+            </div>
+            <div>
+              <span>Active</span>
+              <strong>{ruleGovernanceSummary.activeRules}</strong>
+            </div>
+            <div>
+              <span>Triggered</span>
+              <strong>{ruleGovernanceSummary.triggeredRules}</strong>
+            </div>
+            <div>
+              <span>Precision</span>
+              <strong>{ruleGovernanceSummary.precisionLabel}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Trigger Count</span>
+              <strong>{ruleGovernanceSummary.totalTriggerCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>False Positive</span>
+              <strong>{ruleGovernanceSummary.falsePositiveRateLabel}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Saving</span>
+              <strong>CNY {ruleGovernanceSummary.savingAmount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>ROI</span>
+              <strong>{ruleGovernanceSummary.roiLabel}</strong>
             </div>
           </div>
         </div>

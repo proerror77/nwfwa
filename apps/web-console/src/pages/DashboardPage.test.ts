@@ -4,6 +4,7 @@ import {
   buildDashboardLabelPoolSummary,
   buildDashboardModelGovernanceSummary,
   buildDashboardQaQueueSummary,
+  buildDashboardRuleGovernanceSummary,
   buildProviderRiskSummary,
 } from "./DashboardPage";
 
@@ -120,6 +121,38 @@ describe("buildDashboardModelGovernanceSummary", () => {
       evaluationCoverageLabel: "75.0%",
       averagePrecisionLabel: "71.2%",
       averageRecallLabel: "63.5%",
+    });
+  });
+});
+
+describe("buildDashboardRuleGovernanceSummary", () => {
+  it("summarizes rule performance and ROI governance", () => {
+    const summary = buildDashboardRuleGovernanceSummary({
+      total_rules: 10,
+      active_rules: 8,
+      triggered_rules: 3,
+      total_trigger_count: 12,
+      reviewed_count: 4,
+      confirmed_fwa_count: 3,
+      false_positive_count: 1,
+      precision: 0.75,
+      false_positive_rate: 0.25,
+      saving_amount: "8200.00",
+      roi: 6.83,
+    });
+
+    expect(summary).toEqual({
+      totalRules: 10,
+      activeRules: 8,
+      triggeredRules: 3,
+      totalTriggerCount: 12,
+      reviewedCount: 4,
+      confirmedFwaCount: 3,
+      falsePositiveCount: 1,
+      precisionLabel: "75.0%",
+      falsePositiveRateLabel: "25.0%",
+      savingAmount: "8200.00",
+      roiLabel: "6.8x",
     });
   });
 });

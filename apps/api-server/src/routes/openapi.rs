@@ -2250,7 +2250,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "model_governance", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2277,6 +2277,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "qa_queue": { "$ref": "#/components/schemas/DashboardQaQueue" },
                         "agent_governance": { "$ref": "#/components/schemas/DashboardAgentGovernance" },
                         "model_governance": { "$ref": "#/components/schemas/DashboardModelGovernance" },
+                        "rule_governance": { "$ref": "#/components/schemas/DashboardRuleGovernance" },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
                     }
@@ -2323,6 +2324,23 @@ pub async fn openapi_schema() -> Json<Value> {
                         "drift_detected_count": { "type": "integer" },
                         "average_precision": { "type": ["number", "null"] },
                         "average_recall": { "type": ["number", "null"] }
+                    }
+                },
+                "DashboardRuleGovernance": {
+                    "type": "object",
+                    "required": ["total_rules", "active_rules", "triggered_rules", "total_trigger_count", "reviewed_count", "confirmed_fwa_count", "false_positive_count", "precision", "false_positive_rate", "saving_amount", "roi"],
+                    "properties": {
+                        "total_rules": { "type": "integer" },
+                        "active_rules": { "type": "integer" },
+                        "triggered_rules": { "type": "integer" },
+                        "total_trigger_count": { "type": "integer" },
+                        "reviewed_count": { "type": "integer" },
+                        "confirmed_fwa_count": { "type": "integer" },
+                        "false_positive_count": { "type": "integer" },
+                        "precision": { "type": "number" },
+                        "false_positive_rate": { "type": "number" },
+                        "saving_amount": { "type": "string", "format": "decimal" },
+                        "roi": { "type": "number" }
                     }
                 },
                 "Lead": {

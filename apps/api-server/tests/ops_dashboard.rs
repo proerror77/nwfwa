@@ -3,6 +3,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use rust_decimal::Decimal;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -386,6 +387,197 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["label_pool"]["rule_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["model_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["workflow_feedback"], 1);
+}
+
+#[tokio::test]
+async fn dashboard_summarizes_rule_governance_from_rule_performance() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-RULE-GOV-TRUE",
+            "claim_amount": "8000",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "policy": {
+            "external_policy_id": "POL-RULE-GOV-TRUE",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000"
+          },
+          "member": {
+            "external_member_id": "MBR-RULE-GOV-TRUE"
+          },
+          "provider": {
+            "external_provider_id": "PRV-RULE-GOV-TRUE",
+            "name": "Northwind Hospital",
+            "provider_type": "hospital",
+            "region": "SH"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-RULE-GOV-FALSE",
+            "claim_amount": "100",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "policy": {
+            "external_policy_id": "POL-RULE-GOV-FALSE",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000"
+          },
+          "member": {
+            "external_member_id": "MBR-RULE-GOV-FALSE"
+          },
+          "provider": {
+            "external_provider_id": "PRV-RULE-GOV-FALSE",
+            "name": "Northwind Clinic",
+            "provider_type": "clinic",
+            "region": "SH"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-RULE-GOV-TRUE",
+          "investigation_id": "INV-RULE-GOV-TRUE",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA.",
+          "evidence_refs": ["rule_runs:EARLY_CLAIM"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-RULE-GOV-FALSE",
+          "investigation_id": "INV-RULE-GOV-FALSE",
+          "outcome": "cleared",
+          "confirmed_fwa": false,
+          "saving_amount": "0.00",
+          "currency": "CNY",
+          "notes": "Cleared after investigation.",
+          "evidence_refs": ["rule_runs:EARLY_CLAIM"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, rules) = json_request(app.clone(), "GET", "/api/v1/ops/rules", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let rules = rules["rules"].as_array().unwrap();
+    let active_rules = rules
+        .iter()
+        .filter(|rule| rule["status"] == "active")
+        .count() as u64;
+
+    let (status, performance) =
+        json_request(app.clone(), "GET", "/api/v1/ops/rules/performance", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let performance = performance["rules"].as_array().unwrap();
+    let total_trigger_count = performance
+        .iter()
+        .map(|rule| rule["trigger_count"].as_u64().unwrap())
+        .sum::<u64>();
+    let reviewed_count = performance
+        .iter()
+        .map(|rule| rule["reviewed_count"].as_u64().unwrap())
+        .sum::<u64>();
+    let confirmed_fwa_count = performance
+        .iter()
+        .map(|rule| rule["confirmed_fwa_count"].as_u64().unwrap())
+        .sum::<u64>();
+    let false_positive_count = performance
+        .iter()
+        .map(|rule| rule["false_positive_count"].as_u64().unwrap())
+        .sum::<u64>();
+    let saving_amount = performance
+        .iter()
+        .map(|rule| {
+            rule["saving_amount"]
+                .as_str()
+                .unwrap()
+                .parse::<Decimal>()
+                .unwrap()
+        })
+        .sum::<Decimal>();
+
+    let (status, dashboard) = json_request(app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        dashboard["rule_governance"]["total_rules"],
+        rules.len() as u64
+    );
+    assert_eq!(dashboard["rule_governance"]["active_rules"], active_rules);
+    assert_eq!(
+        dashboard["rule_governance"]["triggered_rules"],
+        performance
+            .iter()
+            .filter(|rule| rule["trigger_count"].as_u64().unwrap() > 0)
+            .count() as u64
+    );
+    assert_eq!(
+        dashboard["rule_governance"]["total_trigger_count"],
+        total_trigger_count
+    );
+    assert_eq!(
+        dashboard["rule_governance"]["reviewed_count"],
+        reviewed_count
+    );
+    assert_eq!(
+        dashboard["rule_governance"]["confirmed_fwa_count"],
+        confirmed_fwa_count
+    );
+    assert_eq!(
+        dashboard["rule_governance"]["false_positive_count"],
+        false_positive_count
+    );
+    assert_eq!(
+        dashboard["rule_governance"]["precision"],
+        confirmed_fwa_count as f64 / reviewed_count as f64
+    );
+    assert_eq!(
+        dashboard["rule_governance"]["false_positive_rate"],
+        false_positive_count as f64 / reviewed_count as f64
+    );
+    assert_eq!(
+        dashboard["rule_governance"]["saving_amount"],
+        format!("{:.2}", saving_amount.round_dp(2))
+    );
+    assert!(dashboard["rule_governance"]["roi"].as_f64().unwrap() > 0.0);
 }
 
 #[tokio::test]
