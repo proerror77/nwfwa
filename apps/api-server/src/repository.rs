@@ -1099,6 +1099,13 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
+    async fn update_model_status(
+        &self,
+        model_key: &str,
+        model_version: &str,
+        status: &str,
+    ) -> anyhow::Result<Option<ModelVersionRecord>>;
+
     async fn model_performance(
         &self,
         model_key: &str,
@@ -1225,6 +1232,7 @@ pub struct InMemoryScoringRepository {
     model_dataset_sequence: Mutex<u64>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
+    model_statuses: Mutex<HashMap<String, String>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
 }
 
@@ -1642,7 +1650,39 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
-        Ok(default_model_versions())
+        let statuses = self.model_statuses.lock().await;
+        Ok(default_model_versions()
+            .into_iter()
+            .map(|mut model| {
+                if let Some(status) =
+                    statuses.get(&model_version_key(&model.model_key, &model.version))
+                {
+                    model.status = status.clone();
+                }
+                model
+            })
+            .collect())
+    }
+
+    async fn update_model_status(
+        &self,
+        model_key: &str,
+        model_version: &str,
+        status: &str,
+    ) -> anyhow::Result<Option<ModelVersionRecord>> {
+        let mut models = self.list_models().await?;
+        let Some(model) = models
+            .iter_mut()
+            .find(|model| model.model_key == model_key && model.version == model_version)
+        else {
+            return Ok(None);
+        };
+        model.status = status.to_string();
+        self.model_statuses.lock().await.insert(
+            model_version_key(model_key, model_version),
+            status.to_string(),
+        );
+        Ok(Some(model.clone()))
     }
 
     async fn model_performance(
@@ -3649,6 +3689,60 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect())
+    }
+
+    async fn update_model_status(
+        &self,
+        model_key: &str,
+        model_version: &str,
+        status: &str,
+    ) -> anyhow::Result<Option<ModelVersionRecord>> {
+        ensure_default_models_seeded(&self.pool).await?;
+        let row: Option<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            String,
+            Option<String>,
+            Option<String>,
+        )> = sqlx::query_as(
+            "UPDATE model_versions
+             SET status = $3,
+                 activated_at = CASE WHEN $3 = 'active' THEN now() ELSE NULL END
+             WHERE model_key = $1 AND version = $2
+             RETURNING model_key, version, model_type, runtime_kind, execution_provider, status, COALESCE(metrics ->> 'review_mode', 'both'), artifact_uri, endpoint_url",
+        )
+        .bind(model_key)
+        .bind(model_version)
+        .bind(status)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(
+            |(
+                model_key,
+                version,
+                model_type,
+                runtime_kind,
+                execution_provider,
+                status,
+                review_mode,
+                artifact_uri,
+                endpoint_url,
+            )| ModelVersionRecord {
+                model_key,
+                version,
+                model_type,
+                runtime_kind,
+                execution_provider,
+                status,
+                review_mode: normalize_review_mode(&review_mode),
+                artifact_uri,
+                endpoint_url,
+            },
+        ))
     }
 
     async fn model_performance(
@@ -6697,6 +6791,10 @@ fn default_model_versions() -> Vec<ModelVersionRecord> {
     }]
 }
 
+fn model_version_key(model_key: &str, model_version: &str) -> String {
+    format!("{model_key}:{model_version}")
+}
+
 fn empty_model_performance(model_key: &str) -> ModelPerformanceRecord {
     ModelPerformanceRecord {
         model_key: model_key.to_string(),
@@ -7081,7 +7179,6 @@ async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {
              (model_key, version, model_type, runtime_kind, artifact_uri, endpoint_url, execution_provider, status, metrics, activated_at)
              VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
              ON CONFLICT (model_key, version) DO UPDATE SET
-               status = EXCLUDED.status,
                metrics = model_versions.metrics || EXCLUDED.metrics",
         )
         .bind(&model.model_key)

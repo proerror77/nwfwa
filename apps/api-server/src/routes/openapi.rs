@@ -893,6 +893,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/rollback": {
+                "post": {
+                    "summary": "Roll back an active model to approved status",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model lifecycle status after rollback",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelLifecycleResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/knowledge/cases": {
                 "get": {
                     "summary": "List FWA knowledge cases",
@@ -2359,6 +2383,15 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ModelVersion" }
                         }
+                    }
+                },
+                "ModelLifecycleResponse": {
+                    "type": "object",
+                    "required": ["model_key", "version", "status"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "version": { "type": "string" },
+                        "status": { "type": "string" }
                     }
                 },
                 "ModelPerformanceResponse": {

@@ -179,6 +179,10 @@ pub fn build_app_with_parts(
             post(ops_models::submit_model_promotion_review),
         )
         .route(
+            "/api/v1/ops/models/:model_key/rollback",
+            post(ops_models::rollback_model),
+        )
+        .route(
             "/api/v1/ops/rules/:rule_id/submit",
             post(ops_rules::submit_rule),
         )

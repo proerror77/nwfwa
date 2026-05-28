@@ -137,6 +137,13 @@ export async function submitModelPromotionReview(
   );
 }
 
+export async function rollbackModel(modelKey: string, apiKey: string) {
+  return requestJson(`/api/v1/ops/models/${encodeURIComponent(modelKey)}/rollback`, apiKey, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
 export async function listDatasets(apiKey: string) {
   return requestJson("/api/v1/ops/datasets", apiKey);
 }

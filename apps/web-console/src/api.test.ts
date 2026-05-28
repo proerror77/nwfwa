@@ -29,6 +29,7 @@ import {
   listRules,
   publishKnowledgeCase,
   publishRule,
+  rollbackModel,
   rollbackRule,
   saveRuleCandidate,
   searchSimilarCases,
@@ -158,6 +159,7 @@ describe("ops API helpers", () => {
       { decision: "approved", reviewer: "model-governance", notes: "shadow only" },
       "dev-secret",
     );
+    await rollbackModel("baseline_fwa", "dev-secret");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/models",
@@ -180,6 +182,13 @@ describe("ops API helpers", () => {
           reviewer: "model-governance",
           notes: "shadow only",
         }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/rollback",
+      expect.objectContaining({
+        method: "POST",
+        body: "{}",
       }),
     );
   });

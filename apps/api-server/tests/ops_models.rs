@@ -617,6 +617,68 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
 }
 
 #[tokio::test]
+async fn rolls_back_active_model_version() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["model_key"], "baseline_fwa");
+    assert_eq!(body["version"], "0.1.0");
+    assert_eq!(body["status"], "approved");
+
+    let (status, body) = get_json(app.clone(), "/api/v1/ops/models").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["models"][0]["status"], "approved");
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+    assert_eq!(status, StatusCode::OK);
+    let active_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Active version")
+        .expect("model promotion gates should include active-version gate");
+    assert_eq!(active_gate["passed"], false);
+    assert_eq!(active_gate["evidence_source"], "missing");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model is not active")));
+}
+
+#[tokio::test]
+async fn blocks_model_rollback_when_model_is_not_active() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "MODEL_ROLLBACK_REQUIRES_ACTIVE");
+}
+
+#[tokio::test]
 async fn rejects_missing_api_key_for_model_ops() {
     let app = build_app(test_config());
 

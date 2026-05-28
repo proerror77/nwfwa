@@ -51,6 +51,13 @@ pub struct SubmitModelPromotionReviewRequest {
     pub notes: String,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ModelLifecycleResponse {
+    pub model_key: String,
+    pub version: String,
+    pub status: String,
+}
+
 pub async fn list_models(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -184,6 +191,54 @@ pub async fn submit_model_promotion_review(
         .await
         .map_err(internal_error("MODEL_PROMOTION_AUDIT_SAVE_FAILED"))?;
     Ok(Json(review))
+}
+
+pub async fn rollback_model(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+) -> Result<Json<ModelLifecycleResponse>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    let previous = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == model_key)
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    if previous.status != "active" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "MODEL_ROLLBACK_REQUIRES_ACTIVE",
+            "only active models can be rolled back",
+        ));
+    }
+    let model = state
+        .repository
+        .update_model_status(&previous.model_key, &previous.version, "approved")
+        .await
+        .map_err(internal_error("MODEL_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    record_model_lifecycle_audit(
+        &state,
+        &actor,
+        &model,
+        "model.rollback.completed",
+        Some(&previous.status),
+        "Model rollback completed",
+    )
+    .await
+    .map_err(internal_error("MODEL_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(ModelLifecycleResponse {
+        model_key: model.model_key,
+        version: model.version,
+        status: model.status,
+    }))
 }
 
 fn build_model_promotion_gates(
@@ -487,6 +542,42 @@ async fn record_model_promotion_audit(
             evidence_refs: vec![serde_json::json!(format!(
                 "model_versions:{}:{}",
                 review.model_key, review.model_version
+            ))],
+        })
+        .await
+}
+
+async fn record_model_lifecycle_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    model: &ModelVersionRecord,
+    event_type: &'static str,
+    from_status: Option<&str>,
+    summary: &'static str,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: event_type.into(),
+            event_status: "succeeded".into(),
+            summary: summary.into(),
+            payload: serde_json::json!({
+                "model_key": model.model_key,
+                "model_version": model.version,
+                "from_status": from_status,
+                "to_status": model.status,
+                "runtime_kind": model.runtime_kind,
+                "execution_provider": model.execution_provider,
+            }),
+            evidence_refs: vec![serde_json::json!(format!(
+                "model_versions:{}:{}",
+                model.model_key, model.version
             ))],
         })
         .await

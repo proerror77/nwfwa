@@ -6,6 +6,7 @@ import {
   listOutcomeLabels,
   listQaFeedbackItems,
   listModels,
+  rollbackModel,
   submitModelPromotionReview,
 } from "../api";
 import {
@@ -144,6 +145,16 @@ export function ModelOpsPage() {
       );
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
+    },
+  });
+  const rollbackMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedModel) throw new Error("No model selected");
+      return rollbackModel(selectedModel.model_key, apiKey);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["models"] });
       queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
     },
   });
@@ -399,9 +410,18 @@ export function ModelOpsPage() {
                 >
                   Reject
                 </button>
+                <button
+                  onClick={() => rollbackMutation.mutate()}
+                  disabled={rollbackMutation.isPending}
+                >
+                  Rollback
+                </button>
               </div>
               {reviewMutation.error ? (
                 <pre className="error">{String(reviewMutation.error.message)}</pre>
+              ) : null}
+              {rollbackMutation.error ? (
+                <pre className="error">{String(rollbackMutation.error.message)}</pre>
               ) : null}
             </div>
           </>
