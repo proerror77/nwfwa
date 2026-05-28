@@ -118,6 +118,7 @@ CREATE TABLE IF NOT EXISTS scoring_runs (
   confidence_score INTEGER,
   confidence TEXT,
   routing_reason TEXT,
+  routing_policy JSONB NOT NULL DEFAULT '{}'::jsonb,
   score_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb,
   started_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   completed_at TIMESTAMPTZ,
@@ -129,6 +130,7 @@ ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS risk_level TEXT;
 ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS confidence_score INTEGER;
 ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS confidence TEXT;
 ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS routing_reason TEXT;
+ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS routing_policy JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS score_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb;
 
 CREATE TABLE IF NOT EXISTS feature_values (

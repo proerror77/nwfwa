@@ -472,6 +472,8 @@ pub async fn score_claim(
             confidence_score: decision.confidence_score,
             confidence: decision.confidence.clone(),
             routing_reason: decision.routing_reason.clone(),
+            routing_policy: serde_json::to_value(&decision.routing_policy)
+                .unwrap_or_else(|_| serde_json::json!({})),
             score_breakdown: serde_json::to_value(&scores)
                 .unwrap_or_else(|_| serde_json::json!({})),
             feature_values: features

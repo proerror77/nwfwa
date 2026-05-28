@@ -30,6 +30,7 @@ pub struct PersistedScoringRun {
     pub confidence_score: u8,
     pub confidence: String,
     pub routing_reason: String,
+    pub routing_policy: Value,
     pub score_breakdown: Value,
     pub feature_values: Vec<Value>,
     pub rule_runs: Vec<Value>,
@@ -3081,8 +3082,8 @@ impl ScoringRepository for PostgresScoringRepository {
         let claim_uuid = claim_row.map(|row| row.0);
         sqlx::query(
             "INSERT INTO scoring_runs
-             (run_id, claim_id, source_system, actor_id, status, risk_score, rag, risk_level, recommended_action, confidence_score, confidence, routing_reason, score_breakdown, completed_at)
-             VALUES ($1, $2::uuid, $3, $4, 'succeeded', $5, $6, $7, $8, $9, $10, $11, $12, now())",
+             (run_id, claim_id, source_system, actor_id, status, risk_score, rag, risk_level, recommended_action, confidence_score, confidence, routing_reason, routing_policy, score_breakdown, completed_at)
+             VALUES ($1, $2::uuid, $3, $4, 'succeeded', $5, $6, $7, $8, $9, $10, $11, $12, $13, now())",
         )
         .bind(&run.run_id)
         .bind(claim_uuid.as_deref())
@@ -3095,6 +3096,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(run.confidence_score as i32)
         .bind(&run.confidence)
         .bind(&run.routing_reason)
+        .bind(&run.routing_policy)
         .bind(&run.score_breakdown)
         .execute(&mut *tx)
         .await?;
