@@ -6,6 +6,7 @@ import {
   buildDashboardModelGovernanceSummary,
   buildDashboardQaQueueSummary,
   buildDashboardRuleGovernanceSummary,
+  buildDashboardSavingSegmentRows,
   buildDashboardSchemeRows,
   buildDashboardValueMeasurementSummary,
   buildProviderRiskSummary,
@@ -200,6 +201,52 @@ describe("buildDashboardSchemeRows", () => {
       { schemeFamily: "diagnosis_procedure_mismatch", count: 3 },
       { schemeFamily: "early_high_value_claim", count: 3 },
       { schemeFamily: "provider_peer_outlier", count: 1 },
+    ]);
+  });
+});
+
+describe("buildDashboardSavingSegmentRows", () => {
+  it("orders provider and scheme ROI attribution rows", () => {
+    expect(
+      buildDashboardSavingSegmentRows([
+        {
+          segment_type: "scheme",
+          segment_id: "provider_peer_outlier",
+          saving_amount: "8200.00",
+          currency: "CNY",
+          claim_count: 1,
+          attribution_count: 2,
+          roi: 68.33,
+        },
+        {
+          segment_type: "provider",
+          segment_id: "PRV-0287",
+          saving_amount: "8200.00",
+          currency: "CNY",
+          claim_count: 1,
+          attribution_count: 2,
+          roi: 68.33,
+        },
+      ]),
+    ).toEqual([
+      {
+        key: "provider:PRV-0287:CNY",
+        segmentLabel: "provider / PRV-0287",
+        savingAmount: "8200.00",
+        currency: "CNY",
+        claimCount: 1,
+        attributionCount: 2,
+        roiLabel: "68.3x",
+      },
+      {
+        key: "scheme:provider_peer_outlier:CNY",
+        segmentLabel: "scheme / provider_peer_outlier",
+        savingAmount: "8200.00",
+        currency: "CNY",
+        claimCount: 1,
+        attributionCount: 2,
+        roiLabel: "68.3x",
+      },
     ]);
   });
 });

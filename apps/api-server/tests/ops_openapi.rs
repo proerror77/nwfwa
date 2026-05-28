@@ -330,6 +330,23 @@ async fn openapi_includes_operations_paths() {
             .as_array()
             .unwrap()
             .iter()
+            .any(|field| field == "saving_segments")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
+            ["saving_segments"]["items"]["$ref"],
+        "#/components/schemas/SavingSegmentSummary"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SavingSegmentSummary"]["properties"]["segment_type"]
+            ["enum"][0],
+        "provider"
+    );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
             .any(|field| field == "value_measurement")
     );
     assert_eq!(

@@ -84,6 +84,16 @@ type DashboardValueMeasurement = {
   evidence_caveat: string;
 };
 
+type DashboardSavingSegment = {
+  segment_type: string;
+  segment_id: string;
+  saving_amount: string;
+  currency: string;
+  claim_count: number;
+  attribution_count: number;
+  roi: number;
+};
+
 type DashboardSummary = {
   suspected_claims: number;
   confirmed_fwa: number;
@@ -95,6 +105,7 @@ type DashboardSummary = {
   model_scores: Record<string, DashboardModelScore>;
   layer_scores: Record<string, DashboardLayerScore>;
   saving_attributions: SavingAttributionSummary[];
+  saving_segments: DashboardSavingSegment[];
   value_measurement: DashboardValueMeasurement;
   label_pool: DashboardLabelPool;
   qa_queue: DashboardQaQueue;
@@ -238,6 +249,28 @@ export function buildDashboardSchemeRows(distribution: Record<string, number> = 
     );
 }
 
+export function buildDashboardSavingSegmentRows(segments: DashboardSavingSegment[] = []) {
+  return [...segments]
+    .sort((left, right) => {
+      const leftTypeRank = left.segment_type === "provider" ? 0 : 1;
+      const rightTypeRank = right.segment_type === "provider" ? 0 : 1;
+      return (
+        leftTypeRank - rightTypeRank ||
+        Number(right.saving_amount) - Number(left.saving_amount) ||
+        left.segment_id.localeCompare(right.segment_id)
+      );
+    })
+    .map((segment) => ({
+      key: `${segment.segment_type}:${segment.segment_id}:${segment.currency}`,
+      segmentLabel: `${segment.segment_type} / ${segment.segment_id}`,
+      savingAmount: segment.saving_amount,
+      currency: segment.currency,
+      claimCount: segment.claim_count,
+      attributionCount: segment.attribution_count,
+      roiLabel: `${segment.roi.toFixed(1)}x`,
+    }));
+}
+
 export function buildDashboardValueMeasurementSummary(value?: DashboardValueMeasurement) {
   const currency = value?.currency ?? "CNY";
   return {
@@ -285,6 +318,7 @@ export function DashboardPage() {
   const modelRows = Object.entries(summary?.model_scores ?? {});
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
+  const savingSegmentRows = buildDashboardSavingSegmentRows(summary?.saving_segments ?? []);
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
   const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
   const caseSlaSummary = buildDashboardCaseSlaSummary(summary?.case_sla);
@@ -709,6 +743,26 @@ export function DashboardPage() {
           </div>
           {!dashboardQuery.isLoading && savingAttributionRows.length === 0 ? (
             <p className="empty">No saving attribution</p>
+          ) : null}
+        </div>
+
+        <div className="panel wide-panel">
+          <h2>Segment ROI</h2>
+          <div className="table-list">
+            {savingSegmentRows.map((segment) => (
+              <div className="metric-row" key={segment.key}>
+                <span>{segment.segmentLabel}</span>
+                <strong>
+                  {segment.currency} {segment.savingAmount}
+                </strong>
+                <small>{segment.claimCount} claims</small>
+                <small>{segment.attributionCount} attributions</small>
+                <small>{segment.roiLabel}</small>
+              </div>
+            ))}
+          </div>
+          {!dashboardQuery.isLoading && savingSegmentRows.length === 0 ? (
+            <p className="empty">No segment ROI attribution</p>
           ) : null}
         </div>
       </div>

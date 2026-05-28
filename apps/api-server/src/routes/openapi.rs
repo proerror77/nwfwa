@@ -2568,9 +2568,22 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_count": { "type": "integer" }
                     }
                 },
+                "SavingSegmentSummary": {
+                    "type": "object",
+                    "required": ["segment_type", "segment_id", "saving_amount", "currency", "claim_count", "attribution_count", "roi"],
+                    "properties": {
+                        "segment_type": { "type": "string", "enum": ["provider", "scheme"] },
+                        "segment_id": { "type": "string" },
+                        "saving_amount": { "type": "string", "format": "decimal" },
+                        "currency": { "type": "string" },
+                        "claim_count": { "type": "integer" },
+                        "attribution_count": { "type": "integer" },
+                        "roi": { "type": "number" }
+                    }
+                },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "value_measurement", "label_pool", "qa_queue", "case_sla", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "saving_segments", "value_measurement", "label_pool", "qa_queue", "case_sla", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2596,6 +2609,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "saving_attributions": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/SavingAttributionSummary" }
+                        },
+                        "saving_segments": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/SavingSegmentSummary" }
                         },
                         "value_measurement": { "$ref": "#/components/schemas/DashboardValueMeasurement" },
                         "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },

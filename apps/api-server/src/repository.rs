@@ -325,6 +325,17 @@ pub struct DashboardSavingAttributionRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardSavingSegmentRecord {
+    pub segment_type: String,
+    pub segment_id: String,
+    pub saving_amount: String,
+    pub currency: String,
+    pub claim_count: u32,
+    pub attribution_count: u32,
+    pub roi: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ProviderRiskSummaryItemRecord {
     pub provider_id: String,
     pub risk_score: u8,
@@ -435,6 +446,7 @@ pub struct DashboardSummaryRecord {
     pub model_scores: BTreeMap<String, DashboardModelScoreRecord>,
     pub layer_scores: BTreeMap<String, DashboardLayerScoreRecord>,
     pub saving_attributions: Vec<DashboardSavingAttributionRecord>,
+    pub saving_segments: Vec<DashboardSavingSegmentRecord>,
     pub value_measurement: DashboardValueMeasurementRecord,
     pub label_pool: DashboardLabelPoolRecord,
     pub qa_queue: DashboardQaQueueRecord,
@@ -1775,7 +1787,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let runs = self.runs.lock().await;
         let claims = self.claims.lock().await;
         let pilot_events = self.pilot_audit_events.lock().await;
-        let saving_attribution_records = self.saving_attributions.lock().await;
+        let saving_attribution_records = self.saving_attributions.lock().await.clone();
 
         let mut risk_amount = Decimal::ZERO;
         let mut rag_distribution = BTreeMap::new();
@@ -1866,7 +1878,6 @@ impl ScoringRepository for InMemoryScoringRepository {
         }
         let suspected_claims = runs.iter().filter(|run| run.risk_score >= 70).count() as u32;
         let saving_attributions = summarize_saving_attributions(&saving_attribution_records);
-        drop(saving_attribution_records);
         drop(pilot_events);
         drop(claims);
         drop(runs);
@@ -1879,14 +1890,14 @@ impl ScoringRepository for InMemoryScoringRepository {
         let model_evaluations = self.list_model_evaluations().await?;
         let rules = self.list_rules().await?;
         let rule_performance = self.rule_performance().await?;
-        let scheme_distribution =
-            self.list_leads()
-                .await?
-                .into_iter()
-                .fold(BTreeMap::new(), |mut distribution, lead| {
-                    *distribution.entry(lead.scheme_family).or_insert(0) += 1;
-                    distribution
-                });
+        let leads = self.list_leads().await?;
+        let scheme_distribution = leads
+            .iter()
+            .fold(BTreeMap::new(), |mut distribution, lead| {
+                *distribution.entry(lead.scheme_family.clone()).or_insert(0) += 1;
+                distribution
+            });
+        let saving_segments = summarize_saving_segments(&saving_attribution_records, &leads);
         let false_positive_count = rule_performance
             .iter()
             .map(|record| record.false_positive_count)
@@ -1945,6 +1956,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 )
                 .collect(),
             saving_attributions,
+            saving_segments,
             value_measurement,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
@@ -4075,6 +4087,36 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .fetch_all(&self.pool)
             .await?;
+        let saving_segments: Vec<(String, String, Option<Decimal>, String, i64, i64)> =
+            sqlx::query_as(
+                "SELECT segment_type,
+                        segment_id,
+                        COALESCE(SUM(saving_amount), 0),
+                        currency,
+                        COUNT(DISTINCT claim_id)::bigint,
+                        COUNT(*)::bigint
+                 FROM (
+                   SELECT 'provider'::text AS segment_type,
+                          COALESCE(l.provider_id, 'unknown') AS segment_id,
+                          s.saving_amount,
+                          s.currency,
+                          s.claim_id
+                   FROM saving_attributions s
+                   LEFT JOIN fwa_leads l ON l.claim_id = s.claim_id
+                   UNION ALL
+                   SELECT 'scheme'::text AS segment_type,
+                          COALESCE(l.scheme_family, 'unknown') AS segment_id,
+                          s.saving_amount,
+                          s.currency,
+                          s.claim_id
+                   FROM saving_attributions s
+                   LEFT JOIN fwa_leads l ON l.claim_id = s.claim_id
+                 ) segments
+                 GROUP BY segment_type, segment_id, currency
+                 ORDER BY segment_type, segment_id, currency",
+            )
+            .fetch_all(&self.pool)
+            .await?;
         let outcome_labels = self.list_outcome_labels().await?;
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
@@ -4147,6 +4189,31 @@ impl ScoringRepository for PostgresScoringRepository {
                             ),
                             currency,
                             claim_count: claim_count as u32,
+                        }
+                    },
+                )
+                .collect(),
+            saving_segments: saving_segments
+                .into_iter()
+                .map(
+                    |(
+                        segment_type,
+                        segment_id,
+                        saving_amount,
+                        currency,
+                        claim_count,
+                        attribution_count,
+                    )| {
+                        let saving_amount = saving_amount.unwrap_or(Decimal::ZERO);
+                        let claim_count = claim_count as u32;
+                        DashboardSavingSegmentRecord {
+                            segment_type,
+                            segment_id,
+                            saving_amount: format_decimal_cents(saving_amount),
+                            currency,
+                            claim_count,
+                            attribution_count: attribution_count as u32,
+                            roi: segment_roi(saving_amount, claim_count),
                         }
                     },
                 )
@@ -7523,6 +7590,76 @@ fn summarize_saving_attributions(
             },
         )
         .collect()
+}
+
+fn summarize_saving_segments(
+    records: &[SavingAttributionRecord],
+    leads: &[LeadRecord],
+) -> Vec<DashboardSavingSegmentRecord> {
+    let claim_segments = leads
+        .iter()
+        .map(|lead| {
+            (
+                lead.claim_id.as_str(),
+                (lead.provider_id.as_str(), lead.scheme_family.as_str()),
+            )
+        })
+        .collect::<BTreeMap<_, _>>();
+    let mut accumulators =
+        BTreeMap::<(String, String, String), (Decimal, BTreeSet<String>, u32)>::new();
+
+    for record in records {
+        let (provider_id, scheme_family) = claim_segments
+            .get(record.claim_id.as_str())
+            .copied()
+            .unwrap_or(("unknown", "unknown"));
+        for (segment_type, segment_id) in [
+            ("provider", provider_id.to_string()),
+            ("scheme", scheme_family.to_string()),
+        ] {
+            let key = (
+                segment_type.to_string(),
+                segment_id,
+                record.currency.clone(),
+            );
+            let entry = accumulators
+                .entry(key)
+                .or_insert((Decimal::ZERO, BTreeSet::new(), 0));
+            entry.0 += record.saving_amount;
+            entry.1.insert(record.claim_id.clone());
+            entry.2 += 1;
+        }
+    }
+
+    accumulators
+        .into_iter()
+        .map(
+            |((segment_type, segment_id, currency), (saving_amount, claims, attribution_count))| {
+                let claim_count = claims.len() as u32;
+                DashboardSavingSegmentRecord {
+                    segment_type,
+                    segment_id,
+                    saving_amount: format_decimal_cents(saving_amount),
+                    currency,
+                    claim_count,
+                    attribution_count,
+                    roi: segment_roi(saving_amount, claim_count),
+                }
+            },
+        )
+        .collect()
+}
+
+fn segment_roi(saving_amount: Decimal, claim_count: u32) -> f64 {
+    if claim_count == 0 {
+        return 0.0;
+    }
+    let review_cost = claim_count as f64 * RULE_REVIEW_COST_AMOUNT;
+    if review_cost == 0.0 {
+        0.0
+    } else {
+        decimal_to_f64(&saving_amount) / review_cost
+    }
 }
 
 fn format_decimal_cents(value: Decimal) -> String {

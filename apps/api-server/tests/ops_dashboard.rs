@@ -349,7 +349,10 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     );
     assert_eq!(dashboard["value_measurement"]["recovered_amount"], "0.00");
     assert_eq!(dashboard["value_measurement"]["estimated_impact"], "0.00");
-    assert_eq!(dashboard["scheme_distribution"][selected_scheme], 1);
+    assert_eq!(
+        dashboard["scheme_distribution"][selected_scheme.as_str()],
+        1
+    );
     let attributions = dashboard["saving_attributions"].as_array().unwrap();
     assert_eq!(attributions.len(), 2);
     assert!(attributions.iter().any(|attribution| {
@@ -361,6 +364,22 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
         attribution["source_type"] == "rule"
             && attribution["source_id"] == "EARLY_CLAIM"
             && attribution["saving_amount"] == "4100.00"
+    }));
+    let saving_segments = dashboard["saving_segments"].as_array().unwrap();
+    assert!(saving_segments.iter().any(|segment| {
+        segment["segment_type"] == "provider"
+            && segment["segment_id"] == "PRV-0287"
+            && segment["saving_amount"] == "8200.00"
+            && segment["claim_count"] == 1
+            && segment["attribution_count"] == 2
+            && segment["roi"].as_f64().unwrap() > 0.0
+    }));
+    assert!(saving_segments.iter().any(|segment| {
+        segment["segment_type"] == "scheme"
+            && segment["segment_id"] == selected_scheme
+            && segment["saving_amount"] == "8200.00"
+            && segment["claim_count"] == 1
+            && segment["attribution_count"] == 2
     }));
     assert_eq!(dashboard["rag_distribution"]["Red"], 1);
     assert!(dashboard["rule_hits"].as_u64().unwrap() >= 1);
