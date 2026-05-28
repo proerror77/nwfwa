@@ -1424,7 +1424,8 @@ pub async fn openapi_schema() -> Json<Value> {
                             { "required": ["policy"] },
                             { "required": ["provider"] },
                             { "required": ["documents"] },
-                            { "required": ["provider_profile"] }
+                            { "required": ["provider_profile"] },
+                            { "required": ["provider_relationships"] }
                         ]
                     }
                 },
@@ -1470,6 +1471,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "provider_profile": {
                             "$ref": "#/components/schemas/ProviderProfilePayload"
+                        },
+                        "provider_relationships": {
+                            "$ref": "#/components/schemas/ProviderRelationshipGraphPayload"
                         }
                     },
                     "not": {
@@ -1520,6 +1524,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "provider_profile": {
                             "$ref": "#/components/schemas/ProviderProfilePayload"
+                        },
+                        "provider_relationships": {
+                            "$ref": "#/components/schemas/ProviderRelationshipGraphPayload"
                         }
                     }
                 },
@@ -1674,6 +1681,25 @@ pub async fn openapi_schema() -> Json<Value> {
                         "false_positive_count": { "type": "integer", "minimum": 0 }
                     }
                 },
+                "ProviderRelationshipGraphPayload": {
+                    "type": "object",
+                    "required": [
+                        "high_risk_neighbor_ratio",
+                        "provider_patient_overlap_score",
+                        "connected_confirmed_fwa_count"
+                    ],
+                    "properties": {
+                        "high_risk_neighbor_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "provider_patient_overlap_score": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "referral_concentration_score": { "type": ["number", "null"], "minimum": 0, "maximum": 1 },
+                        "connected_confirmed_fwa_count": { "type": "integer", "minimum": 0 },
+                        "network_component_risk_score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
                 "ScoreClaimResponse": {
                     "type": "object",
                     "required": [
@@ -1694,6 +1720,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "layers",
                         "clinical_evidence",
                         "provider_profile",
+                        "provider_relationships",
                         "similar_cases",
                         "evidence_refs"
                     ],
@@ -1766,6 +1793,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "provider_profile": {
                             "$ref": "#/components/schemas/ProviderProfileAssessment"
+                        },
+                        "provider_relationships": {
+                            "$ref": "#/components/schemas/ProviderRelationshipGraphAssessment"
                         },
                         "similar_cases": {
                             "type": "array",
@@ -1863,6 +1893,48 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         },
+                        "reason": { "type": "string" },
+                        "evidence_ref": { "type": "string" }
+                    }
+                },
+                "ProviderRelationshipGraphAssessment": {
+                    "type": "object",
+                    "required": [
+                        "provider_id",
+                        "risk_score",
+                        "risk_tier",
+                        "review_required",
+                        "review_route",
+                        "graph_reasons",
+                        "findings",
+                        "evidence_refs"
+                    ],
+                    "properties": {
+                        "provider_id": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "risk_tier": { "type": "string", "enum": ["no_data", "low", "medium", "high"] },
+                        "review_required": { "type": "boolean" },
+                        "review_route": { "type": "string", "enum": ["none", "provider_graph_review"] },
+                        "graph_reasons": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "findings": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ProviderRelationshipGraphFinding" }
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "ProviderRelationshipGraphFinding": {
+                    "type": "object",
+                    "required": ["signal", "risk_score", "reason", "evidence_ref"],
+                    "properties": {
+                        "signal": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "reason": { "type": "string" },
                         "evidence_ref": { "type": "string" }
                     }

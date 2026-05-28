@@ -469,6 +469,117 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
 }
 
 #[tokio::test]
+async fn returns_provider_relationship_graph_evidence_for_l6_network_risk() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-GRAPH-1",
+                "claim_amount": "9000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-910",
+                  "item_type": "procedure",
+                  "description": "High cost imaging",
+                  "quantity": 1,
+                  "unit_amount": "9000",
+                  "total_amount": "9000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-GRAPH-1"
+              },
+              "policy": {
+                "external_policy_id": "POL-GRAPH-1",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-GRAPH-1",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "Medium"
+              },
+              "provider_relationships": {
+                "high_risk_neighbor_ratio": 0.34,
+                "provider_patient_overlap_score": 0.68,
+                "referral_concentration_score": 0.72,
+                "connected_confirmed_fwa_count": 2,
+                "network_component_risk_score": 82,
+                "evidence_refs": ["relationship_edges:PRV-GRAPH-1"]
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    let graph = &body["provider_relationships"];
+    assert_eq!(graph["provider_id"], "PRV-GRAPH-1");
+    assert_eq!(graph["review_required"], true);
+    assert_eq!(graph["review_route"], "provider_graph_review");
+    assert!(graph["risk_score"].as_u64().unwrap() >= 90);
+    assert_eq!(
+        body["scores"]["provider_network_score"],
+        graph["risk_score"]
+    );
+    assert!(graph["graph_reasons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item.as_str().unwrap().contains("关系邻居")));
+    assert!(graph["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("relationship_edges:PRV-GRAPH-1")));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-GRAPH-1")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(
+        scoring_event["payload"]["provider_relationships"]["review_route"],
+        "provider_graph_review"
+    );
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("relationship_edges:PRV-GRAPH-1")));
+}
+
+#[tokio::test]
 async fn scoring_includes_similar_case_signal_from_knowledge_base() {
     let app = build_app(test_config());
 
@@ -770,6 +881,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "provider",
         "documents",
         "provider_profile",
+        "provider_relationships",
     ] {
         assert!(
             claim_id_mode["not"]["anyOf"]
@@ -797,6 +909,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "evidence_refs",
         "clinical_evidence",
         "provider_profile",
+        "provider_relationships",
         "similar_cases",
         "layers",
     ] {
@@ -808,6 +921,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     );
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderProfileAssessment"].is_object());
+    assert!(schema["components"]["schemas"]["ProviderRelationshipGraphAssessment"].is_object());
 
     let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
         .as_array()

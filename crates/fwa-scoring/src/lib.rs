@@ -127,7 +127,7 @@ pub fn aggregate(
         top_reasons.push("账单项目数量或结构需要医疗合理性复核".into());
     }
     if provider_network_score >= 70 {
-        top_reasons.push("Provider 风险画像偏高".into());
+        top_reasons.push("Provider 画像或关系网络风险偏高".into());
     }
     if similar_case_score >= 70 {
         top_reasons.push("命中相似历史 FWA 案例信号".into());
@@ -263,18 +263,23 @@ fn medical_reasonableness_score(features: &FeatureMap) -> u8 {
 }
 
 fn provider_network_score(features: &FeatureMap) -> u8 {
-    if let Some(score) = numeric_feature(features, "provider_profile_score") {
-        return score.round().clamp(0.0, 100.0) as u8;
-    }
-    match features
-        .get("provider_risk_tier")
-        .and_then(|feature| feature.value.as_str())
-    {
-        Some("HIGH") => 80,
-        Some("MEDIUM") => 45,
-        Some("LOW") => 10,
-        _ => 0,
-    }
+    let profile_score = numeric_feature(features, "provider_profile_score")
+        .map(|score| score.round().clamp(0.0, 100.0) as u8)
+        .unwrap_or_else(|| {
+            match features
+                .get("provider_risk_tier")
+                .and_then(|feature| feature.value.as_str())
+            {
+                Some("HIGH") => 80,
+                Some("MEDIUM") => 45,
+                Some("LOW") => 10,
+                _ => 0,
+            }
+        });
+    let graph_score = numeric_feature(features, "provider_graph_risk_score")
+        .map(|score| score.round().clamp(0.0, 100.0) as u8)
+        .unwrap_or(0);
+    profile_score.max(graph_score)
 }
 
 fn numeric_feature(features: &FeatureMap, name: &str) -> Option<f64> {
@@ -360,6 +365,15 @@ mod tests {
                 evidence_refs: vec![],
             },
         );
+        features.insert(
+            "provider_graph_risk_score".into(),
+            FeatureValue {
+                name: "provider_graph_risk_score".into(),
+                version: 1,
+                value: serde_json::json!(92),
+                evidence_refs: vec![],
+            },
+        );
         let rules = vec![RuleMatch {
             rule_id: "rule_1".into(),
             rule_version: 1,
@@ -400,7 +414,7 @@ mod tests {
         assert_eq!(decision.anomaly_score, 72);
         assert_eq!(decision.ml_score, 90);
         assert_eq!(decision.medical_reasonableness_score, 90);
-        assert_eq!(decision.provider_network_score, 80);
+        assert_eq!(decision.provider_network_score, 92);
         assert_eq!(decision.similar_case_score, 90);
         let layer_ids = decision
             .layers
@@ -422,7 +436,7 @@ mod tests {
         assert_eq!(decision.layers[0].score, 95);
         assert_eq!(decision.layers[6].score, decision.risk_score.value());
         assert_eq!(decision.layers[6].status, "active");
-        assert_eq!(decision.risk_score.value(), 85);
+        assert_eq!(decision.risk_score.value(), 86);
         assert_eq!(decision.rag, RiskLevel::Red);
         assert_eq!(decision.risk_level, "Critical");
         assert_eq!(decision.confidence_score, 100);

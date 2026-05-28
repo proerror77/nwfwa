@@ -15,7 +15,9 @@ use fwa_core::*;
 use fwa_features::{calculate_features, EvidenceRef, FeatureMap, FeatureValue};
 use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
 use fwa_provider::{
-    assess_provider_profile, ProviderProfileAssessment, ProviderProfileInput, ProviderProfileWindow,
+    assess_provider_profile, assess_provider_relationship_graph, ProviderProfileAssessment,
+    ProviderProfileInput, ProviderProfileWindow, ProviderRelationshipGraphAssessment,
+    ProviderRelationshipGraphInput,
 };
 use fwa_rules::{evaluate_rules, RuleMatch};
 use fwa_scoring::DetectionLayerScore;
@@ -34,6 +36,7 @@ pub struct ScoreClaimRequest {
     pub provider: Option<ProviderPayload>,
     pub documents: Option<Vec<DocumentPayload>>,
     pub provider_profile: Option<ProviderProfilePayload>,
+    pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -49,6 +52,7 @@ pub struct FullClaimPayload {
     pub provider: Option<ProviderPayload>,
     pub documents: Option<Vec<DocumentPayload>>,
     pub provider_profile: Option<ProviderProfilePayload>,
+    pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -115,6 +119,16 @@ pub struct ProviderProfileWindowPayload {
     pub false_positive_count: u32,
 }
 
+#[derive(Debug, Clone, Deserialize)]
+pub struct ProviderRelationshipGraphPayload {
+    pub high_risk_neighbor_ratio: f64,
+    pub provider_patient_overlap_score: f64,
+    pub referral_concentration_score: Option<f64>,
+    pub connected_confirmed_fwa_count: u32,
+    pub network_component_risk_score: Option<u8>,
+    pub evidence_refs: Option<Vec<String>>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct ScoreClaimResponse {
     pub run_id: String,
@@ -134,6 +148,7 @@ pub struct ScoreClaimResponse {
     pub layers: Vec<DetectionLayerScore>,
     pub clinical_evidence: ClinicalEvidenceAssessment,
     pub provider_profile: ProviderProfileAssessment,
+    pub provider_relationships: ProviderRelationshipGraphAssessment,
     pub similar_cases: Vec<SimilarCaseRecord>,
     pub evidence_refs: Vec<serde_json::Value>,
 }
@@ -188,7 +203,8 @@ pub async fn score_claim(
         || request.policy.is_some()
         || request.provider.is_some()
         || request.documents.is_some()
-        || request.provider_profile.is_some();
+        || request.provider_profile.is_some()
+        || request.provider_relationships.is_some();
     if request.claim_id.is_some() && has_full_payload {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
@@ -205,7 +221,7 @@ pub async fn score_claim(
     }
     let review_mode = normalize_review_mode(request.review_mode.as_deref())?;
 
-    let (context, clinical_documents, provider_profile_input) =
+    let (context, clinical_documents, provider_profile_input, provider_relationships_input) =
         if let Some(claim_id) = request.claim_id.clone() {
             let context = state
                 .repository
@@ -219,7 +235,7 @@ pub async fn score_claim(
                         "claim_id was not found",
                     )
                 })?;
-            (context, Vec::new(), None)
+            (context, Vec::new(), None, None)
         } else {
             let mut payload = request.claim.clone().expect("validated claim payload");
             let duplicate_fields = duplicate_payload_fields(&request, &payload);
@@ -241,6 +257,9 @@ pub async fn score_claim(
             payload.provider_profile = payload
                 .provider_profile
                 .or_else(|| request.provider_profile.clone());
+            payload.provider_relationships = payload
+                .provider_relationships
+                .or_else(|| request.provider_relationships.clone());
             let clinical_documents = payload
                 .documents
                 .clone()
@@ -252,6 +271,10 @@ pub async fn score_claim(
                 .provider_profile
                 .clone()
                 .map(ProviderProfileInput::from);
+            let provider_relationships_input = payload
+                .provider_relationships
+                .clone()
+                .map(ProviderRelationshipGraphInput::from);
             let context = demo_context(payload);
             state
                 .repository
@@ -261,7 +284,12 @@ pub async fn score_claim(
                 )
                 .await
                 .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
-            (context, clinical_documents, provider_profile_input)
+            (
+                context,
+                clinical_documents,
+                provider_profile_input,
+                provider_relationships_input,
+            )
         };
 
     let run_id = ScoringRunId::new();
@@ -269,7 +297,12 @@ pub async fn score_claim(
     let clinical_evidence = assess_clinical_evidence(&context, &clinical_documents);
     let provider_profile =
         assess_provider_profile(&context.provider, provider_profile_input.as_ref());
+    let provider_relationships = assess_provider_relationship_graph(
+        &context.provider,
+        provider_relationships_input.as_ref(),
+    );
     apply_provider_profile_features(&mut features, &context, &provider_profile);
+    apply_provider_relationship_features(&mut features, &context, &provider_relationships);
     let mut evidence_refs = features
         .values()
         .flat_map(|feature| {
@@ -286,6 +319,12 @@ pub async fn score_claim(
     );
     evidence_refs.extend(
         provider_profile
+            .evidence_refs
+            .iter()
+            .map(|evidence| serde_json::json!(evidence)),
+    );
+    evidence_refs.extend(
+        provider_relationships
             .evidence_refs
             .iter()
             .map(|evidence| serde_json::json!(evidence)),
@@ -388,6 +427,7 @@ pub async fn score_claim(
         "layers": &decision.layers,
         "clinical_evidence": &clinical_evidence,
         "provider_profile": &provider_profile,
+        "provider_relationships": &provider_relationships,
         "similar_cases": &similar_cases,
         "triggered_rules": &alerts,
         "event_type": "scoring.completed",
@@ -448,6 +488,7 @@ pub async fn score_claim(
         layers: decision.layers,
         clinical_evidence,
         provider_profile,
+        provider_relationships,
         similar_cases,
         evidence_refs,
     }))
@@ -486,7 +527,9 @@ fn similar_case_tags(features: &FeatureMap, rule_matches: &[RuleMatch]) -> Vec<S
     if numeric_feature(features, "diagnosis_procedure_match_score").unwrap_or(1.0) < 0.5 {
         tags.insert("medical_mismatch".to_string());
     }
-    if numeric_feature(features, "provider_profile_score").unwrap_or(0.0) >= 70.0 {
+    if numeric_feature(features, "provider_profile_score").unwrap_or(0.0) >= 70.0
+        || numeric_feature(features, "provider_graph_risk_score").unwrap_or(0.0) >= 70.0
+    {
         tags.insert("provider_pattern".to_string());
     }
     if numeric_feature(features, "high_cost_item_ratio").unwrap_or(0.0) >= 0.6 {
@@ -542,6 +585,9 @@ fn duplicate_payload_fields(
     if payload.provider_profile.is_some() && request.provider_profile.is_some() {
         fields.push("provider_profile");
     }
+    if payload.provider_relationships.is_some() && request.provider_relationships.is_some() {
+        fields.push("provider_relationships");
+    }
     fields
 }
 
@@ -585,6 +631,19 @@ impl From<ProviderProfileWindowPayload> for ProviderProfileWindow {
     }
 }
 
+impl From<ProviderRelationshipGraphPayload> for ProviderRelationshipGraphInput {
+    fn from(value: ProviderRelationshipGraphPayload) -> Self {
+        Self {
+            high_risk_neighbor_ratio: value.high_risk_neighbor_ratio,
+            provider_patient_overlap_score: value.provider_patient_overlap_score,
+            referral_concentration_score: value.referral_concentration_score,
+            connected_confirmed_fwa_count: value.connected_confirmed_fwa_count,
+            network_component_risk_score: value.network_component_risk_score,
+            evidence_refs: value.evidence_refs.unwrap_or_default(),
+        }
+    }
+}
+
 fn apply_provider_profile_features(
     features: &mut fwa_features::FeatureMap,
     context: &ClaimContext,
@@ -623,6 +682,42 @@ fn apply_provider_profile_features(
                 entity_type: "provider".into(),
                 entity_id: context.provider.external_provider_id.clone(),
                 field: "peer_amount_percentile".into(),
+            }],
+        },
+    );
+}
+
+fn apply_provider_relationship_features(
+    features: &mut fwa_features::FeatureMap,
+    context: &ClaimContext,
+    provider_relationships: &ProviderRelationshipGraphAssessment,
+) {
+    features.insert(
+        "provider_graph_risk_score".into(),
+        FeatureValue {
+            name: "provider_graph_risk_score".into(),
+            version: 1,
+            value: serde_json::json!(provider_relationships.risk_score),
+            evidence_refs: vec![EvidenceRef {
+                entity_type: "provider".into(),
+                entity_id: context.provider.external_provider_id.clone(),
+                field: "provider_graph_risk_score".into(),
+            }],
+        },
+    );
+    features.insert(
+        "provider_high_risk_neighbor_signal".into(),
+        FeatureValue {
+            name: "provider_high_risk_neighbor_signal".into(),
+            version: 1,
+            value: serde_json::json!(provider_relationships
+                .findings
+                .iter()
+                .any(|finding| finding.signal == "high_risk_neighbor_ratio")),
+            evidence_refs: vec![EvidenceRef {
+                entity_type: "provider".into(),
+                entity_id: context.provider.external_provider_id.clone(),
+                field: "high_risk_neighbor_ratio".into(),
             }],
         },
     );
