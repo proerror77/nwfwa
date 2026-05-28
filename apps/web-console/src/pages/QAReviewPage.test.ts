@@ -5,6 +5,7 @@ import {
   QA_CONCLUSION_OPTIONS,
   QA_FEEDBACK_TARGET_OPTIONS,
   QA_ISSUE_TYPE_OPTIONS,
+  QA_SUMMARY_FEEDBACK_ROWS,
   selectQaQueueItem,
 } from "./QAReviewPage";
 
@@ -126,6 +127,17 @@ describe("QAReviewPage helpers", () => {
       "provider_profile",
       "workflow",
       "tpa",
+    ]);
+  });
+
+  it("summarizes every governed QA feedback target in the queue panel", () => {
+    expect(QA_SUMMARY_FEEDBACK_ROWS.map((row) => row.field)).toEqual([
+      "rules_feedback_count",
+      "models_feedback_count",
+      "features_feedback_count",
+      "provider_profile_feedback_count",
+      "workflow_feedback_count",
+      "tpa_feedback_count",
     ]);
   });
 });

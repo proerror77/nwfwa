@@ -863,6 +863,24 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "evidence_backed_count")
     );
+    for field in [
+        "features_feedback_count",
+        "provider_profile_feedback_count",
+        "workflow_feedback_count",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["QaQueueSummaryResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing QA queue summary field {field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["QaQueueSummaryResponse"]["properties"][field]["type"],
+            "integer"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["MemberProfileSummaryResponse"]["properties"]
             ["evidence_refs"]["items"]["type"],

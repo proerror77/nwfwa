@@ -97,6 +97,9 @@ pub struct QaQueueSummaryResponse {
     pub open_count: u32,
     pub rules_feedback_count: u32,
     pub models_feedback_count: u32,
+    pub features_feedback_count: u32,
+    pub provider_profile_feedback_count: u32,
+    pub workflow_feedback_count: u32,
     pub tpa_feedback_count: u32,
     pub high_priority_count: u32,
     pub evidence_backed_count: u32,
@@ -432,6 +435,18 @@ fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryRespo
         models_feedback_count: open_items
             .iter()
             .filter(|item| item.feedback_target == "models")
+            .count() as u32,
+        features_feedback_count: open_items
+            .iter()
+            .filter(|item| item.feedback_target == "features")
+            .count() as u32,
+        provider_profile_feedback_count: open_items
+            .iter()
+            .filter(|item| item.feedback_target == "provider_profile")
+            .count() as u32,
+        workflow_feedback_count: open_items
+            .iter()
+            .filter(|item| item.feedback_target == "workflow")
             .count() as u32,
         tpa_feedback_count: open_items
             .iter()

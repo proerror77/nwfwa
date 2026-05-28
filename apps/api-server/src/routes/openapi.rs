@@ -4291,11 +4291,14 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "QaQueueSummaryResponse": {
                     "type": "object",
-                    "required": ["open_count", "rules_feedback_count", "models_feedback_count", "tpa_feedback_count", "high_priority_count", "evidence_backed_count", "highest_priority"],
+                    "required": ["open_count", "rules_feedback_count", "models_feedback_count", "features_feedback_count", "provider_profile_feedback_count", "workflow_feedback_count", "tpa_feedback_count", "high_priority_count", "evidence_backed_count", "highest_priority"],
                     "properties": {
                         "open_count": { "type": "integer" },
                         "rules_feedback_count": { "type": "integer" },
                         "models_feedback_count": { "type": "integer" },
+                        "features_feedback_count": { "type": "integer" },
+                        "provider_profile_feedback_count": { "type": "integer" },
+                        "workflow_feedback_count": { "type": "integer" },
                         "tpa_feedback_count": { "type": "integer" },
                         "high_priority_count": { "type": "integer" },
                         "evidence_backed_count": { "type": "integer" },

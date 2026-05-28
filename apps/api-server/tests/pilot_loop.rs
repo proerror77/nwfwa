@@ -529,6 +529,24 @@ async fn summarizes_qa_feedback_queue_for_review_operations() {
             "workflow_missing_evidence",
             "issue_found_escalate",
         ),
+        (
+            "QA-QUEUE-FEATURES-1001",
+            "features",
+            "medical_reasonableness",
+            "issue_found_return",
+        ),
+        (
+            "QA-QUEUE-PROVIDER-1001",
+            "provider_profile",
+            "provider_pattern",
+            "issue_found_escalate",
+        ),
+        (
+            "QA-QUEUE-WORKFLOW-1001",
+            "workflow",
+            "qa_review_completed",
+            "issue_found_return",
+        ),
     ] {
         let (status, _) = json_request(
             app.clone(),
@@ -553,12 +571,15 @@ async fn summarizes_qa_feedback_queue_for_review_operations() {
     let (status, summary) = json_request(app, "GET", "/api/v1/ops/qa/queue-summary", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(summary["open_count"], 3);
+    assert_eq!(summary["open_count"], 6);
     assert_eq!(summary["rules_feedback_count"], 1);
     assert_eq!(summary["models_feedback_count"], 1);
+    assert_eq!(summary["features_feedback_count"], 1);
+    assert_eq!(summary["provider_profile_feedback_count"], 1);
+    assert_eq!(summary["workflow_feedback_count"], 1);
     assert_eq!(summary["tpa_feedback_count"], 1);
-    assert_eq!(summary["high_priority_count"], 2);
-    assert_eq!(summary["evidence_backed_count"], 3);
+    assert_eq!(summary["high_priority_count"], 3);
+    assert_eq!(summary["evidence_backed_count"], 6);
     assert_eq!(summary["highest_priority"], "high");
 }
 

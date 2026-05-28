@@ -47,6 +47,9 @@ type QaQueueSummary = {
   open_count: number;
   rules_feedback_count: number;
   models_feedback_count: number;
+  features_feedback_count: number;
+  provider_profile_feedback_count: number;
+  workflow_feedback_count: number;
   tpa_feedback_count: number;
   high_priority_count: number;
   evidence_backed_count: number;
@@ -56,6 +59,15 @@ type QaQueueSummary = {
 type QaQueueListResponse = {
   items: QaQueueItem[];
 };
+
+export const QA_SUMMARY_FEEDBACK_ROWS = [
+  { field: "rules_feedback_count", label: "Rules" },
+  { field: "models_feedback_count", label: "Models" },
+  { field: "features_feedback_count", label: "Features" },
+  { field: "provider_profile_feedback_count", label: "Provider Profile" },
+  { field: "workflow_feedback_count", label: "Workflow" },
+  { field: "tpa_feedback_count", label: "TPA" },
+] as const;
 
 export const QA_CONCLUSION_OPTIONS = [
   { value: "pass", label: "Pass" },
@@ -220,18 +232,12 @@ export function QAReviewPage() {
               <dt>Highest Priority</dt>
               <dd>{queueSummaryQuery.data.highest_priority}</dd>
             </div>
-            <div>
-              <dt>Rules</dt>
-              <dd>{queueSummaryQuery.data.rules_feedback_count}</dd>
-            </div>
-            <div>
-              <dt>Models</dt>
-              <dd>{queueSummaryQuery.data.models_feedback_count}</dd>
-            </div>
-            <div>
-              <dt>TPA</dt>
-              <dd>{queueSummaryQuery.data.tpa_feedback_count}</dd>
-            </div>
+            {QA_SUMMARY_FEEDBACK_ROWS.map((row) => (
+              <div key={row.field}>
+                <dt>{row.label}</dt>
+                <dd>{queueSummaryQuery.data[row.field]}</dd>
+              </div>
+            ))}
           </dl>
         ) : null}
       </div>
