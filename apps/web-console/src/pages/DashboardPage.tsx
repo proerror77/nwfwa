@@ -25,6 +25,9 @@ type DashboardLabelPool = {
   rule_feedback: number;
   model_feedback: number;
   workflow_feedback: number;
+  case_status_labels?: number;
+  false_positive_labels?: number;
+  evidence_backed_labels?: number;
 };
 
 type DashboardQaQueue = {
@@ -160,6 +163,9 @@ export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
     ruleFeedback: labelPool?.rule_feedback ?? 0,
     modelFeedback: labelPool?.model_feedback ?? 0,
     workflowFeedback: labelPool?.workflow_feedback ?? 0,
+    caseStatusLabels: labelPool?.case_status_labels ?? 0,
+    falsePositiveLabels: labelPool?.false_positive_labels ?? 0,
+    evidenceBackedLabels: labelPool?.evidence_backed_labels ?? 0,
     trainingReadyRateLabel:
       totalLabels === 0 ? "0.0%" : formatPercent(approvedForTraining / totalLabels),
   };
@@ -700,6 +706,20 @@ export function DashboardPage() {
             <div className="metric-row compact-metric-row">
               <span>Workflow</span>
               <strong>{labelPoolSummary.workflowFeedback}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Case Status</span>
+              <strong>{labelPoolSummary.caseStatusLabels}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>False Positive</span>
+              <strong>{labelPoolSummary.falsePositiveLabels}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Evidence Backed</span>
+              <strong>
+                {labelPoolSummary.evidenceBackedLabels}/{labelPoolSummary.totalLabels}
+              </strong>
             </div>
           </div>
         </div>

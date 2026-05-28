@@ -457,6 +457,9 @@ pub struct DashboardLabelPoolRecord {
     pub rule_feedback: u32,
     pub model_feedback: u32,
     pub workflow_feedback: u32,
+    pub case_status_labels: u32,
+    pub false_positive_labels: u32,
+    pub evidence_backed_labels: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -7576,6 +7579,18 @@ fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLab
         workflow_feedback: labels
             .iter()
             .filter(|label| label.feedback_target == "workflow")
+            .count() as u32,
+        case_status_labels: labels
+            .iter()
+            .filter(|label| label.source_type == "case_status")
+            .count() as u32,
+        false_positive_labels: labels
+            .iter()
+            .filter(|label| label.label_name == "false_positive")
+            .count() as u32,
+        evidence_backed_labels: labels
+            .iter()
+            .filter(|label| !label.evidence_refs.is_empty())
             .count() as u32,
     }
 }

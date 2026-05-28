@@ -21,6 +21,9 @@ describe("buildDashboardLabelPoolSummary", () => {
       rule_feedback: 3,
       model_feedback: 4,
       workflow_feedback: 2,
+      case_status_labels: 1,
+      false_positive_labels: 1,
+      evidence_backed_labels: 8,
     });
 
     expect(summary).toEqual({
@@ -30,6 +33,9 @@ describe("buildDashboardLabelPoolSummary", () => {
       ruleFeedback: 3,
       modelFeedback: 4,
       workflowFeedback: 2,
+      caseStatusLabels: 1,
+      falsePositiveLabels: 1,
+      evidenceBackedLabels: 8,
       trainingReadyRateLabel: "55.6%",
     });
   });

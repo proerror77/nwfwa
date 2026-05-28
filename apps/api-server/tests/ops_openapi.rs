@@ -816,6 +816,20 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "sla_breach_rate")
     );
+    for field in [
+        "case_status_labels",
+        "false_positive_labels",
+        "evidence_backed_labels",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["DashboardLabelPool"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing dashboard label pool field {field}"
+        );
+    }
     assert!(schema["components"]["schemas"]["Case"]["required"]
         .as_array()
         .unwrap()
