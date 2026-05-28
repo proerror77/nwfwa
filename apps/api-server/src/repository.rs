@@ -737,6 +737,20 @@ pub struct AuditHistoryEventRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct WebhookEventRecord {
+    pub event_id: String,
+    pub event_type: String,
+    pub source_event_type: String,
+    pub source_audit_id: String,
+    pub claim_id: String,
+    pub run_id: String,
+    pub delivery_status: String,
+    pub payload: Value,
+    pub evidence_refs: Vec<String>,
+    pub occurred_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct FeatureSetRecord {
     pub feature_set_id: String,
     pub business_domain: String,
@@ -1157,6 +1171,8 @@ pub trait ScoringRepository: Send + Sync {
         claim_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
 
+    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>>;
+
     async fn register_feature_set(
         &self,
         input: RegisterFeatureSetInput,
@@ -1521,6 +1537,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             event_status: "succeeded".into(),
             summary: format!("Lead triaged: {}", input.decision),
             payload: serde_json::json!({
+                "claim_id": lead.claim_id.clone(),
                 "lead_id": lead.lead_id.clone(),
                 "case_id": case.case_id.clone(),
                 "decision": input.decision.clone(),
@@ -2141,6 +2158,38 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .filter(|(event_claim_id, _)| event_claim_id == claim_id)
                 .map(|(_, event)| event.clone()),
         );
+        Ok(events)
+    }
+
+    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>> {
+        let mut events = self
+            .audit_events
+            .lock()
+            .await
+            .iter()
+            .filter_map(|event| {
+                let audit_event = AuditHistoryEventRecord {
+                    audit_id: event.audit_id.clone(),
+                    run_id: event.run_id.clone(),
+                    event_type: event.event_type.clone(),
+                    event_status: event.event_status.clone(),
+                    summary: event.summary.clone(),
+                    payload: event.payload.clone(),
+                    evidence_refs: evidence_values_to_strings(&event.evidence_refs),
+                    created_at: None,
+                };
+                webhook_event_from_audit(Some(event.claim_id.as_str()), &audit_event)
+            })
+            .collect::<Vec<_>>();
+
+        events.extend(
+            self.pilot_audit_events
+                .lock()
+                .await
+                .iter()
+                .filter_map(|(claim_id, event)| webhook_event_from_audit(Some(claim_id), event)),
+        );
+        sort_webhook_events(&mut events);
         Ok(events)
     }
 
@@ -3377,6 +3426,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 event_status: "succeeded".into(),
                 summary: format!("Lead triaged: {}", input.decision),
                 payload: serde_json::json!({
+                    "claim_id": lead.claim_id.clone(),
                     "lead_id": lead.lead_id.clone(),
                     "case_id": case.case_id.clone(),
                     "decision": input.decision.clone(),
@@ -4766,6 +4816,57 @@ impl ScoringRepository for PostgresScoringRepository {
             .collect())
     }
 
+    async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>> {
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            Value,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+             FROM audit_events
+             ORDER BY created_at, audit_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        let mut events = rows
+            .into_iter()
+            .filter_map(
+                |(
+                    audit_id,
+                    run_id,
+                    event_type,
+                    event_status,
+                    summary,
+                    payload,
+                    evidence_refs,
+                    created_at,
+                )| {
+                    webhook_event_from_audit(
+                        None,
+                        &AuditHistoryEventRecord {
+                            audit_id,
+                            run_id,
+                            event_type,
+                            event_status,
+                            summary,
+                            payload,
+                            evidence_refs: json_array_to_strings(evidence_refs),
+                            created_at: Some(created_at.to_rfc3339()),
+                        },
+                    )
+                },
+            )
+            .collect::<Vec<_>>();
+        sort_webhook_events(&mut events);
+        Ok(events)
+    }
+
     async fn register_feature_set(
         &self,
         input: RegisterFeatureSetInput,
@@ -5454,6 +5555,58 @@ fn case_sla_status(status: &str, sla_target_hours: u32, elapsed_hours: f64) -> S
     } else {
         "on_track".into()
     }
+}
+
+fn webhook_event_from_audit(
+    source_claim_id: Option<&str>,
+    event: &AuditHistoryEventRecord,
+) -> Option<WebhookEventRecord> {
+    if event.event_status != "succeeded" {
+        return None;
+    }
+    let event_type = match event.event_type.as_str() {
+        "scoring.completed" => "fwa.score.completed",
+        "lead.triaged" => "fwa.case.routed",
+        "investigation.result.received" => "fwa.investigation.closed",
+        "qa.result.received" => "fwa.qa.reviewed",
+        "case.status.updated" => {
+            let to_status = event.payload["to_status"].as_str().unwrap_or_default();
+            if is_terminal_case_status(to_status) {
+                "fwa.investigation.closed"
+            } else {
+                return None;
+            }
+        }
+        _ => return None,
+    };
+    let claim_id = event.payload["claim_id"]
+        .as_str()
+        .or(source_claim_id)
+        .unwrap_or_default()
+        .to_string();
+    if claim_id.is_empty() {
+        return None;
+    }
+    Some(WebhookEventRecord {
+        event_id: format!("webhook_{}", event.audit_id),
+        event_type: event_type.into(),
+        source_event_type: event.event_type.clone(),
+        source_audit_id: event.audit_id.clone(),
+        claim_id,
+        run_id: event.run_id.clone(),
+        delivery_status: "pending".into(),
+        payload: event.payload.clone(),
+        evidence_refs: event.evidence_refs.clone(),
+        occurred_at: event.created_at.clone(),
+    })
+}
+
+fn sort_webhook_events(events: &mut [WebhookEventRecord]) {
+    events.sort_by(|left, right| {
+        left.occurred_at
+            .cmp(&right.occurred_at)
+            .then_with(|| left.event_id.cmp(&right.event_id))
+    });
 }
 
 fn hours_between(start: chrono::DateTime<chrono::Utc>, end: chrono::DateTime<chrono::Utc>) -> f64 {

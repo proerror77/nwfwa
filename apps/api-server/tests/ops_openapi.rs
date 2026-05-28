@@ -49,6 +49,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/model-evaluations",
         "/api/v1/ops/model-evaluations/{evaluation_run_id}",
         "/api/v1/ops/dashboard/summary",
+        "/api/v1/ops/webhook-events",
         "/api/v1/ops/leads",
         "/api/v1/ops/leads/{lead_id}/triage",
         "/api/v1/ops/cases",
@@ -299,6 +300,12 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/DashboardValueMeasurement"
     );
     assert!(schema["components"]["schemas"]["DashboardValueMeasurement"].is_object());
+    assert!(schema["components"]["schemas"]["WebhookEvent"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["WebhookEventListResponse"]["properties"]["events"]
+            ["items"]["$ref"],
+        "#/components/schemas/WebhookEvent"
+    );
     assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["financial_impact_type"]["enum"][1],

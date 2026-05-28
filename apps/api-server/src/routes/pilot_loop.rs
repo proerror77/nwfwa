@@ -4,6 +4,7 @@ use crate::{
     repository::{
         AuditSampleLeadRecord, AuditSampleRecord, InvestigationResultRecord,
         MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord, QaReviewRecord,
+        WebhookEventRecord,
     },
 };
 use axum::{
@@ -28,6 +29,11 @@ pub struct PilotWritebackResponse {
 pub struct ClaimAuditHistoryResponse {
     pub claim_id: String,
     pub events: Vec<crate::repository::AuditHistoryEventRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct WebhookEventListResponse {
+    pub events: Vec<WebhookEventRecord>,
 }
 
 #[derive(Debug, Serialize)]
@@ -210,6 +216,19 @@ pub async fn claim_audit_history(
         .await
         .map_err(internal_error("CLAIM_AUDIT_HISTORY_FAILED"))?;
     Ok(Json(ClaimAuditHistoryResponse { claim_id, events }))
+}
+
+pub async fn list_webhook_events(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<WebhookEventListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let events = state
+        .repository
+        .list_webhook_events()
+        .await
+        .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?;
+    Ok(Json(WebhookEventListResponse { events }))
 }
 
 fn build_qa_queue_items(

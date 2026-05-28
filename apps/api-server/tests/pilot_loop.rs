@@ -104,6 +104,140 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
 }
 
 #[tokio::test]
+async fn lists_webhook_events_for_tpa_integrations() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-WEBHOOK-1",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "PROC-001",
+              "item_type": "procedure",
+              "description": "Imaging",
+              "quantity": 1,
+              "unit_amount": "9000",
+              "total_amount": "9000"
+            }
+          ],
+          "member": {
+            "external_member_id": "MBR-WEBHOOK-1"
+          },
+          "policy": {
+            "external_policy_id": "POL-WEBHOOK-1",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-WEBHOOK-1",
+            "name": "Northwind Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "High"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let lead_id = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-WEBHOOK-1")
+        .unwrap()["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "siu-reviewer-1",
+          "reviewer": "medical-reviewer-1",
+          "priority": "high",
+          "notes": "Open case for webhook contract coverage."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-WEBHOOK-1",
+          "investigation_id": "INV-WEBHOOK-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Investigation closed with confirmed FWA outcome.",
+          "evidence_refs": ["investigation_results:INV-WEBHOOK-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-WEBHOOK-1",
+          "claim_id": "CLM-WEBHOOK-1",
+          "qa_conclusion": "pass",
+          "issue_type": "none",
+          "feedback_target": "workflow",
+          "notes": "QA review completed.",
+          "evidence_refs": ["qa_reviews:QA-WEBHOOK-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, webhooks) = json_request(app, "GET", "/api/v1/ops/webhook-events", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let events = webhooks["events"].as_array().unwrap();
+    for expected in [
+        "fwa.score.completed",
+        "fwa.case.routed",
+        "fwa.investigation.closed",
+        "fwa.qa.reviewed",
+    ] {
+        assert!(
+            events.iter().any(|event| {
+                event["event_type"] == expected
+                    && event["claim_id"] == "CLM-WEBHOOK-1"
+                    && event["delivery_status"] == "pending"
+                    && !event["source_audit_id"].as_str().unwrap().is_empty()
+            }),
+            "missing webhook event {expected}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn lists_qa_feedback_items_for_rule_and_model_operators() {
     let app = build_app(test_config());
 

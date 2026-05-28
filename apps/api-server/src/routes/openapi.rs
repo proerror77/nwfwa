@@ -447,6 +447,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/webhook-events": {
+                "get": {
+                    "summary": "List pending webhook events for TPA and operations integrations",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Webhook event outbox",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/WebhookEventListResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/leads": {
                 "get": {
                     "summary": "List FWA leads generated from scoring signals",
@@ -1932,6 +1956,35 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": { "type": "string" }
                         },
                         "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "WebhookEvent": {
+                    "type": "object",
+                    "required": ["event_id", "event_type", "source_event_type", "source_audit_id", "claim_id", "run_id", "delivery_status", "payload", "evidence_refs", "occurred_at"],
+                    "properties": {
+                        "event_id": { "type": "string" },
+                        "event_type": {
+                            "type": "string",
+                            "enum": ["fwa.score.completed", "fwa.case.routed", "fwa.investigation.closed", "fwa.qa.reviewed"]
+                        },
+                        "source_event_type": { "type": "string" },
+                        "source_audit_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "run_id": { "type": "string" },
+                        "delivery_status": { "type": "string", "enum": ["pending"] },
+                        "payload": { "type": "object" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "occurred_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "WebhookEventListResponse": {
+                    "type": "object",
+                    "required": ["events"],
+                    "properties": {
+                        "events": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/WebhookEvent" }
+                        }
                     }
                 },
                 "RuleDetailResponse": {

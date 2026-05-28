@@ -47,6 +47,10 @@ pub fn build_app_with_parts(
             "/api/v1/ops/dashboard/summary",
             get(dashboard::dashboard_summary),
         )
+        .route(
+            "/api/v1/ops/webhook-events",
+            get(pilot_loop::list_webhook_events),
+        )
         .route("/api/v1/ops/leads", get(ops_cases::list_leads))
         .route(
             "/api/v1/ops/leads/:lead_id/triage",
