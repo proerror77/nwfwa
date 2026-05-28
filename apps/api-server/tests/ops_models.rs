@@ -48,6 +48,119 @@ async fn json_request(
     (status, body)
 }
 
+async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
+    let (_, dataset) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/datasets",
+        &format!(
+            r#"{{
+              "source_key": "claims_model_eval_{suffix}",
+              "display_name": "Claims Model Eval {suffix}",
+              "business_domain": "fwa_claims",
+              "owner": "model-ops",
+              "description": "Evaluation dataset for model governance.",
+              "dataset_key": "claims_model_eval_{suffix}",
+              "dataset_version": "v1",
+              "sample_grain": "claim",
+              "label_column": "confirmed_fwa",
+              "entity_keys": ["claim_id"],
+              "manifest_uri": "data/eval/claims_model_eval_{suffix}/v1/manifest.json",
+              "schema_uri": "data/eval/claims_model_eval_{suffix}/v1/schema.json",
+              "profile_uri": "data/eval/claims_model_eval_{suffix}/v1/profile.json",
+              "storage_format": "parquet",
+              "schema_hash": "sha256:model-{suffix}",
+              "row_count": 100,
+              "status": "draft",
+              "splits": [
+                {{
+                  "split_name": "validation",
+                  "data_uri": "data/eval/claims_model_eval_{suffix}/v1/split=validation/",
+                  "row_count": 100,
+                  "positive_count": 25,
+                  "negative_count": 75,
+                  "label_distribution_json": {{"1": 25, "0": 75}}
+                }}
+              ],
+              "fields": [
+                {{
+                  "field_name": "claim_id",
+                  "logical_type": "string",
+                  "nullable": false,
+                  "semantic_role": "key",
+                  "description": "Claim id.",
+                  "profile_json": {{}}
+                }},
+                {{
+                  "field_name": "confirmed_fwa",
+                  "logical_type": "int8",
+                  "nullable": false,
+                  "semantic_role": "label",
+                  "description": "Confirmed FWA label.",
+                  "profile_json": {{"allowed_values": [0, 1]}}
+                }},
+                {{
+                  "field_name": "claim_amount_to_limit_ratio",
+                  "logical_type": "float64",
+                  "nullable": false,
+                  "semantic_role": "feature",
+                  "description": "Claim amount to policy limit ratio.",
+                  "profile_json": {{}}
+                }}
+              ]
+            }}"#
+        ),
+    )
+    .await;
+    let dataset_id = dataset["dataset_id"].as_str().unwrap();
+
+    let (_, feature_set) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "fwa_claims",
+              "feature_set_key": "claims_features_{suffix}",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/eval/claims_model_eval_{suffix}/v1/features/",
+              "feature_list_json": ["claim_amount_to_limit_ratio"],
+              "row_count": 100,
+              "label_column": "confirmed_fwa",
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+    let feature_set_id = feature_set["feature_set_id"].as_str().unwrap();
+
+    let (_, model_dataset) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/model-datasets",
+        &format!(
+            r#"{{
+              "business_domain": "fwa_claims",
+              "task_type": "binary_classification",
+              "label_name": "confirmed_fwa",
+              "feature_set_id": "{feature_set_id}",
+              "train_uri": "data/eval/claims_model_eval_{suffix}/v1/split=train/",
+              "validation_uri": "data/eval/claims_model_eval_{suffix}/v1/split=validation/",
+              "test_uri": null,
+              "row_counts_json": {{"train": 80, "validation": 20}},
+              "label_distribution_json": {{"train": {{"1": 20, "0": 60}}, "validation": {{"1": 5, "0": 15}}}},
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+    model_dataset["model_dataset_id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
 #[tokio::test]
 async fn lists_baseline_model_versions() {
     let app = build_app(test_config());
@@ -258,11 +371,15 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["decision"], "routing_blocked");
     assert_eq!(body["latest_evaluation_id"], "none");
     assert_eq!(body["passed_count"], 1);
-    assert_eq!(body["total_count"], 9);
+    assert_eq!(body["total_count"], 10);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("dataset version missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model drift status unavailable")));
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -274,6 +391,62 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .find(|gate| gate["label"] == "Immutable dataset")
         .unwrap();
     assert_eq!(dataset_gate["evidence_source"], "missing");
+}
+
+#[tokio::test]
+async fn blocks_model_promotion_when_score_drift_is_detected() {
+    let app = build_app(test_config());
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "drift_gate").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_drift_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_drift_gate/v1/feature_importance.parquet",
+              "metrics_json": {{
+                "approval_status": "approved",
+                "leakage_check_status": "passed",
+                "out_of_time_auc": 0.79,
+                "review_capacity_threshold_status": "passed",
+                "score_psi": 0.31,
+                "shadow_comparison_status": "passed"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["decision"], "routing_blocked");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model drift detected")));
+    let drift_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Drift status")
+        .unwrap();
+    assert_eq!(drift_gate["passed"], false);
+    assert_eq!(drift_gate["evidence_source"], "evaluation");
 }
 
 #[tokio::test]

@@ -232,6 +232,8 @@ fn build_model_promotion_gates(
                 .and_then(|value| value.as_str())
                 == Some("approved")
         });
+    let drift_status = performance.drift_status.as_str();
+    let drift_gate_passed = drift_status == "stable";
     let active_version = model.status == "active";
 
     let gates = vec![
@@ -278,6 +280,12 @@ fn build_model_promotion_gates(
             evidence_source(shadow_comparison, "evaluation"),
         ),
         gate(
+            "Drift status",
+            drift_gate_passed,
+            drift_blocker(drift_status),
+            drift_evidence_source(drift_status),
+        ),
+        gate(
             "Approval",
             approval,
             "approval missing",
@@ -321,6 +329,20 @@ fn evidence_source(passed: bool, source: &'static str) -> &'static str {
         source
     } else {
         "missing"
+    }
+}
+
+fn drift_blocker(status: &str) -> &'static str {
+    match status {
+        "not_available" => "model drift status unavailable",
+        _ => "model drift detected",
+    }
+}
+
+fn drift_evidence_source(status: &str) -> &'static str {
+    match status {
+        "not_available" => "missing",
+        _ => "evaluation",
     }
 }
 
