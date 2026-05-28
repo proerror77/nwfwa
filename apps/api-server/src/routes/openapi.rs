@@ -4168,8 +4168,14 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "qa_case_id": { "type": "string" },
                         "claim_id": { "type": "string" },
-                        "qa_conclusion": { "type": "string" },
-                        "issue_type": { "type": "string" },
+                        "qa_conclusion": {
+                            "type": "string",
+                            "enum": ["pass", "issue_found_return", "issue_found_escalate"]
+                        },
+                        "issue_type": {
+                            "type": "string",
+                            "enum": ["none", "qa_review_completed", "alert_handling_incomplete", "medical_reasonableness", "medical_necessity_issue", "provider_pattern", "model_under_scored_confirmed_issue", "workflow_missing_evidence"]
+                        },
                         "feedback_target": {
                             "type": "string",
                             "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
@@ -4217,8 +4223,14 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
                         },
-                        "issue_type": { "type": "string" },
-                        "qa_conclusion": { "type": "string" },
+                        "issue_type": {
+                            "type": "string",
+                            "enum": ["none", "qa_review_completed", "alert_handling_incomplete", "medical_reasonableness", "medical_necessity_issue", "provider_pattern", "model_under_scored_confirmed_issue", "workflow_missing_evidence"]
+                        },
+                        "qa_conclusion": {
+                            "type": "string",
+                            "enum": ["pass", "issue_found_return", "issue_found_escalate"]
+                        },
                         "source": { "type": "string", "const": "qa_review" },
                         "status": { "type": "string" },
                         "priority": { "type": "string" },
@@ -4252,8 +4264,14 @@ pub async fn openapi_schema() -> Json<Value> {
                         "reviewer": { "type": "string" },
                         "assignment_queue": { "type": "string" },
                         "status": { "type": "string", "enum": ["open", "reviewed"] },
-                        "qa_conclusion": { "type": ["string", "null"] },
-                        "issue_type": { "type": ["string", "null"] },
+                        "qa_conclusion": {
+                            "type": ["string", "null"],
+                            "enum": ["pass", "issue_found_return", "issue_found_escalate", null]
+                        },
+                        "issue_type": {
+                            "type": ["string", "null"],
+                            "enum": ["none", "qa_review_completed", "alert_handling_incomplete", "medical_reasonableness", "medical_necessity_issue", "provider_pattern", "model_under_scored_confirmed_issue", "workflow_missing_evidence", null]
+                        },
                         "feedback_target": {
                             "type": ["string", "null"],
                             "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa", null]

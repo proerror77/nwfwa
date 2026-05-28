@@ -128,6 +128,54 @@ async fn rejects_unsupported_qa_feedback_target() {
 }
 
 #[tokio::test]
+async fn rejects_unsupported_qa_conclusion() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-UNSUPPORTED-CONCLUSION",
+          "claim_id": "CLM-0287",
+          "qa_conclusion": "unknown_conclusion",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "Unsupported QA conclusion should not enter QA governance.",
+          "evidence_refs": ["audit:scoring.completed"]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "UNSUPPORTED_QA_CONCLUSION");
+}
+
+#[tokio::test]
+async fn rejects_unsupported_qa_issue_type() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-UNSUPPORTED-ISSUE",
+          "claim_id": "CLM-0287",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "unknown_issue",
+          "feedback_target": "rules",
+          "notes": "Unsupported QA issue type should not enter QA governance.",
+          "evidence_refs": ["audit:scoring.completed"]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "UNSUPPORTED_QA_ISSUE_TYPE");
+}
+
+#[tokio::test]
 async fn lists_webhook_events_for_tpa_integrations() {
     let app = build_app(test_config());
 

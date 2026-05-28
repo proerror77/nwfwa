@@ -130,6 +130,51 @@ async fn openapi_includes_operations_paths() {
             null
         ])
     );
+    let qa_conclusions = serde_json::json!(["pass", "issue_found_return", "issue_found_escalate"]);
+    assert_eq!(
+        schema["components"]["schemas"]["QaResultRequest"]["properties"]["qa_conclusion"]["enum"],
+        qa_conclusions
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["QaFeedbackItem"]["properties"]["qa_conclusion"]["enum"],
+        qa_conclusions
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["QaQueueItem"]["properties"]["qa_conclusion"]["enum"],
+        serde_json::json!(["pass", "issue_found_return", "issue_found_escalate", null])
+    );
+    let qa_issue_types = serde_json::json!([
+        "none",
+        "qa_review_completed",
+        "alert_handling_incomplete",
+        "medical_reasonableness",
+        "medical_necessity_issue",
+        "provider_pattern",
+        "model_under_scored_confirmed_issue",
+        "workflow_missing_evidence"
+    ]);
+    assert_eq!(
+        schema["components"]["schemas"]["QaResultRequest"]["properties"]["issue_type"]["enum"],
+        qa_issue_types
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["QaFeedbackItem"]["properties"]["issue_type"]["enum"],
+        qa_issue_types
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["QaQueueItem"]["properties"]["issue_type"]["enum"],
+        serde_json::json!([
+            "none",
+            "qa_review_completed",
+            "alert_handling_incomplete",
+            "medical_reasonableness",
+            "medical_necessity_issue",
+            "provider_pattern",
+            "model_under_scored_confirmed_issue",
+            "workflow_missing_evidence",
+            null
+        ])
+    );
     assert!(
         schema["components"]["schemas"]["DatasetListResponse"]["required"]
             .as_array()

@@ -176,6 +176,33 @@ pub async fn write_qa_result(
 
 fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> {
     if !matches!(
+        request.qa_conclusion.as_str(),
+        "pass" | "issue_found_return" | "issue_found_escalate"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_QA_CONCLUSION",
+            "qa_conclusion must be pass, issue_found_return, or issue_found_escalate",
+        ));
+    }
+    if !matches!(
+        request.issue_type.as_str(),
+        "none"
+            | "qa_review_completed"
+            | "alert_handling_incomplete"
+            | "medical_reasonableness"
+            | "medical_necessity_issue"
+            | "provider_pattern"
+            | "model_under_scored_confirmed_issue"
+            | "workflow_missing_evidence"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_QA_ISSUE_TYPE",
+            "issue_type is not supported",
+        ));
+    }
+    if !matches!(
         request.feedback_target.as_str(),
         "rules" | "models" | "features" | "provider_profile" | "workflow" | "tpa"
     ) {
