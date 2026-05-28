@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listQaFeedbackItems, submitQaResult } from "../api";
+import { listQaFeedbackItems, listQaQueueSummary, submitQaResult } from "../api";
 
 type QaQueueItem = {
   qa_case_id: string;
@@ -22,6 +22,16 @@ type QaFeedbackItem = {
   summary: string;
   note_present: boolean;
   evidence_refs: string[];
+};
+
+type QaQueueSummary = {
+  open_count: number;
+  rules_feedback_count: number;
+  models_feedback_count: number;
+  tpa_feedback_count: number;
+  high_priority_count: number;
+  evidence_backed_count: number;
+  highest_priority: string;
 };
 
 const demoQueue: QaQueueItem[] = [
@@ -62,6 +72,10 @@ export function QAReviewPage() {
     queryKey: ["qa-feedback-items", apiKey],
     queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
   });
+  const queueSummaryQuery = useQuery({
+    queryKey: ["qa-queue-summary", apiKey],
+    queryFn: () => listQaQueueSummary(apiKey) as Promise<QaQueueSummary>,
+  });
 
   const submitMutation = useMutation({
     mutationFn: () =>
@@ -82,6 +96,7 @@ export function QAReviewPage() {
       ),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["qa-feedback-items"] });
+      queryClient.invalidateQueries({ queryKey: ["qa-queue-summary"] });
     },
   });
 
@@ -107,6 +122,41 @@ export function QAReviewPage() {
             </button>
           ))}
         </div>
+        {queueSummaryQuery.error ? (
+          <pre className="error">{String(queueSummaryQuery.error.message)}</pre>
+        ) : null}
+        {queueSummaryQuery.data ? (
+          <dl className="result-grid">
+            <div>
+              <dt>Open Feedback</dt>
+              <dd>{queueSummaryQuery.data.open_count}</dd>
+            </div>
+            <div>
+              <dt>High Priority</dt>
+              <dd>{queueSummaryQuery.data.high_priority_count}</dd>
+            </div>
+            <div>
+              <dt>Evidence Backed</dt>
+              <dd>{queueSummaryQuery.data.evidence_backed_count}</dd>
+            </div>
+            <div>
+              <dt>Highest Priority</dt>
+              <dd>{queueSummaryQuery.data.highest_priority}</dd>
+            </div>
+            <div>
+              <dt>Rules</dt>
+              <dd>{queueSummaryQuery.data.rules_feedback_count}</dd>
+            </div>
+            <div>
+              <dt>Models</dt>
+              <dd>{queueSummaryQuery.data.models_feedback_count}</dd>
+            </div>
+            <div>
+              <dt>TPA</dt>
+              <dd>{queueSummaryQuery.data.tpa_feedback_count}</dd>
+            </div>
+          </dl>
+        ) : null}
       </div>
 
       <div className="panel">

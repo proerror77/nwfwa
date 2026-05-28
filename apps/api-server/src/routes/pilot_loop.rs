@@ -36,6 +36,17 @@ pub struct QaFeedbackItemListResponse {
 }
 
 #[derive(Debug, Serialize)]
+pub struct QaQueueSummaryResponse {
+    pub open_count: u32,
+    pub rules_feedback_count: u32,
+    pub models_feedback_count: u32,
+    pub tpa_feedback_count: u32,
+    pub high_priority_count: u32,
+    pub evidence_backed_count: u32,
+    pub highest_priority: String,
+}
+
+#[derive(Debug, Serialize)]
 pub struct OutcomeLabelListResponse {
     pub labels: Vec<OutcomeLabelRecord>,
 }
@@ -118,6 +129,19 @@ pub async fn list_qa_feedback_items(
     Ok(Json(QaFeedbackItemListResponse { items }))
 }
 
+pub async fn qa_queue_summary(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<QaQueueSummaryResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let items = state
+        .repository
+        .list_qa_feedback_items()
+        .await
+        .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
+    Ok(Json(build_qa_queue_summary(&items)))
+}
+
 pub async fn list_outcome_labels(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -143,6 +167,49 @@ pub async fn claim_audit_history(
         .await
         .map_err(internal_error("CLAIM_AUDIT_HISTORY_FAILED"))?;
     Ok(Json(ClaimAuditHistoryResponse { claim_id, events }))
+}
+
+fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryResponse {
+    let open_items = items
+        .iter()
+        .filter(|item| item.status == "open")
+        .collect::<Vec<_>>();
+    QaQueueSummaryResponse {
+        open_count: open_items.len() as u32,
+        rules_feedback_count: open_items
+            .iter()
+            .filter(|item| item.feedback_target == "rules")
+            .count() as u32,
+        models_feedback_count: open_items
+            .iter()
+            .filter(|item| item.feedback_target == "models")
+            .count() as u32,
+        tpa_feedback_count: open_items
+            .iter()
+            .filter(|item| item.feedback_target == "tpa")
+            .count() as u32,
+        high_priority_count: open_items
+            .iter()
+            .filter(|item| item.priority == "high")
+            .count() as u32,
+        evidence_backed_count: open_items
+            .iter()
+            .filter(|item| !item.evidence_refs.is_empty())
+            .count() as u32,
+        highest_priority: highest_priority(&open_items).into(),
+    }
+}
+
+fn highest_priority(items: &[&QaFeedbackItemRecord]) -> &'static str {
+    if items.iter().any(|item| item.priority == "high") {
+        "high"
+    } else if items.iter().any(|item| item.priority == "medium") {
+        "medium"
+    } else if items.iter().any(|item| item.priority == "low") {
+        "low"
+    } else {
+        "none"
+    }
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {

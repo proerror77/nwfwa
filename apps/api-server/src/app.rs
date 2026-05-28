@@ -91,6 +91,10 @@ pub fn build_app_with_parts(
             "/api/v1/ops/qa/feedback-items",
             get(pilot_loop::list_qa_feedback_items),
         )
+        .route(
+            "/api/v1/ops/qa/queue-summary",
+            get(pilot_loop::qa_queue_summary),
+        )
         .route("/api/v1/ops/labels", get(pilot_loop::list_outcome_labels))
         .route(
             "/api/v1/audit/claims/:claim_id",

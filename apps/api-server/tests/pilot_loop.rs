@@ -157,6 +157,62 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
 }
 
 #[tokio::test]
+async fn summarizes_qa_feedback_queue_for_review_operations() {
+    let app = build_app(test_config());
+
+    for (qa_case_id, feedback_target, issue_type, qa_conclusion) in [
+        (
+            "QA-QUEUE-RULE-1001",
+            "rules",
+            "alert_handling_incomplete",
+            "issue_found_escalate",
+        ),
+        (
+            "QA-QUEUE-MODEL-1001",
+            "models",
+            "model_under_scored_confirmed_issue",
+            "issue_found_return",
+        ),
+        (
+            "QA-QUEUE-TPA-1001",
+            "tpa",
+            "workflow_missing_evidence",
+            "issue_found_escalate",
+        ),
+    ] {
+        let (status, _) = json_request(
+            app.clone(),
+            "POST",
+            "/api/v1/qa/results",
+            &format!(
+                r#"{{
+                  "qa_case_id": "{qa_case_id}",
+                  "claim_id": "CLM-QA-QUEUE",
+                  "qa_conclusion": "{qa_conclusion}",
+                  "issue_type": "{issue_type}",
+                  "feedback_target": "{feedback_target}",
+                  "notes": "QA feedback needs operational follow-up.",
+                  "evidence_refs": ["audit:scoring.completed", "qa_reviews:{qa_case_id}"]
+                }}"#,
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let (status, summary) = json_request(app, "GET", "/api/v1/ops/qa/queue-summary", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(summary["open_count"], 3);
+    assert_eq!(summary["rules_feedback_count"], 1);
+    assert_eq!(summary["models_feedback_count"], 1);
+    assert_eq!(summary["tpa_feedback_count"], 1);
+    assert_eq!(summary["high_priority_count"], 2);
+    assert_eq!(summary["evidence_backed_count"], 3);
+    assert_eq!(summary["highest_priority"], "high");
+}
+
+#[tokio::test]
 async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     let app = build_app(test_config());
 
