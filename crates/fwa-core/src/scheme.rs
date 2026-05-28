@@ -238,15 +238,10 @@ pub fn fwa_scheme_taxonomy() -> Vec<FwaSchemeDefinition> {
 }
 
 pub fn minimum_evidence_for_scheme(scheme_family: &str) -> Vec<String> {
-    let canonical = match scheme_family {
-        "medical_necessity" => "medically_unnecessary_service",
-        "lab_overuse" => "laboratory_testing_abuse",
-        "pharmacy_or_opioid_abuse" => "pharmacy_controlled_substance_abuse",
-        value => value,
-    };
+    let canonical = canonical_scheme_family(scheme_family);
     fwa_scheme_taxonomy()
         .into_iter()
-        .find(|scheme| scheme.scheme_family == canonical)
+        .find(|scheme| Some(scheme.scheme_family.as_str()) == canonical.as_deref())
         .map(|scheme| scheme.minimum_evidence)
         .unwrap_or_else(|| {
             vec![
@@ -255,6 +250,20 @@ pub fn minimum_evidence_for_scheme(scheme_family: &str) -> Vec<String> {
                 "evidence_refs".into(),
             ]
         })
+}
+
+pub fn canonical_scheme_family(scheme_family: &str) -> Option<String> {
+    let canonical = match scheme_family {
+        "medical_necessity" => "medically_unnecessary_service",
+        "lab_overuse" => "laboratory_testing_abuse",
+        "pharmacy_or_opioid_abuse" => "pharmacy_controlled_substance_abuse",
+        "provider_outlier" => "provider_peer_outlier",
+        value => value,
+    };
+    fwa_scheme_taxonomy()
+        .iter()
+        .any(|scheme| scheme.scheme_family == canonical)
+        .then(|| canonical.to_string())
 }
 
 fn scheme(
@@ -317,6 +326,10 @@ mod tests {
         assert_eq!(
             minimum_evidence_for_scheme("medical_necessity"),
             minimum_evidence_for_scheme("medically_unnecessary_service")
+        );
+        assert_eq!(
+            canonical_scheme_family("lab_overuse"),
+            Some("laboratory_testing_abuse".into())
         );
         assert!(minimum_evidence_for_scheme("provider_peer_outlier")
             .contains(&"peer_group_definition".into()));

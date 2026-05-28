@@ -1,8 +1,8 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use fwa_core::{
-    AuditEventId, Claim, ClaimContext, ClaimId, ClaimItem, Member, MemberId, Money, Policy,
-    PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction,
+    canonical_scheme_family, AuditEventId, Claim, ClaimContext, ClaimId, ClaimItem, Member,
+    MemberId, Money, Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction,
 };
 use fwa_rules::{Condition, Rule, RuleAction};
 use fwa_scoring::RoutingPolicy;
@@ -6649,24 +6649,7 @@ fn scheme_family_from_dsl(dsl: &Value) -> String {
 }
 
 pub(crate) fn normalize_scheme_family(value: &str) -> String {
-    match value {
-        "duplicate_billing"
-        | "upcoding"
-        | "unbundling"
-        | "medically_unnecessary_service"
-        | "excessive_utilization"
-        | "diagnosis_procedure_mismatch"
-        | "laboratory_testing_abuse"
-        | "telehealth_abuse"
-        | "genetic_testing_abuse"
-        | "pharmacy_controlled_substance_abuse"
-        | "dme_home_health_hospice_rehab_risk"
-        | "provider_peer_outlier"
-        | "relationship_concentration"
-        | "early_high_value_claim"
-        | "high_risk_claim" => value.to_string(),
-        _ => "high_risk_claim".into(),
-    }
+    canonical_scheme_family(value).unwrap_or_else(|| "high_risk_claim".into())
 }
 
 fn scheme_family_from_alert_code(alert_code: &str) -> String {

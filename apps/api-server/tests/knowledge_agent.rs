@@ -108,7 +108,7 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
           "case_id": "KC-PUBLISHED-1",
           "title": "Published provider lab overuse case",
           "fwa_type": "Waste",
-          "scheme_family": "laboratory_testing_abuse",
+          "scheme_family": "lab_overuse",
           "diagnosis_code": "E11",
           "provider_region": "Guangzhou",
           "provider_type": "lab",
