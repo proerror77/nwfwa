@@ -42,6 +42,8 @@ pub struct FactorReadinessResponse {
     pub factor_count: u32,
     pub label_count: u32,
     pub entity_key_count: u32,
+    pub data_quality_score: f64,
+    pub data_quality_status: String,
     pub online_ready_count: u32,
     pub rule_convertible_count: u32,
     pub mapped_factor_count: u32,
@@ -255,6 +257,8 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
         factor_count: 0,
         label_count: 0,
         entity_key_count: 0,
+        data_quality_score: 0.0,
+        data_quality_status: "empty".into(),
         online_ready_count: 0,
         rule_convertible_count: 0,
         mapped_factor_count: 0,
@@ -305,7 +309,32 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
         }
     }
 
+    response.data_quality_score = factor_data_quality_score(&response);
+    response.data_quality_status = factor_data_quality_status(response.data_quality_score).into();
+
     response
+}
+
+fn factor_data_quality_score(response: &FactorReadinessResponse) -> f64 {
+    if response.factor_count == 0 {
+        return 0.0;
+    }
+    let max_issue_count = response.factor_count * 3;
+    let issue_count = response.high_missing_count
+        + response.unstable_factor_count
+        + response.unowned_factor_count;
+    let score = 1.0 - (issue_count as f64 / max_issue_count as f64);
+    score.clamp(0.0, 1.0)
+}
+
+fn factor_data_quality_status(score: f64) -> &'static str {
+    if score >= 0.85 {
+        "ready"
+    } else if score >= 0.65 {
+        "watch"
+    } else {
+        "blocked"
+    }
 }
 
 fn numeric_profile_value(profile: &Value, key: &str) -> Option<f64> {

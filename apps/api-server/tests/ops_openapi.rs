@@ -74,6 +74,18 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["paths"]["/api/v1/ops/knowledge/cases"]["post"].is_object());
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
+    assert!(
+        schema["components"]["schemas"]["FactorReadinessResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "data_quality_score")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
+            ["data_quality_status"]["enum"][1],
+        "ready"
+    );
     assert!(schema["components"]["schemas"]["RuleSummary"]["required"]
         .as_array()
         .unwrap()

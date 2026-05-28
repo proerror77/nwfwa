@@ -178,6 +178,8 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
     assert_eq!(readiness["factor_count"], 3);
     assert_eq!(readiness["label_count"], 1);
     assert_eq!(readiness["entity_key_count"], 2);
+    assert_eq!(readiness["data_quality_score"], 0.6666666666666667);
+    assert_eq!(readiness["data_quality_status"], "watch");
     assert_eq!(readiness["online_ready_count"], 2);
     assert_eq!(readiness["rule_convertible_count"], 0);
     assert_eq!(readiness["mapped_factor_count"], 1);

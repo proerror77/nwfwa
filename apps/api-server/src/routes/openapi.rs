@@ -2278,12 +2278,14 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "FactorReadinessResponse": {
                     "type": "object",
-                    "required": ["dataset_count", "factor_count", "label_count", "entity_key_count", "online_ready_count", "rule_convertible_count", "mapped_factor_count", "high_missing_count", "unstable_factor_count", "unowned_factor_count"],
+                    "required": ["dataset_count", "factor_count", "label_count", "entity_key_count", "data_quality_score", "data_quality_status", "online_ready_count", "rule_convertible_count", "mapped_factor_count", "high_missing_count", "unstable_factor_count", "unowned_factor_count"],
                     "properties": {
                         "dataset_count": { "type": "integer" },
                         "factor_count": { "type": "integer" },
                         "label_count": { "type": "integer" },
                         "entity_key_count": { "type": "integer" },
+                        "data_quality_score": { "type": "number" },
+                        "data_quality_status": { "type": "string", "enum": ["empty", "ready", "watch", "blocked"] },
                         "online_ready_count": { "type": "integer" },
                         "rule_convertible_count": { "type": "integer" },
                         "mapped_factor_count": { "type": "integer" },

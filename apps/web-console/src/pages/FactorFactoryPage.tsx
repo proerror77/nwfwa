@@ -47,6 +47,8 @@ type FactorReadiness = {
   factor_count: number;
   label_count: number;
   entity_key_count: number;
+  data_quality_score: number;
+  data_quality_status: string;
   online_ready_count: number;
   rule_convertible_count: number;
   mapped_factor_count: number;
@@ -94,6 +96,8 @@ export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
     datasetCount: readiness?.dataset_count ?? 0,
     factorCount,
     onlineReadyCount,
+    dataQualityScoreLabel: `${((readiness?.data_quality_score ?? 0) * 100).toFixed(1)}%`,
+    dataQualityStatus: readiness?.data_quality_status ?? "empty",
     ruleConvertibleCount: readiness?.rule_convertible_count ?? 0,
     mappedFactorCount: readiness?.mapped_factor_count ?? 0,
     reviewQueueCount,
@@ -235,6 +239,14 @@ export function FactorFactoryPage() {
           <div>
             <span>Ready Rate</span>
             <strong>{readinessSummary.onlineReadyRateLabel}</strong>
+          </div>
+          <div>
+            <span>Data Quality</span>
+            <strong>{readinessSummary.dataQualityScoreLabel}</strong>
+          </div>
+          <div>
+            <span>Quality Status</span>
+            <strong>{readinessSummary.dataQualityStatus}</strong>
           </div>
           <div>
             <span>Rule Ready</span>
