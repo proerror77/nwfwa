@@ -340,6 +340,10 @@ pub async fn score_claim(
         .list_active_rules()
         .await
         .map_err(internal_error("RULE_LOAD_FAILED"))?;
+    let rules = rules
+        .into_iter()
+        .filter(|rule| review_mode_applies(&rule.review_mode, &review_mode))
+        .collect::<Vec<_>>();
     let rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
     let anomaly_score = detect_anomaly(&features);
@@ -537,7 +541,11 @@ async fn active_scoring_model(
 }
 
 fn model_review_mode_applies(model_review_mode: &str, review_mode: &str) -> bool {
-    model_review_mode == "both" || model_review_mode == review_mode
+    review_mode_applies(model_review_mode, review_mode)
+}
+
+fn review_mode_applies(configured_review_mode: &str, requested_review_mode: &str) -> bool {
+    configured_review_mode == "both" || configured_review_mode == requested_review_mode
 }
 
 fn normalize_review_mode(value: Option<&str>) -> Result<String, ApiError> {

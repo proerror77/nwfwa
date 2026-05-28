@@ -1105,6 +1105,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
             rule_id: "candidate_early_high_amount".into(),
             version: 1,
             name: "Early high amount candidate".into(),
+            review_mode: "both".into(),
             conditions: vec![
                 Condition {
                     field: "days_since_policy_start".into(),
@@ -1128,6 +1129,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
             rule_id: "candidate_high_amount_ratio".into(),
             version: 1,
             name: "High amount ratio candidate".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "claim_amount_to_limit_ratio".into(),
                 operator: ">=".into(),

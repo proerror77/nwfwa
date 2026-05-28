@@ -7405,6 +7405,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_early_claim".into(),
             version: 1,
             name: "Early claim".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "days_since_policy_start".into(),
                 operator: "<=".into(),
@@ -7421,6 +7422,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_early_high_amount".into(),
             version: 1,
             name: "Early high amount".into(),
+            review_mode: "both".into(),
             conditions: vec![
                 Condition {
                     field: "days_since_policy_start".into(),
@@ -7444,6 +7446,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_high_cost_single_item".into(),
             version: 1,
             name: "High cost single item".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "high_cost_item_ratio".into(),
                 operator: ">=".into(),
@@ -7460,6 +7463,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_large_limit_usage".into(),
             version: 1,
             name: "Large limit usage".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "claim_amount_to_limit_ratio".into(),
                 operator: ">=".into(),
@@ -7476,6 +7480,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_low_medical_match".into(),
             version: 1,
             name: "Low medical match".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "diagnosis_procedure_match_score".into(),
                 operator: "<=".into(),
@@ -7492,6 +7497,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_many_claim_items".into(),
             version: 1,
             name: "Many claim items".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "claim_item_count".into(),
                 operator: ">=".into(),
@@ -7508,6 +7514,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_peer_p95_amount".into(),
             version: 1,
             name: "Peer P95 amount".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "claim_amount_peer_percentile".into(),
                 operator: ">=".into(),
@@ -7524,6 +7531,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_peer_p99_amount".into(),
             version: 1,
             name: "Peer P99 amount".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "claim_amount_peer_percentile".into(),
                 operator: ">=".into(),
@@ -7540,6 +7548,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_provider_high_risk_tier".into(),
             version: 1,
             name: "Provider high risk tier".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "provider_risk_tier".into(),
                 operator: "==".into(),
@@ -7556,6 +7565,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             rule_id: "rule_provider_profile_high".into(),
             version: 1,
             name: "Provider profile high".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "provider_profile_score".into(),
                 operator: ">=".into(),
@@ -7580,7 +7590,7 @@ fn default_rule_details() -> Vec<RuleDetailRecord> {
 
 fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailRecord {
     let active_version = (status == "active").then_some(rule.version);
-    let review_mode = "both".to_string();
+    let review_mode = normalize_review_mode(&rule.review_mode);
     let scheme_family = scheme_family_from_alert_code(&rule.action.alert_code);
     let dsl = serde_json::json!({
         "review_mode": review_mode,
@@ -7683,6 +7693,7 @@ fn runtime_rule_from_parts(
         rule_id,
         version,
         name,
+        review_mode: review_mode_from_dsl(&dsl),
         conditions: serde_json::from_value(dsl["conditions"].clone())?,
         action: serde_json::from_value(dsl["action"].clone())?,
     })

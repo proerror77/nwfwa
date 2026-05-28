@@ -2483,7 +2483,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["rule", "samples"],
                     "properties": {
-                        "rule": { "type": "object" },
+                        "rule": { "$ref": "#/components/schemas/RuleDefinition" },
                         "expected_review_capacity": { "type": "integer", "minimum": 0 },
                         "samples": {
                             "type": "array",
@@ -2532,7 +2532,44 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["rule"],
                     "properties": {
                         "owner": { "type": "string" },
-                        "rule": { "type": "object" }
+                        "rule": { "$ref": "#/components/schemas/RuleDefinition" }
+                    }
+                },
+                "RuleDefinition": {
+                    "type": "object",
+                    "required": ["rule_id", "version", "name", "review_mode", "conditions", "action"],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "version": { "type": "integer", "minimum": 1 },
+                        "name": { "type": "string" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "conditions": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RuleCondition" }
+                        },
+                        "action": { "$ref": "#/components/schemas/RuleAction" }
+                    }
+                },
+                "RuleCondition": {
+                    "type": "object",
+                    "required": ["field", "operator", "value"],
+                    "properties": {
+                        "field": { "type": "string" },
+                        "operator": { "type": "string", "enum": ["<=", ">=", "=="] },
+                        "value": {}
+                    }
+                },
+                "RuleAction": {
+                    "type": "object",
+                    "required": ["score", "alert_code", "recommended_action", "reason"],
+                    "properties": {
+                        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "alert_code": { "type": "string" },
+                        "recommended_action": {
+                            "type": "string",
+                            "enum": ["AutoApprove", "QaSample", "ManualReview", "RequestEvidence", "EscalateInvestigation", "PostPaymentAudit", "ProviderReview", "RecoveryReview"]
+                        },
+                        "reason": { "type": "string" }
                     }
                 },
                 "RuleDiscoveryRequest": {
@@ -2550,7 +2587,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation"],
                     "properties": {
-                        "rule": { "type": "object" },
+                        "rule": { "$ref": "#/components/schemas/RuleDefinition" },
                         "support": { "type": "integer" },
                         "precision": { "type": "number" },
                         "recall": { "type": "number" },

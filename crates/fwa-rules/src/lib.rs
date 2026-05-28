@@ -15,8 +15,14 @@ pub struct Rule {
     pub rule_id: String,
     pub version: u32,
     pub name: String,
+    #[serde(default = "default_review_mode")]
+    pub review_mode: String,
     pub conditions: Vec<Condition>,
     pub action: RuleAction,
+}
+
+fn default_review_mode() -> String {
+    "both".into()
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -112,6 +118,7 @@ mod tests {
             rule_id: "rule_early_claim".into(),
             version: 1,
             name: "Early claim".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "days_since_policy_start".into(),
                 operator: "<=".into(),
@@ -136,6 +143,7 @@ mod tests {
             rule_id: "rule_missing".into(),
             version: 1,
             name: "Missing".into(),
+            review_mode: "both".into(),
             conditions: vec![Condition {
                 field: "unknown_feature".into(),
                 operator: "==".into(),

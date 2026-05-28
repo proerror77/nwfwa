@@ -8,7 +8,9 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_core::RecommendedAction;
 use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest, ModelScorer};
+use fwa_rules::{Condition, Rule, RuleAction};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -63,6 +65,37 @@ async fn activate_post_payment_model(repository: SharedRepository) {
         })
         .await
         .expect("post-payment model save");
+}
+
+async fn activate_post_payment_rule(repository: SharedRepository) {
+    let rule_id = "rule_post_payment_limit_usage";
+    repository
+        .save_rule_candidate(
+            Rule {
+                rule_id: rule_id.into(),
+                version: 1,
+                name: "Post-payment limit usage".into(),
+                review_mode: "post_payment".into(),
+                conditions: vec![Condition {
+                    field: "claim_amount_to_limit_ratio".into(),
+                    operator: ">=".into(),
+                    value: serde_json::json!(0.7),
+                }],
+                action: RuleAction {
+                    score: 30,
+                    alert_code: "POST_PAYMENT_LIMIT_USAGE".into(),
+                    recommended_action: RecommendedAction::PostPaymentAudit,
+                    reason: "赔后规则仅用于高额度使用审计".into(),
+                },
+            },
+            "rules-ops".into(),
+        )
+        .await
+        .expect("post-payment rule save");
+    repository
+        .update_rule_status(rule_id, "active")
+        .await
+        .expect("post-payment rule activation");
 }
 
 #[tokio::test]
@@ -808,6 +841,106 @@ async fn scoring_uses_only_active_rule_versions() {
         .map(|alert| alert["alert_code"].as_str().unwrap())
         .collect::<std::collections::BTreeSet<_>>();
     assert!(!alert_codes.contains("EARLY_CLAIM"));
+}
+
+#[tokio::test]
+async fn scoring_filters_active_rules_by_review_mode() {
+    let repository = InMemoryScoringRepository::shared();
+    activate_post_payment_rule(repository.clone()).await;
+    let app = build_app_with_parts(test_config(), Arc::new(RequestEchoScorer), repository);
+
+    let pre_payment_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PRE-PAYMENT-RULE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "policy": {
+                "external_policy_id": "POL-PRE-PAYMENT-RULE",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              },
+              "member": {
+                "external_member_id": "MBR-PRE-PAYMENT-RULE"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PRE-PAYMENT-RULE",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let pre_payment_response = app.clone().oneshot(pre_payment_request).await.unwrap();
+    assert_eq!(pre_payment_response.status(), StatusCode::OK);
+    let pre_payment_body = to_bytes(pre_payment_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let pre_payment_body: serde_json::Value = serde_json::from_slice(&pre_payment_body).unwrap();
+    let pre_payment_alert_codes = pre_payment_body["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|alert| alert["alert_code"].as_str().unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(!pre_payment_alert_codes.contains("POST_PAYMENT_LIMIT_USAGE"));
+
+    let post_payment_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "review_mode": "post_payment",
+              "claim": {
+                "external_claim_id": "CLM-POST-PAYMENT-RULE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "policy": {
+                "external_policy_id": "POL-POST-PAYMENT-RULE",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              },
+              "member": {
+                "external_member_id": "MBR-POST-PAYMENT-RULE"
+              },
+              "provider": {
+                "external_provider_id": "PRV-POST-PAYMENT-RULE",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let post_payment_response = app.oneshot(post_payment_request).await.unwrap();
+    assert_eq!(post_payment_response.status(), StatusCode::OK);
+    let post_payment_body = to_bytes(post_payment_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let post_payment_body: serde_json::Value = serde_json::from_slice(&post_payment_body).unwrap();
+    let post_payment_alert_codes = post_payment_body["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|alert| alert["alert_code"].as_str().unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
+    assert!(post_payment_alert_codes.contains("POST_PAYMENT_LIMIT_USAGE"));
 }
 
 #[tokio::test]

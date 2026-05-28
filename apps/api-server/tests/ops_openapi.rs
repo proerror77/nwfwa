@@ -177,6 +177,21 @@ async fn openapi_includes_operations_paths() {
         "pre_payment"
     );
     assert_eq!(
+        schema["components"]["schemas"]["SaveRuleCandidateRequest"]["properties"]["rule"]["$ref"],
+        "#/components/schemas/RuleDefinition"
+    );
+    assert!(
+        schema["components"]["schemas"]["RuleDefinition"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "review_mode")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleDefinition"]["properties"]["review_mode"]["enum"][1],
+        "post_payment"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["RuleSummary"]["properties"]["scheme_family"]["$ref"],
         "#/components/schemas/FwaSchemeFamily"
     );
