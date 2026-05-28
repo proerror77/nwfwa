@@ -58,6 +58,7 @@ describe("buildFactorCards", () => {
       calculation_logic: "claim_amount / policy_limit",
       source_table: "claims",
       source_fields: ["claim_amount", "coverage_limit_amount"],
+      source_lineage_label: "claims.claim_amount,coverage_limit_amount",
       owner: "feature-ops",
       version: "v2",
       iv_label: "0.210",

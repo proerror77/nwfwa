@@ -438,6 +438,15 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
         listed["evaluations"][0]["model_dataset_id"],
         model_dataset_id
     );
+    assert_eq!(listed["lineage"][0]["evaluation_run_id"], "eval_renewal_v1");
+    assert_eq!(listed["lineage"][0]["model_key"], "renewal_baseline");
+    assert_eq!(listed["lineage"][0]["source_dataset_id"], dataset_id);
+    assert_eq!(
+        listed["lineage"][0]["source_dataset_key"],
+        "renewal_automl_20211105"
+    );
+    assert_eq!(listed["lineage"][0]["source_dataset_version"], "v1");
+    assert_eq!(listed["lineage"][0]["source_data_quality_status"], "watch");
 }
 
 #[tokio::test]

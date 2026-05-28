@@ -109,6 +109,23 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/DatasetHealth"
     );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/model-evaluations"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ModelEvaluationListResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelEvaluationListResponse"]["properties"]["lineage"]
+            ["items"]["$ref"],
+        "#/components/schemas/ModelEvaluationLineage"
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelEvaluationLineage"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "source_dataset_id")
+    );
     assert!(schema["components"]["schemas"]["DatasetHealth"]["required"]
         .as_array()
         .unwrap()

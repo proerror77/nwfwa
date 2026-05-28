@@ -69,6 +69,7 @@ export type FactorCard = {
   calculation_logic: string;
   source_table: string;
   source_fields: string[];
+  source_lineage_label: string;
   owner: string;
   version: string;
   missing_rate_label: string;
@@ -126,6 +127,9 @@ export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
       calculation_logic: field.profile_json.calculation_logic ?? "registered_dataset_field",
       source_table: field.profile_json.source_table ?? dataset.dataset_key,
       source_fields: field.profile_json.source_fields ?? [field.field_name],
+      source_lineage_label: `${field.profile_json.source_table ?? dataset.dataset_key}.${
+        (field.profile_json.source_fields ?? [field.field_name]).join(",")
+      }`,
       owner: field.profile_json.owner ?? "unassigned",
       version: formatVersion(field.profile_json.version),
       missing_rate_label: missingRate === null ? "-" : `${(missingRate * 100).toFixed(1)}%`,
@@ -336,6 +340,7 @@ export function FactorFactoryPage() {
                 {factor.source_table} / {factor.version} / {factor.is_label ? "label" : "factor"}
                 {factor.is_entity_key ? " / entity key" : ""}
               </small>
+              <small>Source fields: {factor.source_lineage_label}</small>
               {factor.top_values.length > 0 ? (
                 <ul className="result-list compact-list">
                   {factor.top_values.slice(0, 4).map((value) => (

@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { listDatasets, listModelEvaluations } from "../api";
 
-type DatasetRecord = {
+export type DatasetRecord = {
   dataset_id: string;
   source_key: string;
   business_domain: string;
@@ -47,6 +47,28 @@ type ModelEvaluationRecord = {
   threshold: string | null;
 };
 
+type ModelEvaluationLineageRecord = {
+  evaluation_run_id: string;
+  model_key: string;
+  model_version: string;
+  model_dataset_id: string;
+  source_dataset_id: string | null;
+  source_dataset_key: string | null;
+  source_dataset_version: string | null;
+  source_data_quality_score: number | null;
+  source_data_quality_status: string | null;
+};
+
+export type DatasetModelLineageRow = {
+  evaluationRunId: string;
+  modelLabel: string;
+  modelDatasetId: string;
+  sourceDatasetLabel: string;
+  dataQualityLabel: string;
+  dataQualityStatus: string;
+  metricLabel: string;
+};
+
 export function buildDatasetHealthSummary(health?: DatasetHealthRecord | null) {
   if (!health) {
     return {
@@ -74,6 +96,36 @@ export function buildDatasetHealthSummary(health?: DatasetHealthRecord | null) {
   };
 }
 
+export function buildDatasetModelLineageRows(
+  dataset?: DatasetRecord | null,
+  lineage: ModelEvaluationLineageRecord[] = [],
+  evaluations: ModelEvaluationRecord[] = [],
+): DatasetModelLineageRow[] {
+  if (!dataset) return [];
+  const evaluationsByRun = new Map(
+    evaluations.map((evaluation) => [evaluation.evaluation_run_id, evaluation]),
+  );
+  return lineage
+    .filter((row) => row.source_dataset_id === dataset.dataset_id)
+    .map((row) => {
+      const evaluation = evaluationsByRun.get(row.evaluation_run_id);
+      return {
+        evaluationRunId: row.evaluation_run_id,
+        modelLabel: `${row.model_key}:${row.model_version}`,
+        modelDatasetId: row.model_dataset_id,
+        sourceDatasetLabel: `${row.source_dataset_key ?? dataset.dataset_key}:${
+          row.source_dataset_version ?? dataset.dataset_version
+        }`,
+        dataQualityLabel:
+          row.source_data_quality_score == null
+            ? "-"
+            : `${(row.source_data_quality_score * 100).toFixed(1)}%`,
+        dataQualityStatus: row.source_data_quality_status ?? "unknown",
+        metricLabel: `AUC ${evaluation?.auc ?? "-"} · F1 ${evaluation?.f1 ?? "-"}`,
+      };
+    });
+}
+
 export function DataSourcesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
@@ -88,7 +140,10 @@ export function DataSourcesPage() {
   const evaluationsQuery = useQuery({
     queryKey: ["model-evaluations", apiKey],
     queryFn: () =>
-      listModelEvaluations(apiKey) as Promise<{ evaluations: ModelEvaluationRecord[] }>,
+      listModelEvaluations(apiKey) as Promise<{
+        evaluations: ModelEvaluationRecord[];
+        lineage: ModelEvaluationLineageRecord[];
+      }>,
   });
   const selectedDataset = useMemo(
     () =>
@@ -104,6 +159,11 @@ export function DataSourcesPage() {
     [datasetsQuery.data?.health, selectedDataset?.dataset_id],
   );
   const healthSummary = buildDatasetHealthSummary(selectedDatasetHealth);
+  const modelLineageRows = buildDatasetModelLineageRows(
+    selectedDataset,
+    evaluationsQuery.data?.lineage,
+    evaluationsQuery.data?.evaluations,
+  );
 
   return (
     <section className="ops-grid">
@@ -221,24 +281,35 @@ export function DataSourcesPage() {
       </div>
 
       <div className="panel wide-panel">
-        <h2>Model Evaluations</h2>
+        <h2>Model Lineage</h2>
         {evaluationsQuery.error ? (
           <pre className="error">{String(evaluationsQuery.error.message)}</pre>
         ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Linked Evaluations</span>
+            <strong>{modelLineageRows.length}</strong>
+          </div>
+          <div>
+            <span>Linked Models</span>
+            <strong>{new Set(modelLineageRows.map((row) => row.modelLabel)).size}</strong>
+          </div>
+        </div>
         <div className="table-list">
-          {evaluationsQuery.data?.evaluations.map((evaluation) => (
-            <div className="metric-row" key={evaluation.evaluation_run_id}>
-              <span>{evaluation.evaluation_run_id}</span>
-              <strong>{evaluation.model_key}</strong>
-              <small>AUC {evaluation.auc ?? "-"} · KS {evaluation.ks ?? "-"}</small>
+          {modelLineageRows.map((row) => (
+            <div className="metric-row" key={row.evaluationRunId}>
+              <span>{row.evaluationRunId}</span>
+              <strong>{row.modelLabel}</strong>
+              <small>{row.metricLabel}</small>
               <small>
-                F1 {evaluation.f1 ?? "-"} · Threshold {evaluation.threshold ?? "-"}
+                {row.sourceDatasetLabel} · DQ {row.dataQualityLabel} ·{" "}
+                {row.dataQualityStatus}
               </small>
             </div>
           ))}
         </div>
-        {evaluationsQuery.data?.evaluations.length === 0 ? (
-          <p className="empty">No model evaluations registered</p>
+        {modelLineageRows.length === 0 ? (
+          <p className="empty">No model evaluations linked to this dataset</p>
         ) : null}
       </div>
     </section>

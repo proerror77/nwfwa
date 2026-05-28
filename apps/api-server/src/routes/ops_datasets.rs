@@ -52,6 +52,20 @@ pub struct ModelEvaluationResponse {
 #[derive(Debug, Serialize)]
 pub struct ModelEvaluationListResponse {
     pub evaluations: Vec<ModelEvaluationRecord>,
+    pub lineage: Vec<ModelEvaluationLineageRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelEvaluationLineageRecord {
+    pub evaluation_run_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub model_dataset_id: String,
+    pub source_dataset_id: Option<String>,
+    pub source_dataset_key: Option<String>,
+    pub source_dataset_version: Option<String>,
+    pub source_data_quality_score: Option<f64>,
+    pub source_data_quality_status: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -255,7 +269,46 @@ pub async fn list_model_evaluations(
         .list_model_evaluations()
         .await
         .map_err(internal_error("MODEL_EVALUATION_LIST_FAILED"))?;
-    Ok(Json(ModelEvaluationListResponse { evaluations }))
+    let lineage = build_model_evaluation_lineage(&state, &evaluations).await?;
+    Ok(Json(ModelEvaluationListResponse {
+        evaluations,
+        lineage,
+    }))
+}
+
+async fn build_model_evaluation_lineage(
+    state: &AppState,
+    evaluations: &[ModelEvaluationRecord],
+) -> Result<Vec<ModelEvaluationLineageRecord>, ApiError> {
+    let mut lineage = Vec::with_capacity(evaluations.len());
+    for evaluation in evaluations {
+        let source_dataset = state
+            .repository
+            .get_model_dataset_source_dataset(&evaluation.model_dataset_id)
+            .await
+            .map_err(internal_error("MODEL_DATASET_LINEAGE_FAILED"))?;
+        let source_health = source_dataset.as_ref().map(build_dataset_health_record);
+        lineage.push(ModelEvaluationLineageRecord {
+            evaluation_run_id: evaluation.evaluation_run_id.clone(),
+            model_key: evaluation.model_key.clone(),
+            model_version: evaluation.model_version.clone(),
+            model_dataset_id: evaluation.model_dataset_id.clone(),
+            source_dataset_id: source_dataset
+                .as_ref()
+                .map(|dataset| dataset.dataset_id.clone()),
+            source_dataset_key: source_dataset
+                .as_ref()
+                .map(|dataset| dataset.dataset_key.clone()),
+            source_dataset_version: source_dataset
+                .as_ref()
+                .map(|dataset| dataset.dataset_version.clone()),
+            source_data_quality_score: source_health
+                .as_ref()
+                .map(|health| health.data_quality_score),
+            source_data_quality_status: source_health.map(|health| health.data_quality_status),
+        });
+    }
+    Ok(lineage)
 }
 
 fn validate_parquet_dataset(storage_format: &str) -> Result<(), ApiError> {

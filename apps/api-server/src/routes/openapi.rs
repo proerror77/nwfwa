@@ -414,7 +414,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "security": [{ "ApiKeyAuth": [] }],
                     "responses": {
                         "200": {
-                            "description": "Model evaluation metric list"
+                            "description": "Model evaluation metric list",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelEvaluationListResponse" }
+                                }
+                            }
                         }
                     }
                 },
@@ -3115,6 +3120,35 @@ pub async fn openapi_schema() -> Json<Value> {
                         "confusion_matrix_json": { "type": "object" },
                         "feature_importance_uri": { "type": ["string", "null"] },
                         "metrics_json": { "type": "object" }
+                    }
+                },
+                "ModelEvaluationLineage": {
+                    "type": "object",
+                    "required": ["evaluation_run_id", "model_key", "model_version", "model_dataset_id", "source_dataset_id", "source_dataset_key", "source_dataset_version", "source_data_quality_score", "source_data_quality_status"],
+                    "properties": {
+                        "evaluation_run_id": { "type": "string" },
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "model_dataset_id": { "type": "string" },
+                        "source_dataset_id": { "type": ["string", "null"] },
+                        "source_dataset_key": { "type": ["string", "null"] },
+                        "source_dataset_version": { "type": ["string", "null"] },
+                        "source_data_quality_score": { "type": ["number", "null"] },
+                        "source_data_quality_status": { "type": ["string", "null"], "enum": ["empty", "ready", "watch", "blocked", null] }
+                    }
+                },
+                "ModelEvaluationListResponse": {
+                    "type": "object",
+                    "required": ["evaluations", "lineage"],
+                    "properties": {
+                        "evaluations": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ModelEvaluation" }
+                        },
+                        "lineage": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ModelEvaluationLineage" }
+                        }
                     }
                 },
                 "ModelListResponse": {
