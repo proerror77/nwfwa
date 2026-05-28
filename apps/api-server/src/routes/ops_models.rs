@@ -232,6 +232,25 @@ fn build_model_promotion_gates(
         .get("shadow_comparison_status")
         .and_then(|value| value.as_str())
         == Some("passed");
+    let source_data_quality = metrics
+        .get("data_quality_score")
+        .and_then(|value| value.as_f64())
+        .map(|score| score >= 0.8)
+        .unwrap_or(false);
+    let feature_reproducibility = metrics
+        .get("feature_reproducibility_hash")
+        .and_then(|value| value.as_str())
+        .map(|hash| hash.starts_with("sha256:") && hash.len() > "sha256:".len())
+        .unwrap_or(false);
+    let label_provenance = metrics
+        .get("label_provenance_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+        && metrics
+            .get("label_reviewer_source")
+            .and_then(|value| value.as_str())
+            .map(|source| !source.trim().is_empty())
+            .unwrap_or(false);
     let approval = latest_review
         .map(|review| review.decision == "approved")
         .unwrap_or_else(|| {
@@ -299,6 +318,24 @@ fn build_model_promotion_gates(
             shadow_comparison,
             "shadow comparison missing",
             evidence_source(shadow_comparison, "evaluation"),
+        ),
+        gate(
+            "Source data quality",
+            source_data_quality,
+            data_quality_blocker(metrics),
+            evidence_source(source_data_quality, "evaluation"),
+        ),
+        gate(
+            "Feature reproducibility",
+            feature_reproducibility,
+            "feature reproducibility hash missing",
+            evidence_source(feature_reproducibility, "evaluation"),
+        ),
+        gate(
+            "Label provenance",
+            label_provenance,
+            label_provenance_blocker(metrics),
+            evidence_source(label_provenance, "evaluation"),
         ),
         gate(
             "Drift status",
@@ -385,6 +422,32 @@ fn label_governance_blocker(approved_count: usize, needs_review_count: usize) ->
         "model outcome labels need review"
     } else {
         "none"
+    }
+}
+
+fn data_quality_blocker(metrics: &serde_json::Value) -> &'static str {
+    match metrics
+        .get("data_quality_score")
+        .and_then(|value| value.as_f64())
+    {
+        Some(score) if score < 0.8 => "source data quality score below threshold",
+        _ => "source data quality score missing",
+    }
+}
+
+fn label_provenance_blocker(metrics: &serde_json::Value) -> &'static str {
+    let status = metrics
+        .get("label_provenance_status")
+        .and_then(|value| value.as_str());
+    let reviewer_source_present = metrics
+        .get("label_reviewer_source")
+        .and_then(|value| value.as_str())
+        .map(|source| !source.trim().is_empty())
+        .unwrap_or(false);
+    if status == Some("passed") && !reviewer_source_present {
+        "label reviewer source missing"
+    } else {
+        "label provenance missing"
     }
 }
 

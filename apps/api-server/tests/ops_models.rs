@@ -373,11 +373,23 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["decision"], "routing_blocked");
     assert_eq!(body["latest_evaluation_id"], "none");
     assert_eq!(body["passed_count"], 1);
-    assert_eq!(body["total_count"], 11);
+    assert_eq!(body["total_count"], 14);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("dataset version missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("source data quality score missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("feature reproducibility hash missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("label provenance missing")));
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -393,6 +405,61 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .find(|gate| gate["label"] == "Immutable dataset")
         .unwrap();
     assert_eq!(dataset_gate["evidence_source"], "missing");
+}
+
+#[tokio::test]
+async fn model_promotion_gates_require_data_quality_and_label_provenance() {
+    let app = build_app(test_config());
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "quality_gate").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_quality_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_quality_gate/v1/feature_importance.parquet",
+              "metrics_json": {{
+                "data_quality_score": 0.91,
+                "feature_reproducibility_hash": "sha256:quality-gate-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "qa_review"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    for label in [
+        "Source data quality",
+        "Feature reproducibility",
+        "Label provenance",
+    ] {
+        let gate = body["gates"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|gate| gate["label"] == label)
+            .unwrap();
+        assert_eq!(gate["passed"], true);
+        assert_eq!(gate["evidence_source"], "evaluation");
+    }
 }
 
 #[tokio::test]
