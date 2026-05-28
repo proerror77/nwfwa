@@ -6,6 +6,14 @@ import {
   type ProviderProfileAssessment,
 } from "./providerProfileInspection";
 import { formatReviewModeLabel } from "./reviewMode";
+import {
+  buildClinicalEvidenceInspection,
+  buildProviderGraphInspection,
+  buildSimilarCaseInspection,
+  type ClinicalEvidenceAssessment,
+  type ProviderRelationshipGraphAssessment,
+  type SimilarCase,
+} from "./runtimeEvidence";
 import { buildScoringLayerSummary, type ScoringLayer } from "./scoringLayers";
 
 type ScoringResponse = {
@@ -39,7 +47,10 @@ type ScoringResponse = {
   }>;
   layers: ScoringLayer[];
   top_reasons: string[];
+  clinical_evidence?: ClinicalEvidenceAssessment;
   provider_profile?: ProviderProfileAssessment;
+  provider_relationships?: ProviderRelationshipGraphAssessment;
+  similar_cases: SimilarCase[];
   evidence_refs: unknown[];
 };
 
@@ -51,11 +62,34 @@ const defaultPayload = JSON.stringify(
       external_claim_id: "CLM-0287",
       claim_amount: "8000",
       currency: "CNY",
+      service_date: "2026-01-06",
+      diagnosis_code: "J10",
+      items: [
+        {
+          item_code: "IMG-900",
+          item_type: "procedure",
+          description: "High cost imaging",
+          quantity: 1,
+          unit_amount: "8000",
+          total_amount: "8000",
+        },
+      ],
+      policy: {
+        external_policy_id: "POL-0287",
+        product_code: "MED",
+        coverage_start_date: "2026-01-01",
+        coverage_end_date: "2026-12-31",
+        coverage_limit: "10000",
+        currency: "CNY",
+      },
+      member: {
+        external_member_id: "MBR-0287",
+      },
       provider: {
         external_provider_id: "PRV-DEMO",
         name: "Demo Hospital",
         provider_type: "hospital",
-        region: "SH",
+        region: "Shanghai",
         risk_tier: "Medium",
       },
       provider_profile: {
@@ -74,6 +108,14 @@ const defaultPayload = JSON.stringify(
             false_positive_count: 1,
           },
         ],
+      },
+      provider_relationships: {
+        high_risk_neighbor_ratio: 0.34,
+        provider_patient_overlap_score: 0.68,
+        referral_concentration_score: 0.72,
+        connected_confirmed_fwa_count: 2,
+        network_component_risk_score: 82,
+        evidence_refs: ["relationship_edges:PRV-DEMO"],
       },
     },
   },
@@ -110,6 +152,16 @@ export function RuntimeScoring() {
     ? buildProviderProfileInspection(result.provider_profile)
     : null;
   const providerProfile = result?.provider_profile;
+  const clinicalInspection = result
+    ? buildClinicalEvidenceInspection(result.clinical_evidence)
+    : null;
+  const providerGraphInspection = result
+    ? buildProviderGraphInspection(result.provider_relationships)
+    : null;
+  const providerGraph = result?.provider_relationships;
+  const similarCaseInspection = result
+    ? buildSimilarCaseInspection(result.similar_cases)
+    : null;
   const layerSummary = result ? buildScoringLayerSummary(result.layers) : null;
 
   return (
@@ -357,6 +409,147 @@ export function RuntimeScoring() {
                     <span>Evidence Refs</span>
                     <p>{providerInspection.evidenceSummary}</p>
                   </div>
+                </div>
+              ) : null}
+            </section>
+            <section>
+              <h3>Clinical Evidence</h3>
+              {clinicalInspection && result.clinical_evidence ? (
+                <div className="factor-card">
+                  <dl className="result-grid">
+                    <div>
+                      <dt>Status</dt>
+                      <dd>{clinicalInspection.statusLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Review</dt>
+                      <dd>{clinicalInspection.reviewLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Route</dt>
+                      <dd>{clinicalInspection.routeLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Findings</dt>
+                      <dd>{clinicalInspection.findingCount}</dd>
+                    </div>
+                    <div>
+                      <dt>First Finding</dt>
+                      <dd>{clinicalInspection.firstFindingLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Missing Evidence</dt>
+                      <dd>{clinicalInspection.missingEvidenceSummary}</dd>
+                    </div>
+                  </dl>
+                  <div>
+                    <span>Minimum Evidence</span>
+                    <p>{clinicalInspection.minimumEvidenceSummary}</p>
+                  </div>
+                  <div>
+                    <span>Evidence Refs</span>
+                    <p>{clinicalInspection.evidenceSummary}</p>
+                  </div>
+                </div>
+              ) : (
+                <p className="empty">No clinical evidence assessment</p>
+              )}
+            </section>
+            <section>
+              <h3>Provider Graph Risk</h3>
+              {providerGraphInspection && providerGraph ? (
+                <div className="factor-card">
+                  <dl className="result-grid">
+                    <div>
+                      <dt>Provider</dt>
+                      <dd>{providerGraphInspection.providerId}</dd>
+                    </div>
+                    <div>
+                      <dt>Risk</dt>
+                      <dd>{providerGraphInspection.riskLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Review</dt>
+                      <dd>{providerGraphInspection.reviewLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Route</dt>
+                      <dd>{providerGraphInspection.routeLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Top Signal</dt>
+                      <dd>{providerGraphInspection.topSignalLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Evidence</dt>
+                      <dd>{providerGraphInspection.evidenceSummary}</dd>
+                    </div>
+                  </dl>
+                  <div>
+                    <span>Graph Reasons</span>
+                    <p>{providerGraphInspection.reasonSummary}</p>
+                  </div>
+                  {providerGraph.findings.length > 0 ? (
+                    <ul className="result-list compact-list">
+                      {providerGraph.findings.map((finding) => (
+                        <li key={finding.evidence_ref}>
+                          <strong>
+                            {finding.signal} / {finding.risk_score}
+                          </strong>
+                          <span>{finding.reason}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty">No graph findings</p>
+                  )}
+                </div>
+              ) : (
+                <p className="empty">No provider graph assessment</p>
+              )}
+            </section>
+            <section>
+              <h3>Similar Cases</h3>
+              {similarCaseInspection ? (
+                <div className="factor-card">
+                  <dl className="result-grid">
+                    <div>
+                      <dt>Cases</dt>
+                      <dd>{similarCaseInspection.caseCount}</dd>
+                    </div>
+                    <div>
+                      <dt>Top Case</dt>
+                      <dd>{similarCaseInspection.topCaseLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Scheme</dt>
+                      <dd>{similarCaseInspection.schemeLabel}</dd>
+                    </div>
+                    <div>
+                      <dt>Signals</dt>
+                      <dd>{similarCaseInspection.matchedSignalsSummary}</dd>
+                    </div>
+                  </dl>
+                  <div>
+                    <span>Provenance</span>
+                    <p>{similarCaseInspection.provenanceSummary}</p>
+                  </div>
+                  {result.similar_cases.length > 0 ? (
+                    <ul className="result-list compact-list">
+                      {result.similar_cases.map((similarCase) => (
+                        <li key={similarCase.case_id}>
+                          <strong>
+                            {similarCase.case_id} ·{" "}
+                            {(similarCase.similarity_score * 100).toFixed(0)}%
+                          </strong>
+                          <span>{similarCase.title}</span>
+                          <small>{similarCase.provenance_refs.join(", ")}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <p className="empty">No similar cases</p>
+                  )}
                 </div>
               ) : null}
             </section>
