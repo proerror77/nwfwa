@@ -190,6 +190,11 @@ async fn scores_spec_style_top_level_full_payload() {
     assert_eq!(layers[5]["layer_id"], "L6_PROVIDER_GRAPH_RISK");
     assert_eq!(layers[6]["layer_id"], "L7_RISK_FUSION_ROUTING");
     assert_eq!(layers[6]["score"], body["scores"]["final_score"]);
+    let evidence_refs = body["evidence_refs"]
+        .as_array()
+        .expect("response should include evidence refs");
+    assert!(evidence_refs.contains(&serde_json::json!("rule_runs:EARLY_HIGH_AMOUNT")));
+    assert!(evidence_refs.contains(&serde_json::json!("model_scores:baseline_fwa")));
 
     let audit_request = Request::builder()
         .method("GET")
@@ -221,6 +226,14 @@ async fn scores_spec_style_top_level_full_payload() {
         .as_str()
         .unwrap()
         .contains("医务复核"));
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rule_runs:EARLY_HIGH_AMOUNT")));
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model_scores:baseline_fwa")));
 }
 
 #[tokio::test]

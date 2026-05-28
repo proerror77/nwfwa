@@ -393,6 +393,13 @@ pub async fn score_claim(
             return Err(model_runtime_error(error));
         }
     };
+    evidence_refs.extend(rule_matches.iter().map(|rule_match| {
+        serde_json::Value::String(format!("rule_runs:{}", rule_match.alert_code))
+    }));
+    evidence_refs.push(serde_json::Value::String(format!(
+        "model_scores:{}",
+        model_score.model_key
+    )));
     let decision = fwa_scoring::aggregate_for_review_mode(
         &features,
         &rule_matches,
