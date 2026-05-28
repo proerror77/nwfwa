@@ -717,6 +717,22 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/providers/risk-summary": {
+                "get": {
+                    "summary": "Summarize Provider profile and graph-risk review signals",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Provider risk summary",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ProviderRiskSummaryResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/performance": {
                 "get": {
                     "summary": "Get model performance metrics",
@@ -1490,6 +1506,34 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "reason": { "type": "string" },
                         "evidence_ref": { "type": "string" }
+                    }
+                },
+                "ProviderRiskSummaryItem": {
+                    "type": "object",
+                    "required": ["provider_id", "risk_score", "risk_tier", "review_required", "review_route", "claim_count", "outlier_flags", "evidence_refs"],
+                    "properties": {
+                        "provider_id": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "risk_tier": { "type": "string" },
+                        "review_required": { "type": "boolean" },
+                        "review_route": { "type": "string" },
+                        "claim_count": { "type": "integer" },
+                        "latest_claim_id": { "type": ["string", "null"] },
+                        "outlier_flags": { "type": "array", "items": { "type": "string" } },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "ProviderRiskSummaryResponse": {
+                    "type": "object",
+                    "required": ["provider_count", "review_required_count", "high_risk_count", "providers"],
+                    "properties": {
+                        "provider_count": { "type": "integer" },
+                        "review_required_count": { "type": "integer" },
+                        "high_risk_count": { "type": "integer" },
+                        "providers": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ProviderRiskSummaryItem" }
+                        }
                     }
                 },
                 "ClinicalEvidenceAssessment": {

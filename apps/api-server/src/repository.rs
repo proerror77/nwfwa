@@ -316,6 +316,27 @@ pub struct DashboardSavingAttributionRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderRiskSummaryItemRecord {
+    pub provider_id: String,
+    pub risk_score: u8,
+    pub risk_tier: String,
+    pub review_required: bool,
+    pub review_route: String,
+    pub claim_count: u32,
+    pub latest_claim_id: Option<String>,
+    pub outlier_flags: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProviderRiskSummaryRecord {
+    pub provider_count: u32,
+    pub review_required_count: u32,
+    pub high_risk_count: u32,
+    pub providers: Vec<ProviderRiskSummaryItemRecord>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardLabelPoolRecord {
     pub total_labels: u32,
     pub approved_for_training: u32,
@@ -990,6 +1011,8 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<Option<ModelPromotionReviewRecord>>;
 
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord>;
+
+    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord>;
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>>;
 
@@ -1697,6 +1720,13 @@ impl ScoringRepository for InMemoryScoringRepository {
             investigation_results,
             qa_reviews,
         })
+    }
+
+    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
+        let runs = self.runs.lock().await;
+        Ok(summarize_provider_risk_profiles(
+            runs.iter().map(|run| &run.audit_event),
+        ))
     }
 
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
@@ -3703,6 +3733,20 @@ impl ScoringRepository for PostgresScoringRepository {
         })
     }
 
+    async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord> {
+        let rows: Vec<(Value,)> = sqlx::query_as(
+            "SELECT payload
+             FROM audit_events
+             WHERE event_type = 'scoring.completed'
+               AND event_status = 'succeeded'",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(summarize_provider_risk_profiles(
+            rows.iter().map(|(payload,)| payload),
+        ))
+    }
+
     async fn list_knowledge_cases(&self) -> anyhow::Result<Vec<KnowledgeCaseRecord>> {
         ensure_default_knowledge_cases_seeded(&self.pool).await?;
         let rows: Vec<(
@@ -5144,6 +5188,116 @@ fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLab
             .iter()
             .filter(|label| label.feedback_target == "workflow")
             .count() as u32,
+    }
+}
+
+#[derive(Debug, Default)]
+struct ProviderRiskAccumulator {
+    provider_id: String,
+    risk_score: u8,
+    risk_tier: String,
+    review_required: bool,
+    review_route: String,
+    claim_count: u32,
+    latest_claim_id: Option<String>,
+    outlier_flags: BTreeSet<String>,
+    evidence_refs: BTreeSet<String>,
+}
+
+fn summarize_provider_risk_profiles<'a>(
+    payloads: impl Iterator<Item = &'a Value>,
+) -> ProviderRiskSummaryRecord {
+    let mut providers = BTreeMap::<String, ProviderRiskAccumulator>::new();
+
+    for payload in payloads {
+        let Some(profile) = payload.get("provider_profile") else {
+            continue;
+        };
+        let Some(provider_id) = profile.get("provider_id").and_then(Value::as_str) else {
+            continue;
+        };
+        let risk_score = profile
+            .get("risk_score")
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+            .min(100) as u8;
+        let entry =
+            providers
+                .entry(provider_id.to_string())
+                .or_insert_with(|| ProviderRiskAccumulator {
+                    provider_id: provider_id.to_string(),
+                    risk_tier: "low".into(),
+                    review_route: "none".into(),
+                    ..ProviderRiskAccumulator::default()
+                });
+
+        entry.claim_count += 1;
+        entry.latest_claim_id = payload
+            .get("claim_id")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .or_else(|| entry.latest_claim_id.clone());
+        entry.review_required |= profile
+            .get("review_required")
+            .and_then(Value::as_bool)
+            .unwrap_or(false);
+
+        if risk_score >= entry.risk_score {
+            entry.risk_score = risk_score;
+            entry.risk_tier = profile
+                .get("risk_tier")
+                .and_then(Value::as_str)
+                .unwrap_or("low")
+                .to_string();
+            entry.review_route = profile
+                .get("review_route")
+                .and_then(Value::as_str)
+                .unwrap_or("none")
+                .to_string();
+        }
+
+        extend_string_set(&mut entry.outlier_flags, profile.get("outlier_flags"));
+        extend_string_set(&mut entry.evidence_refs, profile.get("evidence_refs"));
+    }
+
+    let mut providers = providers
+        .into_values()
+        .map(|provider| ProviderRiskSummaryItemRecord {
+            provider_id: provider.provider_id,
+            risk_score: provider.risk_score,
+            risk_tier: provider.risk_tier,
+            review_required: provider.review_required,
+            review_route: provider.review_route,
+            claim_count: provider.claim_count,
+            latest_claim_id: provider.latest_claim_id,
+            outlier_flags: provider.outlier_flags.into_iter().collect(),
+            evidence_refs: provider.evidence_refs.into_iter().collect(),
+        })
+        .collect::<Vec<_>>();
+    providers.sort_by(|left, right| {
+        right
+            .risk_score
+            .cmp(&left.risk_score)
+            .then_with(|| left.provider_id.cmp(&right.provider_id))
+    });
+
+    ProviderRiskSummaryRecord {
+        provider_count: providers.len() as u32,
+        review_required_count: providers
+            .iter()
+            .filter(|provider| provider.review_required)
+            .count() as u32,
+        high_risk_count: providers
+            .iter()
+            .filter(|provider| provider.risk_score >= 70)
+            .count() as u32,
+        providers,
+    }
+}
+
+fn extend_string_set(target: &mut BTreeSet<String>, value: Option<&Value>) {
+    if let Some(items) = value.and_then(Value::as_array) {
+        target.extend(items.iter().filter_map(Value::as_str).map(str::to_string));
     }
 }
 

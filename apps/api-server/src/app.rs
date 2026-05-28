@@ -3,7 +3,7 @@ use crate::{
     repository::{InMemoryScoringRepository, SharedRepository},
     routes::{
         agent, claims, dashboard, health, knowledge, openapi, ops_agents, ops_cases, ops_datasets,
-        ops_models, ops_rules, ops_sampling, pilot_loop,
+        ops_models, ops_providers, ops_rules, ops_sampling, pilot_loop,
     },
 };
 use axum::{
@@ -152,6 +152,10 @@ pub fn build_app_with_parts(
             get(ops_datasets::get_model_evaluation),
         )
         .route("/api/v1/ops/models", get(ops_models::list_models))
+        .route(
+            "/api/v1/ops/providers/risk-summary",
+            get(ops_providers::provider_risk_summary),
+        )
         .route(
             "/api/v1/ops/models/:model_key/performance",
             get(ops_models::model_performance),

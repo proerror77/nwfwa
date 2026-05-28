@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getDashboardSummary } from "../api";
+import { getDashboardSummary, getProviderRiskSummary } from "../api";
 import { buildDashboardLayerRows, type DashboardLayerScore } from "./dashboardLayerRows";
 import {
   buildSavingAttributionRows,
@@ -37,6 +37,25 @@ type DashboardSummary = {
   qa_reviews: number;
 };
 
+type ProviderRiskSummaryItem = {
+  provider_id: string;
+  risk_score: number;
+  risk_tier: string;
+  review_required: boolean;
+  review_route: string;
+  claim_count: number;
+  latest_claim_id?: string | null;
+  outlier_flags: string[];
+  evidence_refs: string[];
+};
+
+type ProviderRiskSummary = {
+  provider_count: number;
+  review_required_count: number;
+  high_risk_count: number;
+  providers: ProviderRiskSummaryItem[];
+};
+
 function formatScore(score: number) {
   return score.toFixed(1);
 }
@@ -56,18 +75,39 @@ export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
   };
 }
 
+export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
+  const providerCount = summary?.provider_count ?? 0;
+  const reviewRequiredCount = summary?.review_required_count ?? 0;
+  const topProvider = summary?.providers[0];
+  return {
+    providerCount,
+    reviewRequiredCount,
+    highRiskCount: summary?.high_risk_count ?? 0,
+    reviewRateLabel:
+      providerCount === 0 ? "0.0%" : `${((reviewRequiredCount / providerCount) * 100).toFixed(1)}%`,
+    topProviderId: topProvider?.provider_id ?? "none",
+    topProviderScore: topProvider?.risk_score ?? 0,
+  };
+}
+
 export function DashboardPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const dashboardQuery = useQuery({
     queryKey: ["dashboard-summary", apiKey],
     queryFn: () => getDashboardSummary(apiKey) as Promise<DashboardSummary>,
   });
+  const providerRiskQuery = useQuery({
+    queryKey: ["provider-risk-summary", apiKey],
+    queryFn: () => getProviderRiskSummary(apiKey) as Promise<ProviderRiskSummary>,
+  });
   const summary = dashboardQuery.data;
+  const providerRisk = providerRiskQuery.data;
   const ragRows = Object.entries(summary?.rag_distribution ?? {});
   const modelRows = Object.entries(summary?.model_scores ?? {});
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
+  const providerRiskSummary = buildProviderRiskSummary(providerRisk);
 
   return (
     <section className="dashboard">
@@ -84,6 +124,9 @@ export function DashboardPage() {
 
       {dashboardQuery.error ? (
         <pre className="error">{String(dashboardQuery.error.message)}</pre>
+      ) : null}
+      {providerRiskQuery.error ? (
+        <pre className="error">{String(providerRiskQuery.error.message)}</pre>
       ) : null}
 
       <div className="summary-grid dashboard-kpis">
@@ -182,6 +225,41 @@ export function DashboardPage() {
               <strong>{labelPoolSummary.workflowFeedback}</strong>
             </div>
           </div>
+        </div>
+
+        <div className="panel">
+          <h2>Provider Risk</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Providers</span>
+              <strong>{providerRiskSummary.providerCount}</strong>
+            </div>
+            <div>
+              <span>Review Required</span>
+              <strong>{providerRiskSummary.reviewRequiredCount}</strong>
+            </div>
+            <div>
+              <span>High Risk</span>
+              <strong>{providerRiskSummary.highRiskCount}</strong>
+            </div>
+            <div>
+              <span>Review Rate</span>
+              <strong>{providerRiskSummary.reviewRateLabel}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            {(providerRisk?.providers ?? []).slice(0, 4).map((provider) => (
+              <div className="metric-row" key={provider.provider_id}>
+                <span>{provider.provider_id}</span>
+                <strong>{provider.risk_score}</strong>
+                <small>{provider.review_route}</small>
+                <small>{provider.outlier_flags.slice(0, 2).join(", ") || "no outliers"}</small>
+              </div>
+            ))}
+          </div>
+          {!providerRiskQuery.isLoading && (providerRisk?.providers.length ?? 0) === 0 ? (
+            <p className="empty">No provider risk profiles</p>
+          ) : null}
         </div>
 
         <div className="panel wide-panel">

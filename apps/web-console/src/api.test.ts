@@ -6,6 +6,7 @@ import {
   discoverRules,
   getDashboardSummary,
   getClaimAuditHistory,
+  getProviderRiskSummary,
   getRulePromotionGates,
   submitRulePromotionReview,
   investigateCase,
@@ -207,9 +208,18 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ suspected_claims: 0 });
 
     await getDashboardSummary("dev-secret");
+    await getProviderRiskSummary("dev-secret");
 
-    expect(fetchMock).toHaveBeenCalledWith(
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
       "/api/v1/ops/dashboard/summary",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/providers/risk-summary",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
