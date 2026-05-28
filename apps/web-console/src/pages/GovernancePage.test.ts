@@ -3,6 +3,7 @@ import {
   buildAgentRunLogSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
+  buildGovernanceChangeTimelineRows,
   buildOpsAlertSummary,
   buildOutcomeLabelSummary,
   buildPromotionGateGovernanceRows,
@@ -71,6 +72,105 @@ describe("buildAuditSummary", () => {
     });
 
     expect(summary.latestEventType).toBe("routing_policy.activation.completed");
+  });
+});
+
+describe("buildGovernanceChangeTimelineRows", () => {
+  it("extracts rule model and routing lifecycle changes from global audit events", () => {
+    const rows = buildGovernanceChangeTimelineRows([
+      {
+        audit_id: "audit_rule",
+        run_id: "run_rule",
+        event_type: "rule.promotion.reviewed",
+        event_status: "succeeded",
+        summary: "Rule promotion review: approved",
+        payload: {
+          rule_id: "rule_early_claim",
+          rule_version: 2,
+          decision: "approved",
+          reviewer: "rule-governance",
+        },
+        evidence_refs: ["rules:rule_early_claim:v2"],
+        created_at: "2026-05-27T10:00:00Z",
+      },
+      {
+        audit_id: "audit_model",
+        run_id: "run_model",
+        event_type: "model.activation.completed",
+        event_status: "succeeded",
+        summary: "Model activation completed",
+        payload: {
+          model_key: "baseline_fwa",
+          model_version: "0.2.0",
+          from_status: "approved",
+          to_status: "active",
+        },
+        evidence_refs: ["model_versions:baseline_fwa:0.2.0"],
+      },
+      {
+        audit_id: "audit_routing",
+        run_id: "run_routing",
+        event_type: "routing_policy.status.changed",
+        event_status: "succeeded",
+        summary: "Routing policy approved",
+        payload: {
+          policy_id: "fwa_risk_fusion_routing",
+          version: 3,
+          review_mode: "post_payment",
+          from_status: "submitted",
+          to_status: "approved",
+          owner: "policy-ops",
+        },
+        evidence_refs: ["routing_policies:fwa_risk_fusion_routing:v3:post_payment"],
+      },
+      {
+        audit_id: "audit_scoring",
+        run_id: "run_scoring",
+        event_type: "scoring.completed",
+        event_status: "succeeded",
+        summary: "Scoring completed",
+        evidence_refs: ["scoring_runs:run_scoring"],
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        auditId: "audit_rule",
+        domain: "Rule",
+        eventType: "rule.promotion.reviewed",
+        targetId: "rule_early_claim@v2",
+        statusTransition: "review -> approved",
+        actor: "rule-governance",
+        decision: "approved",
+        summary: "Rule promotion review: approved",
+        createdAt: "2026-05-27T10:00:00Z",
+        evidenceRefs: ["rules:rule_early_claim:v2"],
+      },
+      {
+        auditId: "audit_model",
+        domain: "Model",
+        eventType: "model.activation.completed",
+        targetId: "baseline_fwa@0.2.0",
+        statusTransition: "approved -> active",
+        actor: "system",
+        decision: "active",
+        summary: "Model activation completed",
+        createdAt: "run_model",
+        evidenceRefs: ["model_versions:baseline_fwa:0.2.0"],
+      },
+      {
+        auditId: "audit_routing",
+        domain: "Routing",
+        eventType: "routing_policy.status.changed",
+        targetId: "fwa_risk_fusion_routing@v3 / post_payment",
+        statusTransition: "submitted -> approved",
+        actor: "policy-ops",
+        decision: "approved",
+        summary: "Routing policy approved",
+        createdAt: "run_routing",
+        evidenceRefs: ["routing_policies:fwa_risk_fusion_routing:v3:post_payment"],
+      },
+    ]);
   });
 });
 

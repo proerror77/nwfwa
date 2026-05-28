@@ -229,6 +229,33 @@ type PromotionGateGovernanceResponse = {
   rows: PromotionGateGovernanceRow[];
 };
 
+export type GovernanceChangeTimelineRow = {
+  auditId: string;
+  domain: string;
+  eventType: string;
+  targetId: string;
+  statusTransition: string;
+  actor: string;
+  decision: string;
+  summary: string;
+  createdAt: string;
+  evidenceRefs: string[];
+};
+
+const governanceChangeEventTypes = new Set([
+  "rule.candidate.saved",
+  "rule.status.changed",
+  "rule.rollback.completed",
+  "rule.promotion.reviewed",
+  "model.promotion.reviewed",
+  "model.activation.completed",
+  "model.rollback.completed",
+  "routing_policy.candidate.saved",
+  "routing_policy.status.changed",
+  "routing_policy.activation.completed",
+  "routing_policy.rollback.completed",
+]);
+
 export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
   const events = data?.events ?? [];
   const latestDatedEvent = events.filter((event) => event.created_at).reduce<
@@ -243,6 +270,73 @@ export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: stri
     failedEvents: events.filter((event) => event.event_status === "failed").length,
     latestEventType: latestDatedEvent?.event_type ?? events.at(-1)?.event_type ?? "none",
   };
+}
+
+function payloadString(payload: Record<string, unknown> | undefined, key: string) {
+  const value = payload?.[key];
+  if (value === undefined || value === null) return "";
+  return String(value);
+}
+
+function governanceChangeDomain(eventType: string) {
+  if (eventType.startsWith("rule.")) return "Rule";
+  if (eventType.startsWith("model.")) return "Model";
+  if (eventType.startsWith("routing_policy.")) return "Routing";
+  return "Governance";
+}
+
+function governanceChangeTargetId(event: AuditEvent) {
+  const payload = event.payload;
+  if (event.event_type.startsWith("rule.")) {
+    const ruleId = payloadString(payload, "rule_id");
+    const version = payloadString(payload, "rule_version");
+    return version ? `${ruleId}@v${version}` : ruleId;
+  }
+  if (event.event_type.startsWith("model.")) {
+    const modelKey = payloadString(payload, "model_key");
+    const version = payloadString(payload, "model_version");
+    return version ? `${modelKey}@${version}` : modelKey;
+  }
+  if (event.event_type.startsWith("routing_policy.")) {
+    const policyId = payloadString(payload, "policy_id");
+    const version = payloadString(payload, "version");
+    const reviewMode = payloadString(payload, "review_mode");
+    return [version ? `${policyId}@v${version}` : policyId, reviewMode]
+      .filter(Boolean)
+      .join(" / ");
+  }
+  return payloadString(payload, "id") || event.run_id;
+}
+
+export function buildGovernanceChangeTimelineRows(
+  events: AuditEvent[] = [],
+): GovernanceChangeTimelineRow[] {
+  return events
+    .filter((event) => governanceChangeEventTypes.has(event.event_type))
+    .map((event) => {
+      const fromStatus = payloadString(event.payload, "from_status") || "-";
+      const toStatus = payloadString(event.payload, "to_status") || "-";
+      const decision = payloadString(event.payload, "decision");
+      return {
+        auditId: event.audit_id,
+        domain: governanceChangeDomain(event.event_type),
+        eventType: event.event_type,
+        targetId: governanceChangeTargetId(event),
+        statusTransition:
+          fromStatus === "-" && toStatus === "-" && decision
+            ? `review -> ${decision}`
+            : `${fromStatus} -> ${toStatus}`,
+        actor:
+          payloadString(event.payload, "reviewer") ||
+          payloadString(event.payload, "owner") ||
+          payloadString(event.payload, "requested_by") ||
+          "system",
+        decision: decision || toStatus,
+        summary: event.summary,
+        createdAt: event.created_at ?? event.run_id,
+        evidenceRefs: event.evidence_refs,
+      };
+    });
 }
 
 export function buildPromotionGateGovernanceRows(
@@ -477,6 +571,9 @@ export function GovernancePage() {
   const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
+  const governanceChangeTimelineRows = buildGovernanceChangeTimelineRows(
+    globalAuditQuery.data?.events,
+  );
   const promotionGateSummary = buildPromotionGateGovernanceSummary(
     promotionGateGovernanceQuery.data?.rows,
   );
@@ -677,6 +774,38 @@ export function GovernancePage() {
           </div>
         ) : (
           <p className="empty">No promotion gate data loaded</p>
+        )}
+      </div>
+
+      <div className="panel">
+        <h2>Governance Change Timeline</h2>
+        {governanceChangeTimelineRows.length ? (
+          <ol className="audit-timeline">
+            {governanceChangeTimelineRows.map((row) => (
+              <li key={row.auditId}>
+                <div>
+                  <strong>
+                    {row.domain} / {row.targetId}
+                  </strong>
+                  <span>{row.decision}</span>
+                </div>
+                <small>
+                  {row.createdAt} · {row.eventType}
+                </small>
+                <p>
+                  {row.statusTransition} · {row.actor}
+                </p>
+                <p>{row.summary}</p>
+                <ul className="result-list">
+                  {row.evidenceRefs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No governance change events loaded</p>
         )}
       </div>
 
