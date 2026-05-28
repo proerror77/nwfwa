@@ -6397,15 +6397,13 @@ fn webhook_event_from_audit(
     }
     let event_type = match event.event_type.as_str() {
         "scoring.completed" => "fwa.score.completed",
-        "lead.triaged" => {
+        "lead.triaged"
             if event.payload["decision"].as_str() == Some("open_case")
-                && event.payload["case_id"].as_str().is_some()
-            {
-                "fwa.case.routed"
-            } else {
-                return None;
-            }
+                && event.payload["case_id"].as_str().is_some() =>
+        {
+            "fwa.case.routed"
         }
+        "lead.triaged" => return None,
         "investigation.result.received" => "fwa.investigation.closed",
         "qa.result.received" => "fwa.qa.reviewed",
         "case.status.updated" => {
