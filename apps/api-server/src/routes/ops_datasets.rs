@@ -5,6 +5,7 @@ use crate::{
         CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, FieldMappingRecord,
         ModelDatasetRecord, ModelEvaluationRecord, PersistedAuditEvent, RegisterDatasetInput,
         RegisterFeatureSetInput, RegisterModelDatasetInput, RegisterModelEvaluationInput,
+        SchemaFieldRecord,
     },
 };
 use axum::{
@@ -84,6 +85,39 @@ pub struct FactorReadinessResponse {
     pub high_missing_count: u32,
     pub unstable_factor_count: u32,
     pub unowned_factor_count: u32,
+    pub factor_cards: Vec<FactorCardRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FactorCardRecord {
+    pub dataset_id: String,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub factor_name: String,
+    pub chinese_name: String,
+    pub entity_type: String,
+    pub semantic_role: String,
+    pub logical_type: String,
+    pub calculation_window: String,
+    pub calculation_logic: String,
+    pub source_table: String,
+    pub source_fields: Vec<String>,
+    pub business_meaning: String,
+    pub risk_direction: String,
+    pub missing_rate: Option<f64>,
+    pub iv: Option<f64>,
+    pub auc_gain: Option<f64>,
+    pub lift: Option<f64>,
+    pub psi: Option<f64>,
+    pub stability: String,
+    pub model_contribution: Option<f64>,
+    pub rule_convertible: bool,
+    pub online_available: bool,
+    pub version: String,
+    pub owner: String,
+    pub is_label: bool,
+    pub is_entity_key: bool,
+    pub evidence_refs: Vec<String>,
 }
 
 pub async fn register_dataset(
@@ -454,6 +488,7 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
         high_missing_count: 0,
         unstable_factor_count: 0,
         unowned_factor_count: 0,
+        factor_cards: Vec::new(),
     };
 
     for dataset in datasets {
@@ -495,6 +530,9 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
             {
                 response.mapped_factor_count += 1;
             }
+            response
+                .factor_cards
+                .push(build_factor_card(dataset, field));
         }
     }
 
@@ -502,6 +540,67 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
     response.data_quality_status = factor_data_quality_status(response.data_quality_score).into();
 
     response
+}
+
+fn build_factor_card(dataset: &DatasetRecord, field: &SchemaFieldRecord) -> FactorCardRecord {
+    let is_label = field.semantic_role == "label";
+    let is_entity_key = dataset.entity_keys.contains(&field.field_name);
+    let missing_rate = numeric_profile_value(&field.profile_json, "missing_rate");
+    let psi = numeric_profile_value(&field.profile_json, "psi");
+    let source_fields = string_array_profile_value(&field.profile_json, "source_fields")
+        .unwrap_or_else(|| vec![field.field_name.clone()]);
+    FactorCardRecord {
+        dataset_id: dataset.dataset_id.clone(),
+        dataset_key: dataset.dataset_key.clone(),
+        dataset_version: dataset.dataset_version.clone(),
+        factor_name: field.field_name.clone(),
+        chinese_name: string_profile_value(&field.profile_json, "chinese_name")
+            .or_else(|| string_profile_value(&field.profile_json, "display_label"))
+            .unwrap_or_else(|| titleize(&field.field_name)),
+        entity_type: string_profile_value(&field.profile_json, "entity_type")
+            .unwrap_or_else(|| dataset.sample_grain.clone()),
+        semantic_role: field.semantic_role.clone(),
+        logical_type: field.logical_type.clone(),
+        calculation_window: string_profile_value(&field.profile_json, "calculation_window")
+            .unwrap_or_else(|| dataset.sample_grain.clone()),
+        calculation_logic: string_profile_value(&field.profile_json, "calculation_logic")
+            .unwrap_or_else(|| "registered_dataset_field".into()),
+        source_table: string_profile_value(&field.profile_json, "source_table")
+            .unwrap_or_else(|| dataset.dataset_key.clone()),
+        source_fields,
+        business_meaning: string_profile_value(&field.profile_json, "business_meaning")
+            .unwrap_or_else(|| field.description.clone()),
+        risk_direction: string_profile_value(&field.profile_json, "risk_direction").unwrap_or_else(
+            || {
+                if is_label {
+                    "label".into()
+                } else {
+                    "unknown".into()
+                }
+            },
+        ),
+        missing_rate,
+        iv: numeric_profile_value(&field.profile_json, "iv"),
+        auc_gain: numeric_profile_value(&field.profile_json, "auc_gain"),
+        lift: numeric_profile_value(&field.profile_json, "lift"),
+        psi,
+        stability: stability_label(psi).into(),
+        model_contribution: numeric_profile_value(&field.profile_json, "model_contribution"),
+        rule_convertible: !is_label
+            && bool_profile_value(&field.profile_json, "convertible_to_rule")
+                .unwrap_or_else(|| is_rule_convertible_type(&field.logical_type)),
+        online_available: !is_label
+            && bool_profile_value(&field.profile_json, "online_available")
+                .unwrap_or(!field.nullable),
+        version: format_factor_version(field.profile_json.get("version")),
+        owner: string_profile_value(&field.profile_json, "owner").unwrap_or_default(),
+        is_label,
+        is_entity_key,
+        evidence_refs: vec![format!(
+            "dataset_fields:{}:{}:{}",
+            dataset.dataset_key, dataset.dataset_version, field.field_name
+        )],
+    }
 }
 
 pub(crate) fn build_dataset_health(datasets: &[DatasetRecord]) -> Vec<DatasetHealthRecord> {
@@ -597,6 +696,64 @@ fn numeric_profile_value(profile: &Value, key: &str) -> Option<f64> {
             .as_f64()
             .or_else(|| value.as_i64().map(|value| value as f64))
     })
+}
+
+fn string_profile_value(profile: &Value, key: &str) -> Option<String> {
+    profile
+        .get(key)
+        .and_then(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn string_array_profile_value(profile: &Value, key: &str) -> Option<Vec<String>> {
+    let values = profile.get(key)?.as_array()?;
+    let values = values
+        .iter()
+        .filter_map(Value::as_str)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    (!values.is_empty()).then_some(values)
+}
+
+fn bool_profile_value(profile: &Value, key: &str) -> Option<bool> {
+    profile.get(key).and_then(Value::as_bool)
+}
+
+fn format_factor_version(value: Option<&Value>) -> String {
+    match value {
+        Some(Value::String(version)) if !version.is_empty() => version.clone(),
+        Some(Value::Number(version)) => version
+            .as_u64()
+            .map(|version| format!("v{version}"))
+            .unwrap_or_else(|| "v1".into()),
+        _ => "v1".into(),
+    }
+}
+
+fn stability_label(psi: Option<f64>) -> &'static str {
+    match psi {
+        None => "unmeasured",
+        Some(value) if value < 0.10 => "stable",
+        Some(value) if value < 0.25 => "watch",
+        Some(_) => "drift",
+    }
+}
+
+fn titleize(value: &str) -> String {
+    value
+        .split('_')
+        .filter(|part| !part.is_empty())
+        .map(|part| {
+            let mut chars = part.chars();
+            match chars.next() {
+                Some(first) => format!("{}{}", first.to_ascii_uppercase(), chars.as_str()),
+                None => String::new(),
+            }
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
 }
 
 fn is_rule_convertible_type(logical_type: &str) -> bool {

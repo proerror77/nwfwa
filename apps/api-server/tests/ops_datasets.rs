@@ -189,6 +189,52 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
     assert_eq!(readiness["mapped_factor_count"], 1);
     assert_eq!(readiness["high_missing_count"], 0);
     assert_eq!(readiness["unowned_factor_count"], 3);
+    assert_eq!(readiness["factor_cards"].as_array().unwrap().len(), 3);
+    assert_eq!(readiness["factor_cards"][0]["factor_name"], "policy_no");
+    assert_eq!(readiness["factor_cards"][0]["chinese_name"], "Policy No");
+    assert_eq!(readiness["factor_cards"][0]["entity_type"], "policy_order");
+    assert_eq!(
+        readiness["factor_cards"][0]["calculation_logic"],
+        "registered_dataset_field"
+    );
+    assert_eq!(
+        readiness["factor_cards"][0]["source_table"],
+        "renewal_automl_20211105"
+    );
+    assert_eq!(
+        readiness["factor_cards"][0]["source_fields"][0],
+        "policy_no"
+    );
+    assert_eq!(
+        readiness["factor_cards"][0]["business_meaning"],
+        "External policy number stored as string to avoid scientific notation corruption."
+    );
+    assert_eq!(readiness["factor_cards"][0]["risk_direction"], "unknown");
+    assert_eq!(readiness["factor_cards"][0]["iv"], serde_json::Value::Null);
+    assert_eq!(
+        readiness["factor_cards"][0]["auc_gain"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        readiness["factor_cards"][0]["lift"],
+        serde_json::Value::Null
+    );
+    assert_eq!(readiness["factor_cards"][0]["psi"], serde_json::Value::Null);
+    assert_eq!(readiness["factor_cards"][0]["stability"], "unmeasured");
+    assert_eq!(
+        readiness["factor_cards"][0]["model_contribution"],
+        serde_json::Value::Null
+    );
+    assert_eq!(readiness["factor_cards"][0]["rule_convertible"], false);
+    assert_eq!(readiness["factor_cards"][0]["online_available"], true);
+    assert_eq!(readiness["factor_cards"][0]["version"], "v1");
+    assert_eq!(readiness["factor_cards"][0]["owner"], "");
+    assert!(readiness["factor_cards"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "dataset_fields:renewal_automl_20211105:v1:policy_no"
+        )));
 }
 
 #[tokio::test]

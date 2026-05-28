@@ -264,6 +264,38 @@ async fn openapi_includes_operations_paths() {
             ["data_quality_status"]["enum"][1],
         "ready"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]["factor_cards"]
+            ["items"]["$ref"],
+        "#/components/schemas/FactorCard"
+    );
+    for field in [
+        "factor_name",
+        "chinese_name",
+        "entity_type",
+        "calculation_logic",
+        "source_table",
+        "business_meaning",
+        "risk_direction",
+        "iv",
+        "auc_gain",
+        "lift",
+        "psi",
+        "stability",
+        "rule_convertible",
+        "online_available",
+        "version",
+        "owner",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["FactorCard"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing factor card field {field}"
+        );
+    }
     assert!(schema["components"]["schemas"]["RuleSummary"]["required"]
         .as_array()
         .unwrap()

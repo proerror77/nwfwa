@@ -3148,7 +3148,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "FactorReadinessResponse": {
                     "type": "object",
-                    "required": ["dataset_count", "factor_count", "label_count", "entity_key_count", "data_quality_score", "data_quality_status", "online_ready_count", "rule_convertible_count", "mapped_factor_count", "high_missing_count", "unstable_factor_count", "unowned_factor_count"],
+                    "required": ["dataset_count", "factor_count", "label_count", "entity_key_count", "data_quality_score", "data_quality_status", "online_ready_count", "rule_convertible_count", "mapped_factor_count", "high_missing_count", "unstable_factor_count", "unowned_factor_count", "factor_cards"],
                     "properties": {
                         "dataset_count": { "type": "integer" },
                         "factor_count": { "type": "integer" },
@@ -3161,7 +3161,42 @@ pub async fn openapi_schema() -> Json<Value> {
                         "mapped_factor_count": { "type": "integer" },
                         "high_missing_count": { "type": "integer" },
                         "unstable_factor_count": { "type": "integer" },
-                        "unowned_factor_count": { "type": "integer" }
+                        "unowned_factor_count": { "type": "integer" },
+                        "factor_cards": { "type": "array", "items": { "$ref": "#/components/schemas/FactorCard" } }
+                    }
+                },
+                "FactorCard": {
+                    "type": "object",
+                    "required": ["dataset_id", "dataset_key", "dataset_version", "factor_name", "chinese_name", "entity_type", "semantic_role", "logical_type", "calculation_window", "calculation_logic", "source_table", "source_fields", "business_meaning", "risk_direction", "missing_rate", "iv", "auc_gain", "lift", "psi", "stability", "model_contribution", "rule_convertible", "online_available", "version", "owner", "is_label", "is_entity_key", "evidence_refs"],
+                    "properties": {
+                        "dataset_id": { "type": "string" },
+                        "dataset_key": { "type": "string" },
+                        "dataset_version": { "type": "string" },
+                        "factor_name": { "type": "string" },
+                        "chinese_name": { "type": "string" },
+                        "entity_type": { "type": "string" },
+                        "semantic_role": { "type": "string" },
+                        "logical_type": { "type": "string" },
+                        "calculation_window": { "type": "string" },
+                        "calculation_logic": { "type": "string" },
+                        "source_table": { "type": "string" },
+                        "source_fields": { "type": "array", "items": { "type": "string" } },
+                        "business_meaning": { "type": "string" },
+                        "risk_direction": { "type": "string" },
+                        "missing_rate": { "type": ["number", "null"] },
+                        "iv": { "type": ["number", "null"] },
+                        "auc_gain": { "type": ["number", "null"] },
+                        "lift": { "type": ["number", "null"] },
+                        "psi": { "type": ["number", "null"] },
+                        "stability": { "type": "string", "enum": ["unmeasured", "stable", "watch", "drift"] },
+                        "model_contribution": { "type": ["number", "null"] },
+                        "rule_convertible": { "type": "boolean" },
+                        "online_available": { "type": "boolean" },
+                        "version": { "type": "string" },
+                        "owner": { "type": "string" },
+                        "is_label": { "type": "boolean" },
+                        "is_entity_key": { "type": "boolean" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "ModelVersion": {

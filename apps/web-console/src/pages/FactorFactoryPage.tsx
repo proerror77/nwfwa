@@ -55,6 +55,38 @@ type FactorReadiness = {
   high_missing_count: number;
   unstable_factor_count: number;
   unowned_factor_count: number;
+  factor_cards?: ApiFactorCard[];
+};
+
+type ApiFactorCard = {
+  dataset_id: string;
+  dataset_key: string;
+  dataset_version: string;
+  factor_name: string;
+  chinese_name: string;
+  entity_type: string;
+  semantic_role: string;
+  logical_type: string;
+  calculation_window: string;
+  calculation_logic: string;
+  source_table: string;
+  source_fields: string[];
+  business_meaning: string;
+  risk_direction: string;
+  missing_rate: number | null;
+  iv: number | null;
+  auc_gain: number | null;
+  lift: number | null;
+  psi: number | null;
+  stability: string;
+  model_contribution: number | null;
+  rule_convertible: boolean;
+  online_available: boolean;
+  version: string;
+  owner: string;
+  is_label: boolean;
+  is_entity_key: boolean;
+  evidence_refs: string[];
 };
 
 export type FactorCard = {
@@ -151,6 +183,43 @@ export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
   });
 }
 
+export function buildApiFactorCards(cards: ApiFactorCard[], datasetId?: string): FactorCard[] {
+  return cards
+    .filter((card) => !datasetId || card.dataset_id === datasetId)
+    .map((card) => ({
+      factor_name: card.factor_name,
+      display_label: card.chinese_name,
+      semantic_role: card.semantic_role,
+      logical_type: card.logical_type,
+      description: card.business_meaning,
+      business_meaning: card.business_meaning,
+      risk_direction: card.risk_direction,
+      calculation_window: card.calculation_window,
+      calculation_logic: card.calculation_logic,
+      source_table: card.source_table,
+      source_fields: card.source_fields,
+      source_lineage_label: `${card.source_table}.${card.source_fields.join(",")}`,
+      owner: card.owner || "unassigned",
+      version: card.version,
+      missing_rate_label:
+        card.missing_rate === null ? "-" : `${(card.missing_rate * 100).toFixed(1)}%`,
+      iv_label: formatMetric(card.iv ?? undefined, 3),
+      auc_gain_label: formatMetric(card.auc_gain ?? undefined, 3),
+      lift_label: card.lift === null ? "-" : `${card.lift.toFixed(2)}x`,
+      stability_label: card.stability,
+      model_contribution_label: formatPercent(card.model_contribution ?? undefined),
+      online_status:
+        card.online_available && !card.is_label && (card.missing_rate ?? 1) <= 0.05
+          ? "ready"
+          : "review",
+      online_available: card.online_available,
+      convertible_to_rule: card.rule_convertible,
+      is_label: card.is_label,
+      is_entity_key: card.is_entity_key,
+      top_values: [],
+    }));
+}
+
 function isRuleConvertibleType(logicalType: string) {
   return ["decimal", "float", "float64", "int", "int8", "int32", "int64", "boolean"].includes(
     logicalType,
@@ -210,7 +279,17 @@ export function FactorFactoryPage() {
       datasetsQuery.data?.datasets[0],
     [datasetsQuery.data?.datasets, selectedDatasetId],
   );
-  const factorCards = selectedDataset ? buildFactorCards(selectedDataset) : [];
+  const factorCards = useMemo(() => {
+    const apiCards = buildApiFactorCards(
+      readinessQuery.data?.factor_cards ?? [],
+      selectedDataset?.dataset_id,
+    );
+    return apiCards.length > 0
+      ? apiCards
+      : selectedDataset
+        ? buildFactorCards(selectedDataset)
+        : [];
+  }, [readinessQuery.data?.factor_cards, selectedDataset]);
   const readinessSummary = buildFactorReadinessSummary(readinessQuery.data);
 
   return (

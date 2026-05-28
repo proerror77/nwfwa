@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildFactorCards, buildFactorReadinessSummary } from "./FactorFactoryPage";
+import {
+  buildApiFactorCards,
+  buildFactorCards,
+  buildFactorReadinessSummary,
+} from "./FactorFactoryPage";
 
 describe("buildFactorCards", () => {
   it("derives factor cards from profiled dataset fields", () => {
@@ -82,6 +86,63 @@ describe("buildFactorCards", () => {
       convertible_to_rule: false,
       online_available: false,
       is_label: true,
+    });
+  });
+});
+
+describe("buildApiFactorCards", () => {
+  it("uses backend factor card governance fields when readiness provides them", () => {
+    const cards = buildApiFactorCards(
+      [
+        {
+          dataset_id: "dataset_1",
+          dataset_key: "demo_claims_fwa",
+          dataset_version: "v1",
+          factor_name: "claim_amount_to_limit_ratio",
+          chinese_name: "理赔金额占保额比例",
+          entity_type: "claim",
+          semantic_role: "feature",
+          logical_type: "decimal",
+          calculation_window: "claim",
+          calculation_logic: "claim_amount / policy_limit",
+          source_table: "claims",
+          source_fields: ["claim_amount", "coverage_limit_amount"],
+          business_meaning: "理赔金额占保障额度比例",
+          risk_direction: "higher_is_riskier",
+          missing_rate: 0.02,
+          iv: 0.21,
+          auc_gain: 0.03,
+          lift: 2.4,
+          psi: 0.04,
+          stability: "stable",
+          model_contribution: 0.18,
+          rule_convertible: true,
+          online_available: true,
+          version: "v2",
+          owner: "feature-ops",
+          is_label: false,
+          is_entity_key: false,
+          evidence_refs: ["dataset_fields:demo_claims_fwa:v1:claim_amount_to_limit_ratio"],
+        },
+      ],
+      "dataset_1",
+    );
+
+    expect(cards[0]).toMatchObject({
+      factor_name: "claim_amount_to_limit_ratio",
+      display_label: "理赔金额占保额比例",
+      online_status: "ready",
+      source_lineage_label: "claims.claim_amount,coverage_limit_amount",
+      owner: "feature-ops",
+      version: "v2",
+      missing_rate_label: "2.0%",
+      iv_label: "0.210",
+      auc_gain_label: "0.030",
+      lift_label: "2.40x",
+      stability_label: "stable",
+      model_contribution_label: "18.0%",
+      convertible_to_rule: true,
+      online_available: true,
     });
   });
 });
