@@ -593,6 +593,10 @@ export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
     const value = Number(label.label_value);
     return Number.isFinite(value) ? total + value : total;
   }, 0);
+  const sourceTypeCounts = labels.reduce<Record<string, number>>((counts, label) => {
+    counts[label.source_type] = (counts[label.source_type] ?? 0) + 1;
+    return counts;
+  }, {});
   return {
     labelCount: labels.length,
     approvedForTrainingCount: labels.filter(
@@ -601,6 +605,12 @@ export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
     needsReviewCount: labels.filter((label) => label.governance_status === "needs_review").length,
     modelFeedbackCount: labels.filter((label) => label.feedback_target === "models").length,
     ruleFeedbackCount: labels.filter((label) => label.feedback_target === "rules").length,
+    falsePositiveCount: labels.filter((label) => label.label_name === "false_positive").length,
+    caseStatusLabelCount: labels.filter((label) => label.source_type === "case_status").length,
+    evidenceBackedCount: labels.filter((label) => label.evidence_refs.length > 0).length,
+    sourceTypeRows: Object.entries(sourceTypeCounts)
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .map(([sourceType, count]) => `${sourceType}: ${count}`),
     amountPreventedTotal,
     amountPreventedCurrency: amountPreventedLabels[0]?.currency ?? "N/A",
   };
@@ -1236,12 +1246,33 @@ export function GovernancePage() {
             <strong>{labelSummary.ruleFeedbackCount}</strong>
           </div>
           <div>
+            <span>Case Status Labels</span>
+            <strong>{labelSummary.caseStatusLabelCount}</strong>
+          </div>
+          <div>
+            <span>False Positives</span>
+            <strong>{labelSummary.falsePositiveCount}</strong>
+          </div>
+          <div>
+            <span>Evidence Backed</span>
+            <strong>
+              {labelSummary.evidenceBackedCount}/{labelSummary.labelCount}
+            </strong>
+          </div>
+          <div>
             <span>Prevented</span>
             <strong>
               {labelSummary.amountPreventedCurrency} {labelSummary.amountPreventedTotal}
             </strong>
           </div>
         </div>
+        {labelSummary.sourceTypeRows.length ? (
+          <ul className="result-list compact-list">
+            {labelSummary.sourceTypeRows.map((row) => (
+              <li key={row}>{row}</li>
+            ))}
+          </ul>
+        ) : null}
         {labelsQuery.data?.labels.length ? (
           <ol className="audit-timeline">
             {labelsQuery.data.labels.map((label) => (

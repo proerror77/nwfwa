@@ -598,14 +598,30 @@ describe("buildOutcomeLabelSummary", () => {
         currency: "CNY",
         evidence_refs: ["saving_attributions:saving_1"],
       },
+      {
+        label_id: "label_4",
+        claim_id: "CLM-3",
+        label_name: "false_positive",
+        label_value: "true",
+        source_type: "case_status",
+        source_id: "case_CLM-3",
+        governance_status: "needs_review",
+        feedback_target: "rules",
+        currency: null,
+        evidence_refs: ["investigation_cases:case_CLM-3"],
+      },
     ]);
 
     expect(summary).toEqual({
-      labelCount: 3,
+      labelCount: 4,
       approvedForTrainingCount: 2,
-      needsReviewCount: 1,
+      needsReviewCount: 2,
       modelFeedbackCount: 2,
-      ruleFeedbackCount: 0,
+      ruleFeedbackCount: 1,
+      falsePositiveCount: 1,
+      caseStatusLabelCount: 1,
+      evidenceBackedCount: 4,
+      sourceTypeRows: ["investigation_result: 2", "case_status: 1", "qa_review: 1"],
       amountPreventedTotal: 8200,
       amountPreventedCurrency: "CNY",
     });
