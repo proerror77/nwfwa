@@ -250,6 +250,21 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/RiskThresholds"
     );
     assert_eq!(
+        schema["paths"]["/api/v1/ops/routing-policies"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/SaveRoutingPolicyCandidateRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/routing-policies"]["post"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/RoutingPolicyRecord"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SaveRoutingPolicyCandidateRequest"]["properties"]
+            ["policy"]["$ref"],
+        "#/components/schemas/RoutingPolicy"
+    );
+    assert_eq!(
         schema["paths"]["/api/v1/ops/models/{model_key}/activate"]["post"]["responses"]["200"]
             ["content"]["application/json"]["schema"]["$ref"],
         "#/components/schemas/ModelLifecycleResponse"

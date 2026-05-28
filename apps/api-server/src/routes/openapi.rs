@@ -859,6 +859,36 @@ pub async fn openapi_schema() -> Json<Value> {
                             }
                         }
                     }
+                },
+                "post": {
+                    "summary": "Save a draft routing policy candidate",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SaveRoutingPolicyCandidateRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Draft routing policy candidate",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RoutingPolicyRecord" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
                 }
             },
             "/api/v1/ops/providers/risk-summary": {
@@ -2898,6 +2928,14 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/RoutingPolicyRecord" }
                         }
+                    }
+                },
+                "SaveRoutingPolicyCandidateRequest": {
+                    "type": "object",
+                    "required": ["policy"],
+                    "properties": {
+                        "policy": { "$ref": "#/components/schemas/RoutingPolicy" },
+                        "owner": { "type": ["string", "null"] }
                     }
                 },
                 "ModelLifecycleResponse": {

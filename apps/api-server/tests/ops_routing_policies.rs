@@ -99,6 +99,85 @@ async fn lists_injected_active_routing_policy_versions() {
 }
 
 #[tokio::test]
+async fn saves_draft_routing_policy_candidate_without_affecting_scoring() {
+    let app = build_app(test_config());
+
+    let save_response = app
+        .clone()
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/ops/routing-policies")
+                .header("content-type", "application/json")
+                .header("x-api-key", "dev-secret")
+                .body(Body::from(
+                    r#"{
+                      "owner": "policy-ops",
+                      "policy": {
+                        "policy_id": "candidate_strict_prepay",
+                        "version": 2,
+                        "review_mode": "pre_payment",
+                        "risk_thresholds": {
+                          "low_max": 0,
+                          "medium_min": 1,
+                          "high_min": 1,
+                          "critical_min": 1
+                        },
+                        "confidence_thresholds": {
+                          "low_confidence_below": 60,
+                          "high_confidence_min": 80
+                        },
+                        "provider_review_threshold": 70
+                      }
+                    }"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(save_response.status(), StatusCode::OK);
+    let save_body = to_bytes(save_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let save_body: serde_json::Value = serde_json::from_slice(&save_body).unwrap();
+    assert_eq!(save_body["policy_id"], "candidate_strict_prepay");
+    assert_eq!(save_body["status"], "draft");
+    assert_eq!(save_body["owner"], "policy-ops");
+
+    let score_response = app
+        .oneshot(
+            Request::builder()
+                .method("POST")
+                .uri("/api/v1/claims/score")
+                .header("content-type", "application/json")
+                .header("x-api-key", "dev-secret")
+                .body(Body::from(
+                    r#"{
+                      "source_system": "tpa-demo",
+                      "review_mode": "pre_payment",
+                      "claim": {
+                        "external_claim_id": "CLM-DRAFT-POLICY",
+                        "claim_amount": "8000",
+                        "currency": "CNY"
+                      }
+                    }"#,
+                ))
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(score_response.status(), StatusCode::OK);
+    let score_body = to_bytes(score_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let score_body: serde_json::Value = serde_json::from_slice(&score_body).unwrap();
+    assert_eq!(
+        score_body["routing_policy"]["policy_id"],
+        "fwa_risk_fusion_routing"
+    );
+}
+
+#[tokio::test]
 async fn routing_policy_list_requires_api_key() {
     let app = build_app(test_config());
 

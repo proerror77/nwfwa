@@ -1131,6 +1131,12 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_routing_policies(&self) -> anyhow::Result<Vec<RoutingPolicyRecord>>;
 
+    async fn save_routing_policy_candidate(
+        &self,
+        policy: RoutingPolicy,
+        owner: String,
+    ) -> anyhow::Result<RoutingPolicyRecord>;
+
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>>;
 
     async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>>;
@@ -1390,7 +1396,7 @@ pub struct InMemoryScoringRepository {
     model_retraining_jobs: Mutex<HashMap<String, ModelRetrainingJobRecord>>,
     model_retraining_job_sequence: Mutex<u64>,
     model_statuses: Mutex<HashMap<String, String>>,
-    routing_policies: Mutex<Vec<RoutingPolicy>>,
+    routing_policies: Mutex<Vec<RoutingPolicyRecord>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
 }
@@ -1402,7 +1408,12 @@ impl InMemoryScoringRepository {
 
     pub fn shared_with_routing_policies(policies: Vec<RoutingPolicy>) -> SharedRepository {
         Arc::new(Self {
-            routing_policies: Mutex::new(policies),
+            routing_policies: Mutex::new(
+                policies
+                    .into_iter()
+                    .map(|policy| routing_policy_record(policy, "active", "system", None, None))
+                    .collect(),
+            ),
             ..Self::default()
         })
     }
@@ -1494,22 +1505,39 @@ impl ScoringRepository for InMemoryScoringRepository {
             .lock()
             .await
             .iter()
+            .filter(|policy| policy.status == "active")
             .filter(|policy| routing_policy_review_mode_applies(&policy.review_mode, review_mode))
             .max_by_key(|policy| policy.version)
-            .cloned())
+            .map(routing_policy_from_record))
     }
 
     async fn list_routing_policies(&self) -> anyhow::Result<Vec<RoutingPolicyRecord>> {
         let policies = self.routing_policies.lock().await;
         let source = if policies.is_empty() {
             default_routing_policies()
+                .into_iter()
+                .map(|policy| routing_policy_record(policy, "active", "system", None, None))
+                .collect()
         } else {
             policies.clone()
         };
-        Ok(source
-            .into_iter()
-            .map(|policy| routing_policy_record(policy, "active", "system", None, None))
-            .collect())
+        Ok(source)
+    }
+
+    async fn save_routing_policy_candidate(
+        &self,
+        policy: RoutingPolicy,
+        owner: String,
+    ) -> anyhow::Result<RoutingPolicyRecord> {
+        let record = routing_policy_record(policy, "draft", &owner, None, None);
+        let mut policies = self.routing_policies.lock().await;
+        policies.retain(|existing| {
+            !(existing.policy_id == record.policy_id
+                && existing.version == record.version
+                && existing.review_mode == record.review_mode)
+        });
+        policies.push(record.clone());
+        Ok(record)
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -3383,6 +3411,32 @@ impl ScoringRepository for PostgresScoringRepository {
                 ))
             })
             .collect()
+    }
+
+    async fn save_routing_policy_candidate(
+        &self,
+        policy: RoutingPolicy,
+        owner: String,
+    ) -> anyhow::Result<RoutingPolicyRecord> {
+        ensure_default_routing_policies_seeded(&self.pool).await?;
+        sqlx::query(
+            "INSERT INTO routing_policies
+             (policy_key, version, review_mode, status, owner, policy_json)
+             VALUES ($1, $2, $3, 'draft', $4, $5)
+             ON CONFLICT (policy_key, version, review_mode) DO UPDATE
+             SET status = 'draft',
+                 owner = EXCLUDED.owner,
+                 policy_json = EXCLUDED.policy_json",
+        )
+        .bind(&policy.policy_id)
+        .bind(policy.version as i32)
+        .bind(&policy.review_mode)
+        .bind(&owner)
+        .bind(serde_json::to_value(&policy)?)
+        .execute(&self.pool)
+        .await?;
+
+        Ok(routing_policy_record(policy, "draft", &owner, None, None))
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -7805,6 +7859,17 @@ fn routing_policy_record(
         provider_review_threshold: policy.provider_review_threshold,
         activated_at,
         created_at,
+    }
+}
+
+fn routing_policy_from_record(record: &RoutingPolicyRecord) -> RoutingPolicy {
+    RoutingPolicy {
+        policy_id: record.policy_id.clone(),
+        version: record.version,
+        review_mode: record.review_mode.clone(),
+        risk_thresholds: record.risk_thresholds.clone(),
+        confidence_thresholds: record.confidence_thresholds.clone(),
+        provider_review_threshold: record.provider_review_threshold,
     }
 }
 

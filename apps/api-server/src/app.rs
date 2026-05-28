@@ -168,7 +168,8 @@ pub fn build_app_with_parts(
         .route("/api/v1/ops/models", get(ops_models::list_models))
         .route(
             "/api/v1/ops/routing-policies",
-            get(ops_routing_policies::list_routing_policies),
+            get(ops_routing_policies::list_routing_policies)
+                .post(ops_routing_policies::save_routing_policy_candidate),
         )
         .route(
             "/api/v1/ops/providers/risk-summary",
