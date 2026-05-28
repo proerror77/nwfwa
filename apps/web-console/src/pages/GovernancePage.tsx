@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getClaimAuditHistory, listAgentRuns, listOutcomeLabels } from "../api";
+import { getClaimAuditHistory, listAgentRuns, listOpsAlerts, listOutcomeLabels } from "../api";
 
 type AuditEvent = {
   audit_id: string;
@@ -86,6 +86,24 @@ type AgentRunLogListResponse = {
   runs: AgentRunLog[];
 };
 
+type OpsAlert = {
+  alert_id: string;
+  alert_type: string;
+  severity: string;
+  status: string;
+  claim_id: string;
+  lead_id?: string | null;
+  case_id?: string | null;
+  scheme_family: string;
+  message: string;
+  recommended_action: string;
+  evidence_refs: string[];
+};
+
+type OpsAlertListResponse = {
+  alerts: OpsAlert[];
+};
+
 type OutcomeLabel = {
   label_id: string;
   claim_id: string;
@@ -135,6 +153,16 @@ export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
   };
 }
 
+export function buildOpsAlertSummary(alerts: OpsAlert[] = []) {
+  return {
+    alertCount: alerts.length,
+    openAlertCount: alerts.filter((alert) => alert.status === "open").length,
+    criticalAlertCount: alerts.filter((alert) => alert.severity === "critical").length,
+    routingAlertCount: alerts.filter((alert) => alert.alert_type === "high_risk_routing").length,
+    slaBreachCount: alerts.filter((alert) => alert.alert_type === "sla_breach").length,
+  };
+}
+
 export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
   const amountPreventedLabels = labels.filter((label) => label.label_name === "amount_prevented");
   const amountPreventedTotal = amountPreventedLabels.reduce((total, label) => {
@@ -166,12 +194,17 @@ export function GovernancePage() {
     queryKey: ["agent-run-logs", apiKey],
     queryFn: () => listAgentRuns(apiKey) as Promise<AgentRunLogListResponse>,
   });
+  const alertsQuery = useQuery({
+    queryKey: ["ops-alerts", apiKey],
+    queryFn: () => listOpsAlerts(apiKey) as Promise<OpsAlertListResponse>,
+  });
   const labelsQuery = useQuery({
     queryKey: ["outcome-labels", apiKey],
     queryFn: () => listOutcomeLabels(apiKey) as Promise<OutcomeLabelListResponse>,
   });
   const summary = buildAuditSummary(auditQuery.data);
   const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
+  const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
 
   return (
@@ -224,6 +257,14 @@ export function GovernancePage() {
             <strong>{agentSummary.pendingApprovalCount}</strong>
           </div>
           <div>
+            <span>Alerts</span>
+            <strong>{alertSummary.openAlertCount}</strong>
+          </div>
+          <div>
+            <span>Critical Alerts</span>
+            <strong>{alertSummary.criticalAlertCount}</strong>
+          </div>
+          <div>
             <span>Labels</span>
             <strong>{labelSummary.labelCount}</strong>
           </div>
@@ -236,7 +277,52 @@ export function GovernancePage() {
         {agentRunsQuery.error ? (
           <pre className="error">{String(agentRunsQuery.error.message)}</pre>
         ) : null}
+        {alertsQuery.error ? (
+          <pre className="error">{String(alertsQuery.error.message)}</pre>
+        ) : null}
         {labelsQuery.error ? <pre className="error">{String(labelsQuery.error.message)}</pre> : null}
+      </div>
+
+      <div className="panel">
+        <h2>Operations Alerts</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Total</span>
+            <strong>{alertSummary.alertCount}</strong>
+          </div>
+          <div>
+            <span>Routing</span>
+            <strong>{alertSummary.routingAlertCount}</strong>
+          </div>
+          <div>
+            <span>SLA Breach</span>
+            <strong>{alertSummary.slaBreachCount}</strong>
+          </div>
+        </div>
+        {alertsQuery.data?.alerts.length ? (
+          <ol className="audit-timeline">
+            {alertsQuery.data.alerts.map((alert) => (
+              <li key={alert.alert_id}>
+                <div>
+                  <strong>{alert.alert_type}</strong>
+                  <span>{alert.severity}</span>
+                </div>
+                <small>
+                  {alert.claim_id} / {alert.scheme_family}
+                </small>
+                <p>{alert.message}</p>
+                <p>{alert.recommended_action}</p>
+                <ul className="result-list">
+                  {alert.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No operations alerts loaded</p>
+        )}
       </div>
 
       <div className="panel">

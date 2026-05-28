@@ -17,6 +17,7 @@ import {
   listFactorReadiness,
   listLeads,
   listKnowledgeCases,
+  listOpsAlerts,
   listOutcomeLabels,
   listQaFeedbackItems,
   listQaQueue,
@@ -233,6 +234,7 @@ describe("ops API helpers", () => {
 
     await getClaimAuditHistory("CLM-0287", "dev-secret");
     await listAgentRuns("dev-secret");
+    await listOpsAlerts("dev-secret");
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -244,6 +246,13 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
       "/api/v1/ops/agent-runs",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/ops/alerts",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

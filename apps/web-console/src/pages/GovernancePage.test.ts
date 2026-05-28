@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAgentRunLogSummary,
   buildAuditSummary,
+  buildOpsAlertSummary,
   buildOutcomeLabelSummary,
 } from "./GovernancePage";
 
@@ -115,6 +116,47 @@ describe("buildAgentRunLogSummary", () => {
       deniedPolicyCheckCount: 0,
       approvalCount: 1,
       pendingApprovalCount: 1,
+    });
+  });
+});
+
+describe("buildOpsAlertSummary", () => {
+  it("summarizes high-risk routing and SLA alerts", () => {
+    const summary = buildOpsAlertSummary([
+      {
+        alert_id: "alert_1",
+        alert_type: "high_risk_routing",
+        severity: "critical",
+        status: "open",
+        claim_id: "CLM-1",
+        lead_id: "lead_CLM-1",
+        case_id: null,
+        scheme_family: "provider_peer_outlier",
+        message: "High-risk lead pending triage.",
+        recommended_action: "Open an investigation case.",
+        evidence_refs: ["rule_runs:PROVIDER_PROFILE_HIGH"],
+      },
+      {
+        alert_id: "alert_2",
+        alert_type: "sla_breach",
+        severity: "high",
+        status: "closed",
+        claim_id: "CLM-2",
+        lead_id: "lead_CLM-2",
+        case_id: "case_CLM-2",
+        scheme_family: "diagnosis_procedure_mismatch",
+        message: "Case breached SLA.",
+        recommended_action: "Escalate overdue case.",
+        evidence_refs: ["case_workflow:overdue"],
+      },
+    ]);
+
+    expect(summary).toEqual({
+      alertCount: 2,
+      openAlertCount: 1,
+      criticalAlertCount: 1,
+      routingAlertCount: 1,
+      slaBreachCount: 1,
     });
   });
 });
