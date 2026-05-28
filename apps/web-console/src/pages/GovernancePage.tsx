@@ -1,15 +1,22 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  getModelPromotionGates,
   getClaimAuditHistory,
+  getRoutingPolicyPromotionGates,
+  getRulePromotionGates,
   listAuditEvents,
   listAgentRuns,
+  listModels,
   listOpsAlerts,
   listOutcomeLabels,
+  listRoutingPolicies,
+  listRules,
   listWebhookEvents,
   submitAgentApproval,
   submitWebhookDeliveryAttempt,
 } from "../api";
+import { formatReviewModeLabel } from "./reviewMode";
 
 type AuditEvent = {
   audit_id: string;
@@ -160,6 +167,68 @@ type OutcomeLabelListResponse = {
   labels: OutcomeLabel[];
 };
 
+type PromotionGate = {
+  label: string;
+  passed: boolean;
+  blocker: string;
+  evidence_source: string;
+};
+
+type PromotionGateResponse = {
+  decision: string;
+  passed_count: number;
+  total_count: number;
+  review_mode?: string;
+  status?: string;
+  blockers?: string[];
+  gates?: PromotionGate[];
+};
+
+type PromotionGateGovernanceItem = {
+  domain: "Rule" | "Model" | "Routing";
+  target_id: string;
+  status?: string;
+  review_mode?: string;
+  response: PromotionGateResponse;
+};
+
+export type PromotionGateGovernanceRow = {
+  domain: string;
+  targetId: string;
+  status: string;
+  reviewMode: string;
+  decision: string;
+  passedCount: number;
+  totalCount: number;
+  blockerCount: number;
+  topBlocker: string;
+  evidenceSources: string;
+};
+
+type RuleSummary = {
+  rule_id: string;
+  status: string;
+  review_mode: string;
+};
+
+type ModelVersion = {
+  model_key: string;
+  version: string;
+  status: string;
+  review_mode: string;
+};
+
+type RoutingPolicyRecord = {
+  policy_id: string;
+  version: number;
+  review_mode: string;
+  status: string;
+};
+
+type PromotionGateGovernanceResponse = {
+  rows: PromotionGateGovernanceRow[];
+};
+
 export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
   const events = data?.events ?? [];
   const latestDatedEvent = events.filter((event) => event.created_at).reduce<
@@ -174,6 +243,78 @@ export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: stri
     failedEvents: events.filter((event) => event.event_status === "failed").length,
     latestEventType: latestDatedEvent?.event_type ?? events.at(-1)?.event_type ?? "none",
   };
+}
+
+export function buildPromotionGateGovernanceRows(
+  items: PromotionGateGovernanceItem[] = [],
+): PromotionGateGovernanceRow[] {
+  return items.map((item) => {
+    const gates = item.response.gates ?? [];
+    const blockers =
+      item.response.blockers ?? gates.filter((gate) => !gate.passed).map((gate) => gate.blocker);
+    const evidenceSources = Array.from(
+      new Set(gates.map((gate) => gate.evidence_source || "missing")),
+    );
+    return {
+      domain: item.domain,
+      targetId: item.target_id,
+      status: item.status ?? item.response.status ?? "unknown",
+      reviewMode: item.review_mode ?? item.response.review_mode ?? "unknown",
+      decision: item.response.decision,
+      passedCount: item.response.passed_count,
+      totalCount: item.response.total_count,
+      blockerCount: blockers.length,
+      topBlocker: blockers[0] ?? "none",
+      evidenceSources: evidenceSources.length ? evidenceSources.join(", ") : "missing",
+    };
+  });
+}
+
+export function buildPromotionGateGovernanceSummary(
+  rows: PromotionGateGovernanceRow[] = [],
+) {
+  return {
+    targetCount: rows.length,
+    allowedTargetCount: rows.filter((row) => row.blockerCount === 0).length,
+    blockedTargetCount: rows.filter((row) => row.blockerCount > 0).length,
+    passedGateCount: rows.reduce((total, row) => total + row.passedCount, 0),
+    totalGateCount: rows.reduce((total, row) => total + row.totalCount, 0),
+    blockerCount: rows.reduce((total, row) => total + row.blockerCount, 0),
+  };
+}
+
+async function loadPromotionGateGovernance(
+  apiKey: string,
+): Promise<PromotionGateGovernanceResponse> {
+  const [ruleList, modelList, routingPolicyList] = await Promise.all([
+    listRules(apiKey) as Promise<{ rules: RuleSummary[] }>,
+    listModels(apiKey) as Promise<{ models: ModelVersion[] }>,
+    listRoutingPolicies(apiKey) as Promise<{ policies: RoutingPolicyRecord[] }>,
+  ]);
+  const items = await Promise.all([
+    ...ruleList.rules.map(async (rule) => ({
+      domain: "Rule" as const,
+      target_id: rule.rule_id,
+      status: rule.status,
+      review_mode: rule.review_mode,
+      response: (await getRulePromotionGates(rule.rule_id, apiKey)) as PromotionGateResponse,
+    })),
+    ...modelList.models.map(async (model) => ({
+      domain: "Model" as const,
+      target_id: `${model.model_key}@${model.version}`,
+      status: model.status,
+      review_mode: model.review_mode,
+      response: (await getModelPromotionGates(model.model_key, apiKey)) as PromotionGateResponse,
+    })),
+    ...routingPolicyList.policies.map(async (policy) => ({
+      domain: "Routing" as const,
+      target_id: `${policy.policy_id}@v${policy.version}`,
+      status: policy.status,
+      review_mode: policy.review_mode,
+      response: (await getRoutingPolicyPromotionGates(policy, apiKey)) as PromotionGateResponse,
+    })),
+  ]);
+  return { rows: buildPromotionGateGovernanceRows(items) };
 }
 
 export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
@@ -326,12 +467,19 @@ export function GovernancePage() {
     queryKey: ["webhook-events", apiKey],
     queryFn: () => listWebhookEvents(apiKey) as Promise<WebhookEventListResponse>,
   });
+  const promotionGateGovernanceQuery = useQuery({
+    queryKey: ["promotion-gate-governance", apiKey],
+    queryFn: () => loadPromotionGateGovernance(apiKey),
+  });
   const summary = buildAuditSummary(auditQuery.data);
   const globalAuditSummary = buildAuditSummary(globalAuditQuery.data);
   const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
   const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
+  const promotionGateSummary = buildPromotionGateGovernanceSummary(
+    promotionGateGovernanceQuery.data?.rows,
+  );
   const agentApprovalMutation = useMutation({
     mutationFn: ({
       run,
@@ -477,6 +625,59 @@ export function GovernancePage() {
         {deliveryAttemptMutation.error ? (
           <pre className="error">{String(deliveryAttemptMutation.error.message)}</pre>
         ) : null}
+        {promotionGateGovernanceQuery.error ? (
+          <pre className="error">{String(promotionGateGovernanceQuery.error.message)}</pre>
+        ) : null}
+      </div>
+
+      <div className="panel">
+        <h2>Promotion Gate Governance</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Targets</span>
+            <strong>{promotionGateSummary.targetCount}</strong>
+          </div>
+          <div>
+            <span>Allowed</span>
+            <strong>{promotionGateSummary.allowedTargetCount}</strong>
+          </div>
+          <div>
+            <span>Blocked</span>
+            <strong>{promotionGateSummary.blockedTargetCount}</strong>
+          </div>
+          <div>
+            <span>Gates</span>
+            <strong>
+              {promotionGateSummary.passedGateCount}/{promotionGateSummary.totalGateCount}
+            </strong>
+          </div>
+          <div>
+            <span>Blockers</span>
+            <strong>{promotionGateSummary.blockerCount}</strong>
+          </div>
+        </div>
+        {promotionGateGovernanceQuery.data?.rows.length ? (
+          <div className="table-list">
+            {promotionGateGovernanceQuery.data.rows.map((row) => (
+              <div
+                className="metric-row compact-metric-row"
+                key={`${row.domain}:${row.targetId}:${row.reviewMode}`}
+              >
+                <span>
+                  {row.domain} / {row.targetId}
+                </span>
+                <strong>{row.decision}</strong>
+                <small>
+                  {formatReviewModeLabel(row.reviewMode)} · {row.status} · {row.passedCount}/
+                  {row.totalCount} · {row.topBlocker}
+                </small>
+                <small>{row.evidenceSources}</small>
+              </div>
+            ))}
+          </div>
+        ) : (
+          <p className="empty">No promotion gate data loaded</p>
+        )}
       </div>
 
       <div className="panel">

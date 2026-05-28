@@ -5,6 +5,8 @@ import {
   buildAgentApprovalPayload,
   buildOpsAlertSummary,
   buildOutcomeLabelSummary,
+  buildPromotionGateGovernanceRows,
+  buildPromotionGateGovernanceSummary,
   buildWebhookDeliverySummary,
   canRecordWebhookDeliveryAttempt,
   hasPendingAgentApproval,
@@ -69,6 +71,126 @@ describe("buildAuditSummary", () => {
     });
 
     expect(summary.latestEventType).toBe("routing_policy.activation.completed");
+  });
+});
+
+describe("promotion gate governance helpers", () => {
+  it("normalizes rule model and routing promotion gates into one governance view", () => {
+    const rows = buildPromotionGateGovernanceRows([
+      {
+        domain: "Rule",
+        target_id: "rule_early_claim",
+        status: "submitted",
+        review_mode: "pre_payment",
+        response: {
+          decision: "routing_blocked",
+          passed_count: 2,
+          total_count: 3,
+          blockers: ["approval missing"],
+          gates: [
+            {
+              label: "Named owner",
+              passed: true,
+              blocker: "owner missing",
+              evidence_source: "metadata",
+            },
+            {
+              label: "Approval before routing",
+              passed: false,
+              blocker: "approval missing",
+              evidence_source: "missing",
+            },
+          ],
+        },
+      },
+      {
+        domain: "Model",
+        target_id: "baseline_fwa@0.1.0",
+        status: "active",
+        review_mode: "both",
+        response: {
+          decision: "routing_allowed",
+          passed_count: 3,
+          total_count: 3,
+          blockers: [],
+          gates: [
+            {
+              label: "Holdout metrics",
+              passed: true,
+              blocker: "holdout metrics missing",
+              evidence_source: "evaluation",
+            },
+          ],
+        },
+      },
+      {
+        domain: "Routing",
+        target_id: "fwa_risk_fusion_routing@v2",
+        status: "approved",
+        review_mode: "post_payment",
+        response: {
+          decision: "activation_allowed",
+          passed_count: 4,
+          total_count: 4,
+          blockers: [],
+          gates: [
+            {
+              label: "Governance approval",
+              passed: true,
+              blocker: "approval missing",
+              evidence_source: "metadata",
+            },
+          ],
+        },
+      },
+    ]);
+
+    expect(rows).toEqual([
+      {
+        domain: "Rule",
+        targetId: "rule_early_claim",
+        status: "submitted",
+        reviewMode: "pre_payment",
+        decision: "routing_blocked",
+        passedCount: 2,
+        totalCount: 3,
+        blockerCount: 1,
+        topBlocker: "approval missing",
+        evidenceSources: "metadata, missing",
+      },
+      {
+        domain: "Model",
+        targetId: "baseline_fwa@0.1.0",
+        status: "active",
+        reviewMode: "both",
+        decision: "routing_allowed",
+        passedCount: 3,
+        totalCount: 3,
+        blockerCount: 0,
+        topBlocker: "none",
+        evidenceSources: "evaluation",
+      },
+      {
+        domain: "Routing",
+        targetId: "fwa_risk_fusion_routing@v2",
+        status: "approved",
+        reviewMode: "post_payment",
+        decision: "activation_allowed",
+        passedCount: 4,
+        totalCount: 4,
+        blockerCount: 0,
+        topBlocker: "none",
+        evidenceSources: "metadata",
+      },
+    ]);
+    expect(buildPromotionGateGovernanceSummary(rows)).toEqual({
+      targetCount: 3,
+      allowedTargetCount: 2,
+      blockedTargetCount: 1,
+      passedGateCount: 9,
+      totalGateCount: 10,
+      blockerCount: 1,
+    });
   });
 });
 
