@@ -236,6 +236,8 @@ pub struct ModelPerformanceRecord {
     pub scored_runs: u32,
     pub average_score: f64,
     pub high_risk_count: u32,
+    pub score_psi: Option<f64>,
+    pub drift_status: String,
     pub latest_scored_at: Option<String>,
 }
 
@@ -1375,7 +1377,17 @@ impl ScoringRepository for InMemoryScoringRepository {
             .iter()
             .any(|model| model.model_key == model_key)
         {
-            Ok(Some(empty_model_performance(model_key)))
+            let evaluations = self.model_evaluations.lock().await;
+            let drift = evaluations
+                .values()
+                .filter(|evaluation| evaluation.model_key == model_key)
+                .max_by(|left, right| left.evaluation_run_id.cmp(&right.evaluation_run_id))
+                .map(|evaluation| drift_summary(&evaluation.metrics_json))
+                .unwrap_or_else(|| drift_summary(&Value::Null));
+            Ok(Some(model_performance_with_drift(
+                empty_model_performance(model_key),
+                drift,
+            )))
         } else {
             Ok(None)
         }
@@ -3129,23 +3141,47 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(model_key)
         .fetch_one(&self.pool)
         .await?;
+        let drift_metrics: Option<(Value,)> = sqlx::query_as(
+            "SELECT metrics_json
+             FROM model_evaluation_runs
+             WHERE model_key = $1
+             ORDER BY created_at DESC, evaluation_run_id DESC
+             LIMIT 1",
+        )
+        .bind(model_key)
+        .fetch_optional(&self.pool)
+        .await?;
+        let drift = drift_summary(
+            drift_metrics
+                .as_ref()
+                .map(|row| &row.0)
+                .unwrap_or(&Value::Null),
+        );
 
         let scored_runs = row.0 as u32;
         if scored_runs == 0 {
-            return Ok(Some(empty_model_performance(model_key)));
+            return Ok(Some(model_performance_with_drift(
+                empty_model_performance(model_key),
+                drift,
+            )));
         }
 
-        Ok(Some(ModelPerformanceRecord {
-            model_key: model_key.to_string(),
-            data_status: "ready".into(),
-            scored_runs,
-            average_score: row
-                .1
-                .map(|value| value.to_string().parse().unwrap_or(0.0))
-                .unwrap_or(0.0),
-            high_risk_count: row.2.unwrap_or(0) as u32,
-            latest_scored_at: row.3.map(|timestamp| timestamp.to_rfc3339()),
-        }))
+        Ok(Some(model_performance_with_drift(
+            ModelPerformanceRecord {
+                model_key: model_key.to_string(),
+                data_status: "ready".into(),
+                scored_runs,
+                average_score: row
+                    .1
+                    .map(|value| value.to_string().parse().unwrap_or(0.0))
+                    .unwrap_or(0.0),
+                high_risk_count: row.2.unwrap_or(0) as u32,
+                score_psi: None,
+                drift_status: "not_available".into(),
+                latest_scored_at: row.3.map(|timestamp| timestamp.to_rfc3339()),
+            },
+            drift,
+        )))
     }
 
     async fn save_model_promotion_review(
@@ -5091,8 +5127,33 @@ fn empty_model_performance(model_key: &str) -> ModelPerformanceRecord {
         scored_runs: 0,
         average_score: 0.0,
         high_risk_count: 0,
+        score_psi: None,
+        drift_status: "not_available".into(),
         latest_scored_at: None,
     }
+}
+
+fn model_performance_with_drift(
+    mut performance: ModelPerformanceRecord,
+    drift: (Option<f64>, String),
+) -> ModelPerformanceRecord {
+    performance.score_psi = drift.0;
+    performance.drift_status = drift.1;
+    performance
+}
+
+fn drift_summary(metrics: &Value) -> (Option<f64>, String) {
+    let score_psi = metrics
+        .get("score_psi")
+        .or_else(|| metrics.get("psi"))
+        .and_then(Value::as_f64);
+    let status = match score_psi {
+        Some(value) if value < 0.10 => "stable",
+        Some(value) if value < 0.25 => "watch",
+        Some(_) => "drift",
+        None => "not_available",
+    };
+    (score_psi, status.into())
 }
 
 fn default_knowledge_cases() -> Vec<KnowledgeCaseRecord> {

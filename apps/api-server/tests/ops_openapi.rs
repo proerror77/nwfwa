@@ -180,6 +180,18 @@ async fn openapi_includes_operations_paths() {
             ["additionalProperties"]["$ref"],
         "#/components/schemas/DashboardLayerScore"
     );
+    assert!(
+        schema["components"]["schemas"]["ModelPerformanceResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "drift_status")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelPerformanceResponse"]["properties"]["score_psi"]
+            ["type"],
+        serde_json::json!(["number", "null"])
+    );
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["get"].is_object());
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["post"].is_object());
 }

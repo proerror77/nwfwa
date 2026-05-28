@@ -107,6 +107,8 @@ pub async fn model_promotion_gates(
             scored_runs: 0,
             average_score: 0.0,
             high_risk_count: 0,
+            score_psi: None,
+            drift_status: "not_available".into(),
             latest_scored_at: None,
         });
     let evaluations = state

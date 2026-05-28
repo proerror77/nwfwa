@@ -38,6 +38,15 @@ type ModelPromotionGatesResponse = {
   gates: PromotionGate[];
 };
 
+type ModelPerformanceResponse = {
+  data_status: string;
+  scored_runs: number;
+  average_score: number;
+  high_risk_count: number;
+  score_psi: number | null;
+  drift_status: string;
+};
+
 export function ModelOpsPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedModelKey, setSelectedModelKey] = useState("baseline_fwa");
@@ -56,7 +65,11 @@ export function ModelOpsPage() {
   );
   const performanceQuery = useQuery({
     queryKey: ["model-performance", selectedModel?.model_key, apiKey],
-    queryFn: () => getModelPerformance(selectedModel!.model_key, apiKey),
+    queryFn: () =>
+      getModelPerformance(
+        selectedModel!.model_key,
+        apiKey,
+      ) as Promise<ModelPerformanceResponse>,
     enabled: Boolean(selectedModel?.model_key),
   });
   const promotionQuery = useQuery({
@@ -177,6 +190,14 @@ export function ModelOpsPage() {
             <div>
               <dt>High Risk</dt>
               <dd>{performanceQuery.data.high_risk_count}</dd>
+            </div>
+            <div>
+              <dt>Score PSI</dt>
+              <dd>{performanceQuery.data.score_psi ?? "-"}</dd>
+            </div>
+            <div>
+              <dt>Drift Status</dt>
+              <dd>{performanceQuery.data.drift_status}</dd>
             </div>
           </dl>
         ) : (

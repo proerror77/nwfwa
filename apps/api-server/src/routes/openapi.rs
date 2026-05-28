@@ -1954,13 +1954,15 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelPerformanceResponse": {
                     "type": "object",
-                    "required": ["model_key", "data_status", "scored_runs", "average_score", "high_risk_count"],
+                    "required": ["model_key", "data_status", "scored_runs", "average_score", "high_risk_count", "score_psi", "drift_status"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "data_status": { "type": "string", "enum": ["empty", "ready"] },
                         "scored_runs": { "type": "integer" },
                         "average_score": { "type": "number" },
                         "high_risk_count": { "type": "integer" },
+                        "score_psi": { "type": ["number", "null"] },
+                        "drift_status": { "type": "string", "enum": ["not_available", "stable", "watch", "drift"] },
                         "latest_scored_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 },
