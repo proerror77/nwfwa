@@ -405,13 +405,14 @@ pub async fn score_claim(
         "model_scores:{}",
         model_score.model_key
     )));
-    let decision = fwa_scoring::aggregate_for_review_mode(
+    let routing_policy = fwa_scoring::default_routing_policy(&review_mode);
+    let decision = fwa_scoring::aggregate_with_routing_policy(
         &features,
         &rule_matches,
         &model_score,
         &anomaly_score,
         similar_case_score,
-        &review_mode,
+        routing_policy,
     );
     let audit_id = AuditEventId::new();
     let alerts: Vec<AlertResponse> = rule_matches

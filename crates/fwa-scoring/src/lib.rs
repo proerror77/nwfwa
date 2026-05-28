@@ -84,6 +84,24 @@ pub fn aggregate_for_review_mode(
     similar_case_score: u8,
     review_mode: &str,
 ) -> ScoringDecision {
+    aggregate_with_routing_policy(
+        features,
+        rule_matches,
+        model_score,
+        anomaly_score,
+        similar_case_score,
+        default_routing_policy(review_mode),
+    )
+}
+
+pub fn aggregate_with_routing_policy(
+    features: &FeatureMap,
+    rule_matches: &[RuleMatch],
+    model_score: &ModelScore,
+    anomaly_score: &AnomalyScore,
+    similar_case_score: u8,
+    routing_policy: RoutingPolicy,
+) -> ScoringDecision {
     let peer_deviation_score = amount_ratio_score(features);
     let rule_score = rule_matches
         .iter()
@@ -103,20 +121,19 @@ pub fn aggregate_for_review_mode(
     ]);
     let risk_score = RiskScore::new(final_score_value).expect("clamped score is valid");
     let rag = RiskLevel::from_score(risk_score);
-    let risk_level = risk_level(risk_score.value()).to_string();
+    let risk_level = risk_level_for_policy(risk_score.value(), &routing_policy).to_string();
     let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);
-    let confidence = confidence_level(confidence_score).to_string();
-    let routing_policy = routing_policy(review_mode);
+    let confidence = confidence_level_for_policy(confidence_score, &routing_policy).to_string();
     let recommended_action = recommended_action(
         &risk_level,
         confidence_score,
-        review_mode,
+        &routing_policy,
         provider_network_score,
     );
     let routing_reason = routing_reason(
         &risk_level,
         confidence_score,
-        review_mode,
+        &routing_policy,
         provider_network_score,
     )
     .to_string();
@@ -232,12 +249,15 @@ fn layer(layer_id: &str, name: &str, score: u8, status: &str, reason: &str) -> D
     }
 }
 
-fn risk_level(score: u8) -> &'static str {
-    match score {
-        0..=39 => "Low",
-        40..=69 => "Medium",
-        70..=84 => "High",
-        _ => "Critical",
+fn risk_level_for_policy(score: u8, policy: &RoutingPolicy) -> &'static str {
+    if score >= policy.risk_thresholds.critical_min {
+        "Critical"
+    } else if score >= policy.risk_thresholds.high_min {
+        "High"
+    } else if score >= policy.risk_thresholds.medium_min {
+        "Medium"
+    } else {
+        "Low"
     }
 }
 
@@ -249,15 +269,17 @@ fn confidence_score(rule_score: u8, anomaly_score: u8, ml_score: u8) -> u8 {
     (55 + supporting_layers * 15).min(100)
 }
 
-fn confidence_level(score: u8) -> &'static str {
-    match score {
-        0..=59 => "Low",
-        60..=79 => "Medium",
-        _ => "High",
+fn confidence_level_for_policy(score: u8, policy: &RoutingPolicy) -> &'static str {
+    if score < policy.confidence_thresholds.low_confidence_below {
+        "Low"
+    } else if score >= policy.confidence_thresholds.high_confidence_min {
+        "High"
+    } else {
+        "Medium"
     }
 }
 
-fn routing_policy(review_mode: &str) -> RoutingPolicy {
+pub fn default_routing_policy(review_mode: &str) -> RoutingPolicy {
     RoutingPolicy {
         policy_id: "fwa_risk_fusion_routing".into(),
         version: 1,
@@ -279,17 +301,17 @@ fn routing_policy(review_mode: &str) -> RoutingPolicy {
 fn recommended_action(
     risk_level: &str,
     confidence_score: u8,
-    review_mode: &str,
+    policy: &RoutingPolicy,
     provider_network_score: u8,
 ) -> RecommendedAction {
-    if confidence_score < 60 {
+    if confidence_score < policy.confidence_thresholds.low_confidence_below {
         return RecommendedAction::RequestEvidence;
     }
-    if review_mode == "post_payment" {
+    if policy.review_mode == "post_payment" {
         if risk_level == "Critical" {
             return RecommendedAction::RecoveryReview;
         }
-        if provider_network_score >= 70 && risk_level == "High" {
+        if provider_network_score >= policy.provider_review_threshold && risk_level == "High" {
             return RecommendedAction::ProviderReview;
         }
         return match risk_level {
@@ -310,17 +332,17 @@ fn recommended_action(
 fn routing_reason(
     risk_level: &str,
     confidence_score: u8,
-    review_mode: &str,
+    policy: &RoutingPolicy,
     provider_network_score: u8,
 ) -> &'static str {
-    if confidence_score < 60 {
+    if confidence_score < policy.confidence_thresholds.low_confidence_below {
         return "置信度偏低，建议补材料或二审";
     }
-    if review_mode == "post_payment" {
+    if policy.review_mode == "post_payment" {
         if risk_level == "Critical" {
             return "赔后关键风险，建议调查复核并评估追偿";
         }
-        if provider_network_score >= 70 && risk_level == "High" {
+        if provider_network_score >= policy.provider_review_threshold && risk_level == "High" {
             return "赔后 Provider / 图谱风险偏高，建议进入 Provider 复核";
         }
         return match risk_level {
@@ -629,6 +651,48 @@ mod tests {
         assert_eq!(decision.confidence, "High");
         assert_eq!(decision.recommended_action, RecommendedAction::QaSample);
         assert!(decision.routing_reason.contains("QA 抽样"));
+    }
+
+    #[test]
+    fn custom_routing_policy_controls_l7_thresholds() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount_peer_percentile".into(),
+            feature(serde_json::json!(80)),
+        );
+        let policy = RoutingPolicy {
+            policy_id: "custom_prepay_routing".into(),
+            version: 3,
+            review_mode: "pre_payment".into(),
+            risk_thresholds: RiskThresholds {
+                low_max: 24,
+                medium_min: 25,
+                high_min: 50,
+                critical_min: 75,
+            },
+            confidence_thresholds: ConfidenceThresholds {
+                low_confidence_below: 50,
+                high_confidence_min: 90,
+            },
+            provider_review_threshold: 65,
+        };
+
+        let decision = aggregate_with_routing_policy(
+            &features,
+            &[rule(60)],
+            &model(80),
+            &anomaly(60),
+            0,
+            policy,
+        );
+
+        assert_eq!(decision.risk_score.value(), 53);
+        assert_eq!(decision.risk_level, "High");
+        assert_eq!(decision.confidence, "High");
+        assert_eq!(decision.recommended_action, RecommendedAction::ManualReview);
+        assert_eq!(decision.routing_policy.policy_id, "custom_prepay_routing");
+        assert_eq!(decision.routing_policy.version, 3);
+        assert_eq!(decision.layers[6].reason, "高风险，建议人工审核");
     }
 
     #[test]
