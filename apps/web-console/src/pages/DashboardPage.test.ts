@@ -198,9 +198,36 @@ describe("buildDashboardSchemeRows", () => {
         diagnosis_procedure_mismatch: 3,
       }),
     ).toEqual([
-      { schemeFamily: "diagnosis_procedure_mismatch", count: 3 },
-      { schemeFamily: "early_high_value_claim", count: 3 },
-      { schemeFamily: "provider_peer_outlier", count: 1 },
+      {
+        schemeFamily: "diagnosis_procedure_mismatch",
+        schemeLabel: "diagnosis_procedure_mismatch",
+        count: 3,
+      },
+      {
+        schemeFamily: "early_high_value_claim",
+        schemeLabel: "early_high_value_claim",
+        count: 3,
+      },
+      {
+        schemeFamily: "provider_peer_outlier",
+        schemeLabel: "provider_peer_outlier",
+        count: 1,
+      },
+    ]);
+  });
+
+  it("uses FWA taxonomy labels when available", () => {
+    expect(
+      buildDashboardSchemeRows(
+        { early_high_value_claim: 2 },
+        { early_high_value_claim: "Early high-value claim (early_high_value_claim)" },
+      ),
+    ).toEqual([
+      {
+        schemeFamily: "early_high_value_claim",
+        schemeLabel: "Early high-value claim (early_high_value_claim)",
+        count: 2,
+      },
     ]);
   });
 });
@@ -248,6 +275,25 @@ describe("buildDashboardSavingSegmentRows", () => {
         roiLabel: "68.3x",
       },
     ]);
+  });
+
+  it("uses taxonomy labels for scheme ROI segment rows", () => {
+    expect(
+      buildDashboardSavingSegmentRows(
+        [
+          {
+            segment_type: "scheme",
+            segment_id: "provider_peer_outlier",
+            saving_amount: "8200.00",
+            currency: "CNY",
+            claim_count: 1,
+            attribution_count: 2,
+            roi: 68.33,
+          },
+        ],
+        { provider_peer_outlier: "Provider peer outlier (provider_peer_outlier)" },
+      )[0].segmentLabel,
+    ).toBe("scheme / Provider peer outlier (provider_peer_outlier)");
   });
 });
 

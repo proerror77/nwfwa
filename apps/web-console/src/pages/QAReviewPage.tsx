@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listQaFeedbackItems, listQaQueue, listQaQueueSummary, submitQaResult } from "../api";
+import {
+  listFwaSchemes,
+  listQaFeedbackItems,
+  listQaQueue,
+  listQaQueueSummary,
+  submitQaResult,
+} from "../api";
+import {
+  buildFwaSchemeLabelMap,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 
 type QaQueueItem = {
   qa_case_id: string;
@@ -95,6 +106,11 @@ export function QAReviewPage() {
     queryKey: ["qa-queue-summary", apiKey],
     queryFn: () => listQaQueueSummary(apiKey) as Promise<QaQueueSummary>,
   });
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
+  const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
 
   useEffect(() => {
     setEvidenceRefs(buildQaEvidenceRefs(selectedCase));
@@ -137,6 +153,9 @@ export function QAReviewPage() {
           <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
         </label>
         {queueQuery.error ? <pre className="error">{String(queueQuery.error.message)}</pre> : null}
+        {schemesQuery.error ? (
+          <pre className="error">{String(schemesQuery.error.message)}</pre>
+        ) : null}
         <div className="table-list">
           {queueQuery.data?.items.map((item) => (
             <button
@@ -148,7 +167,7 @@ export function QAReviewPage() {
             >
               <span>{item.claim_id}</span>
               <strong>{item.rag}</strong>
-              <small>{item.scheme_family}</small>
+              <small>{formatFwaSchemeLabel(item.scheme_family, schemeLabelMap)}</small>
               <small>{item.status}</small>
             </button>
           ))}
@@ -217,7 +236,7 @@ export function QAReviewPage() {
             </div>
             <div>
               <dt>Scheme</dt>
-              <dd>{selectedCase.scheme_family}</dd>
+              <dd>{formatFwaSchemeLabel(selectedCase.scheme_family, schemeLabelMap)}</dd>
             </div>
             <div>
               <dt>Reviewer</dt>

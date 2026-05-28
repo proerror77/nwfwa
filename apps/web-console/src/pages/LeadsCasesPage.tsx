@@ -1,6 +1,11 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listCases, listLeads, triageLead, updateCaseStatus } from "../api";
+import { listCases, listFwaSchemes, listLeads, triageLead, updateCaseStatus } from "../api";
+import {
+  buildFwaSchemeLabelMap,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 
 type LeadRecord = {
   lead_id: string;
@@ -84,6 +89,11 @@ export function LeadsCasesPage() {
     queryKey: ["cases", apiKey],
     queryFn: () => listCases(apiKey) as Promise<CaseListResponse>,
   });
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
+  const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const selectedLead = useMemo(
     () =>
       leadsQuery.data?.leads.find((lead) => lead.lead_id === selectedLeadId) ??
@@ -169,7 +179,7 @@ export function LeadsCasesPage() {
           </div>
           <div>
             <span>Top Scheme</span>
-            <strong>{summary.topScheme}</strong>
+            <strong>{formatFwaSchemeLabel(summary.topScheme, schemeLabelMap)}</strong>
           </div>
         </div>
       </div>
@@ -177,6 +187,9 @@ export function LeadsCasesPage() {
       <div className="panel">
         <h2>Leads</h2>
         {leadsQuery.error ? <pre className="error">{String(leadsQuery.error.message)}</pre> : null}
+        {schemesQuery.error ? (
+          <pre className="error">{String(schemesQuery.error.message)}</pre>
+        ) : null}
         <div className="table-list">
           {leadsQuery.data?.leads.map((lead) => (
             <button
@@ -186,7 +199,7 @@ export function LeadsCasesPage() {
             >
               <span>{lead.claim_id}</span>
               <strong>{lead.risk_score}</strong>
-              <small>{lead.scheme_family}</small>
+              <small>{formatFwaSchemeLabel(lead.scheme_family, schemeLabelMap)}</small>
             </button>
           ))}
         </div>
@@ -337,6 +350,10 @@ export function LeadsCasesPage() {
                 <div>
                   <dt>Priority</dt>
                   <dd>{item.priority}</dd>
+                </div>
+                <div>
+                  <dt>Scheme</dt>
+                  <dd>{formatFwaSchemeLabel(item.scheme_family ?? "-", schemeLabelMap)}</dd>
                 </div>
                 <div>
                   <dt>Assignee</dt>

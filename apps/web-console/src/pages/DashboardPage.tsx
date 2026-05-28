@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getDashboardSummary, getProviderRiskSummary } from "../api";
+import { getDashboardSummary, getProviderRiskSummary, listFwaSchemes } from "../api";
 import { buildDashboardLayerRows, type DashboardLayerScore } from "./dashboardLayerRows";
 import {
   buildSavingAttributionRows,
   type SavingAttributionSummary,
 } from "./savingAttributionRows";
+import {
+  buildFwaSchemeLabelMap,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 
 type DashboardModelScore = {
   scored_runs: number;
@@ -240,16 +245,26 @@ export function buildDashboardRuleGovernanceSummary(governance?: DashboardRuleGo
   };
 }
 
-export function buildDashboardSchemeRows(distribution: Record<string, number> = {}) {
+export function buildDashboardSchemeRows(
+  distribution: Record<string, number> = {},
+  schemeLabelMap: Record<string, string> = {},
+) {
   return Object.entries(distribution)
-    .map(([schemeFamily, count]) => ({ schemeFamily, count }))
+    .map(([schemeFamily, count]) => ({
+      schemeFamily,
+      schemeLabel: formatFwaSchemeLabel(schemeFamily, schemeLabelMap),
+      count,
+    }))
     .sort(
       (left, right) =>
         right.count - left.count || left.schemeFamily.localeCompare(right.schemeFamily),
     );
 }
 
-export function buildDashboardSavingSegmentRows(segments: DashboardSavingSegment[] = []) {
+export function buildDashboardSavingSegmentRows(
+  segments: DashboardSavingSegment[] = [],
+  schemeLabelMap: Record<string, string> = {},
+) {
   return [...segments]
     .sort((left, right) => {
       const leftTypeRank = left.segment_type === "provider" ? 0 : 1;
@@ -262,7 +277,10 @@ export function buildDashboardSavingSegmentRows(segments: DashboardSavingSegment
     })
     .map((segment) => ({
       key: `${segment.segment_type}:${segment.segment_id}:${segment.currency}`,
-      segmentLabel: `${segment.segment_type} / ${segment.segment_id}`,
+      segmentLabel:
+        segment.segment_type === "scheme"
+          ? `${segment.segment_type} / ${formatFwaSchemeLabel(segment.segment_id, schemeLabelMap)}`
+          : `${segment.segment_type} / ${segment.segment_id}`,
       savingAmount: segment.saving_amount,
       currency: segment.currency,
       claimCount: segment.claim_count,
@@ -311,14 +329,25 @@ export function DashboardPage() {
     queryKey: ["provider-risk-summary", apiKey],
     queryFn: () => getProviderRiskSummary(apiKey) as Promise<ProviderRiskSummary>,
   });
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
   const summary = dashboardQuery.data;
   const providerRisk = providerRiskQuery.data;
+  const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const ragRows = Object.entries(summary?.rag_distribution ?? {});
-  const schemeRows = buildDashboardSchemeRows(summary?.scheme_distribution ?? {});
+  const schemeRows = buildDashboardSchemeRows(
+    summary?.scheme_distribution ?? {},
+    schemeLabelMap,
+  );
   const modelRows = Object.entries(summary?.model_scores ?? {});
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
-  const savingSegmentRows = buildDashboardSavingSegmentRows(summary?.saving_segments ?? []);
+  const savingSegmentRows = buildDashboardSavingSegmentRows(
+    summary?.saving_segments ?? [],
+    schemeLabelMap,
+  );
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
   const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
   const caseSlaSummary = buildDashboardCaseSlaSummary(summary?.case_sla);
@@ -347,6 +376,7 @@ export function DashboardPage() {
       {providerRiskQuery.error ? (
         <pre className="error">{String(providerRiskQuery.error.message)}</pre>
       ) : null}
+      {schemesQuery.error ? <pre className="error">{String(schemesQuery.error.message)}</pre> : null}
 
       <div className="summary-grid dashboard-kpis">
         <div>
@@ -398,7 +428,7 @@ export function DashboardPage() {
           <div className="table-list">
             {schemeRows.map((scheme) => (
               <div className="metric-row compact-metric-row" key={scheme.schemeFamily}>
-                <span>{scheme.schemeFamily}</span>
+                <span>{scheme.schemeLabel}</span>
                 <strong>{scheme.count}</strong>
               </div>
             ))}

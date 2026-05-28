@@ -6,7 +6,12 @@ import {
   publishKnowledgeCase,
   searchSimilarCases,
 } from "../api";
-import { buildFwaSchemeOptions, type FwaSchemeDefinition } from "./fwaSchemeOptions";
+import {
+  buildFwaSchemeLabelMap,
+  buildFwaSchemeOptions,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 
 type KnowledgeCase = {
   case_id: string;
@@ -57,6 +62,7 @@ export function KnowledgeBasePage() {
     queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
   });
   const schemeOptions = buildFwaSchemeOptions(schemesQuery.data?.schemes, publishSchemeFamily);
+  const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const selectedCase = useMemo(
     () =>
       casesQuery.data?.cases.find((item) => item.case_id === selectedCaseId) ??
@@ -127,7 +133,7 @@ export function KnowledgeBasePage() {
               <span>{item.title}</span>
               <strong>{item.fwa_type}</strong>
               <small>
-                {item.case_id} · {item.scheme_family}
+                {item.case_id} · {formatFwaSchemeLabel(item.scheme_family, schemeLabelMap)}
               </small>
             </button>
           ))}
@@ -148,7 +154,7 @@ export function KnowledgeBasePage() {
               </div>
               <div>
                 <dt>Scheme</dt>
-                <dd>{selectedCase.scheme_family}</dd>
+                <dd>{formatFwaSchemeLabel(selectedCase.scheme_family, schemeLabelMap)}</dd>
               </div>
               <div>
                 <dt>Region</dt>
@@ -196,7 +202,7 @@ export function KnowledgeBasePage() {
                   {item.case_id} · {(item.similarity_score * 100).toFixed(0)}%
                 </strong>
                 <small>{item.retrieval_method}</small>
-                <span>{item.scheme_family}</span>
+                <span>{formatFwaSchemeLabel(item.scheme_family, schemeLabelMap)}</span>
                 <span>{item.matched_signals.join(", ")}</span>
                 <span>{item.provenance_refs.join(", ")}</span>
               </li>

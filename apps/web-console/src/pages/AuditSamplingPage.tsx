@@ -1,6 +1,11 @@
 import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { createAuditSample, listAuditSamples } from "../api";
+import { createAuditSample, listAuditSamples, listFwaSchemes } from "../api";
+import {
+  buildFwaSchemeLabelMap,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 
 type AuditSampleLead = {
   lead_id: string;
@@ -109,6 +114,11 @@ export function AuditSamplingPage() {
     queryKey: ["audit-samples", apiKey],
     queryFn: () => listAuditSamples(apiKey) as Promise<AuditSampleListResponse>,
   });
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
+  const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const summary = buildAuditSamplingSummary(samplesQuery.data);
   const createMutation = useMutation({
     mutationFn: () =>
@@ -254,6 +264,9 @@ export function AuditSamplingPage() {
         {samplesQuery.error ? (
           <pre className="error">{String(samplesQuery.error.message)}</pre>
         ) : null}
+        {schemesQuery.error ? (
+          <pre className="error">{String(schemesQuery.error.message)}</pre>
+        ) : null}
         <div className="table-list">
           {samplesQuery.data?.samples.map((sample) => {
             const topQaConclusion = topDistributionKey(sample.outcome_distribution.qa_conclusions);
@@ -287,7 +300,7 @@ export function AuditSamplingPage() {
                 <dl className="result-grid">
                   <div>
                     <dt>Scheme</dt>
-                    <dd>{lead.scheme_family}</dd>
+                    <dd>{formatFwaSchemeLabel(lead.scheme_family, schemeLabelMap)}</dd>
                   </div>
                   <div>
                     <dt>Risk</dt>
