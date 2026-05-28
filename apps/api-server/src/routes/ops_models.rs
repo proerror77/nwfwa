@@ -48,6 +48,7 @@ pub struct ModelPromotionGatesResponse {
     pub source_data_quality_status: String,
     pub data_status: String,
     pub scored_runs: u32,
+    pub open_model_feedback_count: usize,
     pub approved_label_count: usize,
     pub needs_review_label_count: usize,
     pub gates: Vec<ModelPromotionGate>,
@@ -830,11 +831,17 @@ async fn load_model_promotion_gates(
         .list_outcome_labels()
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
+    let feedback_items = state
+        .repository
+        .list_qa_feedback_items()
+        .await
+        .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     let gates = build_model_promotion_gates(
         &model,
         &performance,
         &evaluations,
         &outcome_labels,
+        &feedback_items,
         latest_review.as_ref(),
         source_dataset.as_ref(),
     );
@@ -855,6 +862,7 @@ fn build_model_promotion_gates(
     performance: &ModelPerformanceRecord,
     evaluations: &[ModelEvaluationRecord],
     outcome_labels: &[crate::repository::OutcomeLabelRecord],
+    feedback_items: &[QaFeedbackItemRecord],
     latest_review: Option<&ModelPromotionReviewRecord>,
     source_dataset: Option<&DatasetRecord>,
 ) -> ModelPromotionGatesResponse {
@@ -923,6 +931,10 @@ fn build_model_promotion_gates(
     let drift_status = performance.drift_status.as_str();
     let drift_gate_passed = drift_status == "stable";
     let active_version = model.status == "active";
+    let open_model_feedback_count = feedback_items
+        .iter()
+        .filter(|item| item.feedback_target == "models" && item.status == "open")
+        .count();
     let model_labels = outcome_labels
         .iter()
         .filter(|label| label.feedback_target == "models")
@@ -1052,6 +1064,7 @@ fn build_model_promotion_gates(
         source_data_quality_status: source_data_quality.status,
         data_status: performance.data_status.clone(),
         scored_runs: performance.scored_runs,
+        open_model_feedback_count,
         approved_label_count: approved_model_labels,
         needs_review_label_count: needs_review_model_labels,
         gates,

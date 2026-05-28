@@ -230,7 +230,11 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "source_data_quality_score")
     );
-    for field in ["approved_label_count", "needs_review_label_count"] {
+    for field in [
+        "open_model_feedback_count",
+        "approved_label_count",
+        "needs_review_label_count",
+    ] {
         assert!(
             schema["components"]["schemas"]["ModelPromotionGatesResponse"]["required"]
                 .as_array()
