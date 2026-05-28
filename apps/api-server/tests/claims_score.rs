@@ -203,6 +203,55 @@ async fn scores_spec_style_top_level_full_payload() {
 }
 
 #[tokio::test]
+async fn scores_claim_with_review_mode_and_audits_routing_policy() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "review_mode": "post_payment",
+              "claim": {
+                "external_claim_id": "CLM-REVIEW-MODE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["review_mode"], "post_payment");
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-REVIEW-MODE")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(scoring_event["payload"]["review_mode"], "post_payment");
+}
+
+#[tokio::test]
 async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
     let app = build_app(test_config());
 
@@ -654,6 +703,36 @@ async fn rejects_missing_api_key() {
 }
 
 #[tokio::test]
+async fn rejects_invalid_review_mode() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "review_mode": "ad_hoc",
+              "claim": {
+                "external_claim_id": "CLM-BAD-REVIEW-MODE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("INVALID_REVIEW_MODE"));
+}
+
+#[tokio::test]
 async fn exposes_openapi_schema_for_scoring_contract() {
     let app = build_app(test_config());
 
@@ -679,6 +758,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .expect("request schema oneOf");
     assert_eq!(one_of.len(), 2);
     let claim_id_mode = &schema["components"]["schemas"]["ClaimIdScoreClaimRequest"];
+    assert_eq!(
+        claim_id_mode["properties"]["review_mode"]["enum"],
+        serde_json::json!(["pre_payment", "post_payment", "both"])
+    );
     for field in [
         "claim",
         "items",
@@ -702,6 +785,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     for field in [
         "run_id",
         "audit_id",
+        "review_mode",
         "risk_score",
         "rag",
         "risk_level",
@@ -718,6 +802,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");
     }
+    assert_eq!(
+        response_properties["review_mode"]["enum"],
+        serde_json::json!(["pre_payment", "post_payment", "both"])
+    );
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderProfileAssessment"].is_object());
 

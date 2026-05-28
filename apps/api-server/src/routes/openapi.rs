@@ -1098,6 +1098,12 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_id": {
                             "type": "string",
                             "description": "Existing claim id to load from FWA storage."
+                        },
+                        "review_mode": {
+                            "type": "string",
+                            "enum": ["pre_payment", "post_payment", "both"],
+                            "default": "pre_payment",
+                            "description": "Routing policy context for pre-payment, post-payment, or shared review."
                         }
                     },
                     "not": {
@@ -1122,6 +1128,12 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "claim": {
                             "$ref": "#/components/schemas/FullClaimPayload"
+                        },
+                        "review_mode": {
+                            "type": "string",
+                            "enum": ["pre_payment", "post_payment", "both"],
+                            "default": "pre_payment",
+                            "description": "Routing policy context for pre-payment, post-payment, or shared review."
                         },
                         "items": {
                             "type": "array",
@@ -1358,6 +1370,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "run_id",
                         "audit_id",
                         "claim_id",
+                        "review_mode",
                         "risk_score",
                         "rag",
                         "risk_level",
@@ -1383,6 +1396,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "claim_id": {
                             "type": "string"
+                        },
+                        "review_mode": {
+                            "type": "string",
+                            "enum": ["pre_payment", "post_payment", "both"]
                         },
                         "risk_score": {
                             "type": "integer",

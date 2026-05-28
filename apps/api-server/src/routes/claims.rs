@@ -25,6 +25,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 pub struct ScoreClaimRequest {
     pub source_system: String,
+    pub review_mode: Option<String>,
     pub claim_id: Option<String>,
     pub claim: Option<FullClaimPayload>,
     pub items: Option<Vec<ClaimItemPayload>>,
@@ -119,6 +120,7 @@ pub struct ScoreClaimResponse {
     pub run_id: String,
     pub audit_id: String,
     pub claim_id: String,
+    pub review_mode: String,
     pub risk_score: u8,
     pub rag: RiskLevel,
     pub risk_level: String,
@@ -201,6 +203,7 @@ pub async fn score_claim(
             "claim_id or claim payload is required",
         ));
     }
+    let review_mode = normalize_review_mode(request.review_mode.as_deref())?;
 
     let (context, clinical_documents, provider_profile_input) =
         if let Some(claim_id) = request.claim_id.clone() {
@@ -332,6 +335,7 @@ pub async fn score_claim(
                 context: &context,
                 actor: &actor,
                 source_system: &request.source_system,
+                review_mode: &review_mode,
                 summary: "model scoring failed",
                 error_message: &error_message,
                 evidence_refs: evidence_refs.clone(),
@@ -371,6 +375,7 @@ pub async fn score_claim(
     };
     let audit_payload = serde_json::json!({
         "claim_id": context.claim.external_claim_id,
+        "review_mode": &review_mode,
         "risk_score": decision.risk_score.value(),
         "rag": format!("{:?}", decision.rag),
         "risk_level": &decision.risk_level,
@@ -429,6 +434,7 @@ pub async fn score_claim(
         run_id: run_id.to_string(),
         audit_id: audit_id.to_string(),
         claim_id: context.claim.external_claim_id,
+        review_mode,
         risk_score: decision.risk_score.value(),
         rag: decision.rag,
         risk_level: decision.risk_level,
@@ -445,6 +451,18 @@ pub async fn score_claim(
         similar_cases,
         evidence_refs,
     }))
+}
+
+fn normalize_review_mode(value: Option<&str>) -> Result<String, ApiError> {
+    let review_mode = value.unwrap_or("pre_payment");
+    match review_mode {
+        "pre_payment" | "post_payment" | "both" => Ok(review_mode.to_string()),
+        _ => Err(ApiError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "INVALID_REVIEW_MODE",
+            "review_mode must be one of: pre_payment, post_payment, both",
+        )),
+    }
 }
 
 fn similar_case_score(similar_cases: &[SimilarCaseRecord]) -> u8 {
@@ -641,6 +659,7 @@ struct FailedAuditInput<'a> {
     context: &'a ClaimContext,
     actor: &'a ActorContext,
     source_system: &'a str,
+    review_mode: &'a str,
     summary: &'a str,
     error_message: &'a str,
     evidence_refs: Vec<serde_json::Value>,
@@ -662,6 +681,7 @@ async fn persist_failed_audit(input: FailedAuditInput<'_>) -> anyhow::Result<()>
             summary: input.summary.to_string(),
             payload: serde_json::json!({
                 "claim_id": input.context.claim.external_claim_id,
+                "review_mode": input.review_mode,
                 "error": input.error_message
             }),
             evidence_refs: input.evidence_refs,

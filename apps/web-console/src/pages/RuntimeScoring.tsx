@@ -5,12 +5,14 @@ import {
   buildProviderProfileInspection,
   type ProviderProfileAssessment,
 } from "./providerProfileInspection";
+import { formatReviewModeLabel } from "./reviewMode";
 import { buildScoringLayerSummary, type ScoringLayer } from "./scoringLayers";
 
 type ScoringResponse = {
   run_id: string;
   audit_id: string;
   claim_id: string;
+  review_mode: string;
   risk_score: number;
   rag: string;
   risk_level: string;
@@ -44,6 +46,7 @@ type ScoringResponse = {
 const defaultPayload = JSON.stringify(
   {
     source_system: "tpa-demo",
+    review_mode: "pre_payment",
     claim: {
       external_claim_id: "CLM-0287",
       claim_amount: "8000",
@@ -142,6 +145,10 @@ export function RuntimeScoring() {
               <div>
                 <dt>Audit</dt>
                 <dd>{result.audit_id}</dd>
+              </div>
+              <div>
+                <dt>Review Mode</dt>
+                <dd>{formatReviewModeLabel(result.review_mode)}</dd>
               </div>
               <div>
                 <dt>Confidence</dt>
