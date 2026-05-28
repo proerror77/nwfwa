@@ -24,6 +24,12 @@ describe("buildPromotionGateEvidenceRows", () => {
           evidence_source: "evaluation",
         },
         {
+          label: "Source data quality",
+          passed: true,
+          blocker: "source data quality score missing",
+          evidence_source: "dataset",
+        },
+        {
           label: "Label governance",
           passed: false,
           blocker: "model outcome labels need review",
@@ -48,6 +54,12 @@ describe("buildPromotionGateEvidenceRows", () => {
         status: "passed",
         evidenceSource: "Evaluation",
         evidenceClassName: "source-evaluation",
+      },
+      {
+        label: "Source data quality",
+        status: "passed",
+        evidenceSource: "Dataset",
+        evidenceClassName: "source-dataset",
       },
       {
         label: "Label governance",

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildModelLabelReadinessSummary } from "./ModelOpsPage";
+import { buildModelLabelReadinessSummary, formatSourceDataQuality } from "./ModelOpsPage";
 
 describe("buildModelLabelReadinessSummary", () => {
   it("summarizes model-governance labels from human outcomes", () => {
@@ -49,5 +49,12 @@ describe("buildModelLabelReadinessSummary", () => {
       evidenceBackedCount: 2,
       confirmedFwaCount: 1,
     });
+  });
+});
+
+describe("formatSourceDataQuality", () => {
+  it("formats nullable model source data quality scores", () => {
+    expect(formatSourceDataQuality(0.875)).toBe("87.5%");
+    expect(formatSourceDataQuality(null)).toBe("-");
   });
 });

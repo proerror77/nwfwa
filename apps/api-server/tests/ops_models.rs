@@ -49,6 +49,34 @@ async fn json_request(
 }
 
 async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"allowed_values": [0, 1], "missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+        r#"{"missing_rate": 0.0, "psi": 0.01, "owner": "model-ops"}"#,
+    )
+    .await
+}
+
+async fn register_unhealthy_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
+    register_model_dataset_for_test_with_profiles(
+        app,
+        suffix,
+        "{}",
+        r#"{"allowed_values": [0, 1]}"#,
+        "{}",
+    )
+    .await
+}
+
+async fn register_model_dataset_for_test_with_profiles(
+    app: axum::Router,
+    suffix: &str,
+    key_profile: &str,
+    label_profile: &str,
+    feature_profile: &str,
+) -> String {
     let (_, dataset) = json_request(
         app.clone(),
         "POST",
@@ -89,7 +117,7 @@ async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> Str
                   "nullable": false,
                   "semantic_role": "key",
                   "description": "Claim id.",
-                  "profile_json": {{}}
+                  "profile_json": {key_profile}
                 }},
                 {{
                   "field_name": "confirmed_fwa",
@@ -97,7 +125,7 @@ async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> Str
                   "nullable": false,
                   "semantic_role": "label",
                   "description": "Confirmed FWA label.",
-                  "profile_json": {{"allowed_values": [0, 1]}}
+                  "profile_json": {label_profile}
                 }},
                 {{
                   "field_name": "claim_amount_to_limit_ratio",
@@ -105,7 +133,7 @@ async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> Str
                   "nullable": false,
                   "semantic_role": "feature",
                   "description": "Claim amount to policy limit ratio.",
-                  "profile_json": {{}}
+                  "profile_json": {feature_profile}
                 }}
               ]
             }}"#
@@ -372,6 +400,9 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["review_mode"], "both");
     assert_eq!(body["decision"], "routing_blocked");
     assert_eq!(body["latest_evaluation_id"], "none");
+    assert_eq!(body["source_dataset_id"], "none");
+    assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
+    assert_eq!(body["source_data_quality_status"], "missing");
     assert_eq!(body["passed_count"], 1);
     assert_eq!(body["total_count"], 14);
     assert!(body["blockers"]
@@ -446,11 +477,17 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
     let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
 
     assert_eq!(status, StatusCode::OK);
-    for label in [
-        "Source data quality",
-        "Feature reproducibility",
-        "Label provenance",
-    ] {
+    assert_eq!(body["source_data_quality_score"], 1.0);
+    assert_eq!(body["source_data_quality_status"], "ready");
+    let source_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Source data quality")
+        .unwrap();
+    assert_eq!(source_gate["passed"], true);
+    assert_eq!(source_gate["evidence_source"], "dataset");
+    for label in ["Feature reproducibility", "Label provenance"] {
         let gate = body["gates"]
             .as_array()
             .unwrap()
@@ -460,6 +497,68 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
         assert_eq!(gate["passed"], true);
         assert_eq!(gate["evidence_source"], "evaluation");
     }
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_unhealthy_source_dataset() {
+    let app = build_app(test_config());
+    let model_dataset_id =
+        register_unhealthy_model_dataset_for_test(app.clone(), "unhealthy_source").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_unhealthy_source",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_unhealthy_source/v1/feature_importance.parquet",
+              "metrics_json": {{
+                "data_quality_score": 0.99,
+                "feature_reproducibility_hash": "sha256:unhealthy-source-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "qa_review"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["source_data_quality_score"], 0.6666666666666667);
+    assert_eq!(body["source_data_quality_status"], "watch");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "source dataset data quality below threshold"
+        )));
+    let source_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Source data quality")
+        .unwrap();
+    assert_eq!(source_gate["passed"], false);
+    assert_eq!(source_gate["evidence_source"], "dataset");
+    assert_eq!(
+        source_gate["blocker"],
+        "source dataset data quality below threshold"
+    );
 }
 
 #[tokio::test]

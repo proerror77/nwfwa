@@ -334,68 +334,65 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
     response
 }
 
-fn build_dataset_health(datasets: &[DatasetRecord]) -> Vec<DatasetHealthRecord> {
-    datasets
-        .iter()
-        .map(|dataset| {
-            let mut record = DatasetHealthRecord {
-                dataset_id: dataset.dataset_id.clone(),
-                dataset_key: dataset.dataset_key.clone(),
-                dataset_version: dataset.dataset_version.clone(),
-                data_quality_score: 0.0,
-                data_quality_status: "empty".into(),
-                field_count: dataset.fields.len() as u32,
-                label_count: 0,
-                entity_key_count: 0,
-                high_missing_count: 0,
-                unstable_field_count: 0,
-                unowned_field_count: 0,
-                online_ready_count: 0,
-                issue_count: 0,
-            };
+pub(crate) fn build_dataset_health(datasets: &[DatasetRecord]) -> Vec<DatasetHealthRecord> {
+    datasets.iter().map(build_dataset_health_record).collect()
+}
 
-            for field in &dataset.fields {
-                let is_label = field.semantic_role == "label";
-                let is_entity_key = dataset.entity_keys.contains(&field.field_name);
-                let missing_rate = numeric_profile_value(&field.profile_json, "missing_rate");
-                if is_label {
-                    record.label_count += 1;
-                }
-                if is_entity_key {
-                    record.entity_key_count += 1;
-                }
-                if !is_label && !field.nullable && missing_rate.unwrap_or(0.0) <= 0.05 {
-                    record.online_ready_count += 1;
-                }
-                if missing_rate.unwrap_or(0.0) > 0.20 {
-                    record.high_missing_count += 1;
-                }
-                if numeric_profile_value(&field.profile_json, "psi").unwrap_or(0.0) >= 0.25 {
-                    record.unstable_field_count += 1;
-                }
-                if field
-                    .profile_json
-                    .get("owner")
-                    .and_then(Value::as_str)
-                    .is_none_or(str::is_empty)
-                {
-                    record.unowned_field_count += 1;
-                }
-            }
+pub(crate) fn build_dataset_health_record(dataset: &DatasetRecord) -> DatasetHealthRecord {
+    let mut record = DatasetHealthRecord {
+        dataset_id: dataset.dataset_id.clone(),
+        dataset_key: dataset.dataset_key.clone(),
+        dataset_version: dataset.dataset_version.clone(),
+        data_quality_score: 0.0,
+        data_quality_status: "empty".into(),
+        field_count: dataset.fields.len() as u32,
+        label_count: 0,
+        entity_key_count: 0,
+        high_missing_count: 0,
+        unstable_field_count: 0,
+        unowned_field_count: 0,
+        online_ready_count: 0,
+        issue_count: 0,
+    };
 
-            record.issue_count = record.high_missing_count
-                + record.unstable_field_count
-                + record.unowned_field_count;
-            if record.field_count > 0 {
-                record.data_quality_score =
-                    dataset_data_quality_score(record.field_count, record.issue_count);
-                record.data_quality_status =
-                    factor_data_quality_status(record.data_quality_score).into();
-            }
+    for field in &dataset.fields {
+        let is_label = field.semantic_role == "label";
+        let is_entity_key = dataset.entity_keys.contains(&field.field_name);
+        let missing_rate = numeric_profile_value(&field.profile_json, "missing_rate");
+        if is_label {
+            record.label_count += 1;
+        }
+        if is_entity_key {
+            record.entity_key_count += 1;
+        }
+        if !is_label && !field.nullable && missing_rate.unwrap_or(0.0) <= 0.05 {
+            record.online_ready_count += 1;
+        }
+        if missing_rate.unwrap_or(0.0) > 0.20 {
+            record.high_missing_count += 1;
+        }
+        if numeric_profile_value(&field.profile_json, "psi").unwrap_or(0.0) >= 0.25 {
+            record.unstable_field_count += 1;
+        }
+        if field
+            .profile_json
+            .get("owner")
+            .and_then(Value::as_str)
+            .is_none_or(str::is_empty)
+        {
+            record.unowned_field_count += 1;
+        }
+    }
 
-            record
-        })
-        .collect()
+    record.issue_count =
+        record.high_missing_count + record.unstable_field_count + record.unowned_field_count;
+    if record.field_count > 0 {
+        record.data_quality_score =
+            dataset_data_quality_score(record.field_count, record.issue_count);
+        record.data_quality_status = factor_data_quality_status(record.data_quality_score).into();
+    }
+
+    record
 }
 
 fn dataset_data_quality_score(field_count: u32, issue_count: u32) -> f64 {

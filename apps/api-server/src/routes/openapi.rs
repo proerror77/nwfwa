@@ -2512,13 +2512,13 @@ pub async fn openapi_schema() -> Json<Value> {
                         "blocker": { "type": "string" },
                         "evidence_source": {
                             "type": "string",
-                            "enum": ["runtime", "approval", "evaluation", "labels", "metadata", "missing"]
+                            "enum": ["runtime", "approval", "dataset", "evaluation", "labels", "metadata", "missing"]
                         }
                     }
                 },
                 "ModelPromotionGatesResponse": {
                     "type": "object",
-                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "data_status", "scored_runs", "gates", "blockers"],
+                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "data_status", "scored_runs", "gates", "blockers"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
@@ -2527,6 +2527,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         "passed_count": { "type": "integer" },
                         "total_count": { "type": "integer" },
                         "latest_evaluation_id": { "type": "string" },
+                        "source_dataset_id": { "type": "string" },
+                        "source_data_quality_score": { "type": ["number", "null"] },
+                        "source_data_quality_status": { "type": "string", "enum": ["missing", "ready", "watch", "blocked"] },
                         "data_status": { "type": "string" },
                         "scored_runs": { "type": "integer" },
                         "gates": {

@@ -2,9 +2,10 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
+        DatasetRecord, ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
         ModelVersionRecord, PersistedAuditEvent,
     },
+    routes::ops_datasets::build_dataset_health_record,
 };
 use axum::{
     extract::{Path, State},
@@ -38,10 +39,22 @@ pub struct ModelPromotionGatesResponse {
     pub passed_count: usize,
     pub total_count: usize,
     pub latest_evaluation_id: String,
+    pub source_dataset_id: String,
+    pub source_data_quality_score: Option<f64>,
+    pub source_data_quality_status: String,
     pub data_status: String,
     pub scored_runs: u32,
     pub gates: Vec<ModelPromotionGate>,
     pub blockers: Vec<String>,
+}
+
+struct SourceDataQualityGate {
+    dataset_id: String,
+    score: Option<f64>,
+    status: String,
+    passed: bool,
+    blocker: &'static str,
+    evidence_source: &'static str,
 }
 
 #[derive(Debug, Deserialize)]
@@ -124,6 +137,17 @@ pub async fn model_promotion_gates(
         .list_model_evaluations()
         .await
         .map_err(internal_error("MODEL_EVALUATION_LIST_FAILED"))?;
+    let latest_evaluation = evaluations.iter().find(|evaluation| {
+        evaluation.model_key == model.model_key && evaluation.model_version == model.version
+    });
+    let source_dataset = match latest_evaluation {
+        Some(evaluation) => state
+            .repository
+            .get_model_dataset_source_dataset(&evaluation.model_dataset_id)
+            .await
+            .map_err(internal_error("MODEL_DATASET_LINEAGE_FAILED"))?,
+        None => None,
+    };
     let latest_review = state
         .repository
         .latest_model_promotion_review(&model.model_key, &model.version)
@@ -141,6 +165,7 @@ pub async fn model_promotion_gates(
         &evaluations,
         &outcome_labels,
         latest_review.as_ref(),
+        source_dataset.as_ref(),
     )))
 }
 
@@ -247,6 +272,7 @@ fn build_model_promotion_gates(
     evaluations: &[ModelEvaluationRecord],
     outcome_labels: &[crate::repository::OutcomeLabelRecord],
     latest_review: Option<&ModelPromotionReviewRecord>,
+    source_dataset: Option<&DatasetRecord>,
 ) -> ModelPromotionGatesResponse {
     let latest_evaluation = evaluations.iter().find(|evaluation| {
         evaluation.model_key == model.model_key && evaluation.model_version == model.version
@@ -287,11 +313,7 @@ fn build_model_promotion_gates(
         .get("shadow_comparison_status")
         .and_then(|value| value.as_str())
         == Some("passed");
-    let source_data_quality = metrics
-        .get("data_quality_score")
-        .and_then(|value| value.as_f64())
-        .map(|score| score >= 0.8)
-        .unwrap_or(false);
+    let source_data_quality = source_data_quality_gate(metrics, source_dataset);
     let feature_reproducibility = metrics
         .get("feature_reproducibility_hash")
         .and_then(|value| value.as_str())
@@ -376,9 +398,9 @@ fn build_model_promotion_gates(
         ),
         gate(
             "Source data quality",
-            source_data_quality,
-            data_quality_blocker(metrics),
-            evidence_source(source_data_quality, "evaluation"),
+            source_data_quality.passed,
+            source_data_quality.blocker,
+            source_data_quality.evidence_source,
         ),
         gate(
             "Feature reproducibility",
@@ -441,6 +463,9 @@ fn build_model_promotion_gates(
         latest_evaluation_id: latest_evaluation
             .map(|evaluation| evaluation.evaluation_run_id.clone())
             .unwrap_or_else(|| "none".into()),
+        source_dataset_id: source_data_quality.dataset_id,
+        source_data_quality_score: source_data_quality.score,
+        source_data_quality_status: source_data_quality.status,
         data_status: performance.data_status.clone(),
         scored_runs: performance.scored_runs,
         gates,
@@ -480,13 +505,60 @@ fn label_governance_blocker(approved_count: usize, needs_review_count: usize) ->
     }
 }
 
-fn data_quality_blocker(metrics: &serde_json::Value) -> &'static str {
+fn source_data_quality_gate(
+    metrics: &serde_json::Value,
+    source_dataset: Option<&DatasetRecord>,
+) -> SourceDataQualityGate {
+    if let Some(dataset) = source_dataset {
+        let health = build_dataset_health_record(dataset);
+        return SourceDataQualityGate {
+            dataset_id: health.dataset_id,
+            score: Some(health.data_quality_score),
+            status: health.data_quality_status,
+            passed: health.data_quality_score >= 0.8,
+            blocker: if health.data_quality_score >= 0.8 {
+                "none"
+            } else {
+                "source dataset data quality below threshold"
+            },
+            evidence_source: "dataset",
+        };
+    }
+
     match metrics
         .get("data_quality_score")
         .and_then(|value| value.as_f64())
     {
-        Some(score) if score < 0.8 => "source data quality score below threshold",
-        _ => "source data quality score missing",
+        Some(score) => SourceDataQualityGate {
+            dataset_id: "none".into(),
+            score: Some(score),
+            status: data_quality_status_for_score(score).into(),
+            passed: score >= 0.8,
+            blocker: if score >= 0.8 {
+                "none"
+            } else {
+                "source data quality score below threshold"
+            },
+            evidence_source: "evaluation",
+        },
+        None => SourceDataQualityGate {
+            dataset_id: "none".into(),
+            score: None,
+            status: "missing".into(),
+            passed: false,
+            blocker: "source data quality score missing",
+            evidence_source: "missing",
+        },
+    }
+}
+
+fn data_quality_status_for_score(score: f64) -> &'static str {
+    if score >= 0.85 {
+        "ready"
+    } else if score >= 0.65 {
+        "watch"
+    } else {
+        "blocked"
     }
 }
 

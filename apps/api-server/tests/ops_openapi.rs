@@ -101,6 +101,21 @@ async fn openapi_includes_operations_paths() {
         .unwrap()
         .iter()
         .any(|field| field == "issue_count"));
+    assert!(
+        schema["components"]["schemas"]["ModelPromotionGatesResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "source_data_quality_score")
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelPromotionGate"]["properties"]["evidence_source"]
+            ["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "dataset")
+    );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
             ["data_quality_status"]["enum"][1],
@@ -212,10 +227,13 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "evidence_source")
     );
-    assert_eq!(
+    assert!(
         schema["components"]["schemas"]["ModelPromotionGate"]["properties"]["evidence_source"]
-            ["enum"][2],
-        "evaluation"
+            ["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evaluation")
     );
     assert!(
         schema["components"]["schemas"]["RuleBacktestResponse"]["required"]

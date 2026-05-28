@@ -37,6 +37,9 @@ type ModelPromotionGatesResponse = {
   passed_count: number;
   total_count: number;
   latest_evaluation_id: string;
+  source_dataset_id: string;
+  source_data_quality_score: number | null;
+  source_data_quality_status: string;
   data_status: string;
   scored_runs: number;
   blockers: string[];
@@ -79,6 +82,10 @@ export function buildModelLabelReadinessSummary(labels: OutcomeLabel[] = []) {
       (label) => label.label_name === "confirmed_fwa" && label.label_value === "true",
     ).length,
   };
+}
+
+export function formatSourceDataQuality(score?: number | null) {
+  return score == null ? "-" : `${(score * 100).toFixed(1)}%`;
 }
 
 export function ModelOpsPage() {
@@ -365,6 +372,20 @@ export function ModelOpsPage() {
               <div>
                 <span>Latest Evaluation</span>
                 <strong>{promotionQuery.data.latest_evaluation_id}</strong>
+              </div>
+              <div>
+                <span>Source Dataset</span>
+                <strong>{promotionQuery.data.source_dataset_id}</strong>
+              </div>
+              <div>
+                <span>Source DQ</span>
+                <strong>
+                  {formatSourceDataQuality(promotionQuery.data.source_data_quality_score)}
+                </strong>
+              </div>
+              <div>
+                <span>Source DQ Status</span>
+                <strong>{promotionQuery.data.source_data_quality_status}</strong>
               </div>
               <div>
                 <span>Runtime Data</span>

@@ -1238,6 +1238,11 @@ pub trait ScoringRepository: Send + Sync {
         input: RegisterModelDatasetInput,
     ) -> anyhow::Result<Option<ModelDatasetRecord>>;
 
+    async fn get_model_dataset_source_dataset(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<DatasetRecord>>;
+
     async fn register_model_evaluation(
         &self,
         input: RegisterModelEvaluationInput,
@@ -2385,6 +2390,31 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .insert(model_dataset_id, record.clone());
         Ok(Some(record))
+    }
+
+    async fn get_model_dataset_source_dataset(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<DatasetRecord>> {
+        let model_dataset = self
+            .model_datasets
+            .lock()
+            .await
+            .get(model_dataset_id)
+            .cloned();
+        let Some(model_dataset) = model_dataset else {
+            return Ok(None);
+        };
+        let feature_set = self
+            .feature_sets
+            .lock()
+            .await
+            .get(&model_dataset.feature_set_id)
+            .cloned();
+        let Some(feature_set) = feature_set else {
+            return Ok(None);
+        };
+        self.get_dataset(&feature_set.dataset_id).await
     }
 
     async fn register_model_evaluation(
@@ -5280,6 +5310,26 @@ impl ScoringRepository for PostgresScoringRepository {
             label_distribution_json: input.label_distribution_json,
             status: input.status,
         }))
+    }
+
+    async fn get_model_dataset_source_dataset(
+        &self,
+        model_dataset_id: &str,
+    ) -> anyhow::Result<Option<DatasetRecord>> {
+        let row: Option<(String,)> = sqlx::query_as(
+            "SELECT fs.dataset_id::text
+             FROM model_dataset_versions md
+             JOIN feature_set_versions fs ON fs.id = md.feature_set_id
+             WHERE md.id = $1::uuid",
+        )
+        .bind(model_dataset_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        let Some((dataset_id,)) = row else {
+            return Ok(None);
+        };
+        load_dataset_record(&self.pool, &dataset_id).await
     }
 
     async fn register_model_evaluation(
