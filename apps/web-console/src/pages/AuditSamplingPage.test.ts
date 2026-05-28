@@ -31,7 +31,14 @@ describe("buildAuditSamplingSummary", () => {
               evidence_refs: [],
             },
           ],
-          outcome_distribution: {},
+          outcome_distribution: {
+            selected_count: 2,
+            reviewed_count: 1,
+            open_count: 1,
+            qa_conclusions: {
+              issue_found_escalate: 1,
+            },
+          },
           created_at: "2026-05-27T10:00:00Z",
         },
         {
@@ -43,7 +50,12 @@ describe("buildAuditSamplingSummary", () => {
           reviewer: "qa-reviewer-2",
           assignment_queue: "Calibration",
           selected_leads: [],
-          outcome_distribution: {},
+          outcome_distribution: {
+            selected_count: 0,
+            reviewed_count: 0,
+            open_count: 0,
+            qa_conclusions: {},
+          },
           created_at: "2026-05-27T11:00:00Z",
         },
       ],
@@ -52,8 +64,11 @@ describe("buildAuditSamplingSummary", () => {
     expect(summary).toEqual({
       totalSamples: 2,
       selectedLeadCount: 2,
+      reviewedCaseCount: 1,
+      openCaseCount: 1,
       requestedSampleSize: 3,
       topSampleMode: "risk_ranked",
+      topQaConclusion: "issue_found_escalate",
       latestAssignmentQueue: "Calibration",
     });
   });

@@ -30,6 +30,22 @@ type AuditSampleListResponse = {
   samples: AuditSampleRecord[];
 };
 
+function outcomeCount(sample: AuditSampleRecord, key: "reviewed_count" | "open_count") {
+  const value = sample.outcome_distribution[key];
+  return typeof value === "number" ? value : 0;
+}
+
+function topDistributionKey(distribution: unknown) {
+  if (!distribution || typeof distribution !== "object" || Array.isArray(distribution)) {
+    return "none";
+  }
+  return (
+    Object.entries(distribution as Record<string, unknown>)
+      .filter((entry): entry is [string, number] => typeof entry[1] === "number")
+      .sort((left, right) => right[1] - left[1])[0]?.[0] ?? "none"
+  );
+}
+
 export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
   const samples = data?.samples ?? [];
   const modeCounts = samples.reduce<Record<string, number>>((counts, sample) => {
@@ -48,8 +64,30 @@ export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
       (total, sample) => total + sample.selected_leads.length,
       0,
     ),
+    reviewedCaseCount: samples.reduce(
+      (total, sample) => total + outcomeCount(sample, "reviewed_count"),
+      0,
+    ),
+    openCaseCount: samples.reduce(
+      (total, sample) => total + outcomeCount(sample, "open_count"),
+      0,
+    ),
     requestedSampleSize: samples.reduce((total, sample) => total + sample.sample_size, 0),
     topSampleMode,
+    topQaConclusion: topDistributionKey(
+      samples.reduce<Record<string, number>>((counts, sample) => {
+        const conclusions = sample.outcome_distribution.qa_conclusions;
+        if (!conclusions || typeof conclusions !== "object" || Array.isArray(conclusions)) {
+          return counts;
+        }
+        for (const [key, value] of Object.entries(conclusions)) {
+          if (typeof value === "number") {
+            counts[key] = (counts[key] ?? 0) + value;
+          }
+        }
+        return counts;
+      }, {}),
+    ),
     latestAssignmentQueue: latestSample?.assignment_queue ?? "none",
   };
 }
@@ -116,6 +154,14 @@ export function AuditSamplingPage() {
             <strong>{summary.selectedLeadCount}</strong>
           </div>
           <div>
+            <span>Reviewed</span>
+            <strong>{summary.reviewedCaseCount}</strong>
+          </div>
+          <div>
+            <span>Open QA</span>
+            <strong>{summary.openCaseCount}</strong>
+          </div>
+          <div>
             <span>Requested Size</span>
             <strong>{summary.requestedSampleSize}</strong>
           </div>
@@ -126,6 +172,10 @@ export function AuditSamplingPage() {
           <div>
             <span>Latest Queue</span>
             <strong>{summary.latestAssignmentQueue}</strong>
+          </div>
+          <div>
+            <span>Top QA Conclusion</span>
+            <strong>{summary.topQaConclusion}</strong>
           </div>
         </div>
       </div>
@@ -205,14 +255,22 @@ export function AuditSamplingPage() {
           <pre className="error">{String(samplesQuery.error.message)}</pre>
         ) : null}
         <div className="table-list">
-          {samplesQuery.data?.samples.map((sample) => (
-            <div className="row-button" key={sample.sample_id}>
-              <span>{sample.sample_id}</span>
-              <strong>{sample.sample_size}</strong>
-              <small>{sample.sample_mode}</small>
-              <small>{sample.assignment_queue}</small>
-            </div>
-          ))}
+          {samplesQuery.data?.samples.map((sample) => {
+            const topQaConclusion = topDistributionKey(sample.outcome_distribution.qa_conclusions);
+            return (
+              <div className="row-button" key={sample.sample_id}>
+                <span>{sample.sample_id}</span>
+                <strong>{sample.sample_size}</strong>
+                <small>{sample.sample_mode}</small>
+                <small>{sample.assignment_queue}</small>
+                <small>
+                  reviewed {outcomeCount(sample, "reviewed_count")} / open{" "}
+                  {outcomeCount(sample, "open_count")}
+                </small>
+                <small>{topQaConclusion}</small>
+              </div>
+            );
+          })}
         </div>
       </div>
 
