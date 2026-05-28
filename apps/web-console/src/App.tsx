@@ -13,6 +13,7 @@ import { LeadsCasesPage } from "./pages/LeadsCasesPage";
 import { GovernancePage } from "./pages/GovernancePage";
 import { AuditSamplingPage } from "./pages/AuditSamplingPage";
 import { RoutingPoliciesPage } from "./pages/RoutingPoliciesPage";
+import { ProviderRiskPage } from "./pages/ProviderRiskPage";
 
 const modules = [
   "Dashboard",
@@ -23,6 +24,7 @@ const modules = [
   "Data Sources",
   "Factor Factory",
   "Leads & Cases",
+  "Provider Risk",
   "Audit Sampling",
   "Knowledge Base",
   "Agent Investigator",
@@ -55,6 +57,7 @@ export function App() {
         {active === "Data Sources" ? <DataSourcesPage /> : null}
         {active === "Factor Factory" ? <FactorFactoryPage /> : null}
         {active === "Leads & Cases" ? <LeadsCasesPage /> : null}
+        {active === "Provider Risk" ? <ProviderRiskPage /> : null}
         {active === "Audit Sampling" ? <AuditSamplingPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
@@ -69,6 +72,7 @@ export function App() {
           "Data Sources",
           "Factor Factory",
           "Leads & Cases",
+          "Provider Risk",
           "Audit Sampling",
           "Knowledge Base",
           "Agent Investigator",
