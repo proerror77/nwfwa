@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { listDatasets, listFactorReadiness } from "../api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { listDatasets, listFactorReadiness, saveRuleCandidate } from "../api";
 
 type ProfileValue = {
   value: unknown;
@@ -126,6 +126,27 @@ export type FactorCard = {
 
 export type FactorReadinessFilter = "all" | "ready" | "review";
 
+export type FactorRuleCandidate = {
+  owner: string;
+  rule: {
+    rule_id: string;
+    version: number;
+    name: string;
+    review_mode: string;
+    conditions: Array<{
+      field: string;
+      operator: string;
+      value: number;
+    }>;
+    action: {
+      score: number;
+      alert_code: string;
+      recommended_action: "ManualReview";
+      reason: string;
+    };
+  };
+};
+
 export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
   const factorCount = readiness?.factor_count ?? 0;
   const onlineReadyCount = readiness?.online_ready_count ?? 0;
@@ -172,6 +193,57 @@ export function filterFactorCards(
     }
     return true;
   });
+}
+
+export function buildFactorRuleCandidate(card: FactorCard): FactorRuleCandidate | null {
+  if (!card.convertible_to_rule || card.is_label) {
+    return null;
+  }
+  const safeName = safeIdentifier(card.factor_name);
+  return {
+    owner: card.owner === "unassigned" ? "factor-factory" : card.owner,
+    rule: {
+      rule_id: `candidate_factor_${safeName}`,
+      version: 1,
+      name: `${card.display_label} candidate`,
+      review_mode: "both",
+      conditions: [
+        {
+          field: card.factor_name,
+          operator: card.risk_direction === "lower_is_riskier" ? "<=" : ">=",
+          value: suggestedRuleThreshold(card),
+        },
+      ],
+      action: {
+        score: 20,
+        alert_code: `FACTOR_${safeName.toUpperCase()}`,
+        recommended_action: "ManualReview",
+        reason: `${card.display_label} generated from Factor Factory rule-convertible factor`,
+      },
+    },
+  };
+}
+
+function suggestedRuleThreshold(card: FactorCard) {
+  const name = card.factor_name.toLowerCase();
+  if (name.includes("percentile")) {
+    return card.risk_direction === "lower_is_riskier" ? 2 : 98;
+  }
+  if (name.includes("ratio") || name.includes("score") || name.includes("rate")) {
+    return card.risk_direction === "lower_is_riskier" ? 0.2 : 0.8;
+  }
+  if (name.includes("count")) {
+    return 3;
+  }
+  return card.risk_direction === "lower_is_riskier" ? 0 : 1;
+}
+
+function safeIdentifier(value: string) {
+  return value
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 80);
 }
 
 export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
@@ -304,6 +376,7 @@ export function FactorFactoryPage() {
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const [readinessFilter, setReadinessFilter] = useState<FactorReadinessFilter>("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
+  const queryClient = useQueryClient();
   const datasetsQuery = useQuery({
     queryKey: ["factor-datasets", apiKey],
     queryFn: () => listDatasets(apiKey) as Promise<{ datasets: DatasetForFactors[] }>,
@@ -334,6 +407,26 @@ export function FactorFactoryPage() {
     () => filterFactorCards(factorCards, readinessFilter, ownerFilter),
     [factorCards, ownerFilter, readinessFilter],
   );
+  const factorRuleCandidate = useMemo(
+    () =>
+      filteredFactorCards
+        .map((card) => buildFactorRuleCandidate(card))
+        .find((candidate): candidate is FactorRuleCandidate => Boolean(candidate)) ?? null,
+    [filteredFactorCards],
+  );
+  const saveFactorCandidateMutation = useMutation({
+    mutationFn: () => {
+      if (!factorRuleCandidate) {
+        throw new Error("No rule-convertible factor selected");
+      }
+      return saveRuleCandidate(factorRuleCandidate, apiKey);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["rules"] });
+      queryClient.invalidateQueries({ queryKey: ["rule"] });
+      queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
+    },
+  });
   const readinessSummary = buildFactorReadinessSummary(readinessQuery.data);
 
   return (
@@ -452,6 +545,40 @@ export function FactorFactoryPage() {
           </div>
         </div>
         <div className="factor-card-grid">
+          {factorRuleCandidate ? (
+            <article className="factor-card">
+              <div>
+                <strong>Rule Candidate Draft</strong>
+                <span>{factorRuleCandidate.rule.rule_id}</span>
+              </div>
+              <dl className="result-grid">
+                <div>
+                  <dt>Owner</dt>
+                  <dd>{factorRuleCandidate.owner}</dd>
+                </div>
+                <div>
+                  <dt>Condition</dt>
+                  <dd>
+                    {factorRuleCandidate.rule.conditions[0].field}{" "}
+                    {factorRuleCandidate.rule.conditions[0].operator}{" "}
+                    {factorRuleCandidate.rule.conditions[0].value}
+                  </dd>
+                </div>
+              </dl>
+              <button
+                onClick={() => saveFactorCandidateMutation.mutate()}
+                disabled={saveFactorCandidateMutation.isPending}
+              >
+                Save Rule Candidate
+              </button>
+              {saveFactorCandidateMutation.error ? (
+                <pre className="error">{String(saveFactorCandidateMutation.error.message)}</pre>
+              ) : null}
+              {saveFactorCandidateMutation.data ? (
+                <pre>{JSON.stringify(saveFactorCandidateMutation.data, null, 2)}</pre>
+              ) : null}
+            </article>
+          ) : null}
           {filteredFactorCards.map((factor) => (
             <article className="factor-card" key={factor.factor_name}>
               <div>

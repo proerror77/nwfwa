@@ -4,6 +4,7 @@ import {
   buildFactorCards,
   buildFactorOwnerOptions,
   buildFactorReadinessSummary,
+  buildFactorRuleCandidate,
   filterFactorCards,
 } from "./FactorFactoryPage";
 import type { FactorCard } from "./FactorFactoryPage";
@@ -311,5 +312,89 @@ describe("filterFactorCards", () => {
     expect(filterFactorCards(cards, "review", "all").map((card) => card.factor_name)).toEqual([
       "review_feature",
     ]);
+  });
+});
+
+describe("buildFactorRuleCandidate", () => {
+  function factorCard(overrides: Partial<FactorCard>): FactorCard {
+    return {
+      factor_name: "claim_amount_percentile_peer",
+      display_label: "Claim Amount Percentile Peer",
+      semantic_role: "feature",
+      logical_type: "decimal",
+      description: "Claim amount percentile within peers.",
+      business_meaning: "Peer amount outlier.",
+      risk_direction: "higher_is_riskier",
+      calculation_window: "claim",
+      calculation_logic: "peer percentile",
+      source_table: "claim_features",
+      source_fields: ["claim_amount_percentile_peer"],
+      source_lineage_label: "claim_features.claim_amount_percentile_peer",
+      owner: "feature-ops",
+      version: "v1",
+      missing_rate_label: "0.0%",
+      iv_label: "0.210",
+      auc_gain_label: "0.030",
+      lift_label: "2.40x",
+      stability_label: "stable",
+      model_contribution_label: "18.0%",
+      online_status: "ready",
+      online_available: true,
+      convertible_to_rule: true,
+      readiness_issues: [],
+      is_label: false,
+      is_entity_key: false,
+      top_values: [],
+      ...overrides,
+    };
+  }
+
+  it("builds a saveable candidate rule from a rule-convertible factor", () => {
+    const candidate = buildFactorRuleCandidate(factorCard({}));
+
+    expect(candidate).toMatchObject({
+      owner: "feature-ops",
+      rule: {
+        rule_id: "candidate_factor_claim_amount_percentile_peer",
+        version: 1,
+        name: "Claim Amount Percentile Peer candidate",
+        review_mode: "both",
+        conditions: [
+          {
+            field: "claim_amount_percentile_peer",
+            operator: ">=",
+            value: 98,
+          },
+        ],
+        action: {
+          score: 20,
+          alert_code: "FACTOR_CLAIM_AMOUNT_PERCENTILE_PEER",
+          recommended_action: "ManualReview",
+        },
+      },
+    });
+  });
+
+  it("does not create rule candidates from labels or non-convertible factors", () => {
+    expect(buildFactorRuleCandidate(factorCard({ is_label: true }))).toBeNull();
+    expect(buildFactorRuleCandidate(factorCard({ convertible_to_rule: false }))).toBeNull();
+  });
+
+  it("uses lower thresholds for lower-is-riskier score factors", () => {
+    const candidate = buildFactorRuleCandidate(
+      factorCard({
+        factor_name: "diagnosis_procedure_match_score",
+        display_label: "Diagnosis Procedure Match Score",
+        risk_direction: "lower_is_riskier",
+        owner: "unassigned",
+      }),
+    );
+
+    expect(candidate?.owner).toBe("factor-factory");
+    expect(candidate?.rule.conditions[0]).toEqual({
+      field: "diagnosis_procedure_match_score",
+      operator: "<=",
+      value: 0.2,
+    });
   });
 });
