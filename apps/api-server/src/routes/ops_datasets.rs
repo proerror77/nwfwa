@@ -113,6 +113,8 @@ pub struct FactorCardRecord {
     pub model_contribution: Option<f64>,
     pub rule_convertible: bool,
     pub online_available: bool,
+    pub readiness_status: String,
+    pub readiness_issues: Vec<String>,
     pub version: String,
     pub owner: String,
     pub is_label: bool,
@@ -549,6 +551,16 @@ fn build_factor_card(dataset: &DatasetRecord, field: &SchemaFieldRecord) -> Fact
     let psi = numeric_profile_value(&field.profile_json, "psi");
     let source_fields = string_array_profile_value(&field.profile_json, "source_fields")
         .unwrap_or_else(|| vec![field.field_name.clone()]);
+    let owner = string_profile_value(&field.profile_json, "owner").unwrap_or_default();
+    let online_available = !is_label
+        && bool_profile_value(&field.profile_json, "online_available").unwrap_or(!field.nullable);
+    let readiness_issues =
+        factor_readiness_issues(is_label, online_available, missing_rate, psi, &owner);
+    let readiness_status = if readiness_issues.is_empty() {
+        "ready"
+    } else {
+        "needs_review"
+    };
     FactorCardRecord {
         dataset_id: dataset.dataset_id.clone(),
         dataset_key: dataset.dataset_key.clone(),
@@ -589,11 +601,11 @@ fn build_factor_card(dataset: &DatasetRecord, field: &SchemaFieldRecord) -> Fact
         rule_convertible: !is_label
             && bool_profile_value(&field.profile_json, "convertible_to_rule")
                 .unwrap_or_else(|| is_rule_convertible_type(&field.logical_type)),
-        online_available: !is_label
-            && bool_profile_value(&field.profile_json, "online_available")
-                .unwrap_or(!field.nullable),
+        online_available,
+        readiness_status: readiness_status.into(),
+        readiness_issues,
         version: format_factor_version(field.profile_json.get("version")),
-        owner: string_profile_value(&field.profile_json, "owner").unwrap_or_default(),
+        owner,
         is_label,
         is_entity_key,
         evidence_refs: vec![format!(
@@ -739,6 +751,35 @@ fn stability_label(psi: Option<f64>) -> &'static str {
         Some(value) if value < 0.25 => "watch",
         Some(_) => "drift",
     }
+}
+
+fn factor_readiness_issues(
+    is_label: bool,
+    online_available: bool,
+    missing_rate: Option<f64>,
+    psi: Option<f64>,
+    owner: &str,
+) -> Vec<String> {
+    let mut issues = Vec::new();
+    if is_label {
+        issues.push("label_field".into());
+    }
+    if !online_available {
+        issues.push("not_online_available".into());
+    }
+    if missing_rate.unwrap_or(0.0) > 0.05 {
+        issues.push("online_missing_rate_above_threshold".into());
+    }
+    if missing_rate.unwrap_or(0.0) > 0.20 {
+        issues.push("high_missing_rate".into());
+    }
+    if psi.unwrap_or(0.0) >= 0.25 {
+        issues.push("unstable_distribution".into());
+    }
+    if owner.trim().is_empty() {
+        issues.push("missing_owner".into());
+    }
+    issues
 }
 
 fn titleize(value: &str) -> String {

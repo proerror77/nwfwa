@@ -284,6 +284,8 @@ async fn openapi_includes_operations_paths() {
         "stability",
         "rule_convertible",
         "online_available",
+        "readiness_status",
+        "readiness_issues",
         "version",
         "owner",
     ] {

@@ -82,6 +82,8 @@ type ApiFactorCard = {
   model_contribution: number | null;
   rule_convertible: boolean;
   online_available: boolean;
+  readiness_status: "ready" | "needs_review";
+  readiness_issues: string[];
   version: string;
   owner: string;
   is_label: boolean;
@@ -113,6 +115,7 @@ export type FactorCard = {
   online_status: "ready" | "review";
   online_available: boolean;
   convertible_to_rule: boolean;
+  readiness_issues: string[];
   is_label: boolean;
   is_entity_key: boolean;
   top_values: string[];
@@ -174,6 +177,7 @@ export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
       online_status: onlineAvailable && !isLabel && (missingRate ?? 1) <= 0.05 ? "ready" : "review",
       online_available: onlineAvailable && !isLabel,
       convertible_to_rule: convertibleToRule && !isLabel,
+      readiness_issues: [],
       is_label: isLabel,
       is_entity_key: isEntityKey,
       top_values: (field.profile_json.top_values ?? []).map(
@@ -209,11 +213,12 @@ export function buildApiFactorCards(cards: ApiFactorCard[], datasetId?: string):
       stability_label: card.stability,
       model_contribution_label: formatPercent(card.model_contribution ?? undefined),
       online_status:
-        card.online_available && !card.is_label && (card.missing_rate ?? 1) <= 0.05
+        card.readiness_status === "ready" && card.online_available && !card.is_label
           ? "ready"
           : "review",
       online_available: card.online_available,
       convertible_to_rule: card.rule_convertible,
+      readiness_issues: card.readiness_issues,
       is_label: card.is_label,
       is_entity_key: card.is_entity_key,
       top_values: [],
@@ -420,6 +425,13 @@ export function FactorFactoryPage() {
                 {factor.is_entity_key ? " / entity key" : ""}
               </small>
               <small>Source fields: {factor.source_lineage_label}</small>
+              {factor.readiness_issues.length > 0 ? (
+                <ul className="result-list compact-list">
+                  {factor.readiness_issues.map((issue) => (
+                    <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              ) : null}
               {factor.top_values.length > 0 ? (
                 <ul className="result-list compact-list">
                   {factor.top_values.slice(0, 4).map((value) => (

@@ -227,6 +227,14 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
     );
     assert_eq!(readiness["factor_cards"][0]["rule_convertible"], false);
     assert_eq!(readiness["factor_cards"][0]["online_available"], true);
+    assert_eq!(
+        readiness["factor_cards"][0]["readiness_status"],
+        "needs_review"
+    );
+    assert!(readiness["factor_cards"][0]["readiness_issues"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("missing_owner")));
     assert_eq!(readiness["factor_cards"][0]["version"], "v1");
     assert_eq!(readiness["factor_cards"][0]["owner"], "");
     assert!(readiness["factor_cards"][0]["evidence_refs"]

@@ -72,6 +72,7 @@ describe("buildFactorCards", () => {
       model_contribution_label: "18.0%",
       convertible_to_rule: true,
       online_available: true,
+      readiness_issues: [],
       is_label: false,
       is_entity_key: false,
       top_values: ["0.8 (12)"],
@@ -85,6 +86,7 @@ describe("buildFactorCards", () => {
       stability_label: "unmeasured",
       convertible_to_rule: false,
       online_available: false,
+      readiness_issues: [],
       is_label: true,
     });
   });
@@ -118,6 +120,8 @@ describe("buildApiFactorCards", () => {
           model_contribution: 0.18,
           rule_convertible: true,
           online_available: true,
+          readiness_status: "ready",
+          readiness_issues: [],
           version: "v2",
           owner: "feature-ops",
           is_label: false,
@@ -143,6 +147,54 @@ describe("buildApiFactorCards", () => {
       model_contribution_label: "18.0%",
       convertible_to_rule: true,
       online_available: true,
+      readiness_issues: [],
+    });
+  });
+
+  it("keeps API factor readiness issues visible for operations review", () => {
+    const cards = buildApiFactorCards(
+      [
+        {
+          dataset_id: "dataset_1",
+          dataset_key: "demo_claims_fwa",
+          dataset_version: "v1",
+          factor_name: "provider_high_cost_ratio_30d",
+          chinese_name: "Provider 30 日高价项目比例",
+          entity_type: "provider",
+          semantic_role: "feature",
+          logical_type: "decimal",
+          calculation_window: "30d",
+          calculation_logic: "high_cost_items / total_items",
+          source_table: "provider_daily_profiles",
+          source_fields: ["high_cost_items", "total_items"],
+          business_meaning: "Provider high-cost billing concentration.",
+          risk_direction: "higher_is_riskier",
+          missing_rate: 0.12,
+          iv: null,
+          auc_gain: null,
+          lift: null,
+          psi: 0.31,
+          stability: "drift",
+          model_contribution: null,
+          rule_convertible: true,
+          online_available: true,
+          readiness_status: "needs_review",
+          readiness_issues: ["online_missing_rate_above_threshold", "unstable_distribution"],
+          version: "v1",
+          owner: "feature-ops",
+          is_label: false,
+          is_entity_key: false,
+          evidence_refs: ["dataset_fields:demo_claims_fwa:v1:provider_high_cost_ratio_30d"],
+        },
+      ],
+      "dataset_1",
+    );
+
+    expect(cards[0]).toMatchObject({
+      online_status: "review",
+      readiness_issues: ["online_missing_rate_above_threshold", "unstable_distribution"],
+      stability_label: "drift",
+      missing_rate_label: "12.0%",
     });
   });
 });

@@ -3167,7 +3167,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "FactorCard": {
                     "type": "object",
-                    "required": ["dataset_id", "dataset_key", "dataset_version", "factor_name", "chinese_name", "entity_type", "semantic_role", "logical_type", "calculation_window", "calculation_logic", "source_table", "source_fields", "business_meaning", "risk_direction", "missing_rate", "iv", "auc_gain", "lift", "psi", "stability", "model_contribution", "rule_convertible", "online_available", "version", "owner", "is_label", "is_entity_key", "evidence_refs"],
+                    "required": ["dataset_id", "dataset_key", "dataset_version", "factor_name", "chinese_name", "entity_type", "semantic_role", "logical_type", "calculation_window", "calculation_logic", "source_table", "source_fields", "business_meaning", "risk_direction", "missing_rate", "iv", "auc_gain", "lift", "psi", "stability", "model_contribution", "rule_convertible", "online_available", "readiness_status", "readiness_issues", "version", "owner", "is_label", "is_entity_key", "evidence_refs"],
                     "properties": {
                         "dataset_id": { "type": "string" },
                         "dataset_key": { "type": "string" },
@@ -3192,6 +3192,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "model_contribution": { "type": ["number", "null"] },
                         "rule_convertible": { "type": "boolean" },
                         "online_available": { "type": "boolean" },
+                        "readiness_status": { "type": "string", "enum": ["ready", "needs_review"] },
+                        "readiness_issues": { "type": "array", "items": { "type": "string" } },
                         "version": { "type": "string" },
                         "owner": { "type": "string" },
                         "is_label": { "type": "boolean" },
