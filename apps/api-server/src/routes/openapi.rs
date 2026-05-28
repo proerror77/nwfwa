@@ -2786,13 +2786,14 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_id": { "type": "string" },
                         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "rag": { "type": "string" },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "top_reasons": { "type": "array", "items": { "type": "string" } },
                         "similar_case_query": { "$ref": "#/components/schemas/SimilarCaseSearchRequest" }
                     }
                 },
                 "AgentInvestigationResponse": {
                     "type": "object",
-                    "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_refs"],
+                    "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_sufficiency", "evidence_refs"],
                     "properties": {
                         "agent_run_id": { "type": "string" },
                         "decision_boundary": { "type": "string", "const": "assistive_only" },
@@ -2801,7 +2802,19 @@ pub async fn openapi_schema() -> Json<Value> {
                         "investigation_checklist": { "type": "array", "items": { "type": "string" } },
                         "similar_cases": { "type": "array", "items": { "type": "object" } },
                         "qa_opinion_draft": { "type": "string" },
+                        "evidence_sufficiency": { "$ref": "#/components/schemas/EvidenceSufficiency" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "EvidenceSufficiency": {
+                    "type": "object",
+                    "required": ["scheme_family", "status", "minimum_evidence", "present_evidence", "missing_evidence"],
+                    "properties": {
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
+                        "status": { "type": "string", "enum": ["sufficient", "needs_more_evidence"] },
+                        "minimum_evidence": { "type": "array", "items": { "type": "string" } },
+                        "present_evidence": { "type": "array", "items": { "type": "string" } },
+                        "missing_evidence": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "InvestigationResultRequest": {

@@ -215,6 +215,24 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/AgentApprovalRecord"
     );
     assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["scheme_family"]
+            ["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
+    assert!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evidence_sufficiency")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["properties"]
+            ["evidence_sufficiency"]["$ref"],
+        "#/components/schemas/EvidenceSufficiency"
+    );
+    assert!(schema["components"]["schemas"]["EvidenceSufficiency"].is_object());
+    assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
         "string"
     );

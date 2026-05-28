@@ -13,6 +13,7 @@ pub struct InvestigationRequest {
     pub claim_id: String,
     pub risk_score: u8,
     pub rag: String,
+    pub scheme_family: String,
     pub top_reasons: Vec<String>,
     pub similar_cases: Vec<SimilarCaseInput>,
 }
@@ -24,6 +25,15 @@ pub struct InvestigationFinding {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceSufficiency {
+    pub scheme_family: String,
+    pub status: String,
+    pub minimum_evidence: Vec<String>,
+    pub present_evidence: Vec<String>,
+    pub missing_evidence: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvestigationPackage {
     pub agent_run_id: String,
     pub decision_boundary: String,
@@ -32,6 +42,7 @@ pub struct InvestigationPackage {
     pub investigation_checklist: Vec<String>,
     pub similar_cases: Vec<SimilarCaseInput>,
     pub qa_opinion_draft: String,
+    pub evidence_sufficiency: EvidenceSufficiency,
     pub evidence_refs: Vec<String>,
 }
 
@@ -52,6 +63,8 @@ impl DeterministicInvestigator {
         evidence_refs.sort();
         evidence_refs.dedup();
 
+        let evidence_sufficiency = build_evidence_sufficiency(&request);
+
         InvestigationPackage {
             agent_run_id,
             decision_boundary: "assistive_only".into(),
@@ -69,6 +82,7 @@ impl DeterministicInvestigator {
             qa_opinion_draft:
                 "建议 QA 复核告警处理是否完整，并确认所有结论均有理赔、规则、模型或知识库证据支持。"
                     .into(),
+            evidence_sufficiency,
             evidence_refs,
         }
     }
@@ -102,6 +116,199 @@ fn build_findings(request: &InvestigationRequest) -> Vec<InvestigationFinding> {
     findings
 }
 
+fn build_evidence_sufficiency(request: &InvestigationRequest) -> EvidenceSufficiency {
+    let minimum_evidence = minimum_evidence_for_scheme(&request.scheme_family);
+    let evidence_text = evidence_text(request);
+    let present_evidence = minimum_evidence
+        .iter()
+        .filter(|item| evidence_item_present(item, &evidence_text))
+        .cloned()
+        .collect::<Vec<_>>();
+    let missing_evidence = minimum_evidence
+        .iter()
+        .filter(|item| !present_evidence.contains(item))
+        .cloned()
+        .collect::<Vec<_>>();
+    let status = if missing_evidence.is_empty() {
+        "sufficient"
+    } else {
+        "needs_more_evidence"
+    };
+
+    EvidenceSufficiency {
+        scheme_family: request.scheme_family.clone(),
+        status: status.into(),
+        minimum_evidence,
+        present_evidence,
+        missing_evidence,
+    }
+}
+
+fn minimum_evidence_for_scheme(scheme_family: &str) -> Vec<String> {
+    let items = match scheme_family {
+        "duplicate_billing" => &[
+            "same_member",
+            "provider",
+            "service_date",
+            "procedure",
+            "amount",
+            "claim_lineage",
+        ][..],
+        "upcoding" => &[
+            "diagnosis",
+            "billed_code",
+            "lower_complexity_comparator",
+            "medical_record",
+            "coding_rationale",
+        ],
+        "unbundling" => &[
+            "component_codes",
+            "bundled_code_comparator",
+            "same_episode",
+            "billing_timeline",
+        ],
+        "medically_unnecessary_service" | "medical_necessity" => &[
+            "diagnosis",
+            "order",
+            "chart_note",
+            "treatment_context",
+            "reviewer_finding",
+            "policy_rule",
+        ],
+        "laboratory_testing_abuse" | "lab_overuse" => &[
+            "ordering_pattern",
+            "diagnosis_match",
+            "frequency",
+            "peer_benchmark",
+            "ordering_provider",
+        ],
+        "excessive_utilization" => &[
+            "member_history",
+            "service_frequency",
+            "peer_benchmark",
+            "time_window",
+            "clinical_rationale",
+        ],
+        "provider_peer_outlier" => &[
+            "peer_group_definition",
+            "time_window",
+            "specialty",
+            "region",
+            "statistical_deviation",
+        ],
+        "telehealth_abuse" => &[
+            "visit_mode",
+            "provider_member_location",
+            "visit_frequency",
+            "documentation",
+            "policy_rule",
+        ],
+        "pharmacy_controlled_substance_abuse" | "pharmacy_or_opioid_abuse" => &[
+            "prescription",
+            "prescriber",
+            "fill_pattern",
+            "dosage",
+            "member_history",
+            "policy_rule",
+        ],
+        "genetic_testing_abuse" => &[
+            "test_order",
+            "diagnosis",
+            "policy_rule",
+            "medical_record",
+            "lab_provider",
+        ],
+        "dme_home_health_hospice_rehab_risk" => &[
+            "order",
+            "supplier_provider",
+            "medical_record",
+            "delivery_or_service_proof",
+            "policy_rule",
+        ],
+        "relationship_concentration" => &[
+            "relationship_graph",
+            "provider_member_link",
+            "referral_pattern",
+            "ownership_or_affiliation",
+            "time_window",
+        ],
+        "early_high_value_claim" => &[
+            "policy_start_date",
+            "service_date",
+            "claim_amount",
+            "coverage_limit",
+            "medical_record",
+        ],
+        "diagnosis_procedure_mismatch" => &[
+            "diagnosis",
+            "procedure",
+            "medical_record",
+            "clinical_rationale",
+            "policy_rule",
+        ],
+        _ => &["claim_context", "risk_reason", "evidence_refs"],
+    };
+    items.iter().map(|item| (*item).to_string()).collect()
+}
+
+fn evidence_text(request: &InvestigationRequest) -> String {
+    let mut parts = request.top_reasons.clone();
+    for similar_case in &request.similar_cases {
+        parts.extend(similar_case.matched_signals.clone());
+        parts.extend(similar_case.evidence_refs.clone());
+    }
+    parts.join(" ").to_ascii_lowercase()
+}
+
+fn evidence_item_present(item: &str, evidence_text: &str) -> bool {
+    match item {
+        "amount" | "claim_amount" => {
+            evidence_text.contains("amount") || evidence_text.contains("金额")
+        }
+        "billed_code" | "component_codes" | "procedure" => {
+            evidence_text.contains("code")
+                || evidence_text.contains("procedure")
+                || evidence_text.contains("项目")
+        }
+        "diagnosis" | "diagnosis_match" => {
+            evidence_text.contains("diagnosis") || evidence_text.contains("诊断")
+        }
+        "documentation" | "medical_record" | "chart_note" => {
+            evidence_text.contains("document")
+                || evidence_text.contains("medical_record")
+                || evidence_text.contains("病历")
+        }
+        "evidence_refs" => evidence_text.contains(':'),
+        "peer_benchmark" | "peer_group_definition" => {
+            evidence_text.contains("peer")
+                || evidence_text.contains("同病种")
+                || evidence_text.contains("同地区")
+        }
+        "policy_rule" => evidence_text.contains("policy") || evidence_text.contains("rule"),
+        "provider" | "ordering_provider" | "prescriber" | "supplier_provider" | "lab_provider" => {
+            evidence_text.contains("provider")
+        }
+        "region" | "provider_member_location" => {
+            evidence_text.contains("region:") || evidence_text.contains("地区")
+        }
+        "risk_reason" => !evidence_text.trim().is_empty(),
+        "statistical_deviation" => {
+            evidence_text.contains("p99")
+                || evidence_text.contains("percentile")
+                || evidence_text.contains("zscore")
+                || evidence_text.contains("偏离")
+                || evidence_text.contains("高于")
+        }
+        "time_window" | "billing_timeline" => {
+            evidence_text.contains("30d")
+                || evidence_text.contains("90d")
+                || evidence_text.contains("window")
+                || evidence_text.contains("近")
+        }
+        other => evidence_text.contains(other),
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -112,6 +319,7 @@ mod tests {
             claim_id: "CLM-0287".into(),
             risk_score: 87,
             rag: "RED".into(),
+            scheme_family: "provider_peer_outlier".into(),
             top_reasons: vec![
                 "金额高于同病种同地区 P99".into(),
                 "诊断-项目匹配度偏低".into(),
@@ -135,6 +343,18 @@ mod tests {
             .findings
             .iter()
             .all(|finding| !finding.evidence_refs.is_empty()));
+        assert_eq!(
+            package.evidence_sufficiency.scheme_family,
+            "provider_peer_outlier"
+        );
+        assert!(package
+            .evidence_sufficiency
+            .minimum_evidence
+            .contains(&"peer_group_definition".into()));
+        assert!(package
+            .evidence_sufficiency
+            .missing_evidence
+            .contains(&"specialty".into()));
         assert!(!package.evidence_refs.is_empty());
         assert!(!package.qa_opinion_draft.contains("拒赔"));
     }

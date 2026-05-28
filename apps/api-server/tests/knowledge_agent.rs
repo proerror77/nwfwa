@@ -184,6 +184,7 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
           "claim_id": "CLM-0287",
           "risk_score": 87,
           "rag": "RED",
+          "scheme_family": "provider_peer_outlier",
           "top_reasons": [
             "金额高于同病种同地区 P99",
             "诊断-项目匹配度偏低"
@@ -209,6 +210,18 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         .unwrap()
         .iter()
         .all(|finding| !finding["evidence_refs"].as_array().unwrap().is_empty()));
+    assert_eq!(
+        body["evidence_sufficiency"]["scheme_family"],
+        "provider_peer_outlier"
+    );
+    assert!(body["evidence_sufficiency"]["minimum_evidence"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("peer_group_definition")));
+    assert!(body["evidence_sufficiency"]["missing_evidence"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("specialty")));
     assert!(!body["evidence_refs"].as_array().unwrap().is_empty());
 }
 
@@ -303,6 +316,7 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert_eq!(approval["proposed_action"], "manual_review_required");
     assert!(!approval["evidence_refs"].as_array().unwrap().is_empty());
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
+    assert!(run["output_json"]["evidence_sufficiency"].is_object());
 }
 
 #[tokio::test]

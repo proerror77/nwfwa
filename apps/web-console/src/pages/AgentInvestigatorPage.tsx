@@ -9,14 +9,32 @@ type InvestigationResponse = {
   investigation_checklist: string[];
   similar_cases: Array<{ case_id: string; similarity_score: number; matched_signals: string[] }>;
   qa_opinion_draft: string;
+  evidence_sufficiency: EvidenceSufficiency;
   evidence_refs: string[];
 };
+
+type EvidenceSufficiency = {
+  scheme_family: string;
+  status: string;
+  minimum_evidence: string[];
+  present_evidence: string[];
+  missing_evidence: string[];
+};
+
+export function buildEvidenceSufficiencyRows(sufficiency?: EvidenceSufficiency) {
+  const present = new Set(sufficiency?.present_evidence ?? []);
+  return (sufficiency?.minimum_evidence ?? []).map((item) => ({
+    item,
+    status: present.has(item) ? "present" : "missing",
+  }));
+}
 
 export function AgentInvestigatorPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
   const [riskScore, setRiskScore] = useState(87);
   const [rag, setRag] = useState("RED");
+  const [schemeFamily, setSchemeFamily] = useState("diagnosis_procedure_mismatch");
   const [topReasons, setTopReasons] = useState(
     "金额高于同病种同地区 P99\n诊断-项目匹配度偏低",
   );
@@ -25,6 +43,7 @@ export function AgentInvestigatorPage() {
   const [tags, setTags] = useState("early_claim, high_amount");
   const [result, setResult] = useState<InvestigationResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const evidenceRows = buildEvidenceSufficiencyRows(result?.evidence_sufficiency);
 
   async function runInvestigation() {
     setError(null);
@@ -34,6 +53,7 @@ export function AgentInvestigatorPage() {
           claim_id: claimId,
           risk_score: riskScore,
           rag,
+          scheme_family: schemeFamily,
           top_reasons: topReasons
             .split("\n")
             .map((reason) => reason.trim())
@@ -79,6 +99,10 @@ export function AgentInvestigatorPage() {
           <label>
             RAG
             <input value={rag} onChange={(event) => setRag(event.target.value)} />
+          </label>
+          <label>
+            Scheme
+            <input value={schemeFamily} onChange={(event) => setSchemeFamily(event.target.value)} />
           </label>
         </div>
         <label>
@@ -129,6 +153,24 @@ export function AgentInvestigatorPage() {
             <ul className="result-list">
               {result.investigation_checklist.map((item) => (
                 <li key={item}>{item}</li>
+              ))}
+            </ul>
+            <dl className="result-grid">
+              <div>
+                <dt>Scheme</dt>
+                <dd>{result.evidence_sufficiency.scheme_family}</dd>
+              </div>
+              <div>
+                <dt>Evidence Status</dt>
+                <dd>{result.evidence_sufficiency.status}</dd>
+              </div>
+            </dl>
+            <ul className="result-list">
+              {evidenceRows.map((row) => (
+                <li key={row.item}>
+                  <strong>{row.item}</strong>
+                  <span>{row.status}</span>
+                </li>
               ))}
             </ul>
             <p>{result.qa_opinion_draft}</p>

@@ -12,7 +12,9 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use fwa_agent::{DeterministicInvestigator, InvestigationRequest, SimilarCaseInput};
+use fwa_agent::{
+    DeterministicInvestigator, EvidenceSufficiency, InvestigationRequest, SimilarCaseInput,
+};
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -23,6 +25,7 @@ pub struct AgentInvestigationRequest {
     pub claim_id: String,
     pub risk_score: u8,
     pub rag: String,
+    pub scheme_family: Option<String>,
     pub top_reasons: Vec<String>,
     pub similar_case_query: AgentSimilarCaseQuery,
 }
@@ -43,6 +46,7 @@ pub struct AgentInvestigationResponse {
     pub investigation_checklist: Vec<String>,
     pub similar_cases: Vec<SimilarCaseInput>,
     pub qa_opinion_draft: String,
+    pub evidence_sufficiency: EvidenceSufficiency,
     pub evidence_refs: Vec<String>,
 }
 
@@ -52,6 +56,10 @@ pub async fn investigate_case(
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
     authorize(&state, &headers)?;
+    let scheme_family = request
+        .scheme_family
+        .clone()
+        .unwrap_or_else(|| infer_scheme_family(&request));
     let tool_call_id = format!("tool_call_{}", request.claim_id);
     let tool_result_id = format!("tool_result_{}", request.claim_id);
     let policy_check = AgentPolicyCheckRecord {
@@ -101,6 +109,7 @@ pub async fn investigate_case(
         "claim_id": request.claim_id,
         "risk_score": request.risk_score,
         "rag": request.rag.clone(),
+        "scheme_family": &scheme_family,
         "top_reasons": request.top_reasons.clone(),
         "similar_case_query": {
             "diagnosis_code": request.similar_case_query.diagnosis_code.clone(),
@@ -118,6 +127,7 @@ pub async fn investigate_case(
         claim_id: request.claim_id.clone(),
         risk_score: request.risk_score,
         rag: request.rag,
+        scheme_family,
         top_reasons: request.top_reasons,
         similar_cases,
     });
@@ -228,8 +238,34 @@ pub async fn investigate_case(
         investigation_checklist: package.investigation_checklist,
         similar_cases: package.similar_cases,
         qa_opinion_draft: package.qa_opinion_draft,
+        evidence_sufficiency: package.evidence_sufficiency,
         evidence_refs: package.evidence_refs,
     }))
+}
+
+fn infer_scheme_family(request: &AgentInvestigationRequest) -> String {
+    let text = request
+        .top_reasons
+        .iter()
+        .chain(request.similar_case_query.tags.iter())
+        .map(|value| value.to_ascii_lowercase())
+        .collect::<Vec<_>>()
+        .join(" ");
+    if text.contains("provider") {
+        "provider_peer_outlier".into()
+    } else if text.contains("diagnosis")
+        || text.contains("medical")
+        || text.contains("诊断")
+        || text.contains("项目")
+    {
+        "diagnosis_procedure_mismatch".into()
+    } else if text.contains("lab") {
+        "laboratory_testing_abuse".into()
+    } else if text.contains("early") || text.contains("high_amount") {
+        "early_high_value_claim".into()
+    } else {
+        "high_risk_claim".into()
+    }
 }
 
 fn context_checksum(context_json: &Value) -> String {
