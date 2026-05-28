@@ -2039,9 +2039,21 @@ pub async fn openapi_schema() -> Json<Value> {
                         "high_risk_count": { "type": "integer" }
                     }
                 },
+                "SavingAttributionSummary": {
+                    "type": "object",
+                    "required": ["source_type", "source_id", "action", "saving_amount", "currency", "claim_count"],
+                    "properties": {
+                        "source_type": { "type": "string" },
+                        "source_id": { "type": "string" },
+                        "action": { "type": "string" },
+                        "saving_amount": { "type": "string", "format": "decimal" },
+                        "currency": { "type": "string" },
+                        "claim_count": { "type": "integer" }
+                    }
+                },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2059,6 +2071,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "layer_scores": {
                             "type": "object",
                             "additionalProperties": { "$ref": "#/components/schemas/DashboardLayerScore" }
+                        },
+                        "saving_attributions": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/SavingAttributionSummary" }
                         },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }

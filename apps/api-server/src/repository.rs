@@ -265,6 +265,16 @@ pub struct DashboardLayerScoreRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardSavingAttributionRecord {
+    pub source_type: String,
+    pub source_id: String,
+    pub action: String,
+    pub saving_amount: String,
+    pub currency: String,
+    pub claim_count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -274,6 +284,7 @@ pub struct DashboardSummaryRecord {
     pub rule_hits: u32,
     pub model_scores: BTreeMap<String, DashboardModelScoreRecord>,
     pub layer_scores: BTreeMap<String, DashboardLayerScoreRecord>,
+    pub saving_attributions: Vec<DashboardSavingAttributionRecord>,
     pub investigation_results: u32,
     pub qa_reviews: u32,
 }
@@ -498,6 +509,19 @@ pub struct InvestigationResultRecord {
     pub currency: Option<String>,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct SavingAttributionRecord {
+    attribution_id: String,
+    claim_id: String,
+    investigation_id: String,
+    source_type: String,
+    source_id: String,
+    action: String,
+    saving_amount: Decimal,
+    currency: String,
+    evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -990,6 +1014,7 @@ pub struct InMemoryScoringRepository {
     model_dataset_sequence: Mutex<u64>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
+    saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
 }
 
 impl InMemoryScoringRepository {
@@ -1387,6 +1412,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let runs = self.runs.lock().await;
         let claims = self.claims.lock().await;
         let pilot_events = self.pilot_audit_events.lock().await;
+        let saving_attribution_records = self.saving_attributions.lock().await;
 
         let mut risk_amount = Decimal::ZERO;
         let mut rag_distribution = BTreeMap::new();
@@ -1507,6 +1533,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                     },
                 )
                 .collect(),
+            saving_attributions: summarize_saving_attributions(&saving_attribution_records),
             investigation_results,
             qa_reviews,
         })
@@ -1658,6 +1685,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         &self,
         record: InvestigationResultRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord> {
+        let saving_attributions = derive_saving_attributions(&record);
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_investigation_{}", record.investigation_id),
             run_id: format!("pilot_investigation_{}", record.investigation_id),
@@ -1671,7 +1699,11 @@ impl ScoringRepository for InMemoryScoringRepository {
         self.pilot_audit_events
             .lock()
             .await
-            .push((record.claim_id, event.clone()));
+            .push((record.claim_id.clone(), event.clone()));
+        let mut stored_attributions = self.saving_attributions.lock().await;
+        stored_attributions
+            .retain(|attribution| attribution.investigation_id != record.investigation_id);
+        stored_attributions.extend(saving_attributions);
         Ok(event)
     }
 
@@ -3258,6 +3290,21 @@ impl ScoringRepository for PostgresScoringRepository {
             .fetch_one(&self.pool)
             .await?;
 
+        let saving_attributions: Vec<(String, String, String, Option<Decimal>, String, i64)> =
+            sqlx::query_as(
+                "SELECT source_type,
+                        source_id,
+                        action,
+                        COALESCE(SUM(saving_amount), 0),
+                        currency,
+                        COUNT(DISTINCT claim_id)::bigint
+                 FROM saving_attributions
+                 GROUP BY source_type, source_id, action, currency
+                 ORDER BY source_type, source_id, action, currency",
+            )
+            .fetch_all(&self.pool)
+            .await?;
+
         Ok(DashboardSummaryRecord {
             suspected_claims: suspected.0 as u32,
             confirmed_fwa: investigation.1 as u32,
@@ -3301,6 +3348,23 @@ impl ScoringRepository for PostgresScoringRepository {
                                 high_risk_count,
                             },
                         )
+                    },
+                )
+                .collect(),
+            saving_attributions: saving_attributions
+                .into_iter()
+                .map(
+                    |(source_type, source_id, action, saving_amount, currency, claim_count)| {
+                        DashboardSavingAttributionRecord {
+                            source_type,
+                            source_id,
+                            action,
+                            saving_amount: format_decimal_cents(
+                                saving_amount.unwrap_or(Decimal::ZERO),
+                            ),
+                            currency,
+                            claim_count: claim_count as u32,
+                        }
                     },
                 )
                 .collect(),
@@ -3800,6 +3864,7 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         record: InvestigationResultRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord> {
+        let saving_attributions = derive_saving_attributions(&record);
         let mut tx = self.pool.begin().await?;
         sqlx::query(
             "INSERT INTO investigation_results
@@ -3823,6 +3888,29 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(serde_json::json!(record.evidence_refs))
         .execute(&mut *tx)
         .await?;
+
+        sqlx::query("DELETE FROM saving_attributions WHERE investigation_id = $1")
+            .bind(&record.investigation_id)
+            .execute(&mut *tx)
+            .await?;
+        for attribution in saving_attributions {
+            sqlx::query(
+                "INSERT INTO saving_attributions
+                 (attribution_id, claim_id, investigation_id, source_type, source_id, action, saving_amount, currency, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+            )
+            .bind(&attribution.attribution_id)
+            .bind(&attribution.claim_id)
+            .bind(&attribution.investigation_id)
+            .bind(&attribution.source_type)
+            .bind(&attribution.source_id)
+            .bind(&attribution.action)
+            .bind(attribution.saving_amount)
+            .bind(&attribution.currency)
+            .bind(serde_json::json!(attribution.evidence_refs))
+            .execute(&mut *tx)
+            .await?;
+        }
 
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_investigation_{}", record.investigation_id),
@@ -5389,6 +5477,115 @@ async fn ensure_default_knowledge_cases_seeded(pool: &PgPool) -> anyhow::Result<
         .await?;
     }
     Ok(())
+}
+
+fn derive_saving_attributions(record: &InvestigationResultRecord) -> Vec<SavingAttributionRecord> {
+    if !record.confirmed_fwa {
+        return Vec::new();
+    }
+    let Some(total_saving) = record.saving_amount else {
+        return Vec::new();
+    };
+    if total_saving <= Decimal::ZERO {
+        return Vec::new();
+    }
+
+    let sources = record
+        .evidence_refs
+        .iter()
+        .filter_map(|reference| recognized_attribution_source(reference))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+    if sources.is_empty() {
+        return Vec::new();
+    }
+
+    let share = (total_saving / Decimal::from(sources.len() as u32)).round_dp(2);
+    let currency = record.currency.clone().unwrap_or_else(|| "UNKNOWN".into());
+
+    sources
+        .into_iter()
+        .map(|(source_type, source_id)| SavingAttributionRecord {
+            attribution_id: format!(
+                "saving_{}_{}_{}",
+                sanitize_identifier(&record.investigation_id),
+                source_type,
+                sanitize_identifier(&source_id)
+            ),
+            claim_id: record.claim_id.clone(),
+            investigation_id: record.investigation_id.clone(),
+            source_type,
+            source_id,
+            action: "investigation_confirmed".into(),
+            saving_amount: share,
+            currency: currency.clone(),
+            evidence_refs: record.evidence_refs.clone(),
+        })
+        .collect()
+}
+
+fn recognized_attribution_source(reference: &str) -> Option<(String, String)> {
+    if let Some(source_id) = reference.strip_prefix("agent_run:") {
+        return Some(("agent".into(), source_id.to_string()));
+    }
+    if let Some(source_id) = reference.strip_prefix("rule_runs:") {
+        return Some(("rule".into(), source_id.to_string()));
+    }
+    if let Some(source_id) = reference.strip_prefix("model_scores:") {
+        return Some(("model".into(), source_id.to_string()));
+    }
+    None
+}
+
+fn summarize_saving_attributions(
+    records: &[SavingAttributionRecord],
+) -> Vec<DashboardSavingAttributionRecord> {
+    let mut accumulators = BTreeMap::<(String, String, String, String), (Decimal, u32)>::new();
+    for record in records {
+        let key = (
+            record.source_type.clone(),
+            record.source_id.clone(),
+            record.action.clone(),
+            record.currency.clone(),
+        );
+        let entry = accumulators.entry(key).or_insert((Decimal::ZERO, 0));
+        entry.0 += record.saving_amount;
+        entry.1 += 1;
+    }
+
+    accumulators
+        .into_iter()
+        .map(
+            |((source_type, source_id, action, currency), (saving_amount, claim_count))| {
+                DashboardSavingAttributionRecord {
+                    source_type,
+                    source_id,
+                    action,
+                    saving_amount: format_decimal_cents(saving_amount),
+                    currency,
+                    claim_count,
+                }
+            },
+        )
+        .collect()
+}
+
+fn format_decimal_cents(value: Decimal) -> String {
+    format!("{:.2}", value.round_dp(2))
+}
+
+fn sanitize_identifier(value: &str) -> String {
+    value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() || character == '-' || character == '_' {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect()
 }
 
 async fn insert_audit_event(

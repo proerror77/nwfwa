@@ -162,6 +162,19 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "layer_scores")
     );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "saving_attributions")
+    );
+    assert!(schema["components"]["schemas"]["SavingAttributionSummary"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
+            ["saving_attributions"]["items"]["$ref"],
+        "#/components/schemas/SavingAttributionSummary"
+    );
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["layer_scores"]
             ["additionalProperties"]["$ref"],

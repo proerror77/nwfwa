@@ -2,6 +2,10 @@ import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardSummary } from "../api";
 import { buildDashboardLayerRows, type DashboardLayerScore } from "./dashboardLayerRows";
+import {
+  buildSavingAttributionRows,
+  type SavingAttributionSummary,
+} from "./savingAttributionRows";
 
 type DashboardModelScore = {
   scored_runs: number;
@@ -18,6 +22,7 @@ type DashboardSummary = {
   rule_hits: number;
   model_scores: Record<string, DashboardModelScore>;
   layer_scores: Record<string, DashboardLayerScore>;
+  saving_attributions: SavingAttributionSummary[];
   investigation_results: number;
   qa_reviews: number;
 };
@@ -36,6 +41,7 @@ export function DashboardPage() {
   const ragRows = Object.entries(summary?.rag_distribution ?? {});
   const modelRows = Object.entries(summary?.model_scores ?? {});
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
+  const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
 
   return (
     <section className="dashboard">
@@ -131,6 +137,25 @@ export function DashboardPage() {
           </div>
           {!dashboardQuery.isLoading && layerRows.length === 0 ? (
             <p className="empty">No layer scores</p>
+          ) : null}
+        </div>
+
+        <div className="panel wide-panel">
+          <h2>Saving Attribution</h2>
+          <div className="table-list">
+            {savingAttributionRows.map((attribution) => (
+              <div className="metric-row" key={attribution.key}>
+                <span>{attribution.sourceLabel}</span>
+                <strong>
+                  {attribution.currency} {attribution.savingAmount}
+                </strong>
+                <small>{attribution.action}</small>
+                <small>{attribution.claimCount} claims</small>
+              </div>
+            ))}
+          </div>
+          {!dashboardQuery.isLoading && savingAttributionRows.length === 0 ? (
+            <p className="empty">No saving attribution</p>
           ) : null}
         </div>
       </div>

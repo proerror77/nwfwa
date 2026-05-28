@@ -523,6 +523,20 @@ CREATE TABLE IF NOT EXISTS investigation_results (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS saving_attributions (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  attribution_id TEXT NOT NULL UNIQUE,
+  claim_id TEXT NOT NULL,
+  investigation_id TEXT NOT NULL,
+  source_type TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  action TEXT NOT NULL,
+  saving_amount NUMERIC NOT NULL,
+  currency TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS qa_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   qa_case_id TEXT NOT NULL UNIQUE,

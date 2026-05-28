@@ -97,7 +97,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
           "saving_amount": "8200.00",
           "currency": "CNY",
           "notes": "TPA investigation confirmed over-treatment signals.",
-          "evidence_refs": ["agent_run:agent_CLM-0287", "knowledge_cases:KC-1001"]
+          "evidence_refs": ["agent_run:agent_CLM-0287", "rule_runs:EARLY_CLAIM", "knowledge_cases:KC-1001"]
         }"#,
     )
     .await;
@@ -129,6 +129,18 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["investigation_results"], 1);
     assert_eq!(dashboard["risk_amount"], "8000");
     assert_eq!(dashboard["saving_amount"], "8200.00");
+    let attributions = dashboard["saving_attributions"].as_array().unwrap();
+    assert_eq!(attributions.len(), 2);
+    assert!(attributions.iter().any(|attribution| {
+        attribution["source_type"] == "agent"
+            && attribution["source_id"] == "agent_CLM-0287"
+            && attribution["saving_amount"] == "4100.00"
+    }));
+    assert!(attributions.iter().any(|attribution| {
+        attribution["source_type"] == "rule"
+            && attribution["source_id"] == "EARLY_CLAIM"
+            && attribution["saving_amount"] == "4100.00"
+    }));
     assert_eq!(dashboard["rag_distribution"]["Red"], 1);
     assert!(dashboard["rule_hits"].as_u64().unwrap() >= 1);
     assert_eq!(dashboard["model_scores"]["baseline_fwa"]["scored_runs"], 1);
