@@ -1,7 +1,7 @@
 use api_server::{
     app::{build_app, build_app_with_parts},
     config::AppConfig,
-    repository::InMemoryScoringRepository,
+    repository::{InMemoryScoringRepository, ModelVersionRecord, SharedRepository},
 };
 use async_trait::async_trait;
 use axum::{
@@ -19,6 +19,27 @@ fn test_config() -> AppConfig {
         database_url: "postgres://unused".into(),
         model_service_url: "http://unused".into(),
     }
+}
+
+async fn activate_candidate_model(repository: SharedRepository) {
+    repository
+        .update_model_status("baseline_fwa", "0.1.0", "approved")
+        .await
+        .expect("default model status update");
+    repository
+        .save_model_version(ModelVersionRecord {
+            model_key: "baseline_fwa".into(),
+            version: "0.2.0-active".into(),
+            model_type: "baseline_classifier".into(),
+            runtime_kind: "python_http".into(),
+            execution_provider: "cpu".into(),
+            status: "active".into(),
+            review_mode: "both".into(),
+            artifact_uri: Some("s3://fwa-models/baseline_fwa/0.2.0-active/model.onnx".into()),
+            endpoint_url: Some("http://127.0.0.1:8001/score/baseline_fwa/0.2.0-active".into()),
+        })
+        .await
+        .expect("candidate model save");
 }
 
 #[tokio::test]
@@ -1007,6 +1028,85 @@ async fn scores_existing_claim_after_full_payload_upsert() {
         ))
         .unwrap();
     assert_eq!(app.oneshot(second).await.unwrap().status(), StatusCode::OK);
+}
+
+#[derive(Debug)]
+struct RequestEchoScorer;
+
+#[async_trait]
+impl ModelScorer for RequestEchoScorer {
+    async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
+        Ok(ModelScore {
+            model_key: request.model_key,
+            model_version: request.model_version,
+            runtime_kind: "test_echo".into(),
+            execution_provider: "cpu".into(),
+            score: 72,
+            label: "ACTIVE_MODEL_USED".into(),
+            explanations: vec![],
+            metadata: serde_json::json!({
+                "endpoint_url": request.endpoint_url,
+            }),
+            latency_ms: 0,
+        })
+    }
+}
+
+#[tokio::test]
+async fn scoring_uses_active_model_version_from_model_registry() {
+    let repository = InMemoryScoringRepository::shared();
+    activate_candidate_model(repository.clone()).await;
+    let app = build_app_with_parts(test_config(), Arc::new(RequestEchoScorer), repository);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-ACTIVE-MODEL",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["scores"]["ml_score"], 72);
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-ACTIVE-MODEL")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(
+        scoring_event["payload"]["model_score"]["model_version"],
+        "0.2.0-active"
+    );
+    assert_eq!(
+        scoring_event["payload"]["model_score"]["metadata"]["endpoint_url"],
+        "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-active"
+    );
 }
 
 #[derive(Debug)]

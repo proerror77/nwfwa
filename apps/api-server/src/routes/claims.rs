@@ -1,7 +1,10 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery, SimilarCaseRecord},
+    repository::{
+        ModelVersionRecord, PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery,
+        SimilarCaseRecord,
+    },
 };
 use axum::{extract::State, http::HeaderMap, Json};
 use chrono::NaiveDate;
@@ -23,6 +26,8 @@ use fwa_rules::{evaluate_rules, RuleMatch};
 use fwa_scoring::DetectionLayerScore;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+
+const SCORING_MODEL_KEY: &str = "baseline_fwa";
 
 #[derive(Debug, Deserialize)]
 pub struct ScoreClaimRequest {
@@ -356,12 +361,15 @@ pub async fn score_claim(
             .cloned()
             .map(serde_json::Value::String),
     );
+    let active_model = active_scoring_model(&state).await?;
     let model_score = match state
         .scorer
         .score(ModelScoreRequest {
             run_id: run_id.clone(),
             claim_id: context.claim.id.clone(),
-            model_key: "baseline_fwa".into(),
+            model_key: active_model.model_key.clone(),
+            model_version: active_model.version.clone(),
+            endpoint_url: active_model.endpoint_url.clone(),
             features: features.clone(),
         })
         .await
@@ -431,6 +439,7 @@ pub async fn score_claim(
         "provider_profile": &provider_profile,
         "provider_relationships": &provider_relationships,
         "similar_cases": &similar_cases,
+        "model_score": &model_score,
         "triggered_rules": &alerts,
         "event_type": "scoring.completed",
         "event_status": "succeeded"
@@ -494,6 +503,23 @@ pub async fn score_claim(
         similar_cases,
         evidence_refs,
     }))
+}
+
+async fn active_scoring_model(state: &AppState) -> Result<ModelVersionRecord, ApiError> {
+    state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == SCORING_MODEL_KEY && model.status == "active")
+        .ok_or_else(|| {
+            ApiError::new(
+                axum::http::StatusCode::CONFLICT,
+                "ACTIVE_MODEL_NOT_FOUND",
+                "no active scoring model is available",
+            )
+        })
 }
 
 fn normalize_review_mode(value: Option<&str>) -> Result<String, ApiError> {

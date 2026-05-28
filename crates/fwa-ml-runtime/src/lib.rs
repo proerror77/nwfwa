@@ -19,6 +19,8 @@ pub struct ModelScoreRequest {
     pub run_id: ScoringRunId,
     pub claim_id: ClaimId,
     pub model_key: String,
+    pub model_version: String,
+    pub endpoint_url: Option<String>,
     pub features: FeatureMap,
 }
 
@@ -62,7 +64,7 @@ impl ModelScorer for HeuristicModelScorer {
         let score = (ratio * 100.0).round().clamp(0.0, 100.0) as u8;
         Ok(ModelScore {
             model_key: request.model_key,
-            model_version: "heuristic-0.1.0".into(),
+            model_version: request.model_version,
             runtime_kind: "heuristic".into(),
             execution_provider: "cpu".into(),
             score,
@@ -102,6 +104,7 @@ struct HttpScoreRequest {
     run_id: String,
     claim_id: String,
     model_key: String,
+    model_version: String,
     features: BTreeMap<String, Value>,
 }
 
@@ -128,11 +131,15 @@ impl ModelScorer for HttpModelScorer {
             run_id: request.run_id.to_string(),
             claim_id: request.claim_id.to_string(),
             model_key: request.model_key,
+            model_version: request.model_version,
             features,
         };
+        let target_url = request
+            .endpoint_url
+            .unwrap_or_else(|| format!("{}/score", self.base_url));
         let response = self
             .client
-            .post(format!("{}/score", self.base_url))
+            .post(target_url)
             .json(&payload)
             .send()
             .await
@@ -183,12 +190,15 @@ mod tests {
                 run_id: ScoringRunId::from_external("run_test"),
                 claim_id: ClaimId::from_external("CLM-1"),
                 model_key: "baseline_fwa".into(),
+                model_version: "0.1.0".into(),
+                endpoint_url: None,
                 features,
             })
             .await
             .unwrap();
 
         assert_eq!(result.score, 82);
+        assert_eq!(result.model_version, "0.1.0");
         assert_eq!(result.runtime_kind, "heuristic");
     }
 
