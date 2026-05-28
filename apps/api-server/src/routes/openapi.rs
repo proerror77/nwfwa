@@ -2142,7 +2142,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2165,8 +2165,21 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/SavingAttributionSummary" }
                         },
+                        "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
+                    }
+                },
+                "DashboardLabelPool": {
+                    "type": "object",
+                    "required": ["total_labels", "approved_for_training", "needs_review", "rule_feedback", "model_feedback", "workflow_feedback"],
+                    "properties": {
+                        "total_labels": { "type": "integer" },
+                        "approved_for_training": { "type": "integer" },
+                        "needs_review": { "type": "integer" },
+                        "rule_feedback": { "type": "integer" },
+                        "model_feedback": { "type": "integer" },
+                        "workflow_feedback": { "type": "integer" }
                     }
                 },
                 "Lead": {

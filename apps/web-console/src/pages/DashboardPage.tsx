@@ -13,6 +13,15 @@ type DashboardModelScore = {
   high_risk_count: number;
 };
 
+type DashboardLabelPool = {
+  total_labels: number;
+  approved_for_training: number;
+  needs_review: number;
+  rule_feedback: number;
+  model_feedback: number;
+  workflow_feedback: number;
+};
+
 type DashboardSummary = {
   suspected_claims: number;
   confirmed_fwa: number;
@@ -23,12 +32,28 @@ type DashboardSummary = {
   model_scores: Record<string, DashboardModelScore>;
   layer_scores: Record<string, DashboardLayerScore>;
   saving_attributions: SavingAttributionSummary[];
+  label_pool: DashboardLabelPool;
   investigation_results: number;
   qa_reviews: number;
 };
 
 function formatScore(score: number) {
   return score.toFixed(1);
+}
+
+export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
+  const totalLabels = labelPool?.total_labels ?? 0;
+  const approvedForTraining = labelPool?.approved_for_training ?? 0;
+  return {
+    totalLabels,
+    approvedForTraining,
+    needsReview: labelPool?.needs_review ?? 0,
+    ruleFeedback: labelPool?.rule_feedback ?? 0,
+    modelFeedback: labelPool?.model_feedback ?? 0,
+    workflowFeedback: labelPool?.workflow_feedback ?? 0,
+    trainingReadyRateLabel:
+      totalLabels === 0 ? "0.0%" : `${((approvedForTraining / totalLabels) * 100).toFixed(1)}%`,
+  };
 }
 
 export function DashboardPage() {
@@ -42,6 +67,7 @@ export function DashboardPage() {
   const modelRows = Object.entries(summary?.model_scores ?? {});
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
+  const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
 
   return (
     <section className="dashboard">
@@ -120,6 +146,42 @@ export function DashboardPage() {
           {!dashboardQuery.isLoading && modelRows.length === 0 ? (
             <p className="empty">No model scores</p>
           ) : null}
+        </div>
+
+        <div className="panel">
+          <h2>Label Governance</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Total Labels</span>
+              <strong>{labelPoolSummary.totalLabels}</strong>
+            </div>
+            <div>
+              <span>Training Ready</span>
+              <strong>{labelPoolSummary.approvedForTraining}</strong>
+            </div>
+            <div>
+              <span>Needs Review</span>
+              <strong>{labelPoolSummary.needsReview}</strong>
+            </div>
+            <div>
+              <span>Ready Rate</span>
+              <strong>{labelPoolSummary.trainingReadyRateLabel}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Rules</span>
+              <strong>{labelPoolSummary.ruleFeedback}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Models</span>
+              <strong>{labelPoolSummary.modelFeedback}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Workflow</span>
+              <strong>{labelPoolSummary.workflowFeedback}</strong>
+            </div>
+          </div>
         </div>
 
         <div className="panel wide-panel">

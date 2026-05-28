@@ -316,6 +316,16 @@ pub struct DashboardSavingAttributionRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardLabelPoolRecord {
+    pub total_labels: u32,
+    pub approved_for_training: u32,
+    pub needs_review: u32,
+    pub rule_feedback: u32,
+    pub model_feedback: u32,
+    pub workflow_feedback: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -326,6 +336,7 @@ pub struct DashboardSummaryRecord {
     pub model_scores: BTreeMap<String, DashboardModelScoreRecord>,
     pub layer_scores: BTreeMap<String, DashboardLayerScoreRecord>,
     pub saving_attributions: Vec<DashboardSavingAttributionRecord>,
+    pub label_pool: DashboardLabelPoolRecord,
     pub investigation_results: u32,
     pub qa_reviews: u32,
 }
@@ -1605,11 +1616,17 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut confirmed_fwa = 0_u32;
         let mut investigation_results = 0_u32;
         let mut qa_reviews = 0_u32;
+        let mut outcome_labels = Vec::new();
 
         for (_, event) in pilot_events.iter() {
             match event.event_type.as_str() {
                 "investigation.result.received" => {
                     investigation_results += 1;
+                    if let Ok(record) =
+                        serde_json::from_value::<InvestigationResultRecord>(event.payload.clone())
+                    {
+                        outcome_labels.extend(labels_from_investigation_result(record));
+                    }
                     if event.payload["confirmed_fwa"].as_bool().unwrap_or(false) {
                         confirmed_fwa += 1;
                     }
@@ -1619,6 +1636,11 @@ impl ScoringRepository for InMemoryScoringRepository {
                 }
                 "qa.result.received" => {
                     qa_reviews += 1;
+                    if let Ok(record) =
+                        serde_json::from_value::<QaReviewRecord>(event.payload.clone())
+                    {
+                        outcome_labels.push(label_from_qa_review(record));
+                    }
                 }
                 _ => {}
             }
@@ -1671,6 +1693,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 )
                 .collect(),
             saving_attributions: summarize_saving_attributions(&saving_attribution_records),
+            label_pool: summarize_dashboard_label_pool(&outcome_labels),
             investigation_results,
             qa_reviews,
         })
@@ -3609,6 +3632,7 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .fetch_all(&self.pool)
             .await?;
+        let outcome_labels = self.list_outcome_labels().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims: suspected.0 as u32,
@@ -3673,6 +3697,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     },
                 )
                 .collect(),
+            label_pool: summarize_dashboard_label_pool(&outcome_labels),
             investigation_results: investigation.0 as u32,
             qa_reviews: qa_reviews.0 as u32,
         })
@@ -5094,6 +5119,32 @@ fn sort_outcome_labels(labels: &mut [OutcomeLabelRecord]) {
             .then_with(|| left.source_id.cmp(&right.source_id))
             .then_with(|| left.label_name.cmp(&right.label_name))
     });
+}
+
+fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLabelPoolRecord {
+    DashboardLabelPoolRecord {
+        total_labels: labels.len() as u32,
+        approved_for_training: labels
+            .iter()
+            .filter(|label| label.governance_status == "approved_for_training")
+            .count() as u32,
+        needs_review: labels
+            .iter()
+            .filter(|label| label.governance_status == "needs_review")
+            .count() as u32,
+        rule_feedback: labels
+            .iter()
+            .filter(|label| label.feedback_target == "rules")
+            .count() as u32,
+        model_feedback: labels
+            .iter()
+            .filter(|label| label.feedback_target == "models")
+            .count() as u32,
+        workflow_feedback: labels
+            .iter()
+            .filter(|label| label.feedback_target == "workflow")
+            .count() as u32,
+    }
 }
 
 fn selection_method_for_mode(sample_mode: &str) -> &'static str {

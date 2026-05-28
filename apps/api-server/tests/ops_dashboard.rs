@@ -170,6 +170,12 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
             .unwrap()
             >= 1
     );
+    assert_eq!(dashboard["label_pool"]["total_labels"], 3);
+    assert_eq!(dashboard["label_pool"]["approved_for_training"], 2);
+    assert_eq!(dashboard["label_pool"]["needs_review"], 1);
+    assert_eq!(dashboard["label_pool"]["rule_feedback"], 1);
+    assert_eq!(dashboard["label_pool"]["model_feedback"], 1);
+    assert_eq!(dashboard["label_pool"]["workflow_feedback"], 1);
 }
 
 #[tokio::test]
