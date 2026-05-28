@@ -70,6 +70,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/cases",
         "/api/v1/ops/cases/{case_id}/status",
         "/api/v1/ops/audit-samples",
+        "/api/v1/ops/audit-events",
         "/api/v1/ops/agent-runs",
         "/api/v1/ops/agent-runs/{agent_run_id}/approvals",
         "/api/v1/ops/knowledge/cases",
@@ -365,6 +366,16 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["components"]["schemas"]["LeadListResponse"].is_object());
     assert!(schema["components"]["schemas"]["CaseListResponse"].is_object());
     assert!(schema["components"]["schemas"]["AuditSampleRecord"].is_object());
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/audit-events"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/AuditEventListResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AuditEventListResponse"]["properties"]["events"]["items"]
+            ["$ref"],
+        "#/components/schemas/AuditHistoryEvent"
+    );
     assert!(schema["components"]["schemas"]["AgentRunLogRecord"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["steps"]["items"]

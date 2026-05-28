@@ -34,6 +34,7 @@ import {
   getModelPromotionGates,
   getModelRetrainingReadiness,
   approveRoutingPolicy,
+  listAuditEvents,
   submitModelPromotionReview,
   updateModelRetrainingJobStatus,
   listRules,
@@ -453,6 +454,7 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ claim_id: "CLM-0287", events: [], runs: [] });
 
     await getClaimAuditHistory("CLM-0287", "dev-secret");
+    await listAuditEvents("dev-secret", 25);
     await listAgentRuns("dev-secret");
     await listOpsAlerts("dev-secret");
 
@@ -465,13 +467,20 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/api/v1/ops/agent-runs",
+      "/api/v1/ops/audit-events?limit=25",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      "/api/v1/ops/agent-runs",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
       "/api/v1/ops/alerts",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),

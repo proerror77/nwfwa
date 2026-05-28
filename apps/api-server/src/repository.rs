@@ -1352,6 +1352,8 @@ pub trait ScoringRepository: Send + Sync {
         claim_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
 
+    async fn list_audit_events(&self, limit: u32) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
+
     async fn list_webhook_events(&self) -> anyhow::Result<Vec<WebhookEventRecord>>;
 
     async fn save_webhook_delivery_attempt(
@@ -2652,6 +2654,35 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .filter(|(event_claim_id, _)| event_claim_id == claim_id)
                 .map(|(_, event)| event.clone()),
         );
+        Ok(events)
+    }
+
+    async fn list_audit_events(&self, limit: u32) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        let mut events = self
+            .audit_events
+            .lock()
+            .await
+            .iter()
+            .map(|event| AuditHistoryEventRecord {
+                audit_id: event.audit_id.clone(),
+                run_id: event.run_id.clone(),
+                event_type: event.event_type.clone(),
+                event_status: event.event_status.clone(),
+                summary: event.summary.clone(),
+                payload: event.payload.clone(),
+                evidence_refs: evidence_values_to_strings(&event.evidence_refs),
+                created_at: None,
+            })
+            .collect::<Vec<_>>();
+        events.extend(
+            self.pilot_audit_events
+                .lock()
+                .await
+                .iter()
+                .map(|(_, event)| event.clone()),
+        );
+        events.reverse();
+        events.truncate(limit as usize);
         Ok(events)
     }
 
@@ -5850,6 +5881,52 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(claim_id)
             .fetch_all(&self.pool)
             .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    audit_id,
+                    run_id,
+                    event_type,
+                    event_status,
+                    summary,
+                    payload,
+                    evidence_refs,
+                    created_at,
+                )| AuditHistoryEventRecord {
+                    audit_id,
+                    run_id,
+                    event_type,
+                    event_status,
+                    summary,
+                    payload,
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                    created_at: Some(created_at.to_rfc3339()),
+                },
+            )
+            .collect())
+    }
+
+    async fn list_audit_events(&self, limit: u32) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
+        let rows: Vec<(
+            String,
+            String,
+            String,
+            String,
+            String,
+            Value,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+             FROM audit_events
+             ORDER BY created_at DESC, audit_id DESC
+             LIMIT $1",
+        )
+        .bind(limit as i64)
+        .fetch_all(&self.pool)
+        .await?;
 
         Ok(rows
             .into_iter()

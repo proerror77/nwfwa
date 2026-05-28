@@ -701,6 +701,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/audit-events": {
+                "get": {
+                    "summary": "List global audit events for governance review",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Recent audit events across claims, rules, models, routing policies, QA, and Agent runs",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/AuditEventListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/agent-runs": {
                 "get": {
                     "summary": "List agent run logs for governance review",
@@ -2553,6 +2577,16 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": { "type": "string" }
                         },
                         "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "AuditEventListResponse": {
+                    "type": "object",
+                    "required": ["events"],
+                    "properties": {
+                        "events": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/AuditHistoryEvent" }
+                        }
                     }
                 },
                 "WebhookEvent": {

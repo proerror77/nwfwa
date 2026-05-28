@@ -43,6 +43,33 @@ describe("buildAuditSummary", () => {
       latestEventType: "qa.result.received",
     });
   });
+
+  it("uses timestamps for latest event even when global audit events are newest-first", () => {
+    const summary = buildAuditSummary({
+      events: [
+        {
+          audit_id: "audit_new",
+          run_id: "run_new",
+          event_type: "routing_policy.activation.completed",
+          event_status: "succeeded",
+          summary: "Routing policy activated",
+          evidence_refs: ["routing_policies:fwa:v2:pre_payment"],
+          created_at: "2026-05-27T12:00:00Z",
+        },
+        {
+          audit_id: "audit_old",
+          run_id: "run_old",
+          event_type: "routing_policy.candidate.saved",
+          event_status: "succeeded",
+          summary: "Routing policy saved",
+          evidence_refs: ["routing_policies:fwa:v2:pre_payment"],
+          created_at: "2026-05-27T11:00:00Z",
+        },
+      ],
+    });
+
+    expect(summary.latestEventType).toBe("routing_policy.activation.completed");
+  });
 });
 
 describe("buildAgentRunLogSummary", () => {

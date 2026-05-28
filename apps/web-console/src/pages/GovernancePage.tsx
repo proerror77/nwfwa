@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getClaimAuditHistory,
+  listAuditEvents,
   listAgentRuns,
   listOpsAlerts,
   listOutcomeLabels,
@@ -23,6 +24,10 @@ type AuditEvent = {
 
 type ClaimAuditHistoryResponse = {
   claim_id: string;
+  events: AuditEvent[];
+};
+
+type AuditEventListResponse = {
   events: AuditEvent[];
 };
 
@@ -155,13 +160,19 @@ type OutcomeLabelListResponse = {
   labels: OutcomeLabel[];
 };
 
-export function buildAuditSummary(data?: ClaimAuditHistoryResponse) {
+export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
   const events = data?.events ?? [];
+  const latestDatedEvent = events.filter((event) => event.created_at).reduce<
+    AuditEvent | undefined
+  >((latest, event) => {
+    if (!latest) return event;
+    return String(event.created_at) > String(latest.created_at) ? event : latest;
+  }, undefined);
   return {
     totalEvents: events.length,
     succeededEvents: events.filter((event) => event.event_status === "succeeded").length,
     failedEvents: events.filter((event) => event.event_status === "failed").length,
-    latestEventType: events.at(-1)?.event_type ?? "none",
+    latestEventType: latestDatedEvent?.event_type ?? events.at(-1)?.event_type ?? "none",
   };
 }
 
@@ -269,6 +280,10 @@ export function GovernancePage() {
     queryFn: () => getClaimAuditHistory(claimId, apiKey) as Promise<ClaimAuditHistoryResponse>,
     enabled: claimId.trim().length > 0,
   });
+  const globalAuditQuery = useQuery({
+    queryKey: ["global-audit-events", apiKey],
+    queryFn: () => listAuditEvents(apiKey, 50) as Promise<AuditEventListResponse>,
+  });
   const agentRunsQuery = useQuery({
     queryKey: ["agent-run-logs", apiKey],
     queryFn: () => listAgentRuns(apiKey) as Promise<AgentRunLogListResponse>,
@@ -286,6 +301,7 @@ export function GovernancePage() {
     queryFn: () => listWebhookEvents(apiKey) as Promise<WebhookEventListResponse>,
   });
   const summary = buildAuditSummary(auditQuery.data);
+  const globalAuditSummary = buildAuditSummary(globalAuditQuery.data);
   const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
   const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
@@ -306,6 +322,7 @@ export function GovernancePage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["agent-run-logs"] });
       queryClient.invalidateQueries({ queryKey: ["claim-audit-history"] });
+      queryClient.invalidateQueries({ queryKey: ["global-audit-events"] });
     },
   });
   const deliveryAttemptMutation = useMutation({
@@ -356,6 +373,10 @@ export function GovernancePage() {
           <div>
             <span>Audit Events</span>
             <strong>{summary.totalEvents}</strong>
+          </div>
+          <div>
+            <span>Global Events</span>
+            <strong>{globalAuditSummary.totalEvents}</strong>
           </div>
           <div>
             <span>Succeeded</span>
@@ -411,6 +432,9 @@ export function GovernancePage() {
           </div>
         </div>
         {auditQuery.error ? <pre className="error">{String(auditQuery.error.message)}</pre> : null}
+        {globalAuditQuery.error ? (
+          <pre className="error">{String(globalAuditQuery.error.message)}</pre>
+        ) : null}
         {agentRunsQuery.error ? (
           <pre className="error">{String(agentRunsQuery.error.message)}</pre>
         ) : null}
@@ -549,6 +573,49 @@ export function GovernancePage() {
           </ol>
         ) : (
           <p className="empty">No webhook events loaded</p>
+        )}
+      </div>
+
+      <div className="panel">
+        <h2>Global Audit Events</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Total</span>
+            <strong>{globalAuditSummary.totalEvents}</strong>
+          </div>
+          <div>
+            <span>Succeeded</span>
+            <strong>{globalAuditSummary.succeededEvents}</strong>
+          </div>
+          <div>
+            <span>Failed</span>
+            <strong>{globalAuditSummary.failedEvents}</strong>
+          </div>
+          <div>
+            <span>Latest</span>
+            <strong>{globalAuditSummary.latestEventType}</strong>
+          </div>
+        </div>
+        {globalAuditQuery.data?.events.length ? (
+          <ol className="audit-timeline">
+            {globalAuditQuery.data.events.map((event) => (
+              <li key={event.audit_id}>
+                <div>
+                  <strong>{event.event_type}</strong>
+                  <span>{event.event_status}</span>
+                </div>
+                <small>{event.created_at || event.run_id}</small>
+                <p>{event.summary}</p>
+                <ul className="result-list">
+                  {event.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No global audit events loaded</p>
         )}
       </div>
 

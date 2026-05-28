@@ -283,6 +283,10 @@ export async function getClaimAuditHistory(claimId: string, apiKey: string) {
   return requestJson(`/api/v1/audit/claims/${encodeURIComponent(claimId)}`, apiKey);
 }
 
+export async function listAuditEvents(apiKey: string, limit = 50) {
+  return requestJson(`/api/v1/ops/audit-events?limit=${encodeURIComponent(limit)}`, apiKey);
+}
+
 export async function listWebhookEvents(apiKey: string) {
   return requestJson("/api/v1/ops/webhook-events", apiKey);
 }
