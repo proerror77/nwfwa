@@ -753,7 +753,7 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    let (status, labels) = json_request(app.clone(), "GET", "/api/v1/ops/labels", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     let labels = labels["labels"].as_array().unwrap();
@@ -882,7 +882,7 @@ async fn lists_governed_outcome_labels_from_terminal_case_status() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    let (status, labels) = json_request(app.clone(), "GET", "/api/v1/ops/labels", "{}").await;
     assert_eq!(status, StatusCode::OK);
     assert!(labels["labels"].as_array().unwrap().iter().any(|label| {
         label["claim_id"] == "CLM-CASE-LABEL-1"
@@ -899,6 +899,42 @@ async fn lists_governed_outcome_labels_from_terminal_case_status() {
                 .any(|reference| {
                     reference == &serde_json::json!(format!("investigation_cases:{case_id}"))
                 })
+    }));
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        r#"{
+          "status": "rejected",
+          "actor_id": "siu-case-label-owner",
+          "notes": "Case reviewer rejected the lead after investigation.",
+          "evidence_refs": ["case_workflow:rejected"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let labels = labels["labels"].as_array().unwrap();
+    assert!(labels.iter().any(|label| {
+        label["claim_id"] == "CLM-CASE-LABEL-1"
+            && label["label_name"] == "confirmed_fwa"
+            && label["label_value"] == "false"
+            && label["source_type"] == "case_status"
+            && label["source_id"] == case_id
+            && label["governance_status"] == "needs_review"
+            && label["feedback_target"] == "models"
+    }));
+    assert!(labels.iter().any(|label| {
+        label["claim_id"] == "CLM-CASE-LABEL-1"
+            && label["label_name"] == "false_positive"
+            && label["label_value"] == "true"
+            && label["source_type"] == "case_status"
+            && label["source_id"] == case_id
+            && label["governance_status"] == "needs_review"
+            && label["feedback_target"] == "rules"
     }));
 }
 
