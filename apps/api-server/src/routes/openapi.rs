@@ -1745,7 +1745,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RuleSummary": {
                     "type": "object",
-                    "required": ["rule_id", "name", "status", "owner", "latest_version", "review_mode", "score", "alert_code", "recommended_action"],
+                    "required": ["rule_id", "name", "status", "owner", "latest_version", "review_mode", "scheme_family", "score", "alert_code", "recommended_action"],
                     "properties": {
                         "rule_id": { "type": "string" },
                         "name": { "type": "string" },
@@ -1754,9 +1754,45 @@ pub async fn openapi_schema() -> Json<Value> {
                         "active_version": { "type": ["integer", "null"] },
                         "latest_version": { "type": "integer" },
                         "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "alert_code": { "type": "string" },
                         "recommended_action": { "type": "string" }
+                    }
+                },
+                "FwaSchemeFamily": {
+                    "type": "string",
+                    "enum": [
+                        "duplicate_billing",
+                        "upcoding",
+                        "unbundling",
+                        "medically_unnecessary_service",
+                        "excessive_utilization",
+                        "diagnosis_procedure_mismatch",
+                        "laboratory_testing_abuse",
+                        "telehealth_abuse",
+                        "genetic_testing_abuse",
+                        "pharmacy_controlled_substance_abuse",
+                        "dme_home_health_hospice_rehab_risk",
+                        "provider_peer_outlier",
+                        "relationship_concentration",
+                        "early_high_value_claim",
+                        "high_risk_claim"
+                    ]
+                },
+                "RuleVersion": {
+                    "type": "object",
+                    "required": ["version", "status", "dsl", "review_mode", "scheme_family", "score", "alert_code", "recommended_action", "reason"],
+                    "properties": {
+                        "version": { "type": "integer" },
+                        "status": { "type": "string" },
+                        "dsl": { "type": "object" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
+                        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "alert_code": { "type": "string" },
+                        "recommended_action": { "type": "string" },
+                        "reason": { "type": "string" }
                     }
                 },
                 "RuleListResponse": {
@@ -1905,7 +1941,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "summary": { "$ref": "#/components/schemas/RuleSummary" },
                         "versions": {
                             "type": "array",
-                            "items": { "type": "object" }
+                            "items": { "$ref": "#/components/schemas/RuleVersion" }
                         },
                         "audit_events": {
                             "type": "array",

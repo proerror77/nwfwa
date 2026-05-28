@@ -87,6 +87,7 @@ pub struct RuleSummaryRecord {
     pub active_version: Option<u32>,
     pub latest_version: u32,
     pub review_mode: String,
+    pub scheme_family: String,
     pub score: u8,
     pub alert_code: String,
     pub recommended_action: RecommendedAction,
@@ -98,6 +99,7 @@ pub struct RuleVersionRecord {
     pub status: String,
     pub dsl: Value,
     pub review_mode: String,
+    pub scheme_family: String,
     pub score: u8,
     pub alert_code: String,
     pub recommended_action: RecommendedAction,
@@ -2800,6 +2802,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         },
                         latest_version: version as u32,
                         review_mode: review_mode_from_dsl(&dsl),
+                        scheme_family: scheme_family_from_dsl(&dsl),
                         status,
                         owner,
                         score: score as u8,
@@ -2869,6 +2872,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     version: version as u32,
                     status: summary.status.clone(),
                     review_mode: review_mode_from_dsl(&dsl),
+                    scheme_family: scheme_family_from_dsl(&dsl),
                     dsl,
                     score: score as u8,
                     alert_code: action["alert_code"]
@@ -5075,6 +5079,75 @@ fn scheme_family_from_rule_runs(rule_runs: &[Value]) -> String {
     }
 }
 
+fn scheme_family_from_dsl(dsl: &Value) -> String {
+    dsl.get("scheme_family")
+        .and_then(Value::as_str)
+        .or_else(|| dsl["action"]["scheme_family"].as_str())
+        .map(normalize_scheme_family)
+        .unwrap_or_else(|| {
+            scheme_family_from_alert_code(dsl["action"]["alert_code"].as_str().unwrap_or(""))
+        })
+}
+
+fn normalize_scheme_family(value: &str) -> String {
+    match value {
+        "duplicate_billing"
+        | "upcoding"
+        | "unbundling"
+        | "medically_unnecessary_service"
+        | "excessive_utilization"
+        | "diagnosis_procedure_mismatch"
+        | "laboratory_testing_abuse"
+        | "telehealth_abuse"
+        | "genetic_testing_abuse"
+        | "pharmacy_controlled_substance_abuse"
+        | "dme_home_health_hospice_rehab_risk"
+        | "provider_peer_outlier"
+        | "relationship_concentration"
+        | "early_high_value_claim"
+        | "high_risk_claim" => value.to_string(),
+        _ => "high_risk_claim".into(),
+    }
+}
+
+fn scheme_family_from_alert_code(alert_code: &str) -> String {
+    let code = alert_code.to_ascii_uppercase();
+    if code.contains("DUPLICATE") {
+        "duplicate_billing".into()
+    } else if code.contains("UPCOD") {
+        "upcoding".into()
+    } else if code.contains("UNBUND") {
+        "unbundling".into()
+    } else if code.contains("DIAGNOSIS") || code.contains("MEDICAL") || code.contains("LOW_MEDICAL")
+    {
+        "diagnosis_procedure_mismatch".into()
+    } else if code.contains("LAB") {
+        "laboratory_testing_abuse".into()
+    } else if code.contains("TELE") {
+        "telehealth_abuse".into()
+    } else if code.contains("GENETIC") {
+        "genetic_testing_abuse".into()
+    } else if code.contains("PHARMACY") || code.contains("OPIOID") || code.contains("CONTROLLED") {
+        "pharmacy_controlled_substance_abuse".into()
+    } else if code.contains("DME")
+        || code.contains("HOME_HEALTH")
+        || code.contains("HOSPICE")
+        || code.contains("REHAB")
+    {
+        "dme_home_health_hospice_rehab_risk".into()
+    } else if code.contains("PROVIDER") {
+        "provider_peer_outlier".into()
+    } else if code.contains("REFERRAL") || code.contains("OWNERSHIP") || code.contains("RELATION") {
+        "relationship_concentration".into()
+    } else if code.contains("EARLY") || code.contains("LIMIT") {
+        "early_high_value_claim".into()
+    } else if code.contains("MANY") || code.contains("HIGH_COST") || code.contains("PEER") {
+        "excessive_utilization".into()
+    } else {
+        "high_risk_claim".into()
+    }
+}
+
 fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
     CaseRecord {
         case_id: format!("case_{}", lead.claim_id),
@@ -5949,8 +6022,10 @@ fn default_rule_details() -> Vec<RuleDetailRecord> {
 fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailRecord {
     let active_version = (status == "active").then_some(rule.version);
     let review_mode = "both".to_string();
+    let scheme_family = scheme_family_from_alert_code(&rule.action.alert_code);
     let dsl = serde_json::json!({
         "review_mode": review_mode,
+        "scheme_family": scheme_family,
         "conditions": rule.conditions,
         "action": rule.action
     });
@@ -5962,6 +6037,7 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
         active_version,
         latest_version: rule.version,
         review_mode: review_mode.clone(),
+        scheme_family: scheme_family.clone(),
         score: rule.action.score,
         alert_code: rule.action.alert_code.clone(),
         recommended_action: rule.action.recommended_action,
@@ -5971,6 +6047,7 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
         status: status.into(),
         dsl,
         review_mode,
+        scheme_family,
         score: rule.action.score,
         alert_code: rule.action.alert_code,
         recommended_action: rule.action.recommended_action,

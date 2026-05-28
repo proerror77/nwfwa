@@ -45,6 +45,7 @@ async fn lists_rule_library() {
     assert_eq!(body["rules"][0]["status"], "active");
     assert_eq!(body["rules"][0]["active_version"], 1);
     assert_eq!(body["rules"][0]["review_mode"], "both");
+    assert_eq!(body["rules"][0]["scheme_family"], "early_high_value_claim");
 }
 
 #[tokio::test]
@@ -64,6 +65,10 @@ async fn ships_minimum_mvp_default_rule_set() {
         .iter()
         .map(|rule| rule["alert_code"].as_str().unwrap())
         .collect::<std::collections::BTreeSet<_>>();
+    let scheme_families = rules
+        .iter()
+        .map(|rule| rule["scheme_family"].as_str().unwrap())
+        .collect::<std::collections::BTreeSet<_>>();
     for expected in [
         "EARLY_CLAIM",
         "LARGE_LIMIT_USAGE",
@@ -78,6 +83,13 @@ async fn ships_minimum_mvp_default_rule_set() {
     ] {
         assert!(alert_codes.contains(expected), "missing {expected}");
     }
+    for expected in [
+        "early_high_value_claim",
+        "diagnosis_procedure_mismatch",
+        "provider_peer_outlier",
+    ] {
+        assert!(scheme_families.contains(expected), "missing {expected}");
+    }
 }
 
 #[tokio::test]
@@ -90,8 +102,13 @@ async fn returns_rule_detail_with_versions() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["summary"]["rule_id"], "rule_early_claim");
     assert_eq!(body["summary"]["review_mode"], "both");
+    assert_eq!(body["summary"]["scheme_family"], "early_high_value_claim");
     assert_eq!(body["versions"][0]["version"], 1);
     assert_eq!(body["versions"][0]["review_mode"], "both");
+    assert_eq!(
+        body["versions"][0]["scheme_family"],
+        "early_high_value_claim"
+    );
     assert!(body["versions"][0]["dsl"]["conditions"].is_array());
 }
 

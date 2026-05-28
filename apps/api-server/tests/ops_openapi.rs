@@ -77,9 +77,32 @@ async fn openapi_includes_operations_paths() {
         .unwrap()
         .iter()
         .any(|field| field == "review_mode"));
+    assert!(schema["components"]["schemas"]["RuleSummary"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "scheme_family"));
     assert_eq!(
         schema["components"]["schemas"]["RuleSummary"]["properties"]["review_mode"]["enum"][0],
         "pre_payment"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleSummary"]["properties"]["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FwaSchemeFamily"]["enum"][0],
+        "duplicate_billing"
+    );
+    assert!(schema["components"]["schemas"]["RuleVersion"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "scheme_family"));
+    assert_eq!(
+        schema["components"]["schemas"]["RuleDetailResponse"]["properties"]["versions"]["items"]
+            ["$ref"],
+        "#/components/schemas/RuleVersion"
     );
     assert!(schema["components"]["schemas"]["ModelVersion"]["required"]
         .as_array()

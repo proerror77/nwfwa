@@ -37,6 +37,7 @@ type RuleSummary = {
   active_version: number | null;
   latest_version: number;
   review_mode: string;
+  scheme_family: string;
   score: number;
   alert_code: string;
   recommended_action: string;
@@ -282,7 +283,7 @@ export function RulesStudio() {
               <span>{rule.name}</span>
               <strong>{rule.status}</strong>
               <small>
-                {rule.alert_code} · {formatReviewModeLabel(rule.review_mode)}
+                {rule.alert_code} · {rule.scheme_family} · {formatReviewModeLabel(rule.review_mode)}
               </small>
             </button>
           ))}
@@ -312,6 +313,10 @@ export function RulesStudio() {
               <div>
                 <dt>Review Mode</dt>
                 <dd>{formatReviewModeLabel(selectedRule.review_mode)}</dd>
+              </div>
+              <div>
+                <dt>Scheme</dt>
+                <dd>{selectedRule.scheme_family}</dd>
               </div>
               <div>
                 <dt>Score</dt>
