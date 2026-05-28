@@ -3740,11 +3740,25 @@ pub async fn openapi_schema() -> Json<Value> {
                         "reviewer": { "type": "string" },
                         "priority": { "type": "string" },
                         "routing_reason": { "type": "string" },
-                        "evidence_package": { "type": "object" },
+                        "evidence_package": { "$ref": "#/components/schemas/CaseEvidencePackage" },
                         "sla_target_hours": { "type": "integer" },
                         "sla_status": { "type": "string" },
                         "time_to_triage_hours": { "type": "number" },
                         "time_to_closure_hours": { "type": ["number", "null"] }
+                    }
+                },
+                "CaseEvidencePackage": {
+                    "type": "object",
+                    "required": ["lead_id", "claim_id", "risk_score", "rag", "reason", "triage_notes", "evidence_sufficiency", "evidence_refs"],
+                    "properties": {
+                        "lead_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "rag": { "type": "string" },
+                        "reason": { "type": "string" },
+                        "triage_notes": { "type": "string" },
+                        "evidence_sufficiency": { "$ref": "#/components/schemas/EvidenceSufficiency" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "CaseListResponse": {

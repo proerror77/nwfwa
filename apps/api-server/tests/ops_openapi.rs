@@ -507,6 +507,22 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/EvidenceSufficiency"
     );
     assert!(schema["components"]["schemas"]["EvidenceSufficiency"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["Case"]["properties"]["evidence_package"]["$ref"],
+        "#/components/schemas/CaseEvidencePackage"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["CaseEvidencePackage"]["properties"]
+            ["evidence_sufficiency"]["$ref"],
+        "#/components/schemas/EvidenceSufficiency"
+    );
+    assert!(
+        schema["components"]["schemas"]["CaseEvidencePackage"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evidence_sufficiency")
+    );
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphPayload"].is_object());
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphAssessment"].is_object());
     assert_eq!(
