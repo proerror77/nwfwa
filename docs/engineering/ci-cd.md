@@ -15,10 +15,21 @@ CI runs on:
 Current checks:
 
 - repository health check through `scripts/ci/check_repo.sh`
-- Rust: `cargo fmt --all -- --check`, `cargo clippy --workspace --all-targets -- -D warnings`, and `cargo test --workspace`
+- Rust: `cargo fetch --locked`, `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, and `cargo test --locked --workspace`
 - PostgreSQL migration idempotency
 - Python ML service install and `pytest`
 - Web console `npm ci`, TypeScript lint, Vitest, and production build
+
+## Rust Compilation
+
+Rust CI is optimized for fast, reproducible validation rather than release artifact generation.
+
+- Dependency resolution is locked with `Cargo.lock` through `--locked`.
+- `Swatinem/rust-cache@v2` caches the Cargo registry, git dependencies, and build artifacts.
+- CI disables incremental compilation because GitHub-hosted runners are cold and cache restores are a better fit for repeated builds.
+- CI disables dev/test debug info with `CARGO_PROFILE_DEV_DEBUG=0` and `CARGO_PROFILE_TEST_DEBUG=0` to reduce compile output size and linking work.
+- Local dev/test profiles keep line-table debug info through `debug = 1`, which is lighter than full debug info while preserving useful failure locations.
+- Release-mode Rust builds are intentionally not part of default CI yet. Add `cargo build --release --locked --workspace` only when release artifact validation becomes a required signal.
 
 ## GitHub Actions Runtime
 
@@ -27,6 +38,7 @@ GitHub announced Node.js 20 deprecation for JavaScript actions and migration tow
 - `actions/checkout@v6`
 - `actions/setup-python@v6`
 - `actions/setup-node@v6`
+- `Swatinem/rust-cache@v2`
 
 Keep hosted runners on GitHub-managed `ubuntu-latest`. If self-hosted runners are introduced, they must be at least runner `v2.327.1` before using the v6 setup actions.
 

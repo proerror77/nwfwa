@@ -45,6 +45,13 @@ Use this skill when writing, reviewing, or refactoring code to reduce common LLM
 - For multi-step work, state a short plan with a concrete verification check for each step.
 - Continue looping until the success criteria are verified or a real blocker is identified.
 
+# Rust Compile Rules
+
+- Keep Rust CI commands locked to `Cargo.lock` with `--locked` for dependency reproducibility.
+- Keep CI cold builds optimized for validation speed: Rust CI disables incremental compilation and debug info through `CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0`, and `CARGO_PROFILE_TEST_DEBUG=0`.
+- Keep the Rust dependency and target cache in CI unless a failing cache is proven to hide a real build issue.
+- Do not add release-mode Rust builds to the default CI path unless release artifact validation is explicitly required; release builds trade correctness signal for longer feedback time.
+
 # Collaboration
 
 ## Agent Teams

@@ -40,3 +40,9 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter", "json"] }
 ulid = { version = "1", features = ["serde"] }
 uuid = { version = "1", features = ["serde", "v7"] }
+
+[profile.dev]
+debug = 1
+
+[profile.test]
+debug = 1
