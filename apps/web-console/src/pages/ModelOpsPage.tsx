@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getModelPerformance,
   getModelPromotionGates,
+  listOutcomeLabels,
   listQaFeedbackItems,
   listModels,
   submitModelPromotionReview,
@@ -47,6 +48,35 @@ type ModelPerformanceResponse = {
   drift_status: string;
 };
 
+type OutcomeLabel = {
+  label_id: string;
+  claim_id: string;
+  label_name: string;
+  label_value: string;
+  source_type: string;
+  source_id: string;
+  governance_status: string;
+  feedback_target: string;
+  currency?: string | null;
+  evidence_refs: string[];
+};
+
+export function buildModelLabelReadinessSummary(labels: OutcomeLabel[] = []) {
+  const modelLabels = labels.filter((label) => label.feedback_target === "models");
+  return {
+    modelLabelCount: modelLabels.length,
+    approvedForTrainingCount: modelLabels.filter(
+      (label) => label.governance_status === "approved_for_training",
+    ).length,
+    needsReviewCount: modelLabels.filter((label) => label.governance_status === "needs_review")
+      .length,
+    evidenceBackedCount: modelLabels.filter((label) => label.evidence_refs.length > 0).length,
+    confirmedFwaCount: modelLabels.filter(
+      (label) => label.label_name === "confirmed_fwa" && label.label_value === "true",
+    ).length,
+  };
+}
+
 export function ModelOpsPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedModelKey, setSelectedModelKey] = useState("baseline_fwa");
@@ -85,6 +115,10 @@ export function ModelOpsPage() {
     queryKey: ["qa-feedback-items", apiKey],
     queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
   });
+  const outcomeLabelsQuery = useQuery({
+    queryKey: ["outcome-labels", apiKey],
+    queryFn: () => listOutcomeLabels(apiKey) as Promise<{ labels: OutcomeLabel[] }>,
+  });
   const modelFeedbackItems = useMemo(
     () => filterQaFeedbackItems(qaFeedbackQuery.data?.items ?? [], "models"),
     [qaFeedbackQuery.data?.items],
@@ -92,6 +126,10 @@ export function ModelOpsPage() {
   const modelFeedbackSummary = useMemo(
     () => summarizeQaFeedbackItems(modelFeedbackItems),
     [modelFeedbackItems],
+  );
+  const modelLabelSummary = useMemo(
+    () => buildModelLabelReadinessSummary(outcomeLabelsQuery.data?.labels),
+    [outcomeLabelsQuery.data?.labels],
   );
   const reviewMutation = useMutation({
     mutationFn: (decision: "approved" | "rejected") => {
@@ -236,6 +274,51 @@ export function ModelOpsPage() {
           ))}
         </div>
         {modelFeedbackItems.length === 0 ? <p className="empty">No model feedback items</p> : null}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Label Readiness</h2>
+        {outcomeLabelsQuery.error ? (
+          <pre className="error">{String(outcomeLabelsQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Model Labels</span>
+            <strong>{modelLabelSummary.modelLabelCount}</strong>
+          </div>
+          <div>
+            <span>Training Ready</span>
+            <strong>{modelLabelSummary.approvedForTrainingCount}</strong>
+          </div>
+          <div>
+            <span>Needs Review</span>
+            <strong>{modelLabelSummary.needsReviewCount}</strong>
+          </div>
+          <div>
+            <span>Evidence Backed</span>
+            <strong>{modelLabelSummary.evidenceBackedCount}</strong>
+          </div>
+          <div>
+            <span>Confirmed FWA</span>
+            <strong>{modelLabelSummary.confirmedFwaCount}</strong>
+          </div>
+        </div>
+        <div className="table-list">
+          {(outcomeLabelsQuery.data?.labels ?? [])
+            .filter((label) => label.feedback_target === "models")
+            .map((label) => (
+              <div className="metric-row compact-metric-row" key={label.label_id}>
+                <span>{label.label_name}</span>
+                <strong>{label.governance_status}</strong>
+                <small>
+                  {label.claim_id} · {label.source_type}:{label.source_id}
+                </small>
+                <small>{label.evidence_refs.length} evidence refs</small>
+              </div>
+            ))}
+        </div>
+        {modelLabelSummary.modelLabelCount === 0 ? (
+          <p className="empty">No model outcome labels</p>
+        ) : null}
       </div>
       <div className="panel wide-panel">
         <h2>Promotion Gates</h2>
