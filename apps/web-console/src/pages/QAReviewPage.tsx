@@ -57,6 +57,32 @@ type QaQueueListResponse = {
   items: QaQueueItem[];
 };
 
+export const QA_CONCLUSION_OPTIONS = [
+  { value: "pass", label: "Pass" },
+  { value: "issue_found_return", label: "Issue Found - Return" },
+  { value: "issue_found_escalate", label: "Issue Found - Escalate" },
+] as const;
+
+export const QA_ISSUE_TYPE_OPTIONS = [
+  { value: "none", label: "None" },
+  { value: "qa_review_completed", label: "QA Review Completed" },
+  { value: "alert_handling_incomplete", label: "Alert Handling Incomplete" },
+  { value: "medical_reasonableness", label: "Medical Reasonableness" },
+  { value: "medical_necessity_issue", label: "Medical Necessity Issue" },
+  { value: "provider_pattern", label: "Provider Pattern" },
+  { value: "model_under_scored_confirmed_issue", label: "Model Under-Scored Confirmed Issue" },
+  { value: "workflow_missing_evidence", label: "Workflow Missing Evidence" },
+] as const;
+
+export const QA_FEEDBACK_TARGET_OPTIONS = [
+  { value: "rules", label: "Rules" },
+  { value: "models", label: "Models" },
+  { value: "features", label: "Features" },
+  { value: "provider_profile", label: "Provider Profile" },
+  { value: "workflow", label: "Workflow" },
+  { value: "tpa", label: "TPA" },
+] as const;
+
 export function selectQaQueueItem(queue: QaQueueItem[], selectedCaseId: string) {
   return queue.find((item) => item.qa_case_id === selectedCaseId) ?? queue[0] ?? null;
 }
@@ -263,25 +289,34 @@ export function QAReviewPage() {
           <label>
             Conclusion
             <select value={qaConclusion} onChange={(event) => setQaConclusion(event.target.value)}>
-              <option value="pass">Pass</option>
-              <option value="issue_found_return">Issue Found - Return</option>
-              <option value="issue_found_escalate">Issue Found - Escalate</option>
+              {QA_CONCLUSION_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
           <label>
             Issue Type
             <select value={issueType} onChange={(event) => setIssueType(event.target.value)}>
-              <option value="alert_handling_incomplete">Alert Handling Incomplete</option>
-              <option value="medical_reasonableness">Medical Reasonableness</option>
-              <option value="provider_pattern">Provider Pattern</option>
+              {QA_ISSUE_TYPE_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
           <label>
             Feedback
-            <select value={feedbackTarget} onChange={(event) => setFeedbackTarget(event.target.value)}>
-              <option value="rules">Rules</option>
-              <option value="models">Models</option>
-              <option value="tpa">TPA</option>
+            <select
+              value={feedbackTarget}
+              onChange={(event) => setFeedbackTarget(event.target.value)}
+            >
+              {QA_FEEDBACK_TARGET_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
             </select>
           </label>
         </div>

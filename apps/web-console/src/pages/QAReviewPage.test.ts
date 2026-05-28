@@ -1,5 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { buildQaEvidenceRefs, canSubmitQaQueueItem, selectQaQueueItem } from "./QAReviewPage";
+import {
+  buildQaEvidenceRefs,
+  canSubmitQaQueueItem,
+  QA_CONCLUSION_OPTIONS,
+  QA_FEEDBACK_TARGET_OPTIONS,
+  QA_ISSUE_TYPE_OPTIONS,
+  selectQaQueueItem,
+} from "./QAReviewPage";
 
 describe("QAReviewPage helpers", () => {
   it("selects the requested QA queue item or falls back to the first real queue item", () => {
@@ -94,5 +101,31 @@ describe("QAReviewPage helpers", () => {
       "audit:scoring.completed",
     ]);
     expect(buildQaEvidenceRefs(null)).toBe("");
+  });
+
+  it("exposes QA review options that match the governed API labels", () => {
+    expect(QA_CONCLUSION_OPTIONS.map((option) => option.value)).toEqual([
+      "pass",
+      "issue_found_return",
+      "issue_found_escalate",
+    ]);
+    expect(QA_ISSUE_TYPE_OPTIONS.map((option) => option.value)).toEqual([
+      "none",
+      "qa_review_completed",
+      "alert_handling_incomplete",
+      "medical_reasonableness",
+      "medical_necessity_issue",
+      "provider_pattern",
+      "model_under_scored_confirmed_issue",
+      "workflow_missing_evidence",
+    ]);
+    expect(QA_FEEDBACK_TARGET_OPTIONS.map((option) => option.value)).toEqual([
+      "rules",
+      "models",
+      "features",
+      "provider_profile",
+      "workflow",
+      "tpa",
+    ]);
   });
 });
