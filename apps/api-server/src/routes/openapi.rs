@@ -2250,7 +2250,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2275,6 +2275,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },
                         "qa_queue": { "$ref": "#/components/schemas/DashboardQaQueue" },
+                        "agent_governance": { "$ref": "#/components/schemas/DashboardAgentGovernance" },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
                     }
@@ -2298,6 +2299,17 @@ pub async fn openapi_schema() -> Json<Value> {
                         "sampled_cases": { "type": "integer" },
                         "open_cases": { "type": "integer" },
                         "reviewed_cases": { "type": "integer" }
+                    }
+                },
+                "DashboardAgentGovernance": {
+                    "type": "object",
+                    "required": ["total_runs", "successful_runs", "pending_approvals", "approved_approvals", "rejected_approvals"],
+                    "properties": {
+                        "total_runs": { "type": "integer" },
+                        "successful_runs": { "type": "integer" },
+                        "pending_approvals": { "type": "integer" },
+                        "approved_approvals": { "type": "integer" },
+                        "rejected_approvals": { "type": "integer" }
                     }
                 },
                 "Lead": {

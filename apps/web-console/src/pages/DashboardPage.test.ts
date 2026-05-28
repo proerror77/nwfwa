@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDashboardAgentGovernanceSummary,
   buildDashboardLabelPoolSummary,
   buildDashboardQaQueueSummary,
   buildProviderRiskSummary,
@@ -73,6 +74,28 @@ describe("buildDashboardQaQueueSummary", () => {
       openCases: 3,
       reviewedCases: 5,
       reviewedRateLabel: "62.5%",
+    });
+  });
+});
+
+describe("buildDashboardAgentGovernanceSummary", () => {
+  it("summarizes agent run success and approval adoption", () => {
+    const summary = buildDashboardAgentGovernanceSummary({
+      total_runs: 5,
+      successful_runs: 4,
+      pending_approvals: 1,
+      approved_approvals: 3,
+      rejected_approvals: 1,
+    });
+
+    expect(summary).toEqual({
+      totalRuns: 5,
+      successfulRuns: 4,
+      pendingApprovals: 1,
+      approvedApprovals: 3,
+      rejectedApprovals: 1,
+      successRateLabel: "80.0%",
+      approvalRateLabel: "75.0%",
     });
   });
 });

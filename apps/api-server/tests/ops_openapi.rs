@@ -186,6 +186,19 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/DashboardQaQueue"
     );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "agent_governance")
+    );
+    assert!(schema["components"]["schemas"]["DashboardAgentGovernance"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
+            ["agent_governance"]["$ref"],
+        "#/components/schemas/DashboardAgentGovernance"
+    );
     assert!(schema["components"]["schemas"]["SavingAttributionSummary"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]

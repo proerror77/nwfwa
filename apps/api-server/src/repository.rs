@@ -354,6 +354,15 @@ pub struct DashboardQaQueueRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardAgentGovernanceRecord {
+    pub total_runs: u32,
+    pub successful_runs: u32,
+    pub pending_approvals: u32,
+    pub approved_approvals: u32,
+    pub rejected_approvals: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -366,6 +375,7 @@ pub struct DashboardSummaryRecord {
     pub saving_attributions: Vec<DashboardSavingAttributionRecord>,
     pub label_pool: DashboardLabelPoolRecord,
     pub qa_queue: DashboardQaQueueRecord,
+    pub agent_governance: DashboardAgentGovernanceRecord,
     pub investigation_results: u32,
     pub qa_reviews: u32,
 }
@@ -1687,6 +1697,7 @@ impl ScoringRepository for InMemoryScoringRepository {
 
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
+        let agent_runs = self.list_agent_runs().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims,
@@ -1737,6 +1748,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             saving_attributions,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
+            agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             investigation_results,
             qa_reviews,
         })
@@ -3701,6 +3713,7 @@ impl ScoringRepository for PostgresScoringRepository {
         let outcome_labels = self.list_outcome_labels().await?;
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
+        let agent_runs = self.list_agent_runs().await?;
 
         Ok(DashboardSummaryRecord {
             suspected_claims: suspected.0 as u32,
@@ -3767,6 +3780,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 .collect(),
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
+            agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             investigation_results: investigation.0 as u32,
             qa_reviews: qa_reviews.0 as u32,
         })
@@ -5288,6 +5302,31 @@ fn summarize_dashboard_qa_queue(
         sampled_cases,
         open_cases: sampled_cases.saturating_sub(reviewed_cases),
         reviewed_cases,
+    }
+}
+
+fn summarize_dashboard_agent_governance(
+    runs: &[AgentRunLogRecord],
+) -> DashboardAgentGovernanceRecord {
+    let mut pending_approvals = 0_u32;
+    let mut approved_approvals = 0_u32;
+    let mut rejected_approvals = 0_u32;
+
+    for approval in runs.iter().flat_map(|run| run.approvals.iter()) {
+        match approval.decision.as_str() {
+            "pending" => pending_approvals += 1,
+            "approved" => approved_approvals += 1,
+            "rejected" => rejected_approvals += 1,
+            _ => {}
+        }
+    }
+
+    DashboardAgentGovernanceRecord {
+        total_runs: runs.len() as u32,
+        successful_runs: runs.iter().filter(|run| run.status == "succeeded").count() as u32,
+        pending_approvals,
+        approved_approvals,
+        rejected_approvals,
     }
 }
 

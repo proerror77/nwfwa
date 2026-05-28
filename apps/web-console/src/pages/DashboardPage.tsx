@@ -28,6 +28,14 @@ type DashboardQaQueue = {
   reviewed_cases: number;
 };
 
+type DashboardAgentGovernance = {
+  total_runs: number;
+  successful_runs: number;
+  pending_approvals: number;
+  approved_approvals: number;
+  rejected_approvals: number;
+};
+
 type DashboardSummary = {
   suspected_claims: number;
   confirmed_fwa: number;
@@ -40,6 +48,7 @@ type DashboardSummary = {
   saving_attributions: SavingAttributionSummary[];
   label_pool: DashboardLabelPool;
   qa_queue: DashboardQaQueue;
+  agent_governance: DashboardAgentGovernance;
   investigation_results: number;
   qa_reviews: number;
 };
@@ -94,6 +103,27 @@ export function buildDashboardQaQueueSummary(queue?: DashboardQaQueue) {
   };
 }
 
+export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgentGovernance) {
+  const totalRuns = governance?.total_runs ?? 0;
+  const successfulRuns = governance?.successful_runs ?? 0;
+  const approvedApprovals = governance?.approved_approvals ?? 0;
+  const rejectedApprovals = governance?.rejected_approvals ?? 0;
+  const decidedApprovals = approvedApprovals + rejectedApprovals;
+  return {
+    totalRuns,
+    successfulRuns,
+    pendingApprovals: governance?.pending_approvals ?? 0,
+    approvedApprovals,
+    rejectedApprovals,
+    successRateLabel:
+      totalRuns === 0 ? "0.0%" : `${((successfulRuns / totalRuns) * 100).toFixed(1)}%`,
+    approvalRateLabel:
+      decidedApprovals === 0
+        ? "0.0%"
+        : `${((approvedApprovals / decidedApprovals) * 100).toFixed(1)}%`,
+  };
+}
+
 export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
@@ -127,6 +157,7 @@ export function DashboardPage() {
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
   const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
+  const agentGovernanceSummary = buildDashboardAgentGovernanceSummary(summary?.agent_governance);
   const providerRiskSummary = buildProviderRiskSummary(providerRisk);
 
   return (
@@ -229,6 +260,38 @@ export function DashboardPage() {
             <div>
               <span>Review Rate</span>
               <strong>{qaQueueSummary.reviewedRateLabel}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <h2>Agent Governance</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Agent Runs</span>
+              <strong>{agentGovernanceSummary.totalRuns}</strong>
+            </div>
+            <div>
+              <span>Success Rate</span>
+              <strong>{agentGovernanceSummary.successRateLabel}</strong>
+            </div>
+            <div>
+              <span>Pending</span>
+              <strong>{agentGovernanceSummary.pendingApprovals}</strong>
+            </div>
+            <div>
+              <span>Approval Rate</span>
+              <strong>{agentGovernanceSummary.approvalRateLabel}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Approved</span>
+              <strong>{agentGovernanceSummary.approvedApprovals}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Rejected</span>
+              <strong>{agentGovernanceSummary.rejectedApprovals}</strong>
             </div>
           </div>
         </div>

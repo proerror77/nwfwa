@@ -145,6 +145,39 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, agent_investigation) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-0287",
+          "risk_score": 87,
+          "rag": "RED",
+          "top_reasons": ["金额高于同病种同地区 P99", "Provider 风险画像偏高"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let agent_run_id = agent_investigation["agent_run_id"].as_str().unwrap();
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_approval:manual_review_required"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, dashboard) = json_request(app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
@@ -155,6 +188,11 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["qa_queue"]["sampled_cases"], 1);
     assert_eq!(dashboard["qa_queue"]["open_cases"], 0);
     assert_eq!(dashboard["qa_queue"]["reviewed_cases"], 1);
+    assert_eq!(dashboard["agent_governance"]["total_runs"], 1);
+    assert_eq!(dashboard["agent_governance"]["successful_runs"], 1);
+    assert_eq!(dashboard["agent_governance"]["pending_approvals"], 0);
+    assert_eq!(dashboard["agent_governance"]["approved_approvals"], 1);
+    assert_eq!(dashboard["agent_governance"]["rejected_approvals"], 0);
     assert_eq!(dashboard["risk_amount"], "8000");
     assert_eq!(dashboard["saving_amount"], "8200.00");
     let attributions = dashboard["saving_attributions"].as_array().unwrap();
