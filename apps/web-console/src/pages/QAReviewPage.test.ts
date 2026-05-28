@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { canSubmitQaQueueItem, selectQaQueueItem } from "./QAReviewPage";
+import { buildQaEvidenceRefs, canSubmitQaQueueItem, selectQaQueueItem } from "./QAReviewPage";
 
 describe("QAReviewPage helpers", () => {
   it("selects the requested QA queue item or falls back to the first real queue item", () => {
@@ -70,5 +70,29 @@ describe("QAReviewPage helpers", () => {
       }),
     ).toBe(false);
     expect(canSubmitQaQueueItem(null)).toBe(false);
+  });
+
+  it("builds QA evidence refs from the selected sampled lead", () => {
+    expect(
+      buildQaEvidenceRefs({
+        qa_case_id: "qa_sample_1_lead_1",
+        sample_id: "sample_1",
+        lead_id: "lead_1",
+        claim_id: "CLM-1",
+        scheme_family: "provider_peer_outlier",
+        rag: "RED",
+        risk_score: 82,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        status: "open",
+        evidence_refs: ["audit:scoring.completed", "lead:lead_1"],
+      }).split("\n"),
+    ).toEqual([
+      "qa_queue:qa_sample_1_lead_1",
+      "audit_sample:sample_1",
+      "lead:lead_1",
+      "audit:scoring.completed",
+    ]);
+    expect(buildQaEvidenceRefs(null)).toBe("");
   });
 });

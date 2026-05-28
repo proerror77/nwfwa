@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listQaFeedbackItems, listQaQueue, listQaQueueSummary, submitQaResult } from "../api";
 
@@ -54,6 +54,20 @@ export function canSubmitQaQueueItem(item: QaQueueItem | null) {
   return item?.status === "open";
 }
 
+export function buildQaEvidenceRefs(item: QaQueueItem | null) {
+  if (!item) {
+    return "";
+  }
+  return [
+    `qa_queue:${item.qa_case_id}`,
+    `audit_sample:${item.sample_id}`,
+    `lead:${item.lead_id}`,
+    ...item.evidence_refs,
+  ]
+    .filter((value, index, refs) => refs.indexOf(value) === index)
+    .join("\n");
+}
+
 export function QAReviewPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -81,6 +95,10 @@ export function QAReviewPage() {
     queryKey: ["qa-queue-summary", apiKey],
     queryFn: () => listQaQueueSummary(apiKey) as Promise<QaQueueSummary>,
   });
+
+  useEffect(() => {
+    setEvidenceRefs(buildQaEvidenceRefs(selectedCase));
+  }, [selectedCase?.qa_case_id]);
 
   const submitMutation = useMutation({
     mutationFn: () => {
@@ -184,6 +202,14 @@ export function QAReviewPage() {
             <div>
               <dt>Claim</dt>
               <dd>{selectedCase.claim_id}</dd>
+            </div>
+            <div>
+              <dt>Sample</dt>
+              <dd>{selectedCase.sample_id}</dd>
+            </div>
+            <div>
+              <dt>Lead</dt>
+              <dd>{selectedCase.lead_id}</dd>
             </div>
             <div>
               <dt>Risk</dt>
