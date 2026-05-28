@@ -203,6 +203,8 @@ export function LeadsCasesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
+      queryClient.invalidateQueries({ queryKey: ["outcome-labels"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
 
