@@ -7621,6 +7621,9 @@ fn parse_recommended_action(value: &str) -> RecommendedAction {
         "QaSample" => RecommendedAction::QaSample,
         "RequestEvidence" => RecommendedAction::RequestEvidence,
         "EscalateInvestigation" => RecommendedAction::EscalateInvestigation,
+        "PostPaymentAudit" => RecommendedAction::PostPaymentAudit,
+        "ProviderReview" => RecommendedAction::ProviderReview,
+        "RecoveryReview" => RecommendedAction::RecoveryReview,
         _ => RecommendedAction::ManualReview,
     }
 }

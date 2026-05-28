@@ -41,6 +41,24 @@ pub fn aggregate(
     anomaly_score: &AnomalyScore,
     similar_case_score: u8,
 ) -> ScoringDecision {
+    aggregate_for_review_mode(
+        features,
+        rule_matches,
+        model_score,
+        anomaly_score,
+        similar_case_score,
+        "pre_payment",
+    )
+}
+
+pub fn aggregate_for_review_mode(
+    features: &FeatureMap,
+    rule_matches: &[RuleMatch],
+    model_score: &ModelScore,
+    anomaly_score: &AnomalyScore,
+    similar_case_score: u8,
+    review_mode: &str,
+) -> ScoringDecision {
     let peer_deviation_score = amount_ratio_score(features);
     let rule_score = rule_matches
         .iter()
@@ -63,8 +81,19 @@ pub fn aggregate(
     let risk_level = risk_level(risk_score.value()).to_string();
     let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);
     let confidence = confidence_level(confidence_score).to_string();
-    let recommended_action = recommended_action(&risk_level, confidence_score);
-    let routing_reason = routing_reason(&risk_level, confidence_score).to_string();
+    let recommended_action = recommended_action(
+        &risk_level,
+        confidence_score,
+        review_mode,
+        provider_network_score,
+    );
+    let routing_reason = routing_reason(
+        &risk_level,
+        confidence_score,
+        review_mode,
+        provider_network_score,
+    )
+    .to_string();
     let layers = vec![
         layer(
             "L1_PEER_BENCHMARK",
@@ -201,9 +230,27 @@ fn confidence_level(score: u8) -> &'static str {
     }
 }
 
-fn recommended_action(risk_level: &str, confidence_score: u8) -> RecommendedAction {
+fn recommended_action(
+    risk_level: &str,
+    confidence_score: u8,
+    review_mode: &str,
+    provider_network_score: u8,
+) -> RecommendedAction {
     if confidence_score < 60 {
         return RecommendedAction::RequestEvidence;
+    }
+    if review_mode == "post_payment" {
+        if risk_level == "Critical" {
+            return RecommendedAction::RecoveryReview;
+        }
+        if provider_network_score >= 70 && risk_level == "High" {
+            return RecommendedAction::ProviderReview;
+        }
+        return match risk_level {
+            "Low" => RecommendedAction::AutoApprove,
+            "Medium" | "High" => RecommendedAction::PostPaymentAudit,
+            _ => RecommendedAction::PostPaymentAudit,
+        };
     }
     match risk_level {
         "Low" => RecommendedAction::AutoApprove,
@@ -214,9 +261,28 @@ fn recommended_action(risk_level: &str, confidence_score: u8) -> RecommendedActi
     }
 }
 
-fn routing_reason(risk_level: &str, confidence_score: u8) -> &'static str {
+fn routing_reason(
+    risk_level: &str,
+    confidence_score: u8,
+    review_mode: &str,
+    provider_network_score: u8,
+) -> &'static str {
     if confidence_score < 60 {
         return "置信度偏低，建议补材料或二审";
+    }
+    if review_mode == "post_payment" {
+        if risk_level == "Critical" {
+            return "赔后关键风险，建议调查复核并评估追偿";
+        }
+        if provider_network_score >= 70 && risk_level == "High" {
+            return "赔后 Provider / 图谱风险偏高，建议进入 Provider 复核";
+        }
+        return match risk_level {
+            "Low" => "赔后低风险，建议不进入审计队列",
+            "Medium" => "赔后中风险，建议进入审计抽样队列",
+            "High" => "赔后高风险，建议进入专项审计队列",
+            _ => "赔后风险等级未知，建议进入审计队列",
+        };
     }
     match risk_level {
         "Low" => "低风险且置信度充足，建议自动通过",
@@ -517,6 +583,62 @@ mod tests {
         assert_eq!(decision.confidence, "High");
         assert_eq!(decision.recommended_action, RecommendedAction::QaSample);
         assert!(decision.routing_reason.contains("QA 抽样"));
+    }
+
+    #[test]
+    fn routes_post_payment_medium_risk_to_audit_queue() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount_peer_percentile".into(),
+            feature(serde_json::json!(95)),
+        );
+        let rules = vec![rule(80)];
+
+        let decision = aggregate_for_review_mode(
+            &features,
+            &rules,
+            &model(80),
+            &anomaly(0),
+            0,
+            "post_payment",
+        );
+
+        assert_eq!(decision.risk_level, "Medium");
+        assert_eq!(
+            decision.recommended_action,
+            RecommendedAction::PostPaymentAudit
+        );
+        assert!(decision.routing_reason.contains("赔后"));
+    }
+
+    #[test]
+    fn routes_post_payment_provider_risk_to_provider_review() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount_peer_percentile".into(),
+            feature(serde_json::json!(98)),
+        );
+        features.insert(
+            "provider_graph_risk_score".into(),
+            feature(serde_json::json!(90)),
+        );
+        let rules = vec![rule(90)];
+
+        let decision = aggregate_for_review_mode(
+            &features,
+            &rules,
+            &model(95),
+            &anomaly(95),
+            80,
+            "post_payment",
+        );
+
+        assert_eq!(decision.risk_level, "High");
+        assert_eq!(
+            decision.recommended_action,
+            RecommendedAction::ProviderReview
+        );
+        assert!(decision.routing_reason.contains("Provider"));
     }
 
     #[test]

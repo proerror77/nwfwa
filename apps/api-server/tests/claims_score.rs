@@ -229,6 +229,8 @@ async fn scores_claim_with_review_mode_and_audits_routing_policy() {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body["review_mode"], "post_payment");
+    assert_eq!(body["recommended_action"], "PostPaymentAudit");
+    assert!(body["routing_reason"].as_str().unwrap().contains("赔后"));
 
     let audit_request = Request::builder()
         .method("GET")
@@ -249,6 +251,10 @@ async fn scores_claim_with_review_mode_and_audits_routing_policy() {
         .find(|event| event["event_type"] == "scoring.completed")
         .expect("audit history should include scoring.completed");
     assert_eq!(scoring_event["payload"]["review_mode"], "post_payment");
+    assert_eq!(
+        scoring_event["payload"]["recommended_action"],
+        "PostPaymentAudit"
+    );
 }
 
 #[tokio::test]
@@ -936,7 +942,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             "QaSample",
             "ManualReview",
             "RequestEvidence",
-            "EscalateInvestigation"
+            "EscalateInvestigation",
+            "PostPaymentAudit",
+            "ProviderReview",
+            "RecoveryReview"
         ])
     );
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());

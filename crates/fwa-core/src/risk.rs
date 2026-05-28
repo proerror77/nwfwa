@@ -48,6 +48,9 @@ pub enum RecommendedAction {
     ManualReview,
     RequestEvidence,
     EscalateInvestigation,
+    PostPaymentAudit,
+    ProviderReview,
+    RecoveryReview,
 }
 
 #[cfg(test)]

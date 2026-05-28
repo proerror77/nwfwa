@@ -385,12 +385,13 @@ pub async fn score_claim(
             return Err(model_runtime_error(error));
         }
     };
-    let decision = fwa_scoring::aggregate(
+    let decision = fwa_scoring::aggregate_for_review_mode(
         &features,
         &rule_matches,
         &model_score,
         &anomaly_score,
         similar_case_score,
+        &review_mode,
     );
     let audit_id = AuditEventId::new();
     let alerts: Vec<AlertResponse> = rule_matches

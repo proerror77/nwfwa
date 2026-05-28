@@ -1758,7 +1758,10 @@ pub async fn openapi_schema() -> Json<Value> {
                                 "QaSample",
                                 "ManualReview",
                                 "RequestEvidence",
-                                "EscalateInvestigation"
+                                "EscalateInvestigation",
+                                "PostPaymentAudit",
+                                "ProviderReview",
+                                "RecoveryReview"
                             ]
                         },
                         "confidence_score": {
