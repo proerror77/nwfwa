@@ -779,7 +779,7 @@ pub async fn publish_rule(
     headers: HeaderMap,
     Path(rule_id): Path<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    update_status(state, headers, rule_id, "active").await
+    update_status_with_required_previous(state, headers, rule_id, "active", Some("approved")).await
 }
 
 async fn update_status(
@@ -787,6 +787,16 @@ async fn update_status(
     headers: HeaderMap,
     rule_id: String,
     status: &'static str,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    update_status_with_required_previous(state, headers, rule_id, status, None).await
+}
+
+async fn update_status_with_required_previous(
+    state: AppState,
+    headers: HeaderMap,
+    rule_id: String,
+    status: &'static str,
+    required_previous_status: Option<&'static str>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
     let previous = state
@@ -796,6 +806,15 @@ async fn update_status(
         .map_err(internal_error("RULE_LOAD_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
         .summary;
+    if let Some(required_status) = required_previous_status {
+        if previous.status != required_status {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_APPROVAL_REQUIRED",
+                format!("rule must be {required_status} before publish"),
+            ));
+        }
+    }
     let rule = state
         .repository
         .update_rule_status(&rule_id, status)

@@ -813,3 +813,25 @@ async fn advances_rule_lifecycle() {
         assert_eq!(body["status"], expected_status);
     }
 }
+
+#[tokio::test]
+async fn blocks_rule_publish_before_approval() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/publish",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "RULE_APPROVAL_REQUIRED");
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/rules/rule_early_claim", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["summary"]["status"], "active");
+}
