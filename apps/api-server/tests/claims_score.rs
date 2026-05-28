@@ -326,6 +326,7 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
         .unwrap()
         .iter()
         .any(|item| item == "claim_items:IMG-900"));
+    assert_eq!(body["scores"]["medical_reasonableness_score"], 100);
 
     let audit_request = Request::builder()
         .method("GET")
@@ -349,6 +350,15 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
         scoring_event["payload"]["clinical_evidence"]["review_route"],
         "medical_review"
     );
+    assert_eq!(
+        scoring_event["payload"]["scores"]["medical_reasonableness_score"],
+        body["scores"]["medical_reasonableness_score"]
+    );
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item.as_str().unwrap().contains("clinical_evidence")));
 }
 
 #[tokio::test]

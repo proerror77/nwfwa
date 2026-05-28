@@ -301,6 +301,7 @@ pub async fn score_claim(
         &context.provider,
         provider_relationships_input.as_ref(),
     );
+    apply_clinical_evidence_features(&mut features, &context, &clinical_evidence);
     apply_provider_profile_features(&mut features, &context, &provider_profile);
     apply_provider_relationship_features(&mut features, &context, &provider_relationships);
     let mut evidence_refs = features
@@ -641,6 +642,46 @@ impl From<ProviderRelationshipGraphPayload> for ProviderRelationshipGraphInput {
             network_component_risk_score: value.network_component_risk_score,
             evidence_refs: value.evidence_refs.unwrap_or_default(),
         }
+    }
+}
+
+fn apply_clinical_evidence_features(
+    features: &mut fwa_features::FeatureMap,
+    context: &ClaimContext,
+    clinical_evidence: &ClinicalEvidenceAssessment,
+) {
+    let evidence_ref = EvidenceRef {
+        entity_type: "claim".into(),
+        entity_id: context.claim.external_claim_id.clone(),
+        field: "clinical_evidence".into(),
+    };
+    for (name, value) in [
+        (
+            "clinical_missing_evidence_count",
+            clinical_evidence.missing_evidence.len() as i64,
+        ),
+        (
+            "clinical_item_finding_count",
+            clinical_evidence.item_findings.len() as i64,
+        ),
+        (
+            "clinical_review_required",
+            if clinical_evidence.review_required {
+                1
+            } else {
+                0
+            },
+        ),
+    ] {
+        features.insert(
+            name.into(),
+            FeatureValue {
+                name: name.into(),
+                version: 1,
+                value: serde_json::json!(value),
+                evidence_refs: vec![evidence_ref.clone()],
+            },
+        );
     }
 }
 

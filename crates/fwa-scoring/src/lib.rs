@@ -252,15 +252,26 @@ fn amount_ratio_score(features: &FeatureMap) -> u8 {
 }
 
 fn medical_reasonableness_score(features: &FeatureMap) -> u8 {
+    let clinical_gap_risk = numeric_feature(features, "clinical_missing_evidence_count")
+        .map(|count| (count * 15.0).round().clamp(0.0, 45.0))
+        .unwrap_or(0.0);
+    let clinical_review_risk = numeric_feature(features, "clinical_review_required")
+        .map(|flag| if flag > 0.0 { 15.0 } else { 0.0 })
+        .unwrap_or(0.0);
+
     if let Some(match_score) = numeric_feature(features, "diagnosis_procedure_match_score") {
         let mismatch_risk = ((1.0 - match_score) * 100.0).round().clamp(0.0, 100.0);
         let high_cost_risk = numeric_feature(features, "high_cost_item_ratio")
             .map(|ratio| (ratio * 25.0).round().clamp(0.0, 25.0))
             .unwrap_or(0.0);
-        return (mismatch_risk + high_cost_risk).round().clamp(0.0, 100.0) as u8;
+        return (mismatch_risk + high_cost_risk + clinical_gap_risk + clinical_review_risk)
+            .round()
+            .clamp(0.0, 100.0) as u8;
     }
     let item_count = numeric_feature(features, "claim_item_count").unwrap_or(0.0);
-    (item_count * 12.0).round().clamp(0.0, 60.0) as u8
+    (item_count * 12.0 + clinical_gap_risk + clinical_review_risk)
+        .round()
+        .clamp(0.0, 100.0) as u8
 }
 
 fn provider_network_score(features: &FeatureMap) -> u8 {
@@ -519,5 +530,35 @@ mod tests {
             RecommendedAction::RequestEvidence
         );
         assert!(decision.routing_reason.contains("补材料"));
+    }
+
+    #[test]
+    fn clinical_evidence_gaps_raise_medical_reasonableness_score() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "diagnosis_procedure_match_score".into(),
+            feature(serde_json::json!(0.80)),
+        );
+        features.insert(
+            "high_cost_item_ratio".into(),
+            feature(serde_json::json!(0.0)),
+        );
+        features.insert(
+            "clinical_missing_evidence_count".into(),
+            feature(serde_json::json!(2)),
+        );
+        features.insert(
+            "clinical_review_required".into(),
+            feature(serde_json::json!(1)),
+        );
+
+        let decision = aggregate(&features, &[], &model(20), &anomaly(0), 0);
+
+        assert_eq!(decision.medical_reasonableness_score, 65);
+        assert_eq!(decision.layers[4].layer_id, "L5_MEDICAL_REASONABLENESS");
+        assert_eq!(decision.layers[4].score, 65);
+        assert!(decision
+            .top_reasons
+            .contains(&"账单项目数量或结构需要医疗合理性复核".to_string()));
     }
 }
