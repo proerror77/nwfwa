@@ -496,6 +496,12 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
     assert_eq!(items[0]["status"], "open");
     assert_eq!(items[0]["source"], "qa_review");
     assert_eq!(items[0]["note_present"], true);
+    assert_eq!(items[0]["status_updated_by"], serde_json::Value::Null);
+    assert_eq!(items[0]["status_audit_id"], serde_json::Value::Null);
+    assert!(items[0]["status_evidence_refs"]
+        .as_array()
+        .unwrap()
+        .is_empty());
     assert!(items[0]["summary"]
         .as_str()
         .unwrap()
@@ -580,11 +586,23 @@ async fn updates_qa_feedback_item_status_with_audit_trail() {
         "qa_feedback_QA-FEEDBACK-STATUS-1"
     );
     assert!(!update["audit_id"].as_str().unwrap().is_empty());
+    assert_eq!(update["item"]["status_updated_by"], "rule-ops");
+    assert_eq!(update["item"]["status_audit_id"], update["audit_id"]);
+    assert_eq!(
+        update["item"]["status_evidence_refs"],
+        serde_json::json!(["qa_feedback:qa_feedback_QA-FEEDBACK-STATUS-1"])
+    );
 
     let (status, feedback) =
         json_request(app.clone(), "GET", "/api/v1/ops/qa/feedback-items", "{}").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(feedback["items"][0]["status"], "resolved");
+    assert_eq!(feedback["items"][0]["status_updated_by"], "rule-ops");
+    assert_eq!(feedback["items"][0]["status_audit_id"], update["audit_id"]);
+    assert_eq!(
+        feedback["items"][0]["status_evidence_refs"],
+        serde_json::json!(["qa_feedback:qa_feedback_QA-FEEDBACK-STATUS-1"])
+    );
 
     let (status, audit) = json_request(
         app,

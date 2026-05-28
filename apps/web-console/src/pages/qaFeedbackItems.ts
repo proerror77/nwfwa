@@ -9,6 +9,10 @@ export type QaFeedbackItem = {
   summary: string;
   note_present: boolean;
   evidence_refs: string[];
+  status_updated_by?: string | null;
+  status_audit_id?: string | null;
+  status_updated_at?: string | null;
+  status_evidence_refs?: string[];
 };
 
 export function filterQaFeedbackItems(items: QaFeedbackItem[], target: string) {

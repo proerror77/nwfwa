@@ -115,6 +115,24 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["QaFeedbackItem"]["properties"]["feedback_target"]["enum"],
         qa_feedback_targets
     );
+    for field in [
+        "status_updated_by",
+        "status_audit_id",
+        "status_updated_at",
+        "status_evidence_refs",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["QaFeedbackItem"]["properties"][field].is_object(),
+            "missing QA feedback item field {field}"
+        );
+    }
+    assert!(
+        schema["components"]["schemas"]["QaFeedbackItem"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "status_evidence_refs")
+    );
     assert_eq!(
         schema["components"]["schemas"]["OutcomeLabel"]["properties"]["feedback_target"]["enum"],
         qa_feedback_targets

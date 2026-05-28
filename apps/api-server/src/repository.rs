@@ -826,6 +826,19 @@ pub struct QaFeedbackItemRecord {
     pub note_present: bool,
     pub evidence_refs: Vec<String>,
     pub created_at: Option<String>,
+    pub status_updated_by: Option<String>,
+    pub status_audit_id: Option<String>,
+    pub status_updated_at: Option<String>,
+    pub status_evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct QaFeedbackStatusUpdate {
+    status: String,
+    actor_id: Option<String>,
+    audit_id: String,
+    updated_at: Option<String>,
+    evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2646,11 +2659,11 @@ impl ScoringRepository for InMemoryScoringRepository {
             .filter(|review| review.qa_conclusion != "pass")
             .map(|review| {
                 let feedback_id = qa_feedback_id(&review.qa_case_id);
-                let status = feedback_statuses
-                    .get(&feedback_id)
-                    .map(String::as_str)
+                let status_update = feedback_statuses.get(&feedback_id);
+                let status = status_update
+                    .map(|update| update.status.as_str())
                     .unwrap_or("open");
-                qa_review_to_feedback_item(review, None, status)
+                qa_review_to_feedback_item(review, None, status, status_update)
             })
             .collect::<Vec<_>>();
         sort_qa_feedback_items(&mut items);
@@ -2673,6 +2686,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         let from_status = item.status.clone();
         item.status = input.status.clone();
         let audit_id = AuditEventId::new().to_string();
+        item.status_updated_by = Some(input.actor_id.clone());
+        item.status_audit_id = Some(audit_id.clone());
+        item.status_updated_at = None;
+        item.status_evidence_refs = input.evidence_refs.clone();
         let event = AuditHistoryEventRecord {
             audit_id: audit_id.clone(),
             run_id: format!("qa_feedback_status_{}", item.feedback_id),
@@ -5835,6 +5852,28 @@ impl ScoringRepository for PostgresScoringRepository {
     }
 
     async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+        let mut status_events = self
+            .list_audit_events(AuditEventListFilter {
+                limit: 10_000,
+                event_type: Some("qa.feedback.status.updated".into()),
+                ..Default::default()
+            })
+            .await?;
+        status_events.reverse();
+        let feedback_statuses = latest_qa_feedback_statuses(
+            &status_events
+                .into_iter()
+                .map(|event| {
+                    (
+                        event.payload["claim_id"]
+                            .as_str()
+                            .unwrap_or_default()
+                            .to_string(),
+                        event,
+                    )
+                })
+                .collect::<Vec<_>>(),
+        );
         let rows: Vec<(
             String,
             String,
@@ -5867,6 +5906,8 @@ impl ScoringRepository for PostgresScoringRepository {
                     evidence_refs,
                     created_at,
                 )| {
+                    let feedback_id = qa_feedback_id(&qa_case_id);
+                    let status_update = feedback_statuses.get(&feedback_id);
                     qa_review_to_feedback_item(
                         QaReviewRecord {
                             qa_case_id,
@@ -5879,6 +5920,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         },
                         Some(created_at.to_rfc3339()),
                         &feedback_status,
+                        status_update,
                     )
                 },
             )
@@ -5950,6 +5992,7 @@ impl ScoringRepository for PostgresScoringRepository {
         else {
             return Ok(None);
         };
+        let audit_id = AuditEventId::new().to_string();
         let item = qa_review_to_feedback_item(
             QaReviewRecord {
                 qa_case_id,
@@ -5962,8 +6005,14 @@ impl ScoringRepository for PostgresScoringRepository {
             },
             Some(created_at.to_rfc3339()),
             &feedback_status,
+            Some(&QaFeedbackStatusUpdate {
+                status: feedback_status.clone(),
+                actor_id: Some(input.actor_id.clone()),
+                audit_id: audit_id.clone(),
+                updated_at: None,
+                evidence_refs: input.evidence_refs.clone(),
+            }),
         );
-        let audit_id = AuditEventId::new().to_string();
         insert_pilot_audit_event(
             &mut tx,
             &claim_id,
@@ -7155,6 +7204,7 @@ fn qa_review_to_feedback_item(
     review: QaReviewRecord,
     created_at: Option<String>,
     status: &str,
+    status_update: Option<&QaFeedbackStatusUpdate>,
 ) -> QaFeedbackItemRecord {
     let priority = if review.qa_conclusion.contains("escalate") {
         "high"
@@ -7180,6 +7230,12 @@ fn qa_review_to_feedback_item(
         note_present: !review.notes.trim().is_empty(),
         evidence_refs: review.evidence_refs,
         created_at,
+        status_updated_by: status_update.and_then(|update| update.actor_id.clone()),
+        status_audit_id: status_update.map(|update| update.audit_id.clone()),
+        status_updated_at: status_update.and_then(|update| update.updated_at.clone()),
+        status_evidence_refs: status_update
+            .map(|update| update.evidence_refs.clone())
+            .unwrap_or_default(),
     }
 }
 
@@ -7193,17 +7249,9 @@ fn qa_case_id_from_feedback_id(feedback_id: &str) -> Option<&str> {
 
 fn latest_qa_feedback_statuses(
     events: &[(String, AuditHistoryEventRecord)],
-) -> HashMap<String, String> {
+) -> HashMap<String, QaFeedbackStatusUpdate> {
     let mut statuses = HashMap::new();
     for (_, event) in events {
-        if event.event_type == "qa.result.received" {
-            if let Ok(review) = serde_json::from_value::<QaReviewRecord>(event.payload.clone()) {
-                if review.qa_conclusion != "pass" {
-                    statuses.insert(qa_feedback_id(&review.qa_case_id), "open".into());
-                }
-            }
-            continue;
-        }
         if event.event_type == "qa.feedback.status.updated" {
             let Some(feedback_id) = event.payload["feedback_id"].as_str() else {
                 continue;
@@ -7211,7 +7259,16 @@ fn latest_qa_feedback_statuses(
             let Some(status) = event.payload["to_status"].as_str() else {
                 continue;
             };
-            statuses.insert(feedback_id.to_string(), status.to_string());
+            statuses.insert(
+                feedback_id.to_string(),
+                QaFeedbackStatusUpdate {
+                    status: status.to_string(),
+                    actor_id: event.payload["actor_id"].as_str().map(str::to_string),
+                    audit_id: event.audit_id.clone(),
+                    updated_at: event.created_at.clone(),
+                    evidence_refs: event.evidence_refs.clone(),
+                },
+            );
         }
     }
     statuses

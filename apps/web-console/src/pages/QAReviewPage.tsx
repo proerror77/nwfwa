@@ -42,6 +42,10 @@ type QaFeedbackItem = {
   summary: string;
   note_present: boolean;
   evidence_refs: string[];
+  status_updated_by?: string | null;
+  status_audit_id?: string | null;
+  status_updated_at?: string | null;
+  status_evidence_refs?: string[];
 };
 
 type QaQueueSummary = {
@@ -410,6 +414,15 @@ export function QAReviewPage() {
               <small>
                 {item.priority} · {item.status}
               </small>
+              {item.status_updated_by || item.status_audit_id ? (
+                <small>
+                  Updated by {item.status_updated_by ?? "unknown"}
+                  {item.status_audit_id ? ` · ${item.status_audit_id}` : ""}
+                </small>
+              ) : null}
+              {item.status_evidence_refs?.length ? (
+                <small>{item.status_evidence_refs.join(", ")}</small>
+              ) : null}
               {canUpdateQaFeedbackItem(item) ? (
                 <div className="button-row">
                   <button

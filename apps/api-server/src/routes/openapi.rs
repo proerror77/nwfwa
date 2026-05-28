@@ -4349,7 +4349,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "QaFeedbackItem": {
                     "type": "object",
-                    "required": ["feedback_id", "qa_case_id", "claim_id", "feedback_target", "issue_type", "qa_conclusion", "source", "status", "priority", "summary", "note_present", "evidence_refs"],
+                    "required": ["feedback_id", "qa_case_id", "claim_id", "feedback_target", "issue_type", "qa_conclusion", "source", "status", "priority", "summary", "note_present", "evidence_refs", "status_evidence_refs"],
                     "properties": {
                         "feedback_id": { "type": "string" },
                         "qa_case_id": { "type": "string" },
@@ -4372,7 +4372,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "summary": { "type": "string" },
                         "note_present": { "type": "boolean" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
-                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                        "created_at": { "type": ["string", "null"], "format": "date-time" },
+                        "status_updated_by": { "type": ["string", "null"] },
+                        "status_audit_id": { "type": ["string", "null"] },
+                        "status_updated_at": { "type": ["string", "null"], "format": "date-time" },
+                        "status_evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "QaFeedbackItemListResponse": {
