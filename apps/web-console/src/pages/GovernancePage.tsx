@@ -18,6 +18,7 @@ import {
   submitAgentApproval,
   submitWebhookDeliveryAttempt,
 } from "../api";
+import { buildFwaSchemeLabelMap, formatFwaSchemeLabel } from "./fwaSchemeOptions";
 import { formatReviewModeLabel } from "./reviewMode";
 
 type AuditEvent = {
@@ -686,6 +687,7 @@ export function GovernancePage() {
     promotionGateGovernanceQuery.data?.rows,
   );
   const fwaSchemeRows = buildFwaSchemeGovernanceRows(fwaSchemesQuery.data?.schemes);
+  const schemeLabelMap = buildFwaSchemeLabelMap(fwaSchemesQuery.data?.schemes);
   const fwaSchemeSummary = buildFwaSchemeGovernanceSummary(fwaSchemeRows);
   const agentApprovalMutation = useMutation({
     mutationFn: ({
@@ -992,7 +994,7 @@ export function GovernancePage() {
                   <span>{alert.severity}</span>
                 </div>
                 <small>
-                  {alert.claim_id} / {alert.scheme_family}
+                  {alert.claim_id} / {formatFwaSchemeLabel(alert.scheme_family, schemeLabelMap)}
                 </small>
                 <p>{alert.message}</p>
                 <p>{alert.recommended_action}</p>

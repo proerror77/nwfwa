@@ -1,10 +1,15 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
-import { scoreClaim } from "../api";
+import { useMutation, useQuery } from "@tanstack/react-query";
+import { listFwaSchemes, scoreClaim } from "../api";
 import {
   buildProviderProfileInspection,
   type ProviderProfileAssessment,
 } from "./providerProfileInspection";
+import {
+  buildFwaSchemeLabelMap,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 import { formatReviewModeLabel } from "./reviewMode";
 import {
   buildClinicalEvidenceInspection,
@@ -209,6 +214,11 @@ export function RuntimeScoring() {
   const [claimId, setClaimId] = useState("CLM-0287");
   const [reviewMode, setReviewMode] = useState("pre_payment");
   const [payload, setPayload] = useState(defaultPayload);
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
+  const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const mutation = useMutation({
     mutationFn: () =>
       scoreClaim(
@@ -231,7 +241,7 @@ export function RuntimeScoring() {
     : null;
   const providerGraph = result?.provider_relationships;
   const similarCaseInspection = result
-    ? buildSimilarCaseInspection(result.similar_cases)
+    ? buildSimilarCaseInspection(result.similar_cases, schemeLabelMap)
     : null;
   const layerSummary = result ? buildScoringLayerSummary(result.layers) : null;
   const routingPolicySummary = result
@@ -247,6 +257,9 @@ export function RuntimeScoring() {
           API Key
           <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
         </label>
+        {schemesQuery.error ? (
+          <pre className="error">{String(schemesQuery.error.message)}</pre>
+        ) : null}
         <div className="form-grid">
           <label>
             Request Mode
@@ -647,6 +660,7 @@ export function RuntimeScoring() {
                             {(similarCase.similarity_score * 100).toFixed(0)}%
                           </strong>
                           <span>{similarCase.title}</span>
+                          <small>{formatFwaSchemeLabel(similarCase.scheme_family, schemeLabelMap)}</small>
                           <small>{similarCase.provenance_refs.join(", ")}</small>
                         </li>
                       ))}

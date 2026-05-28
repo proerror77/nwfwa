@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { investigateCase, listFwaSchemes } from "../api";
-import { buildFwaSchemeOptions, type FwaSchemeDefinition } from "./fwaSchemeOptions";
+import {
+  buildFwaSchemeLabelMap,
+  buildFwaSchemeOptions,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 
 type InvestigationResponse = {
   agent_run_id: string;
@@ -50,6 +55,7 @@ export function AgentInvestigatorPage() {
     queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
   });
   const schemeOptions = buildFwaSchemeOptions(schemesQuery.data?.schemes, schemeFamily);
+  const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const evidenceRows = buildEvidenceSufficiencyRows(result?.evidence_sufficiency);
 
   async function runInvestigation() {
@@ -175,7 +181,12 @@ export function AgentInvestigatorPage() {
             <dl className="result-grid">
               <div>
                 <dt>Scheme</dt>
-                <dd>{result.evidence_sufficiency.scheme_family}</dd>
+                <dd>
+                  {formatFwaSchemeLabel(
+                    result.evidence_sufficiency.scheme_family,
+                    schemeLabelMap,
+                  )}
+                </dd>
               </div>
               <div>
                 <dt>Evidence Status</dt>

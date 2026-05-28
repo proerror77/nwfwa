@@ -1,3 +1,5 @@
+import { formatFwaSchemeLabel } from "./fwaSchemeOptions";
+
 export type ClinicalEvidenceAssessment = {
   review_required: boolean;
   review_route: string;
@@ -84,7 +86,10 @@ export function buildProviderGraphInspection(graph?: ProviderRelationshipGraphAs
   };
 }
 
-export function buildSimilarCaseInspection(cases: SimilarCase[] = []) {
+export function buildSimilarCaseInspection(
+  cases: SimilarCase[] = [],
+  schemeLabelMap: Record<string, string> = {},
+) {
   const topCase = cases.slice().sort((left, right) => right.similarity_score - left.similarity_score)[0];
 
   return {
@@ -92,7 +97,7 @@ export function buildSimilarCaseInspection(cases: SimilarCase[] = []) {
     topCaseLabel: topCase
       ? `${topCase.case_id} · ${(topCase.similarity_score * 100).toFixed(0)}%`
       : "No similar cases",
-    schemeLabel: topCase?.scheme_family ?? "None",
+    schemeLabel: topCase ? formatFwaSchemeLabel(topCase.scheme_family, schemeLabelMap) : "None",
     matchedSignalsSummary: topCase ? summarizeList(topCase.matched_signals, "No matched signals") : "None",
     provenanceSummary: topCase ? summarizeList(topCase.provenance_refs, "No provenance refs") : "None",
   };

@@ -224,4 +224,26 @@ describe("runtime evidence inspections", () => {
       provenanceSummary: "knowledge_cases:KC-HIGH",
     });
   });
+
+  it("uses taxonomy labels for similar knowledge case schemes", () => {
+    expect(
+      buildSimilarCaseInspection(
+        [
+          {
+            case_id: "KC-HIGH",
+            title: "Higher match",
+            scheme_family: "early_high_value_claim",
+            similarity_score: 0.91,
+            matched_signals: ["early_claim"],
+            retrieval_method: "hybrid",
+            provenance_refs: ["knowledge_cases:KC-HIGH"],
+            summary: "Higher match.",
+            outcome: "Confirmed.",
+            evidence_refs: [],
+          },
+        ],
+        { early_high_value_claim: "Early high-value claim (early_high_value_claim)" },
+      ).schemeLabel,
+    ).toBe("Early high-value claim (early_high_value_claim)");
+  });
 });
