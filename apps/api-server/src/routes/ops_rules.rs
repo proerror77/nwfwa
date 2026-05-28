@@ -212,9 +212,16 @@ pub async fn rule_promotion_gates(
     Path(rule_id): Path<String>,
 ) -> Result<Json<RulePromotionGatesResponse>, ApiError> {
     authorize(&state, &headers)?;
+    Ok(Json(load_rule_promotion_gates(&state, &rule_id).await?))
+}
+
+async fn load_rule_promotion_gates(
+    state: &AppState,
+    rule_id: &str,
+) -> Result<RulePromotionGatesResponse, ApiError> {
     let rule = state
         .repository
-        .get_rule(&rule_id)
+        .get_rule(rule_id)
         .await
         .map_err(internal_error("RULE_LOAD_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
@@ -243,13 +250,13 @@ pub async fn rule_promotion_gates(
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
 
-    Ok(Json(build_rule_promotion_gates(
+    Ok(build_rule_promotion_gates(
         &rule,
         &performance,
         latest_backtest.as_ref(),
         &outcome_labels,
         latest_review.as_ref(),
-    )))
+    ))
 }
 
 pub async fn submit_rule_promotion_review(
@@ -349,7 +356,6 @@ fn build_rule_promotion_gates(
         .map(|review| review.decision == "approved")
         .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active"));
     let shadow_rollout = performance.trigger_count > 0 && performance.reviewed_count > 0;
-    let rollback_path = rule.latest_version > 0 && rule.active_version.is_some();
     let rule_feedback_labels = outcome_labels
         .iter()
         .filter(|label| label.feedback_target == "rules")
@@ -415,9 +421,13 @@ fn build_rule_promotion_gates(
         ),
         rule_gate(
             "Rollback path",
-            rollback_path,
+            rule.latest_version > 0,
             "rollback path missing",
-            if rollback_path { "metadata" } else { "missing" },
+            if rule.latest_version > 0 {
+                "metadata"
+            } else {
+                "missing"
+            },
         ),
     ];
     let blockers = gates
@@ -806,7 +816,57 @@ pub async fn publish_rule(
     headers: HeaderMap,
     Path(rule_id): Path<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    update_status_with_required_previous(state, headers, rule_id, "active", Some("approved")).await
+    let actor = authorize(&state, &headers)?;
+    let previous = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    if previous.status != "approved" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "RULE_APPROVAL_REQUIRED",
+            "rule must be approved before publish",
+        ));
+    }
+    let gates = load_rule_promotion_gates(&state, &rule_id).await?;
+    if gates.decision != "routing_allowed" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "RULE_PROMOTION_GATES_BLOCKED",
+            format!(
+                "rule promotion gates blocked: {}",
+                gates.blockers.join(", ")
+            ),
+        ));
+    }
+    let rule = state
+        .repository
+        .update_rule_status(&rule_id, "active")
+        .await
+        .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &rule,
+            event_type: "rule.status.changed",
+            from_status: Some(&previous.status),
+            to_status: &rule.status,
+            summary: "Rule status changed",
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(RuleLifecycleResponse {
+        rule_id: rule.rule_id,
+        status: rule.status,
+        active_version: rule.active_version,
+        latest_version: rule.latest_version,
+    }))
 }
 
 pub async fn rollback_rule(
