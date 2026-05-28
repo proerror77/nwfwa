@@ -192,6 +192,10 @@ pub fn build_app_with_parts(
             post(ops_models::update_model_retraining_job_status),
         )
         .route(
+            "/api/v1/ops/model-retraining-jobs/claim-next",
+            post(ops_models::claim_next_model_retraining_job),
+        )
+        .route(
             "/api/v1/ops/model-retraining-jobs/:job_id/output",
             post(ops_models::complete_model_retraining_job),
         )

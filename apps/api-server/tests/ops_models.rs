@@ -826,10 +826,10 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     let (status, updated) = json_request(
         app.clone(),
         "POST",
-        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
+        "/api/v1/ops/model-retraining-jobs/claim-next",
         r#"{
-          "status": "running",
           "actor": "trainer-worker",
+          "model_key": "baseline_fwa",
           "notes": "Training worker picked up the job."
         }"#,
     )
@@ -840,6 +840,20 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(updated["status"], "running");
     assert_eq!(updated["updated_by"], "trainer-worker");
     assert_eq!(updated["status_note"], "Training worker picked up the job.");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/claim-next",
+        r#"{
+          "actor": "trainer-worker",
+          "model_key": "baseline_fwa",
+          "notes": "No work expected."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(body["code"], "MODEL_RETRAINING_JOB_NOT_FOUND");
 
     let (status, updated) = json_request(
         app.clone(),

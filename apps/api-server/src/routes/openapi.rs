@@ -1011,6 +1011,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/model-retraining-jobs/claim-next": {
+                "post": {
+                    "summary": "Claim the next queued model retraining job for a worker",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ClaimModelRetrainingJobRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Claimed model retraining job",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelRetrainingJob" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/model-retraining-jobs/{job_id}/output": {
                 "post": {
                     "summary": "Register model retraining output, candidate version, and validation evaluation",
@@ -2788,6 +2812,15 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
                         "actor": { "type": "string" },
                         "notes": { "type": "string" }
+                    }
+                },
+                "ClaimModelRetrainingJobRequest": {
+                    "type": "object",
+                    "required": ["actor", "notes"],
+                    "properties": {
+                        "actor": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "model_key": { "type": ["string", "null"] }
                     }
                 },
                 "CompleteModelRetrainingJobRequest": {

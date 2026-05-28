@@ -104,6 +104,13 @@ pub struct UpdateModelRetrainingJobStatusRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ClaimModelRetrainingJobRequest {
+    pub actor: String,
+    pub notes: String,
+    pub model_key: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CompleteModelRetrainingJobRequest {
     pub actor: String,
     pub notes: String,
@@ -362,6 +369,41 @@ pub async fn update_model_retraining_job_status(
             )
         })?;
     record_model_retraining_audit(&state, &actor, &job, "model.retraining.status_updated")
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(job))
+}
+
+pub async fn claim_next_model_retraining_job(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<ClaimModelRetrainingJobRequest>,
+) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    if request.actor.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_JOB_ACTOR",
+            "actor is required",
+        ));
+    }
+    let job = state
+        .repository
+        .claim_next_model_retraining_job(
+            request.model_key.as_deref(),
+            &request.actor,
+            &request.notes,
+        )
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_JOB_CLAIM_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_RETRAINING_JOB_NOT_FOUND",
+                "queued model retraining job not found",
+            )
+        })?;
+    record_model_retraining_audit(&state, &actor, &job, "model.retraining.claimed")
         .await
         .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(job))

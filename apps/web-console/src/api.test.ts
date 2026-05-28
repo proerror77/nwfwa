@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveRule,
   backtestRule,
+  claimNextModelRetrainingJob,
   completeModelRetrainingJob,
   createAuditSample,
   discoverRules,
@@ -173,6 +174,10 @@ describe("ops API helpers", () => {
       { status: "running", actor: "trainer-worker", notes: "started" },
       "dev-secret",
     );
+    await claimNextModelRetrainingJob(
+      { actor: "trainer-worker", model_key: "baseline_fwa", notes: "claim next" },
+      "dev-secret",
+    );
     await completeModelRetrainingJob(
       "job_1",
       {
@@ -233,6 +238,17 @@ describe("ops API helpers", () => {
           status: "running",
           actor: "trainer-worker",
           notes: "started",
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/model-retraining-jobs/claim-next",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          actor: "trainer-worker",
+          model_key: "baseline_fwa",
+          notes: "claim next",
         }),
       }),
     );

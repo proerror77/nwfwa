@@ -44,6 +44,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/models/{model_key}/retraining-readiness",
         "/api/v1/ops/models/{model_key}/retraining-jobs",
         "/api/v1/ops/model-retraining-jobs/{job_id}/status",
+        "/api/v1/ops/model-retraining-jobs/claim-next",
         "/api/v1/ops/model-retraining-jobs/{job_id}/output",
         "/api/v1/ops/models/{model_key}/promotion-reviews",
         "/api/v1/ops/models/{model_key}/rollback",
@@ -147,6 +148,13 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["CompleteModelRetrainingJobResponse"]["properties"]
             ["candidate_model"]["$ref"],
         "#/components/schemas/ModelVersion"
+    );
+    assert!(
+        schema["components"]["schemas"]["ClaimModelRetrainingJobRequest"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "actor")
     );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]

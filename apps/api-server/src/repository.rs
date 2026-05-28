@@ -1221,6 +1221,13 @@ pub trait ScoringRepository: Send + Sync {
         job_id: &str,
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
 
+    async fn claim_next_model_retraining_job(
+        &self,
+        model_key: Option<&str>,
+        actor: &str,
+        status_note: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
+
     async fn update_model_retraining_job_status(
         &self,
         job_id: &str,
@@ -1918,6 +1925,32 @@ impl ScoringRepository for InMemoryScoringRepository {
         job_id: &str,
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
         Ok(self.model_retraining_jobs.lock().await.get(job_id).cloned())
+    }
+
+    async fn claim_next_model_retraining_job(
+        &self,
+        model_key: Option<&str>,
+        actor: &str,
+        status_note: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        let mut jobs = self.model_retraining_jobs.lock().await;
+        let next_job_id = jobs
+            .values()
+            .filter(|job| job.status == "queued")
+            .filter(|job| model_key.map(|key| job.model_key == key).unwrap_or(true))
+            .min_by(|left, right| left.created_at.cmp(&right.created_at))
+            .map(|job| job.job_id.clone());
+        let Some(job_id) = next_job_id else {
+            return Ok(None);
+        };
+        let Some(job) = jobs.get_mut(&job_id) else {
+            return Ok(None);
+        };
+        job.status = "running".into();
+        job.updated_by = actor.to_string();
+        job.status_note = status_note.to_string();
+        job.updated_at = Some(chrono::Utc::now().to_rfc3339());
+        Ok(Some(job.clone()))
     }
 
     async fn update_model_retraining_job_status(
@@ -4273,6 +4306,41 @@ impl ScoringRepository for PostgresScoringRepository {
              WHERE id = $1::uuid",
         )
         .bind(job_id)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(model_retraining_job_from_pg_row))
+    }
+
+    async fn claim_next_model_retraining_job(
+        &self,
+        model_key: Option<&str>,
+        actor: &str,
+        status_note: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        let row = sqlx::query(
+            "WITH next_job AS (
+                 SELECT id
+                 FROM model_retraining_jobs
+                 WHERE status = 'queued'
+                   AND ($3::text IS NULL OR model_key = $3)
+                 ORDER BY created_at ASC
+                 LIMIT 1
+                 FOR UPDATE SKIP LOCKED
+             )
+             UPDATE model_retraining_jobs
+             SET status = 'running', updated_by = $1, status_note = $2, updated_at = now()
+             WHERE id = (SELECT id FROM next_job)
+             RETURNING id::text AS job_id, model_key, model_version, status, requested_by, request_notes,
+                       status_note, updated_by, readiness_recommendation, latest_evaluation_id,
+                       source_dataset_id, source_data_quality_score, source_data_quality_status,
+                       trigger_summary_json, blocker_summary_json, candidate_model_version,
+                       candidate_artifact_uri, candidate_endpoint_url, validation_report_uri,
+                       output_evaluation_id, created_at, updated_at",
+        )
+        .bind(actor)
+        .bind(status_note)
+        .bind(model_key)
         .fetch_optional(&self.pool)
         .await?;
 

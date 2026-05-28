@@ -22,6 +22,26 @@ async fn main() -> anyhow::Result<()> {
                 "parquet profile written"
             );
         }
+        "claim-retraining-job" => {
+            let api_url = take_flag_value(&mut args, "--api-url")?;
+            let api_key = take_flag_value(&mut args, "--api-key")?;
+            let actor = take_flag_value(&mut args, "--actor")?;
+            let model_key = take_optional_flag_value(&mut args, "--model-key")?;
+            let notes = take_optional_flag_value(&mut args, "--notes")?
+                .unwrap_or_else(|| "Worker claimed retraining job.".into());
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let job = worker::claim_next_retraining_job(
+                &api_url,
+                &api_key,
+                &actor,
+                model_key.as_deref(),
+                &notes,
+            )
+            .await?;
+            println!("{}", serde_json::to_string_pretty(&job)?);
+        }
         command => anyhow::bail!("unknown worker command: {command}"),
     }
     Ok(())
@@ -36,4 +56,15 @@ fn take_flag_value(args: &mut Vec<String>, flag: &str) -> anyhow::Result<String>
         anyhow::bail!("missing value for flag {flag}");
     }
     Ok(args.remove(index))
+}
+
+fn take_optional_flag_value(args: &mut Vec<String>, flag: &str) -> anyhow::Result<Option<String>> {
+    let Some(index) = args.iter().position(|arg| arg == flag) else {
+        return Ok(None);
+    };
+    args.remove(index);
+    if index >= args.len() {
+        anyhow::bail!("missing value for flag {flag}");
+    }
+    Ok(Some(args.remove(index)))
 }

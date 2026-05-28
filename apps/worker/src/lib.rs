@@ -7,6 +7,56 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct ClaimedRetrainingJob {
+    pub job_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub status: String,
+    pub updated_by: String,
+    pub status_note: String,
+}
+
+#[derive(Debug, Serialize)]
+struct ClaimRetrainingJobPayload<'a> {
+    actor: &'a str,
+    notes: &'a str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    model_key: Option<&'a str>,
+}
+
+pub async fn claim_next_retraining_job(
+    api_base_url: &str,
+    api_key: &str,
+    actor: &str,
+    model_key: Option<&str>,
+    notes: &str,
+) -> anyhow::Result<ClaimedRetrainingJob> {
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/model-retraining-jobs/claim-next",
+        ))
+        .header("x-api-key", api_key)
+        .json(&ClaimRetrainingJobPayload {
+            actor,
+            notes,
+            model_key,
+        })
+        .send()
+        .await
+        .context("claim next model retraining job")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("claim next model retraining job failed with {status}: {body}");
+    }
+    response
+        .json::<ClaimedRetrainingJob>()
+        .await
+        .context("parse claimed retraining job response")
+}
+
 #[derive(Debug, Clone, Deserialize)]
 pub struct ParquetDatasetManifest {
     pub source_key: Option<String>,
@@ -403,6 +453,10 @@ fn reject_csv_uri(uri: &str) -> anyhow::Result<()> {
     Ok(())
 }
 
+fn api_url(base_url: &str, path: &str) -> String {
+    format!("{}{}", base_url.trim_end_matches('/'), path)
+}
+
 fn resolve_parquet_files(base_dir: &Path, data_uri: &str) -> anyhow::Result<Vec<PathBuf>> {
     let path = PathBuf::from(data_uri);
     let path = if path.is_absolute() {
@@ -577,6 +631,17 @@ mod tests {
         sync::Arc,
         time::{SystemTime, UNIX_EPOCH},
     };
+
+    #[test]
+    fn builds_worker_api_url_without_double_slashes() {
+        assert_eq!(
+            api_url(
+                "http://127.0.0.1:8080/",
+                "/api/v1/ops/model-retraining-jobs/claim-next"
+            ),
+            "http://127.0.0.1:8080/api/v1/ops/model-retraining-jobs/claim-next"
+        );
+    }
 
     #[test]
     fn profiles_parquet_manifest_and_writes_schema_and_profile() {
