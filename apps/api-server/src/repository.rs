@@ -7618,6 +7618,8 @@ fn apply_rule_status(detail: &mut RuleDetailRecord, statuses: &HashMap<String, S
 fn parse_recommended_action(value: &str) -> RecommendedAction {
     match value {
         "AutoApprove" => RecommendedAction::AutoApprove,
+        "QaSample" => RecommendedAction::QaSample,
+        "RequestEvidence" => RecommendedAction::RequestEvidence,
         "EscalateInvestigation" => RecommendedAction::EscalateInvestigation,
         _ => RecommendedAction::ManualReview,
     }

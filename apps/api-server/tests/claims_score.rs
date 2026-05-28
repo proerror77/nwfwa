@@ -919,6 +919,16 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         response_properties["review_mode"]["enum"],
         serde_json::json!(["pre_payment", "post_payment", "both"])
     );
+    assert_eq!(
+        response_properties["recommended_action"]["enum"],
+        serde_json::json!([
+            "AutoApprove",
+            "QaSample",
+            "ManualReview",
+            "RequestEvidence",
+            "EscalateInvestigation"
+        ])
+    );
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderProfileAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphAssessment"].is_object());

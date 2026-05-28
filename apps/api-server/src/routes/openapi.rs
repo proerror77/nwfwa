@@ -1753,7 +1753,13 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "recommended_action": {
                             "type": "string",
-                            "enum": ["AutoApprove", "ManualReview", "EscalateInvestigation"]
+                            "enum": [
+                                "AutoApprove",
+                                "QaSample",
+                                "ManualReview",
+                                "RequestEvidence",
+                                "EscalateInvestigation"
+                            ]
                         },
                         "confidence_score": {
                             "type": "integer",

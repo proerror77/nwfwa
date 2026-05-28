@@ -203,11 +203,12 @@ fn confidence_level(score: u8) -> &'static str {
 
 fn recommended_action(risk_level: &str, confidence_score: u8) -> RecommendedAction {
     if confidence_score < 60 {
-        return RecommendedAction::ManualReview;
+        return RecommendedAction::RequestEvidence;
     }
     match risk_level {
         "Low" => RecommendedAction::AutoApprove,
-        "Medium" | "High" => RecommendedAction::ManualReview,
+        "Medium" => RecommendedAction::QaSample,
+        "High" => RecommendedAction::ManualReview,
         "Critical" => RecommendedAction::EscalateInvestigation,
         _ => RecommendedAction::ManualReview,
     }
@@ -298,6 +299,48 @@ mod tests {
     use fwa_features::FeatureValue;
     use fwa_ml_runtime::ModelExplanation;
     use std::collections::BTreeMap;
+
+    fn feature(value: serde_json::Value) -> FeatureValue {
+        FeatureValue {
+            name: "test_feature".into(),
+            version: 1,
+            value,
+            evidence_refs: vec![],
+        }
+    }
+
+    fn model(score: u8) -> ModelScore {
+        ModelScore {
+            model_key: "baseline".into(),
+            model_version: "0.1.0".into(),
+            runtime_kind: "heuristic".into(),
+            execution_provider: "cpu".into(),
+            score,
+            label: "TEST".into(),
+            explanations: vec![],
+            metadata: serde_json::json!({}),
+            latency_ms: 0,
+        }
+    }
+
+    fn anomaly(score: u8) -> AnomalyScore {
+        AnomalyScore {
+            score,
+            anomaly_type: "test_pattern".into(),
+            explanations: vec![],
+        }
+    }
+
+    fn rule(score: u8) -> RuleMatch {
+        RuleMatch {
+            rule_id: "rule_1".into(),
+            rule_version: 1,
+            score_contribution: score,
+            alert_code: "TEST".into(),
+            reason: "test rule".into(),
+            recommended_action: RecommendedAction::ManualReview,
+        }
+    }
 
     #[test]
     fn aggregates_seven_layer_scores() {
@@ -446,5 +489,35 @@ mod tests {
             decision.recommended_action,
             RecommendedAction::EscalateInvestigation
         );
+    }
+
+    #[test]
+    fn routes_medium_risk_to_qa_sample() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount_peer_percentile".into(),
+            feature(serde_json::json!(95)),
+        );
+        let rules = vec![rule(80)];
+
+        let decision = aggregate(&features, &rules, &model(80), &anomaly(0), 0);
+
+        assert_eq!(decision.risk_level, "Medium");
+        assert_eq!(decision.confidence, "High");
+        assert_eq!(decision.recommended_action, RecommendedAction::QaSample);
+        assert!(decision.routing_reason.contains("QA 抽样"));
+    }
+
+    #[test]
+    fn routes_low_confidence_to_evidence_request() {
+        let features = BTreeMap::new();
+        let decision = aggregate(&features, &[], &model(20), &anomaly(0), 0);
+
+        assert_eq!(decision.confidence, "Low");
+        assert_eq!(
+            decision.recommended_action,
+            RecommendedAction::RequestEvidence
+        );
+        assert!(decision.routing_reason.contains("补材料"));
     }
 }
