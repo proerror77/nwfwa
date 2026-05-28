@@ -1259,6 +1259,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "layers",
                         "clinical_evidence",
                         "provider_profile",
+                        "similar_cases",
                         "evidence_refs"
                     ],
                     "properties": {
@@ -1326,6 +1327,12 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "provider_profile": {
                             "$ref": "#/components/schemas/ProviderProfileAssessment"
+                        },
+                        "similar_cases": {
+                            "type": "array",
+                            "items": {
+                                "$ref": "#/components/schemas/SimilarCase"
+                            }
                         },
                         "evidence_refs": {
                             "type": "array",

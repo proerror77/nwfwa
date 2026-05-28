@@ -420,6 +420,100 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
 }
 
 #[tokio::test]
+async fn scoring_includes_similar_case_signal_from_knowledge_base() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-SIMILAR-CASE",
+                "claim_amount": "9000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              },
+              "items": [
+                {
+                  "item_code": "IMG-902",
+                  "item_type": "procedure",
+                  "description": "High cost imaging",
+                  "quantity": 1,
+                  "unit_amount": "9000",
+                  "total_amount": "9000"
+                }
+              ],
+              "member": {
+                "external_member_id": "MBR-SIMILAR-CASE"
+              },
+              "policy": {
+                "external_policy_id": "POL-SIMILAR-CASE",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              },
+              "provider": {
+                "external_provider_id": "PRV-SIMILAR-CASE",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "Shanghai",
+                "risk_tier": "High"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert!(body["scores"]["similar_case_score"].as_u64().unwrap() >= 90);
+    let similar_cases = body["similar_cases"]
+        .as_array()
+        .expect("scoring response should include similar cases");
+    assert_eq!(similar_cases[0]["case_id"], "KC-1001");
+    assert!(similar_cases[0]["provenance_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-SIMILAR-CASE")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(
+        scoring_event["payload"]["similar_cases"][0]["case_id"],
+        "KC-1001"
+    );
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+}
+
+#[tokio::test]
 async fn scoring_uses_only_active_rule_versions() {
     let app = build_app(test_config());
 
@@ -619,6 +713,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "evidence_refs",
         "clinical_evidence",
         "provider_profile",
+        "similar_cases",
         "layers",
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");

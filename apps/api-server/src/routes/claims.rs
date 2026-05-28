@@ -1,7 +1,7 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{PersistedAuditEvent, PersistedScoringRun},
+    repository::{PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery, SimilarCaseRecord},
 };
 use axum::{extract::State, http::HeaderMap, Json};
 use chrono::NaiveDate;
@@ -12,12 +12,12 @@ use fwa_clinical::{
     assess_clinical_evidence, ClinicalDocumentEvidence, ClinicalEvidenceAssessment,
 };
 use fwa_core::*;
-use fwa_features::{calculate_features, EvidenceRef, FeatureValue};
+use fwa_features::{calculate_features, EvidenceRef, FeatureMap, FeatureValue};
 use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
 use fwa_provider::{
     assess_provider_profile, ProviderProfileAssessment, ProviderProfileInput, ProviderProfileWindow,
 };
-use fwa_rules::evaluate_rules;
+use fwa_rules::{evaluate_rules, RuleMatch};
 use fwa_scoring::DetectionLayerScore;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -132,6 +132,7 @@ pub struct ScoreClaimResponse {
     pub layers: Vec<DetectionLayerScore>,
     pub clinical_evidence: ClinicalEvidenceAssessment,
     pub provider_profile: ProviderProfileAssessment,
+    pub similar_cases: Vec<SimilarCaseRecord>,
     pub evidence_refs: Vec<serde_json::Value>,
 }
 
@@ -294,6 +295,24 @@ pub async fn score_claim(
     let rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
     let anomaly_score = detect_anomaly(&features);
+    let similar_cases = state
+        .repository
+        .search_similar_cases(SimilarCaseQuery {
+            claim_id: Some(context.claim.external_claim_id.clone()),
+            diagnosis_code: context.claim.diagnosis_code.clone(),
+            provider_region: context.provider.region.clone(),
+            tags: similar_case_tags(&features, &rule_matches),
+        })
+        .await
+        .map_err(internal_error("SIMILAR_CASE_SEARCH_FAILED"))?;
+    let similar_case_score = similar_case_score(&similar_cases);
+    evidence_refs.extend(
+        similar_cases
+            .iter()
+            .flat_map(|case| case.provenance_refs.iter().chain(case.evidence_refs.iter()))
+            .cloned()
+            .map(serde_json::Value::String),
+    );
     let model_score = match state
         .scorer
         .score(ModelScoreRequest {
@@ -322,7 +341,13 @@ pub async fn score_claim(
             return Err(model_runtime_error(error));
         }
     };
-    let decision = fwa_scoring::aggregate(&features, &rule_matches, &model_score, &anomaly_score);
+    let decision = fwa_scoring::aggregate(
+        &features,
+        &rule_matches,
+        &model_score,
+        &anomaly_score,
+        similar_case_score,
+    );
     let audit_id = AuditEventId::new();
     let alerts: Vec<AlertResponse> = rule_matches
         .iter()
@@ -358,6 +383,7 @@ pub async fn score_claim(
         "layers": &decision.layers,
         "clinical_evidence": &clinical_evidence,
         "provider_profile": &provider_profile,
+        "similar_cases": &similar_cases,
         "triggered_rules": &alerts,
         "event_type": "scoring.completed",
         "event_status": "succeeded"
@@ -416,8 +442,63 @@ pub async fn score_claim(
         layers: decision.layers,
         clinical_evidence,
         provider_profile,
+        similar_cases,
         evidence_refs,
     }))
+}
+
+fn similar_case_score(similar_cases: &[SimilarCaseRecord]) -> u8 {
+    similar_cases
+        .iter()
+        .map(|case| (case.similarity_score * 100.0).round().clamp(0.0, 100.0) as u8)
+        .max()
+        .unwrap_or(0)
+}
+
+fn similar_case_tags(features: &FeatureMap, rule_matches: &[RuleMatch]) -> Vec<String> {
+    let mut tags = std::collections::BTreeSet::new();
+    if numeric_feature(features, "days_since_policy_start").unwrap_or(f64::MAX) <= 7.0 {
+        tags.insert("early_claim".to_string());
+    }
+    if numeric_feature(features, "claim_amount_peer_percentile").unwrap_or(0.0) >= 95.0
+        || numeric_feature(features, "claim_amount_to_limit_ratio").unwrap_or(0.0) >= 0.8
+    {
+        tags.insert("high_amount".to_string());
+    }
+    if numeric_feature(features, "diagnosis_procedure_match_score").unwrap_or(1.0) < 0.5 {
+        tags.insert("medical_mismatch".to_string());
+    }
+    if numeric_feature(features, "provider_profile_score").unwrap_or(0.0) >= 70.0 {
+        tags.insert("provider_pattern".to_string());
+    }
+    if numeric_feature(features, "high_cost_item_ratio").unwrap_or(0.0) >= 0.6 {
+        tags.insert("high_cost_item".to_string());
+    }
+    for rule_match in rule_matches {
+        let alert_code = rule_match.alert_code.to_ascii_lowercase();
+        if alert_code.contains("early") {
+            tags.insert("early_claim".to_string());
+        }
+        if alert_code.contains("amount") || alert_code.contains("high") {
+            tags.insert("high_amount".to_string());
+        }
+        if alert_code.contains("medical") || alert_code.contains("diagnosis") {
+            tags.insert("medical_mismatch".to_string());
+        }
+        if alert_code.contains("provider") {
+            tags.insert("provider_pattern".to_string());
+        }
+    }
+    tags.into_iter().collect()
+}
+
+fn numeric_feature(features: &FeatureMap, name: &str) -> Option<f64> {
+    features.get(name).and_then(|feature| {
+        feature
+            .value
+            .as_f64()
+            .or_else(|| feature.value.as_i64().map(|value| value as f64))
+    })
 }
 
 fn duplicate_payload_fields(

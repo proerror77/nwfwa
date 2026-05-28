@@ -39,6 +39,7 @@ pub fn aggregate(
     rule_matches: &[RuleMatch],
     model_score: &ModelScore,
     anomaly_score: &AnomalyScore,
+    similar_case_score: u8,
 ) -> ScoringDecision {
     let peer_deviation_score = amount_ratio_score(features);
     let rule_score = rule_matches
@@ -48,7 +49,6 @@ pub fn aggregate(
         .min(100) as u8;
     let medical_reasonableness_score = medical_reasonableness_score(features);
     let provider_network_score = provider_network_score(features);
-    let similar_case_score = 0;
     let final_score_value = weighted_final_score(&[
         (peer_deviation_score, 0.15),
         (rule_score, 0.20),
@@ -56,6 +56,7 @@ pub fn aggregate(
         (model_score.score, 0.25),
         (medical_reasonableness_score, 0.10),
         (provider_network_score, 0.10),
+        (similar_case_score, 0.05),
     ]);
     let risk_score = RiskScore::new(final_score_value).expect("clamped score is valid");
     let rag = RiskLevel::from_score(risk_score);
@@ -127,6 +128,9 @@ pub fn aggregate(
     }
     if provider_network_score >= 70 {
         top_reasons.push("Provider 风险画像偏高".into());
+    }
+    if similar_case_score >= 70 {
+        top_reasons.push("命中相似历史 FWA 案例信号".into());
     }
     top_reasons.extend(
         anomaly_score
@@ -390,14 +394,14 @@ mod tests {
             }],
         };
 
-        let decision = aggregate(&features, &rules, &model, &anomaly);
+        let decision = aggregate(&features, &rules, &model, &anomaly, 90);
         assert_eq!(decision.peer_deviation_score, 95);
         assert_eq!(decision.rule_score, 80);
         assert_eq!(decision.anomaly_score, 72);
         assert_eq!(decision.ml_score, 90);
         assert_eq!(decision.medical_reasonableness_score, 90);
         assert_eq!(decision.provider_network_score, 80);
-        assert_eq!(decision.similar_case_score, 0);
+        assert_eq!(decision.similar_case_score, 90);
         let layer_ids = decision
             .layers
             .iter()
