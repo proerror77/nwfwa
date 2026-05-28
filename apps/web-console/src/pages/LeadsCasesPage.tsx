@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listCases, listLeads, triageLead } from "../api";
+import { listCases, listLeads, triageLead, updateCaseStatus } from "../api";
 
 type LeadRecord = {
   lead_id: string;
@@ -69,6 +69,9 @@ export function LeadsCasesPage() {
   const [reviewer, setReviewer] = useState("medical-reviewer-1");
   const [priority, setPriority] = useState("high");
   const [notes, setNotes] = useState("Open investigation from high-risk FWA lead.");
+  const [selectedCaseId, setSelectedCaseId] = useState("");
+  const [caseStatus, setCaseStatus] = useState("investigating");
+  const [caseNotes, setCaseNotes] = useState("Advance case workflow after reviewer action.");
   const queryClient = useQueryClient();
 
   const leadsQuery = useQuery({
@@ -84,6 +87,12 @@ export function LeadsCasesPage() {
       leadsQuery.data?.leads.find((lead) => lead.lead_id === selectedLeadId) ??
       leadsQuery.data?.leads[0],
     [leadsQuery.data?.leads, selectedLeadId],
+  );
+  const selectedCase = useMemo(
+    () =>
+      casesQuery.data?.cases.find((item) => item.case_id === selectedCaseId) ??
+      casesQuery.data?.cases[0],
+    [casesQuery.data?.cases, selectedCaseId],
   );
   const summary = buildLeadSummary(leadsQuery.data, casesQuery.data);
   const triageMutation = useMutation({
@@ -103,6 +112,24 @@ export function LeadsCasesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
+      queryClient.invalidateQueries({ queryKey: ["cases"] });
+    },
+  });
+  const caseStatusMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedCase) throw new Error("No case selected");
+      return updateCaseStatus(
+        selectedCase.case_id,
+        {
+          status: caseStatus,
+          actor_id: assignee,
+          notes: caseNotes,
+          evidence_refs: [`case_workflow:${caseStatus}`],
+        },
+        apiKey,
+      );
+    },
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
     },
   });
@@ -235,6 +262,44 @@ export function LeadsCasesPage() {
       <div className="panel wide-panel">
         <h2>Cases</h2>
         {casesQuery.error ? <pre className="error">{String(casesQuery.error.message)}</pre> : null}
+        <div className="form-grid">
+          <label>
+            Case
+            <select
+              value={selectedCase?.case_id ?? ""}
+              onChange={(event) => setSelectedCaseId(event.target.value)}
+            >
+              {casesQuery.data?.cases.map((item) => (
+                <option key={item.case_id} value={item.case_id}>
+                  {item.case_id}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Status
+            <select value={caseStatus} onChange={(event) => setCaseStatus(event.target.value)}>
+              <option value="investigating">investigating</option>
+              <option value="pending_evidence">pending_evidence</option>
+              <option value="confirmed">confirmed</option>
+              <option value="rejected">rejected</option>
+              <option value="closed">closed</option>
+            </select>
+          </label>
+          <label>
+            Status Notes
+            <input value={caseNotes} onChange={(event) => setCaseNotes(event.target.value)} />
+          </label>
+        </div>
+        <button onClick={() => caseStatusMutation.mutate()} disabled={caseStatusMutation.isPending}>
+          Update Case Status
+        </button>
+        {caseStatusMutation.error ? (
+          <pre className="error">{String(caseStatusMutation.error.message)}</pre>
+        ) : null}
+        {caseStatusMutation.data ? (
+          <pre>{JSON.stringify(caseStatusMutation.data, null, 2)}</pre>
+        ) : null}
         <div className="case-grid">
           {casesQuery.data?.cases.map((item) => (
             <div className="factor-card" key={item.case_id}>

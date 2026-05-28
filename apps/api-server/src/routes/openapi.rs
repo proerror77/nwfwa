@@ -495,6 +495,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/cases/{case_id}/status": {
+                "post": {
+                    "summary": "Update investigation case workflow status",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "case_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/UpdateCaseStatusRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Updated investigation case status with audit id",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/UpdateCaseStatusResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/audit-samples": {
                 "get": {
                     "summary": "List governed audit sampling runs",
@@ -2193,6 +2225,27 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 },
                 "TriageLeadResponse": {
+                    "type": "object",
+                    "required": ["case", "audit_id"],
+                    "properties": {
+                        "case": { "$ref": "#/components/schemas/Case" },
+                        "audit_id": { "type": "string" }
+                    }
+                },
+                "UpdateCaseStatusRequest": {
+                    "type": "object",
+                    "required": ["status", "actor_id", "notes", "evidence_refs"],
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["triage", "investigating", "pending_evidence", "confirmed", "rejected", "closed"]
+                        },
+                        "actor_id": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "UpdateCaseStatusResponse": {
                     "type": "object",
                     "required": ["case", "audit_id"],
                     "properties": {

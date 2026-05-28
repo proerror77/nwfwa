@@ -1,7 +1,10 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{CaseRecord, LeadRecord, TriageLeadInput, TriageLeadRecord},
+    repository::{
+        CaseRecord, LeadRecord, TriageLeadInput, TriageLeadRecord, UpdateCaseStatusInput,
+        UpdateCaseStatusRecord,
+    },
 };
 use axum::{
     extract::{Path, State},
@@ -68,6 +71,43 @@ pub async fn list_cases(
         .await
         .map_err(internal_error("CASE_LIST_FAILED"))?;
     Ok(Json(CaseListResponse { cases }))
+}
+
+pub async fn update_case_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(case_id): Path<String>,
+    Json(request): Json<UpdateCaseStatusInput>,
+) -> Result<Json<UpdateCaseStatusRecord>, ApiError> {
+    authorize(&state, &headers)?;
+    if !is_supported_case_status(&request.status) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_CASE_STATUS",
+            "case status must be one of triage, investigating, pending_evidence, confirmed, rejected, closed",
+        ));
+    }
+    if request.actor_id.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CASE_STATUS_UPDATE",
+            "actor_id is required",
+        ));
+    }
+    let record = state
+        .repository
+        .update_case_status(&case_id, request)
+        .await
+        .map_err(internal_error("CASE_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "CASE_NOT_FOUND", "case not found"))?;
+    Ok(Json(record))
+}
+
+fn is_supported_case_status(status: &str) -> bool {
+    matches!(
+        status,
+        "triage" | "investigating" | "pending_evidence" | "confirmed" | "rejected" | "closed"
+    )
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {

@@ -52,6 +52,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/leads",
         "/api/v1/ops/leads/{lead_id}/triage",
         "/api/v1/ops/cases",
+        "/api/v1/ops/cases/{case_id}/status",
         "/api/v1/ops/audit-samples",
         "/api/v1/ops/agent-runs",
         "/api/v1/ops/agent-runs/{agent_run_id}/approvals",

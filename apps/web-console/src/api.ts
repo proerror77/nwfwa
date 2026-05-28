@@ -161,6 +161,13 @@ export async function listCases(apiKey: string) {
   return requestJson("/api/v1/ops/cases", apiKey);
 }
 
+export async function updateCaseStatus(caseId: string, payload: unknown, apiKey: string) {
+  return requestJson(`/api/v1/ops/cases/${encodeURIComponent(caseId)}/status`, apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listAuditSamples(apiKey: string) {
   return requestJson("/api/v1/ops/audit-samples", apiKey);
 }

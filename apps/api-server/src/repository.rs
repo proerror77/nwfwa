@@ -206,6 +206,20 @@ pub struct TriageLeadRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCaseStatusInput {
+    pub status: String,
+    pub actor_id: String,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct UpdateCaseStatusRecord {
+    pub case: CaseRecord,
+    pub audit_id: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditSampleLeadRecord {
     pub lead_id: String,
     pub claim_id: String,
@@ -919,6 +933,12 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>>;
 
+    async fn update_case_status(
+        &self,
+        case_id: &str,
+        input: UpdateCaseStatusInput,
+    ) -> anyhow::Result<Option<UpdateCaseStatusRecord>>;
+
     async fn create_audit_sample(
         &self,
         input: CreateAuditSampleInput,
@@ -1384,6 +1404,46 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect::<Vec<_>>();
         cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
         Ok(cases)
+    }
+
+    async fn update_case_status(
+        &self,
+        case_id: &str,
+        input: UpdateCaseStatusInput,
+    ) -> anyhow::Result<Option<UpdateCaseStatusRecord>> {
+        let mut cases = self.cases.lock().await;
+        let Some(case) = cases.get_mut(case_id) else {
+            return Ok(None);
+        };
+        let from_status = case.status.clone();
+        case.status = input.status.clone();
+        let case = case.clone();
+        let audit_id = AuditEventId::new().to_string();
+        self.audit_events.lock().await.push(PersistedAuditEvent {
+            audit_id: audit_id.clone(),
+            run_id: format!("case_status_{}", case.case_id),
+            claim_id: case.claim_id.clone(),
+            source_system: case.source_system.clone(),
+            actor_id: input.actor_id.clone(),
+            actor_role: "fwa_operator".into(),
+            event_type: "case.status.updated".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Case status updated: {} -> {}", from_status, case.status),
+            payload: serde_json::json!({
+                "claim_id": case.claim_id,
+                "case_id": case.case_id,
+                "lead_id": case.lead_id,
+                "from_status": from_status,
+                "to_status": case.status,
+                "notes": input.notes
+            }),
+            evidence_refs: input
+                .evidence_refs
+                .iter()
+                .map(|value| Value::String(value.clone()))
+                .collect(),
+        });
+        Ok(Some(UpdateCaseStatusRecord { case, audit_id }))
     }
 
     async fn create_audit_sample(
@@ -3089,6 +3149,62 @@ impl ScoringRepository for PostgresScoringRepository {
 
     async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
         load_cases(&self.pool).await
+    }
+
+    async fn update_case_status(
+        &self,
+        case_id: &str,
+        input: UpdateCaseStatusInput,
+    ) -> anyhow::Result<Option<UpdateCaseStatusRecord>> {
+        let mut tx = self.pool.begin().await?;
+        let case = load_case_in_tx(&mut tx, case_id).await?;
+        let Some(mut case) = case else {
+            return Ok(None);
+        };
+        let from_status = case.status.clone();
+        case.status = input.status.clone();
+        sqlx::query(
+            "UPDATE investigation_cases
+             SET status = $2, updated_at = now()
+             WHERE case_id = $1",
+        )
+        .bind(&case.case_id)
+        .bind(&case.status)
+        .execute(&mut *tx)
+        .await?;
+
+        let audit_id = AuditEventId::new().to_string();
+        insert_audit_event(
+            &mut tx,
+            &PersistedAuditEvent {
+                audit_id: audit_id.clone(),
+                run_id: format!("case_status_{}", case.case_id),
+                claim_id: case.claim_id.clone(),
+                source_system: case.source_system.clone(),
+                actor_id: input.actor_id.clone(),
+                actor_role: "fwa_operator".into(),
+                event_type: "case.status.updated".into(),
+                event_status: "succeeded".into(),
+                summary: format!("Case status updated: {} -> {}", from_status, case.status),
+                payload: serde_json::json!({
+                    "claim_id": case.claim_id,
+                    "case_id": case.case_id,
+                    "lead_id": case.lead_id,
+                    "from_status": from_status,
+                    "to_status": case.status,
+                    "notes": input.notes
+                }),
+                evidence_refs: input
+                    .evidence_refs
+                    .iter()
+                    .map(|value| Value::String(value.clone()))
+                    .collect(),
+            },
+            None,
+        )
+        .await?;
+        tx.commit().await?;
+        Ok(Some(UpdateCaseStatusRecord { case, audit_id }))
     }
 
     async fn create_audit_sample(
@@ -4882,42 +4998,57 @@ async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
     )
     .fetch_all(pool)
     .await?;
-    Ok(rows
-        .into_iter()
-        .map(
-            |(
-                case_id,
-                lead_id,
-                claim_id,
-                member_id,
-                provider_id,
-                source_system,
-                scheme_family,
-                lead_source,
-                status,
-                assignee,
-                reviewer,
-                priority,
-                routing_reason,
-                evidence_package,
-            )| CaseRecord {
-                case_id,
-                lead_id,
-                claim_id,
-                member_id,
-                provider_id,
-                source_system,
-                scheme_family,
-                lead_source,
-                status,
-                assignee,
-                reviewer,
-                priority,
-                routing_reason,
-                evidence_package,
-            },
-        )
-        .collect())
+    Ok(rows.into_iter().map(case_from_row).collect())
+}
+
+async fn load_case_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    case_id: &str,
+) -> anyhow::Result<Option<CaseRecord>> {
+    let row: Option<CaseRow> = sqlx::query_as(
+        "SELECT case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json
+         FROM investigation_cases
+         WHERE case_id = $1",
+    )
+    .bind(case_id)
+    .fetch_optional(&mut **tx)
+    .await?;
+    Ok(row.map(case_from_row))
+}
+
+fn case_from_row(row: CaseRow) -> CaseRecord {
+    let (
+        case_id,
+        lead_id,
+        claim_id,
+        member_id,
+        provider_id,
+        source_system,
+        scheme_family,
+        lead_source,
+        status,
+        assignee,
+        reviewer,
+        priority,
+        routing_reason,
+        evidence_package,
+    ) = row;
+    CaseRecord {
+        case_id,
+        lead_id,
+        claim_id,
+        member_id,
+        provider_id,
+        source_system,
+        scheme_family,
+        lead_source,
+        status,
+        assignee,
+        reviewer,
+        priority,
+        routing_reason,
+        evidence_package,
+    }
 }
 
 pub fn default_runtime_rules() -> Vec<Rule> {

@@ -54,6 +54,10 @@ pub fn build_app_with_parts(
         )
         .route("/api/v1/ops/cases", get(ops_cases::list_cases))
         .route(
+            "/api/v1/ops/cases/:case_id/status",
+            post(ops_cases::update_case_status),
+        )
+        .route(
             "/api/v1/ops/audit-samples",
             get(ops_sampling::list_audit_samples).post(ops_sampling::create_audit_sample),
         )
