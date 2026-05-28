@@ -271,6 +271,97 @@ async fn triages_lead_without_opening_case_for_non_case_dispositions() {
 }
 
 #[tokio::test]
+async fn merges_lead_into_target_without_opening_case() {
+    let app = build_app(test_config());
+    score_high_risk_claim(app.clone(), "CLM-LEAD-MERGE-SOURCE").await;
+    score_high_risk_claim(app.clone(), "CLM-LEAD-MERGE-TARGET").await;
+
+    let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let source_lead_id = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-LEAD-MERGE-SOURCE")
+        .unwrap()["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let target_lead_id = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-LEAD-MERGE-TARGET")
+        .unwrap()["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let (status, missing_target) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{source_lead_id}/triage"),
+        r#"{
+          "decision": "merge_lead",
+          "assignee": "siu-reviewer-5",
+          "reviewer": "medical-reviewer-5",
+          "priority": "medium",
+          "notes": "Missing merge target should be rejected before repository mutation."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(missing_target["code"], "INVALID_MERGE_TARGET_LEAD");
+
+    let (status, merged) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{source_lead_id}/triage"),
+        &format!(
+            r#"{{
+              "decision": "merge_lead",
+              "merge_target_lead_id": "{target_lead_id}",
+              "assignee": "siu-reviewer-5",
+              "reviewer": "medical-reviewer-5",
+              "priority": "medium",
+              "notes": "Merge duplicate lead into the target lead for one investigation path."
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(merged["lead"]["status"], "closed");
+    assert_eq!(merged["lead"]["disposition"], "merged");
+    assert!(merged["case"].is_null());
+
+    let (status, cases) = json_request(app.clone(), "GET", "/api/v1/ops/cases", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(cases["cases"].as_array().unwrap().is_empty());
+
+    let (status, audit) = json_request(
+        app,
+        "GET",
+        "/api/v1/audit/claims/CLM-LEAD-MERGE-SOURCE",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let triage_event = audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "lead.triaged")
+        .expect("merge triage should be audited");
+    assert_eq!(triage_event["payload"]["decision"], "merge_lead");
+    assert_eq!(triage_event["payload"]["disposition"], "merged");
+    assert_eq!(
+        triage_event["payload"]["merge_target_lead_id"],
+        target_lead_id
+    );
+    assert!(triage_event["payload"]["case_id"].is_null());
+}
+
+#[tokio::test]
 async fn updates_case_status_with_audit_trail() {
     let app = build_app(test_config());
 

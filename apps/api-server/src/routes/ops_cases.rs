@@ -44,13 +44,7 @@ pub async fn triage_lead(
     Json(request): Json<TriageLeadInput>,
 ) -> Result<Json<TriageLeadRecord>, ApiError> {
     authorize(&state, &headers)?;
-    if !is_supported_triage_decision(&request.decision) {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "UNSUPPORTED_TRIAGE_DECISION",
-            "decision must be one of open_case, reject_lead, or request_evidence",
-        ));
-    }
+    validate_triage_request(&lead_id, &request)?;
     let record = state
         .repository
         .triage_lead(&lead_id, request)
@@ -60,8 +54,39 @@ pub async fn triage_lead(
     Ok(Json(record))
 }
 
-fn is_supported_triage_decision(decision: &str) -> bool {
-    matches!(decision, "open_case" | "reject_lead" | "request_evidence")
+fn validate_triage_request(lead_id: &str, request: &TriageLeadInput) -> Result<(), ApiError> {
+    if !matches!(
+        request.decision.as_str(),
+        "open_case" | "reject_lead" | "request_evidence" | "merge_lead"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_TRIAGE_DECISION",
+            "decision must be one of open_case, reject_lead, request_evidence, or merge_lead",
+        ));
+    }
+    if request.decision == "merge_lead" {
+        let target = request
+            .merge_target_lead_id
+            .as_deref()
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+            .ok_or_else(|| {
+                ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "INVALID_MERGE_TARGET_LEAD",
+                    "merge_target_lead_id is required for merge_lead",
+                )
+            })?;
+        if target == lead_id {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_MERGE_TARGET_LEAD",
+                "merge_target_lead_id must differ from lead_id",
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub async fn list_cases(

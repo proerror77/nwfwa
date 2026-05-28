@@ -3126,8 +3126,9 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "decision": {
                             "type": "string",
-                            "enum": ["open_case", "reject_lead", "request_evidence"]
+                            "enum": ["open_case", "reject_lead", "request_evidence", "merge_lead"]
                         },
+                        "merge_target_lead_id": { "type": ["string", "null"] },
                         "assignee": { "type": "string" },
                         "reviewer": { "type": "string" },
                         "priority": { "type": "string" },

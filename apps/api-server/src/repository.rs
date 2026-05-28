@@ -201,6 +201,7 @@ pub struct CaseRecord {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriageLeadInput {
     pub decision: String,
+    pub merge_target_lead_id: Option<String>,
     pub assignee: String,
     pub reviewer: String,
     pub priority: String,
@@ -1659,6 +1660,9 @@ impl ScoringRepository for InMemoryScoringRepository {
         input: TriageLeadInput,
     ) -> anyhow::Result<Option<TriageLeadRecord>> {
         let mut leads = self.leads.lock().await;
+        if input.decision == "merge_lead" && !merge_target_exists_in_memory(&leads, &input) {
+            return Ok(None);
+        }
         let Some(lead) = leads.get_mut(lead_id) else {
             return Ok(None);
         };
@@ -1692,6 +1696,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 "case_id": case.as_ref().map(|case| case.case_id.clone()),
                 "decision": input.decision.clone(),
                 "disposition": lead.disposition.clone(),
+                "merge_target_lead_id": input.merge_target_lead_id.clone(),
                 "notes": input.notes.clone()
             }),
             evidence_refs: lead
@@ -3744,6 +3749,11 @@ impl ScoringRepository for PostgresScoringRepository {
         let Some(mut lead) = lead else {
             return Ok(None);
         };
+        if input.decision == "merge_lead"
+            && merge_target_lead_in_tx(&mut tx, &input).await?.is_none()
+        {
+            return Ok(None);
+        }
         lead.status = triage_status_for_decision(&input.decision).into();
         lead.disposition = triage_disposition_for_decision(&input.decision).into();
         let case = (input.decision == "open_case").then(|| case_from_lead(&lead, &input));
@@ -3808,6 +3818,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     "case_id": case.as_ref().map(|case| case.case_id.clone()),
                     "decision": input.decision.clone(),
                     "disposition": lead.disposition.clone(),
+                    "merge_target_lead_id": input.merge_target_lead_id.clone(),
                     "notes": input.notes.clone()
                 }),
                 evidence_refs: lead
@@ -6253,6 +6264,7 @@ fn triage_status_for_decision(decision: &str) -> &'static str {
         "open_case" => "triaged",
         "reject_lead" => "closed",
         "request_evidence" => "pending_evidence",
+        "merge_lead" => "closed",
         _ => "triaged",
     }
 }
@@ -6262,7 +6274,33 @@ fn triage_disposition_for_decision(decision: &str) -> &'static str {
         "open_case" => "open_case",
         "reject_lead" => "rejected",
         "request_evidence" => "pending_evidence",
+        "merge_lead" => "merged",
         _ => "pending_triage",
+    }
+}
+
+fn merge_target_lead_id(input: &TriageLeadInput) -> Option<&str> {
+    input
+        .merge_target_lead_id
+        .as_deref()
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+}
+
+fn merge_target_exists_in_memory(
+    leads: &HashMap<String, LeadRecord>,
+    input: &TriageLeadInput,
+) -> bool {
+    merge_target_lead_id(input).is_some_and(|target_lead_id| leads.contains_key(target_lead_id))
+}
+
+async fn merge_target_lead_in_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    input: &TriageLeadInput,
+) -> anyhow::Result<Option<LeadRecord>> {
+    match merge_target_lead_id(input) {
+        Some(target_lead_id) => load_lead_in_tx(tx, target_lead_id).await,
+        None => Ok(None),
     }
 }
 

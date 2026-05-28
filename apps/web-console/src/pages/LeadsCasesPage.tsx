@@ -66,6 +66,7 @@ export function LeadsCasesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedLeadId, setSelectedLeadId] = useState("");
   const [triageDecision, setTriageDecision] = useState("open_case");
+  const [mergeTargetLeadId, setMergeTargetLeadId] = useState("");
   const [assignee, setAssignee] = useState("siu-reviewer-1");
   const [reviewer, setReviewer] = useState("medical-reviewer-1");
   const [priority, setPriority] = useState("high");
@@ -103,6 +104,7 @@ export function LeadsCasesPage() {
         selectedLead.lead_id,
         {
           decision: triageDecision,
+          merge_target_lead_id: mergeTargetLeadId || undefined,
           assignee,
           reviewer,
           priority,
@@ -230,7 +232,15 @@ export function LeadsCasesPage() {
                   <option value="open_case">open_case</option>
                   <option value="request_evidence">request_evidence</option>
                   <option value="reject_lead">reject_lead</option>
+                  <option value="merge_lead">merge_lead</option>
                 </select>
+              </label>
+              <label>
+                Merge Target Lead
+                <input
+                  value={mergeTargetLeadId}
+                  onChange={(event) => setMergeTargetLeadId(event.target.value)}
+                />
               </label>
               <label>
                 Assignee
