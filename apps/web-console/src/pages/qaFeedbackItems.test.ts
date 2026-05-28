@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { filterQaFeedbackItems, summarizeQaFeedbackItems } from "./qaFeedbackItems";
+import {
+  buildQaFeedbackStatusAuditLabel,
+  buildQaFeedbackStatusEvidenceLabel,
+  filterQaFeedbackItems,
+  summarizeQaFeedbackItems,
+} from "./qaFeedbackItems";
 
 const items = [
   {
@@ -40,5 +45,27 @@ describe("QA feedback item helpers", () => {
       highestPriority: "high",
       evidenceBackedCount: 2,
     });
+  });
+
+  it("formats status update audit metadata for operator surfaces", () => {
+    expect(buildQaFeedbackStatusAuditLabel(items[0])).toBeNull();
+    expect(buildQaFeedbackStatusEvidenceLabel(items[0])).toBeNull();
+
+    expect(
+      buildQaFeedbackStatusAuditLabel({
+        ...items[0],
+        status: "resolved",
+        status_updated_by: "rule-ops",
+        status_audit_id: "audit_status_1",
+        status_updated_at: "2026-05-29T07:45:00+08:00",
+        status_evidence_refs: ["qa_feedback:qa_feedback_QA-RULE-1"],
+      }),
+    ).toBe("Updated by rule-ops · audit_status_1 · 2026-05-29T07:45:00+08:00");
+    expect(
+      buildQaFeedbackStatusEvidenceLabel({
+        ...items[0],
+        status_evidence_refs: ["qa_feedback:qa_feedback_QA-RULE-1"],
+      }),
+    ).toBe("qa_feedback:qa_feedback_QA-RULE-1");
   });
 });

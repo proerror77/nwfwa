@@ -27,6 +27,26 @@ export function summarizeQaFeedbackItems(items: QaFeedbackItem[]) {
   };
 }
 
+export function buildQaFeedbackStatusAuditLabel(item: QaFeedbackItem) {
+  if (!item.status_updated_by && !item.status_audit_id && !item.status_updated_at) {
+    return null;
+  }
+  return [
+    `Updated by ${item.status_updated_by ?? "unknown"}`,
+    item.status_audit_id,
+    item.status_updated_at,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+}
+
+export function buildQaFeedbackStatusEvidenceLabel(item: QaFeedbackItem) {
+  if (!item.status_evidence_refs?.length) {
+    return null;
+  }
+  return item.status_evidence_refs.join(", ");
+}
+
 function highestPriority(items: QaFeedbackItem[]) {
   const priorities = ["critical", "high", "medium", "low"];
   return priorities.find((priority) => items.some((item) => item.priority === priority)) ?? "none";

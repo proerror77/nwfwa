@@ -13,6 +13,10 @@ import {
   formatFwaSchemeLabel,
   type FwaSchemeDefinition,
 } from "./fwaSchemeOptions";
+import {
+  buildQaFeedbackStatusAuditLabel,
+  buildQaFeedbackStatusEvidenceLabel,
+} from "./qaFeedbackItems";
 
 type QaQueueItem = {
   qa_case_id: string;
@@ -414,14 +418,11 @@ export function QAReviewPage() {
               <small>
                 {item.priority} · {item.status}
               </small>
-              {item.status_updated_by || item.status_audit_id ? (
-                <small>
-                  Updated by {item.status_updated_by ?? "unknown"}
-                  {item.status_audit_id ? ` · ${item.status_audit_id}` : ""}
-                </small>
+              {buildQaFeedbackStatusAuditLabel(item) ? (
+                <small>{buildQaFeedbackStatusAuditLabel(item)}</small>
               ) : null}
-              {item.status_evidence_refs?.length ? (
-                <small>{item.status_evidence_refs.join(", ")}</small>
+              {buildQaFeedbackStatusEvidenceLabel(item) ? (
+                <small>{buildQaFeedbackStatusEvidenceLabel(item)}</small>
               ) : null}
               {canUpdateQaFeedbackItem(item) ? (
                 <div className="button-row">

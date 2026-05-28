@@ -16,6 +16,8 @@ import {
   updateModelRetrainingJobStatus,
 } from "../api";
 import {
+  buildQaFeedbackStatusAuditLabel,
+  buildQaFeedbackStatusEvidenceLabel,
   filterQaFeedbackItems,
   QaFeedbackItem,
   summarizeQaFeedbackItems,
@@ -722,6 +724,12 @@ export function ModelOpsPage() {
                 {item.priority} · {item.status}
               </small>
               <small>{item.evidence_refs.length} evidence refs</small>
+              {buildQaFeedbackStatusAuditLabel(item) ? (
+                <small>{buildQaFeedbackStatusAuditLabel(item)}</small>
+              ) : null}
+              {buildQaFeedbackStatusEvidenceLabel(item) ? (
+                <small>{buildQaFeedbackStatusEvidenceLabel(item)}</small>
+              ) : null}
             </div>
           ))}
         </div>
