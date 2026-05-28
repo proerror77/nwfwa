@@ -23,6 +23,12 @@ describe("buildPromotionGateEvidenceRows", () => {
           blocker: "holdout metrics missing",
           evidence_source: "evaluation",
         },
+        {
+          label: "Label governance",
+          passed: false,
+          blocker: "model outcome labels need review",
+          evidence_source: "labels",
+        },
       ]),
     ).toEqual([
       {
@@ -42,6 +48,12 @@ describe("buildPromotionGateEvidenceRows", () => {
         status: "passed",
         evidenceSource: "Evaluation",
         evidenceClassName: "source-evaluation",
+      },
+      {
+        label: "Label governance",
+        status: "model outcome labels need review",
+        evidenceSource: "Labels",
+        evidenceClassName: "source-labels",
       },
     ]);
   });

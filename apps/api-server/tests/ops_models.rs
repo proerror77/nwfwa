@@ -371,7 +371,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["decision"], "routing_blocked");
     assert_eq!(body["latest_evaluation_id"], "none");
     assert_eq!(body["passed_count"], 1);
-    assert_eq!(body["total_count"], 10);
+    assert_eq!(body["total_count"], 11);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -391,6 +391,63 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .find(|gate| gate["label"] == "Immutable dataset")
         .unwrap();
     assert_eq!(dataset_gate["evidence_source"], "missing");
+}
+
+#[tokio::test]
+async fn model_promotion_gates_include_label_governance_evidence() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-MODEL-LABEL-1",
+          "investigation_id": "INV-MODEL-LABEL-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA label ready for model evaluation.",
+          "evidence_refs": ["investigation_results:INV-MODEL-LABEL-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-MODEL-LABEL-1",
+          "claim_id": "CLM-MODEL-LABEL-2",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "model_under_scored_confirmed_issue",
+          "feedback_target": "models",
+          "notes": "Needs model-governance review before training use.",
+          "evidence_refs": ["qa_reviews:QA-MODEL-LABEL-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let label_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Label governance")
+        .expect("model promotion gates should include label governance");
+    assert_eq!(label_gate["passed"], false);
+    assert_eq!(label_gate["evidence_source"], "labels");
+    assert_eq!(label_gate["blocker"], "model outcome labels need review");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model outcome labels need review")));
 }
 
 #[tokio::test]

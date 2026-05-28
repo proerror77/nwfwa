@@ -121,11 +121,17 @@ pub async fn model_promotion_gates(
         .latest_model_promotion_review(&model.model_key, &model.version)
         .await
         .map_err(internal_error("MODEL_PROMOTION_REVIEW_LOAD_FAILED"))?;
+    let outcome_labels = state
+        .repository
+        .list_outcome_labels()
+        .await
+        .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
 
     Ok(Json(build_model_promotion_gates(
         &model,
         &performance,
         &evaluations,
+        &outcome_labels,
         latest_review.as_ref(),
     )))
 }
@@ -183,6 +189,7 @@ fn build_model_promotion_gates(
     model: &ModelVersionRecord,
     performance: &ModelPerformanceRecord,
     evaluations: &[ModelEvaluationRecord],
+    outcome_labels: &[crate::repository::OutcomeLabelRecord],
     latest_review: Option<&ModelPromotionReviewRecord>,
 ) -> ModelPromotionGatesResponse {
     let latest_evaluation = evaluations.iter().find(|evaluation| {
@@ -235,6 +242,19 @@ fn build_model_promotion_gates(
     let drift_status = performance.drift_status.as_str();
     let drift_gate_passed = drift_status == "stable";
     let active_version = model.status == "active";
+    let model_labels = outcome_labels
+        .iter()
+        .filter(|label| label.feedback_target == "models")
+        .collect::<Vec<_>>();
+    let approved_model_labels = model_labels
+        .iter()
+        .filter(|label| label.governance_status == "approved_for_training")
+        .count();
+    let needs_review_model_labels = model_labels
+        .iter()
+        .filter(|label| label.governance_status == "needs_review")
+        .count();
+    let label_governance = approved_model_labels > 0 && needs_review_model_labels == 0;
 
     let gates = vec![
         gate(
@@ -284,6 +304,16 @@ fn build_model_promotion_gates(
             drift_gate_passed,
             drift_blocker(drift_status),
             drift_evidence_source(drift_status),
+        ),
+        gate(
+            "Label governance",
+            label_governance,
+            label_governance_blocker(approved_model_labels, needs_review_model_labels),
+            if model_labels.is_empty() {
+                "missing"
+            } else {
+                "labels"
+            },
         ),
         gate(
             "Approval",
@@ -343,6 +373,16 @@ fn drift_evidence_source(status: &str) -> &'static str {
     match status {
         "not_available" => "missing",
         _ => "evaluation",
+    }
+}
+
+fn label_governance_blocker(approved_count: usize, needs_review_count: usize) -> &'static str {
+    if approved_count == 0 {
+        "approved model outcome labels missing"
+    } else if needs_review_count > 0 {
+        "model outcome labels need review"
+    } else {
+        "none"
     }
 }
 
