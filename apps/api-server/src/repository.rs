@@ -38,6 +38,31 @@ pub struct PersistedScoringRun {
     pub evidence_refs: Vec<Value>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct MemberProfileSummaryRecord {
+    pub member_id: String,
+    pub claim_count: u32,
+    pub policy_count: u32,
+    pub total_claim_amount: Decimal,
+    pub currency: String,
+    pub high_risk_claim_count: u32,
+    pub latest_claim_id: Option<String>,
+    pub risk_level_summary: String,
+    pub profile_summary: String,
+    pub evidence_refs: Vec<String>,
+}
+
+struct MemberProfileSummaryInput {
+    member_id: String,
+    claim_count: u32,
+    policy_count: u32,
+    total_claim_amount: Decimal,
+    currency: String,
+    high_risk_claim_count: u32,
+    latest_claim_id: Option<String>,
+    evidence_refs: BTreeSet<String>,
+}
+
 #[derive(Debug, Clone)]
 pub struct PersistedAuditEvent {
     pub audit_id: String,
@@ -828,6 +853,11 @@ pub trait ScoringRepository: Send + Sync {
         external_claim_id: &str,
     ) -> anyhow::Result<Option<ClaimContext>>;
 
+    async fn member_profile_summary(
+        &self,
+        member_id: &str,
+    ) -> anyhow::Result<Option<MemberProfileSummaryRecord>>;
+
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()>;
 
     async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()>;
@@ -1044,6 +1074,25 @@ impl ScoringRepository for InMemoryScoringRepository {
         external_claim_id: &str,
     ) -> anyhow::Result<Option<ClaimContext>> {
         Ok(self.claims.lock().await.get(external_claim_id).cloned())
+    }
+
+    async fn member_profile_summary(
+        &self,
+        member_id: &str,
+    ) -> anyhow::Result<Option<MemberProfileSummaryRecord>> {
+        let member_claims = self
+            .claims
+            .lock()
+            .await
+            .values()
+            .filter(|context| context.member.external_member_id == member_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        Ok(member_profile_from_contexts(
+            member_id,
+            &member_claims,
+            self.runs.lock().await.as_slice(),
+        ))
     }
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()> {
@@ -2222,6 +2271,69 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
 
         Ok(Some(row.into_context(item_rows)))
+    }
+
+    async fn member_profile_summary(
+        &self,
+        member_id: &str,
+    ) -> anyhow::Result<Option<MemberProfileSummaryRecord>> {
+        let member_exists: Option<(String,)> =
+            sqlx::query_as("SELECT external_member_id FROM members WHERE external_member_id = $1")
+                .bind(member_id)
+                .fetch_optional(&self.pool)
+                .await?;
+        if member_exists.is_none() {
+            return Ok(None);
+        }
+
+        let row: (i64, i64, Option<Decimal>, Option<String>) = sqlx::query_as(
+            "SELECT COUNT(c.id)::bigint,
+                    COUNT(DISTINCT p.id)::bigint,
+                    SUM(c.claim_amount),
+                    MIN(c.currency)
+             FROM members m
+             LEFT JOIN claims c ON c.member_id = m.id
+             LEFT JOIN policies p ON p.id = c.policy_id
+             WHERE m.external_member_id = $1",
+        )
+        .bind(member_id)
+        .fetch_one(&self.pool)
+        .await?;
+        let latest_claim: Option<(String,)> = sqlx::query_as(
+            "SELECT c.external_claim_id
+             FROM claims c
+             JOIN members m ON m.id = c.member_id
+             WHERE m.external_member_id = $1
+             ORDER BY c.service_date DESC, c.external_claim_id DESC
+             LIMIT 1",
+        )
+        .bind(member_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        let high_risk: (i64,) = sqlx::query_as(
+            "SELECT COUNT(DISTINCT c.id)::bigint
+             FROM members m
+             JOIN claims c ON c.member_id = m.id
+             JOIN scoring_runs sr ON sr.claim_id = c.id
+             WHERE m.external_member_id = $1
+               AND sr.risk_score >= 70",
+        )
+        .bind(member_id)
+        .fetch_one(&self.pool)
+        .await?;
+
+        Ok(Some(member_profile_summary_record(
+            MemberProfileSummaryInput {
+                member_id: member_id.into(),
+                claim_count: row.0 as u32,
+                policy_count: row.1 as u32,
+                total_claim_amount: row.2.unwrap_or(Decimal::ZERO),
+                currency: row.3.unwrap_or_else(|| "UNKNOWN".into()),
+                high_risk_claim_count: high_risk.0 as u32,
+                latest_claim_id: latest_claim.map(|claim| claim.0),
+                evidence_refs: BTreeSet::from([format!("members:{member_id}")]),
+            },
+        )))
     }
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()> {
@@ -5634,6 +5746,100 @@ fn summarize_saving_attributions(
 
 fn format_decimal_cents(value: Decimal) -> String {
     format!("{:.2}", value.round_dp(2))
+}
+
+fn member_profile_from_contexts(
+    member_id: &str,
+    contexts: &[ClaimContext],
+    runs: &[PersistedScoringRun],
+) -> Option<MemberProfileSummaryRecord> {
+    if contexts.is_empty() {
+        return None;
+    }
+
+    let claim_ids = contexts
+        .iter()
+        .map(|context| context.claim.external_claim_id.clone())
+        .collect::<BTreeSet<_>>();
+    let policy_count = contexts
+        .iter()
+        .map(|context| context.policy.external_policy_id.clone())
+        .collect::<BTreeSet<_>>()
+        .len() as u32;
+    let total_claim_amount = contexts
+        .iter()
+        .map(|context| context.claim.amount.amount)
+        .sum::<Decimal>();
+    let currency = contexts
+        .first()
+        .map(|context| context.claim.amount.currency.clone())
+        .unwrap_or_else(|| "UNKNOWN".into());
+    let high_risk_claim_count = runs
+        .iter()
+        .filter(|run| claim_ids.contains(&run.claim_id) && run.risk_score >= 70)
+        .map(|run| run.claim_id.clone())
+        .collect::<BTreeSet<_>>()
+        .len() as u32;
+    let latest_claim_id = contexts
+        .iter()
+        .max_by(|left, right| {
+            left.claim
+                .service_date
+                .cmp(&right.claim.service_date)
+                .then_with(|| {
+                    left.claim
+                        .external_claim_id
+                        .cmp(&right.claim.external_claim_id)
+                })
+        })
+        .map(|context| context.claim.external_claim_id.clone());
+    let evidence_refs = std::iter::once(format!("members:{member_id}"))
+        .chain(
+            claim_ids
+                .iter()
+                .map(|claim_id| format!("claims:{claim_id}")),
+        )
+        .collect::<BTreeSet<_>>();
+
+    Some(member_profile_summary_record(MemberProfileSummaryInput {
+        member_id: member_id.into(),
+        claim_count: contexts.len() as u32,
+        policy_count,
+        total_claim_amount,
+        currency,
+        high_risk_claim_count,
+        latest_claim_id,
+        evidence_refs,
+    }))
+}
+
+fn member_profile_summary_record(input: MemberProfileSummaryInput) -> MemberProfileSummaryRecord {
+    let risk_level_summary = if input.high_risk_claim_count > 0 {
+        "has_high_risk_history"
+    } else {
+        "no_high_risk_history"
+    };
+    let profile_summary = format!(
+        "投保人共有 {} 张保单、{} 笔历史理赔，累计理赔金额 {} {}，其中 {} 笔为高风险评分记录。",
+        input.policy_count,
+        input.claim_count,
+        format_decimal_cents(input.total_claim_amount),
+        input.currency,
+        input.high_risk_claim_count
+    );
+
+    MemberProfileSummaryRecord {
+        member_id: input.member_id,
+        claim_count: input.claim_count,
+        policy_count: input.policy_count,
+        total_claim_amount: input.total_claim_amount,
+        currency: input.currency,
+        high_risk_claim_count: input.high_risk_claim_count,
+        latest_claim_id: input.latest_claim_id,
+        risk_level_summary: risk_level_summary.into(),
+        profile_summary,
+        evidence_refs: input.evidence_refs.into_iter().collect(),
+    }
 }
 
 fn sanitize_identifier(value: &str) -> String {

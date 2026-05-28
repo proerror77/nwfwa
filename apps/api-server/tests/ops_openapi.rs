@@ -194,4 +194,10 @@ async fn openapi_includes_operations_paths() {
     );
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["get"].is_object());
     assert!(schema["paths"]["/api/v1/ops/model-evaluations"]["post"].is_object());
+    assert!(schema["paths"]["/api/v1/members/{member_id}/profile-summary"]["get"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["MemberProfileSummaryResponse"]["properties"]
+            ["evidence_refs"]["items"]["type"],
+        "string"
+    );
 }

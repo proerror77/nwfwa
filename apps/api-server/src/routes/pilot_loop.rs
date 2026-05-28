@@ -1,7 +1,9 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{InvestigationResultRecord, QaFeedbackItemRecord, QaReviewRecord},
+    repository::{
+        InvestigationResultRecord, MemberProfileSummaryRecord, QaFeedbackItemRecord, QaReviewRecord,
+    },
 };
 use axum::{
     extract::{Path, State},
@@ -30,6 +32,27 @@ pub struct ClaimAuditHistoryResponse {
 #[derive(Debug, Serialize)]
 pub struct QaFeedbackItemListResponse {
     pub items: Vec<QaFeedbackItemRecord>,
+}
+
+pub async fn member_profile_summary(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(member_id): Path<String>,
+) -> Result<Json<MemberProfileSummaryRecord>, ApiError> {
+    authorize(&state, &headers)?;
+    let profile = state
+        .repository
+        .member_profile_summary(&member_id)
+        .await
+        .map_err(internal_error("MEMBER_PROFILE_SUMMARY_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MEMBER_NOT_FOUND",
+                "member not found",
+            )
+        })?;
+    Ok(Json(profile))
 }
 
 pub async fn write_investigation_result(

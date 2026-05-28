@@ -157,6 +157,90 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
 }
 
 #[tokio::test]
+async fn returns_member_profile_summary_from_scored_claims() {
+    let app = build_app(test_config());
+
+    for (claim_id, policy_id, amount, limit) in [
+        ("CLM-MEMBER-1001", "POL-MEMBER-1001", "9200.00", "10000.00"),
+        ("CLM-MEMBER-1002", "POL-MEMBER-1002", "1800.00", "12000.00"),
+    ] {
+        let (status, _) = json_request(
+            app.clone(),
+            "POST",
+            "/api/v1/claims/score",
+            &format!(
+                r#"{{
+                  "source_system": "tpa-demo",
+                  "claim": {{
+                    "external_claim_id": "{claim_id}",
+                    "claim_amount": "{amount}",
+                    "currency": "CNY",
+                    "service_date": "2026-02-05",
+                    "diagnosis_code": "J10",
+                    "member": {{
+                      "external_member_id": "MBR-PROFILE-1"
+                    }},
+                    "policy": {{
+                      "external_policy_id": "{policy_id}",
+                      "product_code": "MED",
+                      "coverage_start_date": "2026-01-01",
+                      "coverage_end_date": "2026-12-31",
+                      "coverage_limit": "{limit}",
+                      "currency": "CNY"
+                    }},
+                    "provider": {{
+                      "external_provider_id": "PRV-PROFILE-1",
+                      "name": "Profile Hospital",
+                      "provider_type": "hospital",
+                      "region": "Shanghai",
+                      "risk_tier": "Medium"
+                    }},
+                    "items": [
+                      {{
+                        "item_code": "PROC-1",
+                        "item_type": "procedure",
+                        "description": "Procedure",
+                        "quantity": 1,
+                        "unit_amount": "{amount}",
+                        "total_amount": "{amount}",
+                        "currency": "CNY"
+                      }}
+                    ]
+                  }}
+                }}"#
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let (status, profile) = json_request(
+        app,
+        "GET",
+        "/api/v1/members/MBR-PROFILE-1/profile-summary",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(profile["member_id"], "MBR-PROFILE-1");
+    assert_eq!(profile["claim_count"], 2);
+    assert_eq!(profile["policy_count"], 2);
+    assert_eq!(profile["currency"], "CNY");
+    assert_eq!(profile["total_claim_amount"], "11000.00");
+    assert_eq!(profile["latest_claim_id"], "CLM-MEMBER-1002");
+    assert!(profile["high_risk_claim_count"].as_u64().unwrap() >= 1);
+    assert!(profile["profile_summary"]
+        .as_str()
+        .unwrap()
+        .contains("2 笔历史理赔"));
+    assert!(profile["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("members:MBR-PROFILE-1")));
+}
+
+#[tokio::test]
 async fn pilot_loop_endpoints_require_api_key() {
     for (method, uri, body) in [
         (
@@ -187,6 +271,7 @@ async fn pilot_loop_endpoints_require_api_key() {
             }"#,
         ),
         ("GET", "/api/v1/audit/claims/CLM-0287", "{}"),
+        ("GET", "/api/v1/members/MBR-PROFILE-1/profile-summary", "{}"),
     ] {
         let status = unauthenticated_request(method, uri, body).await;
         assert_eq!(status, StatusCode::UNAUTHORIZED);

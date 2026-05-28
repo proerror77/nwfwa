@@ -835,6 +835,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/members/{member_id}/profile-summary": {
+                "get": {
+                    "summary": "Get member policy and claim profile summary",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "member_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Member profile summary",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/MemberProfileSummaryResponse" }
+                                }
+                            }
+                        },
+                        "404": {
+                            "description": "Member was not found",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/investigations/results": {
                 "post": {
                     "summary": "Write back a pilot investigation result",
@@ -2493,6 +2525,22 @@ pub async fn openapi_schema() -> Json<Value> {
                         "event_status": { "type": "string" },
                         "audit_id": { "type": "string" },
                         "run_id": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "MemberProfileSummaryResponse": {
+                    "type": "object",
+                    "required": ["member_id", "claim_count", "policy_count", "total_claim_amount", "currency", "high_risk_claim_count", "risk_level_summary", "profile_summary", "evidence_refs"],
+                    "properties": {
+                        "member_id": { "type": "string" },
+                        "claim_count": { "type": "integer" },
+                        "policy_count": { "type": "integer" },
+                        "total_claim_amount": { "type": "string", "format": "decimal" },
+                        "currency": { "type": "string" },
+                        "high_risk_claim_count": { "type": "integer" },
+                        "latest_claim_id": { "type": ["string", "null"] },
+                        "risk_level_summary": { "type": "string", "enum": ["no_high_risk_history", "has_high_risk_history"] },
+                        "profile_summary": { "type": "string" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },

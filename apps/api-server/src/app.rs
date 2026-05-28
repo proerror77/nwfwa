@@ -75,6 +75,10 @@ pub fn build_app_with_parts(
             post(knowledge::search_similar),
         )
         .route(
+            "/api/v1/members/:member_id/profile-summary",
+            get(pilot_loop::member_profile_summary),
+        )
+        .route(
             "/api/v1/investigations/results",
             post(pilot_loop::write_investigation_result),
         )
