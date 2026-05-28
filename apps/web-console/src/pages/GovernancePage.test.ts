@@ -22,6 +22,7 @@ describe("auditEventFilterShortcuts", () => {
     expect(auditEventFilterShortcuts).toEqual([
       { label: "Scoring", eventType: "scoring.completed" },
       { label: "QA Results", eventType: "qa.result.received" },
+      { label: "QA Feedback Status", eventType: "qa.feedback.status.updated" },
       { label: "Case Status", eventType: "case.status.updated" },
       { label: "Rule Candidates", eventType: "rule.candidate.saved" },
     ]);
@@ -153,6 +154,22 @@ describe("buildGovernanceChangeTimelineRows", () => {
         evidence_refs: ["datasets:claims_training:v1"],
       },
       {
+        audit_id: "audit_qa_feedback_status",
+        run_id: "run_qa_feedback_status",
+        event_type: "qa.feedback.status.updated",
+        event_status: "succeeded",
+        summary: "QA feedback status updated",
+        payload: {
+          feedback_id: "qa_feedback_QA-1",
+          qa_case_id: "QA-1",
+          claim_id: "CLM-1",
+          from_status: "open",
+          to_status: "in_progress",
+          actor_id: "qa-lead",
+        },
+        evidence_refs: ["qa_feedback:qa_feedback_QA-1"],
+      },
+      {
         audit_id: "audit_scoring",
         run_id: "run_scoring",
         event_type: "scoring.completed",
@@ -210,6 +227,18 @@ describe("buildGovernanceChangeTimelineRows", () => {
         summary: "Dataset registered",
         createdAt: "run_dataset",
         evidenceRefs: ["datasets:claims_training:v1"],
+      },
+      {
+        auditId: "audit_qa_feedback_status",
+        domain: "QA",
+        eventType: "qa.feedback.status.updated",
+        targetId: "qa_feedback_QA-1",
+        statusTransition: "open -> in_progress",
+        actor: "qa-lead",
+        decision: "in_progress",
+        summary: "QA feedback status updated",
+        createdAt: "run_qa_feedback_status",
+        evidenceRefs: ["qa_feedback:qa_feedback_QA-1"],
       },
     ]);
   });

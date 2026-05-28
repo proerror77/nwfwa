@@ -133,6 +133,20 @@ async fn filters_global_audit_events_for_governance_search() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-AUDIT-FILTER/status",
+        r#"{
+          "status": "in_progress",
+          "actor_id": "qa-lead",
+          "notes": "Move feedback into active remediation.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-AUDIT-FILTER"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, routing_events) = json_request(
         app.clone(),
         "GET",
@@ -177,6 +191,24 @@ async fn filters_global_audit_events_for_governance_search() {
         "QA-AUDIT-FILTER"
     );
 
+    let (status, status_events) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?event_type=qa.feedback.status.updated&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status_events["events"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        status_events["events"][0]["payload"]["to_status"],
+        "in_progress"
+    );
+    assert_eq!(
+        status_events["events"][0]["payload"]["claim_id"],
+        "CLM-AUDIT-FILTER"
+    );
+
     let (status, governance_events) = json_request(
         app.clone(),
         "GET",
@@ -192,6 +224,7 @@ async fn filters_global_audit_events_for_governance_search() {
         .map(|event| event["event_type"].as_str().unwrap())
         .collect::<Vec<_>>();
     assert!(governance_event_types.contains(&"routing_policy.candidate.saved"));
+    assert!(governance_event_types.contains(&"qa.feedback.status.updated"));
     assert!(!governance_event_types.contains(&"qa.result.received"));
 
     let (status, empty_events) = json_request(

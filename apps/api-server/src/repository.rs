@@ -111,6 +111,7 @@ const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "model.promotion.reviewed",
     "model.activation.completed",
     "model.rollback.completed",
+    "qa.feedback.status.updated",
     "routing_policy.candidate.saved",
     "routing_policy.status.changed",
     "routing_policy.activation.completed",

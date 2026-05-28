@@ -289,6 +289,7 @@ const governanceChangeEventTypes = new Set([
   "model.promotion.reviewed",
   "model.activation.completed",
   "model.rollback.completed",
+  "qa.feedback.status.updated",
   "routing_policy.candidate.saved",
   "routing_policy.status.changed",
   "routing_policy.activation.completed",
@@ -298,6 +299,7 @@ const governanceChangeEventTypes = new Set([
 export const auditEventFilterShortcuts = [
   { label: "Scoring", eventType: "scoring.completed" },
   { label: "QA Results", eventType: "qa.result.received" },
+  { label: "QA Feedback Status", eventType: "qa.feedback.status.updated" },
   { label: "Case Status", eventType: "case.status.updated" },
   { label: "Rule Candidates", eventType: "rule.candidate.saved" },
 ];
@@ -335,6 +337,7 @@ function governanceChangeDomain(eventType: string) {
   }
   if (eventType.startsWith("rule.")) return "Rule";
   if (eventType.startsWith("model.")) return "Model";
+  if (eventType.startsWith("qa.")) return "QA";
   if (eventType.startsWith("routing_policy.")) return "Routing";
   return "Governance";
 }
@@ -381,6 +384,13 @@ function governanceChangeTargetId(event: AuditEvent) {
     const version = payloadString(payload, "model_version");
     return version ? `${modelKey}@${version}` : modelKey;
   }
+  if (event.event_type === "qa.feedback.status.updated") {
+    return (
+      payloadString(payload, "feedback_id") ||
+      payloadString(payload, "qa_case_id") ||
+      payloadString(payload, "claim_id")
+    );
+  }
   if (event.event_type.startsWith("routing_policy.")) {
     const policyId = payloadString(payload, "policy_id");
     const version = payloadString(payload, "version");
@@ -413,6 +423,7 @@ export function buildGovernanceChangeTimelineRows(
         actor:
           payloadString(event.payload, "reviewer") ||
           payloadString(event.payload, "owner") ||
+          payloadString(event.payload, "actor_id") ||
           payloadString(event.payload, "requested_by") ||
           "system",
         decision: decision || toStatus,
