@@ -49,6 +49,7 @@ pub struct ModelPromotionGatesResponse {
     pub data_status: String,
     pub scored_runs: u32,
     pub open_model_feedback_count: usize,
+    pub unresolved_model_feedback_count: usize,
     pub approved_label_count: usize,
     pub needs_review_label_count: usize,
     pub gates: Vec<ModelPromotionGate>,
@@ -935,6 +936,12 @@ fn build_model_promotion_gates(
         .iter()
         .filter(|item| item.feedback_target == "models" && item.status == "open")
         .count();
+    let unresolved_model_feedback_count = feedback_items
+        .iter()
+        .filter(|item| {
+            item.feedback_target == "models" && is_unresolved_feedback_status(&item.status)
+        })
+        .count();
     let model_labels = outcome_labels
         .iter()
         .filter(|label| label.feedback_target == "models")
@@ -1017,6 +1024,12 @@ fn build_model_promotion_gates(
             drift_evidence_source(drift_status),
         ),
         gate(
+            "Model QA feedback closure",
+            unresolved_model_feedback_count == 0,
+            "unresolved model QA feedback",
+            "qa_feedback",
+        ),
+        gate(
             "Label governance",
             label_governance,
             label_governance_blocker(approved_model_labels, needs_review_model_labels),
@@ -1065,6 +1078,7 @@ fn build_model_promotion_gates(
         data_status: performance.data_status.clone(),
         scored_runs: performance.scored_runs,
         open_model_feedback_count,
+        unresolved_model_feedback_count,
         approved_label_count: approved_model_labels,
         needs_review_label_count: needs_review_model_labels,
         gates,
@@ -1151,6 +1165,10 @@ fn build_model_retraining_readiness(
         retraining_triggers,
         blockers,
     }
+}
+
+fn is_unresolved_feedback_status(status: &str) -> bool {
+    matches!(status, "open" | "in_progress")
 }
 
 fn evidence_source(passed: bool, source: &'static str) -> &'static str {

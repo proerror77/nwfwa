@@ -55,6 +55,7 @@ pub struct RulePromotionGatesResponse {
     pub false_positive_rate: f64,
     pub saving_amount: String,
     pub open_rule_feedback_count: usize,
+    pub unresolved_rule_feedback_count: usize,
     pub approved_label_count: usize,
     pub needs_review_label_count: usize,
     pub gates: Vec<RulePromotionGate>,
@@ -370,6 +371,12 @@ fn build_rule_promotion_gates(
         .iter()
         .filter(|item| item.feedback_target == "rules" && item.status == "open")
         .count();
+    let unresolved_rule_feedback_count = feedback_items
+        .iter()
+        .filter(|item| {
+            item.feedback_target == "rules" && is_unresolved_feedback_status(&item.status)
+        })
+        .count();
     let rule_feedback_labels = outcome_labels
         .iter()
         .filter(|label| label.feedback_target == "rules")
@@ -426,6 +433,12 @@ fn build_rule_promotion_gates(
             if approved { "approval" } else { "missing" },
         ),
         rule_gate(
+            "Rule QA feedback closure",
+            unresolved_rule_feedback_count == 0,
+            "unresolved rule QA feedback",
+            "qa_feedback",
+        ),
+        rule_gate(
             "Rule feedback governance",
             rule_feedback_governance,
             "rule feedback labels need review",
@@ -475,6 +488,7 @@ fn build_rule_promotion_gates(
         false_positive_rate: effective_false_positive_rate,
         saving_amount: format!("{:.2}", effective_saving.round_dp(2)),
         open_rule_feedback_count,
+        unresolved_rule_feedback_count,
         approved_label_count: approved_rule_feedback,
         needs_review_label_count: needs_review_rule_feedback,
         gates,
@@ -484,6 +498,10 @@ fn build_rule_promotion_gates(
 
 fn decimal_from_string(value: &str) -> Decimal {
     value.parse::<Decimal>().unwrap_or(Decimal::ZERO)
+}
+
+fn is_unresolved_feedback_status(status: &str) -> bool {
+    matches!(status, "open" | "in_progress")
 }
 
 fn review_evidence_source(

@@ -532,8 +532,8 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["source_dataset_id"], "none");
     assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
     assert_eq!(body["source_data_quality_status"], "missing");
-    assert_eq!(body["passed_count"], 1);
-    assert_eq!(body["total_count"], 14);
+    assert_eq!(body["passed_count"], 2);
+    assert_eq!(body["total_count"], 15);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -729,6 +729,20 @@ async fn model_promotion_gates_include_label_governance_evidence() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-MODEL-LABEL-1/status",
+        r#"{
+          "status": "in_progress",
+          "actor_id": "model-ops",
+          "notes": "Model operator accepted the feedback for review.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-MODEL-LABEL-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
 
     assert_eq!(status, StatusCode::OK);
@@ -741,13 +755,27 @@ async fn model_promotion_gates_include_label_governance_evidence() {
     assert_eq!(label_gate["passed"], false);
     assert_eq!(label_gate["evidence_source"], "labels");
     assert_eq!(label_gate["blocker"], "model outcome labels need review");
-    assert_eq!(body["open_model_feedback_count"], 1);
+    let closure_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Model QA feedback closure")
+        .expect("model promotion gates should include QA feedback closure");
+    assert_eq!(closure_gate["passed"], false);
+    assert_eq!(closure_gate["evidence_source"], "qa_feedback");
+    assert_eq!(closure_gate["blocker"], "unresolved model QA feedback");
+    assert_eq!(body["open_model_feedback_count"], 0);
+    assert_eq!(body["unresolved_model_feedback_count"], 1);
     assert_eq!(body["approved_label_count"], 1);
     assert_eq!(body["needs_review_label_count"], 1);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("model outcome labels need review")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("unresolved model QA feedback")));
 }
 
 #[tokio::test]
@@ -1138,7 +1166,7 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["decision"], "routing_blocked");
-    assert_eq!(body["passed_count"], 2);
+    assert_eq!(body["passed_count"], 3);
     assert!(!body["blockers"]
         .as_array()
         .unwrap()

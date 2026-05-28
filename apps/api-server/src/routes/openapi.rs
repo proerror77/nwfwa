@@ -2729,7 +2729,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "blocker": { "type": "string" },
                         "evidence_source": {
                             "type": "string",
-                            "enum": ["runtime", "backtest", "approval", "labels", "metadata", "missing"]
+                            "enum": ["runtime", "backtest", "approval", "labels", "qa_feedback", "metadata", "missing"]
                         }
                     }
                 },
@@ -2748,6 +2748,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "false_positive_rate",
                         "saving_amount",
                         "open_rule_feedback_count",
+                        "unresolved_rule_feedback_count",
                         "approved_label_count",
                         "needs_review_label_count",
                         "gates",
@@ -2766,6 +2767,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "false_positive_rate": { "type": "number", "minimum": 0 },
                         "saving_amount": { "type": "string", "format": "decimal" },
                         "open_rule_feedback_count": { "type": "integer" },
+                        "unresolved_rule_feedback_count": { "type": "integer" },
                         "approved_label_count": { "type": "integer" },
                         "needs_review_label_count": { "type": "integer" },
                         "gates": {
@@ -3444,13 +3446,13 @@ pub async fn openapi_schema() -> Json<Value> {
                         "blocker": { "type": "string" },
                         "evidence_source": {
                             "type": "string",
-                            "enum": ["runtime", "approval", "dataset", "evaluation", "labels", "metadata", "missing"]
+                            "enum": ["runtime", "approval", "dataset", "evaluation", "labels", "qa_feedback", "metadata", "missing"]
                         }
                     }
                 },
                 "ModelPromotionGatesResponse": {
                     "type": "object",
-                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "data_status", "scored_runs", "open_model_feedback_count", "approved_label_count", "needs_review_label_count", "gates", "blockers"],
+                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "data_status", "scored_runs", "open_model_feedback_count", "unresolved_model_feedback_count", "approved_label_count", "needs_review_label_count", "gates", "blockers"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
@@ -3465,6 +3467,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "data_status": { "type": "string" },
                         "scored_runs": { "type": "integer" },
                         "open_model_feedback_count": { "type": "integer" },
+                        "unresolved_model_feedback_count": { "type": "integer" },
                         "approved_label_count": { "type": "integer" },
                         "needs_review_label_count": { "type": "integer" },
                         "gates": {

@@ -125,6 +125,7 @@ async fn openapi_includes_operations_paths() {
     );
     for field in [
         "open_rule_feedback_count",
+        "unresolved_rule_feedback_count",
         "approved_label_count",
         "needs_review_label_count",
     ] {
@@ -237,6 +238,7 @@ async fn openapi_includes_operations_paths() {
     );
     for field in [
         "open_model_feedback_count",
+        "unresolved_model_feedback_count",
         "approved_label_count",
         "needs_review_label_count",
     ] {
@@ -249,6 +251,22 @@ async fn openapi_includes_operations_paths() {
             "missing {field}"
         );
     }
+    assert!(
+        schema["components"]["schemas"]["RulePromotionGate"]["properties"]["evidence_source"]
+            ["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "qa_feedback")
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelPromotionGate"]["properties"]["evidence_source"]
+            ["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "qa_feedback")
+    );
     assert!(
         schema["components"]["schemas"]["ModelPromotionGate"]["properties"]["evidence_source"]
             ["enum"]

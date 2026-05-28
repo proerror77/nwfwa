@@ -50,6 +50,7 @@ type ModelPromotionGatesResponse = {
   data_status: string;
   scored_runs: number;
   open_model_feedback_count: number;
+  unresolved_model_feedback_count: number;
   approved_label_count: number;
   needs_review_label_count: number;
   blockers: string[];
@@ -822,6 +823,10 @@ export function ModelOpsPage() {
               <div>
                 <span>Open Feedback</span>
                 <strong>{promotionQuery.data.open_model_feedback_count}</strong>
+              </div>
+              <div>
+                <span>Unresolved Feedback</span>
+                <strong>{promotionQuery.data.unresolved_model_feedback_count}</strong>
               </div>
               <div>
                 <span>Approved Labels</span>

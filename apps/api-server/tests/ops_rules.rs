@@ -247,8 +247,8 @@ async fn returns_rule_promotion_gates_for_unreviewed_rule() {
     assert_eq!(body["rule_version"], 1);
     assert_eq!(body["review_mode"], "both");
     assert_eq!(body["decision"], "routing_blocked");
-    assert_eq!(body["total_count"], 8);
-    assert_eq!(body["passed_count"], 4);
+    assert_eq!(body["total_count"], 9);
+    assert_eq!(body["passed_count"], 5);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -628,6 +628,20 @@ async fn rule_promotion_gates_include_rule_feedback_labels() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-RULE-GATE-1/status",
+        r#"{
+          "status": "in_progress",
+          "actor_id": "rule-ops",
+          "notes": "Rule operator accepted the feedback for review.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-RULE-GATE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, body) = json_request(
         app,
         "GET",
@@ -647,13 +661,27 @@ async fn rule_promotion_gates_include_rule_feedback_labels() {
     assert_eq!(feedback_gate["passed"], false);
     assert_eq!(feedback_gate["evidence_source"], "labels");
     assert_eq!(feedback_gate["blocker"], "rule feedback labels need review");
-    assert_eq!(body["open_rule_feedback_count"], 1);
+    let closure_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Rule QA feedback closure")
+        .expect("rule promotion gates should include QA feedback closure");
+    assert_eq!(closure_gate["passed"], false);
+    assert_eq!(closure_gate["evidence_source"], "qa_feedback");
+    assert_eq!(closure_gate["blocker"], "unresolved rule QA feedback");
+    assert_eq!(body["open_rule_feedback_count"], 0);
+    assert_eq!(body["unresolved_rule_feedback_count"], 1);
     assert_eq!(body["approved_label_count"], 0);
     assert_eq!(body["needs_review_label_count"], 1);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("rule feedback labels need review")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("unresolved rule QA feedback")));
 }
 
 #[tokio::test]
