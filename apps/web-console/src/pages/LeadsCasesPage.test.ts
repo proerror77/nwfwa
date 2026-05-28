@@ -62,6 +62,15 @@ describe("buildLeadSummary", () => {
             priority: "high",
             assignee: "siu-reviewer-1",
             reviewer: "medical-reviewer-1",
+            evidence_package: {
+              evidence_sufficiency: {
+                scheme_family: "provider_peer_outlier",
+                status: "needs_more_evidence",
+                minimum_evidence: ["peer_group_definition", "statistical_deviation"],
+                present_evidence: ["peer_group_definition"],
+                missing_evidence: ["statistical_deviation"],
+              },
+            },
           },
         ],
       },
@@ -75,6 +84,7 @@ describe("buildLeadSummary", () => {
       requestEvidenceLeads: 1,
       closedLeads: 1,
       openCases: 1,
+      casesMissingEvidence: 1,
       highPriorityCases: 1,
       topScheme: "early_high_value_claim",
     });

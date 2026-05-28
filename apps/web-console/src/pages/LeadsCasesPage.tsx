@@ -66,6 +66,9 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
   }, {});
   const topScheme =
     Object.entries(schemeCounts).sort((left, right) => right[1] - left[1])[0]?.[0] ?? "none";
+  const casesMissingEvidence = cases.filter(
+    (item) => caseEvidenceSufficiencyFromPackage(item.evidence_package)?.missing_evidence.length,
+  ).length;
   return {
     totalLeads: leads.length,
     pendingTriage: leads.filter((lead) => lead.disposition === "pending_triage").length,
@@ -76,6 +79,7 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
       ["rejected", "merged", "closed"].includes(lead.disposition),
     ).length,
     openCases: cases.length,
+    casesMissingEvidence,
     highPriorityCases: cases.filter((item) => item.priority === "high").length,
     topScheme,
   };
@@ -243,6 +247,10 @@ export function LeadsCasesPage() {
           <div>
             <span>Open Cases</span>
             <strong>{summary.openCases}</strong>
+          </div>
+          <div>
+            <span>Missing Evidence Cases</span>
+            <strong>{summary.casesMissingEvidence}</strong>
           </div>
           <div>
             <span>High Priority</span>
