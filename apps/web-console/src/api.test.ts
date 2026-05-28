@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   approveRule,
+  activateRoutingPolicy,
   backtestRule,
   claimNextModelRetrainingJob,
   completeModelRetrainingJob,
@@ -29,18 +30,23 @@ import {
   listModelEvaluations,
   listModelRetrainingJobs,
   listModels,
+  listRoutingPolicies,
   getModelPromotionGates,
   getModelRetrainingReadiness,
+  approveRoutingPolicy,
   submitModelPromotionReview,
   updateModelRetrainingJobStatus,
   listRules,
   publishKnowledgeCase,
   publishRule,
   rollbackModel,
+  rollbackRoutingPolicy,
   rollbackRule,
   saveRuleCandidate,
+  saveRoutingPolicyCandidate,
   searchSimilarCases,
   submitAgentApproval,
+  submitRoutingPolicy,
   submitRule,
   submitQaResult,
   submitWebhookDeliveryAttempt,
@@ -120,6 +126,75 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       7,
       "/api/v1/ops/rules/rule_early_claim/rollback",
+      expect.objectContaining({ method: "POST" }),
+    );
+  });
+
+  it("calls routing policy lifecycle endpoints", async () => {
+    const fetchMock = mockFetch({ policies: [] });
+    const policy = {
+      policy_id: "fwa_risk_fusion_routing",
+      review_mode: "pre_payment",
+      version: 2,
+    };
+    const candidate = {
+      owner: "policy-ops",
+      policy: {
+        ...policy,
+        risk_thresholds: {
+          low_max: 24,
+          medium_min: 25,
+          high_min: 65,
+          critical_min: 88,
+        },
+        confidence_thresholds: {
+          low_confidence_below: 55,
+          high_confidence_min: 85,
+        },
+        provider_review_threshold: 72,
+      },
+    };
+
+    await listRoutingPolicies("dev-secret");
+    await saveRoutingPolicyCandidate(candidate, "dev-secret");
+    await submitRoutingPolicy(policy, "dev-secret");
+    await approveRoutingPolicy(policy, "dev-secret");
+    await activateRoutingPolicy(policy, "dev-secret");
+    await rollbackRoutingPolicy(policy, "dev-secret");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/ops/routing-policies",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/routing-policies",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(candidate),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/submit",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/approve",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
+      "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/activate",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      6,
+      "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/rollback",
       expect.objectContaining({ method: "POST" }),
     );
   });

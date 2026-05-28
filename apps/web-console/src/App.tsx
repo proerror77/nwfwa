@@ -12,12 +12,14 @@ import { FactorFactoryPage } from "./pages/FactorFactoryPage";
 import { LeadsCasesPage } from "./pages/LeadsCasesPage";
 import { GovernancePage } from "./pages/GovernancePage";
 import { AuditSamplingPage } from "./pages/AuditSamplingPage";
+import { RoutingPoliciesPage } from "./pages/RoutingPoliciesPage";
 
 const modules = [
   "Dashboard",
   "Runtime Scoring",
   "Rules",
   "Models",
+  "Routing Policies",
   "Data Sources",
   "Factor Factory",
   "Leads & Cases",
@@ -49,6 +51,7 @@ export function App() {
         {active === "Runtime Scoring" ? <RuntimeScoring /> : null}
         {active === "Rules" ? <RulesStudio /> : null}
         {active === "Models" ? <ModelOpsPage /> : null}
+        {active === "Routing Policies" ? <RoutingPoliciesPage /> : null}
         {active === "Data Sources" ? <DataSourcesPage /> : null}
         {active === "Factor Factory" ? <FactorFactoryPage /> : null}
         {active === "Leads & Cases" ? <LeadsCasesPage /> : null}
@@ -62,6 +65,7 @@ export function App() {
           "Dashboard",
           "Rules",
           "Models",
+          "Routing Policies",
           "Data Sources",
           "Factor Factory",
           "Leads & Cases",

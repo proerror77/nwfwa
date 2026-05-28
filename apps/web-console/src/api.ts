@@ -108,6 +108,55 @@ export async function listModels(apiKey: string) {
   return requestJson("/api/v1/ops/models", apiKey);
 }
 
+type RoutingPolicyRef = {
+  policy_id: string;
+  review_mode: string;
+  version: number;
+};
+
+function routingPolicyLifecyclePath(policy: RoutingPolicyRef, action: string) {
+  return `/api/v1/ops/routing-policies/${encodeURIComponent(policy.policy_id)}/${encodeURIComponent(policy.review_mode)}/${encodeURIComponent(policy.version)}/${action}`;
+}
+
+export async function listRoutingPolicies(apiKey: string) {
+  return requestJson("/api/v1/ops/routing-policies", apiKey);
+}
+
+export async function saveRoutingPolicyCandidate(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/ops/routing-policies", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function submitRoutingPolicy(policy: RoutingPolicyRef, apiKey: string) {
+  return requestJson(routingPolicyLifecyclePath(policy, "submit"), apiKey, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function approveRoutingPolicy(policy: RoutingPolicyRef, apiKey: string) {
+  return requestJson(routingPolicyLifecyclePath(policy, "approve"), apiKey, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function activateRoutingPolicy(policy: RoutingPolicyRef, apiKey: string) {
+  return requestJson(routingPolicyLifecyclePath(policy, "activate"), apiKey, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
+export async function rollbackRoutingPolicy(policy: RoutingPolicyRef, apiKey: string) {
+  return requestJson(routingPolicyLifecyclePath(policy, "rollback"), apiKey, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
 export async function getModelPerformance(modelKey: string, apiKey: string) {
   return requestJson(
     `/api/v1/ops/models/${encodeURIComponent(modelKey)}/performance`,
