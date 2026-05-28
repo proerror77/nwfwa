@@ -283,6 +283,13 @@ export async function listAgentRuns(apiKey: string) {
   return requestJson("/api/v1/ops/agent-runs", apiKey);
 }
 
+export async function submitAgentApproval(agentRunId: string, payload: unknown, apiKey: string) {
+  return requestJson(`/api/v1/ops/agent-runs/${encodeURIComponent(agentRunId)}/approvals`, apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listOpsAlerts(apiKey: string) {
   return requestJson("/api/v1/ops/alerts", apiKey);
 }

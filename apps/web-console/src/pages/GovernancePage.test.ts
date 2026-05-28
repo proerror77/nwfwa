@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildAgentRunLogSummary,
   buildAuditSummary,
+  buildAgentApprovalPayload,
   buildOpsAlertSummary,
   buildOutcomeLabelSummary,
   buildWebhookDeliverySummary,
   canRecordWebhookDeliveryAttempt,
+  hasPendingAgentApproval,
 } from "./GovernancePage";
 
 describe("buildAuditSummary", () => {
@@ -119,6 +121,70 @@ describe("buildAgentRunLogSummary", () => {
       approvalCount: 1,
       pendingApprovalCount: 1,
     });
+  });
+});
+
+describe("agent approval helpers", () => {
+  it("builds human approval payloads from pending agent runs", () => {
+    const run = {
+      agent_run_id: "agent_CLM-1",
+      claim_id: "CLM-1",
+      status: "succeeded",
+      decision_boundary: "assistive_only",
+      evidence_refs: ["agent_run:agent_CLM-1", "knowledge_cases:KC-1001"],
+      steps: [],
+      context_snapshots: [],
+      tool_calls: [],
+      policy_checks: [],
+      tool_results: [],
+      approvals: [
+        {
+          approval_id: "approval_agent_CLM-1",
+          agent_run_id: "agent_CLM-1",
+          proposed_action: "manual_review_required",
+          decision: "pending",
+          approver: "unassigned",
+          reason: "Agent output requires human approval before downstream action.",
+          evidence_refs: ["agent_run:agent_CLM-1"],
+        },
+      ],
+    };
+
+    expect(hasPendingAgentApproval(run)).toBe(true);
+    expect(buildAgentApprovalPayload(run, "approved", " qa-lead ")).toEqual({
+      decision: "approved",
+      approver: "qa-lead",
+      reason: "Evidence package approved for manual review routing.",
+      evidence_refs: ["agent_run:agent_CLM-1", "knowledge_cases:KC-1001"],
+    });
+  });
+
+  it("does not expose approval actions after the decision is recorded", () => {
+    expect(
+      hasPendingAgentApproval({
+        agent_run_id: "agent_CLM-1",
+        claim_id: "CLM-1",
+        status: "succeeded",
+        decision_boundary: "assistive_only",
+        evidence_refs: [],
+        steps: [],
+        context_snapshots: [],
+        tool_calls: [],
+        policy_checks: [],
+        tool_results: [],
+        approvals: [
+          {
+            approval_id: "approval_agent_CLM-1",
+            agent_run_id: "agent_CLM-1",
+            proposed_action: "manual_review_required",
+            decision: "approved",
+            approver: "qa-lead",
+            reason: "Approved.",
+            evidence_refs: ["agent_run:agent_CLM-1"],
+          },
+        ],
+      }),
+    ).toBe(false);
   });
 });
 

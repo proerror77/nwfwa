@@ -6,6 +6,7 @@ import {
   listOpsAlerts,
   listOutcomeLabels,
   listWebhookEvents,
+  submitAgentApproval,
   submitWebhookDeliveryAttempt,
 } from "../api";
 
@@ -186,6 +187,32 @@ export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
   };
 }
 
+export function hasPendingAgentApproval(run: AgentRunLog) {
+  return run.approvals.some((approval) => approval.decision === "pending");
+}
+
+export function buildAgentApprovalPayload(
+  run: AgentRunLog,
+  decision: "approved" | "rejected",
+  approver: string,
+) {
+  const pendingApproval = run.approvals.find((approval) => approval.decision === "pending");
+  const evidenceRefs = [
+    ...(pendingApproval?.evidence_refs ?? []),
+    ...run.evidence_refs,
+    `agent_run:${run.agent_run_id}`,
+  ].filter((value, index, refs) => refs.indexOf(value) === index);
+  return {
+    decision,
+    approver: approver.trim(),
+    reason:
+      decision === "approved"
+        ? "Evidence package approved for manual review routing."
+        : "Evidence package rejected pending stronger support.",
+    evidence_refs: evidenceRefs,
+  };
+}
+
 export function buildOpsAlertSummary(alerts: OpsAlert[] = []) {
   return {
     alertCount: alerts.length,
@@ -235,6 +262,7 @@ export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
 export function GovernancePage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
+  const [agentApprover, setAgentApprover] = useState("qa-lead");
   const queryClient = useQueryClient();
   const auditQuery = useQuery({
     queryKey: ["claim-audit-history", apiKey, claimId],
@@ -262,6 +290,24 @@ export function GovernancePage() {
   const alertSummary = buildOpsAlertSummary(alertsQuery.data?.alerts);
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
+  const agentApprovalMutation = useMutation({
+    mutationFn: ({
+      run,
+      decision,
+    }: {
+      run: AgentRunLog;
+      decision: "approved" | "rejected";
+    }) =>
+      submitAgentApproval(
+        run.agent_run_id,
+        buildAgentApprovalPayload(run, decision, agentApprover),
+        apiKey,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["agent-run-logs"] });
+      queryClient.invalidateQueries({ queryKey: ["claim-audit-history"] });
+    },
+  });
   const deliveryAttemptMutation = useMutation({
     mutationFn: ({
       eventId,
@@ -298,6 +344,13 @@ export function GovernancePage() {
         <label>
           Claim ID
           <input value={claimId} onChange={(event) => setClaimId(event.target.value)} />
+        </label>
+        <label>
+          Agent Approver
+          <input
+            value={agentApprover}
+            onChange={(event) => setAgentApprover(event.target.value)}
+          />
         </label>
         <div className="summary-grid">
           <div>
@@ -360,6 +413,9 @@ export function GovernancePage() {
         {auditQuery.error ? <pre className="error">{String(auditQuery.error.message)}</pre> : null}
         {agentRunsQuery.error ? (
           <pre className="error">{String(agentRunsQuery.error.message)}</pre>
+        ) : null}
+        {agentApprovalMutation.error ? (
+          <pre className="error">{String(agentApprovalMutation.error.message)}</pre>
         ) : null}
         {alertsQuery.error ? (
           <pre className="error">{String(alertsQuery.error.message)}</pre>
@@ -604,6 +660,34 @@ export function GovernancePage() {
                   {run.approvals.filter((approval) => approval.decision === "pending").length}{" "}
                   pending
                 </p>
+                {hasPendingAgentApproval(run) ? (
+                  <div className="button-row">
+                    <button
+                      disabled={agentApprovalMutation.isPending}
+                      onClick={() =>
+                        agentApprovalMutation.mutate({
+                          run,
+                          decision: "approved",
+                        })
+                      }
+                      type="button"
+                    >
+                      Approve Agent Output
+                    </button>
+                    <button
+                      disabled={agentApprovalMutation.isPending}
+                      onClick={() =>
+                        agentApprovalMutation.mutate({
+                          run,
+                          decision: "rejected",
+                        })
+                      }
+                      type="button"
+                    >
+                      Reject Agent Output
+                    </button>
+                  </div>
+                ) : null}
                 <ul className="result-list">
                   {run.context_snapshots.map((snapshot) => (
                     <li key={snapshot.snapshot_id}>

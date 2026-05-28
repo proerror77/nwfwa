@@ -40,6 +40,7 @@ import {
   rollbackRule,
   saveRuleCandidate,
   searchSimilarCases,
+  submitAgentApproval,
   submitRule,
   submitQaResult,
   submitWebhookDeliveryAttempt,
@@ -399,6 +400,26 @@ describe("ops API helpers", () => {
       "/api/v1/ops/alerts",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("submits agent approval decisions", async () => {
+    const fetchMock = mockFetch({ approval: {}, audit_id: "aud_1" });
+    const payload = {
+      decision: "approved",
+      approver: "qa-lead",
+      reason: "Evidence package is sufficient for manual review routing.",
+      evidence_refs: ["agent_run:agent_CLM-0287"],
+    };
+
+    await submitAgentApproval("agent_CLM-0287", payload, "dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/agent-runs/agent_CLM-0287/approvals",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
     );
   });
