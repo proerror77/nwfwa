@@ -134,6 +134,10 @@ export async function listDatasets(apiKey: string) {
   return requestJson("/api/v1/ops/datasets", apiKey);
 }
 
+export async function listFactorReadiness(apiKey: string) {
+  return requestJson("/api/v1/ops/factors/readiness", apiKey);
+}
+
 export async function listModelEvaluations(apiKey: string) {
   return requestJson("/api/v1/ops/model-evaluations", apiKey);
 }

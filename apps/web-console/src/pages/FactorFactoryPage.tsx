@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listDatasets } from "../api";
+import { listDatasets, listFactorReadiness } from "../api";
 
 type ProfileValue = {
   value: unknown;
@@ -42,6 +42,19 @@ type DatasetForFactors = {
   fields: SchemaField[];
 };
 
+type FactorReadiness = {
+  dataset_count: number;
+  factor_count: number;
+  label_count: number;
+  entity_key_count: number;
+  online_ready_count: number;
+  rule_convertible_count: number;
+  mapped_factor_count: number;
+  high_missing_count: number;
+  unstable_factor_count: number;
+  unowned_factor_count: number;
+};
+
 export type FactorCard = {
   factor_name: string;
   display_label: string;
@@ -69,6 +82,25 @@ export type FactorCard = {
   is_entity_key: boolean;
   top_values: string[];
 };
+
+export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
+  const factorCount = readiness?.factor_count ?? 0;
+  const onlineReadyCount = readiness?.online_ready_count ?? 0;
+  const reviewQueueCount =
+    (readiness?.high_missing_count ?? 0) +
+    (readiness?.unstable_factor_count ?? 0) +
+    (readiness?.unowned_factor_count ?? 0);
+  return {
+    datasetCount: readiness?.dataset_count ?? 0,
+    factorCount,
+    onlineReadyCount,
+    ruleConvertibleCount: readiness?.rule_convertible_count ?? 0,
+    mappedFactorCount: readiness?.mapped_factor_count ?? 0,
+    reviewQueueCount,
+    onlineReadyRateLabel:
+      factorCount === 0 ? "0.0%" : `${((onlineReadyCount / factorCount) * 100).toFixed(1)}%`,
+  };
+}
 
 export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
   return dataset.fields.map((field) => {
@@ -160,6 +192,10 @@ export function FactorFactoryPage() {
     queryKey: ["factor-datasets", apiKey],
     queryFn: () => listDatasets(apiKey) as Promise<{ datasets: DatasetForFactors[] }>,
   });
+  const readinessQuery = useQuery({
+    queryKey: ["factor-readiness", apiKey],
+    queryFn: () => listFactorReadiness(apiKey) as Promise<FactorReadiness>,
+  });
   const selectedDataset = useMemo(
     () =>
       datasetsQuery.data?.datasets.find((dataset) => dataset.dataset_id === selectedDatasetId) ??
@@ -167,6 +203,7 @@ export function FactorFactoryPage() {
     [datasetsQuery.data?.datasets, selectedDatasetId],
   );
   const factorCards = selectedDataset ? buildFactorCards(selectedDataset) : [];
+  const readinessSummary = buildFactorReadinessSummary(readinessQuery.data);
 
   return (
     <section className="ops-grid">
@@ -179,6 +216,35 @@ export function FactorFactoryPage() {
         {datasetsQuery.error ? (
           <pre className="error">{String(datasetsQuery.error.message)}</pre>
         ) : null}
+        {readinessQuery.error ? (
+          <pre className="error">{String(readinessQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Datasets</span>
+            <strong>{readinessSummary.datasetCount}</strong>
+          </div>
+          <div>
+            <span>Factors</span>
+            <strong>{readinessSummary.factorCount}</strong>
+          </div>
+          <div>
+            <span>Online Ready</span>
+            <strong>{readinessSummary.onlineReadyCount}</strong>
+          </div>
+          <div>
+            <span>Ready Rate</span>
+            <strong>{readinessSummary.onlineReadyRateLabel}</strong>
+          </div>
+          <div>
+            <span>Rule Ready</span>
+            <strong>{readinessSummary.ruleConvertibleCount}</strong>
+          </div>
+          <div>
+            <span>Review Queue</span>
+            <strong>{readinessSummary.reviewQueueCount}</strong>
+          </div>
+        </div>
         <div className="table-list">
           {datasetsQuery.data?.datasets.map((dataset) => (
             <button

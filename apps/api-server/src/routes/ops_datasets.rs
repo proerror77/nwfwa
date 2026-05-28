@@ -14,6 +14,7 @@ use axum::{
 };
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use serde::Serialize;
+use serde_json::Value;
 
 #[derive(Debug, Serialize)]
 pub struct DatasetListResponse {
@@ -33,6 +34,20 @@ pub struct ModelEvaluationResponse {
 #[derive(Debug, Serialize)]
 pub struct ModelEvaluationListResponse {
     pub evaluations: Vec<ModelEvaluationRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FactorReadinessResponse {
+    pub dataset_count: u32,
+    pub factor_count: u32,
+    pub label_count: u32,
+    pub entity_key_count: u32,
+    pub online_ready_count: u32,
+    pub rule_convertible_count: u32,
+    pub mapped_factor_count: u32,
+    pub high_missing_count: u32,
+    pub unstable_factor_count: u32,
+    pub unowned_factor_count: u32,
 }
 
 pub async fn register_dataset(
@@ -61,6 +76,19 @@ pub async fn list_datasets(
         .await
         .map_err(internal_error("DATASET_LIST_FAILED"))?;
     Ok(Json(DatasetListResponse { datasets }))
+}
+
+pub async fn factor_readiness(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<FactorReadinessResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let datasets = state
+        .repository
+        .list_datasets()
+        .await
+        .map_err(internal_error("DATASET_LIST_FAILED"))?;
+    Ok(Json(build_factor_readiness(&datasets)))
 }
 
 pub async fn get_dataset(
@@ -219,6 +247,80 @@ fn validate_parquet_dataset(storage_format: &str) -> Result<(), ApiError> {
             "registered analytical datasets must use parquet storage_format",
         ))
     }
+}
+
+fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse {
+    let mut response = FactorReadinessResponse {
+        dataset_count: datasets.len() as u32,
+        factor_count: 0,
+        label_count: 0,
+        entity_key_count: 0,
+        online_ready_count: 0,
+        rule_convertible_count: 0,
+        mapped_factor_count: 0,
+        high_missing_count: 0,
+        unstable_factor_count: 0,
+        unowned_factor_count: 0,
+    };
+
+    for dataset in datasets {
+        for field in &dataset.fields {
+            response.factor_count += 1;
+            let is_label = field.semantic_role == "label";
+            let is_entity_key = dataset.entity_keys.contains(&field.field_name);
+            let missing_rate = numeric_profile_value(&field.profile_json, "missing_rate");
+            if is_label {
+                response.label_count += 1;
+            }
+            if is_entity_key {
+                response.entity_key_count += 1;
+            }
+            if !is_label && !field.nullable && missing_rate.unwrap_or(0.0) <= 0.05 {
+                response.online_ready_count += 1;
+            }
+            if !is_label && is_rule_convertible_type(&field.logical_type) {
+                response.rule_convertible_count += 1;
+            }
+            if missing_rate.unwrap_or(0.0) > 0.20 {
+                response.high_missing_count += 1;
+            }
+            if numeric_profile_value(&field.profile_json, "psi").unwrap_or(0.0) >= 0.25 {
+                response.unstable_factor_count += 1;
+            }
+            if field
+                .profile_json
+                .get("owner")
+                .and_then(Value::as_str)
+                .is_none_or(str::is_empty)
+            {
+                response.unowned_factor_count += 1;
+            }
+            if dataset
+                .mappings
+                .iter()
+                .any(|mapping| mapping.feature_name.as_deref() == Some(field.field_name.as_str()))
+            {
+                response.mapped_factor_count += 1;
+            }
+        }
+    }
+
+    response
+}
+
+fn numeric_profile_value(profile: &Value, key: &str) -> Option<f64> {
+    profile.get(key).and_then(|value| {
+        value
+            .as_f64()
+            .or_else(|| value.as_i64().map(|value| value as f64))
+    })
+}
+
+fn is_rule_convertible_type(logical_type: &str) -> bool {
+    matches!(
+        logical_type,
+        "decimal" | "float" | "float64" | "int" | "int8" | "int32" | "int64" | "boolean"
+    )
 }
 
 fn validate_dataset_contract(request: &RegisterDatasetInput) -> Result<(), ApiError> {

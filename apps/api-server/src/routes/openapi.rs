@@ -341,6 +341,22 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/factors/readiness": {
+                "get": {
+                    "summary": "Summarize factor factory readiness across registered datasets",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Factor readiness summary",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/FactorReadinessResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/model-datasets": {
                 "post": {
                     "summary": "Register a model dataset version",
@@ -2013,6 +2029,22 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["mapping"],
                     "properties": {
                         "mapping": { "$ref": "#/components/schemas/FieldMapping" }
+                    }
+                },
+                "FactorReadinessResponse": {
+                    "type": "object",
+                    "required": ["dataset_count", "factor_count", "label_count", "entity_key_count", "online_ready_count", "rule_convertible_count", "mapped_factor_count", "high_missing_count", "unstable_factor_count", "unowned_factor_count"],
+                    "properties": {
+                        "dataset_count": { "type": "integer" },
+                        "factor_count": { "type": "integer" },
+                        "label_count": { "type": "integer" },
+                        "entity_key_count": { "type": "integer" },
+                        "online_ready_count": { "type": "integer" },
+                        "rule_convertible_count": { "type": "integer" },
+                        "mapped_factor_count": { "type": "integer" },
+                        "high_missing_count": { "type": "integer" },
+                        "unstable_factor_count": { "type": "integer" },
+                        "unowned_factor_count": { "type": "integer" }
                     }
                 },
                 "ModelVersion": {

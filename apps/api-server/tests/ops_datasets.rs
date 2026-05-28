@@ -141,6 +141,51 @@ async fn registers_and_reads_parquet_dataset_catalog() {
 }
 
 #[tokio::test]
+async fn returns_factor_readiness_summary_from_profiled_fields() {
+    let app = build_app(test_config());
+    let (_, created) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/datasets",
+        &renewal_dataset_payload("parquet").replace(
+            r#""profile_json": {"allowed_values": [0, 1]}"#,
+            r#""profile_json": {"allowed_values": [0, 1], "missing_rate": 0.0}"#,
+        ),
+    )
+    .await;
+    let dataset_id = created["dataset_id"].as_str().unwrap();
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/datasets/{dataset_id}/mappings"),
+        r#"{
+          "external_field": "policy_no",
+          "canonical_target": "feature.policy_no",
+          "feature_name": "policy_no",
+          "transform_kind": "direct",
+          "transform_json": {},
+          "status": "active"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, readiness) = json_request(app, "GET", "/api/v1/ops/factors/readiness", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(readiness["dataset_count"], 1);
+    assert_eq!(readiness["factor_count"], 3);
+    assert_eq!(readiness["label_count"], 1);
+    assert_eq!(readiness["entity_key_count"], 2);
+    assert_eq!(readiness["online_ready_count"], 2);
+    assert_eq!(readiness["rule_convertible_count"], 0);
+    assert_eq!(readiness["mapped_factor_count"], 1);
+    assert_eq!(readiness["high_missing_count"], 0);
+    assert_eq!(readiness["unowned_factor_count"], 3);
+}
+
+#[tokio::test]
 async fn rejects_non_parquet_dataset_registration() {
     let app = build_app(test_config());
 

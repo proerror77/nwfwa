@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildFactorCards } from "./FactorFactoryPage";
+import { buildFactorCards, buildFactorReadinessSummary } from "./FactorFactoryPage";
 
 describe("buildFactorCards", () => {
   it("derives factor cards from profiled dataset fields", () => {
@@ -81,6 +81,33 @@ describe("buildFactorCards", () => {
       convertible_to_rule: false,
       online_available: false,
       is_label: true,
+    });
+  });
+});
+
+describe("buildFactorReadinessSummary", () => {
+  it("summarizes factor factory readiness metrics", () => {
+    const summary = buildFactorReadinessSummary({
+      dataset_count: 2,
+      factor_count: 12,
+      label_count: 2,
+      entity_key_count: 3,
+      online_ready_count: 7,
+      rule_convertible_count: 5,
+      mapped_factor_count: 6,
+      high_missing_count: 1,
+      unstable_factor_count: 2,
+      unowned_factor_count: 4,
+    });
+
+    expect(summary).toEqual({
+      datasetCount: 2,
+      factorCount: 12,
+      onlineReadyCount: 7,
+      ruleConvertibleCount: 5,
+      mappedFactorCount: 6,
+      reviewQueueCount: 7,
+      onlineReadyRateLabel: "58.3%",
     });
   });
 });

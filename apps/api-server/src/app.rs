@@ -132,6 +132,10 @@ pub fn build_app_with_parts(
             post(ops_datasets::add_field_mapping),
         )
         .route(
+            "/api/v1/ops/factors/readiness",
+            get(ops_datasets::factor_readiness),
+        )
+        .route(
             "/api/v1/ops/feature-sets",
             post(ops_datasets::register_feature_set),
         )

@@ -13,6 +13,7 @@ import {
   listAuditSamples,
   listCases,
   listDatasets,
+  listFactorReadiness,
   listLeads,
   listKnowledgeCases,
   listOutcomeLabels,
@@ -176,6 +177,7 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ datasets: [], evaluations: [] });
 
     await listDatasets("dev-secret");
+    await listFactorReadiness("dev-secret");
     await listModelEvaluations("dev-secret");
 
     expect(fetchMock).toHaveBeenNthCalledWith(
@@ -187,6 +189,13 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      "/api/v1/ops/factors/readiness",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
       "/api/v1/ops/model-evaluations",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
