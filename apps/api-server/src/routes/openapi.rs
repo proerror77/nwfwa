@@ -220,6 +220,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/{rule_id}/rollback": {
+                "post": {
+                    "summary": "Rollback an active rule out of production routing",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "rule_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Rule rolled back to approved status",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleLifecycleResponse" }
+                                }
+                            }
+                        },
+                        "409": {
+                            "description": "Rule is not active and cannot be rolled back",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/datasets": {
                 "get": {
                     "summary": "List registered external datasets",
@@ -1851,6 +1883,16 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/RuleSummary" }
                         }
+                    }
+                },
+                "RuleLifecycleResponse": {
+                    "type": "object",
+                    "required": ["rule_id", "status", "active_version", "latest_version"],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "status": { "type": "string", "enum": ["draft", "active", "submitted", "approved"] },
+                        "active_version": { "type": ["integer", "null"] },
+                        "latest_version": { "type": "integer" }
                     }
                 },
                 "RulePerformanceRecord": {

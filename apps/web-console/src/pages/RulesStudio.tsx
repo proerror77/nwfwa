@@ -10,6 +10,7 @@ import {
   listQaFeedbackItems,
   listRules,
   publishRule,
+  rollbackRule,
   saveRuleCandidate,
   submitRule,
   submitRulePromotionReview,
@@ -213,10 +214,11 @@ export function RulesStudio() {
     [outcomeLabelsQuery.data?.labels],
   );
   const lifecycleMutation = useMutation({
-    mutationFn: (action: "submit" | "approve" | "publish") => {
+    mutationFn: (action: "submit" | "approve" | "publish" | "rollback") => {
       if (!selectedRule) throw new Error("No rule selected");
       if (action === "submit") return submitRule(selectedRule.rule_id, apiKey);
       if (action === "approve") return approveRule(selectedRule.rule_id, apiKey);
+      if (action === "rollback") return rollbackRule(selectedRule.rule_id, apiKey);
       return publishRule(selectedRule.rule_id, apiKey);
     },
     onSuccess: () => {
@@ -331,6 +333,7 @@ export function RulesStudio() {
               <button onClick={() => lifecycleMutation.mutate("submit")}>Submit</button>
               <button onClick={() => lifecycleMutation.mutate("approve")}>Approve</button>
               <button onClick={() => lifecycleMutation.mutate("publish")}>Publish</button>
+              <button onClick={() => lifecycleMutation.mutate("rollback")}>Rollback</button>
             </div>
             {lifecycleMutation.error ? (
               <pre className="error">{String(lifecycleMutation.error.message)}</pre>

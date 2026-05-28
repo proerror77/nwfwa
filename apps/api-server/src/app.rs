@@ -190,5 +190,9 @@ pub fn build_app_with_parts(
             "/api/v1/ops/rules/:rule_id/publish",
             post(ops_rules::publish_rule),
         )
+        .route(
+            "/api/v1/ops/rules/:rule_id/rollback",
+            post(ops_rules::rollback_rule),
+        )
         .with_state(state)
 }

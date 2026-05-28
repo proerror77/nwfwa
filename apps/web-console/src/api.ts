@@ -97,6 +97,13 @@ export async function publishRule(ruleId: string, apiKey: string) {
   });
 }
 
+export async function rollbackRule(ruleId: string, apiKey: string) {
+  return requestJson(`/api/v1/ops/rules/${encodeURIComponent(ruleId)}/rollback`, apiKey, {
+    method: "POST",
+    body: "{}",
+  });
+}
+
 export async function listModels(apiKey: string) {
   return requestJson("/api/v1/ops/models", apiKey);
 }

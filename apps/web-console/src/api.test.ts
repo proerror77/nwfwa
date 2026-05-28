@@ -29,6 +29,7 @@ import {
   listRules,
   publishKnowledgeCase,
   publishRule,
+  rollbackRule,
   saveRuleCandidate,
   searchSimilarCases,
   submitRule,
@@ -63,6 +64,7 @@ describe("ops API helpers", () => {
     await submitRule("rule_early_claim", "dev-secret");
     await approveRule("rule_early_claim", "dev-secret");
     await publishRule("rule_early_claim", "dev-secret");
+    await rollbackRule("rule_early_claim", "dev-secret");
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -103,6 +105,11 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
       "/api/v1/ops/rules/rule_early_claim/publish",
+      expect.objectContaining({ method: "POST" }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "/api/v1/ops/rules/rule_early_claim/rollback",
       expect.objectContaining({ method: "POST" }),
     );
   });

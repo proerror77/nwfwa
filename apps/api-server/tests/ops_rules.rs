@@ -902,3 +902,64 @@ async fn blocks_rule_publish_before_approval() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["summary"]["status"], "active");
 }
+
+#[tokio::test]
+async fn rolls_back_active_rule_with_audit_event() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/rollback",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["rule_id"], "rule_early_claim");
+    assert_eq!(body["status"], "approved");
+    assert!(body["active_version"].is_null());
+    assert_eq!(body["latest_version"], 1);
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/rules/rule_early_claim", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["summary"]["status"], "approved");
+    assert!(body["summary"]["active_version"].is_null());
+    let rollback_event = body["audit_events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "rule.rollback.completed")
+        .expect("rollback should be audited");
+    assert_eq!(rollback_event["payload"]["from_status"], "active");
+    assert_eq!(rollback_event["payload"]["to_status"], "approved");
+    assert_eq!(rollback_event["payload"]["rule_version"], 1);
+}
+
+#[tokio::test]
+async fn blocks_rule_rollback_when_rule_is_not_active() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/rollback",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/rollback",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "RULE_ROLLBACK_REQUIRES_ACTIVE");
+}

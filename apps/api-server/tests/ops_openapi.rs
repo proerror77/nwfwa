@@ -37,6 +37,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/rules/{rule_id}/promotion-reviews",
         "/api/v1/ops/rules/candidates",
         "/api/v1/ops/rules/discover",
+        "/api/v1/ops/rules/{rule_id}/rollback",
         "/api/v1/ops/models",
         "/api/v1/ops/models/{model_key}/performance",
         "/api/v1/ops/models/{model_key}/promotion-gates",
@@ -117,6 +118,16 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["RuleDetailResponse"]["properties"]["versions"]["items"]
             ["$ref"],
         "#/components/schemas/RuleVersion"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/rules/{rule_id}/rollback"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/RuleLifecycleResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleLifecycleResponse"]["properties"]["active_version"]
+            ["type"],
+        serde_json::json!(["integer", "null"])
     );
     assert!(schema["components"]["schemas"]["ModelVersion"]["required"]
         .as_array()

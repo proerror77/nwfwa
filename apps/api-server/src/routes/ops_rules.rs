@@ -809,6 +809,53 @@ pub async fn publish_rule(
     update_status_with_required_previous(state, headers, rule_id, "active", Some("approved")).await
 }
 
+pub async fn rollback_rule(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(rule_id): Path<String>,
+) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    let previous = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    if previous.status != "active" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "RULE_ROLLBACK_REQUIRES_ACTIVE",
+            "only active rules can be rolled back",
+        ));
+    }
+    let rule = state
+        .repository
+        .update_rule_status(&rule_id, "approved")
+        .await
+        .map_err(internal_error("RULE_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
+    record_rule_audit(
+        &state,
+        &actor,
+        RuleAuditInput {
+            rule: &rule,
+            event_type: "rule.rollback.completed",
+            from_status: Some(&previous.status),
+            to_status: &rule.status,
+            summary: "Rule rollback completed",
+        },
+    )
+    .await
+    .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(RuleLifecycleResponse {
+        rule_id: rule.rule_id,
+        status: rule.status,
+        active_version: rule.active_version,
+        latest_version: rule.latest_version,
+    }))
+}
+
 async fn update_status(
     state: AppState,
     headers: HeaderMap,
