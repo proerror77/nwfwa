@@ -177,6 +177,26 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     assert_eq!(triage["case"]["sla_status"], "on_track");
     assert_eq!(triage["case"]["time_to_triage_hours"], 0.0);
     assert!(triage["case"]["time_to_closure_hours"].is_null());
+    assert_eq!(
+        triage["case"]["evidence_package"]["evidence_sufficiency"]["scheme_family"],
+        triage["case"]["scheme_family"]
+    );
+    assert!(
+        triage["case"]["evidence_package"]["evidence_sufficiency"]["minimum_evidence"]
+            .as_array()
+            .unwrap()
+            .len()
+            >= 3
+    );
+    assert!(
+        triage["case"]["evidence_package"]["evidence_sufficiency"]["missing_evidence"].is_array()
+    );
+    assert!(matches!(
+        triage["case"]["evidence_package"]["evidence_sufficiency"]["status"]
+            .as_str()
+            .unwrap(),
+        "sufficient" | "needs_more_evidence"
+    ));
     assert!(triage["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, cases) = json_request(app, "GET", "/api/v1/ops/cases", "{}").await;

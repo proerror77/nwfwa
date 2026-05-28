@@ -11,6 +11,15 @@ pub struct FwaSchemeDefinition {
     pub primary_layers: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EvidenceSufficiency {
+    pub scheme_family: String,
+    pub status: String,
+    pub minimum_evidence: Vec<String>,
+    pub present_evidence: Vec<String>,
+    pub missing_evidence: Vec<String>,
+}
+
 pub fn fwa_scheme_taxonomy() -> Vec<FwaSchemeDefinition> {
     vec![
         scheme(
@@ -252,6 +261,39 @@ pub fn minimum_evidence_for_scheme(scheme_family: &str) -> Vec<String> {
         })
 }
 
+pub fn assess_evidence_sufficiency(
+    scheme_family: &str,
+    evidence_text: &str,
+) -> EvidenceSufficiency {
+    let scheme_family =
+        canonical_scheme_family(scheme_family).unwrap_or_else(|| "high_risk_claim".into());
+    let minimum_evidence = minimum_evidence_for_scheme(&scheme_family);
+    let evidence_text = evidence_text.to_ascii_lowercase();
+    let present_evidence = minimum_evidence
+        .iter()
+        .filter(|item| evidence_item_present(item, &evidence_text))
+        .cloned()
+        .collect::<Vec<_>>();
+    let missing_evidence = minimum_evidence
+        .iter()
+        .filter(|item| !present_evidence.contains(item))
+        .cloned()
+        .collect::<Vec<_>>();
+    let status = if missing_evidence.is_empty() {
+        "sufficient"
+    } else {
+        "needs_more_evidence"
+    };
+
+    EvidenceSufficiency {
+        scheme_family,
+        status: status.into(),
+        minimum_evidence,
+        present_evidence,
+        missing_evidence,
+    }
+}
+
 pub fn canonical_scheme_family(scheme_family: &str) -> Option<String> {
     let canonical = match scheme_family {
         "medical_necessity" => "medically_unnecessary_service",
@@ -264,6 +306,55 @@ pub fn canonical_scheme_family(scheme_family: &str) -> Option<String> {
         .iter()
         .any(|scheme| scheme.scheme_family == canonical)
         .then(|| canonical.to_string())
+}
+
+fn evidence_item_present(item: &str, evidence_text: &str) -> bool {
+    match item {
+        "amount" | "claim_amount" => {
+            evidence_text.contains("amount") || evidence_text.contains("金额")
+        }
+        "billed_code" | "component_codes" | "procedure" => {
+            evidence_text.contains("code")
+                || evidence_text.contains("procedure")
+                || evidence_text.contains("项目")
+        }
+        "diagnosis" | "diagnosis_match" => {
+            evidence_text.contains("diagnosis") || evidence_text.contains("诊断")
+        }
+        "documentation" | "medical_record" | "chart_note" => {
+            evidence_text.contains("document")
+                || evidence_text.contains("medical_record")
+                || evidence_text.contains("病历")
+        }
+        "evidence_refs" => evidence_text.contains(':'),
+        "peer_benchmark" | "peer_group_definition" => {
+            evidence_text.contains("peer")
+                || evidence_text.contains("同病种")
+                || evidence_text.contains("同地区")
+        }
+        "policy_rule" => evidence_text.contains("policy") || evidence_text.contains("rule"),
+        "provider" | "ordering_provider" | "prescriber" | "supplier_provider" | "lab_provider" => {
+            evidence_text.contains("provider")
+        }
+        "region" | "provider_member_location" => {
+            evidence_text.contains("region:") || evidence_text.contains("地区")
+        }
+        "risk_reason" => !evidence_text.trim().is_empty(),
+        "statistical_deviation" => {
+            evidence_text.contains("p99")
+                || evidence_text.contains("percentile")
+                || evidence_text.contains("zscore")
+                || evidence_text.contains("偏离")
+                || evidence_text.contains("高于")
+        }
+        "time_window" | "billing_timeline" => {
+            evidence_text.contains("30d")
+                || evidence_text.contains("90d")
+                || evidence_text.contains("window")
+                || evidence_text.contains("近")
+        }
+        other => evidence_text.contains(other),
+    }
 }
 
 fn scheme(
@@ -333,5 +424,24 @@ mod tests {
         );
         assert!(minimum_evidence_for_scheme("provider_peer_outlier")
             .contains(&"peer_group_definition".into()));
+    }
+
+    #[test]
+    fn assesses_evidence_sufficiency_from_scheme_taxonomy() {
+        let assessment = assess_evidence_sufficiency(
+            "provider_outlier",
+            "provider peer group 同地区 P99 statistical_deviation",
+        );
+
+        assert_eq!(assessment.scheme_family, "provider_peer_outlier");
+        assert_eq!(assessment.status, "needs_more_evidence");
+        assert!(assessment
+            .present_evidence
+            .contains(&"peer_group_definition".into()));
+        assert!(assessment.present_evidence.contains(&"region".into()));
+        assert!(assessment
+            .present_evidence
+            .contains(&"statistical_deviation".into()));
+        assert!(assessment.missing_evidence.contains(&"specialty".into()));
     }
 }

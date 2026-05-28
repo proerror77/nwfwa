@@ -1,8 +1,9 @@
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use fwa_core::{
-    canonical_scheme_family, AuditEventId, Claim, ClaimContext, ClaimId, ClaimItem, Member,
-    MemberId, Money, Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction,
+    assess_evidence_sufficiency, canonical_scheme_family, AuditEventId, Claim, ClaimContext,
+    ClaimId, ClaimItem, Member, MemberId, Money, Policy, PolicyId, Provider, ProviderId,
+    ProviderRiskTier, RecommendedAction,
 };
 use fwa_rules::{Condition, Rule, RuleAction};
 use fwa_scoring::RoutingPolicy;
@@ -6727,6 +6728,8 @@ pub(crate) fn scheme_family_from_knowledge_signals(fwa_type: &str, tags: &[Strin
 
 fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
     let sla_target_hours = sla_target_hours_for_priority(&input.priority);
+    let evidence_sufficiency =
+        assess_evidence_sufficiency(&lead.scheme_family, &case_evidence_text(lead, input));
     CaseRecord {
         case_id: format!("case_{}", lead.claim_id),
         lead_id: lead.lead_id.clone(),
@@ -6748,6 +6751,7 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
             "rag": lead.rag.clone(),
             "reason": lead.reason.clone(),
             "triage_notes": input.notes.clone(),
+            "evidence_sufficiency": evidence_sufficiency,
             "evidence_refs": lead.evidence_refs.clone()
         }),
         sla_target_hours,
@@ -6755,6 +6759,19 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
         time_to_triage_hours: 0.0,
         time_to_closure_hours: None,
     }
+}
+
+fn case_evidence_text(lead: &LeadRecord, input: &TriageLeadInput) -> String {
+    let mut parts = vec![
+        lead.claim_id.clone(),
+        lead.member_id.clone(),
+        lead.provider_id.clone(),
+        lead.scheme_family.clone(),
+        lead.reason.clone(),
+        input.notes.clone(),
+    ];
+    parts.extend(lead.evidence_refs.clone());
+    parts.join(" ")
 }
 
 fn triage_status_for_decision(decision: &str) -> &'static str {

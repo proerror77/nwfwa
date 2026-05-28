@@ -1,4 +1,4 @@
-use fwa_core::minimum_evidence_for_scheme;
+use fwa_core::assess_evidence_sufficiency;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -26,14 +26,7 @@ pub struct InvestigationFinding {
     pub evidence_refs: Vec<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub struct EvidenceSufficiency {
-    pub scheme_family: String,
-    pub status: String,
-    pub minimum_evidence: Vec<String>,
-    pub present_evidence: Vec<String>,
-    pub missing_evidence: Vec<String>,
-}
+pub use fwa_core::EvidenceSufficiency;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvestigationPackage {
@@ -120,31 +113,7 @@ fn build_findings(request: &InvestigationRequest) -> Vec<InvestigationFinding> {
 }
 
 fn build_evidence_sufficiency(request: &InvestigationRequest) -> EvidenceSufficiency {
-    let minimum_evidence = minimum_evidence_for_scheme(&request.scheme_family);
-    let evidence_text = evidence_text(request);
-    let present_evidence = minimum_evidence
-        .iter()
-        .filter(|item| evidence_item_present(item, &evidence_text))
-        .cloned()
-        .collect::<Vec<_>>();
-    let missing_evidence = minimum_evidence
-        .iter()
-        .filter(|item| !present_evidence.contains(item))
-        .cloned()
-        .collect::<Vec<_>>();
-    let status = if missing_evidence.is_empty() {
-        "sufficient"
-    } else {
-        "needs_more_evidence"
-    };
-
-    EvidenceSufficiency {
-        scheme_family: request.scheme_family.clone(),
-        status: status.into(),
-        minimum_evidence,
-        present_evidence,
-        missing_evidence,
-    }
+    assess_evidence_sufficiency(&request.scheme_family, &evidence_text(request))
 }
 
 fn evidence_text(request: &InvestigationRequest) -> String {
@@ -155,55 +124,6 @@ fn evidence_text(request: &InvestigationRequest) -> String {
         parts.extend(similar_case.evidence_refs.clone());
     }
     parts.join(" ").to_ascii_lowercase()
-}
-
-fn evidence_item_present(item: &str, evidence_text: &str) -> bool {
-    match item {
-        "amount" | "claim_amount" => {
-            evidence_text.contains("amount") || evidence_text.contains("金额")
-        }
-        "billed_code" | "component_codes" | "procedure" => {
-            evidence_text.contains("code")
-                || evidence_text.contains("procedure")
-                || evidence_text.contains("项目")
-        }
-        "diagnosis" | "diagnosis_match" => {
-            evidence_text.contains("diagnosis") || evidence_text.contains("诊断")
-        }
-        "documentation" | "medical_record" | "chart_note" => {
-            evidence_text.contains("document")
-                || evidence_text.contains("medical_record")
-                || evidence_text.contains("病历")
-        }
-        "evidence_refs" => evidence_text.contains(':'),
-        "peer_benchmark" | "peer_group_definition" => {
-            evidence_text.contains("peer")
-                || evidence_text.contains("同病种")
-                || evidence_text.contains("同地区")
-        }
-        "policy_rule" => evidence_text.contains("policy") || evidence_text.contains("rule"),
-        "provider" | "ordering_provider" | "prescriber" | "supplier_provider" | "lab_provider" => {
-            evidence_text.contains("provider")
-        }
-        "region" | "provider_member_location" => {
-            evidence_text.contains("region:") || evidence_text.contains("地区")
-        }
-        "risk_reason" => !evidence_text.trim().is_empty(),
-        "statistical_deviation" => {
-            evidence_text.contains("p99")
-                || evidence_text.contains("percentile")
-                || evidence_text.contains("zscore")
-                || evidence_text.contains("偏离")
-                || evidence_text.contains("高于")
-        }
-        "time_window" | "billing_timeline" => {
-            evidence_text.contains("30d")
-                || evidence_text.contains("90d")
-                || evidence_text.contains("window")
-                || evidence_text.contains("近")
-        }
-        other => evidence_text.contains(other),
-    }
 }
 
 #[cfg(test)]
