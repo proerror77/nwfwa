@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
+import { buildClaimIdScorePayload } from "./RuntimeScoring";
 import { buildProviderProfileInspection } from "./providerProfileInspection";
+
+describe("buildClaimIdScorePayload", () => {
+  it("builds the stored-claim scoring request contract", () => {
+    expect(buildClaimIdScorePayload("tpa-demo", " CLM-0287 ", "post_payment")).toEqual({
+      source_system: "tpa-demo",
+      claim_id: "CLM-0287",
+      review_mode: "post_payment",
+    });
+  });
+});
 
 describe("buildProviderProfileInspection", () => {
   it("summarizes provider review route, outliers, and evidence", () => {

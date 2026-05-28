@@ -81,11 +81,29 @@ const defaultPayload = JSON.stringify(
   2,
 );
 
+export function buildClaimIdScorePayload(sourceSystem: string, claimId: string, reviewMode: string) {
+  return {
+    source_system: sourceSystem,
+    claim_id: claimId.trim(),
+    review_mode: reviewMode,
+  };
+}
+
 export function RuntimeScoring() {
   const [apiKey, setApiKey] = useState("dev-secret");
+  const [requestMode, setRequestMode] = useState("full_payload");
+  const [sourceSystem, setSourceSystem] = useState("tpa-demo");
+  const [claimId, setClaimId] = useState("CLM-0287");
+  const [reviewMode, setReviewMode] = useState("pre_payment");
   const [payload, setPayload] = useState(defaultPayload);
   const mutation = useMutation({
-    mutationFn: () => scoreClaim(JSON.parse(payload), apiKey) as Promise<ScoringResponse>,
+    mutationFn: () =>
+      scoreClaim(
+        requestMode === "claim_id"
+          ? buildClaimIdScorePayload(sourceSystem, claimId, reviewMode)
+          : JSON.parse(payload),
+        apiKey,
+      ) as Promise<ScoringResponse>,
   });
   const result = mutation.data;
   const providerInspection = result
@@ -102,10 +120,38 @@ export function RuntimeScoring() {
           API Key
           <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
         </label>
-        <label>
-          Claim Request JSON
-          <textarea value={payload} onChange={(event) => setPayload(event.target.value)} />
-        </label>
+        <div className="form-grid">
+          <label>
+            Request Mode
+            <select value={requestMode} onChange={(event) => setRequestMode(event.target.value)}>
+              <option value="full_payload">Full Payload</option>
+              <option value="claim_id">Claim ID</option>
+            </select>
+          </label>
+          <label>
+            Review Mode
+            <select value={reviewMode} onChange={(event) => setReviewMode(event.target.value)}>
+              <option value="pre_payment">Pre Payment</option>
+              <option value="post_payment">Post Payment</option>
+              <option value="both">Both</option>
+            </select>
+          </label>
+          <label>
+            Source System
+            <input value={sourceSystem} onChange={(event) => setSourceSystem(event.target.value)} />
+          </label>
+        </div>
+        {requestMode === "claim_id" ? (
+          <label>
+            Claim ID
+            <input value={claimId} onChange={(event) => setClaimId(event.target.value)} />
+          </label>
+        ) : (
+          <label>
+            Claim Request JSON
+            <textarea value={payload} onChange={(event) => setPayload(event.target.value)} />
+          </label>
+        )}
         <button onClick={() => mutation.mutate()} disabled={mutation.isPending}>
           Score Claim
         </button>
