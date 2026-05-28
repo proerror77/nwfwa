@@ -213,6 +213,8 @@ describe("buildDashboardValueMeasurementSummary", () => {
         avoided_future_exposure: "500.00",
         estimated_impact: "500.00",
         review_cost: "100.00",
+        false_positive_operational_cost: "25.00",
+        reviewer_capacity_hours: "0.25",
         net_value: "1650.00",
         currency: "CNY",
         evidence_caveat: "Estimated values require caveats.",
@@ -223,6 +225,8 @@ describe("buildDashboardValueMeasurementSummary", () => {
       avoidedFutureExposure: "CNY 500.00",
       estimatedImpact: "CNY 500.00",
       reviewCost: "CNY 100.00",
+      falsePositiveOperationalCost: "CNY 25.00",
+      reviewerCapacityHours: "0.25h",
       netValue: "CNY 1650.00",
       evidenceCaveat: "Estimated values require caveats.",
     });

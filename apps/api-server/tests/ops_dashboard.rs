@@ -738,6 +738,20 @@ async fn dashboard_summarizes_rule_governance_from_rule_performance() {
         false_positive_count as f64 / reviewed_count as f64
     );
     assert_eq!(
+        dashboard["value_measurement"]["false_positive_operational_cost"],
+        format!(
+            "{:.2}",
+            Decimal::from(false_positive_count * 100).round_dp(2)
+        )
+    );
+    assert_eq!(
+        dashboard["value_measurement"]["reviewer_capacity_hours"],
+        format!(
+            "{:.2}",
+            Decimal::from(total_trigger_count) * Decimal::new(25, 2)
+        )
+    );
+    assert_eq!(
         dashboard["rule_governance"]["saving_amount"],
         format!("{:.2}", saving_amount.round_dp(2))
     );

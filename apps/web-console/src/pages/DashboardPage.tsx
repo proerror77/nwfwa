@@ -77,6 +77,8 @@ type DashboardValueMeasurement = {
   avoided_future_exposure: string;
   estimated_impact: string;
   review_cost: string;
+  false_positive_operational_cost: string;
+  reviewer_capacity_hours: string;
   net_value: string;
   currency: string;
   evidence_caveat: string;
@@ -244,6 +246,8 @@ export function buildDashboardValueMeasurementSummary(value?: DashboardValueMeas
     avoidedFutureExposure: `${currency} ${value?.avoided_future_exposure ?? "0.00"}`,
     estimatedImpact: `${currency} ${value?.estimated_impact ?? "0.00"}`,
     reviewCost: `${currency} ${value?.review_cost ?? "0.00"}`,
+    falsePositiveOperationalCost: `${currency} ${value?.false_positive_operational_cost ?? "0.00"}`,
+    reviewerCapacityHours: `${value?.reviewer_capacity_hours ?? "0.00"}h`,
     netValue: `${currency} ${value?.net_value ?? "0.00"}`,
     evidenceCaveat: value?.evidence_caveat ?? "No value measurement caveat available.",
   };
@@ -398,6 +402,14 @@ export function DashboardPage() {
             <div className="metric-row compact-metric-row">
               <span>Review Cost</span>
               <strong>{valueMeasurementSummary.reviewCost}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>False Positive Cost</span>
+              <strong>{valueMeasurementSummary.falsePositiveOperationalCost}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Reviewer Capacity</span>
+              <strong>{valueMeasurementSummary.reviewerCapacityHours}</strong>
             </div>
           </div>
           <p className="empty">{valueMeasurementSummary.evidenceCaveat}</p>

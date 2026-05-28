@@ -416,6 +416,8 @@ pub struct DashboardValueMeasurementRecord {
     pub avoided_future_exposure: String,
     pub estimated_impact: String,
     pub review_cost: String,
+    pub false_positive_operational_cost: String,
+    pub reviewer_capacity_hours: String,
     pub net_value: String,
     pub currency: String,
     pub evidence_caveat: String,
@@ -1810,8 +1812,15 @@ impl ScoringRepository for InMemoryScoringRepository {
                     *distribution.entry(lead.scheme_family).or_insert(0) += 1;
                     distribution
                 });
-        let value_measurement =
-            summarize_dashboard_value_measurement(&financial_impacts, rule_hits);
+        let false_positive_count = rule_performance
+            .iter()
+            .map(|record| record.false_positive_count)
+            .sum::<u32>();
+        let value_measurement = summarize_dashboard_value_measurement(
+            &financial_impacts,
+            rule_hits,
+            false_positive_count,
+        );
 
         Ok(DashboardSummaryRecord {
             suspected_claims,
@@ -3982,6 +3991,10 @@ impl ScoringRepository for PostgresScoringRepository {
             value_measurement: summarize_dashboard_value_measurement(
                 &financial_impacts,
                 rule_hits.0 as u32,
+                rule_performance
+                    .iter()
+                    .map(|record| record.false_positive_count)
+                    .sum::<u32>(),
             ),
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
@@ -6027,6 +6040,7 @@ fn summarize_dashboard_rule_governance(
 fn summarize_dashboard_value_measurement(
     impacts: &[FinancialImpactRecord],
     review_events: u32,
+    false_positive_events: u32,
 ) -> DashboardValueMeasurementRecord {
     let mut prevented_payment = Decimal::ZERO;
     let mut recovered_amount = Decimal::ZERO;
@@ -6049,6 +6063,9 @@ fn summarize_dashboard_value_measurement(
     }
 
     let review_cost = Decimal::from(review_events) * Decimal::from(RULE_REVIEW_COST_AMOUNT as u32);
+    let false_positive_operational_cost =
+        Decimal::from(false_positive_events) * Decimal::from(RULE_REVIEW_COST_AMOUNT as u32);
+    let reviewer_capacity_hours = Decimal::from(review_events) * Decimal::new(25, 2);
     let estimated_impact = avoided_future_exposure + deterrence_or_other_estimate;
     let net_value = prevented_payment + recovered_amount + estimated_impact - review_cost;
 
@@ -6058,6 +6075,8 @@ fn summarize_dashboard_value_measurement(
         avoided_future_exposure: format_decimal_cents(avoided_future_exposure),
         estimated_impact: format_decimal_cents(estimated_impact),
         review_cost: format_decimal_cents(review_cost),
+        false_positive_operational_cost: format_decimal_cents(false_positive_operational_cost),
+        reviewer_capacity_hours: format_decimal_cents(reviewer_capacity_hours),
         net_value: format_decimal_cents(net_value),
         currency: currency.unwrap_or_else(|| "CNY".into()),
         evidence_caveat:

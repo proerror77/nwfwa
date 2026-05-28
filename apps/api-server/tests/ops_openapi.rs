@@ -300,6 +300,13 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/DashboardValueMeasurement"
     );
     assert!(schema["components"]["schemas"]["DashboardValueMeasurement"].is_object());
+    assert!(
+        schema["components"]["schemas"]["DashboardValueMeasurement"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "false_positive_operational_cost")
+    );
     assert!(schema["components"]["schemas"]["WebhookEvent"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["WebhookEventListResponse"]["properties"]["events"]
