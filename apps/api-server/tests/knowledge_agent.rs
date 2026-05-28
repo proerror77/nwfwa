@@ -202,7 +202,11 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["decision_boundary"], "assistive_only");
     assert!(body["agent_run_id"].as_str().unwrap().starts_with("agent_"));
-    assert!(body["risk_summary"].as_str().unwrap().contains("CLM-0287"));
+    assert!(!body["risk_summary"].as_str().unwrap().contains("CLM-0287"));
+    assert!(body["risk_summary"]
+        .as_str()
+        .unwrap()
+        .contains("masked:claim:"));
     assert!(body["investigation_checklist"].as_array().unwrap().len() >= 3);
     assert!(!body["similar_cases"].as_array().unwrap().is_empty());
     let similar_case = &body["similar_cases"][0];
@@ -282,6 +286,10 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert_eq!(run["claim_id"], "CLM-AGENT-LOGS");
     assert_eq!(run["status"], "succeeded");
     assert_eq!(run["decision_boundary"], "assistive_only");
+    assert!(!run["agent_run_id"]
+        .as_str()
+        .unwrap()
+        .contains("CLM-AGENT-LOGS"));
     assert!(!run["steps"].as_array().unwrap().is_empty());
     let context_snapshot = run["context_snapshots"]
         .as_array()
@@ -294,10 +302,24 @@ async fn lists_agent_run_logs_for_governance_review() {
         .unwrap()
         .starts_with("snapshot:"));
     assert!(context_snapshot["context_json"]["claim_id"].is_string());
+    assert_ne!(
+        context_snapshot["context_json"]["claim_id"],
+        "CLM-AGENT-LOGS"
+    );
+    assert!(context_snapshot["context_json"]["claim_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("masked:claim:"));
+    assert!(!context_snapshot["context_json"]
+        .to_string()
+        .contains("CLM-AGENT-LOGS"));
     assert!(!context_snapshot["source_refs"]
         .as_array()
         .unwrap()
         .is_empty());
+    assert!(!context_snapshot["source_refs"]
+        .to_string()
+        .contains("CLM-AGENT-LOGS"));
     let tool_call = run["tool_calls"]
         .as_array()
         .unwrap()
@@ -306,6 +328,9 @@ async fn lists_agent_run_logs_for_governance_review() {
         .expect("similar-case search tool call should be audited");
     assert_eq!(tool_call["status"], "succeeded");
     assert!(!tool_call["input_json"].as_object().unwrap().is_empty());
+    assert!(!tool_call["input_json"]
+        .to_string()
+        .contains("CLM-AGENT-LOGS"));
     assert!(!tool_call["evidence_refs"].as_array().unwrap().is_empty());
     let policy_check = run["policy_checks"]
         .as_array()
@@ -340,6 +365,7 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert!(!approval["evidence_refs"].as_array().unwrap().is_empty());
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
     assert!(run["output_json"]["evidence_sufficiency"].is_object());
+    assert!(!run["output_json"].to_string().contains("CLM-AGENT-LOGS"));
 }
 
 #[tokio::test]

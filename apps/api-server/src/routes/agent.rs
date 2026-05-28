@@ -56,15 +56,16 @@ pub async fn investigate_case(
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
     authorize(&state, &headers)?;
+    let masked_claim_ref = mask_agent_claim_ref(&request.claim_id);
     let scheme_family = request
         .scheme_family
         .clone()
         .unwrap_or_else(|| infer_scheme_family(&request));
-    let tool_call_id = format!("tool_call_{}", request.claim_id);
-    let tool_result_id = format!("tool_result_{}", request.claim_id);
+    let tool_call_id = format!("tool_call_{}", masked_claim_ref);
+    let tool_result_id = format!("tool_result_{}", masked_claim_ref);
     let policy_check = AgentPolicyCheckRecord {
-        policy_check_id: format!("policy_check_{}", request.claim_id),
-        agent_run_id: format!("agent_{}", request.claim_id),
+        policy_check_id: format!("policy_check_{}", masked_claim_ref),
+        agent_run_id: format!("agent_{}", masked_claim_ref),
         tool_call_id: tool_call_id.clone(),
         tool_name: "knowledge.search_similar".into(),
         policy_name: "agent_tool_allowlist".into(),
@@ -72,21 +73,21 @@ pub async fn investigate_case(
         reason: "Tool is allowlisted for read-only similar-case evidence retrieval.".into(),
         evidence_refs: vec![
             "policy:agent_tool_allowlist".into(),
-            format!("knowledge_query:{}", request.claim_id),
+            format!("knowledge_query:{}", masked_claim_ref),
         ],
         created_at: None,
     };
     let tool_input = serde_json::json!({
-        "claim_id": request.claim_id,
+        "claim_id": masked_claim_ref,
         "diagnosis_code": request.similar_case_query.diagnosis_code,
         "provider_region": request.similar_case_query.provider_region,
         "tags": request.similar_case_query.tags,
     });
-    let query_evidence_refs = vec![format!("knowledge_query:{}", request.claim_id)];
+    let query_evidence_refs = vec![format!("knowledge_query:{}", masked_claim_ref)];
     let similar_cases = state
         .repository
         .search_similar_cases(SimilarCaseQuery {
-            claim_id: Some(request.claim_id.clone()),
+            claim_id: Some(masked_claim_ref.clone()),
             diagnosis_code: request.similar_case_query.diagnosis_code.clone(),
             provider_region: request.similar_case_query.provider_region.clone(),
             tags: request.similar_case_query.tags.clone(),
@@ -112,7 +113,7 @@ pub async fn investigate_case(
         })
         .collect::<Vec<_>>();
     let context_json = serde_json::json!({
-        "claim_id": request.claim_id,
+        "claim_id": masked_claim_ref,
         "risk_score": request.risk_score,
         "rag": request.rag.clone(),
         "scheme_family": &scheme_family,
@@ -124,13 +125,13 @@ pub async fn investigate_case(
         }
     });
     let context_source_refs = vec![
-        format!("claims:{}", request.claim_id),
-        format!("risk_summary:{}", request.claim_id),
-        format!("knowledge_query:{}", request.claim_id),
+        format!("claims:{}", masked_claim_ref),
+        format!("risk_summary:{}", masked_claim_ref),
+        format!("knowledge_query:{}", masked_claim_ref),
     ];
 
     let package = DeterministicInvestigator.investigate(InvestigationRequest {
-        claim_id: request.claim_id.clone(),
+        claim_id: masked_claim_ref,
         risk_score: request.risk_score,
         rag: request.rag,
         scheme_family,
@@ -278,6 +279,19 @@ fn context_checksum(context_json: &Value) -> String {
     let mut hasher = std::collections::hash_map::DefaultHasher::new();
     context_json.to_string().hash(&mut hasher);
     format!("snapshot:{:016x}", hasher.finish())
+}
+
+fn mask_agent_claim_ref(claim_id: &str) -> String {
+    format!("masked:claim:{:016x}", stable_fnv1a64("claim", claim_id))
+}
+
+fn stable_fnv1a64(scope: &str, value: &str) -> u64 {
+    let mut hash = 0xcbf29ce484222325_u64;
+    for byte in scope.bytes().chain([0xff]).chain(value.bytes()) {
+        hash ^= u64::from(byte);
+        hash = hash.wrapping_mul(0x100000001b3);
+    }
+    hash
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
