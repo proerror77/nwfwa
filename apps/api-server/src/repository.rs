@@ -209,7 +209,8 @@ pub struct TriageLeadInput {
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct TriageLeadRecord {
-    pub case: CaseRecord,
+    pub lead: LeadRecord,
+    pub case: Option<CaseRecord>,
     pub audit_id: String,
 }
 
@@ -1661,13 +1662,19 @@ impl ScoringRepository for InMemoryScoringRepository {
         let Some(lead) = leads.get_mut(lead_id) else {
             return Ok(None);
         };
-        lead.status = "triaged".into();
-        lead.disposition = input.decision.clone();
-        let case = case_from_lead(lead, &input);
-        self.cases
-            .lock()
-            .await
-            .insert(case.case_id.clone(), case.clone());
+        lead.status = triage_status_for_decision(&input.decision).into();
+        lead.disposition = triage_disposition_for_decision(&input.decision).into();
+        let lead = lead.clone();
+        let case = if input.decision == "open_case" {
+            let case = case_from_lead(&lead, &input);
+            self.cases
+                .lock()
+                .await
+                .insert(case.case_id.clone(), case.clone());
+            Some(case)
+        } else {
+            None
+        };
         let audit_id = AuditEventId::new().to_string();
         self.audit_events.lock().await.push(PersistedAuditEvent {
             audit_id: audit_id.clone(),
@@ -1682,8 +1689,9 @@ impl ScoringRepository for InMemoryScoringRepository {
             payload: serde_json::json!({
                 "claim_id": lead.claim_id.clone(),
                 "lead_id": lead.lead_id.clone(),
-                "case_id": case.case_id.clone(),
+                "case_id": case.as_ref().map(|case| case.case_id.clone()),
                 "decision": input.decision.clone(),
+                "disposition": lead.disposition.clone(),
                 "notes": input.notes.clone()
             }),
             evidence_refs: lead
@@ -1692,7 +1700,11 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .map(|value| Value::String(value.clone()))
                 .collect(),
         });
-        Ok(Some(TriageLeadRecord { case, audit_id }))
+        Ok(Some(TriageLeadRecord {
+            lead,
+            case,
+            audit_id,
+        }))
     }
 
     async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
@@ -3732,9 +3744,9 @@ impl ScoringRepository for PostgresScoringRepository {
         let Some(mut lead) = lead else {
             return Ok(None);
         };
-        lead.status = "triaged".into();
-        lead.disposition = input.decision.clone();
-        let case = case_from_lead(&lead, &input);
+        lead.status = triage_status_for_decision(&input.decision).into();
+        lead.disposition = triage_disposition_for_decision(&input.decision).into();
+        let case = (input.decision == "open_case").then(|| case_from_lead(&lead, &input));
         sqlx::query(
             "UPDATE fwa_leads
              SET status = $2, disposition = $3, updated_at = now()
@@ -3745,35 +3757,37 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&lead.disposition)
         .execute(&mut *tx)
         .await?;
-        sqlx::query(
-            "INSERT INTO investigation_cases
-             (case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-             ON CONFLICT (case_id) DO UPDATE
-             SET status = EXCLUDED.status,
-                 assignee = EXCLUDED.assignee,
-                 reviewer = EXCLUDED.reviewer,
-                 priority = EXCLUDED.priority,
-                 routing_reason = EXCLUDED.routing_reason,
-                 evidence_package_json = EXCLUDED.evidence_package_json,
-                 updated_at = now()",
-        )
-        .bind(&case.case_id)
-        .bind(&case.lead_id)
-        .bind(&case.claim_id)
-        .bind(&case.member_id)
-        .bind(&case.provider_id)
-        .bind(&case.source_system)
-        .bind(&case.scheme_family)
-        .bind(&case.lead_source)
-        .bind(&case.status)
-        .bind(&case.assignee)
-        .bind(&case.reviewer)
-        .bind(&case.priority)
-        .bind(&case.routing_reason)
-        .bind(&case.evidence_package)
-        .execute(&mut *tx)
-        .await?;
+        if let Some(case) = &case {
+            sqlx::query(
+                "INSERT INTO investigation_cases
+                 (case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                 ON CONFLICT (case_id) DO UPDATE
+                 SET status = EXCLUDED.status,
+                     assignee = EXCLUDED.assignee,
+                     reviewer = EXCLUDED.reviewer,
+                     priority = EXCLUDED.priority,
+                     routing_reason = EXCLUDED.routing_reason,
+                     evidence_package_json = EXCLUDED.evidence_package_json,
+                     updated_at = now()",
+            )
+            .bind(&case.case_id)
+            .bind(&case.lead_id)
+            .bind(&case.claim_id)
+            .bind(&case.member_id)
+            .bind(&case.provider_id)
+            .bind(&case.source_system)
+            .bind(&case.scheme_family)
+            .bind(&case.lead_source)
+            .bind(&case.status)
+            .bind(&case.assignee)
+            .bind(&case.reviewer)
+            .bind(&case.priority)
+            .bind(&case.routing_reason)
+            .bind(&case.evidence_package)
+            .execute(&mut *tx)
+            .await?;
+        }
 
         let audit_id = AuditEventId::new().to_string();
         insert_audit_event(
@@ -3791,8 +3805,9 @@ impl ScoringRepository for PostgresScoringRepository {
                 payload: serde_json::json!({
                     "claim_id": lead.claim_id.clone(),
                     "lead_id": lead.lead_id.clone(),
-                    "case_id": case.case_id.clone(),
+                    "case_id": case.as_ref().map(|case| case.case_id.clone()),
                     "decision": input.decision.clone(),
+                    "disposition": lead.disposition.clone(),
                     "notes": input.notes.clone()
                 }),
                 evidence_refs: lead
@@ -3805,7 +3820,11 @@ impl ScoringRepository for PostgresScoringRepository {
         )
         .await?;
         tx.commit().await?;
-        Ok(Some(TriageLeadRecord { case, audit_id }))
+        Ok(Some(TriageLeadRecord {
+            lead,
+            case,
+            audit_id,
+        }))
     }
 
     async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
@@ -6229,6 +6248,24 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
     }
 }
 
+fn triage_status_for_decision(decision: &str) -> &'static str {
+    match decision {
+        "open_case" => "triaged",
+        "reject_lead" => "closed",
+        "request_evidence" => "pending_evidence",
+        _ => "triaged",
+    }
+}
+
+fn triage_disposition_for_decision(decision: &str) -> &'static str {
+    match decision {
+        "open_case" => "open_case",
+        "reject_lead" => "rejected",
+        "request_evidence" => "pending_evidence",
+        _ => "pending_triage",
+    }
+}
+
 fn build_audit_sample(
     sample_id: String,
     input: CreateAuditSampleInput,
@@ -6360,7 +6397,15 @@ fn webhook_event_from_audit(
     }
     let event_type = match event.event_type.as_str() {
         "scoring.completed" => "fwa.score.completed",
-        "lead.triaged" => "fwa.case.routed",
+        "lead.triaged" => {
+            if event.payload["decision"].as_str() == Some("open_case")
+                && event.payload["case_id"].as_str().is_some()
+            {
+                "fwa.case.routed"
+            } else {
+                return None;
+            }
+        }
         "investigation.result.received" => "fwa.investigation.closed",
         "qa.result.received" => "fwa.qa.reviewed",
         "case.status.updated" => {

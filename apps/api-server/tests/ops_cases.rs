@@ -34,6 +34,57 @@ async fn json_request(
     (status, body)
 }
 
+async fn score_high_risk_claim(app: axum::Router, claim_id: &str) {
+    let suffix = claim_id.replace('-', "_");
+    let (status, _) = json_request(
+        app,
+        "POST",
+        "/api/v1/claims/score",
+        &format!(
+            r#"{{
+              "source_system": "tpa-demo",
+              "claim": {{
+                "external_claim_id": "{claim_id}",
+                "claim_amount": "9000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10"
+              }},
+              "items": [
+                {{
+                  "item_code": "PROC-001",
+                  "item_type": "procedure",
+                  "description": "Imaging",
+                  "quantity": 1,
+                  "unit_amount": "9000",
+                  "total_amount": "9000"
+                }}
+              ],
+              "member": {{
+                "external_member_id": "MBR-{suffix}"
+              }},
+              "policy": {{
+                "external_policy_id": "POL-{suffix}",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+                "currency": "CNY"
+              }},
+              "provider": {{
+                "external_provider_id": "PRV-{suffix}",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH",
+                "risk_tier": "High"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+}
+
 #[tokio::test]
 async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     let app = build_app(test_config());
@@ -136,6 +187,87 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
         .unwrap()
         .iter()
         .any(|case| case["lead_id"] == lead_id));
+}
+
+#[tokio::test]
+async fn triages_lead_without_opening_case_for_non_case_dispositions() {
+    let app = build_app(test_config());
+    score_high_risk_claim(app.clone(), "CLM-LEAD-REJECT").await;
+    score_high_risk_claim(app.clone(), "CLM-LEAD-EVIDENCE").await;
+
+    let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let rejected_lead_id = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-LEAD-REJECT")
+        .unwrap()["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let evidence_lead_id = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-LEAD-EVIDENCE")
+        .unwrap()["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let (status, rejected) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{rejected_lead_id}/triage"),
+        r#"{
+          "decision": "reject_lead",
+          "assignee": "siu-reviewer-3",
+          "reviewer": "medical-reviewer-3",
+          "priority": "medium",
+          "notes": "Known false positive after triage."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(rejected["lead"]["status"], "closed");
+    assert_eq!(rejected["lead"]["disposition"], "rejected");
+    assert!(rejected["case"].is_null());
+
+    let (status, evidence) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{evidence_lead_id}/triage"),
+        r#"{
+          "decision": "request_evidence",
+          "assignee": "siu-reviewer-4",
+          "reviewer": "medical-reviewer-4",
+          "priority": "high",
+          "notes": "Need invoice and discharge summary before opening a case."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(evidence["lead"]["status"], "pending_evidence");
+    assert_eq!(evidence["lead"]["disposition"], "pending_evidence");
+    assert!(evidence["case"].is_null());
+
+    let (status, cases) = json_request(app.clone(), "GET", "/api/v1/ops/cases", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(cases["cases"].as_array().unwrap().is_empty());
+
+    let (status, audit) =
+        json_request(app, "GET", "/api/v1/audit/claims/CLM-LEAD-REJECT", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let triage_event = audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "lead.triaged")
+        .expect("non-case triage should be audited");
+    assert_eq!(triage_event["payload"]["decision"], "reject_lead");
+    assert_eq!(triage_event["payload"]["disposition"], "rejected");
+    assert!(triage_event["payload"]["case_id"].is_null());
 }
 
 #[tokio::test]

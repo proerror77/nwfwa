@@ -65,6 +65,7 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
 export function LeadsCasesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedLeadId, setSelectedLeadId] = useState("");
+  const [triageDecision, setTriageDecision] = useState("open_case");
   const [assignee, setAssignee] = useState("siu-reviewer-1");
   const [reviewer, setReviewer] = useState("medical-reviewer-1");
   const [priority, setPriority] = useState("high");
@@ -101,7 +102,7 @@ export function LeadsCasesPage() {
       return triageLead(
         selectedLead.lead_id,
         {
-          decision: "open_case",
+          decision: triageDecision,
           assignee,
           reviewer,
           priority,
@@ -221,6 +222,17 @@ export function LeadsCasesPage() {
             </dl>
             <div className="form-grid">
               <label>
+                Decision
+                <select
+                  value={triageDecision}
+                  onChange={(event) => setTriageDecision(event.target.value)}
+                >
+                  <option value="open_case">open_case</option>
+                  <option value="request_evidence">request_evidence</option>
+                  <option value="reject_lead">reject_lead</option>
+                </select>
+              </label>
+              <label>
                 Assignee
                 <input value={assignee} onChange={(event) => setAssignee(event.target.value)} />
               </label>
@@ -242,7 +254,7 @@ export function LeadsCasesPage() {
               <input value={notes} onChange={(event) => setNotes(event.target.value)} />
             </label>
             <button onClick={() => triageMutation.mutate()} disabled={triageMutation.isPending}>
-              Open Case
+              Submit Triage
             </button>
             {triageMutation.error ? (
               <pre className="error">{String(triageMutation.error.message)}</pre>

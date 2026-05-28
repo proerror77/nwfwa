@@ -44,11 +44,11 @@ pub async fn triage_lead(
     Json(request): Json<TriageLeadInput>,
 ) -> Result<Json<TriageLeadRecord>, ApiError> {
     authorize(&state, &headers)?;
-    if request.decision != "open_case" {
+    if !is_supported_triage_decision(&request.decision) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "UNSUPPORTED_TRIAGE_DECISION",
-            "only open_case is supported in the MVP case workflow",
+            "decision must be one of open_case, reject_lead, or request_evidence",
         ));
     }
     let record = state
@@ -58,6 +58,10 @@ pub async fn triage_lead(
         .map_err(internal_error("LEAD_TRIAGE_FAILED"))?
         .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "LEAD_NOT_FOUND", "lead not found"))?;
     Ok(Json(record))
+}
+
+fn is_supported_triage_decision(decision: &str) -> bool {
+    matches!(decision, "open_case" | "reject_lead" | "request_evidence")
 }
 
 pub async fn list_cases(

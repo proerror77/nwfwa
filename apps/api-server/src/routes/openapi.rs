@@ -585,7 +585,7 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "/api/v1/ops/leads/{lead_id}/triage": {
                 "post": {
-                    "summary": "Triage a lead into an investigation case",
+                    "summary": "Triage a lead into an investigation case or non-case disposition",
                     "security": [{ "ApiKeyAuth": [] }],
                     "parameters": [
                         {
@@ -605,7 +605,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     },
                     "responses": {
                         "200": {
-                            "description": "Created or updated investigation case",
+                            "description": "Updated lead disposition and optional investigation case",
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/TriageLeadResponse" }
@@ -3124,7 +3124,10 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["decision", "assignee", "reviewer", "priority", "notes"],
                     "properties": {
-                        "decision": { "type": "string" },
+                        "decision": {
+                            "type": "string",
+                            "enum": ["open_case", "reject_lead", "request_evidence"]
+                        },
                         "assignee": { "type": "string" },
                         "reviewer": { "type": "string" },
                         "priority": { "type": "string" },
@@ -3133,9 +3136,15 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "TriageLeadResponse": {
                     "type": "object",
-                    "required": ["case", "audit_id"],
+                    "required": ["lead", "audit_id"],
                     "properties": {
-                        "case": { "$ref": "#/components/schemas/Case" },
+                        "lead": { "$ref": "#/components/schemas/Lead" },
+                        "case": {
+                            "oneOf": [
+                                { "$ref": "#/components/schemas/Case" },
+                                { "type": "null" }
+                            ]
+                        },
                         "audit_id": { "type": "string" }
                     }
                 },
