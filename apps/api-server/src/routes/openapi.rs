@@ -3522,6 +3522,17 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "AgentSimilarCase": {
+                    "type": "object",
+                    "required": ["case_id", "similarity_score", "matched_signals", "provenance_refs", "evidence_refs"],
+                    "properties": {
+                        "case_id": { "type": "string" },
+                        "similarity_score": { "type": "number" },
+                        "matched_signals": { "type": "array", "items": { "type": "string" } },
+                        "provenance_refs": { "type": "array", "items": { "type": "string" } },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
                 "AgentInvestigationRequest": {
                     "type": "object",
                     "required": ["claim_id", "risk_score", "rag", "top_reasons", "similar_case_query"],
@@ -3543,7 +3554,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "risk_summary": { "type": "string" },
                         "findings": { "type": "array", "items": { "type": "object" } },
                         "investigation_checklist": { "type": "array", "items": { "type": "string" } },
-                        "similar_cases": { "type": "array", "items": { "type": "object" } },
+                        "similar_cases": { "type": "array", "items": { "$ref": "#/components/schemas/AgentSimilarCase" } },
                         "qa_opinion_draft": { "type": "string" },
                         "evidence_sufficiency": { "$ref": "#/components/schemas/EvidenceSufficiency" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }

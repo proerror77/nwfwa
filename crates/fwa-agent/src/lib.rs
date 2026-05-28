@@ -5,6 +5,7 @@ pub struct SimilarCaseInput {
     pub case_id: String,
     pub similarity_score: f64,
     pub matched_signals: Vec<String>,
+    pub provenance_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -59,6 +60,7 @@ impl DeterministicInvestigator {
             .collect::<Vec<_>>();
         for similar_case in &request.similar_cases {
             evidence_refs.extend(similar_case.evidence_refs.clone());
+            evidence_refs.extend(similar_case.provenance_refs.clone());
         }
         evidence_refs.sort();
         evidence_refs.dedup();
@@ -255,6 +257,7 @@ fn evidence_text(request: &InvestigationRequest) -> String {
     let mut parts = request.top_reasons.clone();
     for similar_case in &request.similar_cases {
         parts.extend(similar_case.matched_signals.clone());
+        parts.extend(similar_case.provenance_refs.clone());
         parts.extend(similar_case.evidence_refs.clone());
     }
     parts.join(" ").to_ascii_lowercase()
@@ -328,6 +331,7 @@ mod tests {
                 case_id: "KC-1001".into(),
                 similarity_score: 0.82,
                 matched_signals: vec!["diagnosis:J10".into()],
+                provenance_refs: vec!["retrieval:structured_signal_overlap".into()],
                 evidence_refs: vec!["knowledge_cases:KC-1001".into()],
             }],
         };
@@ -355,6 +359,12 @@ mod tests {
             .evidence_sufficiency
             .missing_evidence
             .contains(&"specialty".into()));
+        assert!(package.similar_cases[0]
+            .provenance_refs
+            .contains(&"retrieval:structured_signal_overlap".into()));
+        assert!(package
+            .evidence_refs
+            .contains(&"retrieval:structured_signal_overlap".into()));
         assert!(!package.evidence_refs.is_empty());
         assert!(!package.qa_opinion_draft.contains("拒赔"));
     }

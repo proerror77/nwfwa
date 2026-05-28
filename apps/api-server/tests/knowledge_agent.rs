@@ -205,6 +205,16 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
     assert!(body["risk_summary"].as_str().unwrap().contains("CLM-0287"));
     assert!(body["investigation_checklist"].as_array().unwrap().len() >= 3);
     assert!(!body["similar_cases"].as_array().unwrap().is_empty());
+    let similar_case = &body["similar_cases"][0];
+    assert!(similar_case["provenance_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+    assert!(similar_case["provenance_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference.as_str().unwrap().starts_with("matched_signal:")));
     assert!(body["findings"]
         .as_array()
         .unwrap()
@@ -222,6 +232,15 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("specialty")));
+    assert!(body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+    assert!(body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference.as_str().unwrap().starts_with("matched_signal:")));
     assert!(!body["evidence_refs"].as_array().unwrap().is_empty());
 }
 
@@ -306,7 +325,11 @@ async fn lists_agent_run_logs_for_governance_review() {
         .expect("similar-case search tool result should be audited");
     assert_eq!(tool_result["status"], "succeeded");
     assert!(tool_result["output_json"]["result_count"].as_u64().unwrap() > 0);
-    assert!(!tool_result["evidence_refs"].as_array().unwrap().is_empty());
+    assert!(tool_result["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference.as_str().unwrap().starts_with("matched_signal:")));
     let approval = run["approvals"]
         .as_array()
         .unwrap()

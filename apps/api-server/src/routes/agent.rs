@@ -98,12 +98,18 @@ pub async fn investigate_case(
             case_id: case.case_id,
             similarity_score: case.similarity_score,
             matched_signals: case.matched_signals,
+            provenance_refs: case.provenance_refs,
             evidence_refs: case.evidence_refs,
         })
         .collect::<Vec<_>>();
     let result_evidence_refs = similar_cases
         .iter()
-        .flat_map(|case| case.evidence_refs.iter().cloned())
+        .flat_map(|case| {
+            case.evidence_refs
+                .iter()
+                .chain(case.provenance_refs.iter())
+                .cloned()
+        })
         .collect::<Vec<_>>();
     let context_json = serde_json::json!({
         "claim_id": request.claim_id,

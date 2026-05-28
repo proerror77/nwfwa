@@ -579,6 +579,18 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["paths"]["/api/v1/members/{member_id}/profile-summary"]["get"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabel"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabelListResponse"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["properties"]
+            ["similar_cases"]["items"]["$ref"],
+        "#/components/schemas/AgentSimilarCase"
+    );
+    assert!(
+        schema["components"]["schemas"]["AgentSimilarCase"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "provenance_refs")
+    );
     assert!(schema["components"]["schemas"]["QaQueueListResponse"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["QaQueueListResponse"]["properties"]["items"]["items"]
