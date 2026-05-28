@@ -69,6 +69,12 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
   return {
     totalLeads: leads.length,
     pendingTriage: leads.filter((lead) => lead.disposition === "pending_triage").length,
+    openCaseLeads: leads.filter((lead) => lead.disposition === "open_case").length,
+    evidenceBackedLeads: leads.filter((lead) => lead.evidence_refs.length > 0).length,
+    requestEvidenceLeads: leads.filter((lead) => lead.disposition === "request_evidence").length,
+    closedLeads: leads.filter((lead) =>
+      ["rejected", "merged", "closed"].includes(lead.disposition),
+    ).length,
     openCases: cases.length,
     highPriorityCases: cases.filter((item) => item.priority === "high").length,
     topScheme,
@@ -219,6 +225,22 @@ export function LeadsCasesPage() {
             <strong>{summary.pendingTriage}</strong>
           </div>
           <div>
+            <span>Open Case Leads</span>
+            <strong>{summary.openCaseLeads}</strong>
+          </div>
+          <div>
+            <span>Evidence Backed</span>
+            <strong>{summary.evidenceBackedLeads}</strong>
+          </div>
+          <div>
+            <span>Request Evidence</span>
+            <strong>{summary.requestEvidenceLeads}</strong>
+          </div>
+          <div>
+            <span>Closed Leads</span>
+            <strong>{summary.closedLeads}</strong>
+          </div>
+          <div>
             <span>Open Cases</span>
             <strong>{summary.openCases}</strong>
           </div>
@@ -276,6 +298,14 @@ export function LeadsCasesPage() {
                 <dd>{selectedLead.rag}</dd>
               </div>
               <div>
+                <dt>Source</dt>
+                <dd>{selectedLead.lead_source || selectedLead.source_system || "-"}</dd>
+              </div>
+              <div>
+                <dt>Evidence</dt>
+                <dd>{selectedLead.evidence_refs.length}</dd>
+              </div>
+              <div>
                 <dt>Member</dt>
                 <dd>{selectedLead.member_id || "-"}</dd>
               </div>
@@ -284,6 +314,7 @@ export function LeadsCasesPage() {
                 <dd>{selectedLead.provider_id || "-"}</dd>
               </div>
             </dl>
+            <p>{selectedLead.reason || "No lead reason provided"}</p>
             <div className="form-grid">
               <label>
                 Decision
