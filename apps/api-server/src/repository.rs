@@ -87,6 +87,9 @@ pub struct AuditEventListFilter {
     pub actor_id: Option<String>,
     pub run_id: Option<String>,
     pub claim_id: Option<String>,
+    pub routing_policy_id: Option<String>,
+    pub routing_policy_version: Option<String>,
+    pub review_mode: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5953,6 +5956,9 @@ impl ScoringRepository for PostgresScoringRepository {
                  OR c.external_claim_id = $5
                  OR ae.claim_id::text = $5
                )
+               AND ($6::text IS NULL OR ae.payload ->> 'policy_id' = $6)
+               AND ($7::text IS NULL OR ae.payload ->> 'version' = $7)
+               AND ($8::text IS NULL OR ae.payload ->> 'review_mode' = $8)
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -5961,6 +5967,9 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.actor_id.as_deref())
         .bind(filter.run_id.as_deref())
         .bind(filter.claim_id.as_deref())
+        .bind(filter.routing_policy_id.as_deref())
+        .bind(filter.routing_policy_version.as_deref())
+        .bind(filter.review_mode.as_deref())
         .fetch_all(&self.pool)
         .await?;
 
@@ -6957,6 +6966,9 @@ fn persisted_audit_event_matches_filter(
             return false;
         }
     }
+    if !audit_event_payload_matches_routing_policy_filter(&event.payload, filter) {
+        return false;
+    }
     true
 }
 
@@ -6987,6 +6999,43 @@ fn pilot_audit_event_matches_filter(
         if claim_id != filter_claim_id && payload_claim_id != Some(filter_claim_id) {
             return false;
         }
+    }
+    if !audit_event_payload_matches_routing_policy_filter(&event.payload, filter) {
+        return false;
+    }
+    true
+}
+
+fn audit_event_payload_matches_routing_policy_filter(
+    payload: &Value,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter
+        .routing_policy_id
+        .as_deref()
+        .is_some_and(|policy_id| payload["policy_id"].as_str() != Some(policy_id))
+    {
+        return false;
+    }
+    if filter
+        .routing_policy_version
+        .as_deref()
+        .is_some_and(|version| {
+            payload["version"]
+                .as_u64()
+                .map(|value| value.to_string())
+                .as_deref()
+                != Some(version)
+        })
+    {
+        return false;
+    }
+    if filter
+        .review_mode
+        .as_deref()
+        .is_some_and(|review_mode| payload["review_mode"].as_str() != Some(review_mode))
+    {
+        return false;
     }
     true
 }

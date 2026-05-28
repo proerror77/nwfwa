@@ -4,6 +4,7 @@ import {
   activateRoutingPolicy,
   approveRoutingPolicy,
   getRoutingPolicyPromotionGates,
+  listAuditEvents,
   listRoutingPolicies,
   rollbackRoutingPolicy,
   saveRoutingPolicyCandidate,
@@ -52,6 +53,17 @@ type RoutingPolicyPromotionGatesResponse = {
   blockers: string[];
 };
 
+type AuditEvent = {
+  audit_id: string;
+  run_id: string;
+  event_type: string;
+  event_status: string;
+  summary: string;
+  payload?: Record<string, unknown>;
+  evidence_refs: string[];
+  created_at?: string | null;
+};
+
 const defaultCandidate = JSON.stringify(
   {
     owner: "policy-ops",
@@ -91,6 +103,15 @@ export function buildRoutingPolicySummary(policies: RoutingPolicyRecord[] = []) 
   };
 }
 
+export function buildRoutingPolicyAuditFilters(policy: RoutingPolicyRecord, limit = 25) {
+  return {
+    limit,
+    routing_policy_id: policy.policy_id,
+    routing_policy_version: policy.version,
+    review_mode: policy.review_mode,
+  };
+}
+
 export function RoutingPoliciesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedPolicyKey, setSelectedPolicyKey] = useState("");
@@ -117,6 +138,15 @@ export function RoutingPoliciesPage() {
       ) as Promise<RoutingPolicyPromotionGatesResponse>,
     enabled: Boolean(selectedPolicy),
   });
+  const auditQuery = useQuery({
+    queryKey: ["routing-policy-audit-events", selectedPolicy, apiKey],
+    queryFn: () =>
+      listAuditEvents(
+        apiKey,
+        buildRoutingPolicyAuditFilters(selectedPolicy!),
+      ) as Promise<{ events: AuditEvent[] }>,
+    enabled: Boolean(selectedPolicy),
+  });
   const summary = buildRoutingPolicySummary(policies);
   const promotionGateRows = promotionQuery.data
     ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
@@ -132,6 +162,7 @@ export function RoutingPoliciesPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["routing-policies"] });
       queryClient.invalidateQueries({ queryKey: ["routing-policy-promotion-gates"] });
+      queryClient.invalidateQueries({ queryKey: ["routing-policy-audit-events"] });
     },
   });
   const saveCandidateMutation = useMutation({
@@ -141,6 +172,7 @@ export function RoutingPoliciesPage() {
       setSelectedPolicyKey(routingPolicyKey(policy));
       queryClient.invalidateQueries({ queryKey: ["routing-policies"] });
       queryClient.invalidateQueries({ queryKey: ["routing-policy-promotion-gates"] });
+      queryClient.invalidateQueries({ queryKey: ["routing-policy-audit-events"] });
     },
   });
 
@@ -270,9 +302,36 @@ export function RoutingPoliciesPage() {
             {promotionQuery.error ? (
               <pre className="error">{String(promotionQuery.error.message)}</pre>
             ) : null}
+            {auditQuery.error ? (
+              <pre className="error">{String(auditQuery.error.message)}</pre>
+            ) : null}
           </div>
         ) : (
           <p className="empty">No routing policies available</p>
+        )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Lifecycle Audit Trail</h2>
+        {auditQuery.data?.events.length ? (
+          <ol className="audit-timeline">
+            {auditQuery.data.events.map((event) => (
+              <li key={event.audit_id}>
+                <div>
+                  <strong>{event.event_type}</strong>
+                  <span>{event.event_status}</span>
+                </div>
+                <small>{event.created_at || event.run_id}</small>
+                <p>{event.summary}</p>
+                <ul className="result-list">
+                  {event.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No lifecycle audit events loaded</p>
         )}
       </div>
       <div className="panel wide-panel">

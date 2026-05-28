@@ -296,6 +296,9 @@ export type AuditEventListFilters = {
   actor_id?: string;
   run_id?: string;
   claim_id?: string;
+  routing_policy_id?: string;
+  routing_policy_version?: number | string;
+  review_mode?: string;
 };
 
 export async function listAuditEvents(

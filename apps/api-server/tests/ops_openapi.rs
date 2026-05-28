@@ -386,7 +386,16 @@ async fn openapi_includes_operations_paths() {
     let audit_event_parameters = schema["paths"]["/api/v1/ops/audit-events"]["get"]["parameters"]
         .as_array()
         .unwrap();
-    for parameter_name in ["limit", "event_type", "actor_id", "run_id", "claim_id"] {
+    for parameter_name in [
+        "limit",
+        "event_type",
+        "actor_id",
+        "run_id",
+        "claim_id",
+        "routing_policy_id",
+        "routing_policy_version",
+        "review_mode",
+    ] {
         assert!(
             audit_event_parameters
                 .iter()

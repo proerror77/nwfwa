@@ -735,6 +735,24 @@ pub async fn openapi_schema() -> Json<Value> {
                             "in": "query",
                             "required": false,
                             "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "routing_policy_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "routing_policy_version",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "review_mode",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] }
                         }
                     ],
                     "responses": {

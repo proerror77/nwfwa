@@ -189,6 +189,87 @@ async fn filters_global_audit_events_for_governance_search() {
 }
 
 #[tokio::test]
+async fn filters_routing_policy_audit_events_for_lifecycle_history() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": "policy-ops",
+          "policy": {
+            "policy_id": "audit_history_policy",
+            "version": 3,
+            "review_mode": "post_payment",
+            "risk_thresholds": {
+              "low_max": 24,
+              "medium_min": 25,
+              "high_min": 65,
+              "critical_min": 88
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 55,
+              "high_confidence_min": 85
+            },
+            "provider_review_threshold": 72
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    for action in ["submit", "approve"] {
+        let (status, _) = json_request(
+            app.clone(),
+            "POST",
+            &format!("/api/v1/ops/routing-policies/audit_history_policy/post_payment/3/{action}"),
+            "{}",
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let (status, history) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?routing_policy_id=audit_history_policy&routing_policy_version=3&review_mode=post_payment&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let event_types = history["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["event_type"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        event_types,
+        vec![
+            "routing_policy.status.changed",
+            "routing_policy.status.changed",
+            "routing_policy.candidate.saved"
+        ]
+    );
+    assert!(history["events"].as_array().unwrap().iter().all(|event| {
+        event["payload"]["policy_id"] == "audit_history_policy"
+            && event["payload"]["version"] == 3
+            && event["payload"]["review_mode"] == "post_payment"
+    }));
+
+    let (status, wrong_version) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?routing_policy_id=audit_history_policy&routing_policy_version=2&review_mode=post_payment&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(wrong_version["events"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn global_audit_events_require_api_key() {
     let app = build_app(test_config());
 

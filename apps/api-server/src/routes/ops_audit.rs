@@ -18,6 +18,9 @@ pub struct AuditEventListQuery {
     pub actor_id: Option<String>,
     pub run_id: Option<String>,
     pub claim_id: Option<String>,
+    pub routing_policy_id: Option<String>,
+    pub routing_policy_version: Option<String>,
+    pub review_mode: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -37,6 +40,9 @@ pub async fn list_audit_events(
         actor_id: normalize_filter(query.actor_id),
         run_id: normalize_filter(query.run_id),
         claim_id: normalize_filter(query.claim_id),
+        routing_policy_id: normalize_filter(query.routing_policy_id),
+        routing_policy_version: normalize_filter(query.routing_policy_version),
+        review_mode: normalize_filter(query.review_mode),
     };
     let events = state
         .repository

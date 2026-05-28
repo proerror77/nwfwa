@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildRoutingPolicySummary, RoutingPolicyRecord } from "./RoutingPoliciesPage";
+import {
+  buildRoutingPolicyAuditFilters,
+  buildRoutingPolicySummary,
+  RoutingPolicyRecord,
+} from "./RoutingPoliciesPage";
 
 const basePolicy: RoutingPolicyRecord = {
   policy_id: "fwa_risk_fusion_routing",
@@ -52,6 +56,17 @@ describe("buildRoutingPolicySummary", () => {
       submittedCount: 1,
       approvedCount: 1,
       reviewModeCount: 3,
+    });
+  });
+});
+
+describe("buildRoutingPolicyAuditFilters", () => {
+  it("builds exact audit query filters for a routing policy version", () => {
+    expect(buildRoutingPolicyAuditFilters(basePolicy)).toEqual({
+      limit: 25,
+      routing_policy_id: "fwa_risk_fusion_routing",
+      routing_policy_version: 1,
+      review_mode: "pre_payment",
     });
   });
 });

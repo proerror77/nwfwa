@@ -469,6 +469,9 @@ describe("ops API helpers", () => {
       actor_id: "qa_reviewer",
       run_id: "pilot_qa_QA-1",
       claim_id: "CLM-1",
+      routing_policy_id: "fwa_risk_fusion_routing",
+      routing_policy_version: 2,
+      review_mode: "pre_payment",
     });
     await listAgentRuns("dev-secret");
     await listOpsAlerts("dev-secret");
@@ -482,7 +485,7 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/api/v1/ops/audit-events?limit=25&event_type=qa.result.received&actor_id=qa_reviewer&run_id=pilot_qa_QA-1&claim_id=CLM-1",
+      "/api/v1/ops/audit-events?limit=25&event_type=qa.result.received&actor_id=qa_reviewer&run_id=pilot_qa_QA-1&claim_id=CLM-1&routing_policy_id=fwa_risk_fusion_routing&routing_policy_version=2&review_mode=pre_payment",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
