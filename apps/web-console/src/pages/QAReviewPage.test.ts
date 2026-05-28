@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildQaEvidenceRefs,
   canSubmitQaQueueItem,
+  canUpdateQaFeedbackItem,
   QA_CONCLUSION_OPTIONS,
   QA_FEEDBACK_TARGET_OPTIONS,
   QA_ISSUE_TYPE_OPTIONS,
@@ -78,6 +79,26 @@ describe("QAReviewPage helpers", () => {
       }),
     ).toBe(false);
     expect(canSubmitQaQueueItem(null)).toBe(false);
+  });
+
+  it("allows only actionable QA feedback statuses to be updated", () => {
+    const item = {
+      feedback_id: "qa_feedback_QA-1",
+      qa_case_id: "QA-1",
+      claim_id: "CLM-1",
+      feedback_target: "rules",
+      issue_type: "alert_handling_incomplete",
+      priority: "high",
+      status: "open",
+      summary: "Rule feedback",
+      note_present: true,
+      evidence_refs: ["rule_runs:EARLY_CLAIM"],
+    };
+
+    expect(canUpdateQaFeedbackItem(item)).toBe(true);
+    expect(canUpdateQaFeedbackItem({ ...item, status: "in_progress" })).toBe(true);
+    expect(canUpdateQaFeedbackItem({ ...item, status: "resolved" })).toBe(false);
+    expect(canUpdateQaFeedbackItem({ ...item, status: "dismissed" })).toBe(false);
   });
 
   it("builds QA evidence refs from the selected sampled lead", () => {

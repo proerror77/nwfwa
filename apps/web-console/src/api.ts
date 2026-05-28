@@ -434,6 +434,21 @@ export async function listQaFeedbackItems(apiKey: string) {
   return requestJson("/api/v1/ops/qa/feedback-items", apiKey);
 }
 
+export async function updateQaFeedbackStatus(
+  feedbackId: string,
+  payload: unknown,
+  apiKey: string,
+) {
+  return requestJson(
+    `/api/v1/ops/qa/feedback-items/${encodeURIComponent(feedbackId)}/status`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function listQaQueue(apiKey: string) {
   return requestJson("/api/v1/ops/qa/queue", apiKey);
 }

@@ -6,6 +6,7 @@ import {
   listQaQueue,
   listQaQueueSummary,
   submitQaResult,
+  updateQaFeedbackStatus,
 } from "../api";
 import {
   buildFwaSchemeLabelMap,
@@ -103,6 +104,10 @@ export function canSubmitQaQueueItem(item: QaQueueItem | null) {
   return item?.status === "open";
 }
 
+export function canUpdateQaFeedbackItem(item: QaFeedbackItem) {
+  return item.status === "open" || item.status === "in_progress";
+}
+
 export function buildQaEvidenceRefs(item: QaQueueItem | null) {
   if (!item) {
     return "";
@@ -177,6 +182,23 @@ export function QAReviewPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["qa-queue"] });
+      queryClient.invalidateQueries({ queryKey: ["qa-feedback-items"] });
+      queryClient.invalidateQueries({ queryKey: ["qa-queue-summary"] });
+    },
+  });
+  const feedbackStatusMutation = useMutation({
+    mutationFn: ({ item, status }: { item: QaFeedbackItem; status: string }) =>
+      updateQaFeedbackStatus(
+        item.feedback_id,
+        {
+          status,
+          actor_id: "qa-ops",
+          notes: `QA feedback marked ${status} from QA Review.`,
+          evidence_refs: [`qa_feedback:${item.feedback_id}`, ...item.evidence_refs],
+        },
+        apiKey,
+      ),
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["qa-feedback-items"] });
       queryClient.invalidateQueries({ queryKey: ["qa-queue-summary"] });
     },
@@ -346,6 +368,9 @@ export function QAReviewPage() {
         {submitMutation.error ? (
           <pre className="error">{String(submitMutation.error.message)}</pre>
         ) : null}
+        {feedbackStatusMutation.error ? (
+          <pre className="error">{String(feedbackStatusMutation.error.message)}</pre>
+        ) : null}
         {submitMutation.data ? (
           <pre>{JSON.stringify(submitMutation.data, null, 2)}</pre>
         ) : null}
@@ -365,6 +390,33 @@ export function QAReviewPage() {
               <small>
                 {item.priority} · {item.status}
               </small>
+              {canUpdateQaFeedbackItem(item) ? (
+                <div className="button-row">
+                  <button
+                    disabled={feedbackStatusMutation.isPending}
+                    onClick={() =>
+                      feedbackStatusMutation.mutate({ item, status: "in_progress" })
+                    }
+                    type="button"
+                  >
+                    In Progress
+                  </button>
+                  <button
+                    disabled={feedbackStatusMutation.isPending}
+                    onClick={() => feedbackStatusMutation.mutate({ item, status: "resolved" })}
+                    type="button"
+                  >
+                    Resolve
+                  </button>
+                  <button
+                    disabled={feedbackStatusMutation.isPending}
+                    onClick={() => feedbackStatusMutation.mutate({ item, status: "dismissed" })}
+                    type="button"
+                  >
+                    Dismiss
+                  </button>
+                </div>
+              ) : null}
             </div>
           ))}
         </div>

@@ -53,6 +53,7 @@ import {
   submitRoutingPolicy,
   submitRule,
   submitQaResult,
+  updateQaFeedbackStatus,
   submitWebhookDeliveryAttempt,
   triageLead,
 } from "./api";
@@ -649,6 +650,29 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/qa/feedback-items",
       expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("updates QA feedback item status", async () => {
+    const fetchMock = mockFetch({ item: {}, audit_id: "audit_1" });
+
+    await updateQaFeedbackStatus(
+      "qa_feedback_QA-1",
+      {
+        status: "resolved",
+        actor_id: "qa-ops",
+        notes: "Resolved in rule review.",
+        evidence_refs: ["qa_feedback:qa_feedback_QA-1"],
+      },
+      "dev-secret",
+    );
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/qa/feedback-items/qa_feedback_QA-1/status",
+      expect.objectContaining({
+        method: "POST",
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
