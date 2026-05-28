@@ -2308,7 +2308,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "value_measurement", "label_pool", "qa_queue", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "value_measurement", "label_pool", "qa_queue", "case_sla", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2338,6 +2338,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "value_measurement": { "$ref": "#/components/schemas/DashboardValueMeasurement" },
                         "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },
                         "qa_queue": { "$ref": "#/components/schemas/DashboardQaQueue" },
+                        "case_sla": { "$ref": "#/components/schemas/DashboardCaseSla" },
                         "agent_governance": { "$ref": "#/components/schemas/DashboardAgentGovernance" },
                         "model_governance": { "$ref": "#/components/schemas/DashboardModelGovernance" },
                         "rule_governance": { "$ref": "#/components/schemas/DashboardRuleGovernance" },
@@ -2380,6 +2381,19 @@ pub async fn openapi_schema() -> Json<Value> {
                         "reviewed_cases": { "type": "integer" },
                         "disagreement_cases": { "type": "integer" },
                         "disagreement_rate": { "type": "number" }
+                    }
+                },
+                "DashboardCaseSla": {
+                    "type": "object",
+                    "required": ["total_cases", "open_cases", "closed_cases", "breached_cases", "sla_breach_rate", "average_time_to_triage_hours", "average_time_to_closure_hours"],
+                    "properties": {
+                        "total_cases": { "type": "integer" },
+                        "open_cases": { "type": "integer" },
+                        "closed_cases": { "type": "integer" },
+                        "breached_cases": { "type": "integer" },
+                        "sla_breach_rate": { "type": "number" },
+                        "average_time_to_triage_hours": { "type": "number" },
+                        "average_time_to_closure_hours": { "type": "number" }
                     }
                 },
                 "DashboardAgentGovernance": {
@@ -2454,7 +2468,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "Case": {
                     "type": "object",
-                    "required": ["case_id", "lead_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "assignee", "reviewer", "priority", "routing_reason", "evidence_package"],
+                    "required": ["case_id", "lead_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "assignee", "reviewer", "priority", "routing_reason", "evidence_package", "sla_target_hours", "sla_status", "time_to_triage_hours", "time_to_closure_hours"],
                     "properties": {
                         "case_id": { "type": "string" },
                         "lead_id": { "type": "string" },
@@ -2469,7 +2483,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "reviewer": { "type": "string" },
                         "priority": { "type": "string" },
                         "routing_reason": { "type": "string" },
-                        "evidence_package": { "type": "object" }
+                        "evidence_package": { "type": "object" },
+                        "sla_target_hours": { "type": "integer" },
+                        "sla_status": { "type": "string" },
+                        "time_to_triage_hours": { "type": "number" },
+                        "time_to_closure_hours": { "type": ["number", "null"] }
                     }
                 },
                 "CaseListResponse": {

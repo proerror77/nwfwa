@@ -465,6 +465,95 @@ async fn dashboard_separates_observed_and_estimated_value() {
 }
 
 #[tokio::test]
+async fn dashboard_summarizes_case_sla_metrics() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-SLA-1",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "PROC-001",
+              "item_type": "procedure",
+              "description": "Imaging",
+              "quantity": 1,
+              "unit_amount": "9000",
+              "total_amount": "9000"
+            }
+          ],
+          "member": {
+            "external_member_id": "MBR-SLA-1"
+          },
+          "policy": {
+            "external_policy_id": "POL-SLA-1",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-SLA-1",
+            "name": "Northwind Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "High"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let lead_id = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-SLA-1")
+        .unwrap()["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string();
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "siu-reviewer-1",
+          "reviewer": "medical-reviewer-1",
+          "priority": "high",
+          "notes": "Open SLA-tracked investigation."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, dashboard) = json_request(app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(dashboard["case_sla"]["total_cases"], 1);
+    assert_eq!(dashboard["case_sla"]["open_cases"], 1);
+    assert_eq!(dashboard["case_sla"]["closed_cases"], 0);
+    assert_eq!(dashboard["case_sla"]["breached_cases"], 0);
+    assert_eq!(dashboard["case_sla"]["sla_breach_rate"], 0.0);
+    assert_eq!(dashboard["case_sla"]["average_time_to_triage_hours"], 0.0);
+    assert_eq!(dashboard["case_sla"]["average_time_to_closure_hours"], 0.0);
+}
+
+#[tokio::test]
 async fn dashboard_summarizes_rule_governance_from_rule_performance() {
     let app = build_app(test_config());
 

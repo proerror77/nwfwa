@@ -30,6 +30,16 @@ type DashboardQaQueue = {
   disagreement_rate: number;
 };
 
+type DashboardCaseSla = {
+  total_cases: number;
+  open_cases: number;
+  closed_cases: number;
+  breached_cases: number;
+  sla_breach_rate: number;
+  average_time_to_triage_hours: number;
+  average_time_to_closure_hours: number;
+};
+
 type DashboardAgentGovernance = {
   total_runs: number;
   successful_runs: number;
@@ -86,6 +96,7 @@ type DashboardSummary = {
   value_measurement: DashboardValueMeasurement;
   label_pool: DashboardLabelPool;
   qa_queue: DashboardQaQueue;
+  case_sla: DashboardCaseSla;
   agent_governance: DashboardAgentGovernance;
   model_governance: DashboardModelGovernance;
   rule_governance: DashboardRuleGovernance;
@@ -147,6 +158,18 @@ export function buildDashboardQaQueueSummary(queue?: DashboardQaQueue) {
     reviewedRateLabel:
       sampledCases === 0 ? "0.0%" : formatPercent(reviewedCases / sampledCases),
     disagreementRateLabel: formatPercent(queue?.disagreement_rate ?? 0),
+  };
+}
+
+export function buildDashboardCaseSlaSummary(sla?: DashboardCaseSla) {
+  return {
+    totalCases: sla?.total_cases ?? 0,
+    openCases: sla?.open_cases ?? 0,
+    closedCases: sla?.closed_cases ?? 0,
+    breachedCases: sla?.breached_cases ?? 0,
+    breachRateLabel: formatPercent(sla?.sla_breach_rate ?? 0),
+    averageTimeToTriageLabel: `${(sla?.average_time_to_triage_hours ?? 0).toFixed(1)}h`,
+    averageTimeToClosureLabel: `${(sla?.average_time_to_closure_hours ?? 0).toFixed(1)}h`,
   };
 }
 
@@ -260,6 +283,7 @@ export function DashboardPage() {
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
   const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
+  const caseSlaSummary = buildDashboardCaseSlaSummary(summary?.case_sla);
   const agentGovernanceSummary = buildDashboardAgentGovernanceSummary(summary?.agent_governance);
   const modelGovernanceSummary = buildDashboardModelGovernanceSummary(summary?.model_governance);
   const ruleGovernanceSummary = buildDashboardRuleGovernanceSummary(summary?.rule_governance);
@@ -496,6 +520,42 @@ export function DashboardPage() {
             <div className="metric-row compact-metric-row">
               <span>Disagreement Cases</span>
               <strong>{qaQueueSummary.disagreementCases}</strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="panel">
+          <h2>Case SLA</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Cases</span>
+              <strong>{caseSlaSummary.totalCases}</strong>
+            </div>
+            <div>
+              <span>Open</span>
+              <strong>{caseSlaSummary.openCases}</strong>
+            </div>
+            <div>
+              <span>Closed</span>
+              <strong>{caseSlaSummary.closedCases}</strong>
+            </div>
+            <div>
+              <span>Breach Rate</span>
+              <strong>{caseSlaSummary.breachRateLabel}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Breached Cases</span>
+              <strong>{caseSlaSummary.breachedCases}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Avg Triage</span>
+              <strong>{caseSlaSummary.averageTimeToTriageLabel}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Avg Closure</span>
+              <strong>{caseSlaSummary.averageTimeToClosureLabel}</strong>
             </div>
           </div>
         </div>

@@ -329,8 +329,25 @@ async fn openapi_includes_operations_paths() {
             .as_array()
             .unwrap()
             .iter()
-            .any(|field| field == "agent_governance")
+            .any(|field| field == "case_sla")
     );
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["case_sla"]
+            ["$ref"],
+        "#/components/schemas/DashboardCaseSla"
+    );
+    assert!(
+        schema["components"]["schemas"]["DashboardCaseSla"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "sla_breach_rate")
+    );
+    assert!(schema["components"]["schemas"]["Case"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "sla_target_hours"));
     assert!(schema["components"]["schemas"]["DashboardAgentGovernance"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]

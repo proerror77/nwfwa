@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildDashboardAgentGovernanceSummary,
   buildDashboardLabelPoolSummary,
+  buildDashboardCaseSlaSummary,
   buildDashboardModelGovernanceSummary,
   buildDashboardQaQueueSummary,
   buildDashboardRuleGovernanceSummary,
@@ -104,6 +105,30 @@ describe("buildDashboardAgentGovernanceSummary", () => {
       rejectedApprovals: 1,
       successRateLabel: "80.0%",
       approvalRateLabel: "75.0%",
+    });
+  });
+});
+
+describe("buildDashboardCaseSlaSummary", () => {
+  it("summarizes case SLA timing and breach rate", () => {
+    const summary = buildDashboardCaseSlaSummary({
+      total_cases: 5,
+      open_cases: 3,
+      closed_cases: 2,
+      breached_cases: 1,
+      sla_breach_rate: 0.2,
+      average_time_to_triage_hours: 1.25,
+      average_time_to_closure_hours: 18.5,
+    });
+
+    expect(summary).toEqual({
+      totalCases: 5,
+      openCases: 3,
+      closedCases: 2,
+      breachedCases: 1,
+      breachRateLabel: "20.0%",
+      averageTimeToTriageLabel: "1.3h",
+      averageTimeToClosureLabel: "18.5h",
     });
   });
 });

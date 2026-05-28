@@ -122,6 +122,10 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     assert_eq!(triage["case"]["assignee"], "siu-reviewer-1");
     assert_eq!(triage["case"]["reviewer"], "medical-reviewer-1");
     assert_eq!(triage["case"]["priority"], "high");
+    assert_eq!(triage["case"]["sla_target_hours"], 24);
+    assert_eq!(triage["case"]["sla_status"], "on_track");
+    assert_eq!(triage["case"]["time_to_triage_hours"], 0.0);
+    assert!(triage["case"]["time_to_closure_hours"].is_null());
     assert!(triage["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, cases) = json_request(app, "GET", "/api/v1/ops/cases", "{}").await;

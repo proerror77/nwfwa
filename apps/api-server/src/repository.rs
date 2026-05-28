@@ -192,6 +192,10 @@ pub struct CaseRecord {
     pub priority: String,
     pub routing_reason: String,
     pub evidence_package: Value,
+    pub sla_target_hours: u32,
+    pub sla_status: String,
+    pub time_to_triage_hours: f64,
+    pub time_to_closure_hours: Option<f64>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -361,6 +365,17 @@ pub struct DashboardQaQueueRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardCaseSlaRecord {
+    pub total_cases: u32,
+    pub open_cases: u32,
+    pub closed_cases: u32,
+    pub breached_cases: u32,
+    pub sla_breach_rate: f64,
+    pub average_time_to_triage_hours: f64,
+    pub average_time_to_closure_hours: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardAgentGovernanceRecord {
     pub total_runs: u32,
     pub successful_runs: u32,
@@ -421,6 +436,7 @@ pub struct DashboardSummaryRecord {
     pub value_measurement: DashboardValueMeasurementRecord,
     pub label_pool: DashboardLabelPoolRecord,
     pub qa_queue: DashboardQaQueueRecord,
+    pub case_sla: DashboardCaseSlaRecord,
     pub agent_governance: DashboardAgentGovernanceRecord,
     pub model_governance: DashboardModelGovernanceRecord,
     pub rule_governance: DashboardRuleGovernanceRecord,
@@ -852,22 +868,26 @@ type LeadRow = (
     String,
     Value,
 );
-type CaseRow = (
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    Value,
-);
+#[derive(sqlx::FromRow)]
+struct CaseRow {
+    case_id: String,
+    lead_id: String,
+    claim_id: String,
+    member_id: String,
+    provider_id: String,
+    source_system: String,
+    scheme_family: String,
+    lead_source: String,
+    status: String,
+    assignee: String,
+    reviewer: String,
+    priority: String,
+    routing_reason: String,
+    evidence_package_json: Value,
+    lead_created_at: chrono::DateTime<chrono::Utc>,
+    case_created_at: chrono::DateTime<chrono::Utc>,
+    case_updated_at: chrono::DateTime<chrono::Utc>,
+}
 
 #[derive(sqlx::FromRow)]
 struct AgentApprovalRow {
@@ -1538,6 +1558,13 @@ impl ScoringRepository for InMemoryScoringRepository {
         };
         let from_status = case.status.clone();
         case.status = input.status.clone();
+        if is_terminal_case_status(&case.status) {
+            case.time_to_closure_hours = Some(0.0);
+        } else {
+            case.time_to_closure_hours = None;
+        }
+        let elapsed_hours = case.time_to_closure_hours.unwrap_or(0.0);
+        case.sla_status = case_sla_status(&case.status, case.sla_target_hours, elapsed_hours);
         let case = case.clone();
         let audit_id = AuditEventId::new().to_string();
         self.audit_events.lock().await.push(PersistedAuditEvent {
@@ -1752,6 +1779,7 @@ impl ScoringRepository for InMemoryScoringRepository {
 
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
+        let cases = self.list_cases().await?;
         let agent_runs = self.list_agent_runs().await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
@@ -1819,6 +1847,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             value_measurement,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
+            case_sla: summarize_dashboard_case_sla(&cases),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
             rule_governance: summarize_dashboard_rule_governance(&rules, &rule_performance),
@@ -3391,6 +3420,9 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&case.status)
         .execute(&mut *tx)
         .await?;
+        let case = load_case_in_tx(&mut tx, case_id)
+            .await?
+            .expect("case should exist after status update");
 
         let audit_id = AuditEventId::new().to_string();
         insert_audit_event(
@@ -3903,6 +3935,7 @@ impl ScoringRepository for PostgresScoringRepository {
             ),
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
+            case_sla: summarize_dashboard_case_sla(&self.list_cases().await?),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
             rule_governance: summarize_dashboard_rule_governance(&rules, &rule_performance),
@@ -5270,6 +5303,7 @@ pub(crate) fn scheme_family_from_knowledge_signals(fwa_type: &str, tags: &[Strin
 }
 
 fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
+    let sla_target_hours = sla_target_hours_for_priority(&input.priority);
     CaseRecord {
         case_id: format!("case_{}", lead.claim_id),
         lead_id: lead.lead_id.clone(),
@@ -5293,6 +5327,10 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
             "triage_notes": input.notes.clone(),
             "evidence_refs": lead.evidence_refs.clone()
         }),
+        sla_target_hours,
+        sla_status: case_sla_status("triage", sla_target_hours, 0.0),
+        time_to_triage_hours: 0.0,
+        time_to_closure_hours: None,
     }
 }
 
@@ -5388,6 +5426,38 @@ fn qa_review_to_feedback_item(
         evidence_refs: review.evidence_refs,
         created_at,
     }
+}
+
+fn sla_target_hours_for_priority(priority: &str) -> u32 {
+    match priority {
+        "critical" => 8,
+        "high" => 24,
+        "medium" => 72,
+        "low" => 168,
+        _ => 72,
+    }
+}
+
+fn is_terminal_case_status(status: &str) -> bool {
+    matches!(status, "confirmed" | "rejected" | "closed")
+}
+
+fn case_sla_status(status: &str, sla_target_hours: u32, elapsed_hours: f64) -> String {
+    if is_terminal_case_status(status) {
+        if elapsed_hours > sla_target_hours as f64 {
+            "closed_breached".into()
+        } else {
+            "closed_within_sla".into()
+        }
+    } else if elapsed_hours > sla_target_hours as f64 {
+        "breached".into()
+    } else {
+        "on_track".into()
+    }
+}
+
+fn hours_between(start: chrono::DateTime<chrono::Utc>, end: chrono::DateTime<chrono::Utc>) -> f64 {
+    end.signed_duration_since(start).num_seconds().max(0) as f64 / 3600.0
 }
 
 fn sort_qa_feedback_items(items: &mut [QaFeedbackItemRecord]) {
@@ -5618,6 +5688,51 @@ fn summarize_dashboard_qa_queue(
         reviewed_cases,
         disagreement_cases,
         disagreement_rate,
+    }
+}
+
+fn summarize_dashboard_case_sla(cases: &[CaseRecord]) -> DashboardCaseSlaRecord {
+    let total_cases = cases.len() as u32;
+    let closed_cases = cases
+        .iter()
+        .filter(|case| is_terminal_case_status(&case.status))
+        .count() as u32;
+    let breached_cases = cases
+        .iter()
+        .filter(|case| case.sla_status == "breached" || case.sla_status == "closed_breached")
+        .count() as u32;
+    let closure_times = cases
+        .iter()
+        .filter_map(|case| case.time_to_closure_hours)
+        .collect::<Vec<_>>();
+    DashboardCaseSlaRecord {
+        total_cases,
+        open_cases: total_cases.saturating_sub(closed_cases),
+        closed_cases,
+        breached_cases,
+        sla_breach_rate: if total_cases == 0 {
+            0.0
+        } else {
+            breached_cases as f64 / total_cases as f64
+        },
+        average_time_to_triage_hours: average_hours(
+            cases.iter().map(|case| case.time_to_triage_hours),
+        ),
+        average_time_to_closure_hours: average_hours(closure_times.into_iter()),
+    }
+}
+
+fn average_hours(values: impl Iterator<Item = f64>) -> f64 {
+    let mut count = 0_u32;
+    let mut sum = 0.0;
+    for value in values {
+        count += 1;
+        sum += value;
+    }
+    if count == 0 {
+        0.0
+    } else {
+        sum / count as f64
     }
 }
 
@@ -6019,9 +6134,10 @@ fn lead_from_row(row: LeadRow) -> LeadRecord {
 
 async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
     let rows: Vec<CaseRow> = sqlx::query_as(
-        "SELECT case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json
-         FROM investigation_cases
-         ORDER BY created_at, case_id",
+        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
+         FROM investigation_cases c
+         JOIN fwa_leads l ON l.lead_id = c.lead_id
+         ORDER BY c.created_at, c.case_id",
     )
     .fetch_all(pool)
     .await?;
@@ -6033,9 +6149,10 @@ async fn load_case_in_tx(
     case_id: &str,
 ) -> anyhow::Result<Option<CaseRecord>> {
     let row: Option<CaseRow> = sqlx::query_as(
-        "SELECT case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json
-         FROM investigation_cases
-         WHERE case_id = $1",
+        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
+         FROM investigation_cases c
+         JOIN fwa_leads l ON l.lead_id = c.lead_id
+         WHERE c.case_id = $1",
     )
     .bind(case_id)
     .fetch_optional(&mut **tx)
@@ -6044,37 +6161,32 @@ async fn load_case_in_tx(
 }
 
 fn case_from_row(row: CaseRow) -> CaseRecord {
-    let (
-        case_id,
-        lead_id,
-        claim_id,
-        member_id,
-        provider_id,
-        source_system,
-        scheme_family,
-        lead_source,
-        status,
-        assignee,
-        reviewer,
-        priority,
-        routing_reason,
-        evidence_package,
-    ) = row;
+    let sla_target_hours = sla_target_hours_for_priority(&row.priority);
+    let time_to_closure_hours = is_terminal_case_status(&row.status)
+        .then(|| hours_between(row.case_created_at, row.case_updated_at));
+    let elapsed_hours = time_to_closure_hours
+        .unwrap_or_else(|| hours_between(row.case_created_at, chrono::Utc::now()));
+    let sla_status = case_sla_status(&row.status, sla_target_hours, elapsed_hours);
+    let time_to_triage_hours = hours_between(row.lead_created_at, row.case_created_at);
     CaseRecord {
-        case_id,
-        lead_id,
-        claim_id,
-        member_id,
-        provider_id,
-        source_system,
-        scheme_family,
-        lead_source,
-        status,
-        assignee,
-        reviewer,
-        priority,
-        routing_reason,
-        evidence_package,
+        case_id: row.case_id,
+        lead_id: row.lead_id,
+        claim_id: row.claim_id,
+        member_id: row.member_id,
+        provider_id: row.provider_id,
+        source_system: row.source_system,
+        scheme_family: row.scheme_family,
+        lead_source: row.lead_source,
+        status: row.status,
+        assignee: row.assignee,
+        reviewer: row.reviewer,
+        priority: row.priority,
+        routing_reason: row.routing_reason,
+        evidence_package: row.evidence_package_json,
+        sla_target_hours,
+        sla_status,
+        time_to_triage_hours,
+        time_to_closure_hours,
     }
 }
 
