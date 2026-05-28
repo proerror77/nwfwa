@@ -133,6 +133,19 @@ ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS routing_reason TEXT;
 ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS routing_policy JSONB NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE scoring_runs ADD COLUMN IF NOT EXISTS score_breakdown JSONB NOT NULL DEFAULT '{}'::jsonb;
 
+CREATE TABLE IF NOT EXISTS routing_policies (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  policy_key TEXT NOT NULL,
+  version INTEGER NOT NULL,
+  review_mode TEXT NOT NULL,
+  status TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  policy_json JSONB NOT NULL,
+  activated_at TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(policy_key, version, review_mode)
+);
+
 CREATE TABLE IF NOT EXISTS feature_values (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   run_id TEXT NOT NULL REFERENCES scoring_runs(run_id) ON DELETE CASCADE,

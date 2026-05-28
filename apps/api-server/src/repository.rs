@@ -5,6 +5,7 @@ use fwa_core::{
     PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction,
 };
 use fwa_rules::{Condition, Rule, RuleAction};
+use fwa_scoring::RoutingPolicy;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -1109,6 +1110,11 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()>;
 
+    async fn active_routing_policy(
+        &self,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicy>>;
+
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>>;
 
     async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>>;
@@ -1368,6 +1374,7 @@ pub struct InMemoryScoringRepository {
     model_retraining_jobs: Mutex<HashMap<String, ModelRetrainingJobRecord>>,
     model_retraining_job_sequence: Mutex<u64>,
     model_statuses: Mutex<HashMap<String, String>>,
+    routing_policies: Mutex<Vec<RoutingPolicy>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
 }
@@ -1375,6 +1382,13 @@ pub struct InMemoryScoringRepository {
 impl InMemoryScoringRepository {
     pub fn shared() -> SharedRepository {
         Arc::new(Self::default())
+    }
+
+    pub fn shared_with_routing_policies(policies: Vec<RoutingPolicy>) -> SharedRepository {
+        Arc::new(Self {
+            routing_policies: Mutex::new(policies),
+            ..Self::default()
+        })
     }
 }
 
@@ -1453,6 +1467,20 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()> {
         self.audit_events.lock().await.push(event);
         Ok(())
+    }
+
+    async fn active_routing_policy(
+        &self,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicy>> {
+        Ok(self
+            .routing_policies
+            .lock()
+            .await
+            .iter()
+            .filter(|policy| routing_policy_review_mode_applies(&policy.review_mode, review_mode))
+            .max_by_key(|policy| policy.version)
+            .cloned())
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -3279,6 +3307,29 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
         tx.commit().await?;
         Ok(())
+    }
+
+    async fn active_routing_policy(
+        &self,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicy>> {
+        ensure_default_routing_policies_seeded(&self.pool).await?;
+        let row: Option<(Value,)> = sqlx::query_as(
+            "SELECT policy_json
+             FROM routing_policies
+             WHERE policy_key = 'fwa_risk_fusion_routing'
+               AND status = 'active'
+               AND review_mode IN ($1, 'both')
+             ORDER BY CASE WHEN review_mode = $1 THEN 0 ELSE 1 END, version DESC
+             LIMIT 1",
+        )
+        .bind(review_mode)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(|row| serde_json::from_value(row.0))
+            .transpose()
+            .map_err(Into::into)
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -7669,6 +7720,20 @@ fn normalize_review_mode(value: &str) -> String {
     }
 }
 
+fn routing_policy_review_mode_applies(
+    policy_review_mode: &str,
+    requested_review_mode: &str,
+) -> bool {
+    policy_review_mode == "both" || policy_review_mode == requested_review_mode
+}
+
+fn default_routing_policies() -> Vec<RoutingPolicy> {
+    ["pre_payment", "post_payment", "both"]
+        .into_iter()
+        .map(fwa_scoring::default_routing_policy)
+        .collect()
+}
+
 fn runtime_rule_from_detail(detail: RuleDetailRecord) -> anyhow::Result<Rule> {
     let version = detail
         .versions
@@ -8151,6 +8216,25 @@ async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {
         .bind(&model.execution_provider)
         .bind(&model.status)
         .bind(serde_json::json!({ "review_mode": model.review_mode }))
+        .execute(pool)
+        .await?;
+    }
+    Ok(())
+}
+
+async fn ensure_default_routing_policies_seeded(pool: &PgPool) -> anyhow::Result<()> {
+    for policy in default_routing_policies() {
+        sqlx::query(
+            "INSERT INTO routing_policies
+             (policy_key, version, review_mode, status, owner, policy_json, activated_at)
+             VALUES ($1, $2, $3, 'active', 'system', $4, now())
+             ON CONFLICT (policy_key, version, review_mode) DO UPDATE SET
+               policy_json = EXCLUDED.policy_json",
+        )
+        .bind(&policy.policy_id)
+        .bind(policy.version as i32)
+        .bind(&policy.review_mode)
+        .bind(serde_json::to_value(&policy)?)
         .execute(pool)
         .await?;
     }

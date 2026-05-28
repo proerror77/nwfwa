@@ -405,7 +405,7 @@ pub async fn score_claim(
         "model_scores:{}",
         model_score.model_key
     )));
-    let routing_policy = fwa_scoring::default_routing_policy(&review_mode);
+    let routing_policy = active_routing_policy(&state, &review_mode).await?;
     let decision = fwa_scoring::aggregate_with_routing_policy(
         &features,
         &rule_matches,
@@ -544,6 +544,18 @@ async fn active_scoring_model(
                 format!("no active scoring model is available for review_mode {review_mode}"),
             )
         })
+}
+
+async fn active_routing_policy(
+    state: &AppState,
+    review_mode: &str,
+) -> Result<fwa_scoring::RoutingPolicy, ApiError> {
+    Ok(state
+        .repository
+        .active_routing_policy(review_mode)
+        .await
+        .map_err(internal_error("ROUTING_POLICY_LOAD_FAILED"))?
+        .unwrap_or_else(|| fwa_scoring::default_routing_policy(review_mode)))
 }
 
 fn model_review_mode_applies(model_review_mode: &str, review_mode: &str) -> bool {

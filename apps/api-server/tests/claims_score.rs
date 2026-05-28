@@ -11,6 +11,7 @@ use axum::{
 use fwa_core::RecommendedAction;
 use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest, ModelScorer};
 use fwa_rules::{Condition, Rule, RuleAction};
+use fwa_scoring::{ConfidenceThresholds, RiskThresholds, RoutingPolicy};
 use std::sync::Arc;
 use tower::ServiceExt;
 
@@ -96,6 +97,25 @@ async fn activate_post_payment_rule(repository: SharedRepository) {
         .update_rule_status(rule_id, "active")
         .await
         .expect("post-payment rule activation");
+}
+
+struct HighRiskScorer;
+
+#[async_trait]
+impl ModelScorer for HighRiskScorer {
+    async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
+        Ok(ModelScore {
+            model_key: request.model_key,
+            model_version: request.model_version,
+            runtime_kind: "test".into(),
+            execution_provider: "cpu".into(),
+            score: 95,
+            label: "HIGH_RISK".into(),
+            explanations: vec![],
+            metadata: serde_json::json!({}),
+            latency_ms: 0,
+        })
+    }
 }
 
 #[tokio::test]
@@ -363,6 +383,54 @@ async fn scores_claim_with_review_mode_and_audits_routing_policy() {
         scoring_event["payload"]["recommended_action"],
         "PostPaymentAudit"
     );
+}
+
+#[tokio::test]
+async fn scoring_uses_active_routing_policy_from_registry() {
+    let repository = InMemoryScoringRepository::shared_with_routing_policies(vec![RoutingPolicy {
+        policy_id: "custom_prepay_routing".into(),
+        version: 3,
+        review_mode: "pre_payment".into(),
+        risk_thresholds: RiskThresholds {
+            low_max: 0,
+            medium_min: 1,
+            high_min: 1,
+            critical_min: 1,
+        },
+        confidence_thresholds: ConfidenceThresholds {
+            low_confidence_below: 60,
+            high_confidence_min: 80,
+        },
+        provider_review_threshold: 70,
+    }]);
+    let app = build_app_with_parts(test_config(), Arc::new(HighRiskScorer), repository);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "review_mode": "pre_payment",
+              "claim": {
+                "external_claim_id": "CLM-CUSTOM-POLICY",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["routing_policy"]["policy_id"], "custom_prepay_routing");
+    assert_eq!(body["routing_policy"]["version"], 3);
+    assert_eq!(body["risk_level"], "Critical");
+    assert_eq!(body["recommended_action"], "EscalateInvestigation");
 }
 
 #[tokio::test]
