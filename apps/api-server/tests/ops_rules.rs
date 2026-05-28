@@ -44,6 +44,7 @@ async fn lists_rule_library() {
     assert_eq!(body["rules"][0]["rule_id"], "rule_early_claim");
     assert_eq!(body["rules"][0]["status"], "active");
     assert_eq!(body["rules"][0]["active_version"], 1);
+    assert_eq!(body["rules"][0]["review_mode"], "both");
 }
 
 #[tokio::test]
@@ -88,7 +89,9 @@ async fn returns_rule_detail_with_versions() {
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["summary"]["rule_id"], "rule_early_claim");
+    assert_eq!(body["summary"]["review_mode"], "both");
     assert_eq!(body["versions"][0]["version"], 1);
+    assert_eq!(body["versions"][0]["review_mode"], "both");
     assert!(body["versions"][0]["dsl"]["conditions"].is_array());
 }
 

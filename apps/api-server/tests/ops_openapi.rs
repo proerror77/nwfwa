@@ -72,6 +72,24 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["paths"]["/api/v1/ops/knowledge/cases"]["post"].is_object());
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
+    assert!(schema["components"]["schemas"]["RuleSummary"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "review_mode"));
+    assert_eq!(
+        schema["components"]["schemas"]["RuleSummary"]["properties"]["review_mode"]["enum"][0],
+        "pre_payment"
+    );
+    assert!(schema["components"]["schemas"]["ModelVersion"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "review_mode"));
+    assert_eq!(
+        schema["components"]["schemas"]["ModelVersion"]["properties"]["review_mode"]["enum"][2],
+        "both"
+    );
     assert!(
         schema["components"]["schemas"]["RulePromotionGate"]["required"]
             .as_array()

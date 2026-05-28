@@ -1728,7 +1728,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RuleSummary": {
                     "type": "object",
-                    "required": ["rule_id", "name", "status", "owner", "latest_version", "score", "alert_code", "recommended_action"],
+                    "required": ["rule_id", "name", "status", "owner", "latest_version", "review_mode", "score", "alert_code", "recommended_action"],
                     "properties": {
                         "rule_id": { "type": "string" },
                         "name": { "type": "string" },
@@ -1736,6 +1736,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "owner": { "type": "string" },
                         "active_version": { "type": ["integer", "null"] },
                         "latest_version": { "type": "integer" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "alert_code": { "type": "string" },
                         "recommended_action": { "type": "string" }
@@ -2125,7 +2126,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelVersion": {
                     "type": "object",
-                    "required": ["model_key", "version", "model_type", "runtime_kind", "execution_provider", "status"],
+                    "required": ["model_key", "version", "model_type", "runtime_kind", "execution_provider", "status", "review_mode"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "version": { "type": "string" },
@@ -2133,6 +2134,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "runtime_kind": { "type": "string" },
                         "execution_provider": { "type": "string" },
                         "status": { "type": "string" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "artifact_uri": { "type": ["string", "null"] },
                         "endpoint_url": { "type": ["string", "null"] }
                     }

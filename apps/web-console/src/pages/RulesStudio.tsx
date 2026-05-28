@@ -27,6 +27,7 @@ import {
   buildPromotionGateEvidenceRows,
   type PromotionGate,
 } from "./promotionGateEvidence";
+import { formatReviewModeLabel } from "./reviewMode";
 
 type RuleSummary = {
   rule_id: string;
@@ -35,6 +36,7 @@ type RuleSummary = {
   owner: string;
   active_version: number | null;
   latest_version: number;
+  review_mode: string;
   score: number;
   alert_code: string;
   recommended_action: string;
@@ -278,7 +280,9 @@ export function RulesStudio() {
             >
               <span>{rule.name}</span>
               <strong>{rule.status}</strong>
-              <small>{rule.alert_code}</small>
+              <small>
+                {rule.alert_code} · {formatReviewModeLabel(rule.review_mode)}
+              </small>
             </button>
           ))}
         </div>
@@ -303,6 +307,10 @@ export function RulesStudio() {
               <div>
                 <dt>Version</dt>
                 <dd>{selectedRule.latest_version}</dd>
+              </div>
+              <div>
+                <dt>Review Mode</dt>
+                <dd>{formatReviewModeLabel(selectedRule.review_mode)}</dd>
               </div>
               <div>
                 <dt>Score</dt>

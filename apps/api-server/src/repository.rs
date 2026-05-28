@@ -86,6 +86,7 @@ pub struct RuleSummaryRecord {
     pub owner: String,
     pub active_version: Option<u32>,
     pub latest_version: u32,
+    pub review_mode: String,
     pub score: u8,
     pub alert_code: String,
     pub recommended_action: RecommendedAction,
@@ -96,6 +97,7 @@ pub struct RuleVersionRecord {
     pub version: u32,
     pub status: String,
     pub dsl: Value,
+    pub review_mode: String,
     pub score: u8,
     pub alert_code: String,
     pub recommended_action: RecommendedAction,
@@ -264,6 +266,7 @@ pub struct ModelVersionRecord {
     pub runtime_kind: String,
     pub execution_provider: String,
     pub status: String,
+    pub review_mode: String,
     pub artifact_uri: Option<String>,
     pub endpoint_url: Option<String>,
 }
@@ -2796,6 +2799,7 @@ impl ScoringRepository for PostgresScoringRepository {
                             None
                         },
                         latest_version: version as u32,
+                        review_mode: review_mode_from_dsl(&dsl),
                         status,
                         owner,
                         score: score as u8,
@@ -2864,6 +2868,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 RuleVersionRecord {
                     version: version as u32,
                     status: summary.status.clone(),
+                    review_mode: review_mode_from_dsl(&dsl),
                     dsl,
                     score: score as u8,
                     alert_code: action["alert_code"]
@@ -3478,10 +3483,11 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Option<String>,
             Option<String>,
         )> = sqlx::query_as(
-            "SELECT model_key, version, model_type, runtime_kind, execution_provider, status, artifact_uri, endpoint_url
+            "SELECT model_key, version, model_type, runtime_kind, execution_provider, status, COALESCE(metrics ->> 'review_mode', 'both'), artifact_uri, endpoint_url
              FROM model_versions
              ORDER BY model_key, version DESC",
         )
@@ -3497,6 +3503,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     runtime_kind,
                     execution_provider,
                     status,
+                    review_mode,
                     artifact_uri,
                     endpoint_url,
                 )| ModelVersionRecord {
@@ -3506,6 +3513,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     runtime_kind,
                     execution_provider,
                     status,
+                    review_mode: normalize_review_mode(&review_mode),
                     artifact_uri,
                     endpoint_url,
                 },
@@ -5940,7 +5948,9 @@ fn default_rule_details() -> Vec<RuleDetailRecord> {
 
 fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailRecord {
     let active_version = (status == "active").then_some(rule.version);
+    let review_mode = "both".to_string();
     let dsl = serde_json::json!({
+        "review_mode": review_mode,
         "conditions": rule.conditions,
         "action": rule.action
     });
@@ -5951,6 +5961,7 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
         owner,
         active_version,
         latest_version: rule.version,
+        review_mode: review_mode.clone(),
         score: rule.action.score,
         alert_code: rule.action.alert_code.clone(),
         recommended_action: rule.action.recommended_action,
@@ -5959,6 +5970,7 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
         version: rule.version,
         status: status.into(),
         dsl,
+        review_mode,
         score: rule.action.score,
         alert_code: rule.action.alert_code,
         recommended_action: rule.action.recommended_action,
@@ -5987,6 +5999,20 @@ fn parse_recommended_action(value: &str) -> RecommendedAction {
         "AutoApprove" => RecommendedAction::AutoApprove,
         "EscalateInvestigation" => RecommendedAction::EscalateInvestigation,
         _ => RecommendedAction::ManualReview,
+    }
+}
+
+fn review_mode_from_dsl(dsl: &Value) -> String {
+    dsl.get("review_mode")
+        .and_then(Value::as_str)
+        .map(normalize_review_mode)
+        .unwrap_or_else(|| "both".into())
+}
+
+fn normalize_review_mode(value: &str) -> String {
+    match value {
+        "pre_payment" | "post_payment" | "both" => value.into(),
+        _ => "both".into(),
     }
 }
 
@@ -6066,6 +6092,7 @@ fn default_model_versions() -> Vec<ModelVersionRecord> {
         runtime_kind: "python_http".into(),
         execution_provider: "cpu".into(),
         status: "active".into(),
+        review_mode: "both".into(),
         artifact_uri: None,
         endpoint_url: Some("http://127.0.0.1:8001/score".into()),
     }]
@@ -6450,8 +6477,10 @@ async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {
         sqlx::query(
             "INSERT INTO model_versions
              (model_key, version, model_type, runtime_kind, artifact_uri, endpoint_url, execution_provider, status, metrics, activated_at)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, '{}'::jsonb, now())
-             ON CONFLICT (model_key, version) DO UPDATE SET status = EXCLUDED.status",
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+             ON CONFLICT (model_key, version) DO UPDATE SET
+               status = EXCLUDED.status,
+               metrics = model_versions.metrics || EXCLUDED.metrics",
         )
         .bind(&model.model_key)
         .bind(&model.version)
@@ -6461,6 +6490,7 @@ async fn ensure_default_models_seeded(pool: &PgPool) -> anyhow::Result<()> {
         .bind(&model.endpoint_url)
         .bind(&model.execution_provider)
         .bind(&model.status)
+        .bind(serde_json::json!({ "review_mode": model.review_mode }))
         .execute(pool)
         .await?;
     }

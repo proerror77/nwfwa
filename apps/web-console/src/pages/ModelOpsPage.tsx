@@ -17,6 +17,7 @@ import {
   buildPromotionGateEvidenceRows,
   type PromotionGate,
 } from "./promotionGateEvidence";
+import { formatReviewModeLabel } from "./reviewMode";
 
 type ModelVersion = {
   model_key: string;
@@ -25,6 +26,7 @@ type ModelVersion = {
   runtime_kind: string;
   execution_provider: string;
   status: string;
+  review_mode: string;
   endpoint_url: string | null;
 };
 
@@ -168,7 +170,9 @@ export function ModelOpsPage() {
             >
               <span>{model.model_key}</span>
               <strong>{model.status}</strong>
-              <small>{model.runtime_kind}</small>
+              <small>
+                {model.runtime_kind} · {formatReviewModeLabel(model.review_mode)}
+              </small>
             </button>
           ))}
         </div>
@@ -200,6 +204,10 @@ export function ModelOpsPage() {
             <div>
               <dt>Status</dt>
               <dd>{selectedModel.status}</dd>
+            </div>
+            <div>
+              <dt>Review Mode</dt>
+              <dd>{formatReviewModeLabel(selectedModel.review_mode)}</dd>
             </div>
           </dl>
         ) : (

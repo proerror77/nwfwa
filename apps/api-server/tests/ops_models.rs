@@ -172,6 +172,7 @@ async fn lists_baseline_model_versions() {
     assert_eq!(body["models"][0]["version"], "0.1.0");
     assert_eq!(body["models"][0]["runtime_kind"], "python_http");
     assert_eq!(body["models"][0]["status"], "active");
+    assert_eq!(body["models"][0]["review_mode"], "both");
 }
 
 #[tokio::test]
