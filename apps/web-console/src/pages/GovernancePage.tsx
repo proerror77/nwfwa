@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { getClaimAuditHistory, listAgentRuns } from "../api";
+import { getClaimAuditHistory, listAgentRuns, listOutcomeLabels } from "../api";
 
 type AuditEvent = {
   audit_id: string;
@@ -86,6 +86,23 @@ type AgentRunLogListResponse = {
   runs: AgentRunLog[];
 };
 
+type OutcomeLabel = {
+  label_id: string;
+  claim_id: string;
+  label_name: string;
+  label_value: string;
+  source_type: string;
+  source_id: string;
+  governance_status: string;
+  feedback_target: string;
+  currency?: string | null;
+  evidence_refs: string[];
+};
+
+type OutcomeLabelListResponse = {
+  labels: OutcomeLabel[];
+};
+
 export function buildAuditSummary(data?: ClaimAuditHistoryResponse) {
   const events = data?.events ?? [];
   return {
@@ -118,6 +135,25 @@ export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
   };
 }
 
+export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
+  const amountPreventedLabels = labels.filter((label) => label.label_name === "amount_prevented");
+  const amountPreventedTotal = amountPreventedLabels.reduce((total, label) => {
+    const value = Number(label.label_value);
+    return Number.isFinite(value) ? total + value : total;
+  }, 0);
+  return {
+    labelCount: labels.length,
+    approvedForTrainingCount: labels.filter(
+      (label) => label.governance_status === "approved_for_training",
+    ).length,
+    needsReviewCount: labels.filter((label) => label.governance_status === "needs_review").length,
+    modelFeedbackCount: labels.filter((label) => label.feedback_target === "models").length,
+    ruleFeedbackCount: labels.filter((label) => label.feedback_target === "rules").length,
+    amountPreventedTotal,
+    amountPreventedCurrency: amountPreventedLabels[0]?.currency ?? "N/A",
+  };
+}
+
 export function GovernancePage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
@@ -130,8 +166,13 @@ export function GovernancePage() {
     queryKey: ["agent-run-logs", apiKey],
     queryFn: () => listAgentRuns(apiKey) as Promise<AgentRunLogListResponse>,
   });
+  const labelsQuery = useQuery({
+    queryKey: ["outcome-labels", apiKey],
+    queryFn: () => listOutcomeLabels(apiKey) as Promise<OutcomeLabelListResponse>,
+  });
   const summary = buildAuditSummary(auditQuery.data);
   const agentSummary = buildAgentRunLogSummary(agentRunsQuery.data?.runs);
+  const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
 
   return (
     <section className="ops-grid">
@@ -182,11 +223,20 @@ export function GovernancePage() {
             <span>Approvals</span>
             <strong>{agentSummary.pendingApprovalCount}</strong>
           </div>
+          <div>
+            <span>Labels</span>
+            <strong>{labelSummary.labelCount}</strong>
+          </div>
+          <div>
+            <span>Training Ready</span>
+            <strong>{labelSummary.approvedForTrainingCount}</strong>
+          </div>
         </div>
         {auditQuery.error ? <pre className="error">{String(auditQuery.error.message)}</pre> : null}
         {agentRunsQuery.error ? (
           <pre className="error">{String(agentRunsQuery.error.message)}</pre>
         ) : null}
+        {labelsQuery.error ? <pre className="error">{String(labelsQuery.error.message)}</pre> : null}
       </div>
 
       <div className="panel">
@@ -211,6 +261,56 @@ export function GovernancePage() {
           </ol>
         ) : (
           <p className="empty">No audit events loaded</p>
+        )}
+      </div>
+      <div className="panel">
+        <h2>Outcome Labels</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Needs Review</span>
+            <strong>{labelSummary.needsReviewCount}</strong>
+          </div>
+          <div>
+            <span>Model Feedback</span>
+            <strong>{labelSummary.modelFeedbackCount}</strong>
+          </div>
+          <div>
+            <span>Rule Feedback</span>
+            <strong>{labelSummary.ruleFeedbackCount}</strong>
+          </div>
+          <div>
+            <span>Prevented</span>
+            <strong>
+              {labelSummary.amountPreventedCurrency} {labelSummary.amountPreventedTotal}
+            </strong>
+          </div>
+        </div>
+        {labelsQuery.data?.labels.length ? (
+          <ol className="audit-timeline">
+            {labelsQuery.data.labels.map((label) => (
+              <li key={label.label_id}>
+                <div>
+                  <strong>{label.label_name}</strong>
+                  <span>{label.governance_status}</span>
+                </div>
+                <small>
+                  {label.claim_id} / {label.source_type}:{label.source_id}
+                </small>
+                <p>
+                  {label.label_value}
+                  {label.currency ? ` ${label.currency}` : ""}{" "}
+                  {"->"} {label.feedback_target}
+                </p>
+                <ul className="result-list">
+                  {label.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No governed labels loaded</p>
         )}
       </div>
       <div className="panel wide-panel">

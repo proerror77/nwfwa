@@ -15,6 +15,7 @@ import {
   listDatasets,
   listLeads,
   listKnowledgeCases,
+  listOutcomeLabels,
   listQaFeedbackItems,
   listModelEvaluations,
   listModels,
@@ -328,6 +329,19 @@ describe("ops API helpers", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/qa/feedback-items",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("lists governed outcome labels", async () => {
+    const fetchMock = mockFetch({ labels: [] });
+
+    await listOutcomeLabels("dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/labels",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

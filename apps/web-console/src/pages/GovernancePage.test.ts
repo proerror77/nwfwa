@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentRunLogSummary, buildAuditSummary } from "./GovernancePage";
+import {
+  buildAgentRunLogSummary,
+  buildAuditSummary,
+  buildOutcomeLabelSummary,
+} from "./GovernancePage";
 
 describe("buildAuditSummary", () => {
   it("summarizes claim audit events for governance review", () => {
@@ -111,6 +115,59 @@ describe("buildAgentRunLogSummary", () => {
       deniedPolicyCheckCount: 0,
       approvalCount: 1,
       pendingApprovalCount: 1,
+    });
+  });
+});
+
+describe("buildOutcomeLabelSummary", () => {
+  it("summarizes governed labels for training and review queues", () => {
+    const summary = buildOutcomeLabelSummary([
+      {
+        label_id: "label_1",
+        claim_id: "CLM-1",
+        label_name: "confirmed_fwa",
+        label_value: "true",
+        source_type: "investigation_result",
+        source_id: "INV-1",
+        governance_status: "approved_for_training",
+        feedback_target: "models",
+        currency: null,
+        evidence_refs: ["investigation_results:INV-1"],
+      },
+      {
+        label_id: "label_2",
+        claim_id: "CLM-1",
+        label_name: "medical_necessity_issue",
+        label_value: "true",
+        source_type: "qa_review",
+        source_id: "QA-1",
+        governance_status: "needs_review",
+        feedback_target: "models",
+        currency: null,
+        evidence_refs: ["qa_reviews:QA-1"],
+      },
+      {
+        label_id: "label_3",
+        claim_id: "CLM-2",
+        label_name: "amount_prevented",
+        label_value: "8200.00",
+        source_type: "investigation_result",
+        source_id: "INV-2",
+        governance_status: "approved_for_training",
+        feedback_target: "workflow",
+        currency: "CNY",
+        evidence_refs: ["saving_attributions:saving_1"],
+      },
+    ]);
+
+    expect(summary).toEqual({
+      labelCount: 3,
+      approvedForTrainingCount: 2,
+      needsReviewCount: 1,
+      modelFeedbackCount: 2,
+      ruleFeedbackCount: 0,
+      amountPreventedTotal: 8200,
+      amountPreventedCurrency: "CNY",
     });
   });
 });
