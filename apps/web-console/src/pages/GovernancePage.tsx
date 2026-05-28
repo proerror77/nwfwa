@@ -673,6 +673,8 @@ export function GovernancePage() {
     actorId: "",
     runId: "",
     claimId: "",
+    feedbackId: "",
+    qaCaseId: "",
     limit: "50",
   });
   const parsedAuditEventLimit = Number.parseInt(auditEventFilters.limit, 10);
@@ -694,6 +696,8 @@ export function GovernancePage() {
       auditEventFilters.actorId,
       auditEventFilters.runId,
       auditEventFilters.claimId,
+      auditEventFilters.feedbackId,
+      auditEventFilters.qaCaseId,
     ],
     queryFn: () =>
       listAuditEvents(apiKey, {
@@ -702,6 +706,8 @@ export function GovernancePage() {
         actor_id: auditEventFilters.actorId,
         run_id: auditEventFilters.runId,
         claim_id: auditEventFilters.claimId,
+        feedback_id: auditEventFilters.feedbackId,
+        qa_case_id: auditEventFilters.qaCaseId,
       }) as Promise<AuditEventListResponse>,
   });
   const agentRunsQuery = useQuery({
@@ -1229,6 +1235,30 @@ export function GovernancePage() {
               setAuditEventFilters((filters) => ({
                 ...filters,
                 claimId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Feedback ID
+          <input
+            value={auditEventFilters.feedbackId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                feedbackId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          QA Case ID
+          <input
+            value={auditEventFilters.qaCaseId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                qaCaseId: event.target.value,
               }))
             }
           />

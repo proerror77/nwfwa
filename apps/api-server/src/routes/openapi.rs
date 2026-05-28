@@ -788,6 +788,18 @@ pub async fn openapi_schema() -> Json<Value> {
                             "in": "query",
                             "required": false,
                             "schema": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] }
+                        },
+                        {
+                            "name": "feedback_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "qa_case_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
                         }
                     ],
                     "responses": {

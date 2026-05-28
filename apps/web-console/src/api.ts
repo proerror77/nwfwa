@@ -308,6 +308,8 @@ export type AuditEventListFilters = {
   routing_policy_id?: string;
   routing_policy_version?: number | string;
   review_mode?: string;
+  feedback_id?: string;
+  qa_case_id?: string;
 };
 
 export async function listAuditEvents(

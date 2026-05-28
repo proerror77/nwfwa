@@ -194,7 +194,7 @@ async fn filters_global_audit_events_for_governance_search() {
     let (status, status_events) = json_request(
         app.clone(),
         "GET",
-        "/api/v1/ops/audit-events?event_type=qa.feedback.status.updated&limit=10",
+        "/api/v1/ops/audit-events?event_type=qa.feedback.status.updated&claim_id=CLM-AUDIT-FILTER&feedback_id=qa_feedback_QA-AUDIT-FILTER&qa_case_id=QA-AUDIT-FILTER&actor_id=qa-lead&limit=10",
         "{}",
     )
     .await;

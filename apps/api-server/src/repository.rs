@@ -96,6 +96,8 @@ pub struct AuditEventListFilter {
     pub routing_policy_id: Option<String>,
     pub routing_policy_version: Option<String>,
     pub review_mode: Option<String>,
+    pub feedback_id: Option<String>,
+    pub qa_case_id: Option<String>,
 }
 
 const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
@@ -7257,11 +7259,9 @@ fn persisted_audit_event_matches_filter(
     {
         return false;
     }
-    if filter
-        .actor_id
-        .as_deref()
-        .is_some_and(|actor_id| event.actor_id != actor_id)
-    {
+    if filter.actor_id.as_deref().is_some_and(|actor_id| {
+        event.actor_id != actor_id && !audit_event_payload_matches_actor(&event.payload, actor_id)
+    }) {
         return false;
     }
     if filter
@@ -7286,6 +7286,9 @@ fn persisted_audit_event_matches_filter(
     if !audit_event_payload_matches_model_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_qa_feedback_filter(&event.payload, filter) {
+        return false;
+    }
     true
 }
 
@@ -7304,8 +7307,10 @@ fn pilot_audit_event_matches_filter(
     {
         return false;
     }
-    if filter.actor_id.is_some() {
-        return false;
+    if let Some(actor_id) = filter.actor_id.as_deref() {
+        if !audit_event_payload_matches_actor(&event.payload, actor_id) {
+            return false;
+        }
     }
     if filter
         .run_id
@@ -7329,7 +7334,17 @@ fn pilot_audit_event_matches_filter(
     if !audit_event_payload_matches_model_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_qa_feedback_filter(&event.payload, filter) {
+        return false;
+    }
     true
+}
+
+fn audit_event_payload_matches_actor(payload: &Value, actor_id: &str) -> bool {
+    payload["actor_id"].as_str() == Some(actor_id)
+        || payload["reviewer"].as_str() == Some(actor_id)
+        || payload["owner"].as_str() == Some(actor_id)
+        || payload["requested_by"].as_str() == Some(actor_id)
 }
 
 fn audit_event_matches_group(event_type: &str, filter: &AuditEventListFilter) -> bool {
@@ -7401,6 +7416,27 @@ fn audit_event_payload_matches_routing_policy_filter(
         .review_mode
         .as_deref()
         .is_some_and(|review_mode| payload["review_mode"].as_str() != Some(review_mode))
+    {
+        return false;
+    }
+    true
+}
+
+fn audit_event_payload_matches_qa_feedback_filter(
+    payload: &Value,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter
+        .feedback_id
+        .as_deref()
+        .is_some_and(|feedback_id| payload["feedback_id"].as_str() != Some(feedback_id))
+    {
+        return false;
+    }
+    if filter
+        .qa_case_id
+        .as_deref()
+        .is_some_and(|qa_case_id| payload["qa_case_id"].as_str() != Some(qa_case_id))
     {
         return false;
     }

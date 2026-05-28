@@ -616,6 +616,8 @@ async fn openapi_includes_operations_paths() {
         "routing_policy_id",
         "routing_policy_version",
         "review_mode",
+        "feedback_id",
+        "qa_case_id",
     ] {
         assert!(
             audit_event_parameters
