@@ -6,6 +6,7 @@ import {
   discoverRules,
   getRule,
   getRulePromotionGates,
+  listOutcomeLabels,
   listQaFeedbackItems,
   listRules,
   publishRule,
@@ -50,6 +51,35 @@ type RulePromotionGatesResponse = {
   blockers: string[];
   gates: PromotionGate[];
 };
+
+type OutcomeLabel = {
+  label_id: string;
+  claim_id: string;
+  label_name: string;
+  label_value: string;
+  source_type: string;
+  source_id: string;
+  governance_status: string;
+  feedback_target: string;
+  currency?: string | null;
+  evidence_refs: string[];
+};
+
+export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
+  const ruleLabels = labels.filter((label) => label.feedback_target === "rules");
+  return {
+    ruleLabelCount: ruleLabels.length,
+    approvedForTrainingCount: ruleLabels.filter(
+      (label) => label.governance_status === "approved_for_training",
+    ).length,
+    needsReviewCount: ruleLabels.filter((label) => label.governance_status === "needs_review")
+      .length,
+    evidenceBackedCount: ruleLabels.filter((label) => label.evidence_refs.length > 0).length,
+    confirmedFwaCount: ruleLabels.filter(
+      (label) => label.label_name === "confirmed_fwa" && label.label_value === "true",
+    ).length,
+  };
+}
 
 const defaultBacktest = JSON.stringify(
   {
@@ -162,6 +192,10 @@ export function RulesStudio() {
     queryKey: ["qa-feedback-items", apiKey],
     queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
   });
+  const outcomeLabelsQuery = useQuery({
+    queryKey: ["outcome-labels", apiKey],
+    queryFn: () => listOutcomeLabels(apiKey) as Promise<{ labels: OutcomeLabel[] }>,
+  });
   const ruleFeedbackItems = useMemo(
     () => filterQaFeedbackItems(qaFeedbackQuery.data?.items ?? [], "rules"),
     [qaFeedbackQuery.data?.items],
@@ -169,6 +203,10 @@ export function RulesStudio() {
   const ruleFeedbackSummary = useMemo(
     () => summarizeQaFeedbackItems(ruleFeedbackItems),
     [ruleFeedbackItems],
+  );
+  const ruleLabelSummary = useMemo(
+    () => buildRuleLabelReadinessSummary(outcomeLabelsQuery.data?.labels),
+    [outcomeLabelsQuery.data?.labels],
   );
   const lifecycleMutation = useMutation({
     mutationFn: (action: "submit" | "approve" | "publish") => {
@@ -373,6 +411,27 @@ export function RulesStudio() {
         {qaFeedbackQuery.error ? (
           <pre className="error">{String(qaFeedbackQuery.error.message)}</pre>
         ) : null}
+        {outcomeLabelsQuery.error ? (
+          <pre className="error">{String(outcomeLabelsQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Rule Labels</span>
+            <strong>{ruleLabelSummary.ruleLabelCount}</strong>
+          </div>
+          <div>
+            <span>Training Ready</span>
+            <strong>{ruleLabelSummary.approvedForTrainingCount}</strong>
+          </div>
+          <div>
+            <span>Needs Review</span>
+            <strong>{ruleLabelSummary.needsReviewCount}</strong>
+          </div>
+          <div>
+            <span>Confirmed FWA</span>
+            <strong>{ruleLabelSummary.confirmedFwaCount}</strong>
+          </div>
+        </div>
         <div className="summary-grid">
           <div>
             <span>Open Items</span>
