@@ -361,7 +361,7 @@ pub async fn score_claim(
             .cloned()
             .map(serde_json::Value::String),
     );
-    let active_model = active_scoring_model(&state).await?;
+    let active_model = active_scoring_model(&state, &review_mode).await?;
     let model_score = match state
         .scorer
         .score(ModelScoreRequest {
@@ -512,21 +512,32 @@ pub async fn score_claim(
     }))
 }
 
-async fn active_scoring_model(state: &AppState) -> Result<ModelVersionRecord, ApiError> {
+async fn active_scoring_model(
+    state: &AppState,
+    review_mode: &str,
+) -> Result<ModelVersionRecord, ApiError> {
     state
         .repository
         .list_models()
         .await
         .map_err(internal_error("MODEL_LIST_FAILED"))?
         .into_iter()
-        .find(|model| model.model_key == SCORING_MODEL_KEY && model.status == "active")
+        .find(|model| {
+            model.model_key == SCORING_MODEL_KEY
+                && model.status == "active"
+                && model_review_mode_applies(&model.review_mode, review_mode)
+        })
         .ok_or_else(|| {
             ApiError::new(
                 axum::http::StatusCode::CONFLICT,
                 "ACTIVE_MODEL_NOT_FOUND",
-                "no active scoring model is available",
+                format!("no active scoring model is available for review_mode {review_mode}"),
             )
         })
+}
+
+fn model_review_mode_applies(model_review_mode: &str, review_mode: &str) -> bool {
+    model_review_mode == "both" || model_review_mode == review_mode
 }
 
 fn normalize_review_mode(value: Option<&str>) -> Result<String, ApiError> {

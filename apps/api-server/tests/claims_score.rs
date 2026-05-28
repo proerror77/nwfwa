@@ -42,6 +42,29 @@ async fn activate_candidate_model(repository: SharedRepository) {
         .expect("candidate model save");
 }
 
+async fn activate_post_payment_model(repository: SharedRepository) {
+    repository
+        .update_model_status("baseline_fwa", "0.1.0", "approved")
+        .await
+        .expect("default model status update");
+    repository
+        .save_model_version(ModelVersionRecord {
+            model_key: "baseline_fwa".into(),
+            version: "0.2.0-post-payment".into(),
+            model_type: "baseline_classifier".into(),
+            runtime_kind: "python_http".into(),
+            execution_provider: "cpu".into(),
+            status: "active".into(),
+            review_mode: "post_payment".into(),
+            artifact_uri: Some("s3://fwa-models/baseline_fwa/0.2.0-post-payment/model.onnx".into()),
+            endpoint_url: Some(
+                "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-post-payment".into(),
+            ),
+        })
+        .await
+        .expect("post-payment model save");
+}
+
 #[tokio::test]
 async fn scores_full_payload_with_api_key() {
     let app = build_app(test_config());
@@ -1119,6 +1142,82 @@ async fn scoring_uses_active_model_version_from_model_registry() {
     assert_eq!(
         scoring_event["payload"]["model_score"]["metadata"]["endpoint_url"],
         "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-active"
+    );
+}
+
+#[tokio::test]
+async fn scoring_filters_active_model_by_review_mode() {
+    let repository = InMemoryScoringRepository::shared();
+    activate_post_payment_model(repository.clone()).await;
+    let app = build_app_with_parts(test_config(), Arc::new(RequestEchoScorer), repository);
+
+    let pre_payment_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PRE-PAYMENT-MODEL",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let pre_payment_response = app.clone().oneshot(pre_payment_request).await.unwrap();
+    assert_eq!(pre_payment_response.status(), StatusCode::CONFLICT);
+
+    let post_payment_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "review_mode": "post_payment",
+              "claim": {
+                "external_claim_id": "CLM-POST-PAYMENT-MODEL",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let post_payment_response = app.clone().oneshot(post_payment_request).await.unwrap();
+    assert_eq!(post_payment_response.status(), StatusCode::OK);
+    let body = to_bytes(post_payment_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["scores"]["ml_score"], 72);
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-POST-PAYMENT-MODEL")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(
+        scoring_event["payload"]["model_score"]["model_version"],
+        "0.2.0-post-payment"
     );
 }
 
