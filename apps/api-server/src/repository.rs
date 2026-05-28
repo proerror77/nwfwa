@@ -1137,6 +1137,28 @@ pub trait ScoringRepository: Send + Sync {
         owner: String,
     ) -> anyhow::Result<RoutingPolicyRecord>;
 
+    async fn get_routing_policy(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>>;
+
+    async fn update_routing_policy_status(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+        status: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>>;
+
+    async fn activate_routing_policy(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>>;
+
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>>;
 
     async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>>;
@@ -1500,28 +1522,20 @@ impl ScoringRepository for InMemoryScoringRepository {
         &self,
         review_mode: &str,
     ) -> anyhow::Result<Option<RoutingPolicy>> {
-        Ok(self
-            .routing_policies
-            .lock()
-            .await
+        let mut policies = self.routing_policies.lock().await;
+        seed_default_routing_policy_records(&mut policies);
+        Ok(policies
             .iter()
             .filter(|policy| policy.status == "active")
             .filter(|policy| routing_policy_review_mode_applies(&policy.review_mode, review_mode))
-            .max_by_key(|policy| policy.version)
+            .max_by_key(|policy| (policy.review_mode == review_mode, policy.version))
             .map(routing_policy_from_record))
     }
 
     async fn list_routing_policies(&self) -> anyhow::Result<Vec<RoutingPolicyRecord>> {
-        let policies = self.routing_policies.lock().await;
-        let source = if policies.is_empty() {
-            default_routing_policies()
-                .into_iter()
-                .map(|policy| routing_policy_record(policy, "active", "system", None, None))
-                .collect()
-        } else {
-            policies.clone()
-        };
-        Ok(source)
+        let mut policies = self.routing_policies.lock().await;
+        seed_default_routing_policy_records(&mut policies);
+        Ok(policies.clone())
     }
 
     async fn save_routing_policy_candidate(
@@ -1531,6 +1545,7 @@ impl ScoringRepository for InMemoryScoringRepository {
     ) -> anyhow::Result<RoutingPolicyRecord> {
         let record = routing_policy_record(policy, "draft", &owner, None, None);
         let mut policies = self.routing_policies.lock().await;
+        seed_default_routing_policy_records(&mut policies);
         policies.retain(|existing| {
             !(existing.policy_id == record.policy_id
                 && existing.version == record.version
@@ -1538,6 +1553,77 @@ impl ScoringRepository for InMemoryScoringRepository {
         });
         policies.push(record.clone());
         Ok(record)
+    }
+
+    async fn get_routing_policy(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
+        let mut policies = self.routing_policies.lock().await;
+        seed_default_routing_policy_records(&mut policies);
+        Ok(policies
+            .iter()
+            .find(|policy| {
+                policy.policy_id == policy_id
+                    && policy.version == version
+                    && policy.review_mode == review_mode
+            })
+            .cloned())
+    }
+
+    async fn update_routing_policy_status(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+        status: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
+        let mut policies = self.routing_policies.lock().await;
+        seed_default_routing_policy_records(&mut policies);
+        let Some(policy) = policies.iter_mut().find(|policy| {
+            policy.policy_id == policy_id
+                && policy.version == version
+                && policy.review_mode == review_mode
+        }) else {
+            return Ok(None);
+        };
+        policy.status = status.into();
+        Ok(Some(policy.clone()))
+    }
+
+    async fn activate_routing_policy(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
+        let mut policies = self.routing_policies.lock().await;
+        seed_default_routing_policy_records(&mut policies);
+        if !policies.iter().any(|policy| {
+            policy.policy_id == policy_id
+                && policy.version == version
+                && policy.review_mode == review_mode
+        }) {
+            return Ok(None);
+        }
+        for policy in policies
+            .iter_mut()
+            .filter(|policy| policy.review_mode == review_mode && policy.status == "active")
+        {
+            policy.status = "approved".into();
+        }
+        let policy = policies
+            .iter_mut()
+            .find(|policy| {
+                policy.policy_id == policy_id
+                    && policy.version == version
+                    && policy.review_mode == review_mode
+            })
+            .expect("routing policy existence checked before activation");
+        policy.status = "active".into();
+        Ok(Some(policy.clone()))
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -3374,8 +3460,7 @@ impl ScoringRepository for PostgresScoringRepository {
         let row: Option<(Value,)> = sqlx::query_as(
             "SELECT policy_json
              FROM routing_policies
-             WHERE policy_key = 'fwa_risk_fusion_routing'
-               AND status = 'active'
+             WHERE status = 'active'
                AND review_mode IN ($1, 'both')
              ORDER BY CASE WHEN review_mode = $1 THEN 0 ELSE 1 END, version DESC
              LIMIT 1",
@@ -3400,16 +3485,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
 
         rows.into_iter()
-            .map(|(policy_json, status, owner, activated_at, created_at)| {
-                let policy: RoutingPolicy = serde_json::from_value(policy_json)?;
-                Ok(routing_policy_record(
-                    policy,
-                    &status,
-                    &owner,
-                    activated_at,
-                    created_at,
-                ))
-            })
+            .map(routing_policy_record_from_row)
             .collect()
     }
 
@@ -3437,6 +3513,88 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
 
         Ok(routing_policy_record(policy, "draft", &owner, None, None))
+    }
+
+    async fn get_routing_policy(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
+        ensure_default_routing_policies_seeded(&self.pool).await?;
+        let row: Option<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
+            "SELECT policy_json, status, owner, activated_at::text, created_at::text
+                 FROM routing_policies
+                 WHERE policy_key = $1 AND version = $2 AND review_mode = $3",
+        )
+        .bind(policy_id)
+        .bind(version as i32)
+        .bind(review_mode)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(routing_policy_record_from_row).transpose()
+    }
+
+    async fn update_routing_policy_status(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+        status: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
+        ensure_default_routing_policies_seeded(&self.pool).await?;
+        let row: Option<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
+            "UPDATE routing_policies
+                 SET status = $4
+                 WHERE policy_key = $1 AND version = $2 AND review_mode = $3
+                 RETURNING policy_json, status, owner, activated_at::text, created_at::text",
+        )
+        .bind(policy_id)
+        .bind(version as i32)
+        .bind(review_mode)
+        .bind(status)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        row.map(routing_policy_record_from_row).transpose()
+    }
+
+    async fn activate_routing_policy(
+        &self,
+        policy_id: &str,
+        version: u32,
+        review_mode: &str,
+    ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
+        ensure_default_routing_policies_seeded(&self.pool).await?;
+        let mut tx = self.pool.begin().await?;
+        sqlx::query(
+            "UPDATE routing_policies
+             SET status = 'approved'
+             WHERE review_mode = $1
+               AND status = 'active'
+               AND NOT (policy_key = $2 AND version = $3)",
+        )
+        .bind(review_mode)
+        .bind(policy_id)
+        .bind(version as i32)
+        .execute(&mut *tx)
+        .await?;
+
+        let row: Option<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
+            "UPDATE routing_policies
+                 SET status = 'active', activated_at = now()
+                 WHERE policy_key = $1 AND version = $2 AND review_mode = $3
+                 RETURNING policy_json, status, owner, activated_at::text, created_at::text",
+        )
+        .bind(policy_id)
+        .bind(version as i32)
+        .bind(review_mode)
+        .fetch_optional(&mut *tx)
+        .await?;
+        tx.commit().await?;
+
+        row.map(routing_policy_record_from_row).transpose()
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
@@ -7841,6 +7999,16 @@ fn default_routing_policies() -> Vec<RoutingPolicy> {
         .collect()
 }
 
+fn seed_default_routing_policy_records(policies: &mut Vec<RoutingPolicyRecord>) {
+    if policies.is_empty() {
+        policies.extend(
+            default_routing_policies()
+                .into_iter()
+                .map(|policy| routing_policy_record(policy, "active", "system", None, None)),
+        );
+    }
+}
+
 fn routing_policy_record(
     policy: RoutingPolicy,
     status: &str,
@@ -7860,6 +8028,20 @@ fn routing_policy_record(
         activated_at,
         created_at,
     }
+}
+
+fn routing_policy_record_from_row(
+    row: (Value, String, String, Option<String>, Option<String>),
+) -> anyhow::Result<RoutingPolicyRecord> {
+    let (policy_json, status, owner, activated_at, created_at) = row;
+    let policy: RoutingPolicy = serde_json::from_value(policy_json)?;
+    Ok(routing_policy_record(
+        policy,
+        &status,
+        &owner,
+        activated_at,
+        created_at,
+    ))
 }
 
 fn routing_policy_from_record(record: &RoutingPolicyRecord) -> RoutingPolicy {

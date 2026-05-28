@@ -891,6 +891,106 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/submit": {
+                "post": {
+                    "summary": "Submit a draft routing policy for governance review",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": routing_policy_lifecycle_parameters(),
+                    "responses": {
+                        "200": {
+                            "description": "Submitted routing policy",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RoutingPolicyRecord" }
+                                }
+                            }
+                        },
+                        "409": {
+                            "description": "Routing policy is not in the required source status",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/approve": {
+                "post": {
+                    "summary": "Approve a submitted routing policy",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": routing_policy_lifecycle_parameters(),
+                    "responses": {
+                        "200": {
+                            "description": "Approved routing policy",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RoutingPolicyRecord" }
+                                }
+                            }
+                        },
+                        "409": {
+                            "description": "Routing policy is not in the required source status",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/activate": {
+                "post": {
+                    "summary": "Activate an approved routing policy for scoring",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": routing_policy_lifecycle_parameters(),
+                    "responses": {
+                        "200": {
+                            "description": "Activated routing policy",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RoutingPolicyRecord" }
+                                }
+                            }
+                        },
+                        "409": {
+                            "description": "Routing policy is not approved for activation",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/rollback": {
+                "post": {
+                    "summary": "Roll back an active routing policy to approved status",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": routing_policy_lifecycle_parameters(),
+                    "responses": {
+                        "200": {
+                            "description": "Rolled back routing policy",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RoutingPolicyRecord" }
+                                }
+                            }
+                        },
+                        "409": {
+                            "description": "Routing policy is not active",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/providers/risk-summary": {
                 "get": {
                     "summary": "Summarize Provider profile and graph-risk review signals",
@@ -3933,4 +4033,27 @@ pub async fn openapi_schema() -> Json<Value> {
             }
         }
     }))
+}
+
+fn routing_policy_lifecycle_parameters() -> Value {
+    json!([
+        {
+            "name": "policy_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+        },
+        {
+            "name": "review_mode",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] }
+        },
+        {
+            "name": "version",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "integer", "minimum": 1 }
+        }
+    ])
 }

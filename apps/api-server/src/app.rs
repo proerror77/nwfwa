@@ -172,6 +172,22 @@ pub fn build_app_with_parts(
                 .post(ops_routing_policies::save_routing_policy_candidate),
         )
         .route(
+            "/api/v1/ops/routing-policies/:policy_id/:review_mode/:version/submit",
+            post(ops_routing_policies::submit_routing_policy),
+        )
+        .route(
+            "/api/v1/ops/routing-policies/:policy_id/:review_mode/:version/approve",
+            post(ops_routing_policies::approve_routing_policy),
+        )
+        .route(
+            "/api/v1/ops/routing-policies/:policy_id/:review_mode/:version/activate",
+            post(ops_routing_policies::activate_routing_policy),
+        )
+        .route(
+            "/api/v1/ops/routing-policies/:policy_id/:review_mode/:version/rollback",
+            post(ops_routing_policies::rollback_routing_policy),
+        )
+        .route(
             "/api/v1/ops/providers/risk-summary",
             get(ops_providers::provider_risk_summary),
         )

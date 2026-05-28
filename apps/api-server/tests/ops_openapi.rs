@@ -40,6 +40,10 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/rules/{rule_id}/rollback",
         "/api/v1/ops/models",
         "/api/v1/ops/routing-policies",
+        "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/submit",
+        "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/approve",
+        "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/activate",
+        "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/rollback",
         "/api/v1/ops/models/{model_key}/performance",
         "/api/v1/ops/models/{model_key}/promotion-gates",
         "/api/v1/ops/models/{model_key}/retraining-readiness",
@@ -263,6 +267,18 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["SaveRoutingPolicyCandidateRequest"]["properties"]
             ["policy"]["$ref"],
         "#/components/schemas/RoutingPolicy"
+    );
+    assert_eq!(
+        schema["paths"]
+            ["/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/activate"]["post"]
+            ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/RoutingPolicyRecord"
+    );
+    assert_eq!(
+        schema["paths"]
+            ["/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/rollback"]["post"]
+            ["parameters"][1]["name"],
+        "review_mode"
     );
     assert_eq!(
         schema["paths"]["/api/v1/ops/models/{model_key}/activate"]["post"]["responses"]["200"]
