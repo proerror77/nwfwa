@@ -17,7 +17,7 @@ use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::Serialize;
-use serde_json::{json, Value};
+use serde_json::{json, Map, Value};
 
 #[derive(Debug, Serialize)]
 pub struct DatasetListResponse {
@@ -85,6 +85,9 @@ pub struct FactorReadinessResponse {
     pub high_missing_count: u32,
     pub unstable_factor_count: u32,
     pub unowned_factor_count: u32,
+    pub ready_factor_count: u32,
+    pub review_factor_count: u32,
+    pub readiness_issue_counts: Map<String, Value>,
     pub factor_cards: Vec<FactorCardRecord>,
 }
 
@@ -490,6 +493,9 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
         high_missing_count: 0,
         unstable_factor_count: 0,
         unowned_factor_count: 0,
+        ready_factor_count: 0,
+        review_factor_count: 0,
+        readiness_issue_counts: Map::new(),
         factor_cards: Vec::new(),
     };
 
@@ -532,9 +538,24 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
             {
                 response.mapped_factor_count += 1;
             }
-            response
-                .factor_cards
-                .push(build_factor_card(dataset, field));
+            let factor_card = build_factor_card(dataset, field);
+            if factor_card.readiness_status == "ready" {
+                response.ready_factor_count += 1;
+            } else {
+                response.review_factor_count += 1;
+            }
+            for issue in &factor_card.readiness_issues {
+                let count = response
+                    .readiness_issue_counts
+                    .get(issue)
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0)
+                    + 1;
+                response
+                    .readiness_issue_counts
+                    .insert(issue.clone(), Value::from(count));
+            }
+            response.factor_cards.push(factor_card);
         }
     }
 

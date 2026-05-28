@@ -55,6 +55,9 @@ type FactorReadiness = {
   high_missing_count: number;
   unstable_factor_count: number;
   unowned_factor_count: number;
+  ready_factor_count?: number;
+  review_factor_count?: number;
+  readiness_issue_counts?: Record<string, number>;
   factor_cards?: ApiFactorCard[];
 };
 
@@ -136,6 +139,11 @@ export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
     dataQualityStatus: readiness?.data_quality_status ?? "empty",
     ruleConvertibleCount: readiness?.rule_convertible_count ?? 0,
     mappedFactorCount: readiness?.mapped_factor_count ?? 0,
+    readyFactorCount: readiness?.ready_factor_count ?? 0,
+    reviewFactorCount: readiness?.review_factor_count ?? reviewQueueCount,
+    topReadinessIssues: Object.entries(readiness?.readiness_issue_counts ?? {})
+      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+      .map(([issue, count]) => `${issue}: ${count}`),
     reviewQueueCount,
     onlineReadyRateLabel:
       factorCount === 0 ? "0.0%" : `${((onlineReadyCount / factorCount) * 100).toFixed(1)}%`,
@@ -344,7 +352,22 @@ export function FactorFactoryPage() {
             <span>Review Queue</span>
             <strong>{readinessSummary.reviewQueueCount}</strong>
           </div>
+          <div>
+            <span>Ready Factors</span>
+            <strong>{readinessSummary.readyFactorCount}</strong>
+          </div>
+          <div>
+            <span>Review Factors</span>
+            <strong>{readinessSummary.reviewFactorCount}</strong>
+          </div>
         </div>
+        {readinessSummary.topReadinessIssues.length > 0 ? (
+          <ul className="result-list compact-list">
+            {readinessSummary.topReadinessIssues.slice(0, 4).map((issue) => (
+              <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        ) : null}
         <div className="table-list">
           {datasetsQuery.data?.datasets.map((dataset) => (
             <button

@@ -214,6 +214,13 @@ describe("buildFactorReadinessSummary", () => {
       high_missing_count: 1,
       unstable_factor_count: 2,
       unowned_factor_count: 4,
+      ready_factor_count: 5,
+      review_factor_count: 7,
+      readiness_issue_counts: {
+        missing_owner: 4,
+        unstable_distribution: 2,
+        high_missing_rate: 1,
+      },
     });
 
     expect(summary).toEqual({
@@ -224,6 +231,13 @@ describe("buildFactorReadinessSummary", () => {
       dataQualityStatus: "watch",
       ruleConvertibleCount: 5,
       mappedFactorCount: 6,
+      readyFactorCount: 5,
+      reviewFactorCount: 7,
+      topReadinessIssues: [
+        "missing_owner: 4",
+        "unstable_distribution: 2",
+        "high_missing_rate: 1",
+      ],
       reviewQueueCount: 7,
       onlineReadyRateLabel: "58.3%",
     });

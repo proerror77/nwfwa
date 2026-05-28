@@ -270,6 +270,20 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/FactorCard"
     );
     for field in [
+        "ready_factor_count",
+        "review_factor_count",
+        "readiness_issue_counts",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["FactorReadinessResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing factor readiness field {field}"
+        );
+    }
+    for field in [
         "factor_name",
         "chinese_name",
         "entity_type",

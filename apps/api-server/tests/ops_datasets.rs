@@ -189,6 +189,10 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
     assert_eq!(readiness["mapped_factor_count"], 1);
     assert_eq!(readiness["high_missing_count"], 0);
     assert_eq!(readiness["unowned_factor_count"], 3);
+    assert_eq!(readiness["ready_factor_count"], 0);
+    assert_eq!(readiness["review_factor_count"], 3);
+    assert_eq!(readiness["readiness_issue_counts"]["missing_owner"], 3);
+    assert_eq!(readiness["readiness_issue_counts"]["label_field"], 1);
     assert_eq!(readiness["factor_cards"].as_array().unwrap().len(), 3);
     assert_eq!(readiness["factor_cards"][0]["factor_name"], "policy_no");
     assert_eq!(readiness["factor_cards"][0]["chinese_name"], "Policy No");
