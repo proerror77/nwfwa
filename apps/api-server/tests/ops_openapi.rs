@@ -218,6 +218,24 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
         "string"
     );
+    assert!(schema["components"]["schemas"]["KnowledgeCase"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "scheme_family"));
+    assert_eq!(
+        schema["components"]["schemas"]["KnowledgeCase"]["properties"]["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
+    assert!(schema["components"]["schemas"]["SimilarCase"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "scheme_family"));
+    assert_eq!(
+        schema["components"]["schemas"]["SimilarCase"]["properties"]["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
     assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["provenance_refs"]["items"]
             ["type"],

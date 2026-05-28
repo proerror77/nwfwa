@@ -417,6 +417,7 @@ pub struct KnowledgeCaseRecord {
     pub case_id: String,
     pub title: String,
     pub fwa_type: String,
+    pub scheme_family: String,
     pub diagnosis_code: String,
     pub provider_region: String,
     pub provider_type: String,
@@ -438,6 +439,7 @@ pub struct SimilarCaseQuery {
 pub struct SimilarCaseRecord {
     pub case_id: String,
     pub title: String,
+    pub scheme_family: String,
     pub similarity_score: f64,
     pub matched_signals: Vec<String>,
     pub retrieval_method: String,
@@ -3862,10 +3864,11 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Value,
             Value,
         )> = sqlx::query_as(
-            "SELECT case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs
+            "SELECT case_id, title, fwa_type, scheme_family, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs
              FROM knowledge_cases
              ORDER BY case_id",
         )
@@ -3879,6 +3882,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     case_id,
                     title,
                     fwa_type,
+                    scheme_family,
                     diagnosis_code,
                     provider_region,
                     provider_type,
@@ -3890,6 +3894,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     case_id,
                     title,
                     fwa_type,
+                    scheme_family,
                     diagnosis_code,
                     provider_region,
                     provider_type,
@@ -3908,11 +3913,12 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<KnowledgeCaseRecord> {
         sqlx::query(
             "INSERT INTO knowledge_cases
-             (case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             (case_id, title, fwa_type, scheme_family, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
              ON CONFLICT (case_id) DO UPDATE
              SET title = EXCLUDED.title,
                  fwa_type = EXCLUDED.fwa_type,
+                 scheme_family = EXCLUDED.scheme_family,
                  diagnosis_code = EXCLUDED.diagnosis_code,
                  provider_region = EXCLUDED.provider_region,
                  provider_type = EXCLUDED.provider_type,
@@ -3925,6 +3931,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&record.case_id)
         .bind(&record.title)
         .bind(&record.fwa_type)
+        .bind(&record.scheme_family)
         .bind(&record.diagnosis_code)
         .bind(&record.provider_region)
         .bind(&record.provider_type)
@@ -5089,7 +5096,7 @@ fn scheme_family_from_dsl(dsl: &Value) -> String {
         })
 }
 
-fn normalize_scheme_family(value: &str) -> String {
+pub(crate) fn normalize_scheme_family(value: &str) -> String {
     match value {
         "duplicate_billing"
         | "upcoding"
@@ -5145,6 +5152,41 @@ fn scheme_family_from_alert_code(alert_code: &str) -> String {
         "excessive_utilization".into()
     } else {
         "high_risk_claim".into()
+    }
+}
+
+pub(crate) fn scheme_family_from_knowledge_signals(fwa_type: &str, tags: &[String]) -> String {
+    if let Some(scheme_family) = tags
+        .iter()
+        .find_map(|tag| tag.strip_prefix("scheme:").map(normalize_scheme_family))
+    {
+        return scheme_family;
+    }
+
+    if tags
+        .iter()
+        .any(|tag| tag.contains("medical_mismatch") || tag.contains("diagnosis"))
+    {
+        "diagnosis_procedure_mismatch".into()
+    } else if tags
+        .iter()
+        .any(|tag| tag.contains("lab") || tag.contains("testing"))
+    {
+        "laboratory_testing_abuse".into()
+    } else if tags.iter().any(|tag| tag.contains("provider")) {
+        "provider_peer_outlier".into()
+    } else if tags
+        .iter()
+        .any(|tag| tag.contains("early") || tag.contains("high_amount"))
+    {
+        "early_high_value_claim".into()
+    } else {
+        match fwa_type {
+            "Waste" => "excessive_utilization".into(),
+            "Abuse" => "high_risk_claim".into(),
+            "Fraud" => "relationship_concentration".into(),
+            _ => "high_risk_claim".into(),
+        }
     }
 }
 
@@ -6217,6 +6259,7 @@ fn default_knowledge_cases() -> Vec<KnowledgeCaseRecord> {
             case_id: "KC-1001".into(),
             title: "Early high-amount respiratory claim".into(),
             fwa_type: "Abuse".into(),
+            scheme_family: "diagnosis_procedure_mismatch".into(),
             diagnosis_code: "J10".into(),
             provider_region: "Shanghai".into(),
             provider_type: "hospital".into(),
@@ -6236,6 +6279,7 @@ fn default_knowledge_cases() -> Vec<KnowledgeCaseRecord> {
             case_id: "KC-1002".into(),
             title: "Provider repeated high-cost package pattern".into(),
             fwa_type: "Waste".into(),
+            scheme_family: "provider_peer_outlier".into(),
             diagnosis_code: "M54".into(),
             provider_region: "Beijing".into(),
             provider_type: "clinic".into(),
@@ -6295,6 +6339,7 @@ fn search_cases(
                 Some(SimilarCaseRecord {
                     case_id: case.case_id,
                     title: case.title,
+                    scheme_family: case.scheme_family,
                     similarity_score: score.min(1.0),
                     matched_signals,
                     retrieval_method: "structured_signal_overlap".into(),
@@ -6578,13 +6623,16 @@ async fn ensure_default_knowledge_cases_seeded(pool: &PgPool) -> anyhow::Result<
     for case in default_knowledge_cases() {
         sqlx::query(
             "INSERT INTO knowledge_cases
-             (case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-             ON CONFLICT (case_id) DO UPDATE SET updated_at = now()",
+             (case_id, title, fwa_type, scheme_family, diagnosis_code, provider_region, provider_type, summary, outcome, tags, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+             ON CONFLICT (case_id) DO UPDATE SET
+               scheme_family = EXCLUDED.scheme_family,
+               updated_at = now()",
         )
         .bind(&case.case_id)
         .bind(&case.title)
         .bind(&case.fwa_type)
+        .bind(&case.scheme_family)
         .bind(&case.diagnosis_code)
         .bind(&case.provider_region)
         .bind(&case.provider_type)

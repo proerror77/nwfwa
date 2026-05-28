@@ -43,6 +43,10 @@ async fn lists_knowledge_cases() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["cases"][0]["case_id"], "KC-1001");
     assert_eq!(body["cases"][0]["fwa_type"], "Abuse");
+    assert_eq!(
+        body["cases"][0]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
     assert!(!body["cases"][0]["evidence_refs"]
         .as_array()
         .unwrap()
@@ -69,6 +73,10 @@ async fn searches_similar_knowledge_cases_with_evidence() {
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["results"][0]["case_id"], "KC-1001");
+    assert_eq!(
+        body["results"][0]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
     assert!(body["results"][0]["similarity_score"].as_f64().unwrap() > 0.0);
     assert!(!body["results"][0]["matched_signals"]
         .as_array()
@@ -100,6 +108,7 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
           "case_id": "KC-PUBLISHED-1",
           "title": "Published provider lab overuse case",
           "fwa_type": "Waste",
+          "scheme_family": "laboratory_testing_abuse",
           "diagnosis_code": "E11",
           "provider_region": "Guangzhou",
           "provider_type": "lab",
@@ -115,6 +124,7 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["case"]["case_id"], "KC-PUBLISHED-1");
+    assert_eq!(body["case"]["scheme_family"], "laboratory_testing_abuse");
     assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, body) =
@@ -142,15 +152,24 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["results"][0]["case_id"], "KC-PUBLISHED-1");
+    assert_eq!(
+        body["results"][0]["scheme_family"],
+        "laboratory_testing_abuse"
+    );
 
     let (status, body) = json_request(app, "GET", "/api/v1/audit/claims/CLM-KB-1", "{}").await;
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert!(body["events"]
+    let publish_event = body["events"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|event| event["event_type"] == "knowledge.case.published"));
+        .find(|event| event["event_type"] == "knowledge.case.published")
+        .expect("knowledge case publish should be audited");
+    assert_eq!(
+        publish_event["payload"]["scheme_family"],
+        "laboratory_testing_abuse"
+    );
 }
 
 #[tokio::test]

@@ -190,6 +190,7 @@ CREATE TABLE IF NOT EXISTS knowledge_cases (
   case_id TEXT NOT NULL UNIQUE,
   title TEXT NOT NULL,
   fwa_type TEXT NOT NULL,
+  scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim',
   diagnosis_code TEXT NOT NULL,
   provider_region TEXT NOT NULL,
   provider_type TEXT NOT NULL,
@@ -200,6 +201,9 @@ CREATE TABLE IF NOT EXISTS knowledge_cases (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE knowledge_cases
+  ADD COLUMN IF NOT EXISTS scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim';
 
 CREATE TABLE IF NOT EXISTS agent_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

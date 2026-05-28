@@ -1,7 +1,10 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{KnowledgeCaseRecord, PersistedAuditEvent, SimilarCaseQuery, SimilarCaseRecord},
+    repository::{
+        normalize_scheme_family, scheme_family_from_knowledge_signals, KnowledgeCaseRecord,
+        PersistedAuditEvent, SimilarCaseQuery, SimilarCaseRecord,
+    },
 };
 use axum::{
     extract::State,
@@ -23,6 +26,7 @@ pub struct PublishKnowledgeCaseRequest {
     pub case_id: String,
     pub title: String,
     pub fwa_type: String,
+    pub scheme_family: Option<String>,
     pub diagnosis_code: String,
     pub provider_region: String,
     pub provider_type: String,
@@ -86,10 +90,15 @@ pub async fn publish_case(
         ));
     }
 
+    let scheme_family = request
+        .scheme_family
+        .map(|value| normalize_scheme_family(&value))
+        .unwrap_or_else(|| scheme_family_from_knowledge_signals(&request.fwa_type, &request.tags));
     let case = KnowledgeCaseRecord {
         case_id: request.case_id,
         title: request.title,
         fwa_type: request.fwa_type,
+        scheme_family,
         diagnosis_code: request.diagnosis_code,
         provider_region: request.provider_region,
         provider_type: request.provider_type,
@@ -123,6 +132,7 @@ pub async fn publish_case(
                 "claim_id": source_claim_id,
                 "case_id": case.case_id,
                 "fwa_type": case.fwa_type,
+                "scheme_family": case.scheme_family,
                 "diagnosis_code": case.diagnosis_code,
                 "provider_region": case.provider_region,
                 "tags": case.tags,

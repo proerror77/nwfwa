@@ -6,6 +6,7 @@ type KnowledgeCase = {
   case_id: string;
   title: string;
   fwa_type: string;
+  scheme_family: string;
   diagnosis_code: string;
   provider_region: string;
   provider_type: string;
@@ -18,6 +19,7 @@ type KnowledgeCase = {
 type SimilarCase = {
   case_id: string;
   title: string;
+  scheme_family: string;
   similarity_score: number;
   matched_signals: string[];
   retrieval_method: string;
@@ -71,6 +73,7 @@ export function KnowledgeBasePage() {
           case_id: publishCaseId,
           title: publishTitle,
           fwa_type: "Waste",
+          scheme_family: "early_high_value_claim",
           diagnosis_code: diagnosisCode,
           provider_region: providerRegion,
           provider_type: "provider",
@@ -108,7 +111,9 @@ export function KnowledgeBasePage() {
             >
               <span>{item.title}</span>
               <strong>{item.fwa_type}</strong>
-              <small>{item.case_id}</small>
+              <small>
+                {item.case_id} · {item.scheme_family}
+              </small>
             </button>
           ))}
         </div>
@@ -125,6 +130,10 @@ export function KnowledgeBasePage() {
               <div>
                 <dt>Diagnosis</dt>
                 <dd>{selectedCase.diagnosis_code}</dd>
+              </div>
+              <div>
+                <dt>Scheme</dt>
+                <dd>{selectedCase.scheme_family}</dd>
               </div>
               <div>
                 <dt>Region</dt>
@@ -172,6 +181,7 @@ export function KnowledgeBasePage() {
                   {item.case_id} · {(item.similarity_score * 100).toFixed(0)}%
                 </strong>
                 <small>{item.retrieval_method}</small>
+                <span>{item.scheme_family}</span>
                 <span>{item.matched_signals.join(", ")}</span>
                 <span>{item.provenance_refs.join(", ")}</span>
               </li>

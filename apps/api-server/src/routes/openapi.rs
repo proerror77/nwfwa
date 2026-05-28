@@ -2688,11 +2688,12 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "KnowledgeCase": {
                     "type": "object",
-                    "required": ["case_id", "title", "fwa_type", "diagnosis_code", "provider_region", "summary", "outcome", "tags", "evidence_refs"],
+                    "required": ["case_id", "title", "fwa_type", "scheme_family", "diagnosis_code", "provider_region", "summary", "outcome", "tags", "evidence_refs"],
                     "properties": {
                         "case_id": { "type": "string" },
                         "title": { "type": "string" },
                         "fwa_type": { "type": "string" },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "diagnosis_code": { "type": "string" },
                         "provider_region": { "type": "string" },
                         "provider_type": { "type": "string" },
@@ -2719,6 +2720,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "case_id": { "type": "string" },
                         "title": { "type": "string" },
                         "fwa_type": { "type": "string" },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "diagnosis_code": { "type": "string" },
                         "provider_region": { "type": "string" },
                         "provider_type": { "type": "string" },
@@ -2749,10 +2751,11 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "SimilarCase": {
                     "type": "object",
-                    "required": ["case_id", "title", "similarity_score", "matched_signals", "retrieval_method", "provenance_refs", "summary", "outcome", "evidence_refs"],
+                    "required": ["case_id", "title", "scheme_family", "similarity_score", "matched_signals", "retrieval_method", "provenance_refs", "summary", "outcome", "evidence_refs"],
                     "properties": {
                         "case_id": { "type": "string" },
                         "title": { "type": "string" },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "similarity_score": { "type": "number" },
                         "matched_signals": { "type": "array", "items": { "type": "string" } },
                         "retrieval_method": { "type": "string" },
