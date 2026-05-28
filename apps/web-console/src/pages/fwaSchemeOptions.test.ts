@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildFwaSchemeOptions } from "./fwaSchemeOptions";
+import {
+  buildFwaSchemeLabelMap,
+  buildFwaSchemeOptions,
+  formatFwaSchemeLabel,
+} from "./fwaSchemeOptions";
 
 describe("buildFwaSchemeOptions", () => {
   it("sorts governed FWA schemes and preserves a current fallback value", () => {
@@ -36,5 +40,20 @@ describe("buildFwaSchemeOptions", () => {
         riskDomain: "Provider",
       },
     ]);
+  });
+
+  it("builds display labels for canonical scheme families", () => {
+    const labelMap = buildFwaSchemeLabelMap([
+      {
+        scheme_family: "early_high_value_claim",
+        display_name: "Early high-value claim",
+        risk_domain: "Policy",
+      },
+    ]);
+
+    expect(formatFwaSchemeLabel("early_high_value_claim", labelMap)).toBe(
+      "Early high-value claim (early_high_value_claim)",
+    );
+    expect(formatFwaSchemeLabel("legacy_scheme", labelMap)).toBe("legacy_scheme");
   });
 });

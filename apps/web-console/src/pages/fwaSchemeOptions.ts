@@ -37,3 +37,21 @@ export function buildFwaSchemeOptions(
 
   return options;
 }
+
+export function buildFwaSchemeLabelMap(
+  schemes: FwaSchemeDefinition[] = [],
+): Record<string, string> {
+  return Object.fromEntries(
+    schemes.map((scheme) => [
+      scheme.scheme_family,
+      `${scheme.display_name} (${scheme.scheme_family})`,
+    ]),
+  );
+}
+
+export function formatFwaSchemeLabel(
+  schemeFamily: string,
+  labelMap: Record<string, string> = {},
+) {
+  return labelMap[schemeFamily] ?? schemeFamily;
+}

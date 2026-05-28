@@ -7,6 +7,7 @@ import {
   getRule,
   getRulePromotionGates,
   listAuditEvents,
+  listFwaSchemes,
   listOutcomeLabels,
   listQaFeedbackItems,
   listRules,
@@ -30,6 +31,11 @@ import {
   type PromotionGate,
 } from "./promotionGateEvidence";
 import { formatReviewModeLabel } from "./reviewMode";
+import {
+  buildFwaSchemeLabelMap,
+  formatFwaSchemeLabel,
+  type FwaSchemeDefinition,
+} from "./fwaSchemeOptions";
 
 type RuleSummary = {
   rule_id: string;
@@ -192,6 +198,14 @@ export function RulesStudio() {
     queryKey: ["rules", apiKey],
     queryFn: () => listRules(apiKey) as Promise<{ rules: RuleSummary[] }>,
   });
+  const schemesQuery = useQuery({
+    queryKey: ["fwa-schemes", apiKey],
+    queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
+  });
+  const schemeLabelMap = useMemo(
+    () => buildFwaSchemeLabelMap(schemesQuery.data?.schemes),
+    [schemesQuery.data?.schemes],
+  );
   const selectedRule = useMemo(
     () =>
       rulesQuery.data?.rules.find((rule) => rule.rule_id === selectedRuleId) ??
@@ -309,6 +323,9 @@ export function RulesStudio() {
           <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
         </label>
         {rulesQuery.error ? <pre className="error">{String(rulesQuery.error.message)}</pre> : null}
+        {schemesQuery.error ? (
+          <pre className="error">{String(schemesQuery.error.message)}</pre>
+        ) : null}
         <div className="table-list">
           {rulesQuery.data?.rules.map((rule) => (
             <button
@@ -319,7 +336,8 @@ export function RulesStudio() {
               <span>{rule.name}</span>
               <strong>{rule.status}</strong>
               <small>
-                {rule.alert_code} · {rule.scheme_family} · {formatReviewModeLabel(rule.review_mode)}
+                {rule.alert_code} · {formatFwaSchemeLabel(rule.scheme_family, schemeLabelMap)} ·{" "}
+                {formatReviewModeLabel(rule.review_mode)}
               </small>
             </button>
           ))}
@@ -352,7 +370,7 @@ export function RulesStudio() {
               </div>
               <div>
                 <dt>Scheme</dt>
-                <dd>{selectedRule.scheme_family}</dd>
+                <dd>{formatFwaSchemeLabel(selectedRule.scheme_family, schemeLabelMap)}</dd>
               </div>
               <div>
                 <dt>Score</dt>
