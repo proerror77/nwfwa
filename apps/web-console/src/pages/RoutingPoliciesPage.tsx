@@ -3,11 +3,16 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   activateRoutingPolicy,
   approveRoutingPolicy,
+  getRoutingPolicyPromotionGates,
   listRoutingPolicies,
   rollbackRoutingPolicy,
   saveRoutingPolicyCandidate,
   submitRoutingPolicy,
 } from "../api";
+import {
+  buildPromotionGateEvidenceRows,
+  type PromotionGate,
+} from "./promotionGateEvidence";
 import { formatReviewModeLabel } from "./reviewMode";
 
 type RiskThresholds = {
@@ -33,6 +38,18 @@ export type RoutingPolicyRecord = {
   provider_review_threshold: number;
   activated_at?: string | null;
   created_at?: string | null;
+};
+
+type RoutingPolicyPromotionGatesResponse = {
+  policy_id: string;
+  version: number;
+  review_mode: string;
+  status: string;
+  decision: string;
+  passed_count: number;
+  total_count: number;
+  gates: PromotionGate[];
+  blockers: string[];
 };
 
 const defaultCandidate = JSON.stringify(
@@ -91,7 +108,19 @@ export function RoutingPoliciesPage() {
       policies[0],
     [policies, selectedPolicyKey],
   );
+  const promotionQuery = useQuery({
+    queryKey: ["routing-policy-promotion-gates", selectedPolicy, apiKey],
+    queryFn: () =>
+      getRoutingPolicyPromotionGates(
+        selectedPolicy!,
+        apiKey,
+      ) as Promise<RoutingPolicyPromotionGatesResponse>,
+    enabled: Boolean(selectedPolicy),
+  });
   const summary = buildRoutingPolicySummary(policies);
+  const promotionGateRows = promotionQuery.data
+    ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
+    : [];
   const lifecycleMutation = useMutation({
     mutationFn: (action: "submit" | "approve" | "activate" | "rollback") => {
       if (!selectedPolicy) throw new Error("No routing policy selected");
@@ -102,6 +131,7 @@ export function RoutingPoliciesPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["routing-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["routing-policy-promotion-gates"] });
     },
   });
   const saveCandidateMutation = useMutation({
@@ -110,6 +140,7 @@ export function RoutingPoliciesPage() {
       const policy = record as RoutingPolicyRecord;
       setSelectedPolicyKey(routingPolicyKey(policy));
       queryClient.invalidateQueries({ queryKey: ["routing-policies"] });
+      queryClient.invalidateQueries({ queryKey: ["routing-policy-promotion-gates"] });
     },
   });
 
@@ -236,9 +267,54 @@ export function RoutingPoliciesPage() {
             {lifecycleMutation.error ? (
               <pre className="error">{String(lifecycleMutation.error.message)}</pre>
             ) : null}
+            {promotionQuery.error ? (
+              <pre className="error">{String(promotionQuery.error.message)}</pre>
+            ) : null}
           </div>
         ) : (
           <p className="empty">No routing policies available</p>
+        )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Promotion Gates</h2>
+        {promotionQuery.data ? (
+          <>
+            <div className="summary-grid">
+              <div>
+                <span>Decision</span>
+                <strong>{promotionQuery.data.decision}</strong>
+              </div>
+              <div>
+                <span>Status</span>
+                <strong>{promotionQuery.data.status}</strong>
+              </div>
+              <div>
+                <span>Review Mode</span>
+                <strong>{formatReviewModeLabel(promotionQuery.data.review_mode)}</strong>
+              </div>
+              <div>
+                <span>Gates Passed</span>
+                <strong>
+                  {promotionQuery.data.passed_count}/{promotionQuery.data.total_count}
+                </strong>
+              </div>
+              <div>
+                <span>Blockers</span>
+                <strong>{promotionQuery.data.blockers.length}</strong>
+              </div>
+            </div>
+            <div className="table-list">
+              {promotionGateRows.map((gate) => (
+                <div className="metric-row compact-metric-row" key={gate.label}>
+                  <span>{gate.label}</span>
+                  <strong>{gate.status}</strong>
+                  <small className={gate.evidenceClassName}>{gate.evidenceSource}</small>
+                </div>
+              ))}
+            </div>
+          </>
+        ) : (
+          <p className="empty">No promotion gate data loaded</p>
         )}
       </div>
       <div className="panel wide-panel">

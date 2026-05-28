@@ -41,6 +41,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/models",
         "/api/v1/ops/routing-policies",
         "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/submit",
+        "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/promotion-gates",
         "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/approve",
         "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/activate",
         "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/rollback",
@@ -274,6 +275,17 @@ async fn openapi_includes_operations_paths() {
             ["/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/activate"]["post"]
             ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
         "#/components/schemas/RoutingPolicyRecord"
+    );
+    assert_eq!(
+        schema["paths"]
+            ["/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/promotion-gates"]
+            ["get"]["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/RoutingPolicyPromotionGatesResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicyPromotionGatesResponse"]["properties"]
+            ["gates"]["items"]["$ref"],
+        "#/components/schemas/RoutingPolicyPromotionGate"
     );
     assert_eq!(
         schema["paths"]

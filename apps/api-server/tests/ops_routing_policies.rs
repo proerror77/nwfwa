@@ -121,7 +121,7 @@ async fn saves_draft_routing_policy_candidate_without_affecting_scoring() {
                           "low_max": 0,
                           "medium_min": 1,
                           "high_min": 1,
-                          "critical_min": 1
+                          "critical_min": 90
                         },
                         "confidence_thresholds": {
                           "low_confidence_below": 60,
@@ -194,7 +194,7 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
               "low_max": 0,
               "medium_min": 1,
               "high_min": 1,
-              "critical_min": 1
+              "critical_min": 90
             },
             "confidence_thresholds": {
               "low_confidence_below": 60,
@@ -231,6 +231,15 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(approved["status"], "approved");
+
+    let (status, gates) = get_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/promotion-gates",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(gates["decision"], "activation_allowed");
+    assert_eq!(gates["passed_count"], gates["total_count"]);
 
     let (status, activated) = post_empty(
         app.clone(),
@@ -291,6 +300,76 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
 }
 
 #[tokio::test]
+async fn routing_policy_promotion_gates_block_invalid_thresholds() {
+    let app = build_app(test_config());
+
+    let (status, saved) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": "policy-ops",
+          "policy": {
+            "policy_id": "candidate_invalid_thresholds",
+            "version": 1,
+            "review_mode": "pre_payment",
+            "risk_thresholds": {
+              "low_max": 50,
+              "medium_min": 40,
+              "high_min": 65,
+              "critical_min": 88
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 55,
+              "high_confidence_min": 85
+            },
+            "provider_review_threshold": 72
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(saved["status"], "draft");
+
+    let (status, submitted) = post_empty(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_invalid_thresholds/pre_payment/1/submit",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(submitted["status"], "submitted");
+
+    let (status, approved) = post_empty(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_invalid_thresholds/pre_payment/1/approve",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(approved["status"], "approved");
+
+    let (status, gates) = get_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_invalid_thresholds/pre_payment/1/promotion-gates",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(gates["decision"], "activation_blocked");
+    assert!(gates["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "risk thresholds must satisfy low < medium <= high <= critical"
+        )));
+
+    let (status, blocked) = post_empty(
+        app,
+        "/api/v1/ops/routing-policies/candidate_invalid_thresholds/pre_payment/1/activate",
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(blocked["code"], "ROUTING_POLICY_PROMOTION_GATES_BLOCKED");
+}
+
+#[tokio::test]
 async fn routing_policy_list_requires_api_key() {
     let app = build_app(test_config());
 
@@ -335,6 +414,23 @@ async fn post_empty(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Va
         .oneshot(
             Request::builder()
                 .method("POST")
+                .uri(uri)
+                .header("x-api-key", "dev-secret")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    let status = response.status();
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    (status, serde_json::from_slice(&body).unwrap())
+}
+
+async fn get_json(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Value) {
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
                 .uri(uri)
                 .header("x-api-key", "dev-secret")
                 .body(Body::empty())

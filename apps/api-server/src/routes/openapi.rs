@@ -940,6 +940,23 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/promotion-gates": {
+                "get": {
+                    "summary": "Evaluate promotion gates for a routing policy",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": routing_policy_lifecycle_parameters(),
+                    "responses": {
+                        "200": {
+                            "description": "Routing policy promotion gates",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RoutingPolicyPromotionGatesResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/approve": {
                 "post": {
                     "summary": "Approve a submitted routing policy",
@@ -3070,6 +3087,37 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "policy": { "$ref": "#/components/schemas/RoutingPolicy" },
                         "owner": { "type": ["string", "null"] }
+                    }
+                },
+                "RoutingPolicyPromotionGate": {
+                    "type": "object",
+                    "required": ["label", "passed", "blocker", "evidence_source"],
+                    "properties": {
+                        "label": { "type": "string" },
+                        "passed": { "type": "boolean" },
+                        "blocker": { "type": "string" },
+                        "evidence_source": { "type": "string", "enum": ["metadata", "approval", "policy_json"] }
+                    }
+                },
+                "RoutingPolicyPromotionGatesResponse": {
+                    "type": "object",
+                    "required": ["policy_id", "version", "review_mode", "status", "decision", "passed_count", "total_count", "gates", "blockers"],
+                    "properties": {
+                        "policy_id": { "type": "string" },
+                        "version": { "type": "integer" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "status": { "type": "string" },
+                        "decision": { "type": "string", "enum": ["activation_allowed", "activation_blocked"] },
+                        "passed_count": { "type": "integer" },
+                        "total_count": { "type": "integer" },
+                        "gates": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RoutingPolicyPromotionGate" }
+                        },
+                        "blockers": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
                     }
                 },
                 "ModelLifecycleResponse": {

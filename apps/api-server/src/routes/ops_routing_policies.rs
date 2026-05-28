@@ -20,6 +20,27 @@ pub struct RoutingPolicyListResponse {
     pub policies: Vec<RoutingPolicyRecord>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct RoutingPolicyPromotionGate {
+    pub label: String,
+    pub passed: bool,
+    pub blocker: String,
+    pub evidence_source: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RoutingPolicyPromotionGatesResponse {
+    pub policy_id: String,
+    pub version: u32,
+    pub review_mode: String,
+    pub status: String,
+    pub decision: String,
+    pub passed_count: usize,
+    pub total_count: usize,
+    pub gates: Vec<RoutingPolicyPromotionGate>,
+    pub blockers: Vec<String>,
+}
+
 #[derive(Debug, Deserialize)]
 pub struct SaveRoutingPolicyCandidateRequest {
     pub policy: RoutingPolicy,
@@ -37,6 +58,16 @@ pub async fn list_routing_policies(
         .await
         .map_err(internal_error("ROUTING_POLICY_LIST_FAILED"))?;
     Ok(Json(RoutingPolicyListResponse { policies }))
+}
+
+pub async fn routing_policy_promotion_gates(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
+) -> Result<Json<RoutingPolicyPromotionGatesResponse>, ApiError> {
+    let _actor = authorize(&state, &headers)?;
+    let record = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
+    Ok(Json(build_routing_policy_promotion_gates(&record)))
 }
 
 pub async fn save_routing_policy_candidate(
@@ -126,6 +157,21 @@ pub async fn activate_routing_policy(
     let actor = authorize(&state, &headers)?;
     let previous = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
     require_status(&previous, "approved", "ROUTING_POLICY_APPROVAL_REQUIRED")?;
+    let gates = build_routing_policy_promotion_gates(&previous);
+    let blockers = activation_blockers(&gates);
+    if !blockers.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "ROUTING_POLICY_PROMOTION_GATES_BLOCKED",
+            format!(
+                "routing policy {}:{}:{} promotion gates blocked: {}",
+                previous.policy_id,
+                previous.review_mode,
+                previous.version,
+                blockers.join(", ")
+            ),
+        ));
+    }
     let record = state
         .repository
         .activate_routing_policy(&policy_id, version, &review_mode)
@@ -203,6 +249,84 @@ async fn update_routing_policy_status(
     .await
     .map_err(internal_error("ROUTING_POLICY_AUDIT_SAVE_FAILED"))?;
     Ok(Json(record))
+}
+
+fn build_routing_policy_promotion_gates(
+    record: &RoutingPolicyRecord,
+) -> RoutingPolicyPromotionGatesResponse {
+    let approved = record.status == "approved" || record.status == "active";
+    let risk_thresholds = record.risk_thresholds.low_max < record.risk_thresholds.medium_min
+        && record.risk_thresholds.medium_min <= record.risk_thresholds.high_min
+        && record.risk_thresholds.high_min <= record.risk_thresholds.critical_min;
+    let confidence_thresholds = record.confidence_thresholds.low_confidence_below
+        < record.confidence_thresholds.high_confidence_min;
+    let provider_threshold = record.provider_review_threshold >= record.risk_thresholds.high_min
+        && record.provider_review_threshold <= record.risk_thresholds.critical_min;
+    let gates = vec![
+        promotion_gate(
+            "Governance approval",
+            approved,
+            "approval missing",
+            if approved { "metadata" } else { "approval" },
+        ),
+        promotion_gate(
+            "Risk thresholds",
+            risk_thresholds,
+            "risk thresholds must satisfy low < medium <= high <= critical",
+            "policy_json",
+        ),
+        promotion_gate(
+            "Confidence thresholds",
+            confidence_thresholds,
+            "confidence thresholds must satisfy low confidence < high confidence",
+            "policy_json",
+        ),
+        promotion_gate(
+            "Provider review threshold",
+            provider_threshold,
+            "provider review threshold must sit between high and critical risk thresholds",
+            "policy_json",
+        ),
+    ];
+    let blockers = gates
+        .iter()
+        .filter(|gate| !gate.passed)
+        .map(|gate| gate.blocker.clone())
+        .collect::<Vec<_>>();
+
+    RoutingPolicyPromotionGatesResponse {
+        policy_id: record.policy_id.clone(),
+        version: record.version,
+        review_mode: record.review_mode.clone(),
+        status: record.status.clone(),
+        decision: if blockers.is_empty() {
+            "activation_allowed".into()
+        } else {
+            "activation_blocked".into()
+        },
+        passed_count: gates.len() - blockers.len(),
+        total_count: gates.len(),
+        gates,
+        blockers,
+    }
+}
+
+fn activation_blockers(gates: &RoutingPolicyPromotionGatesResponse) -> Vec<String> {
+    gates.blockers.clone()
+}
+
+fn promotion_gate(
+    label: &str,
+    passed: bool,
+    blocker: &str,
+    evidence_source: &str,
+) -> RoutingPolicyPromotionGate {
+    RoutingPolicyPromotionGate {
+        label: label.into(),
+        passed,
+        blocker: blocker.into(),
+        evidence_source: evidence_source.into(),
+    }
 }
 
 async fn load_routing_policy(

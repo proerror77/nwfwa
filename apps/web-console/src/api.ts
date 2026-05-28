@@ -129,6 +129,13 @@ export async function saveRoutingPolicyCandidate(payload: unknown, apiKey: strin
   });
 }
 
+export async function getRoutingPolicyPromotionGates(
+  policy: RoutingPolicyRef,
+  apiKey: string,
+) {
+  return requestJson(routingPolicyLifecyclePath(policy, "promotion-gates"), apiKey);
+}
+
 export async function submitRoutingPolicy(policy: RoutingPolicyRef, apiKey: string) {
   return requestJson(routingPolicyLifecyclePath(policy, "submit"), apiKey, {
     method: "POST",

@@ -181,6 +181,10 @@ pub fn build_app_with_parts(
             post(ops_routing_policies::submit_routing_policy),
         )
         .route(
+            "/api/v1/ops/routing-policies/:policy_id/:review_mode/:version/promotion-gates",
+            get(ops_routing_policies::routing_policy_promotion_gates),
+        )
+        .route(
             "/api/v1/ops/routing-policies/:policy_id/:review_mode/:version/approve",
             post(ops_routing_policies::approve_routing_policy),
         )

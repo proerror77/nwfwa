@@ -34,6 +34,7 @@ import {
   getModelPromotionGates,
   getModelRetrainingReadiness,
   approveRoutingPolicy,
+  getRoutingPolicyPromotionGates,
   listAuditEvents,
   submitModelPromotionReview,
   updateModelRetrainingJobStatus,
@@ -158,6 +159,7 @@ describe("ops API helpers", () => {
 
     await listRoutingPolicies("dev-secret");
     await saveRoutingPolicyCandidate(candidate, "dev-secret");
+    await getRoutingPolicyPromotionGates(policy, "dev-secret");
     await submitRoutingPolicy(policy, "dev-secret");
     await approveRoutingPolicy(policy, "dev-secret");
     await activateRoutingPolicy(policy, "dev-secret");
@@ -180,21 +182,28 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/promotion-gates",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/submit",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/approve",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/activate",
       expect.objectContaining({ method: "POST" }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+      7,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/rollback",
       expect.objectContaining({ method: "POST" }),
     );
