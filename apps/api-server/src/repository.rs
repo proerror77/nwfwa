@@ -1796,7 +1796,8 @@ impl ScoringRepository for InMemoryScoringRepository {
             .cloned()
             .collect::<Vec<_>>();
         samples.sort_by(|left, right| left.sample_id.cmp(&right.sample_id));
-        Ok(samples)
+        let reviews = self.list_qa_reviews().await?;
+        Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
@@ -3954,7 +3955,7 @@ impl ScoringRepository for PostgresScoringRepository {
         )
         .fetch_all(&self.pool)
         .await?;
-        Ok(rows
+        let samples = rows
             .into_iter()
             .map(
                 |(
@@ -3985,7 +3986,9 @@ impl ScoringRepository for PostgresScoringRepository {
                     created_at: Some(created_at.to_rfc3339()),
                 },
             )
-            .collect())
+            .collect::<Vec<_>>();
+        let reviews = self.list_qa_reviews().await?;
+        Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>> {
@@ -6351,7 +6354,7 @@ fn build_audit_sample(
         })
         .collect::<Vec<_>>();
 
-    AuditSampleRecord {
+    let mut sample = AuditSampleRecord {
         sample_id,
         sample_mode: input.sample_mode,
         population_definition: input.population_definition,
@@ -6364,7 +6367,58 @@ fn build_audit_sample(
         selected_leads,
         outcome_distribution: serde_json::json!({}),
         created_at,
+    };
+    sample.outcome_distribution = audit_sample_outcome_distribution(&sample, &[]);
+    sample
+}
+
+fn with_sample_outcome_distributions(
+    mut samples: Vec<AuditSampleRecord>,
+    reviews: &[QaReviewRecord],
+) -> Vec<AuditSampleRecord> {
+    for sample in &mut samples {
+        sample.outcome_distribution = audit_sample_outcome_distribution(sample, reviews);
     }
+    samples
+}
+
+fn audit_sample_outcome_distribution(
+    sample: &AuditSampleRecord,
+    reviews: &[QaReviewRecord],
+) -> Value {
+    let reviews_by_case_id = reviews
+        .iter()
+        .map(|review| (review.qa_case_id.as_str(), review))
+        .collect::<BTreeMap<_, _>>();
+    let mut qa_conclusions = BTreeMap::<String, u32>::new();
+    let mut issue_types = BTreeMap::<String, u32>::new();
+    let mut feedback_targets = BTreeMap::<String, u32>::new();
+    let mut reviewed_count = 0_u32;
+
+    for lead in &sample.selected_leads {
+        let qa_case_id = format!("qa_{}_{}", sample.sample_id, lead.lead_id);
+        let Some(review) = reviews_by_case_id.get(qa_case_id.as_str()) else {
+            continue;
+        };
+        reviewed_count += 1;
+        *qa_conclusions
+            .entry(review.qa_conclusion.clone())
+            .or_insert(0) += 1;
+        *issue_types.entry(review.issue_type.clone()).or_insert(0) += 1;
+        *feedback_targets
+            .entry(review.feedback_target.clone())
+            .or_insert(0) += 1;
+    }
+
+    let selected_count = sample.selected_leads.len() as u32;
+    serde_json::json!({
+        "selected_count": selected_count,
+        "reviewed_count": reviewed_count,
+        "open_count": selected_count.saturating_sub(reviewed_count),
+        "qa_conclusions": qa_conclusions,
+        "issue_types": issue_types,
+        "feedback_targets": feedback_targets
+    })
 }
 
 fn qa_review_to_feedback_item(

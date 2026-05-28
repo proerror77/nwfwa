@@ -110,11 +110,43 @@ async fn creates_audit_sample_from_ranked_leads() {
     assert_eq!(sample["sample_size"], 1);
     assert_eq!(sample["reviewer"], "qa-reviewer-1");
     assert_eq!(sample["selected_leads"].as_array().unwrap().len(), 1);
-    assert_eq!(sample["outcome_distribution"], serde_json::json!({}));
+    assert_eq!(sample["outcome_distribution"]["selected_count"], 1);
+    assert_eq!(sample["outcome_distribution"]["reviewed_count"], 0);
+    assert_eq!(sample["outcome_distribution"]["open_count"], 1);
+
+    let sample_id = sample["sample_id"].as_str().unwrap();
+    let lead_id = sample["selected_leads"][0]["lead_id"].as_str().unwrap();
+    let qa_case_id = format!("qa_{sample_id}_{lead_id}");
+    let claim_id = sample["selected_leads"][0]["claim_id"].as_str().unwrap();
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        &format!(
+            r#"{{
+              "qa_case_id": "{qa_case_id}",
+              "claim_id": "{claim_id}",
+              "qa_conclusion": "issue_found_escalate",
+              "issue_type": "medical_necessity_issue",
+              "feedback_target": "rules",
+              "notes": "QA completed sampled case review.",
+              "evidence_refs": ["qa_queue:{qa_case_id}", "audit:scoring.completed"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
 
     let (status, samples) = json_request(app, "GET", "/api/v1/ops/audit-samples", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(samples["samples"].as_array().unwrap().len(), 1);
     assert_eq!(samples["samples"][0]["sample_id"], sample["sample_id"]);
+    let distribution = &samples["samples"][0]["outcome_distribution"];
+    assert_eq!(distribution["selected_count"], 1);
+    assert_eq!(distribution["reviewed_count"], 1);
+    assert_eq!(distribution["open_count"], 0);
+    assert_eq!(distribution["qa_conclusions"]["issue_found_escalate"], 1);
+    assert_eq!(distribution["issue_types"]["medical_necessity_issue"], 1);
+    assert_eq!(distribution["feedback_targets"]["rules"], 1);
 }
