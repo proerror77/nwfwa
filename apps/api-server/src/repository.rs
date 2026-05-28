@@ -1059,6 +1059,8 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
 
+    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>>;
+
     async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
 
     async fn claim_audit_history(
@@ -1934,6 +1936,22 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect::<Vec<_>>();
         sort_qa_feedback_items(&mut items);
         Ok(items)
+    }
+
+    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
+        let mut reviews = self
+            .pilot_audit_events
+            .lock()
+            .await
+            .iter()
+            .filter_map(|(_, event)| {
+                (event.event_type == "qa.result.received")
+                    .then(|| serde_json::from_value::<QaReviewRecord>(event.payload.clone()).ok())
+                    .flatten()
+            })
+            .collect::<Vec<_>>();
+        reviews.sort_by(|left, right| left.qa_case_id.cmp(&right.qa_case_id));
+        Ok(reviews)
     }
 
     async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
@@ -4390,6 +4408,38 @@ impl ScoringRepository for PostgresScoringRepository {
             .collect::<Vec<_>>();
         sort_qa_feedback_items(&mut items);
         Ok(items)
+    }
+
+    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
+        let rows: Vec<(String, String, String, String, String, String, Value)> = sqlx::query_as(
+            "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs
+             FROM qa_reviews
+             ORDER BY qa_case_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    qa_case_id,
+                    claim_id,
+                    qa_conclusion,
+                    issue_type,
+                    feedback_target,
+                    notes,
+                    evidence_refs,
+                )| QaReviewRecord {
+                    qa_case_id,
+                    claim_id,
+                    qa_conclusion,
+                    issue_type,
+                    feedback_target,
+                    notes,
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                },
+            )
+            .collect())
     }
 
     async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {

@@ -2783,7 +2783,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "reviewer": { "type": "string" },
                         "assignment_queue": { "type": "string" },
-                        "status": { "type": "string", "enum": ["open"] },
+                        "status": { "type": "string", "enum": ["open", "reviewed"] },
+                        "qa_conclusion": { "type": ["string", "null"] },
+                        "issue_type": { "type": ["string", "null"] },
+                        "feedback_target": { "type": ["string", "null"] },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },

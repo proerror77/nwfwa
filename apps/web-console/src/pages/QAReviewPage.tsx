@@ -13,6 +13,9 @@ type QaQueueItem = {
   reviewer: string;
   assignment_queue: string;
   status: string;
+  qa_conclusion?: string | null;
+  issue_type?: string | null;
+  feedback_target?: string | null;
   evidence_refs: string[];
 };
 
@@ -47,6 +50,10 @@ export function selectQaQueueItem(queue: QaQueueItem[], selectedCaseId: string) 
   return queue.find((item) => item.qa_case_id === selectedCaseId) ?? queue[0] ?? null;
 }
 
+export function canSubmitQaQueueItem(item: QaQueueItem | null) {
+  return item?.status === "open";
+}
+
 export function QAReviewPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -77,7 +84,7 @@ export function QAReviewPage() {
 
   const submitMutation = useMutation({
     mutationFn: () => {
-      if (!selectedCase) {
+      if (!canSubmitQaQueueItem(selectedCase)) {
         throw new Error("No QA queue item selected");
       }
       return submitQaResult(
@@ -124,7 +131,7 @@ export function QAReviewPage() {
               <span>{item.claim_id}</span>
               <strong>{item.rag}</strong>
               <small>{item.scheme_family}</small>
-              <small>{item.assignment_queue}</small>
+              <small>{item.status}</small>
             </button>
           ))}
         </div>
@@ -194,6 +201,14 @@ export function QAReviewPage() {
               <dt>Evidence</dt>
               <dd>{selectedCase.evidence_refs.length}</dd>
             </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{selectedCase.status}</dd>
+            </div>
+            <div>
+              <dt>Conclusion</dt>
+              <dd>{selectedCase.qa_conclusion ?? "pending"}</dd>
+            </div>
           </dl>
         ) : (
           <p className="empty">No QA queue item selected</p>
@@ -234,7 +249,11 @@ export function QAReviewPage() {
           Evidence Refs
           <textarea value={evidenceRefs} onChange={(event) => setEvidenceRefs(event.target.value)} />
         </label>
-        <button disabled={!selectedCase} onClick={() => submitMutation.mutate()} type="button">
+        <button
+          disabled={!canSubmitQaQueueItem(selectedCase)}
+          onClick={() => submitMutation.mutate()}
+          type="button"
+        >
           Submit QA Result
         </button>
 

@@ -207,6 +207,10 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/QaQueueItem"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["QaQueueItem"]["properties"]["qa_conclusion"]["type"],
+        serde_json::json!(["string", "null"])
+    );
     assert!(schema["components"]["schemas"]["QaQueueSummaryResponse"].is_object());
     assert!(
         schema["components"]["schemas"]["QaQueueSummaryResponse"]["required"]

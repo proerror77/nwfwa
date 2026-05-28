@@ -277,7 +277,7 @@ async fn lists_qa_queue_items_from_audit_samples() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, queue) = json_request(app, "GET", "/api/v1/ops/qa/queue", "{}").await;
+    let (status, queue) = json_request(app.clone(), "GET", "/api/v1/ops/qa/queue", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     let items = queue["items"].as_array().unwrap();
@@ -293,6 +293,35 @@ async fn lists_qa_queue_items_from_audit_samples() {
         .unwrap()
         .starts_with("qa_sample_"));
     assert!(!items[0]["evidence_refs"].as_array().unwrap().is_empty());
+
+    let qa_case_id = items[0]["qa_case_id"].as_str().unwrap();
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        &format!(
+            r#"{{
+              "qa_case_id": "{qa_case_id}",
+              "claim_id": "CLM-QA-QUEUE-ITEM",
+              "qa_conclusion": "pass",
+              "issue_type": "qa_review_completed",
+              "feedback_target": "workflow",
+              "notes": "Reviewer completed sampled QA case.",
+              "evidence_refs": ["qa_queue:{qa_case_id}", "audit:scoring.completed"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, queue) = json_request(app, "GET", "/api/v1/ops/qa/queue", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let items = queue["items"].as_array().unwrap();
+    assert_eq!(items[0]["qa_case_id"], qa_case_id);
+    assert_eq!(items[0]["status"], "reviewed");
+    assert_eq!(items[0]["qa_conclusion"], "pass");
+    assert_eq!(items[0]["issue_type"], "qa_review_completed");
 }
 
 #[tokio::test]

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { selectQaQueueItem } from "./QAReviewPage";
+import { canSubmitQaQueueItem, selectQaQueueItem } from "./QAReviewPage";
 
 describe("QAReviewPage helpers", () => {
   it("selects the requested QA queue item or falls back to the first real queue item", () => {
@@ -35,5 +35,40 @@ describe("QAReviewPage helpers", () => {
     expect(selectQaQueueItem(queue, "qa_sample_1_lead_2")?.claim_id).toBe("CLM-2");
     expect(selectQaQueueItem(queue, "missing")?.claim_id).toBe("CLM-1");
     expect(selectQaQueueItem([], "missing")).toBeNull();
+  });
+
+  it("allows only open QA queue items to be submitted", () => {
+    expect(
+      canSubmitQaQueueItem({
+        qa_case_id: "qa_sample_1_lead_1",
+        sample_id: "sample_1",
+        lead_id: "lead_1",
+        claim_id: "CLM-1",
+        scheme_family: "provider_peer_outlier",
+        rag: "RED",
+        risk_score: 82,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        status: "open",
+        evidence_refs: ["audit:scoring.completed"],
+      }),
+    ).toBe(true);
+    expect(
+      canSubmitQaQueueItem({
+        qa_case_id: "qa_sample_1_lead_1",
+        sample_id: "sample_1",
+        lead_id: "lead_1",
+        claim_id: "CLM-1",
+        scheme_family: "provider_peer_outlier",
+        rag: "RED",
+        risk_score: 82,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        status: "reviewed",
+        qa_conclusion: "pass",
+        evidence_refs: ["audit:scoring.completed"],
+      }),
+    ).toBe(false);
+    expect(canSubmitQaQueueItem(null)).toBe(false);
   });
 });

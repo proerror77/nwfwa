@@ -47,6 +47,9 @@ pub struct QaQueueItemResponse {
     pub reviewer: String,
     pub assignment_queue: String,
     pub status: String,
+    pub qa_conclusion: Option<String>,
+    pub issue_type: Option<String>,
+    pub feedback_target: Option<String>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -159,8 +162,13 @@ pub async fn list_qa_queue(
         .list_audit_samples()
         .await
         .map_err(internal_error("AUDIT_SAMPLE_LIST_FAILED"))?;
+    let reviews = state
+        .repository
+        .list_qa_reviews()
+        .await
+        .map_err(internal_error("QA_REVIEW_LIST_FAILED"))?;
     Ok(Json(QaQueueListResponse {
-        items: build_qa_queue_items(&samples),
+        items: build_qa_queue_items(&samples, &reviews),
     }))
 }
 
@@ -204,14 +212,23 @@ pub async fn claim_audit_history(
     Ok(Json(ClaimAuditHistoryResponse { claim_id, events }))
 }
 
-fn build_qa_queue_items(samples: &[AuditSampleRecord]) -> Vec<QaQueueItemResponse> {
+fn build_qa_queue_items(
+    samples: &[AuditSampleRecord],
+    reviews: &[QaReviewRecord],
+) -> Vec<QaQueueItemResponse> {
+    let reviews_by_case_id = reviews
+        .iter()
+        .map(|review| (review.qa_case_id.as_str(), review))
+        .collect::<std::collections::BTreeMap<_, _>>();
     let mut items = samples
         .iter()
         .flat_map(|sample| {
-            sample
-                .selected_leads
-                .iter()
-                .map(|lead| qa_queue_item_from_sample(sample, lead))
+            let reviews_by_case_id = &reviews_by_case_id;
+            sample.selected_leads.iter().map(move |lead| {
+                let qa_case_id = qa_case_id_for_sample_lead(sample, lead);
+                let review = reviews_by_case_id.get(qa_case_id.as_str()).copied();
+                qa_queue_item_from_sample(sample, lead, qa_case_id, review)
+            })
         })
         .collect::<Vec<_>>();
     items.sort_by(|left, right| {
@@ -226,9 +243,11 @@ fn build_qa_queue_items(samples: &[AuditSampleRecord]) -> Vec<QaQueueItemRespons
 fn qa_queue_item_from_sample(
     sample: &AuditSampleRecord,
     lead: &AuditSampleLeadRecord,
+    qa_case_id: String,
+    review: Option<&QaReviewRecord>,
 ) -> QaQueueItemResponse {
     QaQueueItemResponse {
-        qa_case_id: format!("qa_{}_{}", sample.sample_id, lead.lead_id),
+        qa_case_id,
         sample_id: sample.sample_id.clone(),
         lead_id: lead.lead_id.clone(),
         claim_id: lead.claim_id.clone(),
@@ -237,9 +256,16 @@ fn qa_queue_item_from_sample(
         risk_score: lead.risk_score,
         reviewer: sample.reviewer.clone(),
         assignment_queue: sample.assignment_queue.clone(),
-        status: "open".into(),
+        status: if review.is_some() { "reviewed" } else { "open" }.into(),
+        qa_conclusion: review.map(|review| review.qa_conclusion.clone()),
+        issue_type: review.map(|review| review.issue_type.clone()),
+        feedback_target: review.map(|review| review.feedback_target.clone()),
         evidence_refs: lead.evidence_refs.clone(),
     }
+}
+
+fn qa_case_id_for_sample_lead(sample: &AuditSampleRecord, lead: &AuditSampleLeadRecord) -> String {
+    format!("qa_{}_{}", sample.sample_id, lead.lead_id)
 }
 
 fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryResponse {
