@@ -292,6 +292,7 @@ export async function getClaimAuditHistory(claimId: string, apiKey: string) {
 
 export type AuditEventListFilters = {
   limit?: number;
+  event_group?: string;
   event_type?: string;
   actor_id?: string;
   run_id?: string;
@@ -316,6 +317,10 @@ export async function listAuditEvents(
     }
   });
   return requestJson(`/api/v1/ops/audit-events?${params.toString()}`, apiKey);
+}
+
+export async function listGovernanceChangeEvents(apiKey: string, limit = 100) {
+  return listAuditEvents(apiKey, { limit, event_group: "governance" });
 }
 
 export async function listWebhookEvents(apiKey: string) {

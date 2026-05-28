@@ -177,6 +177,23 @@ async fn filters_global_audit_events_for_governance_search() {
         "QA-AUDIT-FILTER"
     );
 
+    let (status, governance_events) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?event_group=governance&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let governance_event_types = governance_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|event| event["event_type"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert!(governance_event_types.contains(&"routing_policy.candidate.saved"));
+    assert!(!governance_event_types.contains(&"qa.result.received"));
+
     let (status, empty_events) = json_request(
         app,
         "GET",

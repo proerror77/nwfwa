@@ -388,6 +388,7 @@ async fn openapi_includes_operations_paths() {
         .unwrap();
     for parameter_name in [
         "limit",
+        "event_group",
         "event_type",
         "actor_id",
         "run_id",

@@ -19,6 +19,7 @@ import {
   listCases,
   listDatasets,
   listFactorReadiness,
+  listGovernanceChangeEvents,
   listLeads,
   listKnowledgeCases,
   listOpsAlerts,
@@ -473,6 +474,7 @@ describe("ops API helpers", () => {
       routing_policy_version: 2,
       review_mode: "pre_payment",
     });
+    await listGovernanceChangeEvents("dev-secret", 100);
     await listAgentRuns("dev-secret");
     await listOpsAlerts("dev-secret");
 
@@ -492,13 +494,20 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
-      "/api/v1/ops/agent-runs",
+      "/api/v1/ops/audit-events?limit=100&event_group=governance",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
+      "/api/v1/ops/agent-runs",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
       "/api/v1/ops/alerts",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),

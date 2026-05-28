@@ -14,6 +14,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Deserialize)]
 pub struct AuditEventListQuery {
     pub limit: Option<u32>,
+    pub event_group: Option<String>,
     pub event_type: Option<String>,
     pub actor_id: Option<String>,
     pub run_id: Option<String>,
@@ -36,6 +37,7 @@ pub async fn list_audit_events(
     authorize(&state, &headers)?;
     let filter = AuditEventListFilter {
         limit: query.limit.unwrap_or(50).clamp(1, 200),
+        event_group: normalize_filter(query.event_group),
         event_type: normalize_filter(query.event_type),
         actor_id: normalize_filter(query.actor_id),
         run_id: normalize_filter(query.run_id),

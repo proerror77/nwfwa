@@ -83,6 +83,7 @@ pub struct PersistedAuditEvent {
 #[derive(Debug, Clone, Default)]
 pub struct AuditEventListFilter {
     pub limit: u32,
+    pub event_group: Option<String>,
     pub event_type: Option<String>,
     pub actor_id: Option<String>,
     pub run_id: Option<String>,
@@ -91,6 +92,20 @@ pub struct AuditEventListFilter {
     pub routing_policy_version: Option<String>,
     pub review_mode: Option<String>,
 }
+
+const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
+    "rule.candidate.saved",
+    "rule.status.changed",
+    "rule.rollback.completed",
+    "rule.promotion.reviewed",
+    "model.promotion.reviewed",
+    "model.activation.completed",
+    "model.rollback.completed",
+    "routing_policy.candidate.saved",
+    "routing_policy.status.changed",
+    "routing_policy.activation.completed",
+    "routing_policy.rollback.completed",
+];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RoutingPolicyRecord {
@@ -5959,6 +5974,25 @@ impl ScoringRepository for PostgresScoringRepository {
                AND ($6::text IS NULL OR ae.payload ->> 'policy_id' = $6)
                AND ($7::text IS NULL OR ae.payload ->> 'version' = $7)
                AND ($8::text IS NULL OR ae.payload ->> 'review_mode' = $8)
+               AND (
+                 $9::text IS NULL
+                 OR (
+                   $9 = 'governance'
+                   AND ae.event_type IN (
+                     'rule.candidate.saved',
+                     'rule.status.changed',
+                     'rule.rollback.completed',
+                     'rule.promotion.reviewed',
+                     'model.promotion.reviewed',
+                     'model.activation.completed',
+                     'model.rollback.completed',
+                     'routing_policy.candidate.saved',
+                     'routing_policy.status.changed',
+                     'routing_policy.activation.completed',
+                     'routing_policy.rollback.completed'
+                   )
+                 )
+               )
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -5970,6 +6004,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.routing_policy_id.as_deref())
         .bind(filter.routing_policy_version.as_deref())
         .bind(filter.review_mode.as_deref())
+        .bind(filter.event_group.as_deref())
         .fetch_all(&self.pool)
         .await?;
 
@@ -6939,6 +6974,9 @@ fn persisted_audit_event_matches_filter(
     event: &PersistedAuditEvent,
     filter: &AuditEventListFilter,
 ) -> bool {
+    if !audit_event_matches_group(&event.event_type, filter) {
+        return false;
+    }
     if filter
         .event_type
         .as_deref()
@@ -6977,6 +7015,9 @@ fn pilot_audit_event_matches_filter(
     event: &AuditHistoryEventRecord,
     filter: &AuditEventListFilter,
 ) -> bool {
+    if !audit_event_matches_group(&event.event_type, filter) {
+        return false;
+    }
     if filter
         .event_type
         .as_deref()
@@ -7004,6 +7045,14 @@ fn pilot_audit_event_matches_filter(
         return false;
     }
     true
+}
+
+fn audit_event_matches_group(event_type: &str, filter: &AuditEventListFilter) -> bool {
+    match filter.event_group.as_deref() {
+        None => true,
+        Some("governance") => GOVERNANCE_AUDIT_EVENT_TYPES.contains(&event_type),
+        Some(_) => false,
+    }
 }
 
 fn audit_event_payload_matches_routing_policy_filter(

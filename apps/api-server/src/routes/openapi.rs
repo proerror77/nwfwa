@@ -713,6 +713,12 @@ pub async fn openapi_schema() -> Json<Value> {
                             "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
                         },
                         {
+                            "name": "event_group",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string", "enum": ["governance"] }
+                        },
+                        {
                             "name": "event_type",
                             "in": "query",
                             "required": false,

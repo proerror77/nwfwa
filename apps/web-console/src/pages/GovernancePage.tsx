@@ -7,6 +7,7 @@ import {
   getRulePromotionGates,
   listAuditEvents,
   listAgentRuns,
+  listGovernanceChangeEvents,
   listModels,
   listOpsAlerts,
   listOutcomeLabels,
@@ -561,6 +562,10 @@ export function GovernancePage() {
     queryKey: ["webhook-events", apiKey],
     queryFn: () => listWebhookEvents(apiKey) as Promise<WebhookEventListResponse>,
   });
+  const governanceChangeEventsQuery = useQuery({
+    queryKey: ["governance-change-events", apiKey],
+    queryFn: () => listGovernanceChangeEvents(apiKey, 100) as Promise<AuditEventListResponse>,
+  });
   const promotionGateGovernanceQuery = useQuery({
     queryKey: ["promotion-gate-governance", apiKey],
     queryFn: () => loadPromotionGateGovernance(apiKey),
@@ -572,7 +577,7 @@ export function GovernancePage() {
   const labelSummary = buildOutcomeLabelSummary(labelsQuery.data?.labels);
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
   const governanceChangeTimelineRows = buildGovernanceChangeTimelineRows(
-    globalAuditQuery.data?.events,
+    governanceChangeEventsQuery.data?.events,
   );
   const promotionGateSummary = buildPromotionGateGovernanceSummary(
     promotionGateGovernanceQuery.data?.rows,
@@ -721,6 +726,9 @@ export function GovernancePage() {
         ) : null}
         {deliveryAttemptMutation.error ? (
           <pre className="error">{String(deliveryAttemptMutation.error.message)}</pre>
+        ) : null}
+        {governanceChangeEventsQuery.error ? (
+          <pre className="error">{String(governanceChangeEventsQuery.error.message)}</pre>
         ) : null}
         {promotionGateGovernanceQuery.error ? (
           <pre className="error">{String(promotionGateGovernanceQuery.error.message)}</pre>
