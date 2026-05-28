@@ -234,6 +234,20 @@ async fn scores_spec_style_top_level_full_payload() {
         .as_str()
         .unwrap()
         .contains("医务复核"));
+    assert_eq!(
+        body["routing_policy"]["policy_id"],
+        "fwa_risk_fusion_routing"
+    );
+    assert_eq!(body["routing_policy"]["version"], 1);
+    assert_eq!(body["routing_policy"]["review_mode"], "pre_payment");
+    assert_eq!(
+        body["routing_policy"]["risk_thresholds"]["critical_min"],
+        85
+    );
+    assert_eq!(
+        body["routing_policy"]["confidence_thresholds"]["low_confidence_below"],
+        60
+    );
     let layers = body["layers"]
         .as_array()
         .expect("response should include layers");
@@ -278,6 +292,10 @@ async fn scores_spec_style_top_level_full_payload() {
         body["scores"]["final_score"]
     );
     assert_eq!(scoring_event["payload"]["layers"][6], body["layers"][6]);
+    assert_eq!(
+        scoring_event["payload"]["routing_policy"],
+        body["routing_policy"]
+    );
     assert!(scoring_event["payload"]["routing_reason"]
         .as_str()
         .unwrap()
@@ -1111,6 +1129,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "confidence_score",
         "confidence",
         "routing_reason",
+        "routing_policy",
         "top_reasons",
         "evidence_refs",
         "clinical_evidence",
@@ -1136,6 +1155,21 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             "PostPaymentAudit",
             "ProviderReview",
             "RecoveryReview"
+        ])
+    );
+    assert_eq!(
+        response_properties["routing_policy"]["$ref"],
+        "#/components/schemas/RoutingPolicy"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicy"]["required"],
+        serde_json::json!([
+            "policy_id",
+            "version",
+            "review_mode",
+            "risk_thresholds",
+            "confidence_thresholds",
+            "provider_review_threshold"
         ])
     );
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());

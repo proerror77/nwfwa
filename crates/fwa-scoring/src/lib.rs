@@ -15,6 +15,30 @@ pub struct DetectionLayerScore {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RoutingPolicy {
+    pub policy_id: String,
+    pub version: u32,
+    pub review_mode: String,
+    pub risk_thresholds: RiskThresholds,
+    pub confidence_thresholds: ConfidenceThresholds,
+    pub provider_review_threshold: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct RiskThresholds {
+    pub low_max: u8,
+    pub medium_min: u8,
+    pub high_min: u8,
+    pub critical_min: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct ConfidenceThresholds {
+    pub low_confidence_below: u8,
+    pub high_confidence_min: u8,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct ScoringDecision {
     pub risk_score: RiskScore,
     pub rag: RiskLevel,
@@ -23,6 +47,7 @@ pub struct ScoringDecision {
     pub confidence_score: u8,
     pub confidence: String,
     pub routing_reason: String,
+    pub routing_policy: RoutingPolicy,
     pub peer_deviation_score: u8,
     pub rule_score: u8,
     pub anomaly_score: u8,
@@ -81,6 +106,7 @@ pub fn aggregate_for_review_mode(
     let risk_level = risk_level(risk_score.value()).to_string();
     let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);
     let confidence = confidence_level(confidence_score).to_string();
+    let routing_policy = routing_policy(review_mode);
     let recommended_action = recommended_action(
         &risk_level,
         confidence_score,
@@ -183,6 +209,7 @@ pub fn aggregate_for_review_mode(
         confidence_score,
         confidence,
         routing_reason,
+        routing_policy,
         peer_deviation_score,
         rule_score,
         anomaly_score: anomaly_score.score,
@@ -227,6 +254,25 @@ fn confidence_level(score: u8) -> &'static str {
         0..=59 => "Low",
         60..=79 => "Medium",
         _ => "High",
+    }
+}
+
+fn routing_policy(review_mode: &str) -> RoutingPolicy {
+    RoutingPolicy {
+        policy_id: "fwa_risk_fusion_routing".into(),
+        version: 1,
+        review_mode: review_mode.into(),
+        risk_thresholds: RiskThresholds {
+            low_max: 39,
+            medium_min: 40,
+            high_min: 70,
+            critical_min: 85,
+        },
+        confidence_thresholds: ConfidenceThresholds {
+            low_confidence_below: 60,
+            high_confidence_min: 80,
+        },
+        provider_review_threshold: 70,
     }
 }
 

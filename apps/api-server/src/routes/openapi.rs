@@ -1746,6 +1746,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "confidence_score",
                         "confidence",
                         "routing_reason",
+                        "routing_policy",
                         "scores",
                         "alerts",
                         "top_reasons",
@@ -1807,6 +1808,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "routing_reason": {
                             "type": "string"
+                        },
+                        "routing_policy": {
+                            "$ref": "#/components/schemas/RoutingPolicy"
                         },
                         "scores": {
                             "$ref": "#/components/schemas/ScoreBreakdown"
@@ -1882,6 +1886,36 @@ pub async fn openapi_schema() -> Json<Value> {
                             "enum": ["active", "baseline", "no_data"]
                         },
                         "reason": { "type": "string" }
+                    }
+                },
+                "RoutingPolicy": {
+                    "type": "object",
+                    "required": ["policy_id", "version", "review_mode", "risk_thresholds", "confidence_thresholds", "provider_review_threshold"],
+                    "properties": {
+                        "policy_id": { "type": "string" },
+                        "version": { "type": "integer", "minimum": 1 },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "risk_thresholds": { "$ref": "#/components/schemas/RiskThresholds" },
+                        "confidence_thresholds": { "$ref": "#/components/schemas/ConfidenceThresholds" },
+                        "provider_review_threshold": { "type": "integer", "minimum": 0, "maximum": 100 }
+                    }
+                },
+                "RiskThresholds": {
+                    "type": "object",
+                    "required": ["low_max", "medium_min", "high_min", "critical_min"],
+                    "properties": {
+                        "low_max": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "medium_min": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "high_min": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "critical_min": { "type": "integer", "minimum": 0, "maximum": 100 }
+                    }
+                },
+                "ConfidenceThresholds": {
+                    "type": "object",
+                    "required": ["low_confidence_below", "high_confidence_min"],
+                    "properties": {
+                        "low_confidence_below": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "high_confidence_min": { "type": "integer", "minimum": 0, "maximum": 100 }
                     }
                 },
                 "ProviderProfileAssessment": {
