@@ -50,6 +50,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/model-evaluations/{evaluation_run_id}",
         "/api/v1/ops/dashboard/summary",
         "/api/v1/ops/webhook-events",
+        "/api/v1/ops/alerts",
         "/api/v1/ops/leads",
         "/api/v1/ops/leads/{lead_id}/triage",
         "/api/v1/ops/cases",
@@ -312,6 +313,16 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["WebhookEventListResponse"]["properties"]["events"]
             ["items"]["$ref"],
         "#/components/schemas/WebhookEvent"
+    );
+    assert!(schema["components"]["schemas"]["OpsAlert"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["OpsAlertListResponse"]["properties"]["alerts"]["items"]
+            ["$ref"],
+        "#/components/schemas/OpsAlert"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["OpsAlert"]["properties"]["alert_type"]["enum"][0],
+        "high_risk_routing"
     );
     assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]

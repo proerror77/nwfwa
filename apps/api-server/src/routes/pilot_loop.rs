@@ -2,9 +2,9 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AuditSampleLeadRecord, AuditSampleRecord, InvestigationResultRecord,
-        MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord, QaReviewRecord,
-        WebhookEventRecord,
+        AuditSampleLeadRecord, AuditSampleRecord, CaseRecord, InvestigationResultRecord,
+        LeadRecord, MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord,
+        QaReviewRecord, WebhookEventRecord,
     },
 };
 use axum::{
@@ -34,6 +34,26 @@ pub struct ClaimAuditHistoryResponse {
 #[derive(Debug, Serialize)]
 pub struct WebhookEventListResponse {
     pub events: Vec<WebhookEventRecord>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct OpsAlertRecord {
+    pub alert_id: String,
+    pub alert_type: String,
+    pub severity: String,
+    pub status: String,
+    pub claim_id: String,
+    pub lead_id: Option<String>,
+    pub case_id: Option<String>,
+    pub scheme_family: String,
+    pub message: String,
+    pub recommended_action: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct OpsAlertListResponse {
+    pub alerts: Vec<OpsAlertRecord>,
 }
 
 #[derive(Debug, Serialize)]
@@ -231,6 +251,26 @@ pub async fn list_webhook_events(
     Ok(Json(WebhookEventListResponse { events }))
 }
 
+pub async fn list_ops_alerts(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<OpsAlertListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let leads = state
+        .repository
+        .list_leads()
+        .await
+        .map_err(internal_error("LEAD_LIST_FAILED"))?;
+    let cases = state
+        .repository
+        .list_cases()
+        .await
+        .map_err(internal_error("CASE_LIST_FAILED"))?;
+    Ok(Json(OpsAlertListResponse {
+        alerts: build_ops_alerts(&leads, &cases),
+    }))
+}
+
 fn build_qa_queue_items(
     samples: &[AuditSampleRecord],
     reviews: &[QaReviewRecord],
@@ -318,6 +358,104 @@ fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryRespo
     }
 }
 
+fn build_ops_alerts(leads: &[LeadRecord], cases: &[CaseRecord]) -> Vec<OpsAlertRecord> {
+    let mut alerts = leads
+        .iter()
+        .filter(|lead| lead.status != "triaged" && (lead.risk_score >= 70 || lead.rag == "RED"))
+        .map(high_risk_routing_alert)
+        .chain(
+            cases
+                .iter()
+                .filter(|case| matches!(case.sla_status.as_str(), "breached" | "closed_breached"))
+                .map(sla_breach_alert),
+        )
+        .collect::<Vec<_>>();
+    alerts.sort_by(|left, right| {
+        severity_rank(&left.severity)
+            .cmp(&severity_rank(&right.severity))
+            .then_with(|| left.alert_type.cmp(&right.alert_type))
+            .then_with(|| left.alert_id.cmp(&right.alert_id))
+    });
+    alerts
+}
+
+fn high_risk_routing_alert(lead: &LeadRecord) -> OpsAlertRecord {
+    OpsAlertRecord {
+        alert_id: format!("alert_high_risk_{}", lead.lead_id),
+        alert_type: "high_risk_routing".into(),
+        severity: if lead.risk_score >= 90 || lead.rag == "RED" {
+            "critical".into()
+        } else {
+            "high".into()
+        },
+        status: "open".into(),
+        claim_id: lead.claim_id.clone(),
+        lead_id: Some(lead.lead_id.clone()),
+        case_id: None,
+        scheme_family: lead.scheme_family.clone(),
+        message: format!(
+            "High-risk FWA lead {} for claim {} is pending triage.",
+            lead.lead_id, lead.claim_id
+        ),
+        recommended_action: "Open an investigation case and assign reviewer ownership.".into(),
+        evidence_refs: lead.evidence_refs.clone(),
+    }
+}
+
+fn sla_breach_alert(case: &CaseRecord) -> OpsAlertRecord {
+    OpsAlertRecord {
+        alert_id: format!("alert_sla_{}", case.case_id),
+        alert_type: "sla_breach".into(),
+        severity: match case.priority.as_str() {
+            "critical" | "high" => "critical",
+            "medium" => "high",
+            _ => "medium",
+        }
+        .into(),
+        status: if case.sla_status == "closed_breached" {
+            "closed".into()
+        } else {
+            "open".into()
+        },
+        claim_id: case.claim_id.clone(),
+        lead_id: Some(case.lead_id.clone()),
+        case_id: Some(case.case_id.clone()),
+        scheme_family: case.scheme_family.clone(),
+        message: format!(
+            "Case {} for claim {} breached the {}h SLA target.",
+            case.case_id, case.claim_id, case.sla_target_hours
+        ),
+        recommended_action: "Escalate the overdue case and record owner follow-up.".into(),
+        evidence_refs: case_evidence_refs(case),
+    }
+}
+
+fn case_evidence_refs(case: &CaseRecord) -> Vec<String> {
+    let refs = case
+        .evidence_package
+        .get("evidence_refs")
+        .and_then(serde_json::Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(str::to_string)
+        .collect::<Vec<_>>();
+    if refs.is_empty() {
+        vec![format!("investigation_cases:{}", case.case_id)]
+    } else {
+        refs
+    }
+}
+
+fn severity_rank(severity: &str) -> u8 {
+    match severity {
+        "critical" => 0,
+        "high" => 1,
+        "medium" => 2,
+        _ => 3,
+    }
+}
+
 fn highest_priority(items: &[&QaFeedbackItemRecord]) -> &'static str {
     if items.iter().any(|item| item.priority == "high") {
         "high"
@@ -353,4 +491,51 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn build_ops_alerts_includes_sla_breach_alerts() {
+        let case = CaseRecord {
+            case_id: "case_CLM-SLA-1".into(),
+            lead_id: "lead_CLM-SLA-1".into(),
+            claim_id: "CLM-SLA-1".into(),
+            member_id: "MBR-SLA-1".into(),
+            provider_id: "PRV-SLA-1".into(),
+            source_system: "tpa-demo".into(),
+            scheme_family: "provider_peer_outlier".into(),
+            lead_source: "scoring_run".into(),
+            status: "investigating".into(),
+            assignee: "siu-owner".into(),
+            reviewer: "medical-owner".into(),
+            priority: "high".into(),
+            routing_reason: "Provider peer outlier".into(),
+            evidence_package: serde_json::json!({
+                "evidence_refs": ["rule_runs:PROVIDER_PROFILE_HIGH", "case_workflow:overdue"]
+            }),
+            sla_target_hours: 24,
+            sla_status: "breached".into(),
+            time_to_triage_hours: 0.0,
+            time_to_closure_hours: None,
+        };
+
+        let alerts = build_ops_alerts(&[], &[case]);
+
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].alert_type, "sla_breach");
+        assert_eq!(alerts[0].severity, "critical");
+        assert_eq!(alerts[0].status, "open");
+        assert_eq!(alerts[0].claim_id, "CLM-SLA-1");
+        assert_eq!(alerts[0].case_id.as_deref(), Some("case_CLM-SLA-1"));
+        assert_eq!(
+            alerts[0].evidence_refs,
+            vec![
+                "rule_runs:PROVIDER_PROFILE_HIGH".to_string(),
+                "case_workflow:overdue".to_string()
+            ]
+        );
+    }
 }

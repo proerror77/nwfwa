@@ -471,6 +471,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/alerts": {
+                "get": {
+                    "summary": "List operational alerts for high-risk routing and SLA follow-up",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Operational alert feed",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/OpsAlertListResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/leads": {
                 "get": {
                     "summary": "List FWA leads generated from scoring signals",
@@ -1984,6 +2008,42 @@ pub async fn openapi_schema() -> Json<Value> {
                         "events": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/WebhookEvent" }
+                        }
+                    }
+                },
+                "OpsAlert": {
+                    "type": "object",
+                    "required": ["alert_id", "alert_type", "severity", "status", "claim_id", "lead_id", "case_id", "scheme_family", "message", "recommended_action", "evidence_refs"],
+                    "properties": {
+                        "alert_id": { "type": "string" },
+                        "alert_type": {
+                            "type": "string",
+                            "enum": ["high_risk_routing", "sla_breach"]
+                        },
+                        "severity": {
+                            "type": "string",
+                            "enum": ["critical", "high", "medium", "low"]
+                        },
+                        "status": {
+                            "type": "string",
+                            "enum": ["open", "closed"]
+                        },
+                        "claim_id": { "type": "string" },
+                        "lead_id": { "type": ["string", "null"] },
+                        "case_id": { "type": ["string", "null"] },
+                        "scheme_family": { "type": "string" },
+                        "message": { "type": "string" },
+                        "recommended_action": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "OpsAlertListResponse": {
+                    "type": "object",
+                    "required": ["alerts"],
+                    "properties": {
+                        "alerts": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/OpsAlert" }
                         }
                     }
                 },

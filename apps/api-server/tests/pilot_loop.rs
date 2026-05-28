@@ -238,6 +238,101 @@ async fn lists_webhook_events_for_tpa_integrations() {
 }
 
 #[tokio::test]
+async fn lists_ops_alerts_for_high_risk_routing() {
+    let app = build_app(test_config());
+
+    let (status, score) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-ALERT-1",
+            "claim_amount": "9500",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "PROC-ALERT-1",
+              "item_type": "procedure",
+              "description": "High-cost imaging",
+              "quantity": 1,
+              "unit_amount": "9500",
+              "total_amount": "9500"
+            }
+          ],
+          "member": { "external_member_id": "MBR-ALERT-1" },
+          "policy": {
+            "external_policy_id": "POL-ALERT-1",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-ALERT-1",
+            "name": "Alert Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "High"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(score["risk_score"].as_u64().unwrap() >= 70);
+
+    let (status, alerts) = json_request(app.clone(), "GET", "/api/v1/ops/alerts", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let alert = alerts["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|alert| alert["claim_id"] == "CLM-ALERT-1")
+        .expect("high-risk lead should create a routing alert");
+    assert_eq!(alert["alert_type"], "high_risk_routing");
+    assert_eq!(alert["status"], "open");
+    assert!(matches!(
+        alert["severity"].as_str().unwrap(),
+        "critical" | "high"
+    ));
+    assert!(alert["case_id"].is_null());
+    assert!(alert["lead_id"].as_str().unwrap().starts_with("lead_"));
+    assert!(!alert["recommended_action"].as_str().unwrap().is_empty());
+    assert!(!alert["evidence_refs"].as_array().unwrap().is_empty());
+
+    let lead_id = alert["lead_id"].as_str().unwrap();
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "siu-alert-owner",
+          "reviewer": "medical-alert-owner",
+          "priority": "high",
+          "notes": "Alert accepted into investigation workflow."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, alerts) = json_request(app, "GET", "/api/v1/ops/alerts", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!alerts["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|alert| alert["claim_id"] == "CLM-ALERT-1"
+            && alert["alert_type"] == "high_risk_routing"));
+}
+
+#[tokio::test]
 async fn lists_qa_feedback_items_for_rule_and_model_operators() {
     let app = build_app(test_config());
 
