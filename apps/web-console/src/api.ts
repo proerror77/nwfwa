@@ -430,8 +430,19 @@ export async function submitQaResult(payload: unknown, apiKey: string) {
   });
 }
 
-export async function listQaFeedbackItems(apiKey: string) {
-  return requestJson("/api/v1/ops/qa/feedback-items", apiKey);
+export async function listQaFeedbackItems(
+  apiKey: string,
+  filters: { status?: string; feedbackTarget?: string } = {},
+) {
+  const params = new URLSearchParams();
+  if (filters.status) {
+    params.set("status", filters.status);
+  }
+  if (filters.feedbackTarget) {
+    params.set("feedback_target", filters.feedbackTarget);
+  }
+  const query = params.toString();
+  return requestJson(`/api/v1/ops/qa/feedback-items${query ? `?${query}` : ""}`, apiKey);
 }
 
 export async function updateQaFeedbackStatus(

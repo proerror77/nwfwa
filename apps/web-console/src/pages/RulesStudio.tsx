@@ -239,8 +239,11 @@ export function RulesStudio() {
     enabled: Boolean(selectedRule?.rule_id),
   });
   const qaFeedbackQuery = useQuery({
-    queryKey: ["qa-feedback-items", apiKey],
-    queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
+    queryKey: ["qa-feedback-items", "rules", apiKey],
+    queryFn: () =>
+      listQaFeedbackItems(apiKey, { feedbackTarget: "rules" }) as Promise<{
+        items: QaFeedbackItem[];
+      }>,
   });
   const outcomeLabelsQuery = useQuery({
     queryKey: ["outcome-labels", apiKey],

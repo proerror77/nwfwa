@@ -1621,6 +1621,26 @@ pub async fn openapi_schema() -> Json<Value> {
                 "get": {
                     "summary": "List QA feedback items for rule and model operators",
                     "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "status",
+                            "in": "query",
+                            "required": false,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["open", "in_progress", "resolved", "dismissed"]
+                            }
+                        },
+                        {
+                            "name": "feedback_target",
+                            "in": "query",
+                            "required": false,
+                            "schema": {
+                                "type": "string",
+                                "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                            }
+                        }
+                    ],
                     "responses": {
                         "200": {
                             "description": "QA feedback items created from QA review writeback",

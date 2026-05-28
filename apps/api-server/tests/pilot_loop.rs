@@ -485,7 +485,8 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
         assert_eq!(status, StatusCode::OK);
     }
 
-    let (status, feedback) = json_request(app, "GET", "/api/v1/ops/qa/feedback-items", "{}").await;
+    let (status, feedback) =
+        json_request(app.clone(), "GET", "/api/v1/ops/qa/feedback-items", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     let items = feedback["items"].as_array().unwrap();
@@ -504,6 +505,39 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
     assert!(items
         .iter()
         .all(|item| !item["evidence_refs"].as_array().unwrap().is_empty()));
+
+    let (status, feedback) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items?feedback_target=rules&status=open",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let items = feedback["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["feedback_id"], "qa_feedback_QA-RULE-1001");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items?status=unknown",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "UNSUPPORTED_QA_FEEDBACK_STATUS");
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/qa/feedback-items?feedback_target=unknown",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "UNSUPPORTED_FEEDBACK_TARGET");
 }
 
 #[tokio::test]

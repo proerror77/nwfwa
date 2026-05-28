@@ -655,6 +655,22 @@ describe("ops API helpers", () => {
     );
   });
 
+  it("lists filtered QA feedback items", async () => {
+    const fetchMock = mockFetch({ items: [] });
+
+    await listQaFeedbackItems("dev-secret", {
+      status: "open",
+      feedbackTarget: "rules",
+    });
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/qa/feedback-items?status=open&feedback_target=rules",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
   it("updates QA feedback item status", async () => {
     const fetchMock = mockFetch({ item: {}, audit_id: "audit_1" });
 

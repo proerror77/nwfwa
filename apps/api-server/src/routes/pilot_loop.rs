@@ -9,7 +9,7 @@ use crate::{
     },
 };
 use axum::{
-    extract::{Path, State},
+    extract::{Path, Query, State},
     http::{HeaderMap, StatusCode},
     Json,
 };
@@ -67,6 +67,12 @@ pub struct OpsAlertListResponse {
 #[derive(Debug, Serialize)]
 pub struct QaFeedbackItemListResponse {
     pub items: Vec<QaFeedbackItemRecord>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+pub struct QaFeedbackItemListQuery {
+    pub status: Option<String>,
+    pub feedback_target: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -205,10 +211,7 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
             "issue_type is not supported",
         ));
     }
-    if !matches!(
-        request.feedback_target.as_str(),
-        "rules" | "models" | "features" | "provider_profile" | "workflow" | "tpa"
-    ) {
+    if !is_supported_qa_feedback_target(&request.feedback_target) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "UNSUPPORTED_FEEDBACK_TARGET",
@@ -221,13 +224,21 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
 pub async fn list_qa_feedback_items(
     State(state): State<AppState>,
     headers: HeaderMap,
+    Query(query): Query<QaFeedbackItemListQuery>,
 ) -> Result<Json<QaFeedbackItemListResponse>, ApiError> {
     authorize(&state, &headers)?;
-    let items = state
+    validate_qa_feedback_item_list_query(&query)?;
+    let mut items = state
         .repository
         .list_qa_feedback_items()
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
+    if let Some(status) = &query.status {
+        items.retain(|item| item.status == *status);
+    }
+    if let Some(feedback_target) = &query.feedback_target {
+        items.retain(|item| item.feedback_target == *feedback_target);
+    }
     Ok(Json(QaFeedbackItemListResponse { items }))
 }
 
@@ -238,10 +249,7 @@ pub async fn update_qa_feedback_status(
     Json(request): Json<UpdateQaFeedbackStatusInput>,
 ) -> Result<Json<UpdateQaFeedbackStatusRecord>, ApiError> {
     authorize(&state, &headers)?;
-    if !matches!(
-        request.status.as_str(),
-        "open" | "in_progress" | "resolved" | "dismissed"
-    ) {
+    if !is_supported_qa_feedback_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "UNSUPPORTED_QA_FEEDBACK_STATUS",
@@ -268,6 +276,39 @@ pub async fn update_qa_feedback_status(
             )
         })?;
     Ok(Json(record))
+}
+
+fn validate_qa_feedback_item_list_query(query: &QaFeedbackItemListQuery) -> Result<(), ApiError> {
+    if let Some(status) = &query.status {
+        if !is_supported_qa_feedback_status(status) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "UNSUPPORTED_QA_FEEDBACK_STATUS",
+                "feedback status must be one of open, in_progress, resolved, dismissed",
+            ));
+        }
+    }
+    if let Some(feedback_target) = &query.feedback_target {
+        if !is_supported_qa_feedback_target(feedback_target) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "UNSUPPORTED_FEEDBACK_TARGET",
+                "feedback_target must be rules, models, features, provider_profile, workflow, or tpa",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn is_supported_qa_feedback_status(status: &str) -> bool {
+    matches!(status, "open" | "in_progress" | "resolved" | "dismissed")
+}
+
+fn is_supported_qa_feedback_target(feedback_target: &str) -> bool {
+    matches!(
+        feedback_target,
+        "rules" | "models" | "features" | "provider_profile" | "workflow" | "tpa"
+    )
 }
 
 pub async fn list_qa_queue(

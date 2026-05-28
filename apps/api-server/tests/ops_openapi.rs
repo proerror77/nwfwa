@@ -928,6 +928,15 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["paths"]["/api/v1/members/{member_id}/profile-summary"]["get"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabel"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabelListResponse"].is_object());
+    let feedback_parameters = schema["paths"]["/api/v1/ops/qa/feedback-items"]["get"]["parameters"]
+        .as_array()
+        .unwrap();
+    assert!(feedback_parameters
+        .iter()
+        .any(|parameter| parameter["name"] == "status"));
+    assert!(feedback_parameters
+        .iter()
+        .any(|parameter| parameter["name"] == "feedback_target"));
     assert!(schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]["status"]

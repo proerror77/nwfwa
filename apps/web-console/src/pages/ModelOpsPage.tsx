@@ -254,8 +254,11 @@ export function ModelOpsPage() {
     enabled: Boolean(selectedModel?.model_key),
   });
   const qaFeedbackQuery = useQuery({
-    queryKey: ["qa-feedback-items", apiKey],
-    queryFn: () => listQaFeedbackItems(apiKey) as Promise<{ items: QaFeedbackItem[] }>,
+    queryKey: ["qa-feedback-items", "models", apiKey],
+    queryFn: () =>
+      listQaFeedbackItems(apiKey, { feedbackTarget: "models" }) as Promise<{
+        items: QaFeedbackItem[];
+      }>,
   });
   const outcomeLabelsQuery = useQuery({
     queryKey: ["outcome-labels", apiKey],
