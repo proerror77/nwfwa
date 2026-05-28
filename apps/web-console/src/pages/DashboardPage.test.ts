@@ -6,6 +6,7 @@ import {
   buildDashboardQaQueueSummary,
   buildDashboardRuleGovernanceSummary,
   buildDashboardSchemeRows,
+  buildDashboardValueMeasurementSummary,
   buildProviderRiskSummary,
 } from "./DashboardPage";
 
@@ -171,5 +172,30 @@ describe("buildDashboardSchemeRows", () => {
       { schemeFamily: "early_high_value_claim", count: 3 },
       { schemeFamily: "provider_peer_outlier", count: 1 },
     ]);
+  });
+});
+
+describe("buildDashboardValueMeasurementSummary", () => {
+  it("formats observed and estimated FWA value separately", () => {
+    expect(
+      buildDashboardValueMeasurementSummary({
+        prevented_payment: "1000.00",
+        recovered_amount: "250.00",
+        avoided_future_exposure: "500.00",
+        estimated_impact: "500.00",
+        review_cost: "100.00",
+        net_value: "1650.00",
+        currency: "CNY",
+        evidence_caveat: "Estimated values require caveats.",
+      }),
+    ).toEqual({
+      preventedPayment: "CNY 1000.00",
+      recoveredAmount: "CNY 250.00",
+      avoidedFutureExposure: "CNY 500.00",
+      estimatedImpact: "CNY 500.00",
+      reviewCost: "CNY 100.00",
+      netValue: "CNY 1650.00",
+      evidenceCaveat: "Estimated values require caveats.",
+    });
   });
 });

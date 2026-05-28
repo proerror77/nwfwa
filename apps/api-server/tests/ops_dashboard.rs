@@ -341,6 +341,12 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["model_governance"]["average_recall"], 0.6);
     assert_eq!(dashboard["risk_amount"], "8000");
     assert_eq!(dashboard["saving_amount"], "8200.00");
+    assert_eq!(
+        dashboard["value_measurement"]["prevented_payment"],
+        "8200.00"
+    );
+    assert_eq!(dashboard["value_measurement"]["recovered_amount"], "0.00");
+    assert_eq!(dashboard["value_measurement"]["estimated_impact"], "0.00");
     assert_eq!(dashboard["scheme_distribution"][selected_scheme], 1);
     let attributions = dashboard["saving_attributions"].as_array().unwrap();
     assert_eq!(attributions.len(), 2);
@@ -389,6 +395,71 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["label_pool"]["rule_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["model_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["workflow_feedback"], 1);
+}
+
+#[tokio::test]
+async fn dashboard_separates_observed_and_estimated_value() {
+    let app = build_app(test_config());
+
+    for body in [
+        r#"{
+          "claim_id": "CLM-VALUE-1",
+          "investigation_id": "INV-VALUE-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "financial_impact_type": "prevented_payment",
+          "saving_amount": "1000.00",
+          "currency": "CNY",
+          "notes": "Pre-payment review prevented improper payment.",
+          "evidence_refs": ["investigation_results:INV-VALUE-1"]
+        }"#,
+        r#"{
+          "claim_id": "CLM-VALUE-2",
+          "investigation_id": "INV-VALUE-2",
+          "outcome": "recovery_confirmed",
+          "confirmed_fwa": true,
+          "financial_impact_type": "recovered_amount",
+          "saving_amount": "250.00",
+          "currency": "CNY",
+          "notes": "Post-payment recovery collected.",
+          "evidence_refs": ["investigation_results:INV-VALUE-2"]
+        }"#,
+        r#"{
+          "claim_id": "CLM-VALUE-3",
+          "investigation_id": "INV-VALUE-3",
+          "outcome": "provider_behavior_change_estimate",
+          "confirmed_fwa": true,
+          "financial_impact_type": "avoided_future_exposure",
+          "saving_amount": "500.00",
+          "currency": "CNY",
+          "notes": "Estimated avoided future exposure from provider education.",
+          "evidence_refs": ["investigation_results:INV-VALUE-3"]
+        }"#,
+    ] {
+        let (status, _) =
+            json_request(app.clone(), "POST", "/api/v1/investigations/results", body).await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
+    let (status, dashboard) = json_request(app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        dashboard["value_measurement"]["prevented_payment"],
+        "1000.00"
+    );
+    assert_eq!(dashboard["value_measurement"]["recovered_amount"], "250.00");
+    assert_eq!(
+        dashboard["value_measurement"]["avoided_future_exposure"],
+        "500.00"
+    );
+    assert_eq!(dashboard["value_measurement"]["estimated_impact"], "500.00");
+    assert_eq!(dashboard["value_measurement"]["review_cost"], "0.00");
+    assert_eq!(dashboard["value_measurement"]["net_value"], "1750.00");
+    assert!(dashboard["value_measurement"]["evidence_caveat"]
+        .as_str()
+        .unwrap()
+        .contains("estimated"));
 }
 
 #[tokio::test]

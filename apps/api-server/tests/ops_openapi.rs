@@ -291,6 +291,24 @@ async fn openapi_includes_operations_paths() {
             .as_array()
             .unwrap()
             .iter()
+            .any(|field| field == "value_measurement")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
+            ["value_measurement"]["$ref"],
+        "#/components/schemas/DashboardValueMeasurement"
+    );
+    assert!(schema["components"]["schemas"]["DashboardValueMeasurement"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
+            ["financial_impact_type"]["enum"][1],
+        "recovered_amount"
+    );
+    assert!(
+        schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
             .any(|field| field == "qa_queue")
     );
     assert!(schema["components"]["schemas"]["DashboardQaQueue"].is_object());

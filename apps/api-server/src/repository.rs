@@ -393,6 +393,18 @@ pub struct DashboardRuleGovernanceRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardValueMeasurementRecord {
+    pub prevented_payment: String,
+    pub recovered_amount: String,
+    pub avoided_future_exposure: String,
+    pub estimated_impact: String,
+    pub review_cost: String,
+    pub net_value: String,
+    pub currency: String,
+    pub evidence_caveat: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -404,6 +416,7 @@ pub struct DashboardSummaryRecord {
     pub model_scores: BTreeMap<String, DashboardModelScoreRecord>,
     pub layer_scores: BTreeMap<String, DashboardLayerScoreRecord>,
     pub saving_attributions: Vec<DashboardSavingAttributionRecord>,
+    pub value_measurement: DashboardValueMeasurementRecord,
     pub label_pool: DashboardLabelPoolRecord,
     pub qa_queue: DashboardQaQueueRecord,
     pub agent_governance: DashboardAgentGovernanceRecord,
@@ -631,6 +644,7 @@ pub struct InvestigationResultRecord {
     pub claim_id: String,
     pub outcome: String,
     pub confirmed_fwa: bool,
+    pub financial_impact_type: Option<String>,
     pub saving_amount: Option<Decimal>,
     pub currency: Option<String>,
     pub notes: String,
@@ -1695,6 +1709,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut investigation_results = 0_u32;
         let mut qa_reviews = 0_u32;
         let mut outcome_labels = Vec::new();
+        let mut financial_impacts = Vec::new();
 
         for (_, event) in pilot_events.iter() {
             match event.event_type.as_str() {
@@ -1703,7 +1718,10 @@ impl ScoringRepository for InMemoryScoringRepository {
                     if let Ok(record) =
                         serde_json::from_value::<InvestigationResultRecord>(event.payload.clone())
                     {
-                        outcome_labels.extend(labels_from_investigation_result(record));
+                        outcome_labels.extend(labels_from_investigation_result(record.clone()));
+                        if let Some(impact) = financial_impact_from_investigation(&record) {
+                            financial_impacts.push(impact);
+                        }
                     }
                     if event.payload["confirmed_fwa"].as_bool().unwrap_or(false) {
                         confirmed_fwa += 1;
@@ -1745,6 +1763,8 @@ impl ScoringRepository for InMemoryScoringRepository {
                     *distribution.entry(lead.scheme_family).or_insert(0) += 1;
                     distribution
                 });
+        let value_measurement =
+            summarize_dashboard_value_measurement(&financial_impacts, rule_hits);
 
         Ok(DashboardSummaryRecord {
             suspected_claims,
@@ -1794,6 +1814,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 )
                 .collect(),
             saving_attributions,
+            value_measurement,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
@@ -3762,6 +3783,28 @@ impl ScoringRepository for PostgresScoringRepository {
         .fetch_all(&self.pool)
         .await?;
 
+        let financial_impact_rows: Vec<(bool, Option<String>, Option<Decimal>, Option<String>)> =
+            sqlx::query_as(
+                "SELECT confirmed_fwa, financial_impact_type, saving_amount, currency
+                 FROM investigation_results
+                 ORDER BY created_at, investigation_id",
+            )
+            .fetch_all(&self.pool)
+            .await?;
+        let financial_impacts = financial_impact_rows
+            .into_iter()
+            .filter_map(
+                |(confirmed_fwa, financial_impact_type, saving_amount, currency)| {
+                    financial_impact_from_parts(
+                        confirmed_fwa,
+                        financial_impact_type.as_deref(),
+                        saving_amount,
+                        currency,
+                    )
+                },
+            )
+            .collect::<Vec<_>>();
+
         let saving_attributions: Vec<(String, String, String, Option<Decimal>, String, i64)> =
             sqlx::query_as(
                 "SELECT source_type,
@@ -3852,6 +3895,10 @@ impl ScoringRepository for PostgresScoringRepository {
                     },
                 )
                 .collect(),
+            value_measurement: summarize_dashboard_value_measurement(
+                &financial_impacts,
+                rule_hits.0 as u32,
+            ),
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
@@ -4376,11 +4423,12 @@ impl ScoringRepository for PostgresScoringRepository {
         let mut tx = self.pool.begin().await?;
         sqlx::query(
             "INSERT INTO investigation_results
-             (investigation_id, claim_id, outcome, confirmed_fwa, saving_amount, currency, notes, evidence_refs)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+             (investigation_id, claim_id, outcome, confirmed_fwa, financial_impact_type, saving_amount, currency, notes, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
              ON CONFLICT (investigation_id) DO UPDATE
              SET outcome = EXCLUDED.outcome,
                  confirmed_fwa = EXCLUDED.confirmed_fwa,
+                 financial_impact_type = EXCLUDED.financial_impact_type,
                  saving_amount = EXCLUDED.saving_amount,
                  currency = EXCLUDED.currency,
                  notes = EXCLUDED.notes,
@@ -4390,6 +4438,9 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&record.claim_id)
         .bind(&record.outcome)
         .bind(record.confirmed_fwa)
+        .bind(normalize_financial_impact_type(
+            record.financial_impact_type.as_deref(),
+        ))
         .bind(record.saving_amount)
         .bind(&record.currency)
         .bind(&record.notes)
@@ -4564,12 +4615,13 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             bool,
+            Option<String>,
             Option<Decimal>,
             Option<String>,
             String,
             Value,
         )> = sqlx::query_as(
-            "SELECT investigation_id, claim_id, outcome, confirmed_fwa, saving_amount, currency, notes, evidence_refs
+            "SELECT investigation_id, claim_id, outcome, confirmed_fwa, financial_impact_type, saving_amount, currency, notes, evidence_refs
              FROM investigation_results
              ORDER BY created_at, investigation_id",
         )
@@ -4592,6 +4644,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     claim_id,
                     outcome,
                     confirmed_fwa,
+                    financial_impact_type,
                     saving_amount,
                     currency,
                     notes,
@@ -4602,6 +4655,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         claim_id,
                         outcome,
                         confirmed_fwa,
+                        financial_impact_type,
                         saving_amount,
                         currency,
                         notes,
@@ -5350,6 +5404,54 @@ fn feedback_target_rank(target: &str) -> u8 {
     }
 }
 
+#[derive(Debug, Clone)]
+struct FinancialImpactRecord {
+    impact_type: String,
+    amount: Decimal,
+    currency: Option<String>,
+}
+
+fn financial_impact_from_investigation(
+    record: &InvestigationResultRecord,
+) -> Option<FinancialImpactRecord> {
+    financial_impact_from_parts(
+        record.confirmed_fwa,
+        record.financial_impact_type.as_deref(),
+        record.saving_amount,
+        record.currency.clone(),
+    )
+}
+
+fn financial_impact_from_parts(
+    confirmed_fwa: bool,
+    financial_impact_type: Option<&str>,
+    saving_amount: Option<Decimal>,
+    currency: Option<String>,
+) -> Option<FinancialImpactRecord> {
+    if !confirmed_fwa {
+        return None;
+    }
+    let amount = saving_amount?;
+    if amount <= Decimal::ZERO {
+        return None;
+    }
+    Some(FinancialImpactRecord {
+        impact_type: normalize_financial_impact_type(financial_impact_type).into(),
+        amount,
+        currency,
+    })
+}
+
+fn normalize_financial_impact_type(value: Option<&str>) -> &'static str {
+    match value.unwrap_or("prevented_payment") {
+        "recovered_amount" => "recovered_amount",
+        "avoided_future_exposure" => "avoided_future_exposure",
+        "deterrence_estimate" => "deterrence_estimate",
+        "estimated_impact" => "estimated_impact",
+        _ => "prevented_payment",
+    }
+}
+
 fn labels_from_investigation_result(record: InvestigationResultRecord) -> Vec<OutcomeLabelRecord> {
     let mut labels = vec![OutcomeLabelRecord {
         label_id: format!(
@@ -5390,13 +5492,21 @@ fn labels_from_investigation_result(record: InvestigationResultRecord) -> Vec<Ou
     }
 
     if let Some(saving_amount) = record.saving_amount {
+        let impact_type = normalize_financial_impact_type(record.financial_impact_type.as_deref());
+        let label_name = match impact_type {
+            "recovered_amount" => "amount_recovered",
+            "avoided_future_exposure" => "avoided_future_exposure",
+            "deterrence_estimate" => "deterrence_estimate",
+            "estimated_impact" => "estimated_impact",
+            _ => "amount_prevented",
+        };
         labels.push(OutcomeLabelRecord {
             label_id: format!(
-                "label_investigation_{}_amount_prevented",
-                record.investigation_id
+                "label_investigation_{}_{}",
+                record.investigation_id, label_name
             ),
             claim_id: record.claim_id,
-            label_name: "amount_prevented".into(),
+            label_name: label_name.into(),
             label_value: saving_amount.to_string(),
             source_type: "investigation_result".into(),
             source_id: record.investigation_id,
@@ -5622,6 +5732,48 @@ fn summarize_dashboard_rule_governance(
         } else {
             saving / review_cost
         },
+    }
+}
+
+fn summarize_dashboard_value_measurement(
+    impacts: &[FinancialImpactRecord],
+    review_events: u32,
+) -> DashboardValueMeasurementRecord {
+    let mut prevented_payment = Decimal::ZERO;
+    let mut recovered_amount = Decimal::ZERO;
+    let mut avoided_future_exposure = Decimal::ZERO;
+    let mut deterrence_or_other_estimate = Decimal::ZERO;
+    let mut currency = None;
+
+    for impact in impacts {
+        if currency.is_none() {
+            currency = impact.currency.clone();
+        }
+        match impact.impact_type.as_str() {
+            "recovered_amount" => recovered_amount += impact.amount,
+            "avoided_future_exposure" => avoided_future_exposure += impact.amount,
+            "deterrence_estimate" | "estimated_impact" => {
+                deterrence_or_other_estimate += impact.amount
+            }
+            _ => prevented_payment += impact.amount,
+        }
+    }
+
+    let review_cost = Decimal::from(review_events) * Decimal::from(RULE_REVIEW_COST_AMOUNT as u32);
+    let estimated_impact = avoided_future_exposure + deterrence_or_other_estimate;
+    let net_value = prevented_payment + recovered_amount + estimated_impact - review_cost;
+
+    DashboardValueMeasurementRecord {
+        prevented_payment: format_decimal_cents(prevented_payment),
+        recovered_amount: format_decimal_cents(recovered_amount),
+        avoided_future_exposure: format_decimal_cents(avoided_future_exposure),
+        estimated_impact: format_decimal_cents(estimated_impact),
+        review_cost: format_decimal_cents(review_cost),
+        net_value: format_decimal_cents(net_value),
+        currency: currency.unwrap_or_else(|| "CNY".into()),
+        evidence_caveat:
+            "Observed values come from confirmed investigation outcomes; avoided exposure and deterrence remain estimated until validated."
+                .into(),
     }
 }
 

@@ -59,6 +59,17 @@ type DashboardRuleGovernance = {
   roi: number;
 };
 
+type DashboardValueMeasurement = {
+  prevented_payment: string;
+  recovered_amount: string;
+  avoided_future_exposure: string;
+  estimated_impact: string;
+  review_cost: string;
+  net_value: string;
+  currency: string;
+  evidence_caveat: string;
+};
+
 type DashboardSummary = {
   suspected_claims: number;
   confirmed_fwa: number;
@@ -70,6 +81,7 @@ type DashboardSummary = {
   model_scores: Record<string, DashboardModelScore>;
   layer_scores: Record<string, DashboardLayerScore>;
   saving_attributions: SavingAttributionSummary[];
+  value_measurement: DashboardValueMeasurement;
   label_pool: DashboardLabelPool;
   qa_queue: DashboardQaQueue;
   agent_governance: DashboardAgentGovernance;
@@ -197,6 +209,19 @@ export function buildDashboardSchemeRows(distribution: Record<string, number> = 
     );
 }
 
+export function buildDashboardValueMeasurementSummary(value?: DashboardValueMeasurement) {
+  const currency = value?.currency ?? "CNY";
+  return {
+    preventedPayment: `${currency} ${value?.prevented_payment ?? "0.00"}`,
+    recoveredAmount: `${currency} ${value?.recovered_amount ?? "0.00"}`,
+    avoidedFutureExposure: `${currency} ${value?.avoided_future_exposure ?? "0.00"}`,
+    estimatedImpact: `${currency} ${value?.estimated_impact ?? "0.00"}`,
+    reviewCost: `${currency} ${value?.review_cost ?? "0.00"}`,
+    netValue: `${currency} ${value?.net_value ?? "0.00"}`,
+    evidenceCaveat: value?.evidence_caveat ?? "No value measurement caveat available.",
+  };
+}
+
 export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
@@ -234,6 +259,7 @@ export function DashboardPage() {
   const agentGovernanceSummary = buildDashboardAgentGovernanceSummary(summary?.agent_governance);
   const modelGovernanceSummary = buildDashboardModelGovernanceSummary(summary?.model_governance);
   const ruleGovernanceSummary = buildDashboardRuleGovernanceSummary(summary?.rule_governance);
+  const valueMeasurementSummary = buildDashboardValueMeasurementSummary(summary?.value_measurement);
   const providerRiskSummary = buildProviderRiskSummary(providerRisk);
 
   return (
@@ -314,6 +340,39 @@ export function DashboardPage() {
           {!dashboardQuery.isLoading && schemeRows.length === 0 ? (
             <p className="empty">No scheme distribution</p>
           ) : null}
+        </div>
+
+        <div className="panel">
+          <h2>Value Measurement</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Prevented</span>
+              <strong>{valueMeasurementSummary.preventedPayment}</strong>
+            </div>
+            <div>
+              <span>Recovered</span>
+              <strong>{valueMeasurementSummary.recoveredAmount}</strong>
+            </div>
+            <div>
+              <span>Estimated</span>
+              <strong>{valueMeasurementSummary.estimatedImpact}</strong>
+            </div>
+            <div>
+              <span>Net Value</span>
+              <strong>{valueMeasurementSummary.netValue}</strong>
+            </div>
+          </div>
+          <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Avoided Exposure</span>
+              <strong>{valueMeasurementSummary.avoidedFutureExposure}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Review Cost</span>
+              <strong>{valueMeasurementSummary.reviewCost}</strong>
+            </div>
+          </div>
+          <p className="empty">{valueMeasurementSummary.evidenceCaveat}</p>
         </div>
 
         <div className="panel">

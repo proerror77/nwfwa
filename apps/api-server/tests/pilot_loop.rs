@@ -363,6 +363,25 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-LABEL-1002",
+          "investigation_id": "INV-LABEL-1002",
+          "outcome": "recovery_confirmed",
+          "confirmed_fwa": true,
+          "financial_impact_type": "recovered_amount",
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Post-payment recovery confirmed.",
+          "evidence_refs": ["investigation_results:INV-LABEL-1002"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
@@ -378,6 +397,12 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
         label["claim_id"] == "CLM-LABEL-1001"
             && label["label_name"] == "amount_prevented"
             && label["label_value"] == "8200.00"
+            && label["currency"] == "CNY"
+    }));
+    assert!(labels.iter().any(|label| {
+        label["claim_id"] == "CLM-LABEL-1002"
+            && label["label_name"] == "amount_recovered"
+            && label["label_value"] == "1200.00"
             && label["currency"] == "CNY"
     }));
     assert!(labels.iter().any(|label| {

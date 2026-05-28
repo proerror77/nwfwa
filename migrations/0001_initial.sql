@@ -520,12 +520,16 @@ CREATE TABLE IF NOT EXISTS investigation_results (
   claim_id TEXT NOT NULL,
   outcome TEXT NOT NULL,
   confirmed_fwa BOOLEAN NOT NULL,
+  financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment',
   saving_amount NUMERIC,
   currency TEXT,
   notes TEXT NOT NULL,
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE investigation_results
+  ADD COLUMN IF NOT EXISTS financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment';
 
 CREATE TABLE IF NOT EXISTS saving_attributions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

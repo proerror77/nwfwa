@@ -2308,7 +2308,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "label_pool", "qa_queue", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "value_measurement", "label_pool", "qa_queue", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -2335,6 +2335,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/SavingAttributionSummary" }
                         },
+                        "value_measurement": { "$ref": "#/components/schemas/DashboardValueMeasurement" },
                         "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },
                         "qa_queue": { "$ref": "#/components/schemas/DashboardQaQueue" },
                         "agent_governance": { "$ref": "#/components/schemas/DashboardAgentGovernance" },
@@ -2342,6 +2343,20 @@ pub async fn openapi_schema() -> Json<Value> {
                         "rule_governance": { "$ref": "#/components/schemas/DashboardRuleGovernance" },
                         "investigation_results": { "type": "integer" },
                         "qa_reviews": { "type": "integer" }
+                    }
+                },
+                "DashboardValueMeasurement": {
+                    "type": "object",
+                    "required": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "estimated_impact", "review_cost", "net_value", "currency", "evidence_caveat"],
+                    "properties": {
+                        "prevented_payment": { "type": "string", "format": "decimal" },
+                        "recovered_amount": { "type": "string", "format": "decimal" },
+                        "avoided_future_exposure": { "type": "string", "format": "decimal" },
+                        "estimated_impact": { "type": "string", "format": "decimal" },
+                        "review_cost": { "type": "string", "format": "decimal" },
+                        "net_value": { "type": "string", "format": "decimal" },
+                        "currency": { "type": "string" },
+                        "evidence_caveat": { "type": "string" }
                     }
                 },
                 "DashboardLabelPool": {
@@ -2825,6 +2840,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_id": { "type": "string" },
                         "outcome": { "type": "string" },
                         "confirmed_fwa": { "type": "boolean" },
+                        "financial_impact_type": {
+                            "type": ["string", "null"],
+                            "enum": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "deterrence_estimate", "estimated_impact", null]
+                        },
                         "saving_amount": { "type": ["string", "null"], "format": "decimal" },
                         "currency": { "type": ["string", "null"] },
                         "notes": { "type": "string" },
