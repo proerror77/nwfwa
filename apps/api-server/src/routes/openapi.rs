@@ -925,6 +925,92 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/retraining-jobs": {
+                "get": {
+                    "summary": "List model retraining jobs",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model retraining jobs",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelRetrainingJobListResponse" }
+                                }
+                            }
+                        }
+                    }
+                },
+                "post": {
+                    "summary": "Queue a model retraining job from readiness",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/CreateModelRetrainingJobRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Queued model retraining job",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelRetrainingJob" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/model-retraining-jobs/{job_id}/status": {
+                "post": {
+                    "summary": "Update model retraining job status",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "job_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/UpdateModelRetrainingJobStatusRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Updated model retraining job",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelRetrainingJob" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/promotion-reviews": {
                 "post": {
                     "summary": "Record a model promotion review decision",
@@ -2589,6 +2675,62 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         }
+                    }
+                },
+                "ModelRetrainingJob": {
+                    "type": "object",
+                    "required": ["job_id", "model_key", "model_version", "status", "requested_by", "request_notes", "status_note", "updated_by", "readiness_recommendation", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "trigger_summary", "blocker_summary", "created_at", "updated_at"],
+                    "properties": {
+                        "job_id": { "type": "string" },
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
+                        "requested_by": { "type": "string" },
+                        "request_notes": { "type": "string" },
+                        "status_note": { "type": "string" },
+                        "updated_by": { "type": "string" },
+                        "readiness_recommendation": { "type": "string" },
+                        "latest_evaluation_id": { "type": "string" },
+                        "source_dataset_id": { "type": "string" },
+                        "source_data_quality_score": { "type": ["number", "null"] },
+                        "source_data_quality_status": { "type": "string" },
+                        "trigger_summary": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "blocker_summary": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" },
+                        "updated_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "ModelRetrainingJobListResponse": {
+                    "type": "object",
+                    "required": ["jobs"],
+                    "properties": {
+                        "jobs": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ModelRetrainingJob" }
+                        }
+                    }
+                },
+                "CreateModelRetrainingJobRequest": {
+                    "type": "object",
+                    "required": ["requested_by", "notes"],
+                    "properties": {
+                        "requested_by": { "type": "string" },
+                        "notes": { "type": "string" }
+                    }
+                },
+                "UpdateModelRetrainingJobStatusRequest": {
+                    "type": "object",
+                    "required": ["status", "actor", "notes"],
+                    "properties": {
+                        "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
+                        "actor": { "type": "string" },
+                        "notes": { "type": "string" }
                     }
                 },
                 "SubmitModelPromotionReviewRequest": {

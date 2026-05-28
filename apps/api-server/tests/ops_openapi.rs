@@ -42,6 +42,8 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/models/{model_key}/performance",
         "/api/v1/ops/models/{model_key}/promotion-gates",
         "/api/v1/ops/models/{model_key}/retraining-readiness",
+        "/api/v1/ops/models/{model_key}/retraining-jobs",
+        "/api/v1/ops/model-retraining-jobs/{job_id}/status",
         "/api/v1/ops/models/{model_key}/promotion-reviews",
         "/api/v1/ops/models/{model_key}/rollback",
         "/api/v1/ops/datasets",
@@ -123,6 +125,18 @@ async fn openapi_includes_operations_paths() {
             .unwrap()
             .iter()
             .any(|field| field == "retraining_triggers")
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelRetrainingJob"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "trigger_summary")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelRetrainingJobListResponse"]["properties"]["jobs"]
+            ["items"]["$ref"],
+        "#/components/schemas/ModelRetrainingJob"
     );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]

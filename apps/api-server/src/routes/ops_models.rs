@@ -3,7 +3,7 @@ use crate::{
     error::ApiError,
     repository::{
         DatasetRecord, ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
-        ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
+        ModelRetrainingJobRecord, ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
     },
     routes::ops_datasets::build_dataset_health_record,
 };
@@ -65,6 +65,11 @@ pub struct ModelRetrainingReadinessResponse {
     pub blockers: Vec<String>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ModelRetrainingJobListResponse {
+    pub jobs: Vec<ModelRetrainingJobRecord>,
+}
+
 struct SourceDataQualityGate {
     dataset_id: String,
     score: Option<f64>,
@@ -78,6 +83,19 @@ struct SourceDataQualityGate {
 pub struct SubmitModelPromotionReviewRequest {
     pub decision: String,
     pub reviewer: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct CreateModelRetrainingJobRequest {
+    pub requested_by: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateModelRetrainingJobStatusRequest {
+    pub status: String,
+    pub actor: String,
     pub notes: String,
 }
 
@@ -140,7 +158,7 @@ pub async fn model_promotion_gates(
         .await
         .map_err(internal_error("MODEL_PERFORMANCE_FAILED"))?
         .unwrap_or_else(|| ModelPerformanceRecord {
-            model_key: model_key.clone(),
+            model_key: model_key.to_string(),
             data_status: "unknown".into(),
             scored_runs: 0,
             average_score: 0.0,
@@ -192,6 +210,130 @@ pub async fn model_retraining_readiness(
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelRetrainingReadinessResponse>, ApiError> {
     authorize(&state, &headers)?;
+    Ok(Json(
+        load_model_retraining_readiness(&state, &model_key).await?,
+    ))
+}
+
+pub async fn list_model_retraining_jobs(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+) -> Result<Json<ModelRetrainingJobListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    ensure_model_exists(&state, &model_key).await?;
+    let jobs = state
+        .repository
+        .list_model_retraining_jobs(&model_key)
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_JOB_LIST_FAILED"))?;
+    Ok(Json(ModelRetrainingJobListResponse { jobs }))
+}
+
+pub async fn create_model_retraining_job(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+    Json(request): Json<CreateModelRetrainingJobRequest>,
+) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    if request.requested_by.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_REQUESTED_BY",
+            "requested_by is required",
+        ));
+    }
+
+    let readiness = load_model_retraining_readiness(&state, &model_key).await?;
+    if readiness.recommendation != "prepare_retraining" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "MODEL_RETRAINING_NOT_READY",
+            "model retraining can only be queued when readiness recommends prepare_retraining",
+        ));
+    }
+
+    let job = state
+        .repository
+        .save_model_retraining_job(ModelRetrainingJobRecord {
+            job_id: String::new(),
+            model_key: readiness.model_key.clone(),
+            model_version: readiness.model_version.clone(),
+            status: "queued".into(),
+            requested_by: request.requested_by,
+            request_notes: request.notes,
+            status_note: "queued from readiness".into(),
+            updated_by: actor.actor_id.clone(),
+            readiness_recommendation: readiness.recommendation,
+            latest_evaluation_id: readiness.latest_evaluation_id,
+            source_dataset_id: readiness.source_dataset_id,
+            source_data_quality_score: readiness.source_data_quality_score,
+            source_data_quality_status: readiness.source_data_quality_status,
+            trigger_summary: readiness.retraining_triggers,
+            blocker_summary: readiness.blockers,
+            created_at: None,
+            updated_at: None,
+        })
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_JOB_SAVE_FAILED"))?;
+    record_model_retraining_audit(&state, &actor, &job, "model.retraining.queued")
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(job))
+}
+
+pub async fn update_model_retraining_job_status(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(job_id): Path<String>,
+    Json(request): Json<UpdateModelRetrainingJobStatusRequest>,
+) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    if !matches!(
+        request.status.as_str(),
+        "queued" | "running" | "validation" | "completed" | "failed" | "cancelled"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_JOB_STATUS",
+            "status must be queued, running, validation, completed, failed, or cancelled",
+        ));
+    }
+    if request.actor.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_JOB_ACTOR",
+            "actor is required",
+        ));
+    }
+    let job = state
+        .repository
+        .update_model_retraining_job_status(
+            &job_id,
+            &request.status,
+            &request.actor,
+            &request.notes,
+        )
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_JOB_UPDATE_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_RETRAINING_JOB_NOT_FOUND",
+                "model retraining job not found",
+            )
+        })?;
+    record_model_retraining_audit(&state, &actor, &job, "model.retraining.status_updated")
+        .await
+        .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(job))
+}
+
+async fn load_model_retraining_readiness(
+    state: &AppState,
+    model_key: &str,
+) -> Result<ModelRetrainingReadinessResponse, ApiError> {
     let model = state
         .repository
         .list_models()
@@ -204,11 +346,11 @@ pub async fn model_retraining_readiness(
         })?;
     let performance = state
         .repository
-        .model_performance(&model_key)
+        .model_performance(model_key)
         .await
         .map_err(internal_error("MODEL_PERFORMANCE_FAILED"))?
         .unwrap_or_else(|| ModelPerformanceRecord {
-            model_key: model_key.clone(),
+            model_key: model_key.to_string(),
             data_status: "unknown".into(),
             scored_runs: 0,
             average_score: 0.0,
@@ -244,14 +386,33 @@ pub async fn model_retraining_readiness(
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
 
-    Ok(Json(build_model_retraining_readiness(
+    Ok(build_model_retraining_readiness(
         &model,
         &performance,
         latest_evaluation,
         &outcome_labels,
         &feedback_items,
         source_dataset.as_ref(),
-    )))
+    ))
+}
+
+async fn ensure_model_exists(state: &AppState, model_key: &str) -> Result<(), ApiError> {
+    let exists = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .any(|model| model.model_key == model_key);
+    if exists {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "MODEL_NOT_FOUND",
+            "model not found",
+        ))
+    }
 }
 
 pub async fn submit_model_promotion_review(
@@ -780,6 +941,41 @@ async fn record_model_promotion_audit(
             evidence_refs: vec![serde_json::json!(format!(
                 "model_versions:{}:{}",
                 review.model_key, review.model_version
+            ))],
+        })
+        .await
+}
+
+async fn record_model_retraining_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    job: &ModelRetrainingJobRecord,
+    event_type: &'static str,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: event_type.into(),
+            event_status: "succeeded".into(),
+            summary: format!("Model retraining job {} is {}", job.job_id, job.status),
+            payload: serde_json::json!({
+                "job_id": job.job_id,
+                "model_key": job.model_key,
+                "model_version": job.model_version,
+                "status": job.status,
+                "requested_by": job.requested_by,
+                "trigger_count": job.trigger_summary.len(),
+                "blocker_count": job.blocker_summary.len(),
+            }),
+            evidence_refs: vec![serde_json::json!(format!(
+                "model_retraining_jobs:{}",
+                job.job_id
             ))],
         })
         .await

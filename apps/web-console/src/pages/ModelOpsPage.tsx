@@ -1,14 +1,17 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  createModelRetrainingJob,
   getModelPerformance,
   getModelPromotionGates,
   getModelRetrainingReadiness,
+  listModelRetrainingJobs,
   listOutcomeLabels,
   listQaFeedbackItems,
   listModels,
   rollbackModel,
   submitModelPromotionReview,
+  updateModelRetrainingJobStatus,
 } from "../api";
 import {
   filterQaFeedbackItems,
@@ -70,6 +73,22 @@ type ModelRetrainingReadinessResponse = {
   blockers: string[];
 };
 
+type ModelRetrainingJob = {
+  job_id: string;
+  model_key: string;
+  model_version: string;
+  status: string;
+  requested_by: string;
+  request_notes: string;
+  status_note: string;
+  updated_by: string;
+  readiness_recommendation: string;
+  trigger_summary: string[];
+  blocker_summary: string[];
+  created_at: string | null;
+  updated_at: string | null;
+};
+
 type OutcomeLabel = {
   label_id: string;
   claim_id: string;
@@ -117,11 +136,22 @@ export function buildModelRetrainingSummary(
   };
 }
 
+export function buildModelRetrainingJobSummary(jobs: ModelRetrainingJob[] = []) {
+  return {
+    jobCount: jobs.length,
+    queuedCount: jobs.filter((job) => job.status === "queued").length,
+    runningCount: jobs.filter((job) => job.status === "running").length,
+    latestStatus: jobs[0]?.status ?? "none",
+  };
+}
+
 export function ModelOpsPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedModelKey, setSelectedModelKey] = useState("baseline_fwa");
   const [reviewer, setReviewer] = useState("model-governance");
   const [notes, setNotes] = useState("Approved for continued shadow evaluation only.");
+  const [retrainingRequester, setRetrainingRequester] = useState("model-ops");
+  const [retrainingNotes, setRetrainingNotes] = useState("Queue retraining from readiness.");
   const queryClient = useQueryClient();
   const modelsQuery = useQuery({
     queryKey: ["models", apiKey],
@@ -158,6 +188,15 @@ export function ModelOpsPage() {
         selectedModel!.model_key,
         apiKey,
       ) as Promise<ModelRetrainingReadinessResponse>,
+    enabled: Boolean(selectedModel?.model_key),
+  });
+  const retrainingJobsQuery = useQuery({
+    queryKey: ["model-retraining-jobs", selectedModel?.model_key, apiKey],
+    queryFn: () =>
+      listModelRetrainingJobs(
+        selectedModel!.model_key,
+        apiKey,
+      ) as Promise<{ jobs: ModelRetrainingJob[] }>,
     enabled: Boolean(selectedModel?.model_key),
   });
   const qaFeedbackQuery = useQuery({
@@ -203,10 +242,36 @@ export function ModelOpsPage() {
       queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
     },
   });
+  const retrainingCreateMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedModel) throw new Error("No model selected");
+      return createModelRetrainingJob(
+        selectedModel.model_key,
+        { requested_by: retrainingRequester, notes: retrainingNotes },
+        apiKey,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["model-retraining-readiness"] });
+    },
+  });
+  const retrainingStatusMutation = useMutation({
+    mutationFn: ({ jobId, status }: { jobId: string; status: string }) =>
+      updateModelRetrainingJobStatus(
+        jobId,
+        { status, actor: retrainingRequester, notes: `Marked ${status}` },
+        apiKey,
+      ),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
+    },
+  });
   const promotionGateRows = promotionQuery.data
     ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
     : [];
   const retrainingSummary = buildModelRetrainingSummary(retrainingQuery.data);
+  const retrainingJobSummary = buildModelRetrainingJobSummary(retrainingJobsQuery.data?.jobs);
 
   return (
     <section className="ops-grid">
@@ -363,6 +428,94 @@ export function ModelOpsPage() {
         ) : (
           <p className="empty">No retraining readiness loaded</p>
         )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Retraining Jobs</h2>
+        {retrainingJobsQuery.error ? (
+          <pre className="error">{String(retrainingJobsQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Jobs</span>
+            <strong>{retrainingJobSummary.jobCount}</strong>
+          </div>
+          <div>
+            <span>Queued</span>
+            <strong>{retrainingJobSummary.queuedCount}</strong>
+          </div>
+          <div>
+            <span>Running</span>
+            <strong>{retrainingJobSummary.runningCount}</strong>
+          </div>
+          <div>
+            <span>Latest Status</span>
+            <strong>{retrainingJobSummary.latestStatus}</strong>
+          </div>
+        </div>
+        <div className="result-stack">
+          <label>
+            Requester
+            <input
+              value={retrainingRequester}
+              onChange={(event) => setRetrainingRequester(event.target.value)}
+            />
+          </label>
+          <label>
+            Retraining Note
+            <textarea
+              value={retrainingNotes}
+              onChange={(event) => setRetrainingNotes(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => retrainingCreateMutation.mutate()}
+            disabled={retrainingCreateMutation.isPending}
+          >
+            Queue Retraining
+          </button>
+          {retrainingCreateMutation.error ? (
+            <pre className="error">{String(retrainingCreateMutation.error.message)}</pre>
+          ) : null}
+        </div>
+        <div className="table-list">
+          {(retrainingJobsQuery.data?.jobs ?? []).map((job) => (
+            <div className="metric-row compact-metric-row" key={job.job_id}>
+              <span>{job.job_id}</span>
+              <strong>{job.status}</strong>
+              <small>
+                {job.model_version} · {job.requested_by}
+              </small>
+              <small>{job.trigger_summary.length} triggers</small>
+              <div className="button-row">
+                <button
+                  onClick={() =>
+                    retrainingStatusMutation.mutate({
+                      jobId: job.job_id,
+                      status: "running",
+                    })
+                  }
+                  disabled={retrainingStatusMutation.isPending || job.status !== "queued"}
+                >
+                  Start
+                </button>
+                <button
+                  onClick={() =>
+                    retrainingStatusMutation.mutate({
+                      jobId: job.job_id,
+                      status: "validation",
+                    })
+                  }
+                  disabled={retrainingStatusMutation.isPending || job.status !== "running"}
+                >
+                  Validate
+                </button>
+              </div>
+            </div>
+          ))}
+        </div>
+        {(retrainingJobsQuery.data?.jobs ?? []).length === 0 ? (
+          <p className="empty">No retraining jobs</p>
+        ) : null}
       </div>
       <div className="panel wide-panel">
         <h2>QA Feedback</h2>

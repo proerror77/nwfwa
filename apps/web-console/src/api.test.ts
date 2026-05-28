@@ -4,6 +4,7 @@ import {
   backtestRule,
   createAuditSample,
   discoverRules,
+  createModelRetrainingJob,
   getDashboardSummary,
   getClaimAuditHistory,
   getProviderRiskSummary,
@@ -24,10 +25,12 @@ import {
   listQaQueueSummary,
   listWebhookEvents,
   listModelEvaluations,
+  listModelRetrainingJobs,
   listModels,
   getModelPromotionGates,
   getModelRetrainingReadiness,
   submitModelPromotionReview,
+  updateModelRetrainingJobStatus,
   listRules,
   publishKnowledgeCase,
   publishRule,
@@ -158,6 +161,17 @@ describe("ops API helpers", () => {
     await listModels("dev-secret");
     await getModelPromotionGates("baseline_fwa", "dev-secret");
     await getModelRetrainingReadiness("baseline_fwa", "dev-secret");
+    await listModelRetrainingJobs("baseline_fwa", "dev-secret");
+    await createModelRetrainingJob(
+      "baseline_fwa",
+      { requested_by: "model-ops", notes: "drift" },
+      "dev-secret",
+    );
+    await updateModelRetrainingJobStatus(
+      "job_1",
+      { status: "running", actor: "trainer-worker", notes: "started" },
+      "dev-secret",
+    );
     await submitModelPromotionReview(
       "baseline_fwa",
       { decision: "approved", reviewer: "model-governance", notes: "shadow only" },
@@ -181,6 +195,30 @@ describe("ops API helpers", () => {
       "/api/v1/ops/models/baseline_fwa/retraining-readiness",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({ requested_by: "model-ops", notes: "drift" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/model-retraining-jobs/job_1/status",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          status: "running",
+          actor: "trainer-worker",
+          notes: "started",
+        }),
       }),
     );
     expect(fetchMock).toHaveBeenCalledWith(

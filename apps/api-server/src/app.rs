@@ -183,6 +183,15 @@ pub fn build_app_with_parts(
             get(ops_models::model_retraining_readiness),
         )
         .route(
+            "/api/v1/ops/models/:model_key/retraining-jobs",
+            get(ops_models::list_model_retraining_jobs)
+                .post(ops_models::create_model_retraining_job),
+        )
+        .route(
+            "/api/v1/ops/model-retraining-jobs/:job_id/status",
+            post(ops_models::update_model_retraining_job_status),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/promotion-reviews",
             post(ops_models::submit_model_promotion_review),
         )

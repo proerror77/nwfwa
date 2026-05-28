@@ -726,6 +726,123 @@ async fn model_retraining_readiness_prepares_when_drift_and_labels_are_ready() {
 }
 
 #[tokio::test]
+async fn blocks_model_retraining_job_when_readiness_is_blocked() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+        r#"{
+          "requested_by": "model-ops",
+          "notes": "Queue retraining from model drift."
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "MODEL_RETRAINING_NOT_READY");
+}
+
+#[tokio::test]
+async fn queues_and_updates_model_retraining_job_from_readiness() {
+    let app = build_app(test_config());
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "retraining_job").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_retraining_job",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_retraining_job/v1/feature_importance.parquet",
+              "metrics_json": {{"score_psi": 0.31}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-RETRAINING-JOB-1",
+          "investigation_id": "INV-RETRAINING-JOB-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA label ready for retraining job.",
+          "evidence_refs": ["investigation_results:INV-RETRAINING-JOB-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, created) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+        r#"{
+          "requested_by": "model-ops",
+          "notes": "Queue retraining from score drift."
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(created["model_key"], "baseline_fwa");
+    assert_eq!(created["status"], "queued");
+    assert_eq!(created["requested_by"], "model-ops");
+    assert_eq!(created["readiness_recommendation"], "prepare_retraining");
+    assert!(created["trigger_summary"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("score drift status: drift")));
+    let job_id = created["job_id"].as_str().unwrap();
+
+    let (status, jobs) = get_json(
+        app.clone(),
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(jobs["jobs"][0]["job_id"], job_id);
+
+    let (status, updated) = json_request(
+        app,
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
+        r#"{
+          "status": "running",
+          "actor": "trainer-worker",
+          "notes": "Training worker picked up the job."
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(updated["job_id"], job_id);
+    assert_eq!(updated["status"], "running");
+    assert_eq!(updated["updated_by"], "trainer-worker");
+    assert_eq!(updated["status_note"], "Training worker picked up the job.");
+}
+
+#[tokio::test]
 async fn blocks_model_promotion_when_score_drift_is_detected() {
     let app = build_app(test_config());
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "drift_gate").await;

@@ -496,6 +496,26 @@ CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS model_retraining_jobs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  model_key TEXT NOT NULL,
+  model_version TEXT NOT NULL,
+  status TEXT NOT NULL CHECK (status IN ('queued', 'running', 'validation', 'completed', 'failed', 'cancelled')),
+  requested_by TEXT NOT NULL,
+  request_notes TEXT NOT NULL,
+  status_note TEXT NOT NULL,
+  updated_by TEXT NOT NULL,
+  readiness_recommendation TEXT NOT NULL,
+  latest_evaluation_id TEXT NOT NULL,
+  source_dataset_id TEXT NOT NULL,
+  source_data_quality_score DOUBLE PRECISION,
+  source_data_quality_status TEXT NOT NULL,
+  trigger_summary_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  blocker_summary_json JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS rule_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   rule_id TEXT NOT NULL,

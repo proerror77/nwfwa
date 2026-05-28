@@ -8,7 +8,7 @@ use fwa_rules::{Condition, Rule, RuleAction};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use sqlx::{postgres::PgPoolOptions, PgPool, Postgres, Transaction};
+use sqlx::{postgres::PgPoolOptions, postgres::PgRow, PgPool, Postgres, Row, Transaction};
 use std::{
     collections::{BTreeMap, BTreeSet, HashMap},
     hash::{Hash, Hasher},
@@ -297,6 +297,27 @@ pub struct ModelPromotionReviewRecord {
     pub reviewer: String,
     pub notes: String,
     pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ModelRetrainingJobRecord {
+    pub job_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub status: String,
+    pub requested_by: String,
+    pub request_notes: String,
+    pub status_note: String,
+    pub updated_by: String,
+    pub readiness_recommendation: String,
+    pub latest_evaluation_id: String,
+    pub source_dataset_id: String,
+    pub source_data_quality_score: Option<f64>,
+    pub source_data_quality_status: String,
+    pub trigger_summary: Vec<String>,
+    pub blocker_summary: Vec<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1163,6 +1184,24 @@ pub trait ScoringRepository: Send + Sync {
         model_version: &str,
     ) -> anyhow::Result<Option<ModelPromotionReviewRecord>>;
 
+    async fn save_model_retraining_job(
+        &self,
+        record: ModelRetrainingJobRecord,
+    ) -> anyhow::Result<ModelRetrainingJobRecord>;
+
+    async fn list_model_retraining_jobs(
+        &self,
+        model_key: &str,
+    ) -> anyhow::Result<Vec<ModelRetrainingJobRecord>>;
+
+    async fn update_model_retraining_job_status(
+        &self,
+        job_id: &str,
+        status: &str,
+        actor: &str,
+        status_note: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
+
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord>;
 
     async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord>;
@@ -1283,6 +1322,8 @@ pub struct InMemoryScoringRepository {
     model_dataset_sequence: Mutex<u64>,
     model_evaluations: Mutex<HashMap<String, ModelEvaluationRecord>>,
     model_promotion_reviews: Mutex<Vec<ModelPromotionReviewRecord>>,
+    model_retraining_jobs: Mutex<HashMap<String, ModelRetrainingJobRecord>>,
+    model_retraining_job_sequence: Mutex<u64>,
     model_statuses: Mutex<HashMap<String, String>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
@@ -1786,6 +1827,57 @@ impl ScoringRepository for InMemoryScoringRepository {
             .rev()
             .find(|review| review.model_key == model_key && review.model_version == model_version)
             .cloned())
+    }
+
+    async fn save_model_retraining_job(
+        &self,
+        mut record: ModelRetrainingJobRecord,
+    ) -> anyhow::Result<ModelRetrainingJobRecord> {
+        let now = chrono::Utc::now().to_rfc3339();
+        let mut sequence = self.model_retraining_job_sequence.lock().await;
+        *sequence += 1;
+        record.job_id = format!("model_retraining_job_{}", *sequence);
+        record.created_at = Some(now.clone());
+        record.updated_at = Some(now);
+        self.model_retraining_jobs
+            .lock()
+            .await
+            .insert(record.job_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn list_model_retraining_jobs(
+        &self,
+        model_key: &str,
+    ) -> anyhow::Result<Vec<ModelRetrainingJobRecord>> {
+        let mut jobs = self
+            .model_retraining_jobs
+            .lock()
+            .await
+            .values()
+            .filter(|job| job.model_key == model_key)
+            .cloned()
+            .collect::<Vec<_>>();
+        jobs.sort_by(|left, right| right.created_at.cmp(&left.created_at));
+        Ok(jobs)
+    }
+
+    async fn update_model_retraining_job_status(
+        &self,
+        job_id: &str,
+        status: &str,
+        actor: &str,
+        status_note: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        let mut jobs = self.model_retraining_jobs.lock().await;
+        let Some(job) = jobs.get_mut(job_id) else {
+            return Ok(None);
+        };
+        job.status = status.to_string();
+        job.updated_by = actor.to_string();
+        job.status_note = status_note.to_string();
+        job.updated_at = Some(chrono::Utc::now().to_rfc3339());
+        Ok(Some(job.clone()))
     }
 
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
@@ -3988,6 +4080,96 @@ impl ScoringRepository for PostgresScoringRepository {
                 }
             },
         ))
+    }
+
+    async fn save_model_retraining_job(
+        &self,
+        record: ModelRetrainingJobRecord,
+    ) -> anyhow::Result<ModelRetrainingJobRecord> {
+        let row: (
+            String,
+            chrono::DateTime<chrono::Utc>,
+            chrono::DateTime<chrono::Utc>,
+        ) = sqlx::query_as(
+            "INSERT INTO model_retraining_jobs
+                 (model_key, model_version, status, requested_by, request_notes, status_note,
+                  updated_by, readiness_recommendation, latest_evaluation_id, source_dataset_id,
+                  source_data_quality_score, source_data_quality_status, trigger_summary_json,
+                  blocker_summary_json)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                 RETURNING id::text, created_at, updated_at",
+        )
+        .bind(&record.model_key)
+        .bind(&record.model_version)
+        .bind(&record.status)
+        .bind(&record.requested_by)
+        .bind(&record.request_notes)
+        .bind(&record.status_note)
+        .bind(&record.updated_by)
+        .bind(&record.readiness_recommendation)
+        .bind(&record.latest_evaluation_id)
+        .bind(&record.source_dataset_id)
+        .bind(record.source_data_quality_score)
+        .bind(&record.source_data_quality_status)
+        .bind(serde_json::json!(record.trigger_summary))
+        .bind(serde_json::json!(record.blocker_summary))
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(ModelRetrainingJobRecord {
+            job_id: row.0,
+            created_at: Some(row.1.to_rfc3339()),
+            updated_at: Some(row.2.to_rfc3339()),
+            ..record
+        })
+    }
+
+    async fn list_model_retraining_jobs(
+        &self,
+        model_key: &str,
+    ) -> anyhow::Result<Vec<ModelRetrainingJobRecord>> {
+        let rows = sqlx::query(
+            "SELECT id::text AS job_id, model_key, model_version, status, requested_by, request_notes,
+                    status_note, updated_by, readiness_recommendation, latest_evaluation_id,
+                    source_dataset_id, source_data_quality_score, source_data_quality_status,
+                    trigger_summary_json, blocker_summary_json, created_at, updated_at
+             FROM model_retraining_jobs
+             WHERE model_key = $1
+             ORDER BY created_at DESC",
+        )
+        .bind(model_key)
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(model_retraining_job_from_pg_row)
+            .collect())
+    }
+
+    async fn update_model_retraining_job_status(
+        &self,
+        job_id: &str,
+        status: &str,
+        actor: &str,
+        status_note: &str,
+    ) -> anyhow::Result<Option<ModelRetrainingJobRecord>> {
+        let row = sqlx::query(
+            "UPDATE model_retraining_jobs
+             SET status = $2, updated_by = $3, status_note = $4, updated_at = now()
+             WHERE id = $1::uuid
+             RETURNING id::text AS job_id, model_key, model_version, status, requested_by, request_notes,
+                       status_note, updated_by, readiness_recommendation, latest_evaluation_id,
+                       source_dataset_id, source_data_quality_score, source_data_quality_status,
+                       trigger_summary_json, blocker_summary_json, created_at, updated_at",
+        )
+        .bind(job_id)
+        .bind(status)
+        .bind(actor)
+        .bind(status_note)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(model_retraining_job_from_pg_row))
     }
 
     async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
@@ -6202,6 +6384,45 @@ fn sort_outcome_labels(labels: &mut [OutcomeLabelRecord]) {
             .then_with(|| left.source_id.cmp(&right.source_id))
             .then_with(|| left.label_name.cmp(&right.label_name))
     });
+}
+
+fn model_retraining_job_from_pg_row(row: PgRow) -> ModelRetrainingJobRecord {
+    let trigger_summary_json: Value = row.get("trigger_summary_json");
+    let blocker_summary_json: Value = row.get("blocker_summary_json");
+    let created_at: chrono::DateTime<chrono::Utc> = row.get("created_at");
+    let updated_at: chrono::DateTime<chrono::Utc> = row.get("updated_at");
+
+    ModelRetrainingJobRecord {
+        job_id: row.get("job_id"),
+        model_key: row.get("model_key"),
+        model_version: row.get("model_version"),
+        status: row.get("status"),
+        requested_by: row.get("requested_by"),
+        request_notes: row.get("request_notes"),
+        status_note: row.get("status_note"),
+        updated_by: row.get("updated_by"),
+        readiness_recommendation: row.get("readiness_recommendation"),
+        latest_evaluation_id: row.get("latest_evaluation_id"),
+        source_dataset_id: row.get("source_dataset_id"),
+        source_data_quality_score: row.get("source_data_quality_score"),
+        source_data_quality_status: row.get("source_data_quality_status"),
+        trigger_summary: json_string_array(trigger_summary_json),
+        blocker_summary: json_string_array(blocker_summary_json),
+        created_at: Some(created_at.to_rfc3339()),
+        updated_at: Some(updated_at.to_rfc3339()),
+    }
+}
+
+fn json_string_array(value: Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLabelPoolRecord {

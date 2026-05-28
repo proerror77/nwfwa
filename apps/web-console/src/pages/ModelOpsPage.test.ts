@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildModelLabelReadinessSummary,
+  buildModelRetrainingJobSummary,
   buildModelRetrainingSummary,
   formatSourceDataQuality,
 } from "./ModelOpsPage";
@@ -87,6 +88,50 @@ describe("buildModelRetrainingSummary", () => {
       approvedLabelCount: 5,
       sourceDataQualityLabel: "91.0%",
       sourceDataQualityStatus: "ready",
+    });
+  });
+});
+
+describe("buildModelRetrainingJobSummary", () => {
+  it("summarizes retraining job queue state", () => {
+    const summary = buildModelRetrainingJobSummary([
+      {
+        job_id: "job_2",
+        model_key: "baseline_fwa",
+        model_version: "0.1.0",
+        status: "running",
+        requested_by: "model-ops",
+        request_notes: "drift",
+        status_note: "started",
+        updated_by: "trainer-worker",
+        readiness_recommendation: "prepare_retraining",
+        trigger_summary: ["score drift status: drift"],
+        blocker_summary: [],
+        created_at: null,
+        updated_at: null,
+      },
+      {
+        job_id: "job_1",
+        model_key: "baseline_fwa",
+        model_version: "0.1.0",
+        status: "queued",
+        requested_by: "model-ops",
+        request_notes: "drift",
+        status_note: "queued",
+        updated_by: "model-ops",
+        readiness_recommendation: "prepare_retraining",
+        trigger_summary: ["approved model labels available"],
+        blocker_summary: [],
+        created_at: null,
+        updated_at: null,
+      },
+    ]);
+
+    expect(summary).toEqual({
+      jobCount: 2,
+      queuedCount: 1,
+      runningCount: 1,
+      latestStatus: "running",
     });
   });
 });

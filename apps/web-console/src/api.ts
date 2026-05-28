@@ -129,6 +129,43 @@ export async function getModelRetrainingReadiness(modelKey: string, apiKey: stri
   );
 }
 
+export async function listModelRetrainingJobs(modelKey: string, apiKey: string) {
+  return requestJson(
+    `/api/v1/ops/models/${encodeURIComponent(modelKey)}/retraining-jobs`,
+    apiKey,
+  );
+}
+
+export async function createModelRetrainingJob(
+  modelKey: string,
+  payload: unknown,
+  apiKey: string,
+) {
+  return requestJson(
+    `/api/v1/ops/models/${encodeURIComponent(modelKey)}/retraining-jobs`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
+export async function updateModelRetrainingJobStatus(
+  jobId: string,
+  payload: unknown,
+  apiKey: string,
+) {
+  return requestJson(
+    `/api/v1/ops/model-retraining-jobs/${encodeURIComponent(jobId)}/status`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function submitModelPromotionReview(
   modelKey: string,
   payload: unknown,
