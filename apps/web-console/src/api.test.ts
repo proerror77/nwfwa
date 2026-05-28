@@ -10,6 +10,7 @@ import {
   createModelRetrainingJob,
   getDashboardSummary,
   getClaimAuditHistory,
+  getMemberProfileSummary,
   getProviderRiskSummary,
   getRulePromotionGates,
   submitRulePromotionReview,
@@ -525,6 +526,19 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
       "/api/v1/ops/fwa-schemes",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls member profile summary endpoint", async () => {
+    const fetchMock = mockFetch({ member_id: "MBR-1" });
+
+    await getMemberProfileSummary("MBR-1", "dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/members/MBR-1/profile-summary",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
