@@ -664,18 +664,44 @@ async fn summarizes_qa_feedback_queue_for_review_operations() {
         assert_eq!(status, StatusCode::OK);
     }
 
+    for (feedback_id, status) in [
+        ("qa_feedback_QA-QUEUE-MODEL-1001", "in_progress"),
+        ("qa_feedback_QA-QUEUE-TPA-1001", "resolved"),
+        ("qa_feedback_QA-QUEUE-WORKFLOW-1001", "dismissed"),
+    ] {
+        let (status_code, _) = json_request(
+            app.clone(),
+            "POST",
+            &format!("/api/v1/ops/qa/feedback-items/{feedback_id}/status"),
+            &format!(
+                r#"{{
+                  "status": "{status}",
+                  "actor_id": "qa-lead",
+                  "notes": "Update QA feedback status for queue distribution.",
+                  "evidence_refs": ["qa_feedback:{feedback_id}"]
+                }}"#,
+            ),
+        )
+        .await;
+        assert_eq!(status_code, StatusCode::OK);
+    }
+
     let (status, summary) = json_request(app, "GET", "/api/v1/ops/qa/queue-summary", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(summary["open_count"], 6);
+    assert_eq!(summary["open_count"], 3);
+    assert_eq!(summary["in_progress_count"], 1);
+    assert_eq!(summary["resolved_count"], 1);
+    assert_eq!(summary["dismissed_count"], 1);
+    assert_eq!(summary["unresolved_count"], 4);
     assert_eq!(summary["rules_feedback_count"], 1);
-    assert_eq!(summary["models_feedback_count"], 1);
+    assert_eq!(summary["models_feedback_count"], 0);
     assert_eq!(summary["features_feedback_count"], 1);
     assert_eq!(summary["provider_profile_feedback_count"], 1);
-    assert_eq!(summary["workflow_feedback_count"], 1);
-    assert_eq!(summary["tpa_feedback_count"], 1);
-    assert_eq!(summary["high_priority_count"], 3);
-    assert_eq!(summary["evidence_backed_count"], 6);
+    assert_eq!(summary["workflow_feedback_count"], 0);
+    assert_eq!(summary["tpa_feedback_count"], 0);
+    assert_eq!(summary["high_priority_count"], 2);
+    assert_eq!(summary["evidence_backed_count"], 3);
     assert_eq!(summary["highest_priority"], "high");
 }
 

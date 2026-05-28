@@ -46,6 +46,10 @@ type QaFeedbackItem = {
 
 type QaQueueSummary = {
   open_count: number;
+  in_progress_count: number;
+  resolved_count: number;
+  dismissed_count: number;
+  unresolved_count: number;
   rules_feedback_count: number;
   models_feedback_count: number;
   features_feedback_count: number;
@@ -241,6 +245,22 @@ export function QAReviewPage() {
             <div>
               <dt>Open Feedback</dt>
               <dd>{queueSummaryQuery.data.open_count}</dd>
+            </div>
+            <div>
+              <dt>In Progress</dt>
+              <dd>{queueSummaryQuery.data.in_progress_count}</dd>
+            </div>
+            <div>
+              <dt>Resolved</dt>
+              <dd>{queueSummaryQuery.data.resolved_count}</dd>
+            </div>
+            <div>
+              <dt>Dismissed</dt>
+              <dd>{queueSummaryQuery.data.dismissed_count}</dd>
+            </div>
+            <div>
+              <dt>Unresolved</dt>
+              <dd>{queueSummaryQuery.data.unresolved_count}</dd>
             </div>
             <div>
               <dt>High Priority</dt>

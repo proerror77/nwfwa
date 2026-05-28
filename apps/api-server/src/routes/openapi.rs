@@ -3749,13 +3749,18 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardQaQueue": {
                     "type": "object",
-                    "required": ["sampled_cases", "open_cases", "reviewed_cases", "disagreement_cases", "disagreement_rate"],
+                    "required": ["sampled_cases", "open_cases", "reviewed_cases", "disagreement_cases", "disagreement_rate", "feedback_open_count", "feedback_in_progress_count", "feedback_resolved_count", "feedback_dismissed_count", "unresolved_feedback_count"],
                     "properties": {
                         "sampled_cases": { "type": "integer" },
                         "open_cases": { "type": "integer" },
                         "reviewed_cases": { "type": "integer" },
                         "disagreement_cases": { "type": "integer" },
-                        "disagreement_rate": { "type": "number" }
+                        "disagreement_rate": { "type": "number" },
+                        "feedback_open_count": { "type": "integer" },
+                        "feedback_in_progress_count": { "type": "integer" },
+                        "feedback_resolved_count": { "type": "integer" },
+                        "feedback_dismissed_count": { "type": "integer" },
+                        "unresolved_feedback_count": { "type": "integer" }
                     }
                 },
                 "DashboardCaseSla": {
@@ -4430,9 +4435,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "QaQueueSummaryResponse": {
                     "type": "object",
-                    "required": ["open_count", "rules_feedback_count", "models_feedback_count", "features_feedback_count", "provider_profile_feedback_count", "workflow_feedback_count", "tpa_feedback_count", "high_priority_count", "evidence_backed_count", "highest_priority"],
+                    "required": ["open_count", "in_progress_count", "resolved_count", "dismissed_count", "unresolved_count", "rules_feedback_count", "models_feedback_count", "features_feedback_count", "provider_profile_feedback_count", "workflow_feedback_count", "tpa_feedback_count", "high_priority_count", "evidence_backed_count", "highest_priority"],
                     "properties": {
                         "open_count": { "type": "integer" },
+                        "in_progress_count": { "type": "integer" },
+                        "resolved_count": { "type": "integer" },
+                        "dismissed_count": { "type": "integer" },
+                        "unresolved_count": { "type": "integer" },
                         "rules_feedback_count": { "type": "integer" },
                         "models_feedback_count": { "type": "integer" },
                         "features_feedback_count": { "type": "integer" },

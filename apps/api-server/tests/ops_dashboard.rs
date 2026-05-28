@@ -195,6 +195,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+
     assert_eq!(score["rag"], "Red");
 
     let (status, _) = json_request(
@@ -252,6 +253,23 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
           "feedback_target": "rules",
           "notes": "Reviewer should attach provider history evidence.",
           "evidence_refs": ["audit:investigation.result.received", "rule_runs:EARLY_CLAIM"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let feedback_id = format!("qa_feedback_{qa_case_id}");
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/qa/feedback-items/{feedback_id}/status"),
+        &format!(
+            r#"{{
+          "status": "in_progress",
+          "actor_id": "dashboard-qa-lead",
+          "notes": "Dashboard should show in-progress feedback as unresolved.",
+          "evidence_refs": ["qa_feedback:{feedback_id}"]
         }}"#
         ),
     )
@@ -330,6 +348,11 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["qa_queue"]["reviewed_cases"], 1);
     assert_eq!(dashboard["qa_queue"]["disagreement_cases"], 1);
     assert_eq!(dashboard["qa_queue"]["disagreement_rate"], 1.0);
+    assert_eq!(dashboard["qa_queue"]["feedback_open_count"], 0);
+    assert_eq!(dashboard["qa_queue"]["feedback_in_progress_count"], 1);
+    assert_eq!(dashboard["qa_queue"]["feedback_resolved_count"], 0);
+    assert_eq!(dashboard["qa_queue"]["feedback_dismissed_count"], 0);
+    assert_eq!(dashboard["qa_queue"]["unresolved_feedback_count"], 1);
     assert_eq!(dashboard["agent_governance"]["total_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["successful_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["pending_approvals"], 0);

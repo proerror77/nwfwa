@@ -101,6 +101,10 @@ pub struct QaQueueListResponse {
 #[derive(Debug, Serialize)]
 pub struct QaQueueSummaryResponse {
     pub open_count: u32,
+    pub in_progress_count: u32,
+    pub resolved_count: u32,
+    pub dismissed_count: u32,
+    pub unresolved_count: u32,
     pub rules_feedback_count: u32,
     pub models_feedback_count: u32,
     pub features_feedback_count: u32,
@@ -506,8 +510,22 @@ fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryRespo
         .iter()
         .filter(|item| item.status == "open")
         .collect::<Vec<_>>();
+    let in_progress_count = items
+        .iter()
+        .filter(|item| item.status == "in_progress")
+        .count() as u32;
     QaQueueSummaryResponse {
         open_count: open_items.len() as u32,
+        in_progress_count,
+        resolved_count: items
+            .iter()
+            .filter(|item| item.status == "resolved")
+            .count() as u32,
+        dismissed_count: items
+            .iter()
+            .filter(|item| item.status == "dismissed")
+            .count() as u32,
+        unresolved_count: open_items.len() as u32 + in_progress_count,
         rules_feedback_count: open_items
             .iter()
             .filter(|item| item.feedback_target == "rules")

@@ -81,6 +81,11 @@ describe("buildDashboardQaQueueSummary", () => {
       reviewed_cases: 5,
       disagreement_cases: 2,
       disagreement_rate: 0.4,
+      feedback_open_count: 3,
+      feedback_in_progress_count: 1,
+      feedback_resolved_count: 2,
+      feedback_dismissed_count: 1,
+      unresolved_feedback_count: 4,
     });
 
     expect(summary).toEqual({
@@ -88,6 +93,11 @@ describe("buildDashboardQaQueueSummary", () => {
       openCases: 3,
       reviewedCases: 5,
       disagreementCases: 2,
+      feedbackOpenCount: 3,
+      feedbackInProgressCount: 1,
+      feedbackResolvedCount: 2,
+      feedbackDismissedCount: 1,
+      unresolvedFeedbackCount: 4,
       reviewedRateLabel: "62.5%",
       disagreementRateLabel: "40.0%",
     });

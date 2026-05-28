@@ -843,6 +843,22 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "disagreement_rate")
     );
+    for field in [
+        "feedback_open_count",
+        "feedback_in_progress_count",
+        "feedback_resolved_count",
+        "feedback_dismissed_count",
+        "unresolved_feedback_count",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["DashboardQaQueue"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing dashboard QA queue field {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["qa_queue"]
             ["$ref"],
@@ -993,6 +1009,10 @@ async fn openapi_includes_operations_paths() {
             .any(|field| field == "evidence_backed_count")
     );
     for field in [
+        "in_progress_count",
+        "resolved_count",
+        "dismissed_count",
+        "unresolved_count",
         "features_feedback_count",
         "provider_profile_feedback_count",
         "workflow_feedback_count",

@@ -469,6 +469,11 @@ pub struct DashboardQaQueueRecord {
     pub reviewed_cases: u32,
     pub disagreement_cases: u32,
     pub disagreement_rate: f64,
+    pub feedback_open_count: u32,
+    pub feedback_in_progress_count: u32,
+    pub feedback_resolved_count: u32,
+    pub feedback_dismissed_count: u32,
+    pub unresolved_feedback_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2339,6 +2344,7 @@ impl ScoringRepository for InMemoryScoringRepository {
 
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
+        let qa_feedback_items = self.list_qa_feedback_items().await?;
         let cases = self.list_cases().await?;
         let agent_runs = self.list_agent_runs().await?;
         let models = self.list_models().await?;
@@ -2414,7 +2420,11 @@ impl ScoringRepository for InMemoryScoringRepository {
             saving_segments,
             value_measurement,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
-            qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
+            qa_queue: summarize_dashboard_qa_queue(
+                &audit_samples,
+                &qa_review_records,
+                &qa_feedback_items,
+            ),
             case_sla: summarize_dashboard_case_sla(&cases),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
@@ -5080,6 +5090,7 @@ impl ScoringRepository for PostgresScoringRepository {
         let outcome_labels = self.list_outcome_labels().await?;
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
+        let qa_feedback_items = self.list_qa_feedback_items().await?;
         let agent_runs = self.list_agent_runs().await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
@@ -5187,7 +5198,11 @@ impl ScoringRepository for PostgresScoringRepository {
                     .sum::<u32>(),
             ),
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
-            qa_queue: summarize_dashboard_qa_queue(&audit_samples, &qa_review_records),
+            qa_queue: summarize_dashboard_qa_queue(
+                &audit_samples,
+                &qa_review_records,
+                &qa_feedback_items,
+            ),
             case_sla: summarize_dashboard_case_sla(&self.list_cases().await?),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
@@ -7814,6 +7829,7 @@ fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLab
 fn summarize_dashboard_qa_queue(
     samples: &[AuditSampleRecord],
     reviews: &[QaReviewRecord],
+    feedback_items: &[QaFeedbackItemRecord],
 ) -> DashboardQaQueueRecord {
     let reviewed_case_ids = reviews
         .iter()
@@ -7849,6 +7865,8 @@ fn summarize_dashboard_qa_queue(
     } else {
         disagreement_cases as f64 / reviewed_cases as f64
     };
+    let feedback_open_count = count_feedback_status(feedback_items, "open");
+    let feedback_in_progress_count = count_feedback_status(feedback_items, "in_progress");
 
     DashboardQaQueueRecord {
         sampled_cases,
@@ -7856,7 +7874,16 @@ fn summarize_dashboard_qa_queue(
         reviewed_cases,
         disagreement_cases,
         disagreement_rate,
+        feedback_open_count,
+        feedback_in_progress_count,
+        feedback_resolved_count: count_feedback_status(feedback_items, "resolved"),
+        feedback_dismissed_count: count_feedback_status(feedback_items, "dismissed"),
+        unresolved_feedback_count: feedback_open_count + feedback_in_progress_count,
     }
+}
+
+fn count_feedback_status(items: &[QaFeedbackItemRecord], status: &str) -> u32 {
+    items.iter().filter(|item| item.status == status).count() as u32
 }
 
 fn summarize_dashboard_case_sla(cases: &[CaseRecord]) -> DashboardCaseSlaRecord {

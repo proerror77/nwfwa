@@ -36,6 +36,11 @@ type DashboardQaQueue = {
   reviewed_cases: number;
   disagreement_cases: number;
   disagreement_rate: number;
+  feedback_open_count?: number;
+  feedback_in_progress_count?: number;
+  feedback_resolved_count?: number;
+  feedback_dismissed_count?: number;
+  unresolved_feedback_count?: number;
 };
 
 type DashboardCaseSla = {
@@ -179,6 +184,11 @@ export function buildDashboardQaQueueSummary(queue?: DashboardQaQueue) {
     openCases: queue?.open_cases ?? 0,
     reviewedCases,
     disagreementCases: queue?.disagreement_cases ?? 0,
+    feedbackOpenCount: queue?.feedback_open_count ?? 0,
+    feedbackInProgressCount: queue?.feedback_in_progress_count ?? 0,
+    feedbackResolvedCount: queue?.feedback_resolved_count ?? 0,
+    feedbackDismissedCount: queue?.feedback_dismissed_count ?? 0,
+    unresolvedFeedbackCount: queue?.unresolved_feedback_count ?? 0,
     reviewedRateLabel:
       sampledCases === 0 ? "0.0%" : formatPercent(reviewedCases / sampledCases),
     disagreementRateLabel: formatPercent(queue?.disagreement_rate ?? 0),
@@ -602,6 +612,26 @@ export function DashboardPage() {
             <div className="metric-row compact-metric-row">
               <span>Disagreement Cases</span>
               <strong>{qaQueueSummary.disagreementCases}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Unresolved Feedback</span>
+              <strong>{qaQueueSummary.unresolvedFeedbackCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Feedback Open</span>
+              <strong>{qaQueueSummary.feedbackOpenCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Feedback In Progress</span>
+              <strong>{qaQueueSummary.feedbackInProgressCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Feedback Resolved</span>
+              <strong>{qaQueueSummary.feedbackResolvedCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Feedback Dismissed</span>
+              <strong>{qaQueueSummary.feedbackDismissedCount}</strong>
             </div>
           </div>
         </div>
