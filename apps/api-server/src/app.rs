@@ -91,6 +91,7 @@ pub fn build_app_with_parts(
             "/api/v1/ops/qa/feedback-items",
             get(pilot_loop::list_qa_feedback_items),
         )
+        .route("/api/v1/ops/qa/queue", get(pilot_loop::list_qa_queue))
         .route(
             "/api/v1/ops/qa/queue-summary",
             get(pilot_loop::qa_queue_summary),

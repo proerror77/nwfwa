@@ -213,6 +213,89 @@ async fn summarizes_qa_feedback_queue_for_review_operations() {
 }
 
 #[tokio::test]
+async fn lists_qa_queue_items_from_audit_samples() {
+    let app = build_app(test_config());
+
+    let (status, score) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-QA-QUEUE-ITEM",
+            "claim_amount": "9300.00",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "IMG-QA-1",
+              "item_type": "procedure",
+              "description": "Imaging",
+              "quantity": 1,
+              "unit_amount": "9300.00",
+              "total_amount": "9300.00"
+            }
+          ],
+          "member": { "external_member_id": "MBR-QA-QUEUE-ITEM" },
+          "policy": {
+            "external_policy_id": "POL-QA-QUEUE-ITEM",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000.00",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-QA-QUEUE-ITEM",
+            "name": "QA Queue Hospital",
+            "provider_type": "hospital",
+            "region": "Shanghai",
+            "risk_tier": "High"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, sample) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "qa_calibration",
+          "population_definition": "High risk claims for QA queue",
+          "inclusion_criteria": { "min_risk_score": 70 },
+          "deterministic_seed": "qa-week-1",
+          "sample_size": 1,
+          "reviewer": "qa-reviewer-1",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, queue) = json_request(app, "GET", "/api/v1/ops/qa/queue", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let items = queue["items"].as_array().unwrap();
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0]["claim_id"], "CLM-QA-QUEUE-ITEM");
+    assert_eq!(items[0]["sample_id"], sample["sample_id"]);
+    assert_eq!(items[0]["risk_score"], score["risk_score"]);
+    assert_eq!(items[0]["assignment_queue"], "QA Review");
+    assert_eq!(items[0]["reviewer"], "qa-reviewer-1");
+    assert_eq!(items[0]["status"], "open");
+    assert!(items[0]["qa_case_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("qa_sample_"));
+    assert!(!items[0]["evidence_refs"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     let app = build_app(test_config());
 

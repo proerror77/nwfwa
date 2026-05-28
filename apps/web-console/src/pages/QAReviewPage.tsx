@@ -1,14 +1,19 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listQaFeedbackItems, listQaQueueSummary, submitQaResult } from "../api";
+import { listQaFeedbackItems, listQaQueue, listQaQueueSummary, submitQaResult } from "../api";
 
 type QaQueueItem = {
   qa_case_id: string;
+  sample_id: string;
+  lead_id: string;
   claim_id: string;
+  scheme_family: string;
   rag: string;
   risk_score: number;
-  alert: string;
-  amount: string;
+  reviewer: string;
+  assignment_queue: string;
+  status: string;
+  evidence_refs: string[];
 };
 
 type QaFeedbackItem = {
@@ -34,31 +39,24 @@ type QaQueueSummary = {
   highest_priority: string;
 };
 
-const demoQueue: QaQueueItem[] = [
-  {
-    qa_case_id: "QA-9001",
-    claim_id: "CLM-0287",
-    rag: "Red",
-    risk_score: 87,
-    alert: "EARLY_CLAIM",
-    amount: "CNY 8000",
-  },
-  {
-    qa_case_id: "QA-9100",
-    claim_id: "CLM-9100",
-    rag: "Red",
-    risk_score: 82,
-    alert: "HIGH_AMOUNT_TO_LIMIT",
-    amount: "CNY 12600",
-  },
-];
+type QaQueueListResponse = {
+  items: QaQueueItem[];
+};
+
+export function selectQaQueueItem(queue: QaQueueItem[], selectedCaseId: string) {
+  return queue.find((item) => item.qa_case_id === selectedCaseId) ?? queue[0] ?? null;
+}
 
 export function QAReviewPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
-  const [selectedCaseId, setSelectedCaseId] = useState(demoQueue[0].qa_case_id);
+  const [selectedCaseId, setSelectedCaseId] = useState("");
+  const queueQuery = useQuery({
+    queryKey: ["qa-queue", apiKey],
+    queryFn: () => listQaQueue(apiKey) as Promise<QaQueueListResponse>,
+  });
   const selectedCase = useMemo(
-    () => demoQueue.find((item) => item.qa_case_id === selectedCaseId) ?? demoQueue[0],
-    [selectedCaseId],
+    () => selectQaQueueItem(queueQuery.data?.items ?? [], selectedCaseId),
+    [queueQuery.data?.items, selectedCaseId],
   );
   const [qaConclusion, setQaConclusion] = useState("issue_found_escalate");
   const [issueType, setIssueType] = useState("alert_handling_incomplete");
@@ -78,8 +76,11 @@ export function QAReviewPage() {
   });
 
   const submitMutation = useMutation({
-    mutationFn: () =>
-      submitQaResult(
+    mutationFn: () => {
+      if (!selectedCase) {
+        throw new Error("No QA queue item selected");
+      }
+      return submitQaResult(
         {
           qa_case_id: selectedCase.qa_case_id,
           claim_id: selectedCase.claim_id,
@@ -93,8 +94,10 @@ export function QAReviewPage() {
             .filter(Boolean),
         },
         apiKey,
-      ),
+      );
+    },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["qa-queue"] });
       queryClient.invalidateQueries({ queryKey: ["qa-feedback-items"] });
       queryClient.invalidateQueries({ queryKey: ["qa-queue-summary"] });
     },
@@ -108,20 +111,24 @@ export function QAReviewPage() {
           API Key
           <input value={apiKey} onChange={(event) => setApiKey(event.target.value)} />
         </label>
+        {queueQuery.error ? <pre className="error">{String(queueQuery.error.message)}</pre> : null}
         <div className="table-list">
-          {demoQueue.map((item) => (
+          {queueQuery.data?.items.map((item) => (
             <button
-              className={item.qa_case_id === selectedCase.qa_case_id ? "row-button active" : "row-button"}
+              className={
+                item.qa_case_id === selectedCase?.qa_case_id ? "row-button active" : "row-button"
+              }
               key={item.qa_case_id}
               onClick={() => setSelectedCaseId(item.qa_case_id)}
             >
               <span>{item.claim_id}</span>
               <strong>{item.rag}</strong>
-              <small>{item.alert}</small>
-              <small>{item.amount}</small>
+              <small>{item.scheme_family}</small>
+              <small>{item.assignment_queue}</small>
             </button>
           ))}
         </div>
+        {queueQuery.data?.items.length === 0 ? <p className="empty">No QA queue items</p> : null}
         {queueSummaryQuery.error ? (
           <pre className="error">{String(queueSummaryQuery.error.message)}</pre>
         ) : null}
@@ -161,24 +168,36 @@ export function QAReviewPage() {
 
       <div className="panel">
         <h2>Review Detail</h2>
-        <dl className="result-grid">
-          <div>
-            <dt>QA Case</dt>
-            <dd>{selectedCase.qa_case_id}</dd>
-          </div>
-          <div>
-            <dt>Claim</dt>
-            <dd>{selectedCase.claim_id}</dd>
-          </div>
-          <div>
-            <dt>Risk</dt>
-            <dd>{selectedCase.risk_score}</dd>
-          </div>
-          <div>
-            <dt>Alert</dt>
-            <dd>{selectedCase.alert}</dd>
-          </div>
-        </dl>
+        {selectedCase ? (
+          <dl className="result-grid">
+            <div>
+              <dt>QA Case</dt>
+              <dd>{selectedCase.qa_case_id}</dd>
+            </div>
+            <div>
+              <dt>Claim</dt>
+              <dd>{selectedCase.claim_id}</dd>
+            </div>
+            <div>
+              <dt>Risk</dt>
+              <dd>{selectedCase.risk_score}</dd>
+            </div>
+            <div>
+              <dt>Scheme</dt>
+              <dd>{selectedCase.scheme_family}</dd>
+            </div>
+            <div>
+              <dt>Reviewer</dt>
+              <dd>{selectedCase.reviewer}</dd>
+            </div>
+            <div>
+              <dt>Evidence</dt>
+              <dd>{selectedCase.evidence_refs.length}</dd>
+            </div>
+          </dl>
+        ) : (
+          <p className="empty">No QA queue item selected</p>
+        )}
 
         <div className="form-grid">
           <label>
@@ -215,7 +234,7 @@ export function QAReviewPage() {
           Evidence Refs
           <textarea value={evidenceRefs} onChange={(event) => setEvidenceRefs(event.target.value)} />
         </label>
-        <button onClick={() => submitMutation.mutate()} type="button">
+        <button disabled={!selectedCase} onClick={() => submitMutation.mutate()} type="button">
           Submit QA Result
         </button>
 

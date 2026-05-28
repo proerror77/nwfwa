@@ -2,8 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        InvestigationResultRecord, MemberProfileSummaryRecord, OutcomeLabelRecord,
-        QaFeedbackItemRecord, QaReviewRecord,
+        AuditSampleLeadRecord, AuditSampleRecord, InvestigationResultRecord,
+        MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord, QaReviewRecord,
     },
 };
 use axum::{
@@ -33,6 +33,26 @@ pub struct ClaimAuditHistoryResponse {
 #[derive(Debug, Serialize)]
 pub struct QaFeedbackItemListResponse {
     pub items: Vec<QaFeedbackItemRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct QaQueueItemResponse {
+    pub qa_case_id: String,
+    pub sample_id: String,
+    pub lead_id: String,
+    pub claim_id: String,
+    pub scheme_family: String,
+    pub rag: String,
+    pub risk_score: u8,
+    pub reviewer: String,
+    pub assignment_queue: String,
+    pub status: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct QaQueueListResponse {
+    pub items: Vec<QaQueueItemResponse>,
 }
 
 #[derive(Debug, Serialize)]
@@ -129,6 +149,21 @@ pub async fn list_qa_feedback_items(
     Ok(Json(QaFeedbackItemListResponse { items }))
 }
 
+pub async fn list_qa_queue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<QaQueueListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let samples = state
+        .repository
+        .list_audit_samples()
+        .await
+        .map_err(internal_error("AUDIT_SAMPLE_LIST_FAILED"))?;
+    Ok(Json(QaQueueListResponse {
+        items: build_qa_queue_items(&samples),
+    }))
+}
+
 pub async fn qa_queue_summary(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -167,6 +202,44 @@ pub async fn claim_audit_history(
         .await
         .map_err(internal_error("CLAIM_AUDIT_HISTORY_FAILED"))?;
     Ok(Json(ClaimAuditHistoryResponse { claim_id, events }))
+}
+
+fn build_qa_queue_items(samples: &[AuditSampleRecord]) -> Vec<QaQueueItemResponse> {
+    let mut items = samples
+        .iter()
+        .flat_map(|sample| {
+            sample
+                .selected_leads
+                .iter()
+                .map(|lead| qa_queue_item_from_sample(sample, lead))
+        })
+        .collect::<Vec<_>>();
+    items.sort_by(|left, right| {
+        right
+            .risk_score
+            .cmp(&left.risk_score)
+            .then_with(|| left.qa_case_id.cmp(&right.qa_case_id))
+    });
+    items
+}
+
+fn qa_queue_item_from_sample(
+    sample: &AuditSampleRecord,
+    lead: &AuditSampleLeadRecord,
+) -> QaQueueItemResponse {
+    QaQueueItemResponse {
+        qa_case_id: format!("qa_{}_{}", sample.sample_id, lead.lead_id),
+        sample_id: sample.sample_id.clone(),
+        lead_id: lead.lead_id.clone(),
+        claim_id: lead.claim_id.clone(),
+        scheme_family: lead.scheme_family.clone(),
+        rag: lead.rag.clone(),
+        risk_score: lead.risk_score,
+        reviewer: sample.reviewer.clone(),
+        assignment_queue: sample.assignment_queue.clone(),
+        status: "open".into(),
+        evidence_refs: lead.evidence_refs.clone(),
+    }
 }
 
 fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryResponse {

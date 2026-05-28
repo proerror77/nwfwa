@@ -995,6 +995,22 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/qa/queue": {
+                "get": {
+                    "summary": "List QA review queue items from audit samples",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "QA queue items selected by audit sampling",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/QaQueueListResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/qa/queue-summary": {
                 "get": {
                     "summary": "Summarize the open QA feedback queue",
@@ -2751,6 +2767,33 @@ pub async fn openapi_schema() -> Json<Value> {
                         "items": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/QaFeedbackItem" }
+                        }
+                    }
+                },
+                "QaQueueItem": {
+                    "type": "object",
+                    "required": ["qa_case_id", "sample_id", "lead_id", "claim_id", "scheme_family", "rag", "risk_score", "reviewer", "assignment_queue", "status", "evidence_refs"],
+                    "properties": {
+                        "qa_case_id": { "type": "string" },
+                        "sample_id": { "type": "string" },
+                        "lead_id": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "scheme_family": { "type": "string" },
+                        "rag": { "type": "string" },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "reviewer": { "type": "string" },
+                        "assignment_queue": { "type": "string" },
+                        "status": { "type": "string", "enum": ["open"] },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "QaQueueListResponse": {
+                    "type": "object",
+                    "required": ["items"],
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/QaQueueItem" }
                         }
                     }
                 },

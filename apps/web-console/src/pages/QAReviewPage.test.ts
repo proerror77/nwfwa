@@ -1,0 +1,39 @@
+import { describe, expect, it } from "vitest";
+import { selectQaQueueItem } from "./QAReviewPage";
+
+describe("QAReviewPage helpers", () => {
+  it("selects the requested QA queue item or falls back to the first real queue item", () => {
+    const queue = [
+      {
+        qa_case_id: "qa_sample_1_lead_1",
+        sample_id: "sample_1",
+        lead_id: "lead_1",
+        claim_id: "CLM-1",
+        scheme_family: "provider_peer_outlier",
+        rag: "RED",
+        risk_score: 82,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        status: "open",
+        evidence_refs: ["audit:scoring.completed"],
+      },
+      {
+        qa_case_id: "qa_sample_1_lead_2",
+        sample_id: "sample_1",
+        lead_id: "lead_2",
+        claim_id: "CLM-2",
+        scheme_family: "medical_necessity",
+        rag: "RED",
+        risk_score: 91,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        status: "open",
+        evidence_refs: ["audit:scoring.completed"],
+      },
+    ];
+
+    expect(selectQaQueueItem(queue, "qa_sample_1_lead_2")?.claim_id).toBe("CLM-2");
+    expect(selectQaQueueItem(queue, "missing")?.claim_id).toBe("CLM-1");
+    expect(selectQaQueueItem([], "missing")).toBeNull();
+  });
+});

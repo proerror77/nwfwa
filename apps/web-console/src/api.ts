@@ -227,6 +227,10 @@ export async function listQaFeedbackItems(apiKey: string) {
   return requestJson("/api/v1/ops/qa/feedback-items", apiKey);
 }
 
+export async function listQaQueue(apiKey: string) {
+  return requestJson("/api/v1/ops/qa/queue", apiKey);
+}
+
 export async function listQaQueueSummary(apiKey: string) {
   return requestJson("/api/v1/ops/qa/queue-summary", apiKey);
 }

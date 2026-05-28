@@ -62,6 +62,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/investigations/results",
         "/api/v1/qa/results",
         "/api/v1/ops/qa/feedback-items",
+        "/api/v1/ops/qa/queue",
         "/api/v1/ops/qa/queue-summary",
         "/api/v1/ops/labels",
         "/api/v1/audit/claims/{claim_id}",
@@ -200,6 +201,12 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["paths"]["/api/v1/members/{member_id}/profile-summary"]["get"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabel"].is_object());
     assert!(schema["components"]["schemas"]["OutcomeLabelListResponse"].is_object());
+    assert!(schema["components"]["schemas"]["QaQueueListResponse"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["QaQueueListResponse"]["properties"]["items"]["items"]
+            ["$ref"],
+        "#/components/schemas/QaQueueItem"
+    );
     assert!(schema["components"]["schemas"]["QaQueueSummaryResponse"].is_object());
     assert!(
         schema["components"]["schemas"]["QaQueueSummaryResponse"]["required"]
