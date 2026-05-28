@@ -2,8 +2,11 @@ import { describe, expect, it } from "vitest";
 import {
   buildApiFactorCards,
   buildFactorCards,
+  buildFactorOwnerOptions,
   buildFactorReadinessSummary,
+  filterFactorCards,
 } from "./FactorFactoryPage";
+import type { FactorCard } from "./FactorFactoryPage";
 
 describe("buildFactorCards", () => {
   it("derives factor cards from profiled dataset fields", () => {
@@ -241,5 +244,72 @@ describe("buildFactorReadinessSummary", () => {
       reviewQueueCount: 7,
       onlineReadyRateLabel: "58.3%",
     });
+  });
+});
+
+describe("filterFactorCards", () => {
+  function factorCard(overrides: Partial<FactorCard>): FactorCard {
+    return {
+      factor_name: "claim_amount_to_limit_ratio",
+      display_label: "Claim amount ratio",
+      semantic_role: "feature",
+      logical_type: "decimal",
+      description: "Claim amount divided by policy limit.",
+      business_meaning: "Claim amount pressure.",
+      risk_direction: "higher_is_riskier",
+      calculation_window: "claim",
+      calculation_logic: "claim_amount / policy_limit",
+      source_table: "claims",
+      source_fields: ["claim_amount", "policy_limit"],
+      source_lineage_label: "claims.claim_amount,policy_limit",
+      owner: "feature-ops",
+      version: "v1",
+      missing_rate_label: "2.0%",
+      iv_label: "0.210",
+      auc_gain_label: "0.030",
+      lift_label: "2.40x",
+      stability_label: "stable",
+      model_contribution_label: "18.0%",
+      online_status: "ready",
+      online_available: true,
+      convertible_to_rule: true,
+      readiness_issues: [],
+      is_label: false,
+      is_entity_key: false,
+      top_values: [],
+      ...overrides,
+    };
+  }
+
+  it("builds sorted owner options from factor cards", () => {
+    const cards = [
+      factorCard({ owner: "model-ops" }),
+      factorCard({ owner: "feature-ops" }),
+      factorCard({ owner: "model-ops" }),
+    ];
+
+    expect(buildFactorOwnerOptions(cards)).toEqual(["feature-ops", "model-ops"]);
+  });
+
+  it("filters factor cards by readiness and owner", () => {
+    const cards = [
+      factorCard({ factor_name: "ready_feature", owner: "feature-ops", online_status: "ready" }),
+      factorCard({
+        factor_name: "review_feature",
+        owner: "feature-ops",
+        online_status: "review",
+      }),
+      factorCard({ factor_name: "model_feature", owner: "model-ops", online_status: "ready" }),
+    ];
+
+    expect(filterFactorCards(cards, "ready", "feature-ops").map((card) => card.factor_name)).toEqual([
+      "ready_feature",
+    ]);
+    expect(filterFactorCards(cards, "all", "model-ops").map((card) => card.factor_name)).toEqual([
+      "model_feature",
+    ]);
+    expect(filterFactorCards(cards, "review", "all").map((card) => card.factor_name)).toEqual([
+      "review_feature",
+    ]);
   });
 });

@@ -124,6 +124,8 @@ export type FactorCard = {
   top_values: string[];
 };
 
+export type FactorReadinessFilter = "all" | "ready" | "review";
+
 export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
   const factorCount = readiness?.factor_count ?? 0;
   const onlineReadyCount = readiness?.online_ready_count ?? 0;
@@ -148,6 +150,28 @@ export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
     onlineReadyRateLabel:
       factorCount === 0 ? "0.0%" : `${((onlineReadyCount / factorCount) * 100).toFixed(1)}%`,
   };
+}
+
+export function buildFactorOwnerOptions(cards: FactorCard[]) {
+  return [...new Set(cards.map((card) => card.owner))].sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
+export function filterFactorCards(
+  cards: FactorCard[],
+  readinessFilter: FactorReadinessFilter,
+  ownerFilter: string,
+) {
+  return cards.filter((card) => {
+    if (readinessFilter !== "all" && card.online_status !== readinessFilter) {
+      return false;
+    }
+    if (ownerFilter !== "all" && card.owner !== ownerFilter) {
+      return false;
+    }
+    return true;
+  });
 }
 
 export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
@@ -278,6 +302,8 @@ function titleize(value: string) {
 export function FactorFactoryPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
+  const [readinessFilter, setReadinessFilter] = useState<FactorReadinessFilter>("all");
+  const [ownerFilter, setOwnerFilter] = useState("all");
   const datasetsQuery = useQuery({
     queryKey: ["factor-datasets", apiKey],
     queryFn: () => listDatasets(apiKey) as Promise<{ datasets: DatasetForFactors[] }>,
@@ -303,6 +329,11 @@ export function FactorFactoryPage() {
         ? buildFactorCards(selectedDataset)
         : [];
   }, [readinessQuery.data?.factor_cards, selectedDataset]);
+  const factorOwnerOptions = useMemo(() => buildFactorOwnerOptions(factorCards), [factorCards]);
+  const filteredFactorCards = useMemo(
+    () => filterFactorCards(factorCards, readinessFilter, ownerFilter),
+    [factorCards, ownerFilter, readinessFilter],
+  );
   const readinessSummary = buildFactorReadinessSummary(readinessQuery.data);
 
   return (
@@ -390,8 +421,38 @@ export function FactorFactoryPage() {
 
       <div className="panel">
         <h2>Factor Cards</h2>
+        <div className="form-grid">
+          <label>
+            Readiness
+            <select
+              value={readinessFilter}
+              onChange={(event) => setReadinessFilter(event.target.value as FactorReadinessFilter)}
+            >
+              <option value="all">All readiness</option>
+              <option value="ready">Ready</option>
+              <option value="review">Review</option>
+            </select>
+          </label>
+          <label>
+            Owner
+            <select value={ownerFilter} onChange={(event) => setOwnerFilter(event.target.value)}>
+              <option value="all">All owners</option>
+              {factorOwnerOptions.map((owner) => (
+                <option key={owner} value={owner}>
+                  {owner}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="metric-row compact-metric-row">
+            <span>Showing</span>
+            <strong>
+              {filteredFactorCards.length}/{factorCards.length}
+            </strong>
+          </div>
+        </div>
         <div className="factor-card-grid">
-          {factorCards.map((factor) => (
+          {filteredFactorCards.map((factor) => (
             <article className="factor-card" key={factor.factor_name}>
               <div>
                 <strong>{factor.display_label}</strong>
@@ -467,6 +528,9 @@ export function FactorFactoryPage() {
         </div>
         {!datasetsQuery.isLoading && factorCards.length === 0 ? (
           <p className="empty">No factor cards available</p>
+        ) : null}
+        {!datasetsQuery.isLoading && factorCards.length > 0 && filteredFactorCards.length === 0 ? (
+          <p className="empty">No factor cards match the current filters</p>
         ) : null}
       </div>
     </section>
