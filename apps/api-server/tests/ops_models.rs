@@ -189,6 +189,135 @@ async fn register_model_dataset_for_test_with_profiles(
         .to_string()
 }
 
+async fn register_activation_candidate(app: axum::Router) -> String {
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "activation").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_activation_base",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_activation/v1/feature_importance.parquet",
+              "metrics_json": {{"score_psi": 0.31}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-ACTIVATION-LABEL-1",
+          "investigation_id": "INV-ACTIVATION-LABEL-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA label ready for model activation.",
+          "evidence_refs": ["investigation_results:INV-ACTIVATION-LABEL-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, created) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+        r#"{
+          "requested_by": "model-ops",
+          "notes": "Queue retraining for activation candidate."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let job_id = created["job_id"].as_str().unwrap();
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/claim-next",
+        r#"{
+          "actor": "trainer-worker",
+          "model_key": "baseline_fwa",
+          "notes": "Training worker picked up the activation job."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
+        r#"{
+          "status": "validation",
+          "actor": "trainer-worker",
+          "notes": "Validation metrics are ready."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let candidate_version = "0.2.0-activation";
+    let (status, completed) = json_request(
+        app,
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
+        &format!(
+            r#"{{
+              "actor": "trainer-worker",
+              "notes": "Candidate model and validation report registered.",
+              "candidate_model_version": "{candidate_version}",
+              "artifact_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/model.onnx",
+              "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/{candidate_version}",
+              "validation_report_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/validation.json",
+              "evaluation_run_id": "eval_baseline_activation_candidate",
+              "auc": "0.86",
+              "ks": "0.48",
+              "precision": "0.78",
+              "recall": "0.71",
+              "f1": "0.74",
+              "accuracy": "0.79",
+              "threshold": "0.52",
+              "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
+              "feature_importance_uri": "data/eval/claims_model_eval_activation_candidate/v1/feature_importance.parquet",
+              "metrics_json": {{
+                "score_psi": 0.04,
+                "out_of_time_auc": 0.84,
+                "review_capacity_threshold_status": "passed",
+                "leakage_check_status": "passed",
+                "shadow_comparison_status": "passed",
+                "feature_reproducibility_hash": "sha256:activation-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "qa_review"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(completed["candidate_model"]["version"], candidate_version);
+
+    candidate_version.to_string()
+}
+
 #[tokio::test]
 async fn lists_baseline_model_versions() {
     let app = build_app(test_config());
@@ -1019,6 +1148,81 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
         .unwrap();
     assert_eq!(approval_gate["passed"], true);
     assert_eq!(approval_gate["evidence_source"], "approval");
+}
+
+#[tokio::test]
+async fn blocks_model_activation_when_promotion_gates_are_blocked() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "MODEL_PROMOTION_GATES_BLOCKED");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("approval missing"));
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains(&candidate_version));
+}
+
+#[tokio::test]
+async fn activates_candidate_model_after_promotion_gates_pass() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
+          "notes": "Approved candidate for production activation."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(review["model_version"], candidate_version);
+
+    let (status, activated) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(activated["model_key"], "baseline_fwa");
+    assert_eq!(activated["version"], candidate_version);
+    assert_eq!(activated["status"], "active");
+
+    let (status, models) = get_json(app.clone(), "/api/v1/ops/models").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(models["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|model| model["version"] == candidate_version && model["status"] == "active"));
+    assert!(models["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|model| model["version"] == "0.1.0" && model["status"] == "approved"));
+
+    let (status, gates) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(gates["decision"], "routing_allowed");
+    assert!(gates["blockers"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]

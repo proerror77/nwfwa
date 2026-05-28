@@ -181,66 +181,8 @@ pub async fn model_promotion_gates(
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelPromotionGatesResponse>, ApiError> {
     authorize(&state, &headers)?;
-    let model = state
-        .repository
-        .list_models()
-        .await
-        .map_err(internal_error("MODEL_LIST_FAILED"))?
-        .into_iter()
-        .find(|model| model.model_key == model_key)
-        .ok_or_else(|| {
-            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
-        })?;
-    let performance = state
-        .repository
-        .model_performance(&model_key)
-        .await
-        .map_err(internal_error("MODEL_PERFORMANCE_FAILED"))?
-        .unwrap_or_else(|| ModelPerformanceRecord {
-            model_key: model_key.to_string(),
-            data_status: "unknown".into(),
-            scored_runs: 0,
-            average_score: 0.0,
-            high_risk_count: 0,
-            score_psi: None,
-            drift_status: "not_available".into(),
-            latest_scored_at: None,
-        });
-    let evaluations = state
-        .repository
-        .list_model_evaluations()
-        .await
-        .map_err(internal_error("MODEL_EVALUATION_LIST_FAILED"))?;
-    let latest_evaluation = evaluations.iter().find(|evaluation| {
-        evaluation.model_key == model.model_key && evaluation.model_version == model.version
-    });
-    let source_dataset = match latest_evaluation {
-        Some(evaluation) => state
-            .repository
-            .get_model_dataset_source_dataset(&evaluation.model_dataset_id)
-            .await
-            .map_err(internal_error("MODEL_DATASET_LINEAGE_FAILED"))?,
-        None => None,
-    };
-    let latest_review = state
-        .repository
-        .latest_model_promotion_review(&model.model_key, &model.version)
-        .await
-        .map_err(internal_error("MODEL_PROMOTION_REVIEW_LOAD_FAILED"))?;
-    let outcome_labels = state
-        .repository
-        .list_outcome_labels()
-        .await
-        .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
-
-    Ok(Json(build_model_promotion_gates(
-        &model,
-        &performance,
-        &evaluations,
-        &outcome_labels,
-        latest_review.as_ref(),
-        source_dataset.as_ref(),
-    )))
+    let (_, gates) = load_model_promotion_gates(&state, &model_key).await?;
+    Ok(Json(gates))
 }
 
 pub async fn model_retraining_readiness(
@@ -711,6 +653,78 @@ pub async fn submit_model_promotion_review(
     Ok(Json(review))
 }
 
+pub async fn activate_model(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+) -> Result<Json<ModelLifecycleResponse>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    let (candidate, gates) = load_model_promotion_gates(&state, &model_key).await?;
+    if candidate.status == "active" {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "MODEL_ALREADY_ACTIVE",
+            "latest model version is already active",
+        ));
+    }
+
+    let blockers = activation_blockers(&gates);
+    if !blockers.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "MODEL_PROMOTION_GATES_BLOCKED",
+            format!(
+                "model {}:{} promotion gates blocked: {}",
+                candidate.model_key,
+                candidate.version,
+                blockers.join(", ")
+            ),
+        ));
+    }
+
+    let models = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?;
+    for model in models {
+        if model.model_key == candidate.model_key
+            && model.version != candidate.version
+            && model.status == "active"
+        {
+            state
+                .repository
+                .update_model_status(&model.model_key, &model.version, "approved")
+                .await
+                .map_err(internal_error("MODEL_STATUS_UPDATE_FAILED"))?;
+        }
+    }
+
+    let activated = state
+        .repository
+        .update_model_status(&candidate.model_key, &candidate.version, "active")
+        .await
+        .map_err(internal_error("MODEL_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    record_model_lifecycle_audit(
+        &state,
+        &actor,
+        &activated,
+        "model.activation.completed",
+        Some(&candidate.status),
+        "Model activation completed",
+    )
+    .await
+    .map_err(internal_error("MODEL_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(ModelLifecycleResponse {
+        model_key: activated.model_key,
+        version: activated.version,
+        status: activated.status,
+    }))
+}
+
 pub async fn rollback_model(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -757,6 +771,81 @@ pub async fn rollback_model(
         version: model.version,
         status: model.status,
     }))
+}
+
+async fn load_model_promotion_gates(
+    state: &AppState,
+    model_key: &str,
+) -> Result<(ModelVersionRecord, ModelPromotionGatesResponse), ApiError> {
+    let model = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == model_key)
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    let performance = state
+        .repository
+        .model_performance(model_key)
+        .await
+        .map_err(internal_error("MODEL_PERFORMANCE_FAILED"))?
+        .unwrap_or_else(|| ModelPerformanceRecord {
+            model_key: model_key.to_string(),
+            data_status: "unknown".into(),
+            scored_runs: 0,
+            average_score: 0.0,
+            high_risk_count: 0,
+            score_psi: None,
+            drift_status: "not_available".into(),
+            latest_scored_at: None,
+        });
+    let evaluations = state
+        .repository
+        .list_model_evaluations()
+        .await
+        .map_err(internal_error("MODEL_EVALUATION_LIST_FAILED"))?;
+    let latest_evaluation = evaluations.iter().find(|evaluation| {
+        evaluation.model_key == model.model_key && evaluation.model_version == model.version
+    });
+    let source_dataset = match latest_evaluation {
+        Some(evaluation) => state
+            .repository
+            .get_model_dataset_source_dataset(&evaluation.model_dataset_id)
+            .await
+            .map_err(internal_error("MODEL_DATASET_LINEAGE_FAILED"))?,
+        None => None,
+    };
+    let latest_review = state
+        .repository
+        .latest_model_promotion_review(&model.model_key, &model.version)
+        .await
+        .map_err(internal_error("MODEL_PROMOTION_REVIEW_LOAD_FAILED"))?;
+    let outcome_labels = state
+        .repository
+        .list_outcome_labels()
+        .await
+        .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
+    let gates = build_model_promotion_gates(
+        &model,
+        &performance,
+        &evaluations,
+        &outcome_labels,
+        latest_review.as_ref(),
+        source_dataset.as_ref(),
+    );
+    Ok((model, gates))
+}
+
+fn activation_blockers(gates: &ModelPromotionGatesResponse) -> Vec<String> {
+    gates
+        .gates
+        .iter()
+        .filter(|gate| gate.label != "Active version" && !gate.passed)
+        .map(|gate| gate.blocker.clone())
+        .collect()
 }
 
 fn build_model_promotion_gates(

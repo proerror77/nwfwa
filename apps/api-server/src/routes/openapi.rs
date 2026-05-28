@@ -1099,6 +1099,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/activate": {
+                "post": {
+                    "summary": "Activate the latest governed model version for production routing",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Model lifecycle status after activation",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelLifecycleResponse" }
+                                }
+                            }
+                        },
+                        "409": {
+                            "description": "Model activation is blocked by governance gates",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/rollback": {
                 "post": {
                     "summary": "Roll back an active model to approved status",

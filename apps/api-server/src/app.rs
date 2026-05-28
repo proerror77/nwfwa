@@ -204,6 +204,10 @@ pub fn build_app_with_parts(
             post(ops_models::submit_model_promotion_review),
         )
         .route(
+            "/api/v1/ops/models/:model_key/activate",
+            post(ops_models::activate_model),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/rollback",
             post(ops_models::rollback_model),
         )

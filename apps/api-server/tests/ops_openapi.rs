@@ -47,6 +47,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/model-retraining-jobs/claim-next",
         "/api/v1/ops/model-retraining-jobs/{job_id}/output",
         "/api/v1/ops/models/{model_key}/promotion-reviews",
+        "/api/v1/ops/models/{model_key}/activate",
         "/api/v1/ops/models/{model_key}/rollback",
         "/api/v1/ops/datasets",
         "/api/v1/ops/datasets/{dataset_id}",
@@ -211,6 +212,11 @@ async fn openapi_includes_operations_paths() {
     assert_eq!(
         schema["components"]["schemas"]["ModelVersion"]["properties"]["review_mode"]["enum"][2],
         "both"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/models/{model_key}/activate"]["post"]["responses"]["200"]
+            ["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ModelLifecycleResponse"
     );
     assert_eq!(
         schema["paths"]["/api/v1/ops/models/{model_key}/rollback"]["post"]["responses"]["200"]
