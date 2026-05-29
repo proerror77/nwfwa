@@ -808,6 +808,107 @@ def assert_factor_factory_readiness():
     }
 
 
+def assert_dataset_model_lineage():
+    datasets = request("GET", "/api/v1/ops/datasets")
+    dataset = next(
+        (
+            item
+            for item in datasets.get("datasets", [])
+            if item.get("dataset_key") == "demo_claims_fwa"
+            and item.get("dataset_version") == "2026-05-demo"
+        ),
+        None,
+    )
+    assert_true(dataset is not None, "demo_claims_fwa dataset is missing")
+    assert_true(dataset.get("sample_grain") == "claim", "demo dataset sample grain mismatch")
+    assert_true(dataset.get("label_column") == "confirmed_fwa", "demo dataset label mismatch")
+    assert_true(dataset.get("storage_format") == "parquet", "demo dataset storage format mismatch")
+    assert_true(dataset.get("row_count") == 25000, "demo dataset row count mismatch")
+    assert_true(
+        set(dataset.get("entity_keys", [])) >= {"claim_id", "member_id", "provider_id"},
+        "demo dataset missing required entity keys",
+    )
+
+    health = next(
+        (
+            item
+            for item in datasets.get("health", [])
+            if item.get("dataset_key") == "demo_claims_fwa"
+            and item.get("dataset_version") == "2026-05-demo"
+        ),
+        None,
+    )
+    assert_true(health is not None, "demo_claims_fwa health row is missing")
+    assert_true(health.get("data_quality_status") == "ready", "demo dataset should be ready")
+    assert_true(health.get("field_count", 0) >= 8, "demo dataset missing profiled fields")
+    assert_true(health.get("label_count", 0) >= 1, "demo dataset missing label field")
+    assert_true(health.get("entity_key_count", 0) >= 3, "demo dataset missing entity key fields")
+    assert_true(health.get("online_ready_count", 0) >= 6, "demo dataset missing online-ready fields")
+
+    evaluations = request("GET", "/api/v1/ops/model-evaluations")
+    evaluation = next(
+        (
+            item
+            for item in evaluations.get("evaluations", [])
+            if item.get("evaluation_run_id") == "eval-baseline-fwa-2026-05-demo"
+        ),
+        None,
+    )
+    assert_true(evaluation is not None, "baseline model evaluation is missing")
+    assert_true(evaluation.get("model_key") == MODEL_KEY, "baseline evaluation model key mismatch")
+    assert_true(evaluation.get("model_version") == "0.1.0", "baseline evaluation version mismatch")
+    assert_true(decimal_value(evaluation.get("auc")) >= Decimal("0.8"), "baseline evaluation AUC too low")
+    assert_true(
+        decimal_value(evaluation.get("precision")) >= Decimal("0.7"),
+        "baseline evaluation precision too low",
+    )
+    assert_true(
+        decimal_value(evaluation.get("recall")) >= Decimal("0.6"),
+        "baseline evaluation recall too low",
+    )
+    assert_true(
+        decimal_value(evaluation.get("metrics_json", {}).get("psi")) <= Decimal("0.1"),
+        "baseline evaluation PSI should be within demo governance threshold",
+    )
+
+    lineage = next(
+        (
+            item
+            for item in evaluations.get("lineage", [])
+            if item.get("evaluation_run_id") == "eval-baseline-fwa-2026-05-demo"
+        ),
+        None,
+    )
+    assert_true(lineage is not None, "baseline evaluation lineage is missing")
+    assert_true(lineage.get("source_dataset_key") == "demo_claims_fwa", "lineage dataset key mismatch")
+    assert_true(
+        lineage.get("source_dataset_version") == "2026-05-demo",
+        "lineage dataset version mismatch",
+    )
+    assert_true(
+        lineage.get("source_data_quality_status") == "ready",
+        "lineage source dataset should be ready",
+    )
+
+    detail = request("GET", "/api/v1/ops/model-evaluations/eval-baseline-fwa-2026-05-demo")
+    assert_true(
+        detail.get("evaluation", {}).get("evaluation_run_id") == "eval-baseline-fwa-2026-05-demo",
+        "baseline evaluation detail endpoint mismatch",
+    )
+    assert_true(
+        detail.get("evaluation", {}).get("confusion_matrix_json"),
+        "baseline evaluation detail missing confusion matrix",
+    )
+
+    return {
+        "dataset_key": dataset["dataset_key"],
+        "dataset_version": dataset["dataset_version"],
+        "data_quality_status": health["data_quality_status"],
+        "evaluation_run_id": evaluation["evaluation_run_id"],
+        "auc": evaluation["auc"],
+    }
+
+
 def assert_tpa_webhook_delivery(score):
     webhooks = request("GET", "/api/v1/ops/webhook-events").get("events", [])
     expected_event_types = {
@@ -1602,6 +1703,7 @@ def main():
     )
     roi_summary = assert_dashboard_roi(dashboard, agent, lead)
 
+    dataset_model_lineage = assert_dataset_model_lineage()
     factor_readiness = assert_factor_factory_readiness()
 
     readiness = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/retraining-readiness")
@@ -1657,6 +1759,7 @@ def main():
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,
                 "knowledge_publish": knowledge_publish,
+                "dataset_model_lineage": dataset_model_lineage,
                 "factor_readiness": factor_readiness,
                 "webhook_delivery": webhook_delivery,
                 "rule_release": rule_release,

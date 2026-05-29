@@ -457,6 +457,63 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM external_dataset_versions edv
+  WHERE edv.dataset_key = 'demo_claims_fwa'
+    AND edv.dataset_version = '2026-05-demo'
+    AND edv.sample_grain = 'claim'
+    AND edv.label_column = 'confirmed_fwa'
+    AND edv.storage_format = 'parquet'
+    AND edv.row_count = 25000
+    AND edv.entity_keys ? 'claim_id'
+    AND edv.entity_keys ? 'member_id'
+    AND edv.entity_keys ? 'provider_id';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected demo_claims_fwa dataset version with claim-grain entity lineage';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM external_schema_fields esf
+  WHERE esf.dataset_id = '71000000-0000-0000-0000-000000000001'
+    AND esf.semantic_role = 'key'
+    AND esf.field_name IN ('claim_id', 'member_id', 'provider_id')
+    AND esf.profile_json ->> 'owner' = 'data-ops';
+  IF row_count <> 3 THEN
+    RAISE EXCEPTION 'expected claim/member/provider schema keys for demo_claims_fwa, found %', row_count;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM model_dataset_versions mdv
+  JOIN feature_set_versions fsv
+    ON fsv.id = mdv.feature_set_id
+  JOIN external_dataset_versions edv
+    ON edv.id = fsv.dataset_id
+  WHERE mdv.id = '75000000-0000-0000-0000-000000000001'
+    AND mdv.task_type = 'binary_classification'
+    AND mdv.label_name = 'confirmed_fwa'
+    AND mdv.status = 'active'
+    AND fsv.feature_set_key = 'fwa_demo_factor_set'
+    AND fsv.version = '2026-05-demo'
+    AND edv.dataset_key = 'demo_claims_fwa'
+    AND edv.dataset_version = '2026-05-demo';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected active model dataset linked to demo_claims_fwa feature set';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM model_evaluation_runs mer
+  WHERE mer.evaluation_run_id = 'eval-baseline-fwa-2026-05-demo'
+    AND mer.model_key = 'baseline_fwa'
+    AND mer.model_version = '0.1.0'
+    AND mer.model_dataset_id = '75000000-0000-0000-0000-000000000001'
+    AND mer.auc >= 0.8
+    AND mer.precision_value >= 0.7
+    AND mer.recall_value >= 0.6
+    AND (mer.metrics_json ->> 'psi')::numeric <= 0.1;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected governed baseline_fwa evaluation linked to demo model dataset';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM model_retraining_jobs
   WHERE model_key = 'baseline_fwa'
     AND model_version = '0.1.0'

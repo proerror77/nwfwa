@@ -64,6 +64,8 @@ grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/candidates" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/qa/feedback-items" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/knowledge/cases" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/datasets" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/model-evaluations" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py

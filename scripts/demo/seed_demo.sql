@@ -553,6 +553,9 @@ INSERT INTO external_schema_fields (
   profile_json
 )
 VALUES
+  ('71000000-0000-0000-0000-000000000001', 'claim_id', 'string', false, 'key', 'External claim identifier for claim-grain lineage.', '{"owner":"data-ops","missing_rate":0.0,"evidence_refs":["datasets:demo_claims_fwa:2026-05-demo:claim_id"]}'::jsonb),
+  ('71000000-0000-0000-0000-000000000001', 'member_id', 'string', false, 'key', 'External member identifier for member-level feature joins.', '{"owner":"data-ops","missing_rate":0.0,"evidence_refs":["datasets:demo_claims_fwa:2026-05-demo:member_id"]}'::jsonb),
+  ('71000000-0000-0000-0000-000000000001', 'provider_id', 'string', false, 'key', 'External provider identifier for provider risk joins.', '{"owner":"data-ops","missing_rate":0.0,"evidence_refs":["datasets:demo_claims_fwa:2026-05-demo:provider_id"]}'::jsonb),
   ('71000000-0000-0000-0000-000000000001', 'claim_amount', 'decimal', false, 'measure', 'Submitted claim amount.', '{"owner":"data-ops","missing_rate":0.0,"p50":420,"p95":6800,"p99":15800,"top_values":[]}'::jsonb),
   ('71000000-0000-0000-0000-000000000001', 'days_since_policy_start', 'integer', false, 'feature', 'Days between policy start and service date.', '{"owner":"feature-ops","missing_rate":0.0,"p50":141,"p95":320,"p99":365,"top_values":[{"value":"0-7","count":920}]}'::jsonb),
   ('71000000-0000-0000-0000-000000000001', 'claim_amount_to_limit_ratio', 'decimal', false, 'feature', 'Claim amount divided by policy limit.', '{"owner":"feature-ops","missing_rate":0.0,"p50":0.08,"p95":0.62,"p99":0.93,"top_values":[]}'::jsonb),
