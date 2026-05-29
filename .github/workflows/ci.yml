@@ -44,6 +44,7 @@ jobs:
       - run: cargo fmt --all -- --check
       - run: cargo clippy --locked --workspace --all-targets -- -D warnings
       - run: cargo test --locked --workspace
+      - run: cargo run --locked -p worker -- health | python3 scripts/ci/assert_worker_health.py
 
   migrations:
     runs-on: ubuntu-latest
