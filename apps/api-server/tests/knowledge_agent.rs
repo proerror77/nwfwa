@@ -413,7 +413,7 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(body["approval"]["approver"], "qa-lead");
     assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
 
-    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    let (status, body) = json_request(app.clone(), "GET", "/api/v1/ops/agent-runs", "{}").await;
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     let run = body["runs"]
@@ -429,6 +429,20 @@ async fn submits_agent_approval_decision_for_governance_review() {
         .expect("submitted approval should be included in agent governance logs");
     assert_eq!(approval["decision"], "approved");
     assert_eq!(approval["approver"], "qa-lead");
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_group=governance&event_type=agent.approval.decided&actor_id=qa-lead&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let events = body["events"].as_array().unwrap();
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0]["event_type"], "agent.approval.decided");
+    assert_eq!(events[0]["payload"]["agent_run_id"], agent_run_id);
 }
 
 #[tokio::test]

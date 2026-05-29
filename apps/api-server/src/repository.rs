@@ -113,6 +113,7 @@ const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "model.promotion.reviewed",
     "model.activation.completed",
     "model.rollback.completed",
+    "agent.approval.decided",
     "qa.feedback.status.updated",
     "routing_policy.candidate.saved",
     "routing_policy.status.changed",
@@ -7472,6 +7473,7 @@ fn audit_event_payload_matches_actor(payload: &Value, actor_id: &str) -> bool {
     payload["actor_id"].as_str() == Some(actor_id)
         || payload["reviewer"].as_str() == Some(actor_id)
         || payload["owner"].as_str() == Some(actor_id)
+        || payload["approver"].as_str() == Some(actor_id)
         || payload["requested_by"].as_str() == Some(actor_id)
 }
 

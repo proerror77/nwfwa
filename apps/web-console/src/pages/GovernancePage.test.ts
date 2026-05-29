@@ -171,6 +171,20 @@ describe("buildGovernanceChangeTimelineRows", () => {
         evidence_refs: ["qa_feedback:qa_feedback_QA-1"],
       },
       {
+        audit_id: "audit_agent_approval",
+        run_id: "agent_approval_agent_CLM-1",
+        event_type: "agent.approval.decided",
+        event_status: "succeeded",
+        summary: "Agent approval decision: approved",
+        payload: {
+          agent_run_id: "agent_CLM-1",
+          proposed_action: "manual_review_required",
+          decision: "approved",
+          approver: "qa-lead",
+        },
+        evidence_refs: ["agent_approval:manual_review_required"],
+      },
+      {
         audit_id: "audit_scoring",
         run_id: "run_scoring",
         event_type: "scoring.completed",
@@ -240,6 +254,18 @@ describe("buildGovernanceChangeTimelineRows", () => {
         summary: "QA feedback status updated",
         createdAt: "run_qa_feedback_status",
         evidenceRefs: ["qa_feedback:qa_feedback_QA-1"],
+      },
+      {
+        auditId: "audit_agent_approval",
+        domain: "Agent",
+        eventType: "agent.approval.decided",
+        targetId: "agent_CLM-1 / manual_review_required",
+        statusTransition: "review -> approved",
+        actor: "qa-lead",
+        decision: "approved",
+        summary: "Agent approval decision: approved",
+        createdAt: "agent_approval_agent_CLM-1",
+        evidenceRefs: ["agent_approval:manual_review_required"],
       },
     ]);
   });

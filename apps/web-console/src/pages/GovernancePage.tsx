@@ -289,6 +289,7 @@ const governanceChangeEventTypes = new Set([
   "model.promotion.reviewed",
   "model.activation.completed",
   "model.rollback.completed",
+  "agent.approval.decided",
   "qa.feedback.status.updated",
   "routing_policy.candidate.saved",
   "routing_policy.status.changed",
@@ -337,6 +338,7 @@ function governanceChangeDomain(eventType: string) {
   }
   if (eventType.startsWith("rule.")) return "Rule";
   if (eventType.startsWith("model.")) return "Model";
+  if (eventType.startsWith("agent.")) return "Agent";
   if (eventType.startsWith("qa.")) return "QA";
   if (eventType.startsWith("routing_policy.")) return "Routing";
   return "Governance";
@@ -391,6 +393,11 @@ function governanceChangeTargetId(event: AuditEvent) {
       payloadString(payload, "claim_id")
     );
   }
+  if (event.event_type === "agent.approval.decided") {
+    return [payloadString(payload, "agent_run_id"), payloadString(payload, "proposed_action")]
+      .filter(Boolean)
+      .join(" / ");
+  }
   if (event.event_type.startsWith("routing_policy.")) {
     const policyId = payloadString(payload, "policy_id");
     const version = payloadString(payload, "version");
@@ -424,6 +431,7 @@ export function buildGovernanceChangeTimelineRows(
           payloadString(event.payload, "reviewer") ||
           payloadString(event.payload, "owner") ||
           payloadString(event.payload, "actor_id") ||
+          payloadString(event.payload, "approver") ||
           payloadString(event.payload, "requested_by") ||
           "system",
         decision: decision || toStatus,
