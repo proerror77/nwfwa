@@ -97,6 +97,7 @@ type ApiFactorCard = {
 export type FactorCard = {
   factor_name: string;
   display_label: string;
+  entity_type: string;
   semantic_role: string;
   logical_type: string;
   description: string;
@@ -310,6 +311,7 @@ export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
     return {
       factor_name: field.field_name,
       display_label: titleize(field.field_name),
+      entity_type: dataset.sample_grain,
       semantic_role: field.semantic_role,
       logical_type: field.logical_type,
       description: field.description,
@@ -351,6 +353,7 @@ export function buildApiFactorCards(cards: ApiFactorCard[], datasetId?: string):
     .map((card) => ({
       factor_name: card.factor_name,
       display_label: card.chinese_name,
+      entity_type: card.entity_type,
       semantic_role: card.semantic_role,
       logical_type: card.logical_type,
       description: card.business_meaning,
@@ -696,6 +699,10 @@ export function FactorFactoryPage() {
                 <div>
                   <dt>Role</dt>
                   <dd>{factor.semantic_role}</dd>
+                </div>
+                <div>
+                  <dt>Entity</dt>
+                  <dd>{factor.entity_type}</dd>
                 </div>
                 <div>
                   <dt>Missing</dt>

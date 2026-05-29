@@ -57,6 +57,7 @@ describe("buildFactorCards", () => {
 
     expect(cards[0]).toMatchObject({
       factor_name: "claim_amount_to_limit_ratio",
+      entity_type: "claim",
       semantic_role: "feature",
       display_label: "Claim Amount To Limit Ratio",
       missing_rate_label: "3.0%",
@@ -142,6 +143,7 @@ describe("buildApiFactorCards", () => {
     expect(cards[0]).toMatchObject({
       factor_name: "claim_amount_to_limit_ratio",
       display_label: "理赔金额占保额比例",
+      entity_type: "claim",
       online_status: "ready",
       source_lineage_label: "claims.claim_amount,coverage_limit_amount",
       owner: "feature-ops",
@@ -258,6 +260,7 @@ describe("filterFactorCards", () => {
     return {
       factor_name: "claim_amount_to_limit_ratio",
       display_label: "Claim amount ratio",
+      entity_type: "claim",
       semantic_role: "feature",
       logical_type: "decimal",
       description: "Claim amount divided by policy limit.",
@@ -326,6 +329,7 @@ describe("buildFactorRuleCandidate", () => {
     return {
       factor_name: "claim_amount_percentile_peer",
       display_label: "Claim Amount Percentile Peer",
+      entity_type: "claim",
       semantic_role: "feature",
       logical_type: "decimal",
       description: "Claim amount percentile within peers.",
