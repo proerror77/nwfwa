@@ -305,6 +305,7 @@ pub async fn register_feature_set(
     Json(request): Json<RegisterFeatureSetInput>,
 ) -> Result<Json<FeatureSetRecord>, ApiError> {
     let actor = authorize(&state, &headers)?;
+    validate_feature_set_registration(&request)?;
     validate_parquet_uri(&request.features_uri, "FEATURE_SET_FORMAT_INVALID")?;
     let feature_set = state
         .repository
@@ -344,6 +345,45 @@ pub async fn register_feature_set(
     .await
     .map_err(internal_error("FEATURE_SET_AUDIT_SAVE_FAILED"))?;
     Ok(Json(feature_set))
+}
+
+fn validate_feature_set_registration(request: &RegisterFeatureSetInput) -> Result<(), ApiError> {
+    if request.business_domain.trim().is_empty()
+        || request.feature_set_key.trim().is_empty()
+        || request.version.trim().is_empty()
+        || request.dataset_id.trim().is_empty()
+        || request.features_uri.trim().is_empty()
+        || request.label_column.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FEATURE_SET",
+            "business_domain, feature_set_key, version, dataset_id, features_uri, and label_column are required",
+        ));
+    }
+    let feature_list = request.feature_list_json.as_array();
+    if feature_list.is_none() || feature_list.is_some_and(|features| features.is_empty()) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FEATURE_SET",
+            "feature_list_json must be a non-empty array",
+        ));
+    }
+    if request.row_count == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FEATURE_SET",
+            "row_count must be greater than zero",
+        ));
+    }
+    if !matches!(request.status.as_str(), "draft" | "active" | "deprecated") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FEATURE_SET",
+            "status must be draft, active, or deprecated",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn register_model_dataset(

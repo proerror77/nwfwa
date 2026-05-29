@@ -362,13 +362,18 @@ pub async fn openapi_schema() -> Json<Value> {
                         "required": true,
                         "content": {
                             "application/json": {
-                                "schema": { "type": "object" }
+                                "schema": { "$ref": "#/components/schemas/FeatureSetRegistrationRequest" }
                             }
                         }
                     },
                     "responses": {
                         "200": {
-                            "description": "Registered feature set"
+                            "description": "Registered feature set",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/FeatureSet" }
+                                }
+                            }
                         }
                     }
                 }
@@ -3333,6 +3338,37 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["mapping"],
                     "properties": {
                         "mapping": { "$ref": "#/components/schemas/FieldMapping" }
+                    }
+                },
+                "FeatureSet": {
+                    "type": "object",
+                    "required": ["feature_set_id", "business_domain", "feature_set_key", "version", "dataset_id", "features_uri", "feature_list_json", "row_count", "label_column", "status"],
+                    "properties": {
+                        "feature_set_id": { "type": "string" },
+                        "business_domain": { "type": "string" },
+                        "feature_set_key": { "type": "string" },
+                        "version": { "type": "string" },
+                        "dataset_id": { "type": "string" },
+                        "features_uri": { "type": "string" },
+                        "feature_list_json": { "type": "array", "items": { "type": "string" } },
+                        "row_count": { "type": "integer", "minimum": 1 },
+                        "label_column": { "type": "string" },
+                        "status": { "type": "string", "enum": ["draft", "active", "deprecated"] }
+                    }
+                },
+                "FeatureSetRegistrationRequest": {
+                    "type": "object",
+                    "required": ["business_domain", "feature_set_key", "version", "dataset_id", "features_uri", "feature_list_json", "row_count", "label_column", "status"],
+                    "properties": {
+                        "business_domain": { "type": "string", "minLength": 1 },
+                        "feature_set_key": { "type": "string", "minLength": 1 },
+                        "version": { "type": "string", "minLength": 1 },
+                        "dataset_id": { "type": "string", "minLength": 1 },
+                        "features_uri": { "type": "string", "minLength": 1 },
+                        "feature_list_json": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+                        "row_count": { "type": "integer", "minimum": 1 },
+                        "label_column": { "type": "string", "minLength": 1 },
+                        "status": { "type": "string", "enum": ["draft", "active", "deprecated"] }
                     }
                 },
                 "FactorReadinessResponse": {

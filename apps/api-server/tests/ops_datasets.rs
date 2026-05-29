@@ -646,6 +646,94 @@ async fn rejects_csv_feature_matrix_uri() {
     let dataset_id = created["dataset_id"].as_str().unwrap();
 
     let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": " ",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": ["member_age"],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FEATURE_SET");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": [],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FEATURE_SET");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": ["member_age"],
+              "row_count": 0,
+              "label_column": "m_2_keep_status",
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FEATURE_SET");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": ["member_age"],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "unknown"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FEATURE_SET");
+
+    let (status, body) = json_request(
         app,
         "POST",
         "/api/v1/ops/feature-sets",
