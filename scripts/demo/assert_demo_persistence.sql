@@ -142,9 +142,9 @@ BEGIN
 
   SELECT COUNT(*) INTO row_count
   FROM audit_events
-  WHERE claim_id = demo_claim_uuid
-    AND event_type = 'qa.feedback.status.updated'
+  WHERE event_type = 'qa.feedback.status.updated'
     AND payload ->> 'feedback_id' = 'qa_feedback_QA-DEMO-SMOKE'
+    AND payload ->> 'claim_id' = demo_claim_id
     AND payload ->> 'to_status' = 'resolved'
     AND evidence_refs <> '[]'::jsonb;
   IF row_count < 1 THEN
