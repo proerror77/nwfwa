@@ -85,6 +85,16 @@ async fn score_high_risk_claim_with_review_mode(
     amount: &str,
     profile: SampleClaimProfile<'_>,
 ) {
+    let response = score_claim_for_sampling(app, claim_id, amount, profile).await;
+    assert!(response["risk_score"].as_u64().unwrap() >= 70);
+}
+
+async fn score_claim_for_sampling(
+    app: axum::Router,
+    claim_id: &str,
+    amount: &str,
+    profile: SampleClaimProfile<'_>,
+) -> serde_json::Value {
     let review_mode_field = profile
         .review_mode
         .map(|value| format!(r#""review_mode": "{value}","#))
@@ -134,7 +144,7 @@ async fn score_high_risk_claim_with_review_mode(
     );
     let (status, response) = json_request(app, "POST", "/api/v1/claims/score", &body).await;
     assert_eq!(status, StatusCode::OK);
-    assert!(response["risk_score"].as_u64().unwrap() >= 70);
+    response
 }
 
 #[tokio::test]
@@ -445,6 +455,74 @@ async fn stratified_sample_filters_by_operational_strata_criteria() {
             .as_object()
             .unwrap()
             .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn random_control_samples_scoring_population_for_baseline_measurement() {
+    let app = build_app(test_config());
+
+    score_high_risk_claim(app.clone(), "CLM-CONTROL-HIGH", "9900").await;
+    let low_risk = score_claim_for_sampling(
+        app.clone(),
+        "CLM-CONTROL-LOW",
+        "500",
+        SampleClaimProfile {
+            product_code: "MED",
+            provider_type: "clinic",
+            provider_region: "SH",
+            provider_name: "Control Clinic",
+            review_mode: Some("pre_payment"),
+        },
+    )
+    .await;
+    assert!(low_risk["risk_score"].as_u64().unwrap() < 70);
+
+    let (status, sample) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "random_control",
+          "population_definition": "Weekly control sample from all scored claims for false-positive and missed-risk baseline",
+          "inclusion_criteria": {
+            "min_risk_score": 0
+          },
+          "deterministic_seed": "control-week-1",
+          "sample_size": 10,
+          "reviewer": "qa-control-reviewer",
+          "assignment_queue": "Control Audit"
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(sample["sample_mode"], "random_control");
+    assert_eq!(sample["selection_method"], "deterministic_hash");
+    let selected = sample["selected_leads"].as_array().unwrap();
+    assert_eq!(selected.len(), 2);
+    assert!(selected
+        .iter()
+        .any(|lead| lead["claim_id"] == "CLM-CONTROL-LOW"
+            && ["low", "medium"].contains(&lead["risk_band"].as_str().unwrap())));
+    assert!(selected
+        .iter()
+        .any(|lead| lead["claim_id"] == "CLM-CONTROL-HIGH"));
+    assert_eq!(
+        sample["outcome_distribution"]["baseline_measurement"]["control_cohort"],
+        true
+    );
+    assert_eq!(
+        sample["outcome_distribution"]["baseline_measurement"]["measurement_goal"],
+        "false_positive_and_missed_risk_baseline"
+    );
+    assert_eq!(
+        sample["outcome_distribution"]["baseline_measurement"]["missed_risk_review_targets"],
+        1
+    );
+    assert_eq!(
+        sample["outcome_distribution"]["baseline_measurement"]["false_positive_review_targets"],
         1
     );
 }

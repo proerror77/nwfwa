@@ -1229,6 +1229,29 @@ async fn openapi_includes_operations_paths() {
             ["items"]["minLength"],
         1
     );
+    let outcome_properties = &schema["components"]["schemas"]["AuditSampleRecord"]["properties"]
+        ["outcome_distribution"]["properties"];
+    for field in [
+        "selected_count",
+        "reviewed_count",
+        "open_count",
+        "qa_conclusions",
+        "issue_types",
+        "feedback_targets",
+        "strata_distribution",
+        "review_mode_distribution",
+        "reviewer_history_distribution",
+        "baseline_measurement",
+    ] {
+        assert!(
+            outcome_properties[field].is_object(),
+            "missing AuditSampleRecord outcome_distribution property {field}"
+        );
+    }
+    assert_eq!(
+        outcome_properties["baseline_measurement"]["properties"]["measurement_goal"]["enum"],
+        serde_json::json!(["false_positive_and_missed_risk_baseline"])
+    );
     for field in ["specialty", "network_status"] {
         assert!(
             schema["components"]["schemas"]["ProviderRiskSummaryItem"]["required"]

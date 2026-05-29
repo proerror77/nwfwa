@@ -2062,7 +2062,17 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut sequence = self.audit_sample_sequence.lock().await;
         *sequence += 1;
         let sample_id = format!("sample_{}", *sequence);
-        let leads = self.list_leads().await?;
+        let leads = if input.sample_mode == "random_control" {
+            let claims = self.claims.lock().await;
+            self.runs
+                .lock()
+                .await
+                .iter()
+                .map(|run| control_lead_from_scoring_run(run, claims.get(&run.claim_id)))
+                .collect()
+        } else {
+            self.list_leads().await?
+        };
         let claims = self.claims.lock().await;
         let strata_contexts = audit_sample_strata_contexts_from_claims(&claims);
         drop(claims);
@@ -4511,7 +4521,11 @@ impl ScoringRepository for PostgresScoringRepository {
         input: CreateAuditSampleInput,
     ) -> anyhow::Result<AuditSampleRecord> {
         let sample_id = format!("sample_{}", AuditEventId::new());
-        let leads = self.list_leads().await?;
+        let leads = if input.sample_mode == "random_control" {
+            load_control_audit_population(&self.pool).await?
+        } else {
+            self.list_leads().await?
+        };
         let strata_contexts = load_audit_sample_strata_contexts(&self.pool).await?;
         let existing_samples = self.list_audit_samples().await?;
         let reviewer_history =
@@ -7016,6 +7030,46 @@ fn lead_from_scoring_run(
     })
 }
 
+fn control_lead_from_scoring_run(
+    run: &PersistedScoringRun,
+    context: Option<&ClaimContext>,
+) -> LeadRecord {
+    let mut evidence_refs = evidence_values_to_strings(&run.evidence_refs);
+    if evidence_refs.is_empty() {
+        evidence_refs.push(format!("audit:{}", run.audit_id));
+    }
+    LeadRecord {
+        lead_id: format!("control_lead_{}", run.claim_id),
+        run_id: run.run_id.clone(),
+        claim_id: run.claim_id.clone(),
+        member_id: context
+            .map(|context| context.member.external_member_id.clone())
+            .unwrap_or_default(),
+        provider_id: context
+            .map(|context| context.provider.external_provider_id.clone())
+            .unwrap_or_default(),
+        source_system: run.source_system.clone(),
+        review_mode: run
+            .audit_event
+            .get("review_mode")
+            .and_then(Value::as_str)
+            .unwrap_or("pre_payment")
+            .to_string(),
+        scheme_family: if run.risk_score >= 70 {
+            scheme_family_from_rule_runs(&run.rule_runs)
+        } else {
+            "control_baseline".into()
+        },
+        lead_source: "random_control_scoring_run".into(),
+        status: "new".into(),
+        disposition: "pending_control_review".into(),
+        risk_score: run.risk_score,
+        rag: run.rag.clone(),
+        reason: format!("Random control baseline sample: {}", run.routing_reason),
+        evidence_refs,
+    }
+}
+
 fn scheme_family_from_rule_runs(rule_runs: &[Value]) -> String {
     let alert_codes = rule_runs
         .iter()
@@ -7539,7 +7593,7 @@ fn audit_sample_outcome_distribution(
     }
 
     let selected_count = sample.selected_leads.len() as u32;
-    serde_json::json!({
+    let mut distribution = serde_json::json!({
         "selected_count": selected_count,
         "reviewed_count": reviewed_count,
         "open_count": selected_count.saturating_sub(reviewed_count),
@@ -7549,7 +7603,26 @@ fn audit_sample_outcome_distribution(
         "strata_distribution": strata_distribution,
         "review_mode_distribution": review_mode_distribution,
         "reviewer_history_distribution": reviewer_history_distribution
-    })
+    });
+    if sample.sample_mode == "random_control" {
+        let missed_risk_review_targets = sample
+            .selected_leads
+            .iter()
+            .filter(|lead| matches!(lead.risk_band.as_str(), "low" | "medium"))
+            .count() as u32;
+        let false_positive_review_targets = sample
+            .selected_leads
+            .iter()
+            .filter(|lead| matches!(lead.risk_band.as_str(), "high" | "critical"))
+            .count() as u32;
+        distribution["baseline_measurement"] = serde_json::json!({
+            "control_cohort": true,
+            "measurement_goal": "false_positive_and_missed_risk_baseline",
+            "missed_risk_review_targets": missed_risk_review_targets,
+            "false_positive_review_targets": false_positive_review_targets
+        });
+    }
+    distribution
 }
 
 fn qa_review_to_feedback_item(
@@ -8864,6 +8937,47 @@ async fn load_leads(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
         "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, COALESCE(review_mode, 'pre_payment'), scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
          FROM fwa_leads
          ORDER BY created_at, lead_id",
+    )
+    .fetch_all(pool)
+    .await?;
+    Ok(rows.into_iter().map(lead_from_row).collect())
+}
+
+async fn load_control_audit_population(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
+    let rows: Vec<LeadRow> = sqlx::query_as(
+        "SELECT 'control_lead_' || c.external_claim_id,
+                sr.run_id,
+                c.external_claim_id,
+                COALESCE(m.external_member_id, ''),
+                COALESCE(pr.external_provider_id, ''),
+                sr.source_system,
+                COALESCE(scoring_event.payload->>'review_mode', 'pre_payment'),
+                CASE
+                  WHEN sr.risk_score >= 70 THEN 'high_risk_claim'
+                  ELSE 'control_baseline'
+                END,
+                'random_control_scoring_run',
+                'new',
+                'pending_control_review',
+                sr.risk_score,
+                COALESCE(sr.rag, 'GREEN'),
+                'Random control baseline sample: ' || COALESCE(sr.routing_reason, 'scored claim'),
+                jsonb_build_array('scoring_runs:' || sr.run_id)
+         FROM scoring_runs sr
+         JOIN claims c ON c.id = sr.claim_id
+         LEFT JOIN members m ON m.id = c.member_id
+         LEFT JOIN providers pr ON pr.id = c.provider_id
+         LEFT JOIN LATERAL (
+           SELECT payload
+           FROM audit_events ae
+           WHERE ae.run_id = sr.run_id
+             AND ae.event_type = 'scoring.completed'
+           ORDER BY ae.created_at DESC
+           LIMIT 1
+         ) scoring_event ON TRUE
+         WHERE sr.status = 'succeeded'
+           AND sr.risk_score IS NOT NULL
+         ORDER BY sr.completed_at, sr.run_id",
     )
     .fetch_all(pool)
     .await?;

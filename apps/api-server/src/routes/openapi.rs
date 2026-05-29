@@ -4442,7 +4442,29 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/AuditSampleLeadRecord" }
                         },
-                        "outcome_distribution": { "type": "object" },
+                        "outcome_distribution": {
+                            "type": "object",
+                            "properties": {
+                                "selected_count": { "type": "integer", "minimum": 0 },
+                                "reviewed_count": { "type": "integer", "minimum": 0 },
+                                "open_count": { "type": "integer", "minimum": 0 },
+                                "qa_conclusions": { "type": "object" },
+                                "issue_types": { "type": "object" },
+                                "feedback_targets": { "type": "object" },
+                                "strata_distribution": { "type": "object" },
+                                "review_mode_distribution": { "type": "object" },
+                                "reviewer_history_distribution": { "type": "object" },
+                                "baseline_measurement": {
+                                    "type": "object",
+                                    "properties": {
+                                        "control_cohort": { "type": "boolean" },
+                                        "measurement_goal": { "type": "string", "enum": ["false_positive_and_missed_risk_baseline"] },
+                                        "missed_risk_review_targets": { "type": "integer", "minimum": 0 },
+                                        "false_positive_review_targets": { "type": "integer", "minimum": 0 }
+                                    }
+                                }
+                            }
+                        },
                         "created_at": { "type": ["string", "null"] }
                     }
                 },
