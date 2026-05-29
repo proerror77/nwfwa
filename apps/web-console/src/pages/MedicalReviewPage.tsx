@@ -54,6 +54,14 @@ export function buildMedicalReviewEvidenceRefs(item: MedicalReviewQueueItem | nu
     .join("\n");
 }
 
+export function buildMedicalReviewDecisionSummary(item: MedicalReviewQueueItem | null) {
+  return {
+    decision: item?.review_decision ?? "pending",
+    reviewer: item?.reviewer ?? "unassigned",
+    reviewedAt: item?.reviewed_at ?? "not reviewed",
+  };
+}
+
 function selectedMedicalReviewItem(items: MedicalReviewQueueItem[], selectedAuditId: string) {
   return items.find((item) => item.audit_id === selectedAuditId) ?? items[0] ?? null;
 }
@@ -74,6 +82,7 @@ export function MedicalReviewPage() {
   const items = queueQuery.data?.items ?? [];
   const summary = buildMedicalReviewQueueSummary(items);
   const selectedItem = selectedMedicalReviewItem(items, selectedAuditId);
+  const decisionSummary = buildMedicalReviewDecisionSummary(selectedItem);
   const submitMutation = useMutation({
     mutationFn: () => {
       if (!selectedItem) {
@@ -182,6 +191,18 @@ export function MedicalReviewPage() {
             <div>
               <dt>Latest Review</dt>
               <dd>{selectedItem.review_audit_id ?? "none"}</dd>
+            </div>
+            <div>
+              <dt>Decision</dt>
+              <dd>{decisionSummary.decision}</dd>
+            </div>
+            <div>
+              <dt>Reviewer</dt>
+              <dd>{decisionSummary.reviewer}</dd>
+            </div>
+            <div>
+              <dt>Reviewed At</dt>
+              <dd>{decisionSummary.reviewedAt}</dd>
             </div>
           </dl>
         ) : (
