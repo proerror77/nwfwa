@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sqlx::{postgres::PgPoolOptions, postgres::PgRow, PgPool, Postgres, Row, Transaction};
 use std::{
-    collections::{BTreeMap, BTreeSet, HashMap},
+    collections::{BTreeMap, BTreeSet, HashMap, VecDeque},
     hash::{Hash, Hasher},
     sync::Arc,
 };
@@ -292,6 +292,18 @@ pub struct AuditSampleLeadRecord {
     pub lead_id: String,
     pub claim_id: String,
     pub scheme_family: String,
+    #[serde(default)]
+    pub provider_id: String,
+    #[serde(default)]
+    pub provider_type: String,
+    #[serde(default)]
+    pub provider_region: String,
+    #[serde(default)]
+    pub policy_type: String,
+    #[serde(default)]
+    pub risk_band: String,
+    #[serde(default)]
+    pub strata_key: String,
     pub risk_score: u8,
     pub rag: String,
     pub evidence_refs: Vec<String>,
@@ -806,6 +818,13 @@ struct SavingAttributionRecord {
     saving_amount: Decimal,
     currency: String,
     evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone)]
+struct AuditSampleStrataContext {
+    provider_type: String,
+    provider_region: String,
+    policy_type: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2037,7 +2056,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         *sequence += 1;
         let sample_id = format!("sample_{}", *sequence);
         let leads = self.list_leads().await?;
-        let sample = build_audit_sample(sample_id, input, leads, None);
+        let claims = self.claims.lock().await;
+        let strata_contexts = audit_sample_strata_contexts_from_claims(&claims);
+        drop(claims);
+        let sample = build_audit_sample(sample_id, input, leads, &strata_contexts, None);
         self.audit_samples
             .lock()
             .await
@@ -4471,7 +4493,8 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<AuditSampleRecord> {
         let sample_id = format!("sample_{}", AuditEventId::new());
         let leads = self.list_leads().await?;
-        let sample = build_audit_sample(sample_id, input, leads, None);
+        let strata_contexts = load_audit_sample_strata_contexts(&self.pool).await?;
+        let sample = build_audit_sample(sample_id, input, leads, &strata_contexts, None);
         sqlx::query(
             "INSERT INTO audit_samples
              (sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json)
@@ -7184,6 +7207,7 @@ fn build_audit_sample(
     sample_id: String,
     input: CreateAuditSampleInput,
     leads: Vec<LeadRecord>,
+    strata_contexts: &HashMap<String, AuditSampleStrataContext>,
     created_at: Option<String>,
 ) -> AuditSampleRecord {
     let selection_method = selection_method_for_mode(&input.sample_mode).to_string();
@@ -7192,39 +7216,32 @@ fn build_audit_sample(
         .filter(|lead| lead_matches_inclusion(lead, &input.inclusion_criteria))
         .collect::<Vec<_>>();
 
-    match selection_method.as_str() {
+    let selected_candidates = match selection_method.as_str() {
         "deterministic_hash" => {
             let seed = input
                 .deterministic_seed
                 .as_deref()
                 .unwrap_or("default-seed");
             candidates.sort_by_key(|lead| deterministic_rank(seed, &lead.lead_id));
+            candidates.into_iter().take(input.sample_size).collect()
         }
-        "scheme_family_then_risk_score" => candidates.sort_by(|left, right| {
-            left.scheme_family
-                .cmp(&right.scheme_family)
-                .then_with(|| right.risk_score.cmp(&left.risk_score))
-                .then_with(|| left.lead_id.cmp(&right.lead_id))
-        }),
-        _ => candidates.sort_by(|left, right| {
-            right
-                .risk_score
-                .cmp(&left.risk_score)
-                .then_with(|| left.lead_id.cmp(&right.lead_id))
-        }),
-    }
+        "stratified_round_robin" => {
+            select_stratified_candidates(candidates, strata_contexts, input.sample_size)
+        }
+        _ => {
+            candidates.sort_by(|left, right| {
+                right
+                    .risk_score
+                    .cmp(&left.risk_score)
+                    .then_with(|| left.lead_id.cmp(&right.lead_id))
+            });
+            candidates.into_iter().take(input.sample_size).collect()
+        }
+    };
 
-    let selected_leads = candidates
+    let selected_leads = selected_candidates
         .into_iter()
-        .take(input.sample_size)
-        .map(|lead| AuditSampleLeadRecord {
-            lead_id: lead.lead_id,
-            claim_id: lead.claim_id,
-            scheme_family: lead.scheme_family,
-            risk_score: lead.risk_score,
-            rag: lead.rag,
-            evidence_refs: lead.evidence_refs,
-        })
+        .map(|lead| audit_sample_lead_record(lead, strata_contexts))
         .collect::<Vec<_>>();
 
     let mut sample = AuditSampleRecord {
@@ -7243,6 +7260,142 @@ fn build_audit_sample(
     };
     sample.outcome_distribution = audit_sample_outcome_distribution(&sample, &[]);
     sample
+}
+
+fn select_stratified_candidates(
+    candidates: Vec<LeadRecord>,
+    strata_contexts: &HashMap<String, AuditSampleStrataContext>,
+    sample_size: usize,
+) -> Vec<LeadRecord> {
+    let mut strata = BTreeMap::<String, Vec<LeadRecord>>::new();
+    for lead in candidates {
+        strata
+            .entry(strata_key_for_lead(&lead, strata_contexts))
+            .or_default()
+            .push(lead);
+    }
+
+    let mut strata = strata
+        .into_iter()
+        .map(|(key, mut leads)| {
+            leads.sort_by(|left, right| {
+                right
+                    .risk_score
+                    .cmp(&left.risk_score)
+                    .then_with(|| left.lead_id.cmp(&right.lead_id))
+            });
+            (key, VecDeque::from(leads))
+        })
+        .collect::<BTreeMap<_, _>>();
+
+    let mut selected = Vec::new();
+    while selected.len() < sample_size && strata.values().any(|leads| !leads.is_empty()) {
+        for leads in strata.values_mut() {
+            if selected.len() >= sample_size {
+                break;
+            }
+            if let Some(lead) = leads.pop_front() {
+                selected.push(lead);
+            }
+        }
+    }
+    selected
+}
+
+fn audit_sample_lead_record(
+    lead: LeadRecord,
+    strata_contexts: &HashMap<String, AuditSampleStrataContext>,
+) -> AuditSampleLeadRecord {
+    let context = strata_context_for_lead(&lead, strata_contexts);
+    let risk_band = risk_band_for_score(lead.risk_score).to_string();
+    let strata_key = strata_key(
+        &lead.scheme_family,
+        &context.provider_type,
+        &context.provider_region,
+        &context.policy_type,
+        &risk_band,
+    );
+    AuditSampleLeadRecord {
+        lead_id: lead.lead_id,
+        claim_id: lead.claim_id,
+        scheme_family: lead.scheme_family,
+        provider_id: lead.provider_id,
+        provider_type: context.provider_type,
+        provider_region: context.provider_region,
+        policy_type: context.policy_type,
+        risk_band,
+        strata_key,
+        risk_score: lead.risk_score,
+        rag: lead.rag,
+        evidence_refs: lead.evidence_refs,
+    }
+}
+
+fn strata_key_for_lead(
+    lead: &LeadRecord,
+    strata_contexts: &HashMap<String, AuditSampleStrataContext>,
+) -> String {
+    let context = strata_context_for_lead(lead, strata_contexts);
+    strata_key(
+        &lead.scheme_family,
+        &context.provider_type,
+        &context.provider_region,
+        &context.policy_type,
+        risk_band_for_score(lead.risk_score),
+    )
+}
+
+fn strata_context_for_lead(
+    lead: &LeadRecord,
+    strata_contexts: &HashMap<String, AuditSampleStrataContext>,
+) -> AuditSampleStrataContext {
+    strata_contexts
+        .get(&lead.claim_id)
+        .cloned()
+        .unwrap_or_else(|| AuditSampleStrataContext {
+            provider_type: "unknown".into(),
+            provider_region: "unknown".into(),
+            policy_type: "unknown".into(),
+        })
+}
+
+fn strata_key(
+    scheme_family: &str,
+    provider_type: &str,
+    provider_region: &str,
+    policy_type: &str,
+    risk_band: &str,
+) -> String {
+    format!(
+        "scheme={scheme_family}|provider_type={provider_type}|region={provider_region}|policy_type={policy_type}|risk_band={risk_band}"
+    )
+}
+
+fn risk_band_for_score(risk_score: u8) -> &'static str {
+    match risk_score {
+        90..=100 => "critical",
+        70..=89 => "high",
+        40..=69 => "medium",
+        _ => "low",
+    }
+}
+
+fn audit_sample_strata_contexts_from_claims(
+    claims: &HashMap<String, ClaimContext>,
+) -> HashMap<String, AuditSampleStrataContext> {
+    claims
+        .iter()
+        .map(|(claim_id, context)| {
+            (
+                claim_id.clone(),
+                AuditSampleStrataContext {
+                    provider_type: context.provider.provider_type.clone(),
+                    provider_region: context.provider.region.clone(),
+                    policy_type: context.policy.product_code.clone(),
+                },
+            )
+        })
+        .collect()
 }
 
 fn with_sample_outcome_distributions(
@@ -7266,7 +7419,14 @@ fn audit_sample_outcome_distribution(
     let mut qa_conclusions = BTreeMap::<String, u32>::new();
     let mut issue_types = BTreeMap::<String, u32>::new();
     let mut feedback_targets = BTreeMap::<String, u32>::new();
+    let mut strata_distribution = BTreeMap::<String, u32>::new();
     let mut reviewed_count = 0_u32;
+
+    for lead in &sample.selected_leads {
+        *strata_distribution
+            .entry(lead.strata_key.clone())
+            .or_insert(0) += 1;
+    }
 
     for lead in &sample.selected_leads {
         let qa_case_id = format!("qa_{}_{}", sample.sample_id, lead.lead_id);
@@ -7290,7 +7450,8 @@ fn audit_sample_outcome_distribution(
         "open_count": selected_count.saturating_sub(reviewed_count),
         "qa_conclusions": qa_conclusions,
         "issue_types": issue_types,
-        "feedback_targets": feedback_targets
+        "feedback_targets": feedback_targets,
+        "strata_distribution": strata_distribution
     })
 }
 
@@ -8538,7 +8699,7 @@ fn extend_string_set(target: &mut BTreeSet<String>, value: Option<&Value>) {
 fn selection_method_for_mode(sample_mode: &str) -> &'static str {
     match sample_mode {
         "random_control" => "deterministic_hash",
-        "stratified" => "scheme_family_then_risk_score",
+        "stratified" => "stratified_round_robin",
         "qa_calibration" => "reviewer_consistency_rotation",
         "post_payment_audit" => "risk_score_desc_post_payment",
         _ => "risk_score_desc",
@@ -8580,6 +8741,36 @@ async fn load_leads(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(lead_from_row).collect())
+}
+
+async fn load_audit_sample_strata_contexts(
+    pool: &PgPool,
+) -> anyhow::Result<HashMap<String, AuditSampleStrataContext>> {
+    let rows: Vec<(String, String, String, String)> = sqlx::query_as(
+        "SELECT c.external_claim_id,
+                COALESCE(pr.provider_type, 'unknown'),
+                COALESCE(pr.region, 'unknown'),
+                COALESCE(p.product_code, 'unknown')
+         FROM claims c
+         LEFT JOIN providers pr ON pr.id = c.provider_id
+         LEFT JOIN policies p ON p.id = c.policy_id",
+    )
+    .fetch_all(pool)
+    .await?;
+
+    Ok(rows
+        .into_iter()
+        .map(|(claim_id, provider_type, provider_region, policy_type)| {
+            (
+                claim_id,
+                AuditSampleStrataContext {
+                    provider_type,
+                    provider_region,
+                    policy_type,
+                },
+            )
+        })
+        .collect())
 }
 
 async fn load_lead_in_tx(

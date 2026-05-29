@@ -4395,11 +4395,17 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AuditSampleLeadRecord": {
                     "type": "object",
-                    "required": ["lead_id", "claim_id", "scheme_family", "risk_score", "rag", "evidence_refs"],
+                    "required": ["lead_id", "claim_id", "scheme_family", "provider_id", "provider_type", "provider_region", "policy_type", "risk_band", "strata_key", "risk_score", "rag", "evidence_refs"],
                     "properties": {
                         "lead_id": { "type": "string" },
                         "claim_id": { "type": "string" },
                         "scheme_family": { "type": "string" },
+                        "provider_id": { "type": "string" },
+                        "provider_type": { "type": "string" },
+                        "provider_region": { "type": "string" },
+                        "policy_type": { "type": "string" },
+                        "risk_band": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
+                        "strata_key": { "type": "string" },
                         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "rag": { "type": "string", "enum": ["GREEN", "AMBER", "RED"] },
                         "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }

@@ -35,6 +35,27 @@ async fn json_request(
 }
 
 async fn score_high_risk_claim(app: axum::Router, claim_id: &str, amount: &str) {
+    score_high_risk_claim_with_context(
+        app,
+        claim_id,
+        amount,
+        "MED",
+        "hospital",
+        "SH",
+        "Northwind Hospital",
+    )
+    .await;
+}
+
+async fn score_high_risk_claim_with_context(
+    app: axum::Router,
+    claim_id: &str,
+    amount: &str,
+    product_code: &str,
+    provider_type: &str,
+    provider_region: &str,
+    provider_name: &str,
+) {
     let body = format!(
         r#"{{
           "source_system": "tpa-demo",
@@ -58,7 +79,7 @@ async fn score_high_risk_claim(app: axum::Router, claim_id: &str, amount: &str) 
           "member": {{ "external_member_id": "MBR-{claim_id}" }},
           "policy": {{
             "external_policy_id": "POL-{claim_id}",
-            "product_code": "MED",
+            "product_code": "{product_code}",
             "coverage_start_date": "2026-01-01",
             "coverage_end_date": "2026-12-31",
             "coverage_limit": "10000",
@@ -66,9 +87,9 @@ async fn score_high_risk_claim(app: axum::Router, claim_id: &str, amount: &str) 
           }},
           "provider": {{
             "external_provider_id": "PRV-{claim_id}",
-            "name": "Northwind Hospital",
-            "provider_type": "hospital",
-            "region": "SH",
+            "name": "{provider_name}",
+            "provider_type": "{provider_type}",
+            "region": "{provider_region}",
             "risk_tier": "High"
           }}
         }}"#
@@ -225,4 +246,103 @@ async fn creates_audit_sample_from_ranked_leads() {
     assert_eq!(distribution["qa_conclusions"]["issue_found_escalate"], 1);
     assert_eq!(distribution["issue_types"]["medical_necessity_issue"], 1);
     assert_eq!(distribution["feedback_targets"]["rules"], 1);
+}
+
+#[tokio::test]
+async fn stratified_sample_spans_operational_strata() {
+    let app = build_app(test_config());
+
+    score_high_risk_claim_with_context(
+        app.clone(),
+        "CLM-STRATA-A1",
+        "9900",
+        "MED",
+        "hospital",
+        "SH",
+        "Northwind Hospital",
+    )
+    .await;
+    score_high_risk_claim_with_context(
+        app.clone(),
+        "CLM-STRATA-A2",
+        "9800",
+        "MED",
+        "hospital",
+        "SH",
+        "Northwind Hospital",
+    )
+    .await;
+    score_high_risk_claim_with_context(
+        app.clone(),
+        "CLM-STRATA-Z1",
+        "9000",
+        "DENTAL",
+        "clinic",
+        "BJ",
+        "Capital Clinic",
+    )
+    .await;
+    score_high_risk_claim_with_context(
+        app.clone(),
+        "CLM-STRATA-Z2",
+        "8900",
+        "DENTAL",
+        "clinic",
+        "BJ",
+        "Capital Clinic",
+    )
+    .await;
+
+    let (status, sample) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "stratified",
+          "population_definition": "Stratified FWA QA sample by scheme, provider, region, policy, and risk band",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "deterministic_seed": "strata-week-1",
+          "sample_size": 2,
+          "reviewer": "qa-reviewer-2",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(sample["sample_mode"], "stratified");
+    assert_eq!(sample["selection_method"], "stratified_round_robin");
+
+    let selected = sample["selected_leads"].as_array().unwrap();
+    assert_eq!(selected.len(), 2);
+    assert!(selected
+        .iter()
+        .all(|lead| lead["scheme_family"].as_str().is_some()));
+    assert!(selected
+        .iter()
+        .all(|lead| lead["risk_band"].as_str().is_some()));
+    assert!(selected
+        .iter()
+        .any(|lead| lead["provider_type"] == "hospital"
+            && lead["provider_region"] == "SH"
+            && lead["policy_type"] == "MED"));
+    assert!(selected.iter().any(|lead| lead["provider_type"] == "clinic"
+        && lead["provider_region"] == "BJ"
+        && lead["policy_type"] == "DENTAL"));
+    assert!(selected
+        .iter()
+        .all(|lead| lead["strata_key"].as_str().unwrap().contains("scheme=")));
+    assert_eq!(sample["outcome_distribution"]["selected_count"], 2);
+    assert!(sample["outcome_distribution"]["strata_distribution"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .any(|key| key.contains("provider_type=hospital")));
+    assert!(sample["outcome_distribution"]["strata_distribution"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .any(|key| key.contains("provider_type=clinic")));
 }

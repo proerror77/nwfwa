@@ -1169,6 +1169,27 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["rag"]["enum"],
         serde_json::json!(["GREEN", "AMBER", "RED"])
     );
+    for field in [
+        "provider_id",
+        "provider_type",
+        "provider_region",
+        "policy_type",
+        "risk_band",
+        "strata_key",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["AuditSampleLeadRecord"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|value| value == field),
+            "missing AuditSampleLeadRecord required field {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["risk_band"]["enum"],
+        serde_json::json!(["low", "medium", "high", "critical"])
+    );
     assert_eq!(
         schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["evidence_refs"]
             ["minItems"],
