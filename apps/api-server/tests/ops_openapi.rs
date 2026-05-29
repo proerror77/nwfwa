@@ -1177,6 +1177,7 @@ async fn openapi_includes_operations_paths() {
         "policy_type",
         "risk_band",
         "strata_key",
+        "prior_reviewer_sample_count",
     ] {
         assert!(
             schema["components"]["schemas"]["AuditSampleLeadRecord"]["required"]
@@ -1195,6 +1196,11 @@ async fn openapi_includes_operations_paths() {
     assert_eq!(
         schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["risk_band"]["enum"],
         serde_json::json!(["low", "medium", "high", "critical"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]
+            ["prior_reviewer_sample_count"]["minimum"],
+        0
     );
     assert_eq!(
         schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["evidence_refs"]

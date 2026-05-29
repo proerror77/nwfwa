@@ -4395,7 +4395,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AuditSampleLeadRecord": {
                     "type": "object",
-                    "required": ["lead_id", "claim_id", "scheme_family", "review_mode", "provider_id", "provider_type", "provider_region", "policy_type", "risk_band", "strata_key", "risk_score", "rag", "evidence_refs"],
+                    "required": ["lead_id", "claim_id", "scheme_family", "review_mode", "provider_id", "provider_type", "provider_region", "policy_type", "risk_band", "strata_key", "prior_reviewer_sample_count", "risk_score", "rag", "evidence_refs"],
                     "properties": {
                         "lead_id": { "type": "string" },
                         "claim_id": { "type": "string" },
@@ -4407,6 +4407,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "policy_type": { "type": "string" },
                         "risk_band": { "type": "string", "enum": ["low", "medium", "high", "critical"] },
                         "strata_key": { "type": "string" },
+                        "prior_reviewer_sample_count": { "type": "integer", "minimum": 0 },
                         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "rag": { "type": "string", "enum": ["GREEN", "AMBER", "RED"] },
                         "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }

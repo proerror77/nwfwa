@@ -447,3 +447,72 @@ async fn post_payment_audit_samples_only_post_payment_leads() {
         1
     );
 }
+
+#[tokio::test]
+async fn qa_calibration_rotates_away_from_reviewer_repeat_leads() {
+    let app = build_app(test_config());
+
+    score_high_risk_claim(app.clone(), "CLM-QA-CAL-HIGH", "9900").await;
+    score_high_risk_claim(app.clone(), "CLM-QA-CAL-LOWER", "8000").await;
+
+    let (status, first_sample) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "risk_ranked",
+          "population_definition": "Initial reviewer calibration baseline",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "deterministic_seed": "qa-calibration-initial",
+          "sample_size": 1,
+          "reviewer": "qa-calibrator-1",
+          "assignment_queue": "QA Calibration"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        first_sample["selected_leads"][0]["claim_id"],
+        "CLM-QA-CAL-HIGH"
+    );
+
+    let (status, calibration_sample) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "qa_calibration",
+          "population_definition": "Reviewer consistency rotation sample",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "deterministic_seed": "qa-calibration-week-2",
+          "sample_size": 1,
+          "reviewer": "qa-calibrator-1",
+          "assignment_queue": "QA Calibration"
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(calibration_sample["sample_mode"], "qa_calibration");
+    assert_eq!(
+        calibration_sample["selection_method"],
+        "reviewer_consistency_rotation"
+    );
+    assert_eq!(
+        calibration_sample["selected_leads"][0]["claim_id"],
+        "CLM-QA-CAL-LOWER"
+    );
+    assert_eq!(
+        calibration_sample["selected_leads"][0]["prior_reviewer_sample_count"],
+        0
+    );
+    assert_eq!(
+        calibration_sample["outcome_distribution"]["reviewer_history_distribution"]
+            ["new_to_reviewer"],
+        1
+    );
+}

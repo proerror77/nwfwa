@@ -308,6 +308,8 @@ pub struct AuditSampleLeadRecord {
     pub risk_band: String,
     #[serde(default)]
     pub strata_key: String,
+    #[serde(default)]
+    pub prior_reviewer_sample_count: u32,
     pub risk_score: u8,
     pub rag: String,
     pub evidence_refs: Vec<String>,
@@ -2064,7 +2066,17 @@ impl ScoringRepository for InMemoryScoringRepository {
         let claims = self.claims.lock().await;
         let strata_contexts = audit_sample_strata_contexts_from_claims(&claims);
         drop(claims);
-        let sample = build_audit_sample(sample_id, input, leads, &strata_contexts, None);
+        let samples = self.audit_samples.lock().await;
+        let reviewer_history = reviewer_lead_sample_counts(samples.values(), &input.reviewer);
+        drop(samples);
+        let sample = build_audit_sample(
+            sample_id,
+            input,
+            leads,
+            &strata_contexts,
+            &reviewer_history,
+            None,
+        );
         self.audit_samples
             .lock()
             .await
@@ -4501,7 +4513,17 @@ impl ScoringRepository for PostgresScoringRepository {
         let sample_id = format!("sample_{}", AuditEventId::new());
         let leads = self.list_leads().await?;
         let strata_contexts = load_audit_sample_strata_contexts(&self.pool).await?;
-        let sample = build_audit_sample(sample_id, input, leads, &strata_contexts, None);
+        let existing_samples = self.list_audit_samples().await?;
+        let reviewer_history =
+            reviewer_lead_sample_counts(existing_samples.iter(), &input.reviewer);
+        let sample = build_audit_sample(
+            sample_id,
+            input,
+            leads,
+            &strata_contexts,
+            &reviewer_history,
+            None,
+        );
         sqlx::query(
             "INSERT INTO audit_samples
              (sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json)
@@ -7221,6 +7243,7 @@ fn build_audit_sample(
     input: CreateAuditSampleInput,
     leads: Vec<LeadRecord>,
     strata_contexts: &HashMap<String, AuditSampleStrataContext>,
+    reviewer_history: &HashMap<String, u32>,
     created_at: Option<String>,
 ) -> AuditSampleRecord {
     let selection_method = selection_method_for_mode(&input.sample_mode).to_string();
@@ -7244,6 +7267,9 @@ fn build_audit_sample(
         "stratified_round_robin" => {
             select_stratified_candidates(candidates, strata_contexts, input.sample_size)
         }
+        "reviewer_consistency_rotation" => {
+            select_reviewer_rotation_candidates(candidates, reviewer_history, input.sample_size)
+        }
         _ => {
             candidates.sort_by(|left, right| {
                 right
@@ -7257,7 +7283,7 @@ fn build_audit_sample(
 
     let selected_leads = selected_candidates
         .into_iter()
-        .map(|lead| audit_sample_lead_record(lead, strata_contexts))
+        .map(|lead| audit_sample_lead_record(lead, strata_contexts, reviewer_history))
         .collect::<Vec<_>>();
 
     let mut sample = AuditSampleRecord {
@@ -7318,9 +7344,26 @@ fn select_stratified_candidates(
     selected
 }
 
+fn select_reviewer_rotation_candidates(
+    mut candidates: Vec<LeadRecord>,
+    reviewer_history: &HashMap<String, u32>,
+    sample_size: usize,
+) -> Vec<LeadRecord> {
+    candidates.sort_by(|left, right| {
+        reviewer_history
+            .get(&left.lead_id)
+            .unwrap_or(&0)
+            .cmp(reviewer_history.get(&right.lead_id).unwrap_or(&0))
+            .then_with(|| right.risk_score.cmp(&left.risk_score))
+            .then_with(|| left.lead_id.cmp(&right.lead_id))
+    });
+    candidates.into_iter().take(sample_size).collect()
+}
+
 fn audit_sample_lead_record(
     lead: LeadRecord,
     strata_contexts: &HashMap<String, AuditSampleStrataContext>,
+    reviewer_history: &HashMap<String, u32>,
 ) -> AuditSampleLeadRecord {
     let context = strata_context_for_lead(&lead, strata_contexts);
     let risk_band = risk_band_for_score(lead.risk_score).to_string();
@@ -7331,6 +7374,7 @@ fn audit_sample_lead_record(
         &context.policy_type,
         &risk_band,
     );
+    let prior_reviewer_sample_count = *reviewer_history.get(&lead.lead_id).unwrap_or(&0);
     AuditSampleLeadRecord {
         lead_id: lead.lead_id,
         claim_id: lead.claim_id,
@@ -7342,6 +7386,7 @@ fn audit_sample_lead_record(
         policy_type: context.policy_type,
         risk_band,
         strata_key,
+        prior_reviewer_sample_count,
         risk_score: lead.risk_score,
         rag: lead.rag,
         evidence_refs: lead.evidence_refs,
@@ -7401,6 +7446,22 @@ fn default_review_mode() -> String {
     "pre_payment".into()
 }
 
+fn reviewer_lead_sample_counts<'a>(
+    samples: impl IntoIterator<Item = &'a AuditSampleRecord>,
+    reviewer: &str,
+) -> HashMap<String, u32> {
+    let mut counts = HashMap::<String, u32>::new();
+    for sample in samples {
+        if sample.reviewer != reviewer {
+            continue;
+        }
+        for lead in &sample.selected_leads {
+            *counts.entry(lead.lead_id.clone()).or_insert(0) += 1;
+        }
+    }
+    counts
+}
+
 fn audit_sample_strata_contexts_from_claims(
     claims: &HashMap<String, ClaimContext>,
 ) -> HashMap<String, AuditSampleStrataContext> {
@@ -7442,6 +7503,7 @@ fn audit_sample_outcome_distribution(
     let mut feedback_targets = BTreeMap::<String, u32>::new();
     let mut strata_distribution = BTreeMap::<String, u32>::new();
     let mut review_mode_distribution = BTreeMap::<String, u32>::new();
+    let mut reviewer_history_distribution = BTreeMap::<String, u32>::new();
     let mut reviewed_count = 0_u32;
 
     for lead in &sample.selected_leads {
@@ -7450,6 +7512,14 @@ fn audit_sample_outcome_distribution(
             .or_insert(0) += 1;
         *review_mode_distribution
             .entry(lead.review_mode.clone())
+            .or_insert(0) += 1;
+        let history_bucket = if lead.prior_reviewer_sample_count == 0 {
+            "new_to_reviewer"
+        } else {
+            "previously_sampled_by_reviewer"
+        };
+        *reviewer_history_distribution
+            .entry(history_bucket.to_string())
             .or_insert(0) += 1;
     }
 
@@ -7477,7 +7547,8 @@ fn audit_sample_outcome_distribution(
         "issue_types": issue_types,
         "feedback_targets": feedback_targets,
         "strata_distribution": strata_distribution,
-        "review_mode_distribution": review_mode_distribution
+        "review_mode_distribution": review_mode_distribution,
+        "reviewer_history_distribution": reviewer_history_distribution
     })
 }
 
