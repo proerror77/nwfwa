@@ -26,6 +26,7 @@ describe("auditEventFilterShortcuts", () => {
   it("covers common governance audit filters", () => {
     expect(auditEventFilterShortcuts).toEqual([
       { label: "Scoring", eventType: "scoring.completed" },
+      { label: "Investigations", eventType: "investigation.result.received" },
       { label: "QA Results", eventType: "qa.result.received" },
       { label: "QA Feedback Status", eventType: "qa.feedback.status.updated" },
       { label: "Case Status", eventType: "case.status.updated" },
@@ -360,6 +361,20 @@ describe("buildGovernanceChangeTimelineRows", () => {
         evidence_refs: ["qa_feedback:qa_feedback_QA-1"],
       },
       {
+        audit_id: "audit_investigation",
+        run_id: "pilot_investigation_INV-1",
+        event_type: "investigation.result.received",
+        event_status: "succeeded",
+        summary: "Investigation result received",
+        payload: {
+          investigation_id: "INV-1",
+          claim_id: "CLM-1",
+          outcome: "confirmed_fwa",
+          confirmed_fwa: true,
+        },
+        evidence_refs: ["investigation_results:INV-1"],
+      },
+      {
         audit_id: "audit_agent_approval",
         run_id: "agent_approval_agent_CLM-1",
         event_type: "agent.approval.decided",
@@ -457,6 +472,18 @@ describe("buildGovernanceChangeTimelineRows", () => {
         summary: "QA feedback status updated",
         createdAt: "run_qa_feedback_status",
         evidenceRefs: ["qa_feedback:qa_feedback_QA-1"],
+      },
+      {
+        auditId: "audit_investigation",
+        domain: "Investigation",
+        eventType: "investigation.result.received",
+        targetId: "INV-1",
+        statusTransition: "writeback -> confirmed_fwa",
+        actor: "system",
+        decision: "confirmed_fwa",
+        summary: "Investigation result received",
+        createdAt: "pilot_investigation_INV-1",
+        evidenceRefs: ["investigation_results:INV-1"],
       },
       {
         auditId: "audit_agent_approval",

@@ -313,6 +313,7 @@ const governanceChangeEventTypes = new Set([
   "model.promotion.reviewed",
   "model.activation.completed",
   "model.rollback.completed",
+  "investigation.result.received",
   "agent.approval.decided",
   "audit_sample.created",
   "qa.feedback.status.updated",
@@ -324,6 +325,7 @@ const governanceChangeEventTypes = new Set([
 
 export const auditEventFilterShortcuts = [
   { label: "Scoring", eventType: "scoring.completed" },
+  { label: "Investigations", eventType: "investigation.result.received" },
   { label: "QA Results", eventType: "qa.result.received" },
   { label: "QA Feedback Status", eventType: "qa.feedback.status.updated" },
   { label: "Case Status", eventType: "case.status.updated" },
@@ -448,6 +450,7 @@ function governanceChangeDomain(eventType: string) {
   }
   if (eventType.startsWith("rule.")) return "Rule";
   if (eventType.startsWith("model.")) return "Model";
+  if (eventType.startsWith("investigation.")) return "Investigation";
   if (eventType.startsWith("agent.")) return "Agent";
   if (eventType.startsWith("audit_sample.")) return "QA";
   if (eventType.startsWith("qa.")) return "QA";
@@ -504,6 +507,13 @@ function governanceChangeTargetId(event: AuditEvent) {
       payloadString(payload, "claim_id")
     );
   }
+  if (event.event_type === "investigation.result.received") {
+    return (
+      payloadString(payload, "investigation_id") ||
+      payloadString(payload, "claim_id") ||
+      event.run_id
+    );
+  }
   if (event.event_type === "agent.approval.decided") {
     return [payloadString(payload, "agent_run_id"), payloadString(payload, "proposed_action")]
       .filter(Boolean)
@@ -532,6 +542,7 @@ export function buildGovernanceChangeTimelineRows(
       const fromStatus = payloadString(event.payload, "from_status") || "-";
       const toStatus = payloadString(event.payload, "to_status") || "-";
       const decision = payloadString(event.payload, "decision");
+      const outcome = payloadString(event.payload, "outcome");
       const sampleMode = payloadString(event.payload, "sample_mode");
       const selectionMethod = payloadString(event.payload, "selection_method");
       return {
@@ -542,6 +553,8 @@ export function buildGovernanceChangeTimelineRows(
         statusTransition:
           event.event_type === "audit_sample.created"
             ? `created -> ${sampleMode || "sample"}`
+            : event.event_type === "investigation.result.received"
+              ? `writeback -> ${outcome || "received"}`
             : fromStatus === "-" && toStatus === "-" && decision
               ? `review -> ${decision}`
               : `${fromStatus} -> ${toStatus}`,
@@ -552,7 +565,7 @@ export function buildGovernanceChangeTimelineRows(
           payloadString(event.payload, "approver") ||
           payloadString(event.payload, "requested_by") ||
           "system",
-        decision: decision || selectionMethod || toStatus,
+        decision: decision || outcome || selectionMethod || toStatus,
         summary: event.summary,
         createdAt: event.created_at ?? event.run_id,
         evidenceRefs: event.evidence_refs,
