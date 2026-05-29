@@ -129,3 +129,95 @@ async fn returns_provider_risk_summary_from_scoring_profiles() {
         .iter()
         .any(|evidence| evidence == "provider_profile:PRV-PROVIDER-SUMMARY-1:90d"));
 }
+
+#[tokio::test]
+async fn returns_provider_graph_risk_summary_from_relationships() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-PROVIDER-GRAPH-SUMMARY-1",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "IMG-910",
+              "item_type": "procedure",
+              "description": "High cost imaging",
+              "quantity": 1,
+              "unit_amount": "9000",
+              "total_amount": "9000"
+            }
+          ],
+          "member": {
+            "external_member_id": "MBR-PROVIDER-GRAPH-SUMMARY-1"
+          },
+          "policy": {
+            "external_policy_id": "POL-PROVIDER-GRAPH-SUMMARY-1",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-PROVIDER-GRAPH-SUMMARY-1",
+            "name": "Northwind Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "Medium"
+          },
+          "provider_relationships": {
+            "high_risk_neighbor_ratio": 0.34,
+            "provider_patient_overlap_score": 0.68,
+            "referral_concentration_score": 0.72,
+            "connected_confirmed_fwa_count": 2,
+            "network_component_risk_score": 82,
+            "evidence_refs": ["relationship_edges:PRV-PROVIDER-GRAPH-SUMMARY-1"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, summary) =
+        json_request(app, "GET", "/api/v1/ops/providers/risk-summary", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(summary["provider_count"], 1);
+    assert_eq!(summary["review_required_count"], 1);
+    assert_eq!(summary["high_risk_count"], 1);
+    assert_eq!(
+        summary["providers"][0]["provider_id"],
+        "PRV-PROVIDER-GRAPH-SUMMARY-1"
+    );
+    assert_eq!(
+        summary["providers"][0]["review_route"],
+        "provider_graph_review"
+    );
+    assert!(summary["providers"][0]["risk_score"].as_u64().unwrap() >= 90);
+    assert!(
+        summary["providers"][0]["network_risk_score"]
+            .as_u64()
+            .unwrap()
+            >= 90
+    );
+    assert!(summary["providers"][0]["graph_reasons"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reason| reason.as_str().unwrap().contains("关系邻居")));
+    assert!(summary["providers"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|evidence| evidence == "relationship_edges:PRV-PROVIDER-GRAPH-SUMMARY-1"));
+}

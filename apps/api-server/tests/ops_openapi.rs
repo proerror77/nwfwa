@@ -1184,6 +1184,16 @@ async fn openapi_includes_operations_paths() {
             serde_json::json!(["string", "null"])
         );
     }
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderRiskSummaryItem"]["properties"]
+            ["network_risk_score"]["type"],
+        serde_json::json!(["integer", "null"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderRiskSummaryItem"]["properties"]["graph_reasons"]
+            ["items"]["type"],
+        "string"
+    );
     assert!(
         schema["components"]["schemas"]["CaseEvidencePackage"]["required"]
             .as_array()

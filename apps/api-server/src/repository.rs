@@ -444,8 +444,10 @@ pub struct ProviderRiskSummaryItemRecord {
     pub claim_count: u32,
     pub specialty: Option<String>,
     pub network_status: Option<String>,
+    pub network_risk_score: Option<u8>,
     pub latest_claim_id: Option<String>,
     pub outlier_flags: Vec<String>,
+    pub graph_reasons: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -8358,8 +8360,10 @@ struct ProviderRiskAccumulator {
     claim_count: u32,
     specialty: Option<String>,
     network_status: Option<String>,
+    network_risk_score: Option<u8>,
     latest_claim_id: Option<String>,
     outlier_flags: BTreeSet<String>,
+    graph_reasons: BTreeSet<String>,
     evidence_refs: BTreeSet<String>,
 }
 
@@ -8369,62 +8373,88 @@ fn summarize_provider_risk_profiles<'a>(
     let mut providers = BTreeMap::<String, ProviderRiskAccumulator>::new();
 
     for payload in payloads {
-        let Some(profile) = payload.get("provider_profile") else {
-            continue;
-        };
-        let Some(provider_id) = profile.get("provider_id").and_then(Value::as_str) else {
-            continue;
-        };
-        let risk_score = profile
-            .get("risk_score")
-            .and_then(Value::as_u64)
-            .unwrap_or(0)
-            .min(100) as u8;
-        let entry =
-            providers
-                .entry(provider_id.to_string())
-                .or_insert_with(|| ProviderRiskAccumulator {
-                    provider_id: provider_id.to_string(),
-                    risk_tier: "low".into(),
-                    review_route: "none".into(),
-                    ..ProviderRiskAccumulator::default()
-                });
+        let mut counted_provider_id = None::<String>;
 
-        entry.claim_count += 1;
-        entry.latest_claim_id = payload
-            .get("claim_id")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .or_else(|| entry.latest_claim_id.clone());
-        entry.review_required |= profile
-            .get("review_required")
-            .and_then(Value::as_bool)
-            .unwrap_or(false);
+        if let Some(profile) = payload.get("provider_profile") {
+            if let Some(provider_id) = profile.get("provider_id").and_then(Value::as_str) {
+                let risk_score = profile
+                    .get("risk_score")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0)
+                    .min(100) as u8;
+                let entry = provider_accumulator_entry(&mut providers, provider_id);
 
-        if risk_score >= entry.risk_score {
-            entry.risk_score = risk_score;
-            entry.risk_tier = profile
-                .get("risk_tier")
-                .and_then(Value::as_str)
-                .unwrap_or("low")
-                .to_string();
-            entry.review_route = profile
-                .get("review_route")
-                .and_then(Value::as_str)
-                .unwrap_or("none")
-                .to_string();
-            entry.specialty = profile
-                .get("specialty")
-                .and_then(Value::as_str)
-                .map(str::to_string);
-            entry.network_status = profile
-                .get("network_status")
-                .and_then(Value::as_str)
-                .map(str::to_string);
+                touch_provider_accumulator(entry, payload);
+                counted_provider_id = Some(provider_id.to_string());
+                entry.review_required |= profile
+                    .get("review_required")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+
+                if risk_score >= entry.risk_score {
+                    entry.risk_score = risk_score;
+                    entry.risk_tier = profile
+                        .get("risk_tier")
+                        .and_then(Value::as_str)
+                        .unwrap_or("low")
+                        .to_string();
+                    entry.review_route = profile
+                        .get("review_route")
+                        .and_then(Value::as_str)
+                        .unwrap_or("none")
+                        .to_string();
+                    entry.specialty = profile
+                        .get("specialty")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                    entry.network_status = profile
+                        .get("network_status")
+                        .and_then(Value::as_str)
+                        .map(str::to_string);
+                }
+
+                extend_string_set(&mut entry.outlier_flags, profile.get("outlier_flags"));
+                extend_string_set(&mut entry.evidence_refs, profile.get("evidence_refs"));
+            }
         }
 
-        extend_string_set(&mut entry.outlier_flags, profile.get("outlier_flags"));
-        extend_string_set(&mut entry.evidence_refs, profile.get("evidence_refs"));
+        if let Some(graph) = payload.get("provider_relationships") {
+            if let Some(provider_id) = graph.get("provider_id").and_then(Value::as_str) {
+                let risk_score = graph
+                    .get("risk_score")
+                    .and_then(Value::as_u64)
+                    .unwrap_or(0)
+                    .min(100) as u8;
+                let entry = provider_accumulator_entry(&mut providers, provider_id);
+
+                if counted_provider_id.as_deref() != Some(provider_id) {
+                    touch_provider_accumulator(entry, payload);
+                }
+                entry.review_required |= graph
+                    .get("review_required")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                entry.network_risk_score =
+                    Some(entry.network_risk_score.unwrap_or(0).max(risk_score));
+
+                if risk_score >= entry.risk_score {
+                    entry.risk_score = risk_score;
+                    entry.risk_tier = graph
+                        .get("risk_tier")
+                        .and_then(Value::as_str)
+                        .unwrap_or("low")
+                        .to_string();
+                    entry.review_route = graph
+                        .get("review_route")
+                        .and_then(Value::as_str)
+                        .unwrap_or("none")
+                        .to_string();
+                }
+
+                extend_string_set(&mut entry.graph_reasons, graph.get("graph_reasons"));
+                extend_string_set(&mut entry.evidence_refs, graph.get("evidence_refs"));
+            }
+        }
     }
 
     let mut providers = providers
@@ -8438,8 +8468,10 @@ fn summarize_provider_risk_profiles<'a>(
             claim_count: provider.claim_count,
             specialty: provider.specialty,
             network_status: provider.network_status,
+            network_risk_score: provider.network_risk_score,
             latest_claim_id: provider.latest_claim_id,
             outlier_flags: provider.outlier_flags.into_iter().collect(),
+            graph_reasons: provider.graph_reasons.into_iter().collect(),
             evidence_refs: provider.evidence_refs.into_iter().collect(),
         })
         .collect::<Vec<_>>();
@@ -8462,6 +8494,29 @@ fn summarize_provider_risk_profiles<'a>(
             .count() as u32,
         providers,
     }
+}
+
+fn provider_accumulator_entry<'a>(
+    providers: &'a mut BTreeMap<String, ProviderRiskAccumulator>,
+    provider_id: &str,
+) -> &'a mut ProviderRiskAccumulator {
+    providers
+        .entry(provider_id.to_string())
+        .or_insert_with(|| ProviderRiskAccumulator {
+            provider_id: provider_id.to_string(),
+            risk_tier: "low".into(),
+            review_route: "none".into(),
+            ..ProviderRiskAccumulator::default()
+        })
+}
+
+fn touch_provider_accumulator(entry: &mut ProviderRiskAccumulator, payload: &Value) {
+    entry.claim_count += 1;
+    entry.latest_claim_id = payload
+        .get("claim_id")
+        .and_then(Value::as_str)
+        .map(str::to_string)
+        .or_else(|| entry.latest_claim_id.clone());
 }
 
 fn extend_string_set(target: &mut BTreeSet<String>, value: Option<&Value>) {
