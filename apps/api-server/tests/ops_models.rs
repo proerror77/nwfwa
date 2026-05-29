@@ -1336,6 +1336,21 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
           "decision": "approved",
           "reviewer": "model-governance",
           "notes": "Approved for continued shadow evaluation only.",
+          "evidence_refs": ["phone:13800138000"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_PROMOTION_REVIEW");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
+          "notes": "Approved for continued shadow evaluation only.",
           "evidence_refs": ["model_versions:baseline_fwa:0.1.0", " "]
         }"#,
     )

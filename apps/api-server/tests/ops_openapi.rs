@@ -1372,6 +1372,7 @@ async fn openapi_includes_operations_paths() {
             1,
             "missing {schema_name}.evidence_refs item minLength"
         );
+        assert_writeback_pii_contract(&schema, schema_name);
     }
     for field in ["assignee", "reviewer", "priority", "notes"] {
         assert_eq!(

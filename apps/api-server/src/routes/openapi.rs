@@ -3037,10 +3037,15 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Promotion review notes must not contain PII."
+                        },
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
+                            "description": "Structured evidence references must not contain PII.",
                             "items": { "type": "string", "minLength": 1 }
                         }
                     }
@@ -3976,8 +3981,17 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Promotion review notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Structured evidence references must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "ModelPromotionReview": {

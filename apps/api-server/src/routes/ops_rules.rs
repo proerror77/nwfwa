@@ -5,6 +5,7 @@ use crate::{
         PersistedAuditEvent, QaFeedbackItemRecord, RuleBacktestRecord, RulePerformanceRecord,
         RulePromotionReviewRecord, RuleSummaryRecord,
     },
+    routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -313,6 +314,16 @@ pub async fn submit_rule_promotion_review(
             StatusCode::BAD_REQUEST,
             "MISSING_PROMOTION_REVIEW_EVIDENCE",
             "promotion review evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_PROMOTION_REVIEW",
+            "promotion review notes and evidence_refs must not contain PII",
         ));
     }
     let rule = state

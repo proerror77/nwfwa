@@ -306,6 +306,22 @@ async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
         r#"{
           "decision": "rejected",
           "reviewer": "rule-governance",
+          "notes": "Reviewer contacted alice@example.com about approval evidence.",
+          "evidence_refs": ["rules:rule_early_claim:v1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_PROMOTION_REVIEW");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/promotion-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-governance",
           "notes": "Rejected until backtest evidence is attached.",
           "evidence_refs": ["rules:rule_early_claim:v1", " "]
         }"#,
