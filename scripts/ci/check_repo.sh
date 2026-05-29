@@ -54,6 +54,7 @@ grep -q "hotfix/" docs/engineering/git-flow.md
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
+grep -q "cargo run --locked -p worker -- run-retraining-job" .github/workflows/ci.yml
 grep -q "scripts/ci/assert_worker_health.py" .github/workflows/ci.yml
 grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
 grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml

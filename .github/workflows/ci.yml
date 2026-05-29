@@ -154,6 +154,23 @@ jobs:
             cat /tmp/fwa-api-server.log
             exit 1
           fi
+
+          if ! cargo run --locked -p worker -- run-retraining-job \
+            --api-url "$FWA_API_BASE_URL" \
+            --api-key "$FWA_API_KEY" \
+            --actor trainer-worker-demo \
+            --artifact-base-uri s3://fwa-demo/model-retraining \
+            --model-key baseline_fwa; then
+            cat /tmp/fwa-ml-service.log
+            cat /tmp/fwa-api-server.log
+            exit 1
+          fi
+
+          if ! scripts/demo/smoke_demo.py --verify-retraining-completed; then
+            cat /tmp/fwa-ml-service.log
+            cat /tmp/fwa-api-server.log
+            exit 1
+          fi
         env:
           DATABASE_URL: postgres://fwa:fwa@localhost:5432/fwa
           FWA_API_BASE_URL: http://127.0.0.1:8080

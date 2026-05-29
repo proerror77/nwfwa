@@ -11,6 +11,7 @@ BASE_URL = os.environ.get("FWA_API_BASE_URL", "http://127.0.0.1:8080").rstrip("/
 API_KEY = os.environ.get("FWA_API_KEY", "dev-secret")
 SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
 CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
+MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 
 
 def request(method, path, payload=None, retries=1):
@@ -55,6 +56,42 @@ def has_label(labels, **expected):
         all(label.get(field) == value for field, value in expected.items())
         and label.get("evidence_refs")
         for label in labels
+    )
+
+
+def assert_retraining_completed():
+    jobs = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/retraining-jobs").get("jobs", [])
+    completed_jobs = [
+        job
+        for job in jobs
+        if job.get("status") == "completed"
+        and job.get("candidate_model_version")
+        and job.get("output_evaluation_id")
+    ]
+    assert_true(completed_jobs, "worker did not complete a retraining job")
+    candidate_versions = {job["candidate_model_version"] for job in completed_jobs}
+
+    models = request("GET", "/api/v1/ops/models").get("models", [])
+    assert_true(
+        any(
+            model.get("model_key") == MODEL_KEY
+            and model.get("version") in candidate_versions
+            and model.get("status") == "candidate"
+            for model in models
+        ),
+        "completed retraining job did not register a candidate model",
+    )
+
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "model_key": MODEL_KEY,
+                "completed_retraining_jobs": len(completed_jobs),
+                "candidate_versions": sorted(candidate_versions),
+            },
+            ensure_ascii=True,
+        )
     )
 
 
@@ -369,6 +406,35 @@ def main():
     assert_true(case_sla.get("total_cases", 0) >= 1, "dashboard missing investigation cases")
     assert_true(case_sla.get("open_cases", 0) >= 1, "dashboard missing open case SLA rollup")
 
+    readiness = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/retraining-readiness")
+    assert_true(
+        readiness.get("recommendation") == "prepare_retraining",
+        "baseline model should be ready for governed retraining",
+    )
+    assert_true(
+        readiness.get("approved_label_count", 0) >= 1,
+        "retraining readiness missing approved model labels",
+    )
+    assert_true(
+        readiness.get("blockers") == [],
+        "retraining readiness should not have blockers",
+    )
+
+    retraining_job = request(
+        "POST",
+        f"/api/v1/ops/models/{MODEL_KEY}/retraining-jobs",
+        {
+            "requested_by": "model-ops-demo",
+            "notes": "Demo smoke queues retraining from readiness triggers.",
+        },
+    )
+    assert_true(retraining_job.get("status") == "queued", "retraining job was not queued")
+    assert_true(retraining_job.get("job_id"), "retraining job missing job_id")
+    assert_true(
+        retraining_job.get("readiness_recommendation") == "prepare_retraining",
+        "retraining job missing readiness recommendation",
+    )
+
     print(
         json.dumps(
             {
@@ -383,6 +449,7 @@ def main():
                 "investigation_audit_id": investigation["audit_id"],
                 "case_id": case_id,
                 "outcome_labels": label_pool["total_labels"],
+                "retraining_job_id": retraining_job["job_id"],
             },
             ensure_ascii=True,
         )
@@ -391,7 +458,12 @@ def main():
 
 if __name__ == "__main__":
     try:
-        main()
+        if len(sys.argv) == 2 and sys.argv[1] == "--verify-retraining-completed":
+            assert_retraining_completed()
+        elif len(sys.argv) == 1:
+            main()
+        else:
+            raise RuntimeError("usage: smoke_demo.py [--verify-retraining-completed]")
     except Exception as error:
         print(f"demo smoke failed: {error}", file=sys.stderr)
         sys.exit(1)

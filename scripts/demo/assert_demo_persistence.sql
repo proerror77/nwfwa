@@ -138,4 +138,55 @@ BEGIN
   IF row_count < 1 THEN
     RAISE EXCEPTION 'expected saving attribution rows for %', demo_claim_id;
   END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM model_retraining_jobs
+  WHERE model_key = 'baseline_fwa'
+    AND model_version = '0.1.0'
+    AND status = 'completed'
+    AND readiness_recommendation = 'prepare_retraining'
+    AND candidate_model_version IS NOT NULL
+    AND candidate_artifact_uri IS NOT NULL
+    AND validation_report_uri IS NOT NULL
+    AND output_evaluation_id IS NOT NULL;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected completed baseline_fwa retraining job';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM model_versions mv
+  JOIN model_retraining_jobs mrj
+    ON mrj.model_key = mv.model_key
+   AND mrj.candidate_model_version = mv.version
+  WHERE mrj.model_key = 'baseline_fwa'
+    AND mrj.status = 'completed'
+    AND mv.status = 'candidate'
+    AND mv.artifact_uri = mrj.candidate_artifact_uri;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected candidate model registered from retraining output';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM model_evaluation_runs mer
+  JOIN model_retraining_jobs mrj
+    ON mrj.output_evaluation_id = mer.evaluation_run_id
+  WHERE mrj.model_key = 'baseline_fwa'
+    AND mrj.status = 'completed'
+    AND mer.model_version = mrj.candidate_model_version;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected candidate evaluation registered from retraining output';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_events
+  WHERE event_type IN (
+      'model.retraining.queued',
+      'model.retraining.claimed',
+      'model.retraining.status_updated',
+      'model.retraining.output_registered'
+    )
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 4 THEN
+    RAISE EXCEPTION 'expected retraining job audit events, found %', row_count;
+  END IF;
 END $$;
