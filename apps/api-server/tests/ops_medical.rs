@@ -139,7 +139,7 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
     assert_eq!(review["review_status"], "pending_evidence");
 
     let (status, queue) = json_request(
-        app,
+        app.clone(),
         "GET",
         "/api/v1/ops/medical-review/queue?limit=10",
         "{}",
@@ -151,6 +151,33 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
     assert_eq!(item["review_decision"], "request_more_evidence");
     assert_eq!(item["reviewer"], "medical-reviewer-1");
     assert_eq!(item["review_audit_id"], review["audit_id"]);
+
+    let (status, webhooks) = json_request(app, "GET", "/api/v1/ops/webhook-events", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let medical_review_event = webhooks["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "fwa.medical.reviewed")
+        .expect("missing medical review webhook event");
+    assert_eq!(medical_review_event["claim_id"], "CLM-MEDICAL-QUEUE-1");
+    assert_eq!(
+        medical_review_event["source_event_type"],
+        "medical.review.recorded"
+    );
+    assert_eq!(medical_review_event["source_audit_id"], review["audit_id"]);
+    assert_eq!(medical_review_event["delivery_status"], "pending");
+    assert_eq!(
+        medical_review_event["idempotency_key"],
+        format!(
+            "fwa-webhook:fwa.medical.reviewed:{}",
+            review["audit_id"].as_str().unwrap()
+        )
+    );
+    assert!(medical_review_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!("audit:{scoring_audit_id}"))));
 }
 
 #[tokio::test]

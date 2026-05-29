@@ -2956,7 +2956,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "event_id": { "type": "string" },
                         "event_type": {
                             "type": "string",
-                            "enum": ["fwa.score.completed", "fwa.case.routed", "fwa.investigation.closed", "fwa.qa.reviewed"]
+                            "enum": ["fwa.score.completed", "fwa.case.routed", "fwa.investigation.closed", "fwa.qa.reviewed", "fwa.medical.reviewed"]
                         },
                         "source_event_type": { "type": "string" },
                         "source_audit_id": { "type": "string" },

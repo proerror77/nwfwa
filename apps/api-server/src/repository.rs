@@ -7597,6 +7597,7 @@ fn webhook_event_from_audit(
         "lead.triaged" => return None,
         "investigation.result.received" => "fwa.investigation.closed",
         "qa.result.received" => "fwa.qa.reviewed",
+        "medical.review.recorded" => "fwa.medical.reviewed",
         "case.status.updated" => {
             let to_status = event.payload["to_status"].as_str().unwrap_or_default();
             if is_terminal_case_status(to_status) {

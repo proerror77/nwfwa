@@ -834,6 +834,12 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["WebhookEvent"]["properties"]["delivery_status"]["enum"][1],
         "retry_wait"
     );
+    assert!(
+        schema["components"]["schemas"]["WebhookEvent"]["properties"]["event_type"]["enum"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("fwa.medical.reviewed"))
+    );
     assert_eq!(
         schema["paths"]["/api/v1/ops/webhook-events/{event_id}/delivery-attempts"]["post"]
             ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
