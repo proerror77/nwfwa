@@ -26,6 +26,16 @@ type MedicalReviewQueueResponse = {
   items: MedicalReviewQueueItem[];
 };
 
+type MedicalReviewResultResponse = {
+  claim_id: string;
+  event_type: string;
+  event_status: string;
+  audit_id: string;
+  run_id: string;
+  review_status: string;
+  evidence_refs: string[];
+};
+
 export function buildMedicalReviewQueueSummary(items: MedicalReviewQueueItem[]) {
   const highScoreCount = items.filter((item) => item.medical_reasonableness_score >= 80).length;
   const missingEvidenceCount = items.filter((item) => item.missing_evidence.length > 0).length;
@@ -59,6 +69,22 @@ export function buildMedicalReviewDecisionSummary(item: MedicalReviewQueueItem |
     decision: item?.review_decision ?? "pending",
     reviewer: item?.reviewer ?? "unassigned",
     reviewedAt: item?.reviewed_at ?? "not reviewed",
+  };
+}
+
+export function buildMedicalReviewSubmitSummary(response?: MedicalReviewResultResponse | null) {
+  if (!response) {
+    return null;
+  }
+  return {
+    claimId: response.claim_id,
+    eventType: response.event_type,
+    eventStatus: response.event_status,
+    auditId: response.audit_id,
+    runId: response.run_id,
+    reviewStatus: response.review_status,
+    evidenceCount: response.evidence_refs.length,
+    evidenceRefs: response.evidence_refs,
   };
 }
 
@@ -101,12 +127,13 @@ export function MedicalReviewPage() {
             .filter(Boolean),
         },
         apiKey,
-      );
+      ) as Promise<MedicalReviewResultResponse>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["medical-review-queue"] });
     },
   });
+  const submitSummary = buildMedicalReviewSubmitSummary(submitMutation.data);
 
   useEffect(() => {
     if (selectedItem && evidenceRefs.length === 0) {
@@ -241,7 +268,49 @@ export function MedicalReviewPage() {
         {submitMutation.error ? (
           <pre className="error">{String(submitMutation.error.message)}</pre>
         ) : null}
-        {submitMutation.data ? <pre>{JSON.stringify(submitMutation.data, null, 2)}</pre> : null}
+        {submitSummary ? (
+          <>
+            <dl className="result-grid">
+              <div>
+                <dt>Review Claim</dt>
+                <dd>{submitSummary.claimId}</dd>
+              </div>
+              <div>
+                <dt>Event Type</dt>
+                <dd>{submitSummary.eventType}</dd>
+              </div>
+              <div>
+                <dt>Event Status</dt>
+                <dd>{submitSummary.eventStatus}</dd>
+              </div>
+              <div>
+                <dt>Review Status</dt>
+                <dd>{submitSummary.reviewStatus}</dd>
+              </div>
+              <div>
+                <dt>Audit ID</dt>
+                <dd>{submitSummary.auditId}</dd>
+              </div>
+              <div>
+                <dt>Run ID</dt>
+                <dd>{submitSummary.runId}</dd>
+              </div>
+              <div>
+                <dt>Evidence Refs</dt>
+                <dd>{submitSummary.evidenceCount}</dd>
+              </div>
+            </dl>
+            {submitSummary.evidenceRefs.length > 0 ? (
+              <ol className="audit-timeline">
+                {submitSummary.evidenceRefs.map((reference) => (
+                  <li key={reference}>
+                    <span>{reference}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+          </>
+        ) : null}
       </div>
 
       <div className="panel wide-panel">

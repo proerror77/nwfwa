@@ -3,6 +3,7 @@ import {
   buildMedicalReviewDecisionSummary,
   buildMedicalReviewEvidenceRefs,
   buildMedicalReviewQueueSummary,
+  buildMedicalReviewSubmitSummary,
 } from "./MedicalReviewPage";
 
 describe("buildMedicalReviewQueueSummary", () => {
@@ -119,5 +120,31 @@ describe("buildMedicalReviewDecisionSummary", () => {
       reviewer: "unassigned",
       reviewedAt: "not reviewed",
     });
+  });
+});
+
+describe("buildMedicalReviewSubmitSummary", () => {
+  it("summarizes medical review writeback audit metadata", () => {
+    expect(
+      buildMedicalReviewSubmitSummary({
+        claim_id: "CLM-1",
+        event_type: "medical.review.recorded",
+        event_status: "succeeded",
+        audit_id: "audit_medical_review_1",
+        run_id: "run_medical_review_1",
+        review_status: "pending_evidence",
+        evidence_refs: ["audit:scoring_1", "claim_items:IMG-900"],
+      }),
+    ).toEqual({
+      claimId: "CLM-1",
+      eventType: "medical.review.recorded",
+      eventStatus: "succeeded",
+      auditId: "audit_medical_review_1",
+      runId: "run_medical_review_1",
+      reviewStatus: "pending_evidence",
+      evidenceCount: 2,
+      evidenceRefs: ["audit:scoring_1", "claim_items:IMG-900"],
+    });
+    expect(buildMedicalReviewSubmitSummary(null)).toBeNull();
   });
 });
