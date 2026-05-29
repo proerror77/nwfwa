@@ -27,6 +27,11 @@ type KnowledgeCase = {
   evidence_refs: string[];
 };
 
+type PublishKnowledgeCaseResponse = {
+  case: KnowledgeCase;
+  audit_id: string;
+};
+
 export type SimilarCase = {
   case_id: string;
   title: string;
@@ -44,6 +49,21 @@ export function buildSimilarCaseEvidenceRefs(item: SimilarCase) {
   return [...item.provenance_refs, ...item.evidence_refs].filter(
     (reference, index, references) => references.indexOf(reference) === index,
   );
+}
+
+export function buildPublishedCaseSummary(response?: PublishKnowledgeCaseResponse | null) {
+  if (!response) {
+    return null;
+  }
+
+  return {
+    caseId: response.case.case_id,
+    title: response.case.title,
+    schemeFamily: response.case.scheme_family,
+    auditId: response.audit_id,
+    evidenceCount: response.case.evidence_refs.length,
+    evidenceRefs: response.case.evidence_refs,
+  };
 }
 
 export function KnowledgeBasePage() {
@@ -119,6 +139,9 @@ export function KnowledgeBasePage() {
       queryClient.invalidateQueries({ queryKey: ["knowledge-cases"] });
     },
   });
+  const publishedCaseSummary = buildPublishedCaseSummary(
+    publishMutation.data as PublishKnowledgeCaseResponse | undefined,
+  );
 
   return (
     <section className="ops-grid">
@@ -264,8 +287,41 @@ export function KnowledgeBasePage() {
         {publishMutation.error ? (
           <pre className="error">{String(publishMutation.error.message)}</pre>
         ) : null}
-        {publishMutation.data ? (
-          <pre>{JSON.stringify(publishMutation.data, null, 2)}</pre>
+        {publishedCaseSummary ? (
+          <div className="result-stack">
+            <dl className="result-grid">
+              <div>
+                <dt>Published Case</dt>
+                <dd>{publishedCaseSummary.caseId}</dd>
+              </div>
+              <div>
+                <dt>Title</dt>
+                <dd>{publishedCaseSummary.title}</dd>
+              </div>
+              <div>
+                <dt>Scheme</dt>
+                <dd>
+                  {formatFwaSchemeLabel(
+                    publishedCaseSummary.schemeFamily,
+                    schemeLabelMap,
+                  )}
+                </dd>
+              </div>
+              <div>
+                <dt>Audit</dt>
+                <dd>{publishedCaseSummary.auditId}</dd>
+              </div>
+              <div>
+                <dt>Evidence Refs</dt>
+                <dd>{publishedCaseSummary.evidenceCount}</dd>
+              </div>
+            </dl>
+            <ul className="result-list compact-list">
+              {publishedCaseSummary.evidenceRefs.map((reference) => (
+                <li key={reference}>{reference}</li>
+              ))}
+            </ul>
+          </div>
         ) : (
           <p className="empty">No case published in this session</p>
         )}

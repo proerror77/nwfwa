@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildSimilarCaseEvidenceRefs, type SimilarCase } from "./KnowledgeBasePage";
+import {
+  buildPublishedCaseSummary,
+  buildSimilarCaseEvidenceRefs,
+  type SimilarCase,
+} from "./KnowledgeBasePage";
 
 describe("buildSimilarCaseEvidenceRefs", () => {
   it("deduplicates provenance and evidence refs for similar case audit display", () => {
@@ -21,5 +25,35 @@ describe("buildSimilarCaseEvidenceRefs", () => {
       "audit:knowledge.publish",
       "qa_reviews:QA-1001",
     ]);
+  });
+});
+
+describe("buildPublishedCaseSummary", () => {
+  it("summarizes published knowledge case audit evidence", () => {
+    expect(
+      buildPublishedCaseSummary({
+        audit_id: "aud_knowledge_publish",
+        case: {
+          case_id: "KC-PUBLISHED-1",
+          title: "Published provider lab overuse case",
+          fwa_type: "Waste",
+          scheme_family: "laboratory_testing_abuse",
+          diagnosis_code: "E11",
+          provider_region: "Guangzhou",
+          provider_type: "lab",
+          summary: "Confirmed repeated lab testing overuse pattern.",
+          outcome: "Confirmed waste; provider education opened.",
+          tags: ["lab_overuse"],
+          evidence_refs: ["investigation_results:INV-KB-1", "qa_reviews:QA-KB-1"],
+        },
+      }),
+    ).toEqual({
+      caseId: "KC-PUBLISHED-1",
+      title: "Published provider lab overuse case",
+      schemeFamily: "laboratory_testing_abuse",
+      auditId: "aud_knowledge_publish",
+      evidenceCount: 2,
+      evidenceRefs: ["investigation_results:INV-KB-1", "qa_reviews:QA-KB-1"],
+    });
   });
 });
