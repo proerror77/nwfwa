@@ -290,6 +290,47 @@ async fn openapi_includes_operations_paths() {
         serde_json::json!(["draft", "active", "deprecated"])
     );
     assert_eq!(
+        schema["paths"]["/api/v1/ops/model-datasets"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ModelDatasetRegistrationRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/model-datasets"]["post"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ModelDataset"
+    );
+    for field in [
+        "business_domain",
+        "task_type",
+        "label_name",
+        "feature_set_id",
+        "train_uri",
+        "validation_uri",
+        "test_uri",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["ModelDatasetRegistrationRequest"]["properties"][field]
+                ["minLength"],
+            1,
+            "missing ModelDatasetRegistrationRequest minLength for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["ModelDatasetRegistrationRequest"]["properties"]
+            ["row_counts_json"]["minProperties"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelDatasetRegistrationRequest"]["properties"]
+            ["label_distribution_json"]["minProperties"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelDatasetRegistrationRequest"]["properties"]["status"]
+            ["enum"],
+        serde_json::json!(["draft", "active", "deprecated"])
+    );
+    assert_eq!(
         schema["paths"]["/api/v1/ops/model-evaluations"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"]["$ref"],
         "#/components/schemas/ModelEvaluationListResponse"

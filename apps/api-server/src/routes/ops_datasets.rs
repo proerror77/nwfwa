@@ -392,6 +392,7 @@ pub async fn register_model_dataset(
     Json(request): Json<RegisterModelDatasetInput>,
 ) -> Result<Json<ModelDatasetRecord>, ApiError> {
     let actor = authorize(&state, &headers)?;
+    validate_model_dataset_registration(&request)?;
     validate_parquet_uri(&request.train_uri, "MODEL_DATASET_FORMAT_INVALID")?;
     validate_parquet_uri(&request.validation_uri, "MODEL_DATASET_FORMAT_INVALID")?;
     if let Some(test_uri) = &request.test_uri {
@@ -430,6 +431,59 @@ pub async fn register_model_dataset(
     .await
     .map_err(internal_error("MODEL_DATASET_AUDIT_SAVE_FAILED"))?;
     Ok(Json(model_dataset))
+}
+
+fn validate_model_dataset_registration(
+    request: &RegisterModelDatasetInput,
+) -> Result<(), ApiError> {
+    if request.business_domain.trim().is_empty()
+        || request.task_type.trim().is_empty()
+        || request.label_name.trim().is_empty()
+        || request.feature_set_id.trim().is_empty()
+        || request.train_uri.trim().is_empty()
+        || request.validation_uri.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_DATASET",
+            "business_domain, task_type, label_name, feature_set_id, train_uri, and validation_uri are required",
+        ));
+    }
+    if let Some(test_uri) = &request.test_uri {
+        if test_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_MODEL_DATASET",
+                "test_uri must not be blank when provided",
+            ));
+        }
+    }
+    let row_counts = request.row_counts_json.as_object();
+    if row_counts.is_none() || row_counts.is_some_and(|row_counts| row_counts.is_empty()) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_DATASET",
+            "row_counts_json must be a non-empty object",
+        ));
+    }
+    let label_distribution = request.label_distribution_json.as_object();
+    if label_distribution.is_none()
+        || label_distribution.is_some_and(|label_distribution| label_distribution.is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_DATASET",
+            "label_distribution_json must be a non-empty object",
+        ));
+    }
+    if !matches!(request.status.as_str(), "draft" | "active" | "deprecated") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_DATASET",
+            "status must be draft, active, or deprecated",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn register_model_evaluation(

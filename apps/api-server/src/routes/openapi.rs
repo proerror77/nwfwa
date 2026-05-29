@@ -402,13 +402,18 @@ pub async fn openapi_schema() -> Json<Value> {
                         "required": true,
                         "content": {
                             "application/json": {
-                                "schema": { "type": "object" }
+                                "schema": { "$ref": "#/components/schemas/ModelDatasetRegistrationRequest" }
                             }
                         }
                     },
                     "responses": {
                         "200": {
-                            "description": "Registered model dataset"
+                            "description": "Registered model dataset",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelDataset" }
+                                }
+                            }
                         }
                     }
                 }
@@ -3368,6 +3373,39 @@ pub async fn openapi_schema() -> Json<Value> {
                         "feature_list_json": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
                         "row_count": { "type": "integer", "minimum": 1 },
                         "label_column": { "type": "string", "minLength": 1 },
+                        "status": { "type": "string", "enum": ["draft", "active", "deprecated"] }
+                    }
+                },
+                "ModelDataset": {
+                    "type": "object",
+                    "required": ["model_dataset_id", "business_domain", "task_type", "label_name", "feature_set_id", "train_uri", "validation_uri", "row_counts_json", "label_distribution_json", "status"],
+                    "properties": {
+                        "model_dataset_id": { "type": "string" },
+                        "business_domain": { "type": "string" },
+                        "task_type": { "type": "string" },
+                        "label_name": { "type": "string" },
+                        "feature_set_id": { "type": "string" },
+                        "train_uri": { "type": "string" },
+                        "validation_uri": { "type": "string" },
+                        "test_uri": { "type": ["string", "null"] },
+                        "row_counts_json": { "type": "object", "additionalProperties": true },
+                        "label_distribution_json": { "type": "object", "additionalProperties": true },
+                        "status": { "type": "string", "enum": ["draft", "active", "deprecated"] }
+                    }
+                },
+                "ModelDatasetRegistrationRequest": {
+                    "type": "object",
+                    "required": ["business_domain", "task_type", "label_name", "feature_set_id", "train_uri", "validation_uri", "row_counts_json", "label_distribution_json", "status"],
+                    "properties": {
+                        "business_domain": { "type": "string", "minLength": 1 },
+                        "task_type": { "type": "string", "minLength": 1 },
+                        "label_name": { "type": "string", "minLength": 1 },
+                        "feature_set_id": { "type": "string", "minLength": 1 },
+                        "train_uri": { "type": "string", "minLength": 1 },
+                        "validation_uri": { "type": "string", "minLength": 1 },
+                        "test_uri": { "type": ["string", "null"], "minLength": 1 },
+                        "row_counts_json": { "type": "object", "minProperties": 1, "additionalProperties": true },
+                        "label_distribution_json": { "type": "object", "minProperties": 1, "additionalProperties": true },
                         "status": { "type": "string", "enum": ["draft", "active", "deprecated"] }
                     }
                 },

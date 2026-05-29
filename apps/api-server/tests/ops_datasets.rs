@@ -756,3 +756,93 @@ async fn rejects_csv_feature_matrix_uri() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "FEATURE_SET_FORMAT_INVALID");
 }
+
+#[tokio::test]
+async fn rejects_invalid_model_dataset_registration() {
+    let app = build_app(test_config());
+    let (_, created) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/datasets",
+        &renewal_dataset_payload("parquet"),
+    )
+    .await;
+    let dataset_id = created["dataset_id"].as_str().unwrap();
+
+    let (status, feature_set) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/feature-sets",
+        &format!(
+            r#"{{
+              "business_domain": "renewal_retention",
+              "feature_set_key": "renewal_features",
+              "version": "v1",
+              "dataset_id": "{dataset_id}",
+              "features_uri": "data/features/renewal_automl_20211105/v1/",
+              "feature_list_json": ["member_age"],
+              "row_count": 88622,
+              "label_column": "m_2_keep_status",
+              "status": "draft"
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let feature_set_id = feature_set["feature_set_id"].as_str().unwrap();
+
+    let valid_request = serde_json::json!({
+        "business_domain": "renewal_retention",
+        "task_type": "binary_classification",
+        "label_name": "renewal_m2_keep_status",
+        "feature_set_id": feature_set_id,
+        "train_uri": "data/features/renewal_automl_20211105/v1/split=train/",
+        "validation_uri": "data/features/renewal_automl_20211105/v1/split=validation/",
+        "test_uri": null,
+        "row_counts_json": {"train": 68664, "validation": 19958},
+        "label_distribution_json": {
+            "train": {"1": 35837, "0": 32827},
+            "validation": {"1": 9342, "0": 10616}
+        },
+        "status": "draft"
+    });
+
+    let mut blank_business_domain = valid_request.clone();
+    blank_business_domain["business_domain"] = serde_json::json!(" ");
+    let payload = blank_business_domain.to_string();
+    let (status, body) =
+        json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_DATASET");
+
+    let mut blank_test_uri = valid_request.clone();
+    blank_test_uri["test_uri"] = serde_json::json!(" ");
+    let payload = blank_test_uri.to_string();
+    let (status, body) =
+        json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_DATASET");
+
+    let mut empty_row_counts = valid_request.clone();
+    empty_row_counts["row_counts_json"] = serde_json::json!({});
+    let payload = empty_row_counts.to_string();
+    let (status, body) =
+        json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_DATASET");
+
+    let mut empty_label_distribution = valid_request.clone();
+    empty_label_distribution["label_distribution_json"] = serde_json::json!({});
+    let payload = empty_label_distribution.to_string();
+    let (status, body) =
+        json_request(app.clone(), "POST", "/api/v1/ops/model-datasets", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_DATASET");
+
+    let mut invalid_status = valid_request.clone();
+    invalid_status["status"] = serde_json::json!("unknown");
+    let payload = invalid_status.to_string();
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/model-datasets", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_DATASET");
+}
