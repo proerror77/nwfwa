@@ -387,6 +387,34 @@ export function focusGlobalAuditFiltersOnAgentRun(
   };
 }
 
+export function focusGlobalAuditFiltersOnQaEvent(
+  filters: GlobalAuditEventFilterState,
+  event: AuditEvent,
+): GlobalAuditEventFilterState {
+  return {
+    ...filters,
+    eventType: event.event_type,
+    actorId: payloadString(event.payload, "actor_id"),
+    runId: event.run_id,
+    claimId: payloadString(event.payload, "claim_id"),
+    feedbackId: payloadString(event.payload, "feedback_id"),
+    qaCaseId: payloadString(event.payload, "qa_case_id"),
+    sampleId: payloadString(event.payload, "sample_id"),
+    agentRunId: "",
+    ruleId: "",
+    ruleVersion: "",
+    modelKey: "",
+    modelVersion: "",
+    routingPolicyId: "",
+    routingPolicyVersion: "",
+    reviewMode: payloadString(event.payload, "review_mode"),
+    datasetId: "",
+    featureSetId: "",
+    modelDatasetId: "",
+    evaluationRunId: "",
+  };
+}
+
 export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
   const events = data?.events ?? [];
   const latestDatedEvent = events.filter((event) => event.created_at).reduce<
@@ -1635,6 +1663,20 @@ export function GovernancePage() {
                     <li key={reference}>{reference}</li>
                   ))}
                 </ul>
+                {event.event_type.startsWith("qa.") ? (
+                  <div className="button-row">
+                    <button
+                      onClick={() =>
+                        setAuditEventFilters((filters) =>
+                          focusGlobalAuditFiltersOnQaEvent(filters, event),
+                        )
+                      }
+                      type="button"
+                    >
+                      Focus QA Trail
+                    </button>
+                  </div>
+                ) : null}
               </li>
             ))}
           </ol>
