@@ -934,6 +934,11 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
+            ["evidence_refs"]["items"]["minLength"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["scheme_family"]
             ["$ref"],
         "#/components/schemas/FwaSchemeFamily"

@@ -698,6 +698,22 @@ async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
         &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
         r#"{
           "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_approval:manual_review_required", " "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
           "approver": " ",
           "reason": " ",
           "evidence_refs": ["agent_approval:manual_review_required"]
