@@ -133,9 +133,10 @@ Run the same API smoke used by CI:
 
 ```bash
 scripts/demo/smoke_demo.py
+psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/demo/assert_demo_persistence.sql
 ```
 
-The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`.
+The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`. The SQL assertion verifies the same demo run was persisted across `scoring_runs`, `feature_values`, `rule_runs`, `model_scores`, `audit_events`, lead/case tables, QA, investigation, and saving attribution tables.
 
 ## 6. Verification Gates
 

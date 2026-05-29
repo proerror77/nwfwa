@@ -158,6 +158,9 @@ jobs:
           FWA_API_BASE_URL: http://127.0.0.1:8080
           FWA_API_KEY: dev-secret
           FWA_SOURCE_SYSTEM: tpa-demo
+      - run: psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/demo/assert_demo_persistence.sql
+        env:
+          DATABASE_URL: postgres://fwa:fwa@localhost:5432/fwa
 
   python:
     runs-on: ubuntu-latest
