@@ -18,6 +18,7 @@ See `AGENTS.md` for project-level agent working instructions.
 ## Engineering Docs
 
 - [Infrastructure Architecture](docs/engineering/infrastructure-architecture.md)
+- [TPA Integration Contract](docs/engineering/tpa-integration-contract.md)
 - [Pilot Demo Runbook](docs/engineering/demo-runbook.md)
 - [Pilot Readiness](docs/engineering/pilot-readiness.md)
 

@@ -6,11 +6,13 @@ required_files=(
   "AGENTS.md"
   "docs/engineering/git-flow.md"
   "docs/engineering/ci-cd.md"
+  "docs/engineering/tpa-integration-contract.md"
   "apps/ml-service/pyproject.toml"
   "apps/web-console/package.json"
   "migrations/0001_initial.sql"
   "scripts/demo/seed_demo.sh"
   "scripts/demo/seed_demo.sql"
+  "scripts/demo/tpa_mock_client.py"
   "scripts/demo/smoke_demo.py"
   "scripts/demo/smoke_web_console.mjs"
   "scripts/ci/assert_worker_health.py"
@@ -51,6 +53,16 @@ grep -q "Agent Teams" AGENTS.md
 grep -q "feature/" docs/engineering/git-flow.md
 grep -q "release/" docs/engineering/git-flow.md
 grep -q "hotfix/" docs/engineering/git-flow.md
+grep -q "POST /api/v1/claims/score" docs/engineering/tpa-integration-contract.md
+grep -q "GET /api/v1/members/{member_id}/profile-summary" docs/engineering/tpa-integration-contract.md
+grep -q "POST /api/v1/knowledge/search-similar" docs/engineering/tpa-integration-contract.md
+grep -q "POST /api/v1/investigations/results" docs/engineering/tpa-integration-contract.md
+grep -q "POST /api/v1/qa/results" docs/engineering/tpa-integration-contract.md
+grep -q "GET /api/v1/audit/claims/{claim_id}" docs/engineering/tpa-integration-contract.md
+grep -q "idempotency_key" docs/engineering/tpa-integration-contract.md
+grep -q "Error shape" docs/engineering/tpa-integration-contract.md
+grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
+grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
