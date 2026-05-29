@@ -755,6 +755,51 @@ async fn rule_promotion_gates_include_rule_feedback_labels() {
 }
 
 #[tokio::test]
+async fn rule_promotion_gates_ignore_feedback_for_other_rules() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-OTHER-RULE-GATE-1",
+          "claim_id": "CLM-OTHER-RULE-GATE-1",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "provider_pattern",
+          "feedback_target": "rules",
+          "notes": "QA found a different rule issue.",
+          "evidence_refs": ["qa_reviews:QA-OTHER-RULE-GATE-1", "rule_runs:HIGH_AMOUNT_TO_LIMIT"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["open_rule_feedback_count"], 0);
+    assert_eq!(body["unresolved_rule_feedback_count"], 0);
+    assert_eq!(body["approved_label_count"], 0);
+    assert_eq!(body["needs_review_label_count"], 0);
+    assert!(!body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rule feedback labels need review")));
+    assert!(!body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("unresolved rule QA feedback")));
+}
+
+#[tokio::test]
 async fn discovers_candidate_rules_from_labeled_samples() {
     let app = build_app(test_config());
 

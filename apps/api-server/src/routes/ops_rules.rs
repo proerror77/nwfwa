@@ -404,19 +404,25 @@ fn build_rule_promotion_gates(
         .map(|review| review.decision == "approved")
         .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active"));
     let shadow_rollout = performance.trigger_count > 0 && performance.reviewed_count > 0;
-    let open_rule_feedback_count = feedback_items
-        .iter()
-        .filter(|item| item.feedback_target == "rules" && item.status == "open")
-        .count();
-    let unresolved_rule_feedback_count = feedback_items
+    let rule_feedback_items = feedback_items
         .iter()
         .filter(|item| {
-            item.feedback_target == "rules" && is_unresolved_feedback_status(&item.status)
+            item.feedback_target == "rules" && feedback_targets_rule(&item.evidence_refs, rule)
         })
+        .collect::<Vec<_>>();
+    let open_rule_feedback_count = rule_feedback_items
+        .iter()
+        .filter(|item| item.status == "open")
+        .count();
+    let unresolved_rule_feedback_count = rule_feedback_items
+        .iter()
+        .filter(|item| is_unresolved_feedback_status(&item.status))
         .count();
     let rule_feedback_labels = outcome_labels
         .iter()
-        .filter(|label| label.feedback_target == "rules")
+        .filter(|label| {
+            label.feedback_target == "rules" && feedback_targets_rule(&label.evidence_refs, rule)
+        })
         .collect::<Vec<_>>();
     let approved_rule_feedback = rule_feedback_labels
         .iter()
@@ -580,6 +586,17 @@ fn rule_gate(label: &str, passed: bool, blocker: &str, evidence_source: &str) ->
         blocker: blocker.into(),
         evidence_source: evidence_source.into(),
     }
+}
+
+fn feedback_targets_rule(evidence_refs: &[String], rule: &RuleSummaryRecord) -> bool {
+    let rule_run_ref = format!("rule_runs:{}", rule.alert_code);
+    evidence_refs.iter().any(|reference| {
+        reference == &rule_run_ref
+            || reference
+                .strip_prefix("rules:")
+                .and_then(|source_id| source_id.split(":v").next())
+                == Some(rule.rule_id.as_str())
+    })
 }
 
 fn empty_rule_performance(rule: &RuleSummaryRecord) -> RulePerformanceRecord {

@@ -33,6 +33,9 @@ def request(method, path, payload=None, retries=1):
             with urllib.request.urlopen(req, timeout=5) as response:
                 raw = response.read()
                 return json.loads(raw.decode("utf-8")) if raw else {}
+        except urllib.error.HTTPError as error:
+            last_error = f"HTTP {error.code}: {error.read().decode('utf-8', errors='replace')}"
+            time.sleep(1)
         except (urllib.error.URLError, TimeoutError) as error:
             last_error = error
             time.sleep(1)
