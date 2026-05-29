@@ -101,7 +101,10 @@ export function KnowledgeBasePage() {
             .split(",")
             .map((tag) => tag.trim())
             .filter(Boolean),
-          evidence_refs: [`claims:${publishSourceClaimId}`, `knowledge_cases:${publishCaseId}`],
+          evidence_refs: [
+            `investigation_results:INV-${publishSourceClaimId}`,
+            `qa_reviews:QA-${publishSourceClaimId}`,
+          ],
           source_claim_id: publishSourceClaimId,
         },
         apiKey,

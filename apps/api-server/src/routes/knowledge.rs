@@ -165,6 +165,15 @@ fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Res
             "evidence_refs are required",
         ));
     }
+    if !request.evidence_refs.iter().any(|reference| {
+        reference.starts_with("investigation_results:") || reference.starts_with("qa_reviews:")
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_KNOWLEDGE_CASE",
+            "confirmed knowledge cases require investigation_results or qa_reviews evidence",
+        ));
+    }
     if request.tags.is_empty() || request.tags.iter().any(|tag| tag.trim().is_empty()) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
