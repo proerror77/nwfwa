@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildCaseStatusUpdateSummary,
   buildCaseEvidenceSufficiencyRows,
+  buildLeadTriageSummary,
   buildLeadSummary,
   caseEvidenceRefsFromPackage,
   caseEvidenceSufficiencyFromPackage,
@@ -104,6 +106,84 @@ describe("caseEvidenceRefsFromPackage", () => {
 
   it("ignores malformed evidence refs", () => {
     expect(caseEvidenceRefsFromPackage({ evidence_refs: "audit:scoring.completed" })).toEqual([]);
+  });
+});
+
+describe("buildLeadTriageSummary", () => {
+  it("summarizes lead triage workflow results", () => {
+    expect(
+      buildLeadTriageSummary({
+        audit_id: "audit_lead_triaged_1",
+        lead: {
+          lead_id: "lead_CLM-1",
+          claim_id: "CLM-1",
+          scheme_family: "early_high_value_claim",
+          status: "triaged",
+          disposition: "open_case",
+          risk_score: 91,
+          rag: "RED",
+          evidence_refs: ["audit:scoring.completed"],
+        },
+        case: {
+          case_id: "case_CLM-1",
+          lead_id: "lead_CLM-1",
+          claim_id: "CLM-1",
+          status: "triage",
+          priority: "high",
+          assignee: "siu-reviewer-1",
+          reviewer: "medical-reviewer-1",
+          evidence_package: {
+            evidence_refs: ["audit:scoring.completed"],
+          },
+        },
+      }),
+    ).toEqual({
+      auditId: "audit_lead_triaged_1",
+      leadId: "lead_CLM-1",
+      claimId: "CLM-1",
+      disposition: "open_case",
+      status: "triaged",
+      riskScore: 91,
+      rag: "RED",
+      evidenceCount: 1,
+      caseId: "case_CLM-1",
+      caseStatus: "triage",
+      casePriority: "high",
+    });
+    expect(buildLeadTriageSummary(null)).toBeNull();
+  });
+});
+
+describe("buildCaseStatusUpdateSummary", () => {
+  it("summarizes case status workflow updates", () => {
+    expect(
+      buildCaseStatusUpdateSummary({
+        audit_id: "audit_case_status_1",
+        case: {
+          case_id: "case_CLM-1",
+          lead_id: "lead_CLM-1",
+          claim_id: "CLM-1",
+          status: "investigating",
+          priority: "high",
+          assignee: "siu-reviewer-1",
+          reviewer: "medical-reviewer-1",
+          evidence_package: {
+            evidence_refs: ["case_workflow:investigating", "audit:scoring.completed"],
+          },
+        },
+      }),
+    ).toEqual({
+      auditId: "audit_case_status_1",
+      caseId: "case_CLM-1",
+      claimId: "CLM-1",
+      status: "investigating",
+      priority: "high",
+      assignee: "siu-reviewer-1",
+      reviewer: "medical-reviewer-1",
+      slaStatus: "not_available",
+      evidenceCount: 2,
+    });
+    expect(buildCaseStatusUpdateSummary(null)).toBeNull();
   });
 });
 

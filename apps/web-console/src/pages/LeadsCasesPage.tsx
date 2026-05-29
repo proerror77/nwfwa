@@ -57,6 +57,17 @@ type CaseListResponse = {
   cases: CaseRecord[];
 };
 
+type TriageLeadResponse = {
+  lead: LeadRecord;
+  case?: CaseRecord | null;
+  audit_id: string;
+};
+
+type UpdateCaseStatusResponse = {
+  case: CaseRecord;
+  audit_id: string;
+};
+
 export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseListResponse) {
   const leads = leadsData?.leads ?? [];
   const cases = casesData?.cases ?? [];
@@ -129,6 +140,45 @@ export function caseRoutingReason(item: CaseRecord) {
   return item.routing_reason || (typeof packageReason === "string" ? packageReason : "");
 }
 
+export function buildLeadTriageSummary(response?: TriageLeadResponse | null) {
+  if (!response) {
+    return null;
+  }
+  return {
+    auditId: response.audit_id,
+    leadId: response.lead.lead_id,
+    claimId: response.lead.claim_id,
+    disposition: response.lead.disposition,
+    status: response.lead.status,
+    riskScore: response.lead.risk_score,
+    rag: response.lead.rag,
+    evidenceCount: response.lead.evidence_refs.length,
+    caseId: response.case?.case_id ?? "none",
+    caseStatus: response.case?.status ?? "not_opened",
+    casePriority: response.case?.priority ?? "none",
+  };
+}
+
+export function buildCaseStatusUpdateSummary(response?: UpdateCaseStatusResponse | null) {
+  if (!response) {
+    return null;
+  }
+  const evidenceRefs = caseEvidenceRefsFromPackage(response.case.evidence_package);
+  return {
+    auditId: response.audit_id,
+    caseId: response.case.case_id,
+    claimId: response.case.claim_id,
+    status: response.case.status,
+    priority: response.case.priority,
+    assignee: response.case.assignee,
+    reviewer: response.case.reviewer,
+    slaStatus: response.case.evidence_package?.sla_status
+      ? String(response.case.evidence_package.sla_status)
+      : "not_available",
+    evidenceCount: evidenceRefs.length,
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -191,7 +241,7 @@ export function LeadsCasesPage() {
           notes,
         },
         apiKey,
-      );
+      ) as Promise<TriageLeadResponse>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["leads"] });
@@ -210,7 +260,7 @@ export function LeadsCasesPage() {
           evidence_refs: [`case_workflow:${caseStatus}`],
         },
         apiKey,
-      );
+      ) as Promise<UpdateCaseStatusResponse>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["cases"] });
@@ -218,6 +268,8 @@ export function LeadsCasesPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
+  const triageSummary = buildLeadTriageSummary(triageMutation.data);
+  const caseStatusSummary = buildCaseStatusUpdateSummary(caseStatusMutation.data);
 
   return (
     <section className="ops-grid">
@@ -383,7 +435,54 @@ export function LeadsCasesPage() {
             {triageMutation.error ? (
               <pre className="error">{String(triageMutation.error.message)}</pre>
             ) : null}
-            {triageMutation.data ? <pre>{JSON.stringify(triageMutation.data, null, 2)}</pre> : null}
+            {triageSummary ? (
+              <dl className="result-grid">
+                <div>
+                  <dt>Triage Audit</dt>
+                  <dd>{triageSummary.auditId}</dd>
+                </div>
+                <div>
+                  <dt>Lead</dt>
+                  <dd>{triageSummary.leadId}</dd>
+                </div>
+                <div>
+                  <dt>Claim</dt>
+                  <dd>{triageSummary.claimId}</dd>
+                </div>
+                <div>
+                  <dt>Disposition</dt>
+                  <dd>{triageSummary.disposition}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{triageSummary.status}</dd>
+                </div>
+                <div>
+                  <dt>Risk</dt>
+                  <dd>{triageSummary.riskScore}</dd>
+                </div>
+                <div>
+                  <dt>RAG</dt>
+                  <dd>{triageSummary.rag}</dd>
+                </div>
+                <div>
+                  <dt>Evidence</dt>
+                  <dd>{triageSummary.evidenceCount}</dd>
+                </div>
+                <div>
+                  <dt>Case</dt>
+                  <dd>{triageSummary.caseId}</dd>
+                </div>
+                <div>
+                  <dt>Case Status</dt>
+                  <dd>{triageSummary.caseStatus}</dd>
+                </div>
+                <div>
+                  <dt>Case Priority</dt>
+                  <dd>{triageSummary.casePriority}</dd>
+                </div>
+              </dl>
+            ) : null}
             <ul className="result-list">
               {selectedLead.evidence_refs.map((ref) => (
                 <li key={ref}>{ref}</li>
@@ -433,8 +532,45 @@ export function LeadsCasesPage() {
         {caseStatusMutation.error ? (
           <pre className="error">{String(caseStatusMutation.error.message)}</pre>
         ) : null}
-        {caseStatusMutation.data ? (
-          <pre>{JSON.stringify(caseStatusMutation.data, null, 2)}</pre>
+        {caseStatusSummary ? (
+          <dl className="result-grid">
+            <div>
+              <dt>Status Audit</dt>
+              <dd>{caseStatusSummary.auditId}</dd>
+            </div>
+            <div>
+              <dt>Case</dt>
+              <dd>{caseStatusSummary.caseId}</dd>
+            </div>
+            <div>
+              <dt>Claim</dt>
+              <dd>{caseStatusSummary.claimId}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{caseStatusSummary.status}</dd>
+            </div>
+            <div>
+              <dt>Priority</dt>
+              <dd>{caseStatusSummary.priority}</dd>
+            </div>
+            <div>
+              <dt>Assignee</dt>
+              <dd>{caseStatusSummary.assignee}</dd>
+            </div>
+            <div>
+              <dt>Reviewer</dt>
+              <dd>{caseStatusSummary.reviewer}</dd>
+            </div>
+            <div>
+              <dt>SLA</dt>
+              <dd>{caseStatusSummary.slaStatus}</dd>
+            </div>
+            <div>
+              <dt>Evidence</dt>
+              <dd>{caseStatusSummary.evidenceCount}</dd>
+            </div>
+          </dl>
         ) : null}
         <div className="case-grid">
           {casesQuery.data?.cases.map((item) => {
