@@ -935,6 +935,7 @@ async fn openapi_includes_operations_paths() {
     );
     for field in [
         "case_status_labels",
+        "medical_review_labels",
         "false_positive_labels",
         "evidence_backed_labels",
     ] {

@@ -22,6 +22,7 @@ describe("buildDashboardLabelPoolSummary", () => {
       model_feedback: 4,
       workflow_feedback: 2,
       case_status_labels: 1,
+      medical_review_labels: 2,
       false_positive_labels: 1,
       evidence_backed_labels: 8,
     });
@@ -34,6 +35,7 @@ describe("buildDashboardLabelPoolSummary", () => {
       modelFeedback: 4,
       workflowFeedback: 2,
       caseStatusLabels: 1,
+      medicalReviewLabels: 2,
       falsePositiveLabels: 1,
       evidenceBackedLabels: 8,
       trainingReadyRateLabel: "55.6%",

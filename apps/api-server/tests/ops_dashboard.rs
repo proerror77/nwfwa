@@ -456,6 +456,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["label_pool"]["model_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["workflow_feedback"], 2);
     assert_eq!(dashboard["label_pool"]["case_status_labels"], 0);
+    assert_eq!(dashboard["label_pool"]["medical_review_labels"], 1);
     assert_eq!(dashboard["label_pool"]["false_positive_labels"], 0);
     assert_eq!(dashboard["label_pool"]["evidence_backed_labels"], 4);
 }

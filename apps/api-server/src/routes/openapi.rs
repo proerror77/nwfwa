@@ -3855,7 +3855,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardLabelPool": {
                     "type": "object",
-                    "required": ["total_labels", "approved_for_training", "needs_review", "rule_feedback", "model_feedback", "workflow_feedback", "case_status_labels", "false_positive_labels", "evidence_backed_labels"],
+                    "required": ["total_labels", "approved_for_training", "needs_review", "rule_feedback", "model_feedback", "workflow_feedback", "case_status_labels", "medical_review_labels", "false_positive_labels", "evidence_backed_labels"],
                     "properties": {
                         "total_labels": { "type": "integer" },
                         "approved_for_training": { "type": "integer" },
@@ -3864,6 +3864,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "model_feedback": { "type": "integer" },
                         "workflow_feedback": { "type": "integer" },
                         "case_status_labels": { "type": "integer" },
+                        "medical_review_labels": { "type": "integer" },
                         "false_positive_labels": { "type": "integer" },
                         "evidence_backed_labels": { "type": "integer" }
                     }

@@ -461,6 +461,7 @@ pub struct DashboardLabelPoolRecord {
     pub model_feedback: u32,
     pub workflow_feedback: u32,
     pub case_status_labels: u32,
+    pub medical_review_labels: u32,
     pub false_positive_labels: u32,
     pub evidence_backed_labels: u32,
 }
@@ -8019,6 +8020,10 @@ fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLab
         case_status_labels: labels
             .iter()
             .filter(|label| label.source_type == "case_status")
+            .count() as u32,
+        medical_review_labels: labels
+            .iter()
+            .filter(|label| label.source_type == "medical_review")
             .count() as u32,
         false_positive_labels: labels
             .iter()
