@@ -2491,15 +2491,15 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["claim_id", "scoring_audit_id", "reviewer", "decision", "notes", "evidence_refs"],
                     "properties": {
-                        "claim_id": { "type": "string" },
-                        "scoring_audit_id": { "type": "string" },
-                        "reviewer": { "type": "string" },
+                        "claim_id": { "type": "string", "minLength": 1 },
+                        "scoring_audit_id": { "type": "string", "minLength": 1 },
+                        "reviewer": { "type": "string", "minLength": 1 },
                         "decision": {
                             "type": "string",
                             "enum": ["evidence_sufficient", "request_more_evidence", "medical_necessity_issue", "no_medical_issue"]
                         },
-                        "notes": { "type": "string" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "notes": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
                     }
                 },
                 "MedicalReviewResultResponse": {

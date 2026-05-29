@@ -895,6 +895,19 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|event_type| event_type == "agent_approval_pending")
     );
+    for field in ["claim_id", "scoring_audit_id", "reviewer", "notes"] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
+                [field]["minLength"],
+            1,
+            "missing SubmitMedicalReviewResultRequest minLength for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
+            ["evidence_refs"]["minItems"],
+        1
+    );
     for field in ["assignee", "reviewer", "priority", "notes"] {
         assert_eq!(
             schema["components"]["schemas"]["TriageLeadRequest"]["properties"][field]["minLength"],

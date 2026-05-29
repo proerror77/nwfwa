@@ -277,7 +277,12 @@ fn validate_medical_review_result(
             "decision must be evidence_sufficient, request_more_evidence, medical_necessity_issue, or no_medical_issue",
         ));
     }
-    if request.notes.trim().is_empty() || request.evidence_refs.is_empty() {
+    if request.notes.trim().is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .all(|reference| reference.trim().is_empty())
+    {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "MISSING_MEDICAL_REVIEW_EVIDENCE",
