@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildRuleAuditFilters, buildRuleLabelReadinessSummary } from "./RulesStudio";
+import {
+  buildRuleAuditFilters,
+  buildRuleDiscoverySummary,
+  buildRuleLabelReadinessSummary,
+} from "./RulesStudio";
 
 describe("buildRuleLabelReadinessSummary", () => {
   it("summarizes rule-governance labels from human outcomes", () => {
@@ -48,6 +52,41 @@ describe("buildRuleLabelReadinessSummary", () => {
       needsReviewCount: 1,
       evidenceBackedCount: 2,
       confirmedFwaCount: 1,
+    });
+  });
+});
+
+describe("buildRuleDiscoverySummary", () => {
+  it("summarizes candidate rule discovery metrics for governance review", () => {
+    const summary = buildRuleDiscoverySummary({
+      sample_count: 12,
+      positive_count: 3,
+      candidates: [
+        {
+          rule: {
+            rule_id: "candidate_early_high_amount",
+            name: "Early high amount candidate",
+          },
+          support: 4,
+          precision: 0.75,
+          recall: 1,
+          lift: 3,
+          estimated_saving: "8200.00",
+          false_positive_rate: 0.25,
+          matched_claim_ids: ["CLM-1", "CLM-2"],
+          explanation: "保单生效早期且理赔金额接近保障额度",
+        },
+      ],
+    });
+
+    expect(summary).toEqual({
+      sampleCount: 12,
+      positiveCount: 3,
+      candidateCount: 1,
+      topRuleId: "candidate_early_high_amount",
+      topPrecisionLabel: "75.0%",
+      topLiftLabel: "3.00x",
+      topSaving: "8200.00",
     });
   });
 });

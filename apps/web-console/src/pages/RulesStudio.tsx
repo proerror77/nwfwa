@@ -93,6 +93,27 @@ type AuditEvent = {
   created_at?: string | null;
 };
 
+type RuleDiscoveryCandidate = {
+  rule: {
+    rule_id: string;
+    name?: string;
+  } & Record<string, unknown>;
+  support: number;
+  precision: number;
+  recall: number;
+  lift: number;
+  estimated_saving: string;
+  false_positive_rate: number;
+  matched_claim_ids: string[];
+  explanation: string;
+};
+
+type RuleDiscoveryResponse = {
+  sample_count: number;
+  positive_count: number;
+  candidates: RuleDiscoveryCandidate[];
+};
+
 export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
   const ruleLabels = labels.filter((label) => label.feedback_target === "rules");
   return {
@@ -106,6 +127,20 @@ export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
     confirmedFwaCount: ruleLabels.filter(
       (label) => label.label_name === "confirmed_fwa" && label.label_value === "true",
     ).length,
+  };
+}
+
+export function buildRuleDiscoverySummary(discovery?: RuleDiscoveryResponse) {
+  const candidates = discovery?.candidates ?? [];
+  const topCandidate = candidates[0];
+  return {
+    sampleCount: discovery?.sample_count ?? 0,
+    positiveCount: discovery?.positive_count ?? 0,
+    candidateCount: candidates.length,
+    topRuleId: topCandidate?.rule.rule_id ?? "none",
+    topPrecisionLabel: topCandidate ? `${(topCandidate.precision * 100).toFixed(1)}%` : "0.0%",
+    topLiftLabel: topCandidate ? `${topCandidate.lift.toFixed(2)}x` : "0.00x",
+    topSaving: topCandidate?.estimated_saving ?? "0.00",
   };
 }
 
@@ -310,14 +345,13 @@ export function RulesStudio() {
     ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
     : [];
   const discoveryMutation = useMutation({
-    mutationFn: () => discoverRules(JSON.parse(discoveryPayload), apiKey),
+    mutationFn: () =>
+      discoverRules(JSON.parse(discoveryPayload), apiKey) as Promise<RuleDiscoveryResponse>,
   });
+  const discoverySummary = buildRuleDiscoverySummary(discoveryMutation.data);
   const saveCandidateMutation = useMutation({
     mutationFn: () => {
-      const discovery = discoveryMutation.data as
-        | { candidates?: Array<{ rule?: unknown }> }
-        | undefined;
-      const rule = discovery?.candidates?.[0]?.rule;
+      const rule = discoveryMutation.data?.candidates?.[0]?.rule;
       if (!rule) throw new Error("No candidate rule available");
       return saveRuleCandidate({ owner: "rule-discovery", rule }, apiKey);
     },
@@ -669,6 +703,55 @@ export function RulesStudio() {
         ) : null}
         {discoveryMutation.data ? (
           <div className="result-stack">
+            <div className="summary-grid">
+              <div>
+                <span>Samples</span>
+                <strong>{discoverySummary.sampleCount}</strong>
+              </div>
+              <div>
+                <span>Positive Labels</span>
+                <strong>{discoverySummary.positiveCount}</strong>
+              </div>
+              <div>
+                <span>Candidates</span>
+                <strong>{discoverySummary.candidateCount}</strong>
+              </div>
+              <div>
+                <span>Top Rule</span>
+                <strong>{discoverySummary.topRuleId}</strong>
+              </div>
+              <div>
+                <span>Top Precision</span>
+                <strong>{discoverySummary.topPrecisionLabel}</strong>
+              </div>
+              <div>
+                <span>Top Lift</span>
+                <strong>{discoverySummary.topLiftLabel}</strong>
+              </div>
+              <div>
+                <span>Top Saving</span>
+                <strong>{discoverySummary.topSaving}</strong>
+              </div>
+            </div>
+            <div className="table-list">
+              {discoveryMutation.data.candidates.map((candidate) => (
+                <div className="metric-row" key={candidate.rule.rule_id}>
+                  <span>
+                    {candidate.rule.name ?? candidate.rule.rule_id}
+                    <small>
+                      {candidate.explanation} · matched{" "}
+                      {candidate.matched_claim_ids.slice(0, 3).join(", ") || "none"}
+                    </small>
+                  </span>
+                  <strong>{(candidate.precision * 100).toFixed(1)}%</strong>
+                  <small>
+                    support {candidate.support} · lift {candidate.lift.toFixed(2)}x · FPR{" "}
+                    {(candidate.false_positive_rate * 100).toFixed(1)}% · saving{" "}
+                    {candidate.estimated_saving}
+                  </small>
+                </div>
+              ))}
+            </div>
             <button
               onClick={() => saveCandidateMutation.mutate()}
               disabled={saveCandidateMutation.isPending}
