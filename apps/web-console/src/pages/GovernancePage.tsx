@@ -1840,16 +1840,20 @@ export function GovernancePage() {
                   {run.approvals.filter((approval) => approval.decision === "pending").length}{" "}
                   pending
                 </p>
-                {buildAgentEvidenceRefRows(run).length ? (
-                  <ul className="result-list compact-list">
-                    {buildAgentEvidenceRefRows(run).map((row) => (
-                      <li key={row.source}>
-                        <strong>{row.source}</strong>
-                        <span>{row.count} refs</span>
-                      </li>
-                    ))}
-                  </ul>
-                ) : null}
+                {(() => {
+                  const evidenceRows = buildAgentEvidenceRefRows(run);
+                  return evidenceRows.length ? (
+                    <ul className="result-list compact-list">
+                      {evidenceRows.map((row) => (
+                        <li key={row.source}>
+                          <strong>{row.source}</strong>
+                          <span>{row.count} refs</span>
+                          <small>{row.refs.join(" | ")}</small>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : null;
+                })()}
                 <div className="button-row">
                   <button
                     onClick={() =>

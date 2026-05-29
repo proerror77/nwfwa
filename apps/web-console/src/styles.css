@@ -214,6 +214,12 @@ pre {
   color: #4e5968;
 }
 
+.result-list small {
+  display: block;
+  margin-top: 4px;
+  color: #5f6b7a;
+}
+
 .empty {
   color: #6b7280;
 }
