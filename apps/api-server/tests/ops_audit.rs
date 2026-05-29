@@ -274,7 +274,7 @@ async fn filters_routing_policy_audit_events_for_lifecycle_history() {
             app.clone(),
             "POST",
             &format!("/api/v1/ops/routing-policies/audit_history_policy/post_payment/3/{action}"),
-            "{}",
+            r#"{"evidence_refs": ["routing_policies:audit_history_policy:v3:post_payment"]}"#,
         )
         .await;
         assert_eq!(status, StatusCode::OK);
@@ -307,6 +307,10 @@ async fn filters_routing_policy_audit_events_for_lifecycle_history() {
             && event["payload"]["version"] == 3
             && event["payload"]["review_mode"] == "post_payment"
     }));
+    assert_eq!(
+        history["events"][0]["evidence_refs"][0],
+        "routing_policies:audit_history_policy:v3:post_payment"
+    );
 
     let (status, wrong_version) = json_request(
         app,

@@ -177,6 +177,10 @@ describe("ops API helpers", () => {
     await activateRoutingPolicy(policy, "dev-secret");
     await rollbackRoutingPolicy(policy, "dev-secret");
 
+    const lifecycleBody = JSON.stringify({
+      evidence_refs: ["routing_policies:fwa_risk_fusion_routing:v2:pre_payment"],
+    });
+
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
       "/api/v1/ops/routing-policies",
@@ -202,22 +206,22 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/submit",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: lifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/approve",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: lifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/activate",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: lifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       7,
       "/api/v1/ops/routing-policies/fwa_risk_fusion_routing/pre_payment/2/rollback",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: lifecycleBody }),
     );
   });
 

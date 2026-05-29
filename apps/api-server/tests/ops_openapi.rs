@@ -743,6 +743,25 @@ async fn openapi_includes_operations_paths() {
             ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
         "#/components/schemas/RoutingPolicyRecord"
     );
+    for action in ["submit", "approve", "activate", "rollback"] {
+        let operation = &schema["paths"][format!(
+            "/api/v1/ops/routing-policies/{{policy_id}}/{{review_mode}}/{{version}}/{action}"
+        )]["post"];
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/RoutingPolicyLifecycleRequest"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicyLifecycleRequest"]["properties"]
+            ["evidence_refs"]["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicyLifecycleRequest"]["properties"]
+            ["evidence_refs"]["items"]["minLength"],
+        1
+    );
     assert_eq!(
         schema["paths"]
             ["/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/promotion-gates"]

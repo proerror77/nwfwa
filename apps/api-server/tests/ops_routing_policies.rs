@@ -316,25 +316,46 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
     assert_eq!(status, StatusCode::OK);
     assert_eq!(saved["status"], "draft");
 
-    let (status, blocked) = post_empty(
+    let (status, blocked) = post_json(
         app.clone(),
         "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/activate",
+        r#"{"evidence_refs": []}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(blocked["code"], "MISSING_ROUTING_POLICY_LIFECYCLE_EVIDENCE");
+
+    let (status, blocked) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/activate",
+        r#"{"evidence_refs": [" "]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(blocked["code"], "MISSING_ROUTING_POLICY_LIFECYCLE_EVIDENCE");
+
+    let (status, blocked) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/activate",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
     assert_eq!(blocked["code"], "ROUTING_POLICY_APPROVAL_REQUIRED");
 
-    let (status, submitted) = post_empty(
+    let (status, submitted) = post_json(
         app.clone(),
         "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/submit",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(submitted["status"], "submitted");
 
-    let (status, approved) = post_empty(
+    let (status, approved) = post_json(
         app.clone(),
         "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/approve",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -349,9 +370,10 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
     assert_eq!(gates["decision"], "activation_allowed");
     assert_eq!(gates["passed_count"], gates["total_count"]);
 
-    let (status, activated) = post_empty(
+    let (status, activated) = post_json(
         app.clone(),
         "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/activate",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -378,9 +400,10 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
     );
     assert_eq!(scored["routing_policy"]["risk_thresholds"]["high_min"], 1);
 
-    let (status, rolled_back) = post_empty(
+    let (status, rolled_back) = post_json(
         app.clone(),
         "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/rollback",
+        r#"{"evidence_refs": ["routing_policies:candidate_strict_prepay:v2:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -438,17 +461,19 @@ async fn routing_policy_promotion_gates_block_invalid_thresholds() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(saved["status"], "draft");
 
-    let (status, submitted) = post_empty(
+    let (status, submitted) = post_json(
         app.clone(),
         "/api/v1/ops/routing-policies/candidate_invalid_thresholds/pre_payment/1/submit",
+        r#"{"evidence_refs": ["routing_policies:candidate_invalid_thresholds:v1:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(submitted["status"], "submitted");
 
-    let (status, approved) = post_empty(
+    let (status, approved) = post_json(
         app.clone(),
         "/api/v1/ops/routing-policies/candidate_invalid_thresholds/pre_payment/1/approve",
+        r#"{"evidence_refs": ["routing_policies:candidate_invalid_thresholds:v1:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -468,9 +493,10 @@ async fn routing_policy_promotion_gates_block_invalid_thresholds() {
             "risk thresholds must satisfy low < medium <= high <= critical"
         )));
 
-    let (status, blocked) = post_empty(
+    let (status, blocked) = post_json(
         app,
         "/api/v1/ops/routing-policies/candidate_invalid_thresholds/pre_payment/1/activate",
+        r#"{"evidence_refs": ["routing_policies:candidate_invalid_thresholds:v1:pre_payment"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::CONFLICT);
@@ -508,23 +534,6 @@ async fn post_json(
                 .header("content-type", "application/json")
                 .header("x-api-key", "dev-secret")
                 .body(Body::from(body))
-                .unwrap(),
-        )
-        .await
-        .unwrap();
-    let status = response.status();
-    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-    (status, serde_json::from_slice(&body).unwrap())
-}
-
-async fn post_empty(app: axum::Router, uri: &str) -> (StatusCode, serde_json::Value) {
-    let response = app
-        .oneshot(
-            Request::builder()
-                .method("POST")
-                .uri(uri)
-                .header("x-api-key", "dev-secret")
-                .body(Body::empty())
                 .unwrap(),
         )
         .await

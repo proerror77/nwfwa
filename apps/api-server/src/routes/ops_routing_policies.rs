@@ -47,6 +47,11 @@ pub struct SaveRoutingPolicyCandidateRequest {
     pub owner: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct RoutingPolicyLifecycleRequest {
+    pub evidence_refs: Vec<String>,
+}
+
 pub async fn list_routing_policies(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -109,6 +114,7 @@ pub async fn save_routing_policy_candidate(
             event_type: "routing_policy.candidate.saved",
             from_status: None,
             summary: "Routing policy candidate saved",
+            evidence_refs: default_routing_policy_evidence_refs(&record),
         },
     )
     .await
@@ -161,15 +167,20 @@ pub async fn submit_routing_policy(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
+    Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
+    validate_routing_policy_lifecycle_request(&request)?;
     update_routing_policy_status(
         state,
         headers,
-        policy_id,
-        version,
-        review_mode,
-        "draft",
-        "submitted",
+        RoutingPolicyStatusChange {
+            policy_id,
+            version,
+            review_mode,
+            required_status: "draft",
+            next_status: "submitted",
+            evidence_refs: request.evidence_refs,
+        },
     )
     .await
 }
@@ -178,15 +189,20 @@ pub async fn approve_routing_policy(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
+    Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
+    validate_routing_policy_lifecycle_request(&request)?;
     update_routing_policy_status(
         state,
         headers,
-        policy_id,
-        version,
-        review_mode,
-        "submitted",
-        "approved",
+        RoutingPolicyStatusChange {
+            policy_id,
+            version,
+            review_mode,
+            required_status: "submitted",
+            next_status: "approved",
+            evidence_refs: request.evidence_refs,
+        },
     )
     .await
 }
@@ -195,7 +211,9 @@ pub async fn activate_routing_policy(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
+    Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
+    validate_routing_policy_lifecycle_request(&request)?;
     let actor = authorize(&state, &headers)?;
     let previous = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
     require_status(&previous, "approved", "ROUTING_POLICY_APPROVAL_REQUIRED")?;
@@ -228,6 +246,7 @@ pub async fn activate_routing_policy(
             event_type: "routing_policy.activation.completed",
             from_status: Some(&previous.status),
             summary: "Routing policy activation completed",
+            evidence_refs: request.evidence_refs,
         },
     )
     .await
@@ -239,34 +258,68 @@ pub async fn rollback_routing_policy(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
+    Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
+    validate_routing_policy_lifecycle_request(&request)?;
     update_routing_policy_status(
         state,
         headers,
-        policy_id,
-        version,
-        review_mode,
-        "active",
-        "approved",
+        RoutingPolicyStatusChange {
+            policy_id,
+            version,
+            review_mode,
+            required_status: "active",
+            next_status: "approved",
+            evidence_refs: request.evidence_refs,
+        },
     )
     .await
+}
+
+fn validate_routing_policy_lifecycle_request(
+    request: &RoutingPolicyLifecycleRequest,
+) -> Result<(), ApiError> {
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_ROUTING_POLICY_LIFECYCLE_EVIDENCE",
+            "routing policy lifecycle evidence_refs are required",
+        ));
+    }
+    Ok(())
 }
 
 async fn update_routing_policy_status(
     state: AppState,
     headers: HeaderMap,
-    policy_id: String,
-    version: u32,
-    review_mode: String,
-    required_status: &'static str,
-    next_status: &'static str,
+    change: RoutingPolicyStatusChange,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     let actor = authorize(&state, &headers)?;
-    let previous = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
-    require_status(&previous, required_status, "ROUTING_POLICY_STATUS_REQUIRED")?;
+    let previous = load_routing_policy(
+        &state,
+        &change.policy_id,
+        change.version,
+        &change.review_mode,
+    )
+    .await?;
+    require_status(
+        &previous,
+        change.required_status,
+        "ROUTING_POLICY_STATUS_REQUIRED",
+    )?;
     let record = state
         .repository
-        .update_routing_policy_status(&policy_id, version, &review_mode, next_status)
+        .update_routing_policy_status(
+            &change.policy_id,
+            change.version,
+            &change.review_mode,
+            change.next_status,
+        )
         .await
         .map_err(internal_error("ROUTING_POLICY_STATUS_UPDATE_FAILED"))?
         .ok_or_else(routing_policy_not_found)?;
@@ -275,22 +328,32 @@ async fn update_routing_policy_status(
         &actor,
         RoutingPolicyAuditInput {
             record: &record,
-            event_type: if next_status == "approved" && required_status == "active" {
+            event_type: if change.next_status == "approved" && change.required_status == "active" {
                 "routing_policy.rollback.completed"
             } else {
                 "routing_policy.status.changed"
             },
             from_status: Some(&previous.status),
-            summary: if next_status == "approved" && required_status == "active" {
+            summary: if change.next_status == "approved" && change.required_status == "active" {
                 "Routing policy rollback completed"
             } else {
                 "Routing policy status changed"
             },
+            evidence_refs: change.evidence_refs,
         },
     )
     .await
     .map_err(internal_error("ROUTING_POLICY_AUDIT_SAVE_FAILED"))?;
     Ok(Json(record))
+}
+
+struct RoutingPolicyStatusChange {
+    policy_id: String,
+    version: u32,
+    review_mode: String,
+    required_status: &'static str,
+    next_status: &'static str,
+    evidence_refs: Vec<String>,
 }
 
 fn build_routing_policy_promotion_gates(
@@ -436,6 +499,7 @@ struct RoutingPolicyAuditInput<'a> {
     event_type: &'static str,
     from_status: Option<&'a str>,
     summary: &'static str,
+    evidence_refs: Vec<String>,
 }
 
 async fn record_routing_policy_audit(
@@ -467,12 +531,16 @@ async fn record_routing_policy_audit(
             event_status: "succeeded".into(),
             summary: input.summary.into(),
             payload,
-            evidence_refs: vec![Value::String(format!(
-                "routing_policies:{}:v{}:{}",
-                input.record.policy_id, input.record.version, input.record.review_mode
-            ))],
+            evidence_refs: input.evidence_refs.into_iter().map(Value::String).collect(),
         })
         .await
+}
+
+fn default_routing_policy_evidence_refs(record: &RoutingPolicyRecord) -> Vec<String> {
+    vec![format!(
+        "routing_policies:{}:v{}:{}",
+        record.policy_id, record.version, record.review_mode
+    )]
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

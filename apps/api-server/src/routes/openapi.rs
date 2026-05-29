@@ -1024,6 +1024,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "summary": "Submit a draft routing policy for governance review",
                     "security": [{ "ApiKeyAuth": [] }],
                     "parameters": routing_policy_lifecycle_parameters(),
+                    "requestBody": routing_policy_lifecycle_request_body(),
                     "responses": {
                         "200": {
                             "description": "Submitted routing policy",
@@ -1066,6 +1067,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "summary": "Approve a submitted routing policy",
                     "security": [{ "ApiKeyAuth": [] }],
                     "parameters": routing_policy_lifecycle_parameters(),
+                    "requestBody": routing_policy_lifecycle_request_body(),
                     "responses": {
                         "200": {
                             "description": "Approved routing policy",
@@ -1091,6 +1093,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "summary": "Activate an approved routing policy for scoring",
                     "security": [{ "ApiKeyAuth": [] }],
                     "parameters": routing_policy_lifecycle_parameters(),
+                    "requestBody": routing_policy_lifecycle_request_body(),
                     "responses": {
                         "200": {
                             "description": "Activated routing policy",
@@ -1116,6 +1119,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "summary": "Roll back an active routing policy to approved status",
                     "security": [{ "ApiKeyAuth": [] }],
                     "parameters": routing_policy_lifecycle_parameters(),
+                    "requestBody": routing_policy_lifecycle_request_body(),
                     "responses": {
                         "200": {
                             "description": "Rolled back routing policy",
@@ -3634,6 +3638,13 @@ pub async fn openapi_schema() -> Json<Value> {
                         "owner": { "type": ["string", "null"], "minLength": 1 }
                     }
                 },
+                "RoutingPolicyLifecycleRequest": {
+                    "type": "object",
+                    "required": ["evidence_refs"],
+                    "properties": {
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                    }
+                },
                 "RoutingPolicyPromotionGate": {
                     "type": "object",
                     "required": ["label", "passed", "blocker", "evidence_source"],
@@ -4778,4 +4789,15 @@ fn routing_policy_lifecycle_parameters() -> Value {
             "schema": { "type": "integer", "minimum": 1 }
         }
     ])
+}
+
+fn routing_policy_lifecycle_request_body() -> Value {
+    json!({
+        "required": true,
+        "content": {
+            "application/json": {
+                "schema": { "$ref": "#/components/schemas/RoutingPolicyLifecycleRequest" }
+            }
+        }
+    })
 }
