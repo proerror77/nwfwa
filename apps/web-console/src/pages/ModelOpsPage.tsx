@@ -175,7 +175,13 @@ export function buildModelRetrainingJobSummary(jobs: ModelRetrainingJob[] = []) 
     queuedCount: jobs.filter((job) => job.status === "queued").length,
     runningCount: jobs.filter((job) => job.status === "running").length,
     completedCount: jobs.filter((job) => job.status === "completed").length,
+    artifactReadyCount: jobs.filter((job) => job.candidate_artifact_uri).length,
+    validationReportCount: jobs.filter((job) => job.validation_report_uri).length,
+    evaluationCount: jobs.filter((job) => job.output_evaluation_id).length,
     latestStatus: jobs[0]?.status ?? "none",
+    latestArtifactStatus: jobs.some((job) => job.candidate_artifact_uri)
+      ? "available"
+      : "missing",
   };
 }
 
@@ -597,8 +603,24 @@ export function ModelOpsPage() {
             <strong>{retrainingJobSummary.completedCount}</strong>
           </div>
           <div>
+            <span>Artifacts</span>
+            <strong>{retrainingJobSummary.artifactReadyCount}</strong>
+          </div>
+          <div>
+            <span>Validation Reports</span>
+            <strong>{retrainingJobSummary.validationReportCount}</strong>
+          </div>
+          <div>
+            <span>Evaluations</span>
+            <strong>{retrainingJobSummary.evaluationCount}</strong>
+          </div>
+          <div>
             <span>Latest Status</span>
             <strong>{retrainingJobSummary.latestStatus}</strong>
+          </div>
+          <div>
+            <span>Latest Artifact</span>
+            <strong>{retrainingJobSummary.latestArtifactStatus}</strong>
           </div>
         </div>
         <div className="result-stack">
@@ -672,6 +694,12 @@ export function ModelOpsPage() {
                 <small>
                   {job.candidate_model_version} · {job.output_evaluation_id ?? "no eval"}
                 </small>
+              ) : null}
+              {job.candidate_artifact_uri ? (
+                <small>artifact {job.candidate_artifact_uri}</small>
+              ) : null}
+              {job.validation_report_uri ? (
+                <small>validation {job.validation_report_uri}</small>
               ) : null}
               <div className="button-row">
                 <button

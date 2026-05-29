@@ -165,7 +165,11 @@ describe("buildModelRetrainingJobSummary", () => {
       queuedCount: 1,
       runningCount: 1,
       completedCount: 0,
+      artifactReadyCount: 1,
+      validationReportCount: 1,
+      evaluationCount: 1,
       latestStatus: "running",
+      latestArtifactStatus: "available",
     });
   });
 });
