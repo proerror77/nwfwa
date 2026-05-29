@@ -205,6 +205,7 @@ pub async fn score_claim(
     })?;
 
     validate_score_request_contract(&request)?;
+    validate_source_system_matches_actor(&request, &actor)?;
     let has_full_payload = request.claim.is_some()
         || request.items.is_some()
         || request.member.is_some()
@@ -561,6 +562,21 @@ fn validate_score_request_contract(request: &ScoreClaimRequest) -> Result<(), Ap
         validate_provider_relationship_graph_payload(provider_relationships)?;
     }
     Ok(())
+}
+
+fn validate_source_system_matches_actor(
+    request: &ScoreClaimRequest,
+    actor: &ActorContext,
+) -> Result<(), ApiError> {
+    if request.source_system == actor.source_system {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "SOURCE_SYSTEM_MISMATCH",
+            "source_system must match authenticated API key source system",
+        ))
+    }
 }
 
 fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiError> {

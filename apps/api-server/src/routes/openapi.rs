@@ -1867,6 +1867,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "source_system": {
                             "type": "string",
                             "minLength": 1,
+                            "description": "Must match the source system bound to the authenticated API key.",
                             "examples": ["tpa-demo"]
                         },
                         "claim_id": {
@@ -1901,6 +1902,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "source_system": {
                             "type": "string",
                             "minLength": 1,
+                            "description": "Must match the source system bound to the authenticated API key.",
                             "examples": ["tpa-demo"]
                         },
                         "claim": {

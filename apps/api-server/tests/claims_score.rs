@@ -1157,6 +1157,30 @@ async fn rejects_invalid_review_mode() {
 }
 
 #[tokio::test]
+async fn rejects_source_system_mismatch_for_authenticated_scoring() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "untrusted-tpa",
+              "claim_id": "CLM-LOAD"
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("SOURCE_SYSTEM_MISMATCH"));
+}
+
+#[tokio::test]
 async fn rejects_blank_scoring_identity_fields() {
     let app = build_app(test_config());
 
@@ -1391,6 +1415,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         serde_json::json!(["pre_payment", "post_payment", "both"])
     );
     assert_eq!(claim_id_mode["properties"]["source_system"]["minLength"], 1);
+    assert!(claim_id_mode["properties"]["source_system"]["description"]
+        .as_str()
+        .unwrap()
+        .contains("authenticated API key"));
     assert_eq!(claim_id_mode["properties"]["claim_id"]["minLength"], 1);
     for field in [
         "claim",
@@ -1415,6 +1443,12 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     assert_eq!(
         full_payload_mode["properties"]["source_system"]["minLength"],
         1
+    );
+    assert!(
+        full_payload_mode["properties"]["source_system"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("authenticated API key")
     );
     for (schema_name, fields) in [
         (
