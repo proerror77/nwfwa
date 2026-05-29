@@ -4583,7 +4583,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&sample.inclusion_criteria)
         .bind(&sample.deterministic_seed)
         .bind(&sample.selection_method)
-        .bind(sample.sample_size as i64)
+        .bind(sample.sample_size as i32)
         .bind(&sample.reviewer)
         .bind(&sample.assignment_queue)
         .bind(serde_json::to_value(&sample.selected_leads)?)
@@ -4605,7 +4605,7 @@ impl ScoringRepository for PostgresScoringRepository {
             Value,
             Option<String>,
             String,
-            i64,
+            i32,
             String,
             String,
             Value,
