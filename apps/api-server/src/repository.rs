@@ -10137,10 +10137,26 @@ fn recognized_attribution_source(reference: &str) -> Option<(String, String)> {
     if let Some(source_id) = reference.strip_prefix("rule_runs:") {
         return Some(("rule".into(), source_id.to_string()));
     }
+    if let Some(source_id) = reference.strip_prefix("rules:") {
+        return non_empty_prefix_before_version(source_id)
+            .map(|source_id| ("rule".into(), source_id.to_string()));
+    }
     if let Some(source_id) = reference.strip_prefix("model_scores:") {
         return Some(("model".into(), source_id.to_string()));
     }
+    if let Some(source_id) = reference.strip_prefix("model_versions:") {
+        return non_empty_prefix_before_version(source_id)
+            .map(|source_id| ("model".into(), source_id.to_string()));
+    }
     None
+}
+
+fn non_empty_prefix_before_version(reference_body: &str) -> Option<&str> {
+    reference_body
+        .split(':')
+        .next()
+        .map(str::trim)
+        .filter(|source_id| !source_id.is_empty())
 }
 
 fn summarize_saving_attributions(

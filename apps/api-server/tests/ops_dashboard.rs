@@ -472,6 +472,50 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
 }
 
 #[tokio::test]
+async fn dashboard_attributes_savings_to_governed_rule_and_model_evidence() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-GOV-ATTR-1",
+          "investigation_id": "INV-GOV-ATTR-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "financial_impact_type": "prevented_payment",
+          "saving_amount": "6000.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA with governed rule and model evidence.",
+          "evidence_refs": ["rules:rule_early_claim:v1", "model_versions:baseline_fwa:0.1.0"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, dashboard) = json_request(app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let attributions = dashboard["saving_attributions"].as_array().unwrap();
+    assert_eq!(attributions.len(), 2);
+    assert!(attributions.iter().any(|attribution| {
+        attribution["source_type"] == "rule"
+            && attribution["source_id"] == "rule_early_claim"
+            && attribution["action"] == "investigation_confirmed"
+            && attribution["saving_amount"] == "3000.00"
+            && attribution["claim_count"] == 1
+    }));
+    assert!(attributions.iter().any(|attribution| {
+        attribution["source_type"] == "model"
+            && attribution["source_id"] == "baseline_fwa"
+            && attribution["action"] == "investigation_confirmed"
+            && attribution["saving_amount"] == "3000.00"
+            && attribution["claim_count"] == 1
+    }));
+}
+
+#[tokio::test]
 async fn dashboard_separates_observed_and_estimated_value() {
     let app = build_app(test_config());
 
