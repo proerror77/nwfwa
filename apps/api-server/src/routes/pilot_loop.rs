@@ -149,6 +149,7 @@ pub async fn write_investigation_result(
     Json(request): Json<InvestigationResultRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
     authorize(&state, &headers)?;
+    validate_investigation_result_request(&request)?;
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -188,6 +189,24 @@ pub async fn write_qa_result(
     }))
 }
 
+fn validate_investigation_result_request(
+    request: &InvestigationResultRecord,
+) -> Result<(), ApiError> {
+    if request.notes.trim().is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .all(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_INVESTIGATION_RESULT_EVIDENCE",
+            "investigation writeback requires notes and evidence_refs",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> {
     if !matches!(
         request.qa_conclusion.as_str(),
@@ -221,6 +240,18 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
             StatusCode::BAD_REQUEST,
             "UNSUPPORTED_FEEDBACK_TARGET",
             "feedback_target must be rules, models, features, provider_profile, workflow, or tpa",
+        ));
+    }
+    if request.notes.trim().is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .all(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_QA_RESULT_EVIDENCE",
+            "QA writeback requires notes and evidence_refs",
         ));
     }
     Ok(())

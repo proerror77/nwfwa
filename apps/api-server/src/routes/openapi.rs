@@ -4403,8 +4403,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "saving_amount": { "type": ["string", "null"], "format": "decimal" },
                         "currency": { "type": ["string", "null"] },
-                        "notes": { "type": "string" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "notes": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
                     }
                 },
                 "QaResultRequest": {
@@ -4425,8 +4425,8 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
                         },
-                        "notes": { "type": "string" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "notes": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
                     }
                 },
                 "PilotWritebackResponse": {

@@ -922,6 +922,25 @@ async fn openapi_includes_operations_paths() {
             ["financial_impact_type"]["enum"][1],
         "recovered_amount"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]["notes"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
+            ["evidence_refs"]["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["QaResultRequest"]["properties"]["notes"]["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["QaResultRequest"]["properties"]["evidence_refs"]
+            ["minItems"],
+        1
+    );
     assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
             .as_array()
