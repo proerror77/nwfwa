@@ -34,6 +34,14 @@ async fn json_request(
     (status, body)
 }
 
+struct SampleClaimProfile<'a> {
+    product_code: &'a str,
+    provider_type: &'a str,
+    provider_region: &'a str,
+    provider_name: &'a str,
+    review_mode: Option<&'a str>,
+}
+
 async fn score_high_risk_claim(app: axum::Router, claim_id: &str, amount: &str) {
     score_high_risk_claim_with_context(
         app,
@@ -56,9 +64,39 @@ async fn score_high_risk_claim_with_context(
     provider_region: &str,
     provider_name: &str,
 ) {
+    score_high_risk_claim_with_review_mode(
+        app,
+        claim_id,
+        amount,
+        SampleClaimProfile {
+            product_code,
+            provider_type,
+            provider_region,
+            provider_name,
+            review_mode: None,
+        },
+    )
+    .await;
+}
+
+async fn score_high_risk_claim_with_review_mode(
+    app: axum::Router,
+    claim_id: &str,
+    amount: &str,
+    profile: SampleClaimProfile<'_>,
+) {
+    let review_mode_field = profile
+        .review_mode
+        .map(|value| format!(r#""review_mode": "{value}","#))
+        .unwrap_or_default();
+    let product_code = profile.product_code;
+    let provider_type = profile.provider_type;
+    let provider_region = profile.provider_region;
+    let provider_name = profile.provider_name;
     let body = format!(
         r#"{{
           "source_system": "tpa-demo",
+          {review_mode_field}
           "claim": {{
             "external_claim_id": "{claim_id}",
             "claim_amount": "{amount}",
@@ -345,4 +383,67 @@ async fn stratified_sample_spans_operational_strata() {
         .unwrap()
         .keys()
         .any(|key| key.contains("provider_type=clinic")));
+}
+
+#[tokio::test]
+async fn post_payment_audit_samples_only_post_payment_leads() {
+    let app = build_app(test_config());
+
+    score_high_risk_claim_with_review_mode(
+        app.clone(),
+        "CLM-PREPAY-HIGH",
+        "9900",
+        SampleClaimProfile {
+            product_code: "MED",
+            provider_type: "hospital",
+            provider_region: "SH",
+            provider_name: "Northwind Hospital",
+            review_mode: Some("pre_payment"),
+        },
+    )
+    .await;
+    score_high_risk_claim_with_review_mode(
+        app.clone(),
+        "CLM-POSTPAY-RECOVERY",
+        "9000",
+        SampleClaimProfile {
+            product_code: "MED",
+            provider_type: "hospital",
+            provider_region: "SH",
+            provider_name: "Northwind Hospital",
+            review_mode: Some("post_payment"),
+        },
+    )
+    .await;
+
+    let (status, sample) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "post_payment_audit",
+          "population_definition": "Post-payment recovery and rule discovery sample",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "deterministic_seed": "post-payment-week-1",
+          "sample_size": 2,
+          "reviewer": "recovery-auditor-1",
+          "assignment_queue": "Post-payment Audit"
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(sample["sample_mode"], "post_payment_audit");
+    assert_eq!(sample["selection_method"], "risk_score_desc_post_payment");
+    let selected = sample["selected_leads"].as_array().unwrap();
+    assert_eq!(selected.len(), 1);
+    assert_eq!(selected[0]["claim_id"], "CLM-POSTPAY-RECOVERY");
+    assert_eq!(selected[0]["review_mode"], "post_payment");
+    assert_eq!(sample["outcome_distribution"]["selected_count"], 1);
+    assert_eq!(
+        sample["outcome_distribution"]["review_mode_distribution"]["post_payment"],
+        1
+    );
 }

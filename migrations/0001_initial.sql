@@ -321,6 +321,7 @@ CREATE TABLE IF NOT EXISTS fwa_leads (
   member_id TEXT NOT NULL,
   provider_id TEXT NOT NULL,
   source_system TEXT NOT NULL,
+  review_mode TEXT NOT NULL DEFAULT 'pre_payment',
   scheme_family TEXT NOT NULL,
   lead_source TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -332,6 +333,9 @@ CREATE TABLE IF NOT EXISTS fwa_leads (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE fwa_leads
+  ADD COLUMN IF NOT EXISTS review_mode TEXT NOT NULL DEFAULT 'pre_payment';
 
 CREATE TABLE IF NOT EXISTS investigation_cases (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

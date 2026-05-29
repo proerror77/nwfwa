@@ -1170,6 +1170,7 @@ async fn openapi_includes_operations_paths() {
         serde_json::json!(["GREEN", "AMBER", "RED"])
     );
     for field in [
+        "review_mode",
         "provider_id",
         "provider_type",
         "provider_region",
@@ -1186,6 +1187,11 @@ async fn openapi_includes_operations_paths() {
             "missing AuditSampleLeadRecord required field {field}"
         );
     }
+    assert_eq!(
+        schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["review_mode"]
+            ["enum"],
+        serde_json::json!(["pre_payment", "post_payment", "both"])
+    );
     assert_eq!(
         schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["risk_band"]["enum"],
         serde_json::json!(["low", "medium", "high", "critical"])

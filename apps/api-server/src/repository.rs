@@ -224,6 +224,8 @@ pub struct LeadRecord {
     pub member_id: String,
     pub provider_id: String,
     pub source_system: String,
+    #[serde(default = "default_review_mode")]
+    pub review_mode: String,
     pub scheme_family: String,
     pub lead_source: String,
     pub status: String,
@@ -292,6 +294,8 @@ pub struct AuditSampleLeadRecord {
     pub lead_id: String,
     pub claim_id: String,
     pub scheme_family: String,
+    #[serde(default = "default_review_mode")]
+    pub review_mode: String,
     #[serde(default)]
     pub provider_id: String,
     #[serde(default)]
@@ -1068,6 +1072,7 @@ struct ClaimContextRow {
 
 type ClaimItemRow = (String, String, String, i32, Decimal, Decimal, String);
 type LeadRow = (
+    String,
     String,
     String,
     String,
@@ -3625,14 +3630,15 @@ impl ScoringRepository for PostgresScoringRepository {
             }
             sqlx::query(
                 "INSERT INTO fwa_leads
-                 (lead_id, run_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                 (lead_id, run_id, claim_id, member_id, provider_id, source_system, review_mode, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                  ON CONFLICT (lead_id) DO UPDATE
                  SET status = EXCLUDED.status,
                      disposition = EXCLUDED.disposition,
                      risk_score = EXCLUDED.risk_score,
                      rag = EXCLUDED.rag,
                      reason = EXCLUDED.reason,
+                     review_mode = EXCLUDED.review_mode,
                      evidence_refs = EXCLUDED.evidence_refs,
                      updated_at = now()",
             )
@@ -3642,6 +3648,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&lead.member_id)
             .bind(&lead.provider_id)
             .bind(&lead.source_system)
+            .bind(&lead.review_mode)
             .bind(&lead.scheme_family)
             .bind(&lead.lead_source)
             .bind(&lead.status)
@@ -6970,6 +6977,12 @@ fn lead_from_scoring_run(
             .map(|context| context.provider.external_provider_id.clone())
             .unwrap_or_default(),
         source_system: run.source_system.clone(),
+        review_mode: run
+            .audit_event
+            .get("review_mode")
+            .and_then(Value::as_str)
+            .unwrap_or("pre_payment")
+            .to_string(),
         scheme_family: scheme_family_from_rule_runs(&run.rule_runs),
         lead_source: "scoring_run".into(),
         status: "new".into(),
@@ -7215,6 +7228,9 @@ fn build_audit_sample(
         .into_iter()
         .filter(|lead| lead_matches_inclusion(lead, &input.inclusion_criteria))
         .collect::<Vec<_>>();
+    if input.sample_mode == "post_payment_audit" {
+        candidates.retain(|lead| lead.review_mode == "post_payment");
+    }
 
     let selected_candidates = match selection_method.as_str() {
         "deterministic_hash" => {
@@ -7319,6 +7335,7 @@ fn audit_sample_lead_record(
         lead_id: lead.lead_id,
         claim_id: lead.claim_id,
         scheme_family: lead.scheme_family,
+        review_mode: lead.review_mode,
         provider_id: lead.provider_id,
         provider_type: context.provider_type,
         provider_region: context.provider_region,
@@ -7380,6 +7397,10 @@ fn risk_band_for_score(risk_score: u8) -> &'static str {
     }
 }
 
+fn default_review_mode() -> String {
+    "pre_payment".into()
+}
+
 fn audit_sample_strata_contexts_from_claims(
     claims: &HashMap<String, ClaimContext>,
 ) -> HashMap<String, AuditSampleStrataContext> {
@@ -7420,11 +7441,15 @@ fn audit_sample_outcome_distribution(
     let mut issue_types = BTreeMap::<String, u32>::new();
     let mut feedback_targets = BTreeMap::<String, u32>::new();
     let mut strata_distribution = BTreeMap::<String, u32>::new();
+    let mut review_mode_distribution = BTreeMap::<String, u32>::new();
     let mut reviewed_count = 0_u32;
 
     for lead in &sample.selected_leads {
         *strata_distribution
             .entry(lead.strata_key.clone())
+            .or_insert(0) += 1;
+        *review_mode_distribution
+            .entry(lead.review_mode.clone())
             .or_insert(0) += 1;
     }
 
@@ -7451,7 +7476,8 @@ fn audit_sample_outcome_distribution(
         "qa_conclusions": qa_conclusions,
         "issue_types": issue_types,
         "feedback_targets": feedback_targets,
-        "strata_distribution": strata_distribution
+        "strata_distribution": strata_distribution,
+        "review_mode_distribution": review_mode_distribution
     })
 }
 
@@ -8722,6 +8748,11 @@ fn lead_matches_inclusion(lead: &LeadRecord, criteria: &Value) -> bool {
             return false;
         }
     }
+    if let Some(review_mode) = criteria["review_mode"].as_str() {
+        if lead.review_mode != review_mode {
+            return false;
+        }
+    }
     true
 }
 
@@ -8734,7 +8765,7 @@ fn deterministic_rank(seed: &str, lead_id: &str) -> u64 {
 
 async fn load_leads(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
     let rows: Vec<LeadRow> = sqlx::query_as(
-        "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
+        "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, COALESCE(review_mode, 'pre_payment'), scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
          FROM fwa_leads
          ORDER BY created_at, lead_id",
     )
@@ -8778,7 +8809,7 @@ async fn load_lead_in_tx(
     lead_id: &str,
 ) -> anyhow::Result<Option<LeadRecord>> {
     let row: Option<LeadRow> = sqlx::query_as(
-        "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
+        "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, COALESCE(review_mode, 'pre_payment'), scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
          FROM fwa_leads
          WHERE lead_id = $1",
     )
@@ -8796,6 +8827,7 @@ fn lead_from_row(row: LeadRow) -> LeadRecord {
         member_id,
         provider_id,
         source_system,
+        review_mode,
         scheme_family,
         lead_source,
         status,
@@ -8812,6 +8844,7 @@ fn lead_from_row(row: LeadRow) -> LeadRecord {
         member_id,
         provider_id,
         source_system,
+        review_mode,
         scheme_family,
         lead_source,
         status,
