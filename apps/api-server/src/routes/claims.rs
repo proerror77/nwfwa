@@ -204,6 +204,7 @@ pub async fn score_claim(
         )
     })?;
 
+    validate_score_request_contract(&request)?;
     let has_full_payload = request.claim.is_some()
         || request.items.is_some()
         || request.member.is_some()
@@ -524,6 +525,125 @@ pub async fn score_claim(
         feature_values,
         evidence_refs,
     }))
+}
+
+fn validate_score_request_contract(request: &ScoreClaimRequest) -> Result<(), ApiError> {
+    require_nonblank(&request.source_system, "source_system")?;
+    if let Some(claim_id) = &request.claim_id {
+        require_nonblank(claim_id, "claim_id")?;
+    }
+    if let Some(claim) = &request.claim {
+        validate_full_claim_payload(claim)?;
+    }
+    if let Some(items) = &request.items {
+        for item in items {
+            validate_claim_item_payload(item)?;
+        }
+    }
+    if let Some(member) = &request.member {
+        validate_member_payload(member)?;
+    }
+    if let Some(policy) = &request.policy {
+        validate_policy_payload(policy)?;
+    }
+    if let Some(provider) = &request.provider {
+        validate_provider_payload(provider)?;
+    }
+    if let Some(documents) = &request.documents {
+        for document in documents {
+            validate_document_payload(document)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiError> {
+    require_nonblank(&payload.external_claim_id, "claim.external_claim_id")?;
+    require_nonblank(&payload.currency, "claim.currency")?;
+    if let Some(diagnosis_code) = &payload.diagnosis_code {
+        require_nonblank(diagnosis_code, "claim.diagnosis_code")?;
+    }
+    if let Some(items) = &payload.items {
+        for item in items {
+            validate_claim_item_payload(item)?;
+        }
+    }
+    if let Some(member) = &payload.member {
+        validate_member_payload(member)?;
+    }
+    if let Some(policy) = &payload.policy {
+        validate_policy_payload(policy)?;
+    }
+    if let Some(provider) = &payload.provider {
+        validate_provider_payload(provider)?;
+    }
+    if let Some(documents) = &payload.documents {
+        for document in documents {
+            validate_document_payload(document)?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_claim_item_payload(payload: &ClaimItemPayload) -> Result<(), ApiError> {
+    require_nonblank(&payload.item_code, "item.item_code")?;
+    require_nonblank(&payload.item_type, "item.item_type")?;
+    require_nonblank(&payload.description, "item.description")?;
+    if let Some(currency) = &payload.currency {
+        require_nonblank(currency, "item.currency")?;
+    }
+    Ok(())
+}
+
+fn validate_member_payload(payload: &MemberPayload) -> Result<(), ApiError> {
+    require_nonblank(&payload.external_member_id, "member.external_member_id")
+}
+
+fn validate_policy_payload(payload: &PolicyPayload) -> Result<(), ApiError> {
+    require_nonblank(&payload.external_policy_id, "policy.external_policy_id")?;
+    if let Some(product_code) = &payload.product_code {
+        require_nonblank(product_code, "policy.product_code")?;
+    }
+    if let Some(currency) = &payload.currency {
+        require_nonblank(currency, "policy.currency")?;
+    }
+    Ok(())
+}
+
+fn validate_provider_payload(payload: &ProviderPayload) -> Result<(), ApiError> {
+    require_nonblank(
+        &payload.external_provider_id,
+        "provider.external_provider_id",
+    )?;
+    require_nonblank(&payload.name, "provider.name")?;
+    require_nonblank(&payload.provider_type, "provider.provider_type")?;
+    require_nonblank(&payload.region, "provider.region")
+}
+
+fn validate_document_payload(payload: &DocumentPayload) -> Result<(), ApiError> {
+    require_nonblank(
+        &payload.external_document_id,
+        "document.external_document_id",
+    )?;
+    require_nonblank(&payload.document_type, "document.document_type")?;
+    if let Some(linked_item_codes) = &payload.linked_item_codes {
+        for item_code in linked_item_codes {
+            require_nonblank(item_code, "document.linked_item_codes")?;
+        }
+    }
+    Ok(())
+}
+
+fn require_nonblank(value: &str, field: &'static str) -> Result<(), ApiError> {
+    if value.trim().is_empty() {
+        Err(ApiError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "INVALID_SCORE_REQUEST",
+            format!("{field} must not be blank"),
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 async fn active_scoring_model(

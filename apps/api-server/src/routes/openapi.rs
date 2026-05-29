@@ -1866,10 +1866,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "source_system": {
                             "type": "string",
+                            "minLength": 1,
                             "examples": ["tpa-demo"]
                         },
                         "claim_id": {
                             "type": "string",
+                            "minLength": 1,
                             "description": "Existing claim id to load from FWA storage."
                         },
                         "review_mode": {
@@ -1898,6 +1900,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "source_system": {
                             "type": "string",
+                            "minLength": 1,
                             "examples": ["tpa-demo"]
                         },
                         "claim": {
@@ -1948,21 +1951,24 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["external_claim_id", "claim_amount", "currency"],
                     "properties": {
                         "external_claim_id": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "claim_amount": {
                             "type": "string",
                             "format": "decimal"
                         },
                         "currency": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "service_date": {
                             "type": "string",
                             "format": "date"
                         },
                         "diagnosis_code": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "items": {
                             "type": "array",
@@ -1998,13 +2004,16 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["item_code", "item_type", "description", "quantity", "unit_amount", "total_amount"],
                     "properties": {
                         "item_code": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "item_type": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "description": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "quantity": {
                             "type": "integer",
@@ -2019,7 +2028,8 @@ pub async fn openapi_schema() -> Json<Value> {
                             "format": "decimal"
                         },
                         "currency": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         }
                     }
                 },
@@ -2028,14 +2038,16 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["external_member_id"],
                     "properties": {
                         "external_member_id": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "dob": {
                             "type": "string",
                             "format": "date"
                         },
                         "gender": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         }
                     }
                 },
@@ -2044,10 +2056,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["external_policy_id", "coverage_start_date", "coverage_end_date", "coverage_limit"],
                     "properties": {
                         "external_policy_id": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "product_code": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "coverage_start_date": {
                             "type": "string",
@@ -2062,7 +2076,8 @@ pub async fn openapi_schema() -> Json<Value> {
                             "format": "decimal"
                         },
                         "currency": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         }
                     }
                 },
@@ -2071,16 +2086,20 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["external_provider_id", "name", "provider_type", "region"],
                     "properties": {
                         "external_provider_id": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "name": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "provider_type": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "region": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "risk_tier": {
                             "type": "string",
@@ -2093,16 +2112,19 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["external_document_id", "document_type"],
                     "properties": {
                         "external_document_id": {
-                            "type": "string"
+                            "type": "string",
+                            "minLength": 1
                         },
                         "document_type": {
                             "type": "string",
+                            "minLength": 1,
                             "description": "Examples: medical_record, clinical_order, radiology_report, prescription, lab_result"
                         },
                         "linked_item_codes": {
                             "type": "array",
                             "items": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1
                             }
                         }
                     }

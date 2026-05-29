@@ -1157,6 +1157,72 @@ async fn rejects_invalid_review_mode() {
 }
 
 #[tokio::test]
+async fn rejects_blank_scoring_identity_fields() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": " ",
+              "claim_id": "CLM-LOAD"
+            }"#,
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("INVALID_SCORE_REQUEST"));
+    assert!(body.contains("source_system"));
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim_id": " "
+            }"#,
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("INVALID_SCORE_REQUEST"));
+    assert!(body.contains("claim_id"));
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": " ",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("INVALID_SCORE_REQUEST"));
+    assert!(body.contains("claim.external_claim_id"));
+}
+
+#[tokio::test]
 async fn exposes_openapi_schema_for_scoring_contract() {
     let app = build_app(test_config());
 
@@ -1186,6 +1252,8 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         claim_id_mode["properties"]["review_mode"]["enum"],
         serde_json::json!(["pre_payment", "post_payment", "both"])
     );
+    assert_eq!(claim_id_mode["properties"]["source_system"]["minLength"], 1);
+    assert_eq!(claim_id_mode["properties"]["claim_id"]["minLength"], 1);
     for field in [
         "claim",
         "items",
@@ -1205,6 +1273,46 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             "claim_id mode should forbid {field}"
         );
     }
+    let full_payload_mode = &schema["components"]["schemas"]["FullPayloadScoreClaimRequest"];
+    assert_eq!(
+        full_payload_mode["properties"]["source_system"]["minLength"],
+        1
+    );
+    for (schema_name, fields) in [
+        (
+            "FullClaimPayload",
+            &["external_claim_id", "currency", "diagnosis_code"][..],
+        ),
+        (
+            "ClaimItemPayload",
+            &["item_code", "item_type", "description", "currency"][..],
+        ),
+        ("MemberPayload", &["external_member_id", "gender"][..]),
+        (
+            "PolicyPayload",
+            &["external_policy_id", "product_code", "currency"][..],
+        ),
+        (
+            "ProviderPayload",
+            &["external_provider_id", "name", "provider_type", "region"][..],
+        ),
+        (
+            "DocumentPayload",
+            &["external_document_id", "document_type"][..],
+        ),
+    ] {
+        for field in fields {
+            assert_eq!(
+                schema["components"]["schemas"][schema_name]["properties"][*field]["minLength"], 1,
+                "missing {schema_name}.{field} minLength"
+            );
+        }
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["DocumentPayload"]["properties"]["linked_item_codes"]
+            ["items"]["minLength"],
+        1
+    );
 
     let response_properties = &schema["components"]["schemas"]["ScoreClaimResponse"]["properties"];
     for field in [
