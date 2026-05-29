@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildAgentSimilarCaseRows, buildEvidenceSufficiencyRows } from "./AgentInvestigatorPage";
+import {
+  buildAgentSimilarCaseRows,
+  buildEvidenceSufficiencyRows,
+  buildInvestigationApprovalPayload,
+} from "./AgentInvestigatorPage";
 
 describe("buildEvidenceSufficiencyRows", () => {
   it("marks minimum evidence items as present or missing", () => {
@@ -16,6 +20,39 @@ describe("buildEvidenceSufficiencyRows", () => {
       { item: "specialty", status: "missing" },
       { item: "statistical_deviation", status: "missing" },
     ]);
+  });
+});
+
+describe("buildInvestigationApprovalPayload", () => {
+  it("builds human approval payloads with agent run evidence", () => {
+    expect(
+      buildInvestigationApprovalPayload(
+        {
+          agent_run_id: "agent_CLM-1",
+          decision_boundary: "assistive_only",
+          risk_summary: "High risk evidence package.",
+          findings: [],
+          investigation_checklist: [],
+          similar_cases: [],
+          qa_opinion_draft: "Review manually.",
+          evidence_sufficiency: {
+            scheme_family: "provider_peer_outlier",
+            status: "sufficient",
+            minimum_evidence: [],
+            present_evidence: [],
+            missing_evidence: [],
+          },
+          evidence_refs: ["knowledge_cases:KC-1", "agent_run:agent_CLM-1"],
+        },
+        "approved",
+        " qa-lead ",
+      ),
+    ).toEqual({
+      decision: "approved",
+      approver: "qa-lead",
+      reason: "Evidence package approved for manual review routing.",
+      evidence_refs: ["knowledge_cases:KC-1", "agent_run:agent_CLM-1"],
+    });
   });
 });
 

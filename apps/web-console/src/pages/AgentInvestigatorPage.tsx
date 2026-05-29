@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { investigateCase, listFwaSchemes } from "../api";
+import { investigateCase, listFwaSchemes, submitAgentApproval } from "../api";
 import {
   buildFwaSchemeLabelMap,
   buildFwaSchemeOptions,
@@ -18,6 +18,16 @@ type InvestigationResponse = {
   qa_opinion_draft: string;
   evidence_sufficiency: EvidenceSufficiency;
   evidence_refs: string[];
+};
+
+type AgentApprovalResponse = {
+  approval: {
+    decision: string;
+    approver: string;
+    proposed_action: string;
+    evidence_refs: string[];
+  };
+  audit_id: string;
 };
 
 export type SimilarCase = {
@@ -50,6 +60,26 @@ export function buildAgentSimilarCaseRows(cases: SimilarCase[] = []) {
   }));
 }
 
+export function buildInvestigationApprovalPayload(
+  result: InvestigationResponse,
+  decision: "approved" | "rejected",
+  approver: string,
+) {
+  const evidenceRefs = [
+    ...result.evidence_refs,
+    `agent_run:${result.agent_run_id}`,
+  ].filter((value, index, refs) => refs.indexOf(value) === index);
+  return {
+    decision,
+    approver: approver.trim(),
+    reason:
+      decision === "approved"
+        ? "Evidence package approved for manual review routing."
+        : "Evidence package rejected pending stronger support.",
+    evidence_refs: evidenceRefs,
+  };
+}
+
 export function AgentInvestigatorPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
@@ -62,8 +92,11 @@ export function AgentInvestigatorPage() {
   const [diagnosisCode, setDiagnosisCode] = useState("J10");
   const [providerRegion, setProviderRegion] = useState("Shanghai");
   const [tags, setTags] = useState("early_claim, high_amount");
+  const [approvalApprover, setApprovalApprover] = useState("qa-lead");
   const [result, setResult] = useState<InvestigationResponse | null>(null);
+  const [approvalResult, setApprovalResult] = useState<AgentApprovalResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [approvalError, setApprovalError] = useState<string | null>(null);
   const schemesQuery = useQuery({
     queryKey: ["fwa-schemes", apiKey],
     queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
@@ -98,8 +131,25 @@ export function AgentInvestigatorPage() {
         apiKey,
       )) as InvestigationResponse;
       setResult(response);
+      setApprovalResult(null);
+      setApprovalError(null);
     } catch (caught) {
       setError(caught instanceof Error ? caught.message : String(caught));
+    }
+  }
+
+  async function submitApproval(decision: "approved" | "rejected") {
+    if (!result) return;
+    setApprovalError(null);
+    try {
+      const response = (await submitAgentApproval(
+        result.agent_run_id,
+        buildInvestigationApprovalPayload(result, decision, approvalApprover),
+        apiKey,
+      )) as AgentApprovalResponse;
+      setApprovalResult(response);
+    } catch (caught) {
+      setApprovalError(caught instanceof Error ? caught.message : String(caught));
     }
   }
 
@@ -236,6 +286,52 @@ export function AgentInvestigatorPage() {
               </ul>
             ) : null}
             <p>{result.qa_opinion_draft}</p>
+            <div className="result-stack">
+              <h3>Human Approval Gate</h3>
+              <div className="summary-grid">
+                <div>
+                  <span>Proposed Action</span>
+                  <strong>manual_review_required</strong>
+                </div>
+                <div>
+                  <span>Status</span>
+                  <strong>{approvalResult?.approval.decision ?? "pending"}</strong>
+                </div>
+                <div>
+                  <span>Audit</span>
+                  <strong>{approvalResult?.audit_id ?? "-"}</strong>
+                </div>
+              </div>
+              <label>
+                Approver
+                <input
+                  value={approvalApprover}
+                  onChange={(event) => setApprovalApprover(event.target.value)}
+                />
+              </label>
+              <div className="button-row">
+                <button
+                  onClick={() => submitApproval("approved")}
+                  disabled={Boolean(approvalResult) || approvalApprover.trim().length === 0}
+                >
+                  Approve
+                </button>
+                <button
+                  onClick={() => submitApproval("rejected")}
+                  disabled={Boolean(approvalResult) || approvalApprover.trim().length === 0}
+                >
+                  Reject
+                </button>
+              </div>
+              {approvalError ? <pre className="error">{approvalError}</pre> : null}
+              {approvalResult ? (
+                <ul className="result-list compact-list">
+                  {approvalResult.approval.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              ) : null}
+            </div>
           </div>
         ) : (
           <p className="empty">No investigation run yet</p>
