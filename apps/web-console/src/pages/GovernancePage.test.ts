@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   auditEventFilterShortcuts,
+  buildAgentEvidenceRefRows,
   buildAgentRunLogSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
@@ -666,6 +667,84 @@ describe("buildAgentRunLogSummary", () => {
       approvalCount: 1,
       pendingApprovalCount: 1,
     });
+  });
+});
+
+describe("buildAgentEvidenceRefRows", () => {
+  it("groups unique agent evidence refs across tools policy checks approvals and snapshots", () => {
+    const rows = buildAgentEvidenceRefRows({
+      agent_run_id: "agent_1",
+      claim_id: "CLM-1",
+      status: "succeeded",
+      decision_boundary: "assistive_only",
+      evidence_refs: ["agent_run:agent_1", "knowledge_cases:KC-1001"],
+      steps: [
+        {
+          step_name: "evidence_finding",
+          evidence_refs: ["claims:CLM-1", "knowledge_cases:KC-1001"],
+        },
+      ],
+      context_snapshots: [
+        {
+          snapshot_id: "snapshot_1",
+          redaction_status: "pii_masked",
+          context_json: { claim_id: "CLM-1" },
+          source_refs: ["claims:CLM-1", "policies:POL-1"],
+          checksum: "snapshot:abc123",
+        },
+      ],
+      tool_calls: [
+        {
+          tool_call_id: "tool_call_1",
+          tool_name: "knowledge.search_similar",
+          status: "succeeded",
+          input_json: { claim_id: "CLM-1" },
+          evidence_refs: ["knowledge_query:CLM-1"],
+        },
+      ],
+      policy_checks: [
+        {
+          policy_check_id: "policy_check_1",
+          agent_run_id: "agent_1",
+          tool_call_id: "tool_call_1",
+          tool_name: "knowledge.search_similar",
+          policy_name: "agent_tool_allowlist",
+          decision: "allowed",
+          reason: "Tool is allowlisted.",
+          evidence_refs: ["policy:agent_tool_allowlist"],
+        },
+      ],
+      tool_results: [
+        {
+          tool_result_id: "tool_result_1",
+          tool_call_id: "tool_call_1",
+          tool_name: "knowledge.search_similar",
+          status: "succeeded",
+          output_json: { result_count: 1 },
+          evidence_refs: ["knowledge_cases:KC-1001"],
+        },
+      ],
+      approvals: [
+        {
+          approval_id: "approval_1",
+          agent_run_id: "agent_1",
+          proposed_action: "manual_review_required",
+          decision: "approved",
+          approver: "qa-lead",
+          reason: "Approved.",
+          evidence_refs: ["agent_run:agent_1"],
+        },
+      ],
+    });
+
+    expect(rows).toEqual([
+      { source: "agent_run", count: 1, refs: ["agent_run:agent_1"] },
+      { source: "claims", count: 1, refs: ["claims:CLM-1"] },
+      { source: "knowledge_cases", count: 1, refs: ["knowledge_cases:KC-1001"] },
+      { source: "knowledge_query", count: 1, refs: ["knowledge_query:CLM-1"] },
+      { source: "policies", count: 1, refs: ["policies:POL-1"] },
+      { source: "policy", count: 1, refs: ["policy:agent_tool_allowlist"] },
+    ]);
   });
 });
 

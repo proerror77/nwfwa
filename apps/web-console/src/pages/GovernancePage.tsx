@@ -656,6 +656,37 @@ export function buildAgentRunLogSummary(runs: AgentRunLog[] = []) {
   };
 }
 
+export function buildAgentEvidenceRefRows(run: AgentRunLog) {
+  const stepEvidenceRefs = run.steps.flatMap((step) => {
+    const value = step.evidence_refs;
+    return Array.isArray(value) ? value.filter((reference) => typeof reference === "string") : [];
+  });
+  const references = [
+    ...run.evidence_refs,
+    ...stepEvidenceRefs,
+    ...run.context_snapshots.flatMap((snapshot) => snapshot.source_refs),
+    ...run.policy_checks.flatMap((check) => check.evidence_refs),
+    ...run.tool_calls.flatMap((call) => call.evidence_refs),
+    ...run.tool_results.flatMap((result) => result.evidence_refs),
+    ...run.approvals.flatMap((approval) => approval.evidence_refs),
+  ].filter(
+    (reference, index, refs) => reference.trim().length > 0 && refs.indexOf(reference) === index,
+  );
+  const rows = new Map<string, string[]>();
+  references.forEach((reference) => {
+    const [source] = reference.split(":", 1);
+    const sourceKey = source || "unknown";
+    rows.set(sourceKey, [...(rows.get(sourceKey) ?? []), reference]);
+  });
+  return [...rows.entries()]
+    .map(([source, refs]) => ({
+      source,
+      count: refs.length,
+      refs: refs.sort(),
+    }))
+    .sort((left, right) => left.source.localeCompare(right.source));
+}
+
 export function hasPendingAgentApproval(run: AgentRunLog) {
   return run.approvals.some((approval) => approval.decision === "pending");
 }
@@ -1809,6 +1840,16 @@ export function GovernancePage() {
                   {run.approvals.filter((approval) => approval.decision === "pending").length}{" "}
                   pending
                 </p>
+                {buildAgentEvidenceRefRows(run).length ? (
+                  <ul className="result-list compact-list">
+                    {buildAgentEvidenceRefRows(run).map((row) => (
+                      <li key={row.source}>
+                        <strong>{row.source}</strong>
+                        <span>{row.count} refs</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : null}
                 <div className="button-row">
                   <button
                     onClick={() =>
