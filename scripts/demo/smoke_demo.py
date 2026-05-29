@@ -571,6 +571,94 @@ def assert_factor_factory_readiness():
     }
 
 
+def assert_tpa_webhook_delivery(score):
+    webhooks = request("GET", "/api/v1/ops/webhook-events").get("events", [])
+    expected_event_types = {
+        "fwa.score.completed",
+        "fwa.case.routed",
+        "fwa.investigation.closed",
+        "fwa.qa.reviewed",
+        "fwa.medical.reviewed",
+    }
+    claim_events = [
+        event
+        for event in webhooks
+        if event.get("claim_id") == CLAIM_ID and event.get("event_type") in expected_event_types
+    ]
+    observed_event_types = {event.get("event_type") for event in claim_events}
+    missing_event_types = expected_event_types - observed_event_types
+    assert_true(
+        not missing_event_types,
+        f"webhook event list missing expected TPA events: {sorted(missing_event_types)}",
+    )
+    for event in claim_events:
+        assert_true(event.get("event_id"), "webhook event missing event_id")
+        assert_true(event.get("source_audit_id"), "webhook event missing source audit id")
+        assert_true(event.get("idempotency_key", "").startswith("fwa-webhook:"), "webhook idempotency key invalid")
+        assert_true(event.get("signature_key_id"), "webhook event missing signature key id")
+        assert_true(event.get("signature_algorithm") == "hmac-sha256", "webhook signature algorithm mismatch")
+        assert_true(event.get("evidence_refs"), "webhook event missing evidence refs")
+
+    score_event = next(
+        (
+            event
+            for event in claim_events
+            if event.get("event_type") == "fwa.score.completed"
+            and event.get("source_audit_id") == score["audit_id"]
+        ),
+        None,
+    )
+    assert_true(score_event is not None, "webhook event list missing current scoring audit event")
+    assert_true(score_event.get("delivery_status") == "pending", "new score webhook should be pending")
+    assert_true(score_event.get("retry_count") == 0, "new score webhook should not have retries")
+
+    attempt = request(
+        "POST",
+        f"/api/v1/ops/webhook-events/{score_event['event_id']}/delivery-attempts",
+        {
+            "delivery_status": "failed",
+            "response_status_code": 503,
+            "error_message": "TPA webhook endpoint unavailable",
+        },
+    )
+    assert_true(attempt.get("event_id") == score_event["event_id"], "webhook attempt event id mismatch")
+    assert_true(attempt.get("attempt_number") == 1, "first webhook attempt should be attempt 1")
+    assert_true(attempt.get("delivery_status") == "failed", "webhook attempt status mismatch")
+    assert_true(attempt.get("response_status_code") == 503, "webhook attempt response status mismatch")
+    assert_true(attempt.get("next_attempt_at"), "failed webhook attempt should schedule retry")
+
+    updated_events = request("GET", "/api/v1/ops/webhook-events").get("events", [])
+    updated_score_event = next(
+        (
+            event
+            for event in updated_events
+            if event.get("event_id") == score_event["event_id"]
+        ),
+        None,
+    )
+    assert_true(updated_score_event is not None, "updated webhook score event missing")
+    assert_true(
+        updated_score_event.get("delivery_status") == "retry_wait",
+        "failed webhook event should move to retry_wait",
+    )
+    assert_true(updated_score_event.get("retry_count") == 1, "webhook retry count mismatch")
+    assert_true(
+        updated_score_event.get("last_response_status_code") == 503,
+        "webhook last response status mismatch",
+    )
+    assert_true(
+        updated_score_event.get("last_error_message") == "TPA webhook endpoint unavailable",
+        "webhook last error message mismatch",
+    )
+    assert_true(updated_score_event.get("next_attempt_at"), "retry_wait webhook event missing next attempt")
+    return {
+        "event_id": score_event["event_id"],
+        "event_type": score_event["event_type"],
+        "delivery_status": updated_score_event["delivery_status"],
+        "retry_count": updated_score_event["retry_count"],
+    }
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -818,6 +906,7 @@ def main():
         "knowledge.case.published" in event_types,
         "audit history missing knowledge.case.published",
     )
+    webhook_delivery = assert_tpa_webhook_delivery(score)
 
     labels = request("GET", "/api/v1/ops/labels").get("labels", [])
     assert_true(
@@ -949,6 +1038,7 @@ def main():
                 "qa_feedback_update": qa_feedback_update,
                 "knowledge_publish": knowledge_publish,
                 "factor_readiness": factor_readiness,
+                "webhook_delivery": webhook_delivery,
                 "rule_release": rule_release,
             },
             ensure_ascii=True,

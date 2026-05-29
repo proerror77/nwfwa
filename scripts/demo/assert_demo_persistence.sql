@@ -173,6 +173,22 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM webhook_delivery_attempts wda
+  JOIN audit_events ae
+    ON wda.event_id = 'webhook_' || ae.audit_id
+  WHERE ae.run_id = demo_run_id
+    AND ae.claim_id = demo_claim_uuid
+    AND ae.event_type = 'scoring.completed'
+    AND wda.attempt_number = 1
+    AND wda.delivery_status = 'failed'
+    AND wda.response_status_code = 503
+    AND wda.error_message = 'TPA webhook endpoint unavailable'
+    AND wda.next_attempt_at IS NOT NULL;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected failed TPA webhook delivery attempt for %', demo_run_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM saving_attributions
   WHERE claim_id = demo_claim_id
     AND investigation_id = 'INV-DEMO-SMOKE'
