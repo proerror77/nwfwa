@@ -50,6 +50,7 @@ Medical review writeback captures:
 - `evidence_refs`
 
 The writeback APIs append audit events and do not alter scoring recommendations or adjudication state.
+Medical review results also produce governed outcome labels for model and workflow feedback.
 
 ## Monitoring
 

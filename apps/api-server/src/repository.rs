@@ -2349,11 +2349,36 @@ impl ScoringRepository for InMemoryScoringRepository {
                         outcome_labels.push(label_from_qa_review(record));
                     }
                 }
+                "medical.review.recorded" => {
+                    if let Some(label) = label_from_medical_review_event(event) {
+                        outcome_labels.push(label);
+                    }
+                }
                 _ => {}
+            }
+        }
+        let runtime_events = self.audit_events.lock().await;
+        for event in runtime_events
+            .iter()
+            .filter(|event| event.event_type == "medical.review.recorded")
+        {
+            let audit_event = AuditHistoryEventRecord {
+                audit_id: event.audit_id.clone(),
+                run_id: event.run_id.clone(),
+                event_type: event.event_type.clone(),
+                event_status: event.event_status.clone(),
+                summary: event.summary.clone(),
+                payload: event.payload.clone(),
+                evidence_refs: evidence_values_to_strings(&event.evidence_refs),
+                created_at: None,
+            };
+            if let Some(label) = label_from_medical_review_event(&audit_event) {
+                outcome_labels.push(label);
             }
         }
         let suspected_claims = runs.iter().filter(|run| run.risk_score >= 70).count() as u32;
         let saving_attributions = summarize_saving_attributions(&saving_attribution_records);
+        drop(runtime_events);
         drop(pilot_events);
         drop(claims);
         drop(runs);
@@ -2752,10 +2777,32 @@ impl ScoringRepository for InMemoryScoringRepository {
                         .ok()
                         .map(|review| vec![label_from_qa_review(review)])
                 }
+                "medical.review.recorded" => {
+                    label_from_medical_review_event(event).map(|label| vec![label])
+                }
                 _ => None,
             })
             .flatten()
             .collect::<Vec<_>>();
+        labels.extend(
+            self.audit_events
+                .lock()
+                .await
+                .iter()
+                .filter(|event| event.event_type == "medical.review.recorded")
+                .filter_map(|event| {
+                    label_from_medical_review_event(&AuditHistoryEventRecord {
+                        audit_id: event.audit_id.clone(),
+                        run_id: event.run_id.clone(),
+                        event_type: event.event_type.clone(),
+                        event_status: event.event_status.clone(),
+                        summary: event.summary.clone(),
+                        payload: event.payload.clone(),
+                        evidence_refs: evidence_values_to_strings(&event.evidence_refs),
+                        created_at: None,
+                    })
+                }),
+        );
         labels.extend(
             self.list_cases()
                 .await?
@@ -6100,6 +6147,15 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .fetch_all(&self.pool)
             .await?;
+        let medical_review_rows: Vec<(String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, payload, evidence_refs
+             FROM audit_events
+             WHERE event_type = 'medical.review.recorded'
+               AND event_status = 'succeeded'
+             ORDER BY created_at, audit_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         let mut labels = investigation_rows
             .into_iter()
@@ -6146,6 +6202,20 @@ impl ScoringRepository for PostgresScoringRepository {
                         feedback_target,
                         notes,
                         evidence_refs: json_array_to_strings(evidence_refs),
+                    })
+                },
+            ))
+            .chain(medical_review_rows.into_iter().filter_map(
+                |(audit_id, payload, evidence_refs)| {
+                    label_from_medical_review_event(&AuditHistoryEventRecord {
+                        audit_id,
+                        run_id: String::new(),
+                        event_type: "medical.review.recorded".into(),
+                        event_status: "succeeded".into(),
+                        summary: String::new(),
+                        payload,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                        created_at: None,
                     })
                 },
             ))
@@ -7777,6 +7847,46 @@ fn label_from_qa_review(record: QaReviewRecord) -> OutcomeLabelRecord {
         feedback_target: record.feedback_target,
         currency: None,
         evidence_refs: record.evidence_refs,
+    }
+}
+
+fn label_from_medical_review_event(event: &AuditHistoryEventRecord) -> Option<OutcomeLabelRecord> {
+    let claim_id = event.payload["claim_id"].as_str()?.to_string();
+    let decision = event.payload["decision"].as_str()?;
+    let (label_name, label_value, governance_status, feedback_target) =
+        medical_review_label_fields(decision);
+    Some(OutcomeLabelRecord {
+        label_id: format!("label_medical_review_{}_{}", event.audit_id, label_name),
+        claim_id,
+        label_name: label_name.into(),
+        label_value: label_value.into(),
+        source_type: "medical_review".into(),
+        source_id: event.audit_id.clone(),
+        governance_status: governance_status.into(),
+        feedback_target: feedback_target.into(),
+        currency: None,
+        evidence_refs: event.evidence_refs.clone(),
+    })
+}
+
+fn medical_review_label_fields(
+    decision: &str,
+) -> (&'static str, &'static str, &'static str, &'static str) {
+    match decision {
+        "request_more_evidence" => ("insufficient_evidence", "true", "needs_review", "workflow"),
+        "medical_necessity_issue" => (
+            "medical_necessity_issue",
+            "true",
+            "approved_for_training",
+            "models",
+        ),
+        "no_medical_issue" => ("false_positive", "true", "approved_for_training", "models"),
+        _ => (
+            "clinical_evidence_sufficient",
+            "true",
+            "approved_for_training",
+            "workflow",
+        ),
     }
 }
 

@@ -309,6 +309,22 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-0287",
+          "scoring_audit_id": "audit_dashboard_scoring_0287",
+          "reviewer": "medical-reviewer-1",
+          "decision": "request_more_evidence",
+          "notes": "Dashboard label pool should include medical evidence gap feedback.",
+          "evidence_refs": ["audit:audit_dashboard_scoring_0287", "documents:medical_record"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let model_dataset_id = register_model_dataset_for_dashboard(app.clone()).await;
     let (status, _) = json_request(
         app.clone(),
@@ -433,15 +449,15 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
             .unwrap()
             >= 1
     );
-    assert_eq!(dashboard["label_pool"]["total_labels"], 3);
+    assert_eq!(dashboard["label_pool"]["total_labels"], 4);
     assert_eq!(dashboard["label_pool"]["approved_for_training"], 2);
-    assert_eq!(dashboard["label_pool"]["needs_review"], 1);
+    assert_eq!(dashboard["label_pool"]["needs_review"], 2);
     assert_eq!(dashboard["label_pool"]["rule_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["model_feedback"], 1);
-    assert_eq!(dashboard["label_pool"]["workflow_feedback"], 1);
+    assert_eq!(dashboard["label_pool"]["workflow_feedback"], 2);
     assert_eq!(dashboard["label_pool"]["case_status_labels"], 0);
     assert_eq!(dashboard["label_pool"]["false_positive_labels"], 0);
-    assert_eq!(dashboard["label_pool"]["evidence_backed_labels"], 3);
+    assert_eq!(dashboard["label_pool"]["evidence_backed_labels"], 4);
 }
 
 #[tokio::test]

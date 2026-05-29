@@ -893,6 +893,22 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-LABEL-1001",
+          "scoring_audit_id": "audit_scoring_label_1001",
+          "reviewer": "medical-reviewer-1",
+          "decision": "medical_necessity_issue",
+          "notes": "Medical reviewer confirmed the billed service lacks clinical necessity support.",
+          "evidence_refs": ["audit:audit_scoring_label_1001", "medical_review:MR-LABEL-1001"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, labels) = json_request(app.clone(), "GET", "/api/v1/ops/labels", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
@@ -923,6 +939,15 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
             && label["source_type"] == "qa_review"
             && label["feedback_target"] == "models"
             && label["governance_status"] == "needs_review"
+    }));
+    assert!(labels.iter().any(|label| {
+        label["claim_id"] == "CLM-LABEL-1001"
+            && label["label_name"] == "medical_necessity_issue"
+            && label["label_value"] == "true"
+            && label["source_type"] == "medical_review"
+            && label["feedback_target"] == "models"
+            && label["governance_status"] == "approved_for_training"
+            && label["source_id"].as_str().unwrap().starts_with("aud_")
     }));
     assert!(labels
         .iter()
