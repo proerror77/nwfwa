@@ -72,6 +72,36 @@ async function main() {
     const bundle = await fetchText(assetUrl);
     assertContains(bundle, "FWA Studio", "web console bundle");
     assertContains(bundle, "Runtime Scoring", "web console bundle");
+    for (const expectedModule of [
+      "Dashboard",
+      "Rules",
+      "Models",
+      "Routing Policies",
+      "Data Sources",
+      "Factor Factory",
+      "Leads & Cases",
+      "Member Profile",
+      "Provider Risk",
+      "Medical Review",
+      "Audit Sampling",
+      "Knowledge Base",
+      "Agent Investigator",
+      "QA Review",
+      "Governance",
+    ]) {
+      assertContains(bundle, expectedModule, "web console navigation bundle");
+    }
+    for (const expectedPanel of [
+      "Management Dashboard",
+      "Rule Promotion Gates",
+      "Model Governance",
+      "Factor Cards",
+      "QA Queue",
+      "Promotion Gate Governance",
+      "Knowledge Base",
+    ]) {
+      assertContains(bundle, expectedPanel, "web console operations panel bundle");
+    }
 
     const builtHtml = await readFile(path.join(distDir, "index.html"), "utf8");
     assertContains(builtHtml, moduleMatch[1], "built index HTML");
