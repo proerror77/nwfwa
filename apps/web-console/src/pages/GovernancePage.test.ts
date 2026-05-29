@@ -4,6 +4,7 @@ import {
   buildAgentRunLogSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
+  buildGlobalAuditEventFilters,
   canSubmitAgentApproval,
   buildFwaSchemeGovernanceRows,
   buildFwaSchemeGovernanceSummary,
@@ -28,6 +29,35 @@ describe("auditEventFilterShortcuts", () => {
       { label: "Rule Candidates", eventType: "rule.candidate.saved" },
       { label: "Audit Samples", eventType: "audit_sample.created" },
     ]);
+  });
+});
+
+describe("buildGlobalAuditEventFilters", () => {
+  it("maps UI filter state to audit event API filters including sample id", () => {
+    expect(
+      buildGlobalAuditEventFilters(
+        {
+          eventType: "audit_sample.created",
+          actorId: "qa-lead",
+          runId: "audit_sample_sample_1",
+          claimId: "CLM-1",
+          feedbackId: "qa_feedback_QA-1",
+          qaCaseId: "QA-1",
+          sampleId: "sample_1",
+          limit: "25",
+        },
+        25,
+      ),
+    ).toEqual({
+      limit: 25,
+      event_type: "audit_sample.created",
+      actor_id: "qa-lead",
+      run_id: "audit_sample_sample_1",
+      claim_id: "CLM-1",
+      feedback_id: "qa_feedback_QA-1",
+      qa_case_id: "QA-1",
+      sample_id: "sample_1",
+    });
   });
 });
 

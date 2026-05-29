@@ -17,6 +17,7 @@ import {
   listWebhookEvents,
   submitAgentApproval,
   submitWebhookDeliveryAttempt,
+  type AuditEventListFilters,
 } from "../api";
 import { buildFwaSchemeLabelMap, formatFwaSchemeLabel } from "./fwaSchemeOptions";
 import { formatReviewModeLabel } from "./reviewMode";
@@ -276,6 +277,17 @@ export type GovernanceChangeTimelineRow = {
   evidenceRefs: string[];
 };
 
+export type GlobalAuditEventFilterState = {
+  eventType: string;
+  actorId: string;
+  runId: string;
+  claimId: string;
+  feedbackId: string;
+  qaCaseId: string;
+  sampleId: string;
+  limit: string;
+};
+
 const governanceChangeEventTypes = new Set([
   "dataset.registered",
   "dataset.field_mapping.added",
@@ -306,6 +318,22 @@ export const auditEventFilterShortcuts = [
   { label: "Rule Candidates", eventType: "rule.candidate.saved" },
   { label: "Audit Samples", eventType: "audit_sample.created" },
 ];
+
+export function buildGlobalAuditEventFilters(
+  filters: GlobalAuditEventFilterState,
+  limit: number,
+): AuditEventListFilters {
+  return {
+    limit,
+    event_type: filters.eventType,
+    actor_id: filters.actorId,
+    run_id: filters.runId,
+    claim_id: filters.claimId,
+    feedback_id: filters.feedbackId,
+    qa_case_id: filters.qaCaseId,
+    sample_id: filters.sampleId,
+  };
+}
 
 export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
   const events = data?.events ?? [];
@@ -698,13 +726,14 @@ export function GovernancePage() {
     feedbackTarget: "",
     governanceStatus: "",
   });
-  const [auditEventFilters, setAuditEventFilters] = useState({
+  const [auditEventFilters, setAuditEventFilters] = useState<GlobalAuditEventFilterState>({
     eventType: "",
     actorId: "",
     runId: "",
     claimId: "",
     feedbackId: "",
     qaCaseId: "",
+    sampleId: "",
     limit: "50",
   });
   const parsedAuditEventLimit = Number.parseInt(auditEventFilters.limit, 10);
@@ -728,17 +757,13 @@ export function GovernancePage() {
       auditEventFilters.claimId,
       auditEventFilters.feedbackId,
       auditEventFilters.qaCaseId,
+      auditEventFilters.sampleId,
     ],
     queryFn: () =>
-      listAuditEvents(apiKey, {
-        limit: auditEventLimit,
-        event_type: auditEventFilters.eventType,
-        actor_id: auditEventFilters.actorId,
-        run_id: auditEventFilters.runId,
-        claim_id: auditEventFilters.claimId,
-        feedback_id: auditEventFilters.feedbackId,
-        qa_case_id: auditEventFilters.qaCaseId,
-      }) as Promise<AuditEventListResponse>,
+      listAuditEvents(
+        apiKey,
+        buildGlobalAuditEventFilters(auditEventFilters, auditEventLimit),
+      ) as Promise<AuditEventListResponse>,
   });
   const agentRunsQuery = useQuery({
     queryKey: ["agent-run-logs", apiKey],
@@ -1297,6 +1322,18 @@ export function GovernancePage() {
               setAuditEventFilters((filters) => ({
                 ...filters,
                 qaCaseId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Sample ID
+          <input
+            value={auditEventFilters.sampleId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                sampleId: event.target.value,
               }))
             }
           />
