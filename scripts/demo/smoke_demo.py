@@ -42,6 +42,14 @@ def assert_true(condition, message):
         raise AssertionError(message)
 
 
+def agent_rag(score_rag):
+    return {
+        "Green": "GREEN",
+        "Amber": "AMBER",
+        "Red": "RED",
+    }.get(score_rag, str(score_rag).upper())
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -74,6 +82,57 @@ def main():
     assert_true(results[0].get("case_id") == "KC-1001", "expected KC-1001 as top similar case")
     assert_true(results[0].get("evidence_refs"), "similar case missing evidence_refs")
 
+    agent = request(
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        {
+            "claim_id": CLAIM_ID,
+            "risk_score": score["risk_score"],
+            "rag": agent_rag(score["rag"]),
+            "scheme_family": "diagnosis_procedure_mismatch",
+            "top_reasons": score["top_reasons"],
+            "similar_case_query": {
+                "diagnosis_code": "J10",
+                "provider_region": "Shanghai",
+                "tags": ["early_claim", "high_amount"],
+            },
+        },
+    )
+    assert_true(agent.get("decision_boundary") == "assistive_only", "agent must be assistive only")
+    assert_true(agent.get("agent_run_id", "").startswith("agent_"), "agent response missing run id")
+    assert_true(agent.get("findings"), "agent response missing findings")
+    assert_true(agent.get("investigation_checklist"), "agent response missing checklist")
+    assert_true(agent.get("evidence_refs"), "agent response missing evidence refs")
+    assert_true(
+        agent.get("similar_cases", [{}])[0].get("case_id") == "KC-1001",
+        "agent response missing expected similar case",
+    )
+
+    investigation = request(
+        "POST",
+        "/api/v1/investigations/results",
+        {
+            "claim_id": CLAIM_ID,
+            "investigation_id": "INV-DEMO-SMOKE",
+            "outcome": "confirmed_fwa_review_needed",
+            "confirmed_fwa": True,
+            "financial_impact_type": "estimated_impact",
+            "saving_amount": "8200.00",
+            "currency": "CNY",
+            "notes": "Demo smoke investigation records evidence-backed manual review outcome.",
+            "evidence_refs": [
+                f"agent_run:{agent['agent_run_id']}",
+                f"audit:{score['audit_id']}",
+                "knowledge_cases:KC-1001",
+            ],
+        },
+    )
+    assert_true(
+        investigation.get("event_type") == "investigation.result.received",
+        "investigation writeback was not audited",
+    )
+    assert_true(investigation.get("audit_id"), "investigation writeback missing audit_id")
+
     qa = request(
         "POST",
         "/api/v1/qa/results",
@@ -93,6 +152,10 @@ def main():
     audit = request("GET", f"/api/v1/audit/claims/{CLAIM_ID}")
     event_types = [event.get("event_type") for event in audit.get("events", [])]
     assert_true("scoring.completed" in event_types, "audit history missing scoring.completed")
+    assert_true(
+        "investigation.result.received" in event_types,
+        "audit history missing investigation.result.received",
+    )
     assert_true("qa.result.received" in event_types, "audit history missing qa.result.received")
     print(
         json.dumps(
@@ -103,6 +166,8 @@ def main():
                 "audit_id": score["audit_id"],
                 "risk_score": score["risk_score"],
                 "similar_case": results[0]["case_id"],
+                "agent_run_id": agent["agent_run_id"],
+                "investigation_audit_id": investigation["audit_id"],
             },
             ensure_ascii=True,
         )
