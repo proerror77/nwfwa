@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAuditSamplingSummary } from "./AuditSamplingPage";
+import { buildAuditSampleRequest, buildAuditSamplingSummary } from "./AuditSamplingPage";
 
 describe("buildAuditSamplingSummary", () => {
   it("summarizes sample coverage and latest assignment", () => {
@@ -79,6 +79,42 @@ describe("buildAuditSamplingSummary", () => {
       controlCohortCount: 1,
       missedRiskReviewTargets: 3,
       falsePositiveReviewTargets: 2,
+    });
+  });
+});
+
+describe("buildAuditSampleRequest", () => {
+  it("includes operational strata criteria when provided", () => {
+    expect(
+      buildAuditSampleRequest({
+        sampleMode: "stratified",
+        populationDefinition: "Clinic dental critical claims",
+        minRiskScore: "70",
+        reviewMode: "post_payment",
+        providerType: "clinic",
+        providerRegion: "BJ",
+        policyType: "DENTAL",
+        riskBand: "critical",
+        deterministicSeed: "strata-week-1",
+        sampleSize: "5",
+        reviewer: "qa-reviewer-1",
+        assignmentQueue: "QA Review",
+      }),
+    ).toEqual({
+      sample_mode: "stratified",
+      population_definition: "Clinic dental critical claims",
+      inclusion_criteria: {
+        min_risk_score: 70,
+        review_mode: "post_payment",
+        provider_type: "clinic",
+        provider_region: "BJ",
+        policy_type: "DENTAL",
+        risk_band: "critical",
+      },
+      deterministic_seed: "strata-week-1",
+      sample_size: 5,
+      reviewer: "qa-reviewer-1",
+      assignment_queue: "QA Review",
     });
   });
 });

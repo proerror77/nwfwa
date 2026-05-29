@@ -35,6 +35,21 @@ type AuditSampleListResponse = {
   samples: AuditSampleRecord[];
 };
 
+type AuditSampleRequestForm = {
+  sampleMode: string;
+  populationDefinition: string;
+  minRiskScore: string;
+  reviewMode: string;
+  providerType: string;
+  providerRegion: string;
+  policyType: string;
+  riskBand: string;
+  deterministicSeed: string;
+  sampleSize: string;
+  reviewer: string;
+  assignmentQueue: string;
+};
+
 function outcomeCount(sample: AuditSampleRecord, key: "reviewed_count" | "open_count") {
   const value = sample.outcome_distribution[key];
   return typeof value === "number" ? value : 0;
@@ -65,6 +80,38 @@ function baselineMeasurementCount(
 ) {
   const value = baselineMeasurement(sample)?.[key];
   return typeof value === "number" ? value : 0;
+}
+
+function addOptionalCriterion(
+  criteria: Record<string, string | number>,
+  key: string,
+  value: string,
+) {
+  const trimmed = value.trim();
+  if (trimmed) {
+    criteria[key] = trimmed;
+  }
+}
+
+export function buildAuditSampleRequest(form: AuditSampleRequestForm) {
+  const inclusionCriteria: Record<string, string | number> = {
+    min_risk_score: Number(form.minRiskScore),
+  };
+  addOptionalCriterion(inclusionCriteria, "review_mode", form.reviewMode);
+  addOptionalCriterion(inclusionCriteria, "provider_type", form.providerType);
+  addOptionalCriterion(inclusionCriteria, "provider_region", form.providerRegion);
+  addOptionalCriterion(inclusionCriteria, "policy_type", form.policyType);
+  addOptionalCriterion(inclusionCriteria, "risk_band", form.riskBand);
+
+  return {
+    sample_mode: form.sampleMode,
+    population_definition: form.populationDefinition,
+    inclusion_criteria: inclusionCriteria,
+    deterministic_seed: form.deterministicSeed,
+    sample_size: Number(form.sampleSize),
+    reviewer: form.reviewer,
+    assignment_queue: form.assignmentQueue,
+  };
 }
 
 export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
@@ -131,6 +178,11 @@ export function AuditSamplingPage() {
     "RED and high risk leads for weekly QA",
   );
   const [minRiskScore, setMinRiskScore] = useState("70");
+  const [reviewMode, setReviewMode] = useState("");
+  const [providerType, setProviderType] = useState("");
+  const [providerRegion, setProviderRegion] = useState("");
+  const [policyType, setPolicyType] = useState("");
+  const [riskBand, setRiskBand] = useState("");
   const [deterministicSeed, setDeterministicSeed] = useState("pilot-week-1");
   const [sampleSize, setSampleSize] = useState("5");
   const [reviewer, setReviewer] = useState("qa-reviewer-1");
@@ -150,17 +202,20 @@ export function AuditSamplingPage() {
   const createMutation = useMutation({
     mutationFn: () =>
       createAuditSample(
-        {
-          sample_mode: sampleMode,
-          population_definition: populationDefinition,
-          inclusion_criteria: {
-            min_risk_score: Number(minRiskScore),
-          },
-          deterministic_seed: deterministicSeed,
-          sample_size: Number(sampleSize),
+        buildAuditSampleRequest({
+          sampleMode,
+          populationDefinition,
+          minRiskScore,
+          reviewMode,
+          providerType,
+          providerRegion,
+          policyType,
+          riskBand,
+          deterministicSeed,
+          sampleSize,
           reviewer,
-          assignment_queue: assignmentQueue,
-        },
+          assignmentQueue,
+        }),
         apiKey,
       ),
     onSuccess: () => {
@@ -273,6 +328,47 @@ export function AuditSamplingPage() {
                 value={deterministicSeed}
                 onChange={(event) => setDeterministicSeed(event.target.value)}
               />
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Review Mode
+              <select value={reviewMode} onChange={(event) => setReviewMode(event.target.value)}>
+                <option value="">any</option>
+                <option value="pre_payment">pre_payment</option>
+                <option value="post_payment">post_payment</option>
+                <option value="both">both</option>
+              </select>
+            </label>
+            <label>
+              Risk Band
+              <select value={riskBand} onChange={(event) => setRiskBand(event.target.value)}>
+                <option value="">any</option>
+                <option value="low">low</option>
+                <option value="medium">medium</option>
+                <option value="high">high</option>
+                <option value="critical">critical</option>
+              </select>
+            </label>
+          </div>
+          <div className="form-grid">
+            <label>
+              Provider Type
+              <input
+                value={providerType}
+                onChange={(event) => setProviderType(event.target.value)}
+              />
+            </label>
+            <label>
+              Provider Region
+              <input
+                value={providerRegion}
+                onChange={(event) => setProviderRegion(event.target.value)}
+              />
+            </label>
+            <label>
+              Policy Type
+              <input value={policyType} onChange={(event) => setPolicyType(event.target.value)} />
             </label>
           </div>
           <div className="form-grid">
