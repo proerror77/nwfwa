@@ -16,6 +16,7 @@ use axum::{
 use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::{AuditEventId, ScoringRunId};
+use rust_decimal::Decimal;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
 
@@ -492,6 +493,7 @@ pub async fn register_model_evaluation(
     Json(request): Json<RegisterModelEvaluationInput>,
 ) -> Result<Json<ModelEvaluationResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
+    validate_model_evaluation_registration(&request)?;
     let evaluation = state
         .repository
         .register_model_evaluation(request)
@@ -527,6 +529,81 @@ pub async fn register_model_evaluation(
     .await
     .map_err(internal_error("MODEL_EVALUATION_AUDIT_SAVE_FAILED"))?;
     Ok(Json(ModelEvaluationResponse { evaluation }))
+}
+
+fn validate_model_evaluation_registration(
+    request: &RegisterModelEvaluationInput,
+) -> Result<(), ApiError> {
+    if request.evaluation_run_id.trim().is_empty()
+        || request.model_key.trim().is_empty()
+        || request.model_version.trim().is_empty()
+        || request.model_dataset_id.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_EVALUATION",
+            "evaluation_run_id, model_key, model_version, and model_dataset_id are required",
+        ));
+    }
+    for (metric_name, metric) in [
+        ("auc", &request.auc),
+        ("ks", &request.ks),
+        ("precision", &request.precision),
+        ("recall", &request.recall),
+        ("f1", &request.f1),
+        ("accuracy", &request.accuracy),
+        ("threshold", &request.threshold),
+    ] {
+        validate_unit_interval_metric(metric_name, metric)?;
+    }
+    let confusion_matrix = request.confusion_matrix_json.as_object();
+    if confusion_matrix.is_none()
+        || confusion_matrix.is_some_and(|confusion_matrix| confusion_matrix.is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_EVALUATION",
+            "confusion_matrix_json must be a non-empty object",
+        ));
+    }
+    let metrics = request.metrics_json.as_object();
+    if metrics.is_none() || metrics.is_some_and(|metrics| metrics.is_empty()) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_EVALUATION",
+            "metrics_json must be a non-empty object",
+        ));
+    }
+    if let Some(feature_importance_uri) = &request.feature_importance_uri {
+        if feature_importance_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_MODEL_EVALUATION",
+                "feature_importance_uri must not be blank when provided",
+            ));
+        }
+        validate_parquet_uri(
+            feature_importance_uri,
+            "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID",
+        )?;
+    }
+    Ok(())
+}
+
+fn validate_unit_interval_metric(
+    metric_name: &'static str,
+    metric: &Option<Decimal>,
+) -> Result<(), ApiError> {
+    if let Some(metric) = metric {
+        if *metric < Decimal::ZERO || *metric > Decimal::ONE {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_MODEL_EVALUATION",
+                format!("{metric_name} must be between 0 and 1"),
+            ));
+        }
+    }
+    Ok(())
 }
 
 pub async fn get_model_evaluation(

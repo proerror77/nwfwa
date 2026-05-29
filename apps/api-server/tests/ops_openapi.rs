@@ -336,6 +336,62 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/ModelEvaluationListResponse"
     );
     assert_eq!(
+        schema["paths"]["/api/v1/ops/model-evaluations"]["post"]["requestBody"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ModelEvaluationRegistrationRequest"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/model-evaluations"]["post"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ModelEvaluationResponse"
+    );
+    for field in [
+        "evaluation_run_id",
+        "model_key",
+        "model_version",
+        "model_dataset_id",
+        "feature_importance_uri",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+                [field]["minLength"],
+            1,
+            "missing ModelEvaluationRegistrationRequest minLength for {field}"
+        );
+    }
+    for field in [
+        "auc",
+        "ks",
+        "precision",
+        "recall",
+        "f1",
+        "accuracy",
+        "threshold",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+                [field]["minimum"],
+            0,
+            "missing ModelEvaluationRegistrationRequest minimum for {field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+                [field]["maximum"],
+            1,
+            "missing ModelEvaluationRegistrationRequest maximum for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+            ["confusion_matrix_json"]["minProperties"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+            ["metrics_json"]["minProperties"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["ModelEvaluationListResponse"]["properties"]["lineage"]
             ["items"]["$ref"],
         "#/components/schemas/ModelEvaluationLineage"

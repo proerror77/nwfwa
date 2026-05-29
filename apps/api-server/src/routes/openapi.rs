@@ -440,13 +440,18 @@ pub async fn openapi_schema() -> Json<Value> {
                         "required": true,
                         "content": {
                             "application/json": {
-                                "schema": { "type": "object" }
+                                "schema": { "$ref": "#/components/schemas/ModelEvaluationRegistrationRequest" }
                             }
                         }
                     },
                     "responses": {
                         "200": {
-                            "description": "Registered model evaluation"
+                            "description": "Registered model evaluation",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelEvaluationResponse" }
+                                }
+                            }
                         }
                     }
                 }
@@ -3503,6 +3508,26 @@ pub async fn openapi_schema() -> Json<Value> {
                         "confusion_matrix_json": { "type": "object" },
                         "feature_importance_uri": { "type": ["string", "null"] },
                         "metrics_json": { "type": "object" }
+                    }
+                },
+                "ModelEvaluationRegistrationRequest": {
+                    "type": "object",
+                    "required": ["evaluation_run_id", "model_key", "model_version", "model_dataset_id", "confusion_matrix_json", "metrics_json"],
+                    "properties": {
+                        "evaluation_run_id": { "type": "string", "minLength": 1 },
+                        "model_key": { "type": "string", "minLength": 1 },
+                        "model_version": { "type": "string", "minLength": 1 },
+                        "model_dataset_id": { "type": "string", "minLength": 1 },
+                        "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
+                        "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
+                        "precision": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
+                        "recall": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
+                        "f1": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
+                        "accuracy": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
+                        "threshold": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
+                        "confusion_matrix_json": { "type": "object", "minProperties": 1 },
+                        "feature_importance_uri": { "type": ["string", "null"], "minLength": 1 },
+                        "metrics_json": { "type": "object", "minProperties": 1 }
                     }
                 },
                 "ModelEvaluationLineage": {

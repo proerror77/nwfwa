@@ -846,3 +846,100 @@ async fn rejects_invalid_model_dataset_registration() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_MODEL_DATASET");
 }
+
+#[tokio::test]
+async fn rejects_invalid_model_evaluation_registration() {
+    let app = build_app(test_config());
+    let valid_request = serde_json::json!({
+        "evaluation_run_id": "eval_renewal_v1",
+        "model_key": "renewal_baseline",
+        "model_version": "0.1.0",
+        "model_dataset_id": "model_dataset_1",
+        "auc": "0.81",
+        "ks": "0.42",
+        "precision": "0.73",
+        "recall": "0.68",
+        "f1": "0.70",
+        "accuracy": "0.74",
+        "threshold": "0.50",
+        "confusion_matrix_json": {"tp": 10, "fp": 2, "tn": 12, "fn": 3},
+        "feature_importance_uri": "data/predictions/renewal_automl_20211105/v1/feature_importance.parquet",
+        "metrics_json": {"data_status": "validation"}
+    });
+
+    let mut blank_evaluation_run_id = valid_request.clone();
+    blank_evaluation_run_id["evaluation_run_id"] = serde_json::json!(" ");
+    let payload = blank_evaluation_run_id.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_EVALUATION");
+
+    let mut invalid_metric = valid_request.clone();
+    invalid_metric["auc"] = serde_json::json!("1.01");
+    let payload = invalid_metric.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_EVALUATION");
+
+    let mut empty_confusion_matrix = valid_request.clone();
+    empty_confusion_matrix["confusion_matrix_json"] = serde_json::json!({});
+    let payload = empty_confusion_matrix.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_EVALUATION");
+
+    let mut empty_metrics = valid_request.clone();
+    empty_metrics["metrics_json"] = serde_json::json!({});
+    let payload = empty_metrics.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_EVALUATION");
+
+    let mut blank_feature_importance_uri = valid_request.clone();
+    blank_feature_importance_uri["feature_importance_uri"] = serde_json::json!(" ");
+    let payload = blank_feature_importance_uri.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_EVALUATION");
+
+    let mut csv_feature_importance_uri = valid_request.clone();
+    csv_feature_importance_uri["feature_importance_uri"] =
+        serde_json::json!("data/predictions/feature_importance.csv");
+    let payload = csv_feature_importance_uri.to_string();
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/model-evaluations", &payload).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID"
+    );
+}
