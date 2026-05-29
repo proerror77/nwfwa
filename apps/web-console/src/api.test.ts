@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  activateModel,
   approveRule,
   activateRoutingPolicy,
   backtestRule,
@@ -307,6 +308,7 @@ describe("ops API helpers", () => {
       },
       "dev-secret",
     );
+    await activateModel("baseline_fwa", "0.1.0", "dev-secret");
     await rollbackModel("baseline_fwa", "0.1.0", "dev-secret");
 
     expect(fetchMock).toHaveBeenCalledWith(
@@ -386,6 +388,15 @@ describe("ops API helpers", () => {
           decision: "approved",
           reviewer: "model-governance",
           notes: "shadow only",
+          evidence_refs: ["model_versions:baseline_fwa:0.1.0"],
+        }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/activate",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
           evidence_refs: ["model_versions:baseline_fwa:0.1.0"],
         }),
       }),

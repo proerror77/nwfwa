@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
+  activateModel,
   completeModelRetrainingJob,
   createModelRetrainingJob,
   getModelPerformance,
@@ -294,6 +295,18 @@ export function ModelOpsPage() {
       );
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
+      queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
+    },
+  });
+  const activateMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedModel) throw new Error("No model selected");
+      return activateModel(selectedModel.model_key, selectedModel.version, apiKey);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["models"] });
+      queryClient.invalidateQueries({ queryKey: ["model-performance"] });
       queryClient.invalidateQueries({ queryKey: ["model-promotion-gates"] });
       queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
     },
@@ -886,6 +899,12 @@ export function ModelOpsPage() {
                   Reject
                 </button>
                 <button
+                  onClick={() => activateMutation.mutate()}
+                  disabled={activateMutation.isPending}
+                >
+                  Activate
+                </button>
+                <button
                   onClick={() => rollbackMutation.mutate()}
                   disabled={rollbackMutation.isPending}
                 >
@@ -894,6 +913,9 @@ export function ModelOpsPage() {
               </div>
               {reviewMutation.error ? (
                 <pre className="error">{String(reviewMutation.error.message)}</pre>
+              ) : null}
+              {activateMutation.error ? (
+                <pre className="error">{String(activateMutation.error.message)}</pre>
               ) : null}
               {rollbackMutation.error ? (
                 <pre className="error">{String(rollbackMutation.error.message)}</pre>

@@ -279,6 +279,13 @@ function modelLifecycleBody(modelKey: string, version: string) {
   });
 }
 
+export async function activateModel(modelKey: string, version: string, apiKey: string) {
+  return requestJson(`/api/v1/ops/models/${encodeURIComponent(modelKey)}/activate`, apiKey, {
+    method: "POST",
+    body: modelLifecycleBody(modelKey, version),
+  });
+}
+
 export async function rollbackModel(modelKey: string, version: string, apiKey: string) {
   return requestJson(`/api/v1/ops/models/${encodeURIComponent(modelKey)}/rollback`, apiKey, {
     method: "POST",
