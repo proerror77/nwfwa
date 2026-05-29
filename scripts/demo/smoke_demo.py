@@ -50,6 +50,14 @@ def agent_rag(score_rag):
     }.get(score_rag, str(score_rag).upper())
 
 
+def has_label(labels, **expected):
+    return any(
+        all(label.get(field) == value for field, value in expected.items())
+        and label.get("evidence_refs")
+        for label in labels
+    )
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -202,6 +210,80 @@ def main():
         "audit history missing investigation.result.received",
     )
     assert_true("qa.result.received" in event_types, "audit history missing qa.result.received")
+
+    labels = request("GET", "/api/v1/ops/labels").get("labels", [])
+    assert_true(
+        any(label.get("claim_id") == CLAIM_ID for label in labels),
+        "outcome labels missing scored claim",
+    )
+    assert_true(
+        has_label(
+            labels,
+            claim_id=CLAIM_ID,
+            source_type="medical_review",
+            label_name="insufficient_evidence",
+            label_value="true",
+            governance_status="needs_review",
+            feedback_target="workflow",
+        ),
+        "outcome labels missing evidence-backed medical review label",
+    )
+    assert_true(
+        has_label(
+            labels,
+            claim_id=CLAIM_ID,
+            source_type="investigation_result",
+            label_name="confirmed_fwa",
+            label_value="true",
+            governance_status="approved_for_training",
+            feedback_target="models",
+        ),
+        "outcome labels missing investigation confirmed_fwa label",
+    )
+    assert_true(
+        has_label(
+            labels,
+            claim_id=CLAIM_ID,
+            source_type="qa_review",
+            label_name="alert_handling_incomplete",
+            label_value="true",
+            governance_status="needs_review",
+            feedback_target="rules",
+        ),
+        "outcome labels missing QA feedback label",
+    )
+
+    dashboard = request("GET", "/api/v1/ops/dashboard/summary")
+    assert_true(dashboard.get("suspected_claims", 0) >= 1, "dashboard missing suspected claims")
+    assert_true(dashboard.get("investigation_results", 0) >= 1, "dashboard missing investigations")
+    assert_true(dashboard.get("qa_reviews", 0) >= 1, "dashboard missing QA reviews")
+    assert_true(dashboard.get("confirmed_fwa", 0) >= 1, "dashboard missing confirmed FWA")
+    assert_true(dashboard.get("rule_hits", 0) >= 1, "dashboard missing rule hits")
+    assert_true(
+        dashboard.get("model_scores", {})
+        .get("baseline_fwa", {})
+        .get("scored_runs", 0)
+        >= 1,
+        "dashboard missing baseline_fwa model scores",
+    )
+    assert_true(
+        dashboard.get("layer_scores", {})
+        .get("L7_RISK_FUSION_ROUTING", {})
+        .get("scored_runs", 0)
+        >= 1,
+        "dashboard missing L7 risk fusion scores",
+    )
+    label_pool = dashboard.get("label_pool", {})
+    assert_true(label_pool.get("total_labels", 0) >= 1, "dashboard missing labels")
+    assert_true(
+        label_pool.get("medical_review_labels", 0) >= 1,
+        "dashboard missing medical review labels",
+    )
+    assert_true(
+        label_pool.get("evidence_backed_labels", 0) >= 1,
+        "dashboard missing evidence-backed labels",
+    )
+
     print(
         json.dumps(
             {
@@ -214,6 +296,7 @@ def main():
                 "medical_review_audit_id": medical_review["audit_id"],
                 "agent_run_id": agent["agent_run_id"],
                 "investigation_audit_id": investigation["audit_id"],
+                "outcome_labels": label_pool["total_labels"],
             },
             ensure_ascii=True,
         )
