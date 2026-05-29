@@ -504,3 +504,66 @@ async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_REASON");
 }
+
+#[tokio::test]
+async fn lists_agent_approval_alert_until_decision_is_recorded() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-APPROVAL-ALERT",
+          "risk_score": 93,
+          "rag": "RED",
+          "top_reasons": ["Agent output requires human approval before action"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(app.clone(), "GET", "/api/v1/ops/alerts", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let alert = body["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|alert| alert["alert_type"] == "agent_approval_pending")
+        .expect("pending agent approval should create an operations alert");
+    assert_eq!(alert["claim_id"], "CLM-AGENT-APPROVAL-ALERT");
+    assert!(alert["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!("agent_run:{agent_run_id}"))));
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_approval:manual_review_required"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/alerts", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(!body["alerts"].as_array().unwrap().iter().any(|alert| {
+        alert["alert_type"] == "agent_approval_pending"
+            && alert["claim_id"] == "CLM-AGENT-APPROVAL-ALERT"
+    }));
+}

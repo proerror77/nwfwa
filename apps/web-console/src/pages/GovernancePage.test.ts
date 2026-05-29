@@ -605,15 +605,29 @@ describe("buildOpsAlertSummary", () => {
         recommended_action: "Assign a medical reviewer.",
         evidence_refs: ["audit:audit_1"],
       },
+      {
+        alert_id: "alert_4",
+        alert_type: "agent_approval_pending",
+        severity: "high",
+        status: "open",
+        claim_id: "CLM-4",
+        lead_id: null,
+        case_id: null,
+        scheme_family: "provider_peer_outlier",
+        message: "Agent output pending approval.",
+        recommended_action: "Review the evidence package.",
+        evidence_refs: ["agent_run:agent_CLM-4"],
+      },
     ]);
 
     expect(summary).toEqual({
-      alertCount: 3,
-      openAlertCount: 2,
+      alertCount: 4,
+      openAlertCount: 3,
       criticalAlertCount: 1,
       routingAlertCount: 1,
       slaBreachCount: 1,
       medicalReviewAlertCount: 1,
+      agentApprovalAlertCount: 1,
     });
   });
 });

@@ -598,6 +598,9 @@ export function buildOpsAlertSummary(alerts: OpsAlert[] = []) {
     medicalReviewAlertCount: alerts.filter(
       (alert) => alert.alert_type === "medical_review_required",
     ).length,
+    agentApprovalAlertCount: alerts.filter(
+      (alert) => alert.alert_type === "agent_approval_pending",
+    ).length,
   };
 }
 
@@ -1066,6 +1069,10 @@ export function GovernancePage() {
           <div>
             <span>Medical Review</span>
             <strong>{alertSummary.medicalReviewAlertCount}</strong>
+          </div>
+          <div>
+            <span>Agent Approval</span>
+            <strong>{alertSummary.agentApprovalAlertCount}</strong>
           </div>
         </div>
         {alertsQuery.data?.alerts.length ? (

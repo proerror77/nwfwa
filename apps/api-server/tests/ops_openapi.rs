@@ -888,6 +888,13 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|event_type| event_type == "medical_review_required")
     );
+    assert!(
+        schema["components"]["schemas"]["OpsAlert"]["properties"]["alert_type"]["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event_type| event_type == "agent_approval_pending")
+    );
     assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["financial_impact_type"]["enum"][1],

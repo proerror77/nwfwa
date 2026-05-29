@@ -2,11 +2,11 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AuditEventListFilter, AuditHistoryEventRecord, AuditSampleLeadRecord, AuditSampleRecord,
-        CaseRecord, InvestigationResultRecord, LeadRecord, MemberProfileSummaryRecord,
-        OutcomeLabelRecord, QaFeedbackItemRecord, QaReviewRecord, UpdateQaFeedbackStatusInput,
-        UpdateQaFeedbackStatusRecord, WebhookDeliveryAttemptInput, WebhookDeliveryAttemptRecord,
-        WebhookEventRecord,
+        AgentRunLogRecord, AuditEventListFilter, AuditHistoryEventRecord, AuditSampleLeadRecord,
+        AuditSampleRecord, CaseRecord, InvestigationResultRecord, LeadRecord,
+        MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord, QaReviewRecord,
+        UpdateQaFeedbackStatusInput, UpdateQaFeedbackStatusRecord, WebhookDeliveryAttemptInput,
+        WebhookDeliveryAttemptRecord, WebhookEventRecord,
     },
 };
 use axum::{
@@ -463,8 +463,19 @@ pub async fn list_ops_alerts(
         })
         .await
         .map_err(internal_error("ALERT_AUDIT_LIST_FAILED"))?;
+    let agent_runs = state
+        .repository
+        .list_agent_runs()
+        .await
+        .map_err(internal_error("AGENT_RUN_LIST_FAILED"))?;
     Ok(Json(OpsAlertListResponse {
-        alerts: build_ops_alerts(&leads, &cases, &scoring_events, &medical_review_events),
+        alerts: build_ops_alerts(
+            &leads,
+            &cases,
+            &scoring_events,
+            &medical_review_events,
+            &agent_runs,
+        ),
     }))
 }
 
@@ -586,6 +597,7 @@ fn build_ops_alerts(
     cases: &[CaseRecord],
     scoring_events: &[AuditHistoryEventRecord],
     medical_review_events: &[AuditHistoryEventRecord],
+    agent_runs: &[AgentRunLogRecord],
 ) -> Vec<OpsAlertRecord> {
     let mut alerts = leads
         .iter()
@@ -601,6 +613,7 @@ fn build_ops_alerts(
             scoring_events,
             medical_review_events,
         ))
+        .chain(build_agent_approval_alerts(agent_runs))
         .collect::<Vec<_>>();
     alerts.sort_by(|left, right| {
         severity_rank(&left.severity)
@@ -609,6 +622,47 @@ fn build_ops_alerts(
             .then_with(|| left.alert_id.cmp(&right.alert_id))
     });
     alerts
+}
+
+fn build_agent_approval_alerts(agent_runs: &[AgentRunLogRecord]) -> Vec<OpsAlertRecord> {
+    agent_runs
+        .iter()
+        .flat_map(|run| {
+            run.approvals
+                .iter()
+                .filter(|approval| approval.decision == "pending")
+                .map(move |approval| agent_approval_alert(run, approval))
+        })
+        .collect()
+}
+
+fn agent_approval_alert(
+    run: &AgentRunLogRecord,
+    approval: &crate::repository::AgentApprovalRecord,
+) -> OpsAlertRecord {
+    let mut evidence_refs = approval.evidence_refs.clone();
+    evidence_refs.extend(run.evidence_refs.clone());
+    evidence_refs.push(format!("agent_run:{}", run.agent_run_id));
+    OpsAlertRecord {
+        alert_id: format!("alert_agent_approval_{}", approval.approval_id),
+        alert_type: "agent_approval_pending".into(),
+        severity: "high".into(),
+        status: "open".into(),
+        claim_id: run.claim_id.clone(),
+        lead_id: None,
+        case_id: None,
+        scheme_family: run.output_json["evidence_sufficiency"]["scheme_family"]
+            .as_str()
+            .unwrap_or("unknown")
+            .to_string(),
+        message: format!(
+            "Agent output {} for claim {} is waiting for human approval.",
+            run.agent_run_id, run.claim_id
+        ),
+        recommended_action: "Review the evidence package and approve or reject the Agent output."
+            .into(),
+        evidence_refs: dedupe_strings(evidence_refs),
+    }
 }
 
 fn build_medical_review_alerts(
@@ -825,7 +879,7 @@ mod tests {
             time_to_closure_hours: None,
         };
 
-        let alerts = build_ops_alerts(&[], &[case], &[], &[]);
+        let alerts = build_ops_alerts(&[], &[case], &[], &[], &[]);
 
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].alert_type, "sla_breach");
@@ -865,7 +919,7 @@ mod tests {
             created_at: None,
         };
 
-        let alerts = build_ops_alerts(&[], &[], &[scoring_event], &[]);
+        let alerts = build_ops_alerts(&[], &[], &[scoring_event], &[], &[]);
 
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].alert_type, "medical_review_required");
@@ -874,5 +928,52 @@ mod tests {
         assert!(alerts[0]
             .evidence_refs
             .contains(&"audit:audit_scoring_medical_1".to_string()));
+    }
+
+    #[test]
+    fn build_ops_alerts_includes_pending_agent_approval_alerts() {
+        let run = AgentRunLogRecord {
+            agent_run_id: "agent_CLM-AGENT-ALERT-1".into(),
+            claim_id: "CLM-AGENT-ALERT-1".into(),
+            status: "succeeded".into(),
+            decision_boundary: "assistive_only".into(),
+            output_json: serde_json::json!({
+                "evidence_sufficiency": {
+                    "scheme_family": "provider_peer_outlier"
+                }
+            }),
+            evidence_refs: vec!["knowledge_cases:KC-1001".into()],
+            steps: vec![],
+            context_snapshots: vec![],
+            policy_checks: vec![],
+            tool_calls: vec![],
+            tool_results: vec![],
+            approvals: vec![crate::repository::AgentApprovalRecord {
+                approval_id: "approval_agent_CLM-AGENT-ALERT-1".into(),
+                agent_run_id: "agent_CLM-AGENT-ALERT-1".into(),
+                proposed_action: "manual_review_required".into(),
+                decision: "pending".into(),
+                approver: "unassigned".into(),
+                reason: "Agent output requires human approval before downstream action.".into(),
+                evidence_refs: vec!["agent_run:agent_CLM-AGENT-ALERT-1".into()],
+                created_at: None,
+            }],
+            created_at: None,
+            completed_at: None,
+        };
+
+        let alerts = build_ops_alerts(&[], &[], &[], &[], &[run]);
+
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].alert_type, "agent_approval_pending");
+        assert_eq!(alerts[0].severity, "high");
+        assert_eq!(alerts[0].claim_id, "CLM-AGENT-ALERT-1");
+        assert_eq!(alerts[0].scheme_family, "provider_peer_outlier");
+        assert!(alerts[0]
+            .evidence_refs
+            .contains(&"agent_run:agent_CLM-AGENT-ALERT-1".to_string()));
+        assert!(alerts[0]
+            .evidence_refs
+            .contains(&"knowledge_cases:KC-1001".to_string()));
     }
 }
