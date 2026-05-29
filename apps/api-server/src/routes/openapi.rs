@@ -2612,9 +2612,14 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["evidence_sufficient", "request_more_evidence", "medical_necessity_issue", "no_medical_issue"]
                         },
-                        "notes": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Medical review notes must not contain PII."
+                        },
                         "evidence_refs": {
                             "type": "array",
+                            "description": "Structured evidence references must not contain PII.",
                             "minItems": 1,
                             "items": { "type": "string", "minLength": 1 }
                         }
@@ -4664,8 +4669,17 @@ pub async fn openapi_schema() -> Json<Value> {
                             "description": "Non-negative decimal string."
                         },
                         "currency": { "type": ["string", "null"] },
-                        "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Investigation writeback notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "description": "Structured evidence references must not contain PII.",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "QaResultRequest": {
@@ -4686,8 +4700,17 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
                         },
-                        "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "QA writeback notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "description": "Structured evidence references must not contain PII.",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "PilotWritebackResponse": {

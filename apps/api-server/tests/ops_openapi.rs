@@ -1336,6 +1336,7 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["items"]["minLength"],
         1
     );
+    assert_writeback_pii_contract(&schema, "SubmitMedicalReviewResultRequest");
     for schema_name in [
         "SubmitRulePromotionReviewRequest",
         "SubmitModelPromotionReviewRequest",
@@ -1413,6 +1414,7 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["items"]["minLength"],
         1
     );
+    assert_writeback_pii_contract(&schema, "InvestigationResultRequest");
     assert!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["saving_amount"]["description"]
@@ -1440,6 +1442,7 @@ async fn openapi_includes_operations_paths() {
             ["minLength"],
         1
     );
+    assert_writeback_pii_contract(&schema, "QaResultRequest");
     assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
             .as_array()
@@ -1667,5 +1670,24 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["MemberProfileSummaryResponse"]["properties"]
             ["evidence_refs"]["items"]["type"],
         "string"
+    );
+}
+
+fn assert_writeback_pii_contract(schema: &serde_json::Value, schema_name: &str) {
+    let notes_description = schema["components"]["schemas"][schema_name]["properties"]["notes"]
+        ["description"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        notes_description.contains("must not contain PII"),
+        "missing {schema_name}.notes PII contract"
+    );
+    let evidence_description = schema["components"]["schemas"][schema_name]["properties"]
+        ["evidence_refs"]["description"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(
+        evidence_description.contains("must not contain PII"),
+        "missing {schema_name}.evidence_refs PII contract"
     );
 }
