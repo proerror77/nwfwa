@@ -14,10 +14,16 @@ type InvestigationResponse = {
   risk_summary: string;
   findings: Array<{ finding: string; evidence_refs: string[] }>;
   investigation_checklist: string[];
-  similar_cases: Array<{ case_id: string; similarity_score: number; matched_signals: string[] }>;
+  similar_cases: SimilarCase[];
   qa_opinion_draft: string;
   evidence_sufficiency: EvidenceSufficiency;
   evidence_refs: string[];
+};
+
+export type SimilarCase = {
+  case_id: string;
+  similarity_score: number;
+  matched_signals: string[];
 };
 
 type EvidenceSufficiency = {
@@ -33,6 +39,14 @@ export function buildEvidenceSufficiencyRows(sufficiency?: EvidenceSufficiency) 
   return (sufficiency?.minimum_evidence ?? []).map((item) => ({
     item,
     status: present.has(item) ? "present" : "missing",
+  }));
+}
+
+export function buildAgentSimilarCaseRows(cases: SimilarCase[] = []) {
+  return cases.map((item) => ({
+    caseId: item.case_id,
+    similarityLabel: `${(item.similarity_score * 100).toFixed(0)}%`,
+    matchedSignalLabel: item.matched_signals.length ? item.matched_signals.join(", ") : "none",
   }));
 }
 
@@ -57,6 +71,7 @@ export function AgentInvestigatorPage() {
   const schemeOptions = buildFwaSchemeOptions(schemesQuery.data?.schemes, schemeFamily);
   const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const evidenceRows = buildEvidenceSufficiencyRows(result?.evidence_sufficiency);
+  const similarCaseRows = buildAgentSimilarCaseRows(result?.similar_cases);
 
   async function runInvestigation() {
     setError(null);
@@ -201,6 +216,25 @@ export function AgentInvestigatorPage() {
                 </li>
               ))}
             </ul>
+            {similarCaseRows.length > 0 ? (
+              <ul className="result-list">
+                {similarCaseRows.map((row) => (
+                  <li key={row.caseId}>
+                    <strong>
+                      {row.caseId} · {row.similarityLabel}
+                    </strong>
+                    <span>{row.matchedSignalLabel}</span>
+                  </li>
+                ))}
+              </ul>
+            ) : null}
+            {result.evidence_refs.length > 0 ? (
+              <ul className="result-list compact-list">
+                {result.evidence_refs.map((reference) => (
+                  <li key={reference}>{reference}</li>
+                ))}
+              </ul>
+            ) : null}
             <p>{result.qa_opinion_draft}</p>
           </div>
         ) : (
