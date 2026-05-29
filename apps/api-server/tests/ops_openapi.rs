@@ -1163,6 +1163,18 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]
+            ["evidence_refs"]["contains"]["pattern"],
+        "^(investigation_results|qa_reviews):"
+    );
+    assert!(
+        schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("investigation_results")
+    );
+    assert_eq!(
         schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]["tags"]
             ["minItems"],
         1

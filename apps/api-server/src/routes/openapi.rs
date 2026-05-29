@@ -4536,7 +4536,16 @@ pub async fn openapi_schema() -> Json<Value> {
                         "summary": { "type": "string", "minLength": 1 },
                         "outcome": { "type": "string", "minLength": 1 },
                         "tags": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Must include at least one confirmed review source: investigation_results:* or qa_reviews:*.",
+                            "items": { "type": "string", "minLength": 1 },
+                            "contains": {
+                                "type": "string",
+                                "pattern": "^(investigation_results|qa_reviews):"
+                            }
+                        },
                         "source_claim_id": { "type": ["string", "null"] }
                     }
                 },
