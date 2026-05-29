@@ -76,6 +76,7 @@ pub async fn save_routing_policy_candidate(
     Json(request): Json<SaveRoutingPolicyCandidateRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     let actor = authorize(&state, &headers)?;
+    validate_routing_policy_candidate(&request)?;
     let owner = request.owner.unwrap_or_else(|| "policy-ops".into());
     if let Some(existing) = state
         .repository
@@ -113,6 +114,47 @@ pub async fn save_routing_policy_candidate(
     .await
     .map_err(internal_error("ROUTING_POLICY_AUDIT_SAVE_FAILED"))?;
     Ok(Json(record))
+}
+
+fn validate_routing_policy_candidate(
+    request: &SaveRoutingPolicyCandidateRequest,
+) -> Result<(), ApiError> {
+    if request.policy.policy_id.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ROUTING_POLICY_ID",
+            "policy_id is required",
+        ));
+    }
+    if request.policy.version == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ROUTING_POLICY_VERSION",
+            "version must be greater than zero",
+        ));
+    }
+    if !matches!(
+        request.policy.review_mode.as_str(),
+        "pre_payment" | "post_payment" | "both"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ROUTING_POLICY_REVIEW_MODE",
+            "review_mode must be pre_payment, post_payment, or both",
+        ));
+    }
+    if request
+        .owner
+        .as_ref()
+        .is_some_and(|owner| owner.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ROUTING_POLICY_OWNER",
+            "owner must not be blank when provided",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn submit_routing_policy(

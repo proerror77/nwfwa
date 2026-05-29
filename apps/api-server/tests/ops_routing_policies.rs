@@ -102,6 +102,114 @@ async fn lists_injected_active_routing_policy_versions() {
 async fn saves_draft_routing_policy_candidate_without_affecting_scoring() {
     let app = build_app(test_config());
 
+    let (status, body) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": "policy-ops",
+          "policy": {
+            "policy_id": " ",
+            "version": 2,
+            "review_mode": "pre_payment",
+            "risk_thresholds": {
+              "low_max": 0,
+              "medium_min": 1,
+              "high_min": 1,
+              "critical_min": 90
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 60,
+              "high_confidence_min": 80
+            },
+            "provider_review_threshold": 70
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ROUTING_POLICY_ID");
+
+    let (status, body) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": "policy-ops",
+          "policy": {
+            "policy_id": "candidate_invalid_version",
+            "version": 0,
+            "review_mode": "pre_payment",
+            "risk_thresholds": {
+              "low_max": 0,
+              "medium_min": 1,
+              "high_min": 1,
+              "critical_min": 90
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 60,
+              "high_confidence_min": 80
+            },
+            "provider_review_threshold": 70
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ROUTING_POLICY_VERSION");
+
+    let (status, body) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": "policy-ops",
+          "policy": {
+            "policy_id": "candidate_invalid_review_mode",
+            "version": 2,
+            "review_mode": "unknown",
+            "risk_thresholds": {
+              "low_max": 0,
+              "medium_min": 1,
+              "high_min": 1,
+              "critical_min": 90
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 60,
+              "high_confidence_min": 80
+            },
+            "provider_review_threshold": 70
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ROUTING_POLICY_REVIEW_MODE");
+
+    let (status, body) = post_json(
+        app.clone(),
+        "/api/v1/ops/routing-policies",
+        r#"{
+          "owner": " ",
+          "policy": {
+            "policy_id": "candidate_blank_owner",
+            "version": 2,
+            "review_mode": "pre_payment",
+            "risk_thresholds": {
+              "low_max": 0,
+              "medium_min": 1,
+              "high_min": 1,
+              "critical_min": 90
+            },
+            "confidence_thresholds": {
+              "low_confidence_below": 60,
+              "high_confidence_min": 80
+            },
+            "provider_review_threshold": 70
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ROUTING_POLICY_OWNER");
+
     let save_response = app
         .clone()
         .oneshot(

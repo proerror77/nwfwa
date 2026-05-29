@@ -2337,7 +2337,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["policy_id", "version", "review_mode", "risk_thresholds", "confidence_thresholds", "provider_review_threshold"],
                     "properties": {
-                        "policy_id": { "type": "string" },
+                        "policy_id": { "type": "string", "minLength": 1 },
                         "version": { "type": "integer", "minimum": 1 },
                         "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "risk_thresholds": { "$ref": "#/components/schemas/RiskThresholds" },
@@ -3501,7 +3501,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["policy"],
                     "properties": {
                         "policy": { "$ref": "#/components/schemas/RoutingPolicy" },
-                        "owner": { "type": ["string", "null"] }
+                        "owner": { "type": ["string", "null"], "minLength": 1 }
                     }
                 },
                 "RoutingPolicyPromotionGate": {

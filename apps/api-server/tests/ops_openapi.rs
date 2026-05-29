@@ -541,6 +541,15 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/RoutingPolicy"
     );
     assert_eq!(
+        schema["components"]["schemas"]["RoutingPolicy"]["properties"]["policy_id"]["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SaveRoutingPolicyCandidateRequest"]["properties"]["owner"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
         schema["paths"]
             ["/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/activate"]["post"]
             ["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
