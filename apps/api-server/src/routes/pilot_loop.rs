@@ -268,6 +268,13 @@ pub async fn update_qa_feedback_status(
             "actor_id is required",
         ));
     }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_QA_FEEDBACK_STATUS_NOTES",
+            "QA feedback status updates require notes",
+        ));
+    }
     if request
         .evidence_refs
         .iter()

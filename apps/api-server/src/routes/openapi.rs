@@ -4507,8 +4507,8 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["open", "in_progress", "resolved", "dismissed"]
                         },
-                        "actor_id": { "type": "string" },
-                        "notes": { "type": "string" },
+                        "actor_id": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 },
                         "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
                     }
                 },
