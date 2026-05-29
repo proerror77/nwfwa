@@ -282,6 +282,27 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         "POST",
         "/api/v1/agent/cases/investigate",
         r#"{
+          "claim_id": "CLM-AGENT-BAD-SCORE",
+          "risk_score": 101,
+          "rag": "RED",
+          "top_reasons": ["金额高于同病种同地区 P99"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["early_claim"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_RISK_SCORE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
           "claim_id": "CLM-AGENT-BAD-RAG",
           "risk_score": 87,
           "rag": "BLUE",

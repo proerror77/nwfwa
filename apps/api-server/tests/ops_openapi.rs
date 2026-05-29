@@ -944,6 +944,11 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["risk_score"]
+            ["maximum"],
+        100
+    );
+    assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["rag"]["enum"],
         serde_json::json!(["GREEN", "AMBER", "RED"])
     );

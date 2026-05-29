@@ -261,6 +261,13 @@ fn validate_agent_investigation_request(
             "claim_id is required",
         ));
     }
+    if request.risk_score > 100 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_RISK_SCORE",
+            "risk_score must be between 0 and 100",
+        ));
+    }
     if !matches!(request.rag.as_str(), "GREEN" | "AMBER" | "RED") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
