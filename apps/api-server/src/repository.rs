@@ -6405,32 +6405,14 @@ impl ScoringRepository for PostgresScoringRepository {
                  $13::text IS NULL
                  OR (
                    $13 = 'governance'
-                   AND ae.event_type IN (
-                     'dataset.registered',
-                     'dataset.field_mapping.added',
-                     'feature_set.registered',
-                     'model_dataset.registered',
-                     'model_evaluation.registered',
-                     'rule.candidate.saved',
-                     'rule.status.changed',
-                     'rule.rollback.completed',
-                     'rule.promotion.reviewed',
-                     'model.promotion.reviewed',
-                     'model.activation.completed',
-                     'model.rollback.completed',
-                     'audit_sample.created',
-                     'routing_policy.candidate.saved',
-                     'routing_policy.status.changed',
-                     'routing_policy.activation.completed',
-                     'routing_policy.rollback.completed'
-                   )
+                   AND ae.event_type = ANY($14::text[])
                  )
                )
-               AND ($14::text IS NULL OR ae.payload ->> 'sample_id' = $14)
-               AND ($15::text IS NULL OR ae.payload ->> 'dataset_id' = $15)
-               AND ($16::text IS NULL OR ae.payload ->> 'feature_set_id' = $16)
-               AND ($17::text IS NULL OR ae.payload ->> 'model_dataset_id' = $17)
-               AND ($18::text IS NULL OR ae.payload ->> 'evaluation_run_id' = $18)
+               AND ($15::text IS NULL OR ae.payload ->> 'sample_id' = $15)
+               AND ($16::text IS NULL OR ae.payload ->> 'dataset_id' = $16)
+               AND ($17::text IS NULL OR ae.payload ->> 'feature_set_id' = $17)
+               AND ($18::text IS NULL OR ae.payload ->> 'model_dataset_id' = $18)
+               AND ($19::text IS NULL OR ae.payload ->> 'evaluation_run_id' = $19)
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -6447,6 +6429,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.model_key.as_deref())
         .bind(filter.model_version.as_deref())
         .bind(filter.event_group.as_deref())
+        .bind(GOVERNANCE_AUDIT_EVENT_TYPES)
         .bind(filter.sample_id.as_deref())
         .bind(filter.dataset_id.as_deref())
         .bind(filter.feature_set_id.as_deref())
