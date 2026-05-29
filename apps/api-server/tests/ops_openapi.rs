@@ -1484,6 +1484,11 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]
+            ["evidence_refs"]["items"]["minLength"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]["actor_id"]
             ["minLength"],
         1

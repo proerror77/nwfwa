@@ -352,10 +352,11 @@ pub async fn update_qa_feedback_status(
             "QA feedback status updates require notes",
         ));
     }
-    if request
-        .evidence_refs
-        .iter()
-        .all(|reference| reference.trim().is_empty())
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
