@@ -173,6 +173,7 @@ pub async fn search_similar(
     Json(request): Json<SimilarCaseSearchRequest>,
 ) -> Result<Json<SimilarCaseSearchResponse>, ApiError> {
     authorize(&state, &headers)?;
+    validate_similar_case_search(&request)?;
     let results = state
         .repository
         .search_similar_cases(SimilarCaseQuery {
@@ -184,6 +185,24 @@ pub async fn search_similar(
         .await
         .map_err(internal_error("KNOWLEDGE_SEARCH_FAILED"))?;
     Ok(Json(SimilarCaseSearchResponse { results }))
+}
+
+fn validate_similar_case_search(request: &SimilarCaseSearchRequest) -> Result<(), ApiError> {
+    if request.diagnosis_code.trim().is_empty() || request.provider_region.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SIMILAR_CASE_QUERY",
+            "diagnosis_code and provider_region are required",
+        ));
+    }
+    if request.tags.iter().all(|tag| tag.trim().is_empty()) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SIMILAR_CASE_QUERY",
+            "at least one non-empty tag is required",
+        ));
+    }
+    Ok(())
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {

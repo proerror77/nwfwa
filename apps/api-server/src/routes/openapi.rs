@@ -4309,9 +4309,9 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["diagnosis_code", "provider_region", "tags"],
                     "properties": {
                         "claim_id": { "type": ["string", "null"] },
-                        "diagnosis_code": { "type": "string" },
-                        "provider_region": { "type": "string" },
-                        "tags": { "type": "array", "items": { "type": "string" } }
+                        "diagnosis_code": { "type": "string", "minLength": 1 },
+                        "provider_region": { "type": "string", "minLength": 1 },
+                        "tags": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
                     }
                 },
                 "SimilarCase": {

@@ -741,6 +741,24 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/FwaSchemeFamily"
     );
+    for field in ["diagnosis_code", "provider_region"] {
+        assert_eq!(
+            schema["components"]["schemas"]["SimilarCaseSearchRequest"]["properties"][field]
+                ["minLength"],
+            1,
+            "missing SimilarCaseSearchRequest minLength for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["SimilarCaseSearchRequest"]["properties"]["tags"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SimilarCaseSearchRequest"]["properties"]["tags"]["items"]
+            ["minLength"],
+        1
+    );
     assert!(
         schema["components"]["schemas"]["AgentInvestigationResponse"]["required"]
             .as_array()

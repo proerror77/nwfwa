@@ -58,6 +58,38 @@ async fn searches_similar_knowledge_cases_with_evidence() {
     let app = build_app(test_config());
 
     let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/knowledge/search-similar",
+        r#"{
+          "claim_id": "CLM-BLANK-QUERY",
+          "diagnosis_code": " ",
+          "provider_region": "Shanghai",
+          "tags": ["early_claim"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_SIMILAR_CASE_QUERY");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/knowledge/search-similar",
+        r#"{
+          "claim_id": "CLM-BLANK-TAGS",
+          "diagnosis_code": "J10",
+          "provider_region": "Shanghai",
+          "tags": [" "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_SIMILAR_CASE_QUERY");
+
+    let (status, body) = json_request(
         app,
         "POST",
         "/api/v1/knowledge/search-similar",
