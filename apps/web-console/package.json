@@ -7,6 +7,7 @@
     "dev": "vite --host 127.0.0.1 --port 5173",
     "build": "tsc && vite build",
     "lint": "tsc --noEmit",
+    "smoke:build": "node ../../scripts/demo/smoke_web_console.mjs",
     "test": "vitest run --passWithNoTests"
   },
   "dependencies": {
