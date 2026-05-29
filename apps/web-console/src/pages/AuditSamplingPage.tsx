@@ -156,6 +156,27 @@ export function buildAuditSampleRunDetailRows(sample: AuditSampleRecord) {
   ];
 }
 
+export function buildAuditSampleCreateSummary(sample?: AuditSampleRecord | null) {
+  if (!sample) {
+    return null;
+  }
+  return {
+    sampleId: sample.sample_id,
+    sampleMode: sample.sample_mode,
+    populationDefinition: sample.population_definition,
+    criteriaLabel: formatInclusionCriteria(sample.inclusion_criteria),
+    selectionMethod: sample.selection_method,
+    seed: sample.deterministic_seed ?? "none",
+    reviewer: sample.reviewer,
+    assignmentQueue: sample.assignment_queue,
+    requestedSize: sample.sample_size,
+    selectedLeadCount: sample.selected_leads.length,
+    reviewedCount: outcomeCount(sample, "reviewed_count"),
+    openCount: outcomeCount(sample, "open_count"),
+    topQaConclusion: topDistributionKey(sample.outcome_distribution.qa_conclusions),
+  };
+}
+
 export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
   const samples = data?.samples ?? [];
   const modeCounts = samples.reduce<Record<string, number>>((counts, sample) => {
@@ -264,6 +285,9 @@ export function AuditSamplingPage() {
       queryClient.invalidateQueries({ queryKey: ["audit-samples"] });
     },
   });
+  const createdSampleSummary = buildAuditSampleCreateSummary(
+    createMutation.data as AuditSampleRecord | undefined,
+  );
 
   return (
     <section className="ops-grid">
@@ -432,7 +456,62 @@ export function AuditSamplingPage() {
           {createMutation.error ? (
             <pre className="error">{String(createMutation.error.message)}</pre>
           ) : null}
-          {createMutation.data ? <pre>{JSON.stringify(createMutation.data, null, 2)}</pre> : null}
+          {createdSampleSummary ? (
+            <dl className="result-grid">
+              <div>
+                <dt>Sample</dt>
+                <dd>{createdSampleSummary.sampleId}</dd>
+              </div>
+              <div>
+                <dt>Mode</dt>
+                <dd>{createdSampleSummary.sampleMode}</dd>
+              </div>
+              <div>
+                <dt>Population</dt>
+                <dd>{createdSampleSummary.populationDefinition}</dd>
+              </div>
+              <div>
+                <dt>Criteria</dt>
+                <dd>{createdSampleSummary.criteriaLabel}</dd>
+              </div>
+              <div>
+                <dt>Selection</dt>
+                <dd>{createdSampleSummary.selectionMethod}</dd>
+              </div>
+              <div>
+                <dt>Seed</dt>
+                <dd>{createdSampleSummary.seed}</dd>
+              </div>
+              <div>
+                <dt>Reviewer</dt>
+                <dd>{createdSampleSummary.reviewer}</dd>
+              </div>
+              <div>
+                <dt>Queue</dt>
+                <dd>{createdSampleSummary.assignmentQueue}</dd>
+              </div>
+              <div>
+                <dt>Requested</dt>
+                <dd>{createdSampleSummary.requestedSize}</dd>
+              </div>
+              <div>
+                <dt>Selected Leads</dt>
+                <dd>{createdSampleSummary.selectedLeadCount}</dd>
+              </div>
+              <div>
+                <dt>Reviewed</dt>
+                <dd>{createdSampleSummary.reviewedCount}</dd>
+              </div>
+              <div>
+                <dt>Open QA</dt>
+                <dd>{createdSampleSummary.openCount}</dd>
+              </div>
+              <div>
+                <dt>Top QA Conclusion</dt>
+                <dd>{createdSampleSummary.topQaConclusion}</dd>
+              </div>
+            </dl>
+          ) : null}
         </div>
       </div>
 

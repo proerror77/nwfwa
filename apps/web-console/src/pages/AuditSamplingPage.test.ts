@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAuditSampleCreateSummary,
   buildAuditSampleLeadDetailRows,
   buildAuditSampleRequest,
   buildAuditSampleRunDetailRows,
@@ -121,6 +122,60 @@ describe("buildAuditSampleRequest", () => {
       reviewer: "qa-reviewer-1",
       assignment_queue: "QA Review",
     });
+  });
+});
+
+describe("buildAuditSampleCreateSummary", () => {
+  it("summarizes a created audit sample for QA operators", () => {
+    expect(
+      buildAuditSampleCreateSummary({
+        sample_id: "sample_1",
+        sample_mode: "stratified",
+        population_definition: "Clinic dental critical claims",
+        inclusion_criteria: {
+          min_risk_score: 70,
+          provider_type: "clinic",
+          provider_region: "BJ",
+        },
+        deterministic_seed: "strata-week-1",
+        selection_method: "stratified_round_robin",
+        sample_size: 5,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        selected_leads: [
+          {
+            lead_id: "lead_1",
+            claim_id: "CLM-1",
+            scheme_family: "provider_peer_outlier",
+            risk_score: 94,
+            rag: "RED",
+            evidence_refs: ["audit:scoring.completed"],
+          },
+        ],
+        outcome_distribution: {
+          reviewed_count: 1,
+          open_count: 0,
+          qa_conclusions: {
+            issue_found_escalate: 1,
+          },
+        },
+      }),
+    ).toEqual({
+      sampleId: "sample_1",
+      sampleMode: "stratified",
+      populationDefinition: "Clinic dental critical claims",
+      criteriaLabel: "min_risk_score=70, provider_region=BJ, provider_type=clinic",
+      selectionMethod: "stratified_round_robin",
+      seed: "strata-week-1",
+      reviewer: "qa-reviewer-1",
+      assignmentQueue: "QA Review",
+      requestedSize: 5,
+      selectedLeadCount: 1,
+      reviewedCount: 1,
+      openCount: 0,
+      topQaConclusion: "issue_found_escalate",
+    });
+    expect(buildAuditSampleCreateSummary(null)).toBeNull();
   });
 });
 
