@@ -56,6 +56,7 @@ pub async fn investigate_case(
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
     authorize(&state, &headers)?;
+    validate_agent_investigation_request(&request)?;
     let masked_claim_ref = mask_agent_claim_ref(&request.claim_id);
     let scheme_family = request
         .scheme_family
@@ -248,6 +249,58 @@ pub async fn investigate_case(
         evidence_sufficiency: package.evidence_sufficiency,
         evidence_refs: package.evidence_refs,
     }))
+}
+
+fn validate_agent_investigation_request(
+    request: &AgentInvestigationRequest,
+) -> Result<(), ApiError> {
+    if request.claim_id.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_CLAIM_ID",
+            "claim_id is required",
+        ));
+    }
+    if !matches!(request.rag.as_str(), "GREEN" | "AMBER" | "RED") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_RAG",
+            "rag must be GREEN, AMBER, or RED",
+        ));
+    }
+    if request
+        .top_reasons
+        .iter()
+        .all(|reason| reason.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_TOP_REASONS",
+            "at least one non-empty top reason is required",
+        ));
+    }
+    if request.similar_case_query.diagnosis_code.trim().is_empty()
+        || request.similar_case_query.provider_region.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_SIMILAR_CASE_QUERY",
+            "diagnosis_code and provider_region are required",
+        ));
+    }
+    if request
+        .similar_case_query
+        .tags
+        .iter()
+        .all(|tag| tag.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_SIMILAR_CASE_QUERY",
+            "at least one non-empty similar case tag is required",
+        ));
+    }
+    Ok(())
 }
 
 fn infer_scheme_family(request: &AgentInvestigationRequest) -> String {

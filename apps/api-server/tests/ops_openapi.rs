@@ -750,6 +750,25 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/FwaSchemeFamily"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["claim_id"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["rag"]["enum"],
+        serde_json::json!(["GREEN", "AMBER", "RED"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["top_reasons"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["top_reasons"]
+            ["items"]["minLength"],
+        1
+    );
     for field in ["diagnosis_code", "provider_region"] {
         assert_eq!(
             schema["components"]["schemas"]["SimilarCaseSearchRequest"]["properties"][field]

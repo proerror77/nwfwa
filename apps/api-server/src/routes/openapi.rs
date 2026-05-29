@@ -4355,11 +4355,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["claim_id", "risk_score", "rag", "top_reasons", "similar_case_query"],
                     "properties": {
-                        "claim_id": { "type": "string" },
+                        "claim_id": { "type": "string", "minLength": 1 },
                         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
-                        "rag": { "type": "string" },
+                        "rag": { "type": "string", "enum": ["GREEN", "AMBER", "RED"] },
                         "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
-                        "top_reasons": { "type": "array", "items": { "type": "string" } },
+                        "top_reasons": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
                         "similar_case_query": { "$ref": "#/components/schemas/SimilarCaseSearchRequest" }
                     }
                 },
