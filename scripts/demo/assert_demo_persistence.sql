@@ -43,9 +43,10 @@ BEGIN
   WHERE run_id = demo_run_id
     AND matched = true
     AND alert_code IS NOT NULL
-    AND reason IS NOT NULL;
+    AND reason IS NOT NULL
+    AND jsonb_array_length(evidence_json) >= 2;
   IF row_count < 1 THEN
-    RAISE EXCEPTION 'expected matched rule_runs with alert and reason for %', demo_run_id;
+    RAISE EXCEPTION 'expected matched rule_runs with alert, reason, and evidence for %', demo_run_id;
   END IF;
 
   SELECT COUNT(*) INTO row_count

@@ -484,6 +484,7 @@ mod tests {
             alert_code: "TEST".into(),
             reason: "test rule".into(),
             recommended_action: RecommendedAction::ManualReview,
+            evidence_refs: vec![],
         }
     }
 
@@ -569,6 +570,7 @@ mod tests {
             alert_code: "EARLY_HIGH_AMOUNT".into(),
             reason: "早期高额理赔".into(),
             recommended_action: RecommendedAction::ManualReview,
+            evidence_refs: vec![],
         }];
         let model = ModelScore {
             model_key: "baseline".into(),

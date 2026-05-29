@@ -48,6 +48,8 @@ pub struct RuleMatch {
     pub alert_code: String,
     pub reason: String,
     pub recommended_action: RecommendedAction,
+    #[serde(default)]
+    pub evidence_refs: Vec<Value>,
 }
 
 pub fn evaluate_rules(rules: &[Rule], features: &FeatureMap) -> Result<Vec<RuleMatch>, RuleError> {
@@ -69,10 +71,33 @@ pub fn evaluate_rules(rules: &[Rule], features: &FeatureMap) -> Result<Vec<RuleM
                 alert_code: rule.action.alert_code.clone(),
                 reason: rule.action.reason.clone(),
                 recommended_action: rule.action.recommended_action,
+                evidence_refs: rule_evidence_refs(rule, features),
             });
         }
     }
     Ok(matches)
+}
+
+fn rule_evidence_refs(rule: &Rule, features: &FeatureMap) -> Vec<Value> {
+    let mut refs = vec![Value::String(format!(
+        "rules:{}:v{}",
+        rule.rule_id, rule.version
+    ))];
+    for condition in &rule.conditions {
+        if let Some(feature) = features.get(&condition.field) {
+            refs.push(Value::String(format!(
+                "feature_values:{}:v{}",
+                feature.name, feature.version
+            )));
+            refs.extend(
+                feature
+                    .evidence_refs
+                    .iter()
+                    .map(|evidence| serde_json::to_value(evidence).unwrap_or(Value::Null)),
+            );
+        }
+    }
+    refs
 }
 
 fn evaluate_condition(condition: &Condition, features: &FeatureMap) -> Result<bool, RuleError> {
@@ -110,7 +135,11 @@ mod tests {
                 name: "days_since_policy_start".into(),
                 version: 1,
                 value: serde_json::json!(5),
-                evidence_refs: vec![],
+                evidence_refs: vec![fwa_features::EvidenceRef {
+                    entity_type: "claim".into(),
+                    entity_id: "CLM-1".into(),
+                    field: "service_date".into(),
+                }],
             },
         );
 
@@ -135,6 +164,17 @@ mod tests {
         let matches = evaluate_rules(&rules, &features).unwrap();
         assert_eq!(matches.len(), 1);
         assert_eq!(matches[0].alert_code, "EARLY_CLAIM");
+        assert!(matches[0]
+            .evidence_refs
+            .contains(&serde_json::json!("rules:rule_early_claim:v1")));
+        assert!(matches[0].evidence_refs.contains(&serde_json::json!(
+            "feature_values:days_since_policy_start:v1"
+        )));
+        assert!(matches[0].evidence_refs.contains(&serde_json::json!({
+            "entity_type": "claim",
+            "entity_id": "CLM-1",
+            "field": "service_date"
+        })));
     }
 
     #[test]

@@ -3599,6 +3599,11 @@ impl ScoringRepository for PostgresScoringRepository {
         }
 
         for rule_run in &run.rule_runs {
+            let rule_evidence = rule_run
+                .get("evidence_refs")
+                .filter(|evidence| evidence.is_array())
+                .cloned()
+                .unwrap_or_else(|| serde_json::json!([]));
             sqlx::query(
                 "INSERT INTO rule_runs
                  (run_id, rule_id, rule_version_id, matched, score_contribution, alert_code, reason, evidence_json)
@@ -3615,7 +3620,7 @@ impl ScoringRepository for PostgresScoringRepository {
                    $4,
                    $5,
                    $6,
-                   '[]'::jsonb
+                   $7
                  )",
             )
             .bind(&run.run_id)
@@ -3624,6 +3629,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(rule_run["score_contribution"].as_i64().unwrap_or(0) as i32)
             .bind(rule_run["alert_code"].as_str())
             .bind(rule_run["reason"].as_str())
+            .bind(rule_evidence)
             .execute(&mut *tx)
             .await?;
         }
