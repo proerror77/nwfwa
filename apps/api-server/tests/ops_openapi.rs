@@ -1931,6 +1931,121 @@ async fn openapi_includes_operations_paths() {
     );
 }
 
+#[tokio::test]
+async fn openapi_defines_core_tpa_integration_contract() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/api/openapi.json")
+        .body(Body::empty())
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let schema: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(
+        schema["components"]["securitySchemes"]["ApiKeyAuth"],
+        serde_json::json!({
+            "type": "apiKey",
+            "in": "header",
+            "name": "x-api-key"
+        })
+    );
+
+    for (path, method, request_ref, response_ref, path_param) in [
+        (
+            "/api/v1/claims/score",
+            "post",
+            Some("#/components/schemas/ScoreClaimRequest"),
+            "#/components/schemas/ScoreClaimResponse",
+            None,
+        ),
+        (
+            "/api/v1/members/{member_id}/profile-summary",
+            "get",
+            None,
+            "#/components/schemas/MemberProfileSummaryResponse",
+            Some("member_id"),
+        ),
+        (
+            "/api/v1/knowledge/search-similar",
+            "post",
+            Some("#/components/schemas/SimilarCaseSearchRequest"),
+            "#/components/schemas/SimilarCaseSearchResponse",
+            None,
+        ),
+        (
+            "/api/v1/investigations/results",
+            "post",
+            Some("#/components/schemas/InvestigationResultRequest"),
+            "#/components/schemas/PilotWritebackResponse",
+            None,
+        ),
+        (
+            "/api/v1/qa/results",
+            "post",
+            Some("#/components/schemas/QaResultRequest"),
+            "#/components/schemas/PilotWritebackResponse",
+            None,
+        ),
+        (
+            "/api/v1/audit/claims/{claim_id}",
+            "get",
+            None,
+            "#/components/schemas/ClaimAuditHistoryResponse",
+            Some("claim_id"),
+        ),
+    ] {
+        let operation = &schema["paths"][path][method];
+        assert!(operation.is_object(), "missing {method} {path}");
+        assert_eq!(
+            operation["security"],
+            serde_json::json!([{ "ApiKeyAuth": [] }]),
+            "missing API key security for {method} {path}"
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"],
+            response_ref,
+            "wrong 200 response schema for {method} {path}"
+        );
+
+        if let Some(request_ref) = request_ref {
+            assert_eq!(
+                operation["requestBody"]["required"], true,
+                "missing required request body for {method} {path}"
+            );
+            assert_eq!(
+                operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+                request_ref,
+                "wrong request schema for {method} {path}"
+            );
+        } else {
+            assert!(
+                operation["requestBody"].is_null(),
+                "unexpected request body for {method} {path}"
+            );
+        }
+
+        if let Some(path_param) = path_param {
+            let params = operation["parameters"]
+                .as_array()
+                .unwrap_or_else(|| panic!("missing path parameters for {method} {path}"));
+            assert!(
+                params.iter().any(|param| {
+                    param["name"] == path_param
+                        && param["in"] == "path"
+                        && param["required"] == true
+                        && param["schema"]["type"] == "string"
+                }),
+                "missing {path_param} path parameter for {method} {path}"
+            );
+        }
+    }
+}
+
 fn assert_writeback_pii_contract(schema: &serde_json::Value, schema_name: &str) {
     let notes_description = schema["components"]["schemas"][schema_name]["properties"]["notes"]
         ["description"]

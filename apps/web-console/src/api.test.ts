@@ -88,6 +88,7 @@ describe("ops API helpers", () => {
     expect(new Set(paths).size).toBe(paths.length);
     expect(paths).toEqual([...paths].sort());
     expect(paths).toContain("/api/v1/claims/score");
+    expect(paths).toContain("/api/v1/investigations/results");
     expect(paths).toContain("/api/v1/members/{member_id}/profile-summary");
     expect(paths).toContain("/api/v1/knowledge/search-similar");
     expect(paths).toContain("/api/v1/qa/results");
