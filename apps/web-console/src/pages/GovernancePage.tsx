@@ -433,6 +433,27 @@ export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: stri
   };
 }
 
+export function buildWritebackAuditSummary(events: AuditEvent[] = []) {
+  const writebackEvents = events.filter(
+    (event) =>
+      event.event_type === "qa.result.received" ||
+      event.event_type === "investigation.result.received",
+  );
+  return {
+    writebackCount: writebackEvents.length,
+    qaWritebackCount: writebackEvents.filter((event) => event.event_type === "qa.result.received")
+      .length,
+    investigationWritebackCount: writebackEvents.filter(
+      (event) => event.event_type === "investigation.result.received",
+    ).length,
+    succeededWritebackCount: writebackEvents.filter((event) => event.event_status === "succeeded")
+      .length,
+    failedWritebackCount: writebackEvents.filter((event) => event.event_status === "failed").length,
+    evidenceBackedWritebackCount: writebackEvents.filter((event) => event.evidence_refs.length > 0)
+      .length,
+  };
+}
+
 function payloadString(payload: Record<string, unknown> | undefined, key: string) {
   const value = payload?.[key];
   if (value === undefined || value === null) return "";
@@ -953,6 +974,7 @@ export function GovernancePage() {
   const outcomeLabelFeedbackTargets = sortedUniqueLabels(outcomeLabels, "feedback_target");
   const outcomeLabelGovernanceStatuses = sortedUniqueLabels(outcomeLabels, "governance_status");
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
+  const writebackAuditSummary = buildWritebackAuditSummary(globalAuditQuery.data?.events);
   const governanceChangeTimelineRows = buildGovernanceChangeTimelineRows(
     governanceChangeEventsQuery.data?.events,
   );
@@ -1081,6 +1103,25 @@ export function GovernancePage() {
           <div>
             <span>Webhooks</span>
             <strong>{webhookSummary.eventCount}</strong>
+          </div>
+          <div>
+            <span>QA Writebacks</span>
+            <strong>{writebackAuditSummary.qaWritebackCount}</strong>
+          </div>
+          <div>
+            <span>Investigation Writebacks</span>
+            <strong>{writebackAuditSummary.investigationWritebackCount}</strong>
+          </div>
+          <div>
+            <span>Writeback Evidence</span>
+            <strong>
+              {writebackAuditSummary.evidenceBackedWritebackCount}/
+              {writebackAuditSummary.writebackCount}
+            </strong>
+          </div>
+          <div>
+            <span>Writeback Failed</span>
+            <strong>{writebackAuditSummary.failedWritebackCount}</strong>
           </div>
           <div>
             <span>Training Ready</span>

@@ -17,6 +17,7 @@ import {
   buildPromotionGateGovernanceRows,
   buildPromotionGateGovernanceSummary,
   buildWebhookDeliverySummary,
+  buildWritebackAuditSummary,
   canRecordWebhookDeliveryAttempt,
   filterOutcomeLabels,
   hasPendingAgentApproval,
@@ -279,6 +280,54 @@ describe("buildAuditSummary", () => {
     });
 
     expect(summary.latestEventType).toBe("routing_policy.activation.completed");
+  });
+});
+
+describe("buildWritebackAuditSummary", () => {
+  it("summarizes QA and investigation writeback audit coverage", () => {
+    expect(
+      buildWritebackAuditSummary([
+        {
+          audit_id: "audit_qa",
+          run_id: "pilot_qa_QA-1",
+          event_type: "qa.result.received",
+          event_status: "succeeded",
+          summary: "QA result received",
+          evidence_refs: ["qa_queue:QA-1"],
+        },
+        {
+          audit_id: "audit_investigation",
+          run_id: "pilot_investigation_INV-1",
+          event_type: "investigation.result.received",
+          event_status: "succeeded",
+          summary: "Investigation result received",
+          evidence_refs: ["investigation_results:INV-1"],
+        },
+        {
+          audit_id: "audit_qa_failed",
+          run_id: "pilot_qa_QA-2",
+          event_type: "qa.result.received",
+          event_status: "failed",
+          summary: "QA result failed",
+          evidence_refs: [],
+        },
+        {
+          audit_id: "audit_scoring",
+          run_id: "run_scoring",
+          event_type: "scoring.completed",
+          event_status: "succeeded",
+          summary: "Scoring completed",
+          evidence_refs: ["scoring_runs:run_scoring"],
+        },
+      ]),
+    ).toEqual({
+      writebackCount: 3,
+      qaWritebackCount: 2,
+      investigationWritebackCount: 1,
+      succeededWritebackCount: 2,
+      failedWritebackCount: 1,
+      evidenceBackedWritebackCount: 2,
+    });
   });
 });
 
