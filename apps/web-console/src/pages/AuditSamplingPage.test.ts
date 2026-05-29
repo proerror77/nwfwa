@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildAuditSampleLeadDetailRows,
   buildAuditSampleRequest,
+  buildAuditSampleRunDetailRows,
   buildAuditSamplingSummary,
 } from "./AuditSamplingPage";
 
@@ -153,6 +154,41 @@ describe("buildAuditSampleLeadDetailRows", () => {
         "Strata",
         "scheme=provider_peer_outlier|provider_type=clinic|region=BJ|policy_type=DENTAL|risk_band=critical",
       ],
+    ]);
+  });
+});
+
+describe("buildAuditSampleRunDetailRows", () => {
+  it("shows stored sampling definition and reproducibility metadata", () => {
+    expect(
+      buildAuditSampleRunDetailRows({
+        sample_id: "sample_1",
+        sample_mode: "stratified",
+        population_definition: "Clinic dental critical claims",
+        inclusion_criteria: {
+          min_risk_score: 70,
+          provider_type: "clinic",
+          provider_region: "BJ",
+          policy_type: "DENTAL",
+          risk_band: "critical",
+        },
+        deterministic_seed: "strata-week-1",
+        selection_method: "stratified_round_robin",
+        sample_size: 5,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        selected_leads: [],
+        outcome_distribution: {},
+      }),
+    ).toEqual([
+      ["Population", "Clinic dental critical claims"],
+      [
+        "Criteria",
+        "min_risk_score=70, policy_type=DENTAL, provider_region=BJ, provider_type=clinic, risk_band=critical",
+      ],
+      ["Selection", "stratified_round_robin"],
+      ["Seed", "strata-week-1"],
+      ["Reviewer", "qa-reviewer-1"],
     ]);
   });
 });

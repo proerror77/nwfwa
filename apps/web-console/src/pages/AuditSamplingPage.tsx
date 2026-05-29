@@ -133,6 +133,29 @@ export function buildAuditSampleLeadDetailRows(lead: AuditSampleLead) {
   ];
 }
 
+function formatInclusionCriteria(criteria?: Record<string, unknown>) {
+  if (!criteria) {
+    return "none";
+  }
+  const entries = Object.entries(criteria)
+    .filter(([, value]) => value !== null && value !== undefined && String(value).trim() !== "")
+    .sort(([left], [right]) => left.localeCompare(right));
+  if (entries.length === 0) {
+    return "none";
+  }
+  return entries.map(([key, value]) => `${key}=${String(value)}`).join(", ");
+}
+
+export function buildAuditSampleRunDetailRows(sample: AuditSampleRecord) {
+  return [
+    ["Population", sample.population_definition],
+    ["Criteria", formatInclusionCriteria(sample.inclusion_criteria)],
+    ["Selection", sample.selection_method],
+    ["Seed", sample.deterministic_seed ?? "none"],
+    ["Reviewer", sample.reviewer],
+  ];
+}
+
 export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
   const samples = data?.samples ?? [];
   const modeCounts = samples.reduce<Record<string, number>>((counts, sample) => {
@@ -435,6 +458,11 @@ export function AuditSamplingPage() {
                   {outcomeCount(sample, "open_count")}
                 </small>
                 <small>{topQaConclusion}</small>
+                {buildAuditSampleRunDetailRows(sample).map(([label, value]) => (
+                  <small key={label}>
+                    {label}: {value}
+                  </small>
+                ))}
               </div>
             );
           })}
