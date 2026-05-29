@@ -378,6 +378,9 @@ describe("buildDashboardValueMeasurementSummary", () => {
         evidence_caveat: "Estimated values require caveats.",
       }),
     ).toEqual({
+      observedFinancialOutcome: "CNY 1250.00",
+      estimatedImpactBoundary: "CNY 1000.00",
+      operationalCost: "CNY 125.00",
       preventedPayment: "CNY 1000.00",
       recoveredAmount: "CNY 250.00",
       avoidedFutureExposure: "CNY 500.00",

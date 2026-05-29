@@ -167,6 +167,10 @@ function formatPercent(value: number) {
   return `${percentage.toFixed(1)}%`;
 }
 
+function formatMoney(currency: string, amount: number | string | undefined) {
+  return `${currency} ${Number(amount ?? 0).toFixed(2)}`;
+}
+
 export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
   const totalLabels = labelPool?.total_labels ?? 0;
   const approvedForTraining = labelPool?.approved_for_training ?? 0;
@@ -339,15 +343,24 @@ export function buildDashboardSavingSegmentRows(
 
 export function buildDashboardValueMeasurementSummary(value?: DashboardValueMeasurement) {
   const currency = value?.currency ?? "CNY";
+  const observedFinancialOutcome =
+    Number(value?.prevented_payment ?? 0) + Number(value?.recovered_amount ?? 0);
+  const estimatedImpactBoundary =
+    Number(value?.avoided_future_exposure ?? 0) + Number(value?.estimated_impact ?? 0);
+  const operationalCost =
+    Number(value?.review_cost ?? 0) + Number(value?.false_positive_operational_cost ?? 0);
   return {
-    preventedPayment: `${currency} ${value?.prevented_payment ?? "0.00"}`,
-    recoveredAmount: `${currency} ${value?.recovered_amount ?? "0.00"}`,
-    avoidedFutureExposure: `${currency} ${value?.avoided_future_exposure ?? "0.00"}`,
-    estimatedImpact: `${currency} ${value?.estimated_impact ?? "0.00"}`,
-    reviewCost: `${currency} ${value?.review_cost ?? "0.00"}`,
-    falsePositiveOperationalCost: `${currency} ${value?.false_positive_operational_cost ?? "0.00"}`,
+    observedFinancialOutcome: formatMoney(currency, observedFinancialOutcome),
+    estimatedImpactBoundary: formatMoney(currency, estimatedImpactBoundary),
+    operationalCost: formatMoney(currency, operationalCost),
+    preventedPayment: formatMoney(currency, value?.prevented_payment),
+    recoveredAmount: formatMoney(currency, value?.recovered_amount),
+    avoidedFutureExposure: formatMoney(currency, value?.avoided_future_exposure),
+    estimatedImpact: formatMoney(currency, value?.estimated_impact),
+    reviewCost: formatMoney(currency, value?.review_cost),
+    falsePositiveOperationalCost: formatMoney(currency, value?.false_positive_operational_cost),
     reviewerCapacityHours: `${value?.reviewer_capacity_hours ?? "0.00"}h`,
-    netValue: `${currency} ${value?.net_value ?? "0.00"}`,
+    netValue: formatMoney(currency, value?.net_value),
     evidenceCaveat: value?.evidence_caveat ?? "No value measurement caveat available.",
   };
 }
@@ -491,16 +504,16 @@ export function DashboardPage() {
           <h2>Value Measurement</h2>
           <div className="summary-grid">
             <div>
-              <span>Prevented</span>
-              <strong>{valueMeasurementSummary.preventedPayment}</strong>
+              <span>Observed Value</span>
+              <strong>{valueMeasurementSummary.observedFinancialOutcome}</strong>
             </div>
             <div>
-              <span>Recovered</span>
-              <strong>{valueMeasurementSummary.recoveredAmount}</strong>
+              <span>Estimated Value</span>
+              <strong>{valueMeasurementSummary.estimatedImpactBoundary}</strong>
             </div>
             <div>
-              <span>Estimated</span>
-              <strong>{valueMeasurementSummary.estimatedImpact}</strong>
+              <span>Operational Cost</span>
+              <strong>{valueMeasurementSummary.operationalCost}</strong>
             </div>
             <div>
               <span>Net Value</span>
@@ -509,8 +522,20 @@ export function DashboardPage() {
           </div>
           <div className="table-list">
             <div className="metric-row compact-metric-row">
-              <span>Avoided Exposure</span>
+              <span>Observed Prevented</span>
+              <strong>{valueMeasurementSummary.preventedPayment}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Observed Recovered</span>
+              <strong>{valueMeasurementSummary.recoveredAmount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Estimated Avoided Exposure</span>
               <strong>{valueMeasurementSummary.avoidedFutureExposure}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Estimated Impact</span>
+              <strong>{valueMeasurementSummary.estimatedImpact}</strong>
             </div>
             <div className="metric-row compact-metric-row">
               <span>Review Cost</span>
