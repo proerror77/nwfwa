@@ -3674,8 +3674,8 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["requested_by", "notes"],
                     "properties": {
-                        "requested_by": { "type": "string" },
-                        "notes": { "type": "string" }
+                        "requested_by": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 }
                     }
                 },
                 "UpdateModelRetrainingJobStatusRequest": {
@@ -3683,16 +3683,16 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["status", "actor", "notes"],
                     "properties": {
                         "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
-                        "actor": { "type": "string" },
-                        "notes": { "type": "string" }
+                        "actor": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 }
                     }
                 },
                 "ClaimModelRetrainingJobRequest": {
                     "type": "object",
                     "required": ["actor", "notes"],
                     "properties": {
-                        "actor": { "type": "string" },
-                        "notes": { "type": "string" },
+                        "actor": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 },
                         "model_key": { "type": ["string", "null"] }
                     }
                 },
@@ -3700,13 +3700,13 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["actor", "notes", "candidate_model_version", "artifact_uri", "validation_report_uri", "evaluation_run_id", "confusion_matrix_json", "metrics_json"],
                     "properties": {
-                        "actor": { "type": "string" },
-                        "notes": { "type": "string" },
-                        "candidate_model_version": { "type": "string" },
-                        "artifact_uri": { "type": "string" },
+                        "actor": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 },
+                        "candidate_model_version": { "type": "string", "minLength": 1 },
+                        "artifact_uri": { "type": "string", "minLength": 1 },
                         "endpoint_url": { "type": ["string", "null"] },
-                        "validation_report_uri": { "type": "string" },
-                        "evaluation_run_id": { "type": "string" },
+                        "validation_report_uri": { "type": "string", "minLength": 1 },
+                        "evaluation_run_id": { "type": "string", "minLength": 1 },
                         "auc": { "type": ["string", "null"] },
                         "ks": { "type": ["string", "null"] },
                         "precision": { "type": ["string", "null"] },

@@ -335,6 +335,35 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "actor")
     );
+    for (schema_name, fields) in [
+        (
+            "CreateModelRetrainingJobRequest",
+            &["requested_by", "notes"][..],
+        ),
+        (
+            "UpdateModelRetrainingJobStatusRequest",
+            &["actor", "notes"][..],
+        ),
+        ("ClaimModelRetrainingJobRequest", &["actor", "notes"][..]),
+        (
+            "CompleteModelRetrainingJobRequest",
+            &[
+                "actor",
+                "notes",
+                "candidate_model_version",
+                "artifact_uri",
+                "validation_report_uri",
+                "evaluation_run_id",
+            ][..],
+        ),
+    ] {
+        for field in fields {
+            assert_eq!(
+                schema["components"]["schemas"][schema_name]["properties"][*field]["minLength"], 1,
+                "missing {schema_name}.{field} minLength"
+            );
+        }
+    }
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
             ["data_quality_status"]["enum"][1],

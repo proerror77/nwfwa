@@ -229,6 +229,13 @@ pub async fn create_model_retraining_job(
             "requested_by is required",
         ));
     }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_JOB_NOTES",
+            "retraining job notes are required",
+        ));
+    }
 
     let readiness = load_model_retraining_readiness(&state, &model_key).await?;
     if readiness.recommendation != "prepare_retraining" {
@@ -297,6 +304,13 @@ pub async fn update_model_retraining_job_status(
             "actor is required",
         ));
     }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_JOB_NOTES",
+            "retraining job notes are required",
+        ));
+    }
     let job = state
         .repository
         .update_model_retraining_job_status(
@@ -331,6 +345,13 @@ pub async fn claim_next_model_retraining_job(
             StatusCode::BAD_REQUEST,
             "INVALID_RETRAINING_JOB_ACTOR",
             "actor is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_JOB_NOTES",
+            "retraining job notes are required",
         ));
     }
     let job = state
@@ -579,6 +600,11 @@ fn validate_retraining_output_request(
             request.actor.as_str(),
             "INVALID_RETRAINING_OUTPUT_ACTOR",
             "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_RETRAINING_OUTPUT_NOTES",
+            "retraining output notes are required",
         ),
         (
             request.candidate_model_version.as_str(),

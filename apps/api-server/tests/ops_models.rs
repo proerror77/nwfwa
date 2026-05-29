@@ -953,6 +953,19 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+        r#"{
+          "requested_by": "model-ops",
+          "notes": " "
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_JOB_NOTES");
+
     let (status, created) = json_request(
         app.clone(),
         "POST",
@@ -982,6 +995,20 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(jobs["jobs"][0]["job_id"], job_id);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/claim-next",
+        r#"{
+          "actor": "trainer-worker",
+          "model_key": "baseline_fwa",
+          "notes": " "
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_JOB_NOTES");
 
     let (status, updated) = json_request(
         app.clone(),
@@ -1015,6 +1042,20 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(body["code"], "MODEL_RETRAINING_JOB_NOT_FOUND");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
+        r#"{
+          "status": "validation",
+          "actor": "trainer-worker",
+          "notes": " "
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_JOB_NOTES");
+
     let (status, updated) = json_request(
         app.clone(),
         "POST",
@@ -1028,6 +1069,25 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(updated["status"], "validation");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
+        r#"{
+          "actor": "trainer-worker",
+          "notes": " ",
+          "candidate_model_version": "0.2.0-candidate",
+          "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+          "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+          "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
+          "metrics_json": {"score_psi": 0.04}
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_NOTES");
 
     let (status, completed) = json_request(
         app.clone(),
