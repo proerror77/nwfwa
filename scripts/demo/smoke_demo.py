@@ -15,6 +15,7 @@ CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
 MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
 CANDIDATE_RULE_ID = "candidate_early_high_amount"
+ROUTING_POLICY_PREFIX = "demo_strict_prepay"
 
 
 def request(method, path, payload=None, retries=1):
@@ -421,6 +422,115 @@ def run_rule_backtest_and_publish(score, investigation):
         "matched_count": backtest["matched_count"],
         "precision": backtest["precision"],
         "lift": backtest["lift"],
+    }
+
+
+def run_routing_policy_governance():
+    policies = request("GET", "/api/v1/ops/routing-policies").get("policies", [])
+    assert_true(policies, "routing policy list returned no policies")
+    assert_true(
+        any(
+            policy.get("review_mode") in ("pre_payment", "both")
+            and policy.get("status") == "active"
+            for policy in policies
+        ),
+        "routing policy list missing active pre-payment policy",
+    )
+
+    policy_id = f"{ROUTING_POLICY_PREFIX}_{int(time.time())}"
+    evidence_ref = f"routing_policies:{policy_id}:v1:pre_payment"
+    candidate = {
+        "policy_id": policy_id,
+        "version": 1,
+        "review_mode": "pre_payment",
+        "risk_thresholds": {
+            "low_max": 0,
+            "medium_min": 1,
+            "high_min": 1,
+            "critical_min": 90,
+        },
+        "confidence_thresholds": {
+            "low_confidence_below": 60,
+            "high_confidence_min": 80,
+        },
+        "provider_review_threshold": 70,
+    }
+    saved = request(
+        "POST",
+        "/api/v1/ops/routing-policies",
+        {
+            "owner": "policy-ops-demo",
+            "policy": candidate,
+        },
+    )
+    assert_true(saved.get("policy_id") == policy_id, "saved routing policy id mismatch")
+    assert_true(saved.get("status") == "draft", "saved routing policy should be draft")
+    assert_true(saved.get("owner") == "policy-ops-demo", "saved routing policy owner mismatch")
+
+    draft_gates = request(
+        "GET",
+        f"/api/v1/ops/routing-policies/{policy_id}/pre_payment/1/promotion-gates",
+    )
+    assert_true(draft_gates.get("decision") == "activation_blocked", "draft routing gates should block activation")
+    assert_true("approval missing" in draft_gates.get("blockers", []), "draft routing gates should require approval")
+
+    lifecycle_payload = {"evidence_refs": [evidence_ref]}
+    for action, expected_status in [
+        ("submit", "submitted"),
+        ("approve", "approved"),
+    ]:
+        result = request(
+            "POST",
+            f"/api/v1/ops/routing-policies/{policy_id}/pre_payment/1/{action}",
+            lifecycle_payload,
+        )
+        assert_true(
+            result.get("status") == expected_status,
+            f"routing policy {action} did not reach {expected_status}",
+        )
+
+    gates = request(
+        "GET",
+        f"/api/v1/ops/routing-policies/{policy_id}/pre_payment/1/promotion-gates",
+    )
+    assert_true(gates.get("decision") == "activation_allowed", f"routing gates should allow activation: {gates}")
+    assert_true(gates.get("passed_count") == gates.get("total_count"), "routing gates did not all pass")
+
+    activated = request(
+        "POST",
+        f"/api/v1/ops/routing-policies/{policy_id}/pre_payment/1/activate",
+        lifecycle_payload,
+    )
+    assert_true(activated.get("status") == "active", "routing policy was not activated")
+    assert_true(activated.get("activated_at"), "activated routing policy missing activated_at")
+
+    routed_score = request(
+        "POST",
+        "/api/v1/claims/score",
+        {
+            "source_system": SOURCE_SYSTEM,
+            "review_mode": "pre_payment",
+            "claim": {
+                "external_claim_id": f"CLM-ROUTING-{policy_id}",
+                "claim_amount": "8000",
+                "currency": "CNY",
+            },
+        },
+    )
+    assert_true(
+        routed_score.get("routing_policy", {}).get("policy_id") == policy_id,
+        "activated routing policy did not control pre-payment scoring",
+    )
+    assert_true(
+        routed_score.get("routing_policy", {}).get("risk_thresholds", {}).get("high_min") == 1,
+        "activated routing policy thresholds were not used",
+    )
+    assert_true(routed_score.get("audit_id"), "routing policy controlled score missing audit id")
+    return {
+        "policy_id": policy_id,
+        "status": activated["status"],
+        "gates_decision": gates["decision"],
+        "scoring_run_id": routed_score["run_id"],
     }
 
 
@@ -897,6 +1007,7 @@ def main():
 
     discovered_rule = run_rule_discovery_candidate_lifecycle()
     rule_release = run_rule_backtest_and_publish(score, investigation)
+    routing_policy = run_routing_policy_governance()
 
     qa = request(
         "POST",
@@ -1076,6 +1187,7 @@ def main():
                 "factor_readiness": factor_readiness,
                 "webhook_delivery": webhook_delivery,
                 "rule_release": rule_release,
+                "routing_policy": routing_policy,
             },
             ensure_ascii=True,
         )

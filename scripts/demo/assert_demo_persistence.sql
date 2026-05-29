@@ -277,6 +277,43 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM routing_policies
+  WHERE policy_key LIKE 'demo_strict_prepay_%'
+    AND version = 1
+    AND review_mode = 'pre_payment'
+    AND status = 'active'
+    AND owner = 'policy-ops-demo'
+    AND policy_json -> 'risk_thresholds' ->> 'high_min' = '1';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected active demo strict pre-payment routing policy';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_events
+  WHERE event_type IN (
+      'routing_policy.candidate.saved',
+      'routing_policy.status.changed',
+      'routing_policy.activation.completed'
+    )
+    AND payload ->> 'policy_id' LIKE 'demo_strict_prepay_%'
+    AND payload ->> 'review_mode' = 'pre_payment'
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 4 THEN
+    RAISE EXCEPTION 'expected routing policy governance audit events, found %',
+      row_count;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM scoring_runs
+  JOIN claims c ON c.id = scoring_runs.claim_id
+  WHERE c.external_claim_id LIKE 'CLM-ROUTING-demo_strict_prepay_%'
+    AND scoring_runs.routing_policy ->> 'policy_id' LIKE 'demo_strict_prepay_%'
+    AND scoring_runs.routing_policy -> 'risk_thresholds' ->> 'high_min' = '1';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected scoring run controlled by demo routing policy';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM model_retraining_jobs
   WHERE model_key = 'baseline_fwa'
     AND model_version = '0.1.0'
