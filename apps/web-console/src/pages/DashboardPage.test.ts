@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDashboardAgentGovernanceSummary,
+  buildDashboardQaFeedbackTargetRows,
   buildDashboardLabelPoolSummary,
   buildDashboardCaseSlaSummary,
   buildDashboardModelGovernanceSummary,
@@ -88,6 +89,12 @@ describe("buildDashboardQaQueueSummary", () => {
       feedback_resolved_count: 2,
       feedback_dismissed_count: 1,
       unresolved_feedback_count: 4,
+      rules_unresolved_feedback_count: 2,
+      models_unresolved_feedback_count: 1,
+      features_unresolved_feedback_count: 0,
+      provider_profile_unresolved_feedback_count: 1,
+      workflow_unresolved_feedback_count: 0,
+      tpa_unresolved_feedback_count: 0,
     });
 
     expect(summary).toEqual({
@@ -100,9 +107,45 @@ describe("buildDashboardQaQueueSummary", () => {
       feedbackResolvedCount: 2,
       feedbackDismissedCount: 1,
       unresolvedFeedbackCount: 4,
+      rulesUnresolvedFeedbackCount: 2,
+      modelsUnresolvedFeedbackCount: 1,
+      featuresUnresolvedFeedbackCount: 0,
+      providerProfileUnresolvedFeedbackCount: 1,
+      workflowUnresolvedFeedbackCount: 0,
+      tpaUnresolvedFeedbackCount: 0,
       reviewedRateLabel: "62.5%",
       disagreementRateLabel: "40.0%",
     });
+  });
+
+  it("builds QA unresolved feedback target rows for dashboard display", () => {
+    const summary = buildDashboardQaQueueSummary({
+      sampled_cases: 8,
+      open_cases: 3,
+      reviewed_cases: 5,
+      disagreement_cases: 2,
+      disagreement_rate: 0.4,
+      feedback_open_count: 3,
+      feedback_in_progress_count: 1,
+      feedback_resolved_count: 2,
+      feedback_dismissed_count: 1,
+      unresolved_feedback_count: 4,
+      rules_unresolved_feedback_count: 2,
+      models_unresolved_feedback_count: 1,
+      features_unresolved_feedback_count: 0,
+      provider_profile_unresolved_feedback_count: 1,
+      workflow_unresolved_feedback_count: 0,
+      tpa_unresolved_feedback_count: 0,
+    });
+
+    expect(buildDashboardQaFeedbackTargetRows(summary)).toEqual([
+      { label: "Rules", count: 2 },
+      { label: "Models", count: 1 },
+      { label: "Features", count: 0 },
+      { label: "Provider Profile", count: 1 },
+      { label: "Workflow", count: 0 },
+      { label: "TPA", count: 0 },
+    ]);
   });
 });
 

@@ -511,6 +511,12 @@ pub struct DashboardQaQueueRecord {
     pub feedback_resolved_count: u32,
     pub feedback_dismissed_count: u32,
     pub unresolved_feedback_count: u32,
+    pub rules_unresolved_feedback_count: u32,
+    pub models_unresolved_feedback_count: u32,
+    pub features_unresolved_feedback_count: u32,
+    pub provider_profile_unresolved_feedback_count: u32,
+    pub workflow_unresolved_feedback_count: u32,
+    pub tpa_unresolved_feedback_count: u32,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -8539,6 +8545,10 @@ fn summarize_dashboard_qa_queue(
     };
     let feedback_open_count = count_feedback_status(feedback_items, "open");
     let feedback_in_progress_count = count_feedback_status(feedback_items, "in_progress");
+    let unresolved_feedback_items = feedback_items
+        .iter()
+        .filter(|item| matches!(item.status.as_str(), "open" | "in_progress"))
+        .collect::<Vec<_>>();
 
     DashboardQaQueueRecord {
         sampled_cases,
@@ -8551,11 +8561,36 @@ fn summarize_dashboard_qa_queue(
         feedback_resolved_count: count_feedback_status(feedback_items, "resolved"),
         feedback_dismissed_count: count_feedback_status(feedback_items, "dismissed"),
         unresolved_feedback_count: feedback_open_count + feedback_in_progress_count,
+        rules_unresolved_feedback_count: count_feedback_target(&unresolved_feedback_items, "rules"),
+        models_unresolved_feedback_count: count_feedback_target(
+            &unresolved_feedback_items,
+            "models",
+        ),
+        features_unresolved_feedback_count: count_feedback_target(
+            &unresolved_feedback_items,
+            "features",
+        ),
+        provider_profile_unresolved_feedback_count: count_feedback_target(
+            &unresolved_feedback_items,
+            "provider_profile",
+        ),
+        workflow_unresolved_feedback_count: count_feedback_target(
+            &unresolved_feedback_items,
+            "workflow",
+        ),
+        tpa_unresolved_feedback_count: count_feedback_target(&unresolved_feedback_items, "tpa"),
     }
 }
 
 fn count_feedback_status(items: &[QaFeedbackItemRecord], status: &str) -> u32 {
     items.iter().filter(|item| item.status == status).count() as u32
+}
+
+fn count_feedback_target(items: &[&QaFeedbackItemRecord], feedback_target: &str) -> u32 {
+    items
+        .iter()
+        .filter(|item| item.feedback_target == feedback_target)
+        .count() as u32
 }
 
 fn summarize_dashboard_case_sla(cases: &[CaseRecord]) -> DashboardCaseSlaRecord {

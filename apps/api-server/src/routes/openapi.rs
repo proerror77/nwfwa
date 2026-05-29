@@ -4206,7 +4206,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardQaQueue": {
                     "type": "object",
-                    "required": ["sampled_cases", "open_cases", "reviewed_cases", "disagreement_cases", "disagreement_rate", "feedback_open_count", "feedback_in_progress_count", "feedback_resolved_count", "feedback_dismissed_count", "unresolved_feedback_count"],
+                    "required": ["sampled_cases", "open_cases", "reviewed_cases", "disagreement_cases", "disagreement_rate", "feedback_open_count", "feedback_in_progress_count", "feedback_resolved_count", "feedback_dismissed_count", "unresolved_feedback_count", "rules_unresolved_feedback_count", "models_unresolved_feedback_count", "features_unresolved_feedback_count", "provider_profile_unresolved_feedback_count", "workflow_unresolved_feedback_count", "tpa_unresolved_feedback_count"],
                     "properties": {
                         "sampled_cases": { "type": "integer" },
                         "open_cases": { "type": "integer" },
@@ -4217,7 +4217,13 @@ pub async fn openapi_schema() -> Json<Value> {
                         "feedback_in_progress_count": { "type": "integer" },
                         "feedback_resolved_count": { "type": "integer" },
                         "feedback_dismissed_count": { "type": "integer" },
-                        "unresolved_feedback_count": { "type": "integer" }
+                        "unresolved_feedback_count": { "type": "integer" },
+                        "rules_unresolved_feedback_count": { "type": "integer" },
+                        "models_unresolved_feedback_count": { "type": "integer" },
+                        "features_unresolved_feedback_count": { "type": "integer" },
+                        "provider_profile_unresolved_feedback_count": { "type": "integer" },
+                        "workflow_unresolved_feedback_count": { "type": "integer" },
+                        "tpa_unresolved_feedback_count": { "type": "integer" }
                     }
                 },
                 "DashboardCaseSla": {

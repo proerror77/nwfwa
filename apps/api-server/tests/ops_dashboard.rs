@@ -371,6 +371,21 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["qa_queue"]["feedback_resolved_count"], 0);
     assert_eq!(dashboard["qa_queue"]["feedback_dismissed_count"], 0);
     assert_eq!(dashboard["qa_queue"]["unresolved_feedback_count"], 1);
+    assert_eq!(dashboard["qa_queue"]["rules_unresolved_feedback_count"], 1);
+    assert_eq!(dashboard["qa_queue"]["models_unresolved_feedback_count"], 0);
+    assert_eq!(
+        dashboard["qa_queue"]["features_unresolved_feedback_count"],
+        0
+    );
+    assert_eq!(
+        dashboard["qa_queue"]["provider_profile_unresolved_feedback_count"],
+        0
+    );
+    assert_eq!(
+        dashboard["qa_queue"]["workflow_unresolved_feedback_count"],
+        0
+    );
+    assert_eq!(dashboard["qa_queue"]["tpa_unresolved_feedback_count"], 0);
     assert_eq!(dashboard["agent_governance"]["total_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["successful_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["pending_approvals"], 0);

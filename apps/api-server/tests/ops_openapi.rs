@@ -1679,6 +1679,12 @@ async fn openapi_includes_operations_paths() {
         "feedback_resolved_count",
         "feedback_dismissed_count",
         "unresolved_feedback_count",
+        "rules_unresolved_feedback_count",
+        "models_unresolved_feedback_count",
+        "features_unresolved_feedback_count",
+        "provider_profile_unresolved_feedback_count",
+        "workflow_unresolved_feedback_count",
+        "tpa_unresolved_feedback_count",
     ] {
         assert!(
             schema["components"]["schemas"]["DashboardQaQueue"]["required"]

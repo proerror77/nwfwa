@@ -42,6 +42,12 @@ type DashboardQaQueue = {
   feedback_resolved_count?: number;
   feedback_dismissed_count?: number;
   unresolved_feedback_count?: number;
+  rules_unresolved_feedback_count?: number;
+  models_unresolved_feedback_count?: number;
+  features_unresolved_feedback_count?: number;
+  provider_profile_unresolved_feedback_count?: number;
+  workflow_unresolved_feedback_count?: number;
+  tpa_unresolved_feedback_count?: number;
 };
 
 type DashboardCaseSla = {
@@ -191,10 +197,30 @@ export function buildDashboardQaQueueSummary(queue?: DashboardQaQueue) {
     feedbackResolvedCount: queue?.feedback_resolved_count ?? 0,
     feedbackDismissedCount: queue?.feedback_dismissed_count ?? 0,
     unresolvedFeedbackCount: queue?.unresolved_feedback_count ?? 0,
+    rulesUnresolvedFeedbackCount: queue?.rules_unresolved_feedback_count ?? 0,
+    modelsUnresolvedFeedbackCount: queue?.models_unresolved_feedback_count ?? 0,
+    featuresUnresolvedFeedbackCount: queue?.features_unresolved_feedback_count ?? 0,
+    providerProfileUnresolvedFeedbackCount:
+      queue?.provider_profile_unresolved_feedback_count ?? 0,
+    workflowUnresolvedFeedbackCount: queue?.workflow_unresolved_feedback_count ?? 0,
+    tpaUnresolvedFeedbackCount: queue?.tpa_unresolved_feedback_count ?? 0,
     reviewedRateLabel:
       sampledCases === 0 ? "0.0%" : formatPercent(reviewedCases / sampledCases),
     disagreementRateLabel: formatPercent(queue?.disagreement_rate ?? 0),
   };
+}
+
+export function buildDashboardQaFeedbackTargetRows(
+  summary: ReturnType<typeof buildDashboardQaQueueSummary>,
+) {
+  return [
+    { label: "Rules", count: summary.rulesUnresolvedFeedbackCount },
+    { label: "Models", count: summary.modelsUnresolvedFeedbackCount },
+    { label: "Features", count: summary.featuresUnresolvedFeedbackCount },
+    { label: "Provider Profile", count: summary.providerProfileUnresolvedFeedbackCount },
+    { label: "Workflow", count: summary.workflowUnresolvedFeedbackCount },
+    { label: "TPA", count: summary.tpaUnresolvedFeedbackCount },
+  ];
 }
 
 export function buildDashboardCaseSlaSummary(sla?: DashboardCaseSla) {
@@ -368,6 +394,7 @@ export function DashboardPage() {
   );
   const labelPoolSummary = buildDashboardLabelPoolSummary(summary?.label_pool);
   const qaQueueSummary = buildDashboardQaQueueSummary(summary?.qa_queue);
+  const qaFeedbackTargetRows = buildDashboardQaFeedbackTargetRows(qaQueueSummary);
   const caseSlaSummary = buildDashboardCaseSlaSummary(summary?.case_sla);
   const agentGovernanceSummary = buildDashboardAgentGovernanceSummary(summary?.agent_governance);
   const modelGovernanceSummary = buildDashboardModelGovernanceSummary(summary?.model_governance);
@@ -635,6 +662,12 @@ export function DashboardPage() {
               <span>Feedback Dismissed</span>
               <strong>{qaQueueSummary.feedbackDismissedCount}</strong>
             </div>
+            {qaFeedbackTargetRows.map((row) => (
+              <div className="metric-row compact-metric-row" key={row.label}>
+                <span>{row.label} Target</span>
+                <strong>{row.count}</strong>
+              </div>
+            ))}
           </div>
         </div>
 
