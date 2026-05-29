@@ -13,7 +13,9 @@ import {
   getDashboardSummary,
   getClaimAuditHistory,
   getMemberProfileSummary,
+  getModelPerformance,
   getProviderRiskSummary,
+  getRule,
   getRulePromotionGates,
   submitRulePromotionReview,
   investigateCase,
@@ -59,7 +61,9 @@ import {
   submitRoutingPolicy,
   submitRule,
   submitQaResult,
+  scoreClaim,
   updateQaFeedbackStatus,
+  updateCaseStatus,
   submitWebhookDeliveryAttempt,
   triageLead,
 } from "./api";
@@ -100,6 +104,31 @@ describe("ops API helpers", () => {
         expect(param).toMatch(/^[a-z][a-z0-9_]*$/);
       }
     }
+  });
+
+  it("calls runtime scoring and rule detail endpoints", async () => {
+    const fetchMock = mockFetch({ claim_id: "CLM-0287", risk_score: 87 });
+    const payload = { claim_id: "CLM-0287", claim_amount: "18900.00" };
+
+    await scoreClaim(payload, "dev-secret");
+    await getRule("rule_early_claim", "dev-secret");
+
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      1,
+      "/api/v1/claims/score",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      2,
+      "/api/v1/ops/rules/rule_early_claim",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
   });
 
   it("calls rule operations endpoints with API key", async () => {
@@ -293,6 +322,7 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ models: [] });
 
     await listModels("dev-secret");
+    await getModelPerformance("baseline_fwa", "dev-secret");
     await getModelPromotionGates("baseline_fwa", "dev-secret");
     await getModelRetrainingReadiness("baseline_fwa", "dev-secret");
     await listModelRetrainingJobs("baseline_fwa", "dev-secret");
@@ -339,6 +369,12 @@ describe("ops API helpers", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/models",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/models/baseline_fwa/performance",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
@@ -680,6 +716,16 @@ describe("ops API helpers", () => {
     await listLeads("dev-secret");
     await triageLead("lead_CLM-0287", triagePayload, "dev-secret");
     await listCases("dev-secret");
+    await updateCaseStatus(
+      "case_CLM-0287",
+      {
+        status: "investigating",
+        actor_id: "siu-reviewer-1",
+        notes: "Provider records requested.",
+        evidence_refs: ["investigation_cases:case_CLM-0287"],
+      },
+      "dev-secret",
+    );
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -701,6 +747,19 @@ describe("ops API helpers", () => {
       "/api/v1/ops/cases",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/v1/ops/cases/case_CLM-0287/status",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify({
+          status: "investigating",
+          actor_id: "siu-reviewer-1",
+          notes: "Provider records requested.",
+          evidence_refs: ["investigation_cases:case_CLM-0287"],
+        }),
       }),
     );
   });
