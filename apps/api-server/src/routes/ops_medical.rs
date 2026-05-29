@@ -278,10 +278,11 @@ fn validate_medical_review_result(
         ));
     }
     if request.notes.trim().is_empty()
+        || request.evidence_refs.is_empty()
         || request
             .evidence_refs
             .iter()
-            .all(|reference| reference.trim().is_empty())
+            .any(|reference| reference.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,

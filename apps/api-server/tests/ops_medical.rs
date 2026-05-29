@@ -202,7 +202,7 @@ async fn rejects_medical_review_result_without_evidence() {
     assert_eq!(body["code"], "MISSING_MEDICAL_REVIEW_EVIDENCE");
 
     let (status, body) = json_request(
-        app,
+        app.clone(),
         "POST",
         "/api/v1/ops/medical-review/results",
         r#"{
@@ -212,6 +212,23 @@ async fn rejects_medical_review_result_without_evidence() {
           "decision": "request_more_evidence",
           "notes": "Medical record is required before necessity can be confirmed.",
           "evidence_refs": [" "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_MEDICAL_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-MEDICAL-QUEUE-2",
+          "scoring_audit_id": "audit_scoring_1",
+          "reviewer": "medical-reviewer-1",
+          "decision": "request_more_evidence",
+          "notes": "Medical record is required before necessity can be confirmed.",
+          "evidence_refs": ["audit:scoring.completed", " "]
         }"#,
     )
     .await;

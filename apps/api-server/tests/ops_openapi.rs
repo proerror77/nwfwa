@@ -1230,6 +1230,11 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["minItems"],
         1
     );
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
+            ["evidence_refs"]["items"]["minLength"],
+        1
+    );
     for schema_name in [
         "SubmitRulePromotionReviewRequest",
         "SubmitModelPromotionReviewRequest",
