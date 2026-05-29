@@ -29,6 +29,10 @@ pub struct AuditEventListQuery {
     pub feedback_id: Option<String>,
     pub qa_case_id: Option<String>,
     pub sample_id: Option<String>,
+    pub dataset_id: Option<String>,
+    pub feature_set_id: Option<String>,
+    pub model_dataset_id: Option<String>,
+    pub evaluation_run_id: Option<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -59,6 +63,10 @@ pub async fn list_audit_events(
         feedback_id: normalize_filter(query.feedback_id),
         qa_case_id: normalize_filter(query.qa_case_id),
         sample_id: normalize_filter(query.sample_id),
+        dataset_id: normalize_filter(query.dataset_id),
+        feature_set_id: normalize_filter(query.feature_set_id),
+        model_dataset_id: normalize_filter(query.model_dataset_id),
+        evaluation_run_id: normalize_filter(query.evaluation_run_id),
     };
     let events = state
         .repository

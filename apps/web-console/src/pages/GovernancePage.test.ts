@@ -51,6 +51,10 @@ describe("buildGlobalAuditEventFilters", () => {
           routingPolicyId: "fwa_risk_fusion_routing",
           routingPolicyVersion: "3",
           reviewMode: "post_payment",
+          datasetId: "dataset_1",
+          featureSetId: "feature_set_1",
+          modelDatasetId: "model_dataset_1",
+          evaluationRunId: "eval_1",
           limit: "25",
         },
         25,
@@ -71,6 +75,10 @@ describe("buildGlobalAuditEventFilters", () => {
       routing_policy_id: "fwa_risk_fusion_routing",
       routing_policy_version: "3",
       review_mode: "post_payment",
+      dataset_id: "dataset_1",
+      feature_set_id: "feature_set_1",
+      model_dataset_id: "model_dataset_1",
+      evaluation_run_id: "eval_1",
     });
   });
 });

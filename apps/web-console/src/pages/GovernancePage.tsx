@@ -292,6 +292,10 @@ export type GlobalAuditEventFilterState = {
   routingPolicyId: string;
   routingPolicyVersion: string;
   reviewMode: string;
+  datasetId: string;
+  featureSetId: string;
+  modelDatasetId: string;
+  evaluationRunId: string;
   limit: string;
 };
 
@@ -346,6 +350,10 @@ export function buildGlobalAuditEventFilters(
     routing_policy_id: filters.routingPolicyId,
     routing_policy_version: filters.routingPolicyVersion,
     review_mode: filters.reviewMode,
+    dataset_id: filters.datasetId,
+    feature_set_id: filters.featureSetId,
+    model_dataset_id: filters.modelDatasetId,
+    evaluation_run_id: filters.evaluationRunId,
   };
 }
 
@@ -755,6 +763,10 @@ export function GovernancePage() {
     routingPolicyId: "",
     routingPolicyVersion: "",
     reviewMode: "",
+    datasetId: "",
+    featureSetId: "",
+    modelDatasetId: "",
+    evaluationRunId: "",
     limit: "50",
   });
   const parsedAuditEventLimit = Number.parseInt(auditEventFilters.limit, 10);
@@ -786,6 +798,10 @@ export function GovernancePage() {
       auditEventFilters.routingPolicyId,
       auditEventFilters.routingPolicyVersion,
       auditEventFilters.reviewMode,
+      auditEventFilters.datasetId,
+      auditEventFilters.featureSetId,
+      auditEventFilters.modelDatasetId,
+      auditEventFilters.evaluationRunId,
     ],
     queryFn: () =>
       listAuditEvents(
@@ -1446,6 +1462,54 @@ export function GovernancePage() {
               setAuditEventFilters((filters) => ({
                 ...filters,
                 reviewMode: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Dataset ID
+          <input
+            value={auditEventFilters.datasetId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                datasetId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Feature Set ID
+          <input
+            value={auditEventFilters.featureSetId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                featureSetId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Model Dataset ID
+          <input
+            value={auditEventFilters.modelDatasetId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                modelDatasetId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Evaluation Run ID
+          <input
+            value={auditEventFilters.evaluationRunId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                evaluationRunId: event.target.value,
               }))
             }
           />

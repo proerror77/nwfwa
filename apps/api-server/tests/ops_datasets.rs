@@ -618,7 +618,7 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     assert_eq!(listed["lineage"][0]["source_data_quality_status"], "watch");
 
     let (status, audit_events) = json_request(
-        app,
+        app.clone(),
         "GET",
         "/api/v1/ops/audit-events?event_group=governance&limit=20",
         "{}",
@@ -656,6 +656,79 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
         model_evaluation_event["evidence_refs"][0],
         "model_evaluations:eval_renewal_v1"
     );
+
+    let (status, dataset_events) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/v1/ops/audit-events?dataset_id={dataset_id}&limit=10"),
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(dataset_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "dataset.registered"
+            && event["payload"]["dataset_id"] == dataset_id));
+
+    let (status, feature_set_events) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/v1/ops/audit-events?feature_set_id={feature_set_id}&limit=10"),
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(feature_set_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "feature_set.registered"
+            && event["payload"]["feature_set_id"] == feature_set_id));
+
+    let (status, model_dataset_events) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/v1/ops/audit-events?model_dataset_id={model_dataset_id}&limit=10"),
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(model_dataset_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "model_dataset.registered"
+            && event["payload"]["model_dataset_id"] == model_dataset_id));
+
+    let (status, evaluation_events) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?evaluation_run_id=eval_renewal_v1&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(evaluation_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "model_evaluation.registered"
+            && event["payload"]["evaluation_run_id"] == "eval_renewal_v1"));
+
+    let (status, missing_dataset_events) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?dataset_id=missing-dataset&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(missing_dataset_events["events"]
+        .as_array()
+        .unwrap()
+        .is_empty());
 }
 
 #[tokio::test]

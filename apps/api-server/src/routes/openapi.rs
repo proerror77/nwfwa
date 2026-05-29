@@ -877,6 +877,30 @@ pub async fn openapi_schema() -> Json<Value> {
                             "in": "query",
                             "required": false,
                             "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "dataset_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "feature_set_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "model_dataset_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "evaluation_run_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
                         }
                     ],
                     "responses": {
