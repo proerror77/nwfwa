@@ -98,6 +98,7 @@ pub struct AuditEventListFilter {
     pub review_mode: Option<String>,
     pub feedback_id: Option<String>,
     pub qa_case_id: Option<String>,
+    pub sample_id: Option<String>,
 }
 
 const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
@@ -6421,6 +6422,7 @@ impl ScoringRepository for PostgresScoringRepository {
                    )
                  )
                )
+               AND ($14::text IS NULL OR ae.payload ->> 'sample_id' = $14)
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -6437,6 +6439,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.model_key.as_deref())
         .bind(filter.model_version.as_deref())
         .bind(filter.event_group.as_deref())
+        .bind(filter.sample_id.as_deref())
         .fetch_all(&self.pool)
         .await?;
 
@@ -7773,6 +7776,9 @@ fn persisted_audit_event_matches_filter(
     if !audit_event_payload_matches_qa_feedback_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_audit_sample_filter(&event.payload, filter) {
+        return false;
+    }
     true
 }
 
@@ -7819,6 +7825,9 @@ fn pilot_audit_event_matches_filter(
         return false;
     }
     if !audit_event_payload_matches_qa_feedback_filter(&event.payload, filter) {
+        return false;
+    }
+    if !audit_event_payload_matches_audit_sample_filter(&event.payload, filter) {
         return false;
     }
     true
@@ -7922,6 +7931,20 @@ fn audit_event_payload_matches_qa_feedback_filter(
         .qa_case_id
         .as_deref()
         .is_some_and(|qa_case_id| payload["qa_case_id"].as_str() != Some(qa_case_id))
+    {
+        return false;
+    }
+    true
+}
+
+fn audit_event_payload_matches_audit_sample_filter(
+    payload: &Value,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter
+        .sample_id
+        .as_deref()
+        .is_some_and(|sample_id| payload["sample_id"].as_str() != Some(sample_id))
     {
         return false;
     }

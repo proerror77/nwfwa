@@ -983,6 +983,7 @@ async fn openapi_includes_operations_paths() {
         "review_mode",
         "feedback_id",
         "qa_case_id",
+        "sample_id",
     ] {
         assert!(
             audit_event_parameters

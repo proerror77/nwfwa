@@ -871,6 +871,12 @@ pub async fn openapi_schema() -> Json<Value> {
                             "in": "query",
                             "required": false,
                             "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "sample_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
                         }
                     ],
                     "responses": {

@@ -143,7 +143,7 @@ async fn records_audit_sample_creation_for_governance_review() {
     );
 
     let (status, governance_events) = json_request(
-        app,
+        app.clone(),
         "GET",
         "/api/v1/ops/audit-events?event_group=governance&limit=20",
         "{}",
@@ -156,6 +156,31 @@ async fn records_audit_sample_creation_for_governance_review() {
         .iter()
         .any(|event| event["event_type"] == "audit_sample.created"
             && event["payload"]["sample_id"] == sample_id));
+
+    let (status, sample_events) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/v1/ops/audit-events?sample_id={sample_id}&limit=10"),
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(sample_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "audit_sample.created"
+            && event["payload"]["sample_id"] == sample_id));
+
+    let (status, sample_events) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?sample_id=missing-sample&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(sample_events["events"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]

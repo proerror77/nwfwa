@@ -355,6 +355,7 @@ export type AuditEventListFilters = {
   review_mode?: string;
   feedback_id?: string;
   qa_case_id?: string;
+  sample_id?: string;
 };
 
 export async function listAuditEvents(
