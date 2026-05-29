@@ -55,6 +55,12 @@ describe("buildAuditSamplingSummary", () => {
             reviewed_count: 0,
             open_count: 0,
             qa_conclusions: {},
+            baseline_measurement: {
+              control_cohort: true,
+              measurement_goal: "false_positive_and_missed_risk_baseline",
+              missed_risk_review_targets: 3,
+              false_positive_review_targets: 2,
+            },
           },
           created_at: "2026-05-27T11:00:00Z",
         },
@@ -70,6 +76,9 @@ describe("buildAuditSamplingSummary", () => {
       topSampleMode: "risk_ranked",
       topQaConclusion: "issue_found_escalate",
       latestAssignmentQueue: "Calibration",
+      controlCohortCount: 1,
+      missedRiskReviewTargets: 3,
+      falsePositiveReviewTargets: 2,
     });
   });
 });

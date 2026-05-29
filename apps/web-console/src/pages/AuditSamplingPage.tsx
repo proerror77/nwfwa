@@ -51,6 +51,22 @@ function topDistributionKey(distribution: unknown) {
   );
 }
 
+function baselineMeasurement(sample: AuditSampleRecord) {
+  const measurement = sample.outcome_distribution.baseline_measurement;
+  if (!measurement || typeof measurement !== "object" || Array.isArray(measurement)) {
+    return undefined;
+  }
+  return measurement as Record<string, unknown>;
+}
+
+function baselineMeasurementCount(
+  sample: AuditSampleRecord,
+  key: "missed_risk_review_targets" | "false_positive_review_targets",
+) {
+  const value = baselineMeasurement(sample)?.[key];
+  return typeof value === "number" ? value : 0;
+}
+
 export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
   const samples = data?.samples ?? [];
   const modeCounts = samples.reduce<Record<string, number>>((counts, sample) => {
@@ -78,6 +94,17 @@ export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
       0,
     ),
     requestedSampleSize: samples.reduce((total, sample) => total + sample.sample_size, 0),
+    controlCohortCount: samples.filter((sample) => baselineMeasurement(sample)?.control_cohort)
+      .length,
+    missedRiskReviewTargets: samples.reduce(
+      (total, sample) => total + baselineMeasurementCount(sample, "missed_risk_review_targets"),
+      0,
+    ),
+    falsePositiveReviewTargets: samples.reduce(
+      (total, sample) =>
+        total + baselineMeasurementCount(sample, "false_positive_review_targets"),
+      0,
+    ),
     topSampleMode,
     topQaConclusion: topDistributionKey(
       samples.reduce<Record<string, number>>((counts, sample) => {
@@ -178,6 +205,18 @@ export function AuditSamplingPage() {
           <div>
             <span>Top Mode</span>
             <strong>{summary.topSampleMode}</strong>
+          </div>
+          <div>
+            <span>Control Cohorts</span>
+            <strong>{summary.controlCohortCount}</strong>
+          </div>
+          <div>
+            <span>Missed Risk Targets</span>
+            <strong>{summary.missedRiskReviewTargets}</strong>
+          </div>
+          <div>
+            <span>False Positive Targets</span>
+            <strong>{summary.falsePositiveReviewTargets}</strong>
           </div>
           <div>
             <span>Latest Queue</span>
