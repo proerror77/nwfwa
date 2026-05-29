@@ -1746,6 +1746,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     for field in [
         "run_id",
         "audit_id",
+        "claim_id",
         "review_mode",
         "risk_score",
         "rag",
@@ -1755,6 +1756,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "confidence",
         "routing_reason",
         "routing_policy",
+        "scores",
         "top_reasons",
         "evidence_refs",
         "clinical_evidence",
@@ -1798,6 +1800,34 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             "provider_review_threshold"
         ])
     );
+    let response_required = schema["components"]["schemas"]["ScoreClaimResponse"]["required"]
+        .as_array()
+        .expect("score response required fields");
+    for field in [
+        "run_id",
+        "audit_id",
+        "claim_id",
+        "risk_score",
+        "rag",
+        "recommended_action",
+        "scores",
+        "top_reasons",
+        "layers",
+        "evidence_refs",
+    ] {
+        assert!(
+            response_required.iter().any(|required| required == field),
+            "ScoreClaimResponse should require {field}"
+        );
+    }
+    assert_eq!(response_properties["layers"]["minItems"], 7);
+    assert_eq!(response_properties["layers"]["maxItems"], 7);
+    assert_eq!(response_properties["evidence_refs"]["minItems"], 1);
+    assert_eq!(response_properties["top_reasons"]["items"]["minLength"], 1);
+    assert_eq!(
+        response_properties["layers"]["items"]["$ref"],
+        "#/components/schemas/DetectionLayerScore"
+    );
     assert!(schema["components"]["schemas"]["ClinicalEvidenceAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderProfileAssessment"].is_object());
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphAssessment"].is_object());
@@ -1810,6 +1840,25 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             ["$ref"],
         "#/components/schemas/EvidenceRef"
     );
+    let layer_schema = &schema["components"]["schemas"]["DetectionLayerScore"];
+    assert_eq!(
+        layer_schema["required"],
+        serde_json::json!(["layer_id", "name", "score", "status", "reason"])
+    );
+    assert_eq!(
+        layer_schema["properties"]["layer_id"]["enum"],
+        serde_json::json!([
+            "L1_PEER_BENCHMARK",
+            "L2_RULE_DETECTION",
+            "L3_UNSUPERVISED_ANOMALY",
+            "L4_SUPERVISED_ML",
+            "L5_MEDICAL_REASONABLENESS",
+            "L6_PROVIDER_GRAPH_RISK",
+            "L7_RISK_FUSION_ROUTING"
+        ])
+    );
+    assert_eq!(layer_schema["properties"]["score"]["minimum"], 0);
+    assert_eq!(layer_schema["properties"]["score"]["maximum"], 100);
 
     let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
         .as_array()

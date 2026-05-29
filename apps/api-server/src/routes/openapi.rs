@@ -2391,11 +2391,14 @@ pub async fn openapi_schema() -> Json<Value> {
                         "top_reasons": {
                             "type": "array",
                             "items": {
-                                "type": "string"
+                                "type": "string",
+                                "minLength": 1
                             }
                         },
                         "layers": {
                             "type": "array",
+                            "minItems": 7,
+                            "maxItems": 7,
                             "items": {
                                 "$ref": "#/components/schemas/DetectionLayerScore"
                             }
@@ -2423,6 +2426,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "evidence_refs": {
                             "type": "array",
+                            "minItems": 1,
                             "items": {
                                 "oneOf": [
                                     { "type": "object" },
