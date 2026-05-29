@@ -29,7 +29,7 @@ The seed includes:
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
 FWA_API_KEY=dev-secret \
 FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
-cargo run -p api-server
+cargo run --locked -p api-server
 ```
 
 In another terminal:
@@ -133,8 +133,8 @@ curl -s http://127.0.0.1:8080/api/v1/audit/claims/CLM-0287 \
 
 ```bash
 cargo fmt --all -- --check
-cargo clippy --workspace --all-targets -- -D warnings
-cargo test --workspace
+cargo clippy --locked --workspace --all-targets -- -D warnings
+cargo test --locked --workspace
 
 cd apps/ml-service
 pytest

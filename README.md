@@ -46,7 +46,7 @@ Run API server:
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
 FWA_API_KEY=dev-secret \
 FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
-cargo run -p api-server
+cargo run --locked -p api-server
 ```
 
 OpenAPI schema:
@@ -58,7 +58,7 @@ curl http://127.0.0.1:8080/api/openapi.json
 Run tests:
 
 ```bash
-cargo test --workspace
+cargo test --locked --workspace
 cd apps/ml-service && pytest
 cd apps/web-console && npm run lint && npm test && npm run build
 ```
