@@ -3320,12 +3320,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["external_field", "canonical_target", "transform_kind", "transform_json", "status"],
                     "properties": {
-                        "external_field": { "type": "string" },
-                        "canonical_target": { "type": "string" },
-                        "feature_name": { "type": ["string", "null"] },
-                        "transform_kind": { "type": "string" },
+                        "external_field": { "type": "string", "minLength": 1 },
+                        "canonical_target": { "type": "string", "minLength": 1 },
+                        "feature_name": { "type": ["string", "null"], "minLength": 1 },
+                        "transform_kind": { "type": "string", "enum": ["direct", "cast", "enum_map", "derived", "aggregate"] },
                         "transform_json": { "type": "object" },
-                        "status": { "type": "string" }
+                        "status": { "type": "string", "enum": ["draft", "active", "deprecated"] }
                     }
                 },
                 "FieldMappingResponse": {

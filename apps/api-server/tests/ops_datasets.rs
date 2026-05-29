@@ -361,6 +361,74 @@ async fn adds_external_field_mapping_to_dataset() {
         "POST",
         &format!("/api/v1/ops/datasets/{dataset_id}/mappings"),
         r#"{
+          "external_field": " ",
+          "canonical_target": "feature.sum_premium",
+          "feature_name": "sum_premium",
+          "transform_kind": "direct",
+          "transform_json": {},
+          "status": "active"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FIELD_MAPPING");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/datasets/{dataset_id}/mappings"),
+        r#"{
+          "external_field": "sum_premium",
+          "canonical_target": "feature.sum_premium",
+          "feature_name": " ",
+          "transform_kind": "direct",
+          "transform_json": {},
+          "status": "active"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FIELD_MAPPING");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/datasets/{dataset_id}/mappings"),
+        r#"{
+          "external_field": "sum_premium",
+          "canonical_target": "feature.sum_premium",
+          "feature_name": "sum_premium",
+          "transform_kind": "script",
+          "transform_json": {},
+          "status": "active"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FIELD_MAPPING");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/datasets/{dataset_id}/mappings"),
+        r#"{
+          "external_field": "sum_premium",
+          "canonical_target": "feature.sum_premium",
+          "feature_name": "sum_premium",
+          "transform_kind": "direct",
+          "transform_json": {},
+          "status": "unknown"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_FIELD_MAPPING");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/datasets/{dataset_id}/mappings"),
+        r#"{
           "external_field": "sum_premium",
           "canonical_target": "feature.sum_premium",
           "feature_name": "sum_premium",

@@ -220,6 +220,7 @@ pub async fn add_field_mapping(
     Json(request): Json<CreateFieldMappingInput>,
 ) -> Result<Json<FieldMappingResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
+    validate_field_mapping(&request)?;
     let mapping = state
         .repository
         .add_field_mapping(&dataset_id, request)
@@ -256,6 +257,46 @@ pub async fn add_field_mapping(
     .await
     .map_err(internal_error("FIELD_MAPPING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(FieldMappingResponse { mapping }))
+}
+
+fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiError> {
+    if request.external_field.trim().is_empty()
+        || request.canonical_target.trim().is_empty()
+        || request.transform_kind.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FIELD_MAPPING",
+            "external_field, canonical_target, and transform_kind are required",
+        ));
+    }
+    if let Some(feature_name) = &request.feature_name {
+        if feature_name.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_FIELD_MAPPING",
+                "feature_name must not be blank when provided",
+            ));
+        }
+    }
+    if !matches!(
+        request.transform_kind.as_str(),
+        "direct" | "cast" | "enum_map" | "derived" | "aggregate"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FIELD_MAPPING",
+            "transform_kind must be direct, cast, enum_map, derived, or aggregate",
+        ));
+    }
+    if !matches!(request.status.as_str(), "draft" | "active" | "deprecated") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_FIELD_MAPPING",
+            "status must be draft, active, or deprecated",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn register_feature_set(

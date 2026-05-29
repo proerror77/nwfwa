@@ -232,6 +232,23 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/DatasetHealth"
     );
+    for field in ["external_field", "canonical_target", "feature_name"] {
+        assert_eq!(
+            schema["components"]["schemas"]["FieldMappingRequest"]["properties"][field]
+                ["minLength"],
+            1,
+            "missing FieldMappingRequest minLength for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["FieldMappingRequest"]["properties"]["transform_kind"]
+            ["enum"],
+        serde_json::json!(["direct", "cast", "enum_map", "derived", "aggregate"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FieldMappingRequest"]["properties"]["status"]["enum"],
+        serde_json::json!(["draft", "active", "deprecated"])
+    );
     assert_eq!(
         schema["paths"]["/api/v1/ops/model-evaluations"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"]["$ref"],
