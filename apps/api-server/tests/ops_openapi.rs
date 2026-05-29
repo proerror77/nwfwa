@@ -855,6 +855,13 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["OpsAlert"]["properties"]["alert_type"]["enum"][0],
         "high_risk_routing"
     );
+    assert!(
+        schema["components"]["schemas"]["OpsAlert"]["properties"]["alert_type"]["enum"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|event_type| event_type == "medical_review_required")
+    );
     assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["financial_impact_type"]["enum"][1],

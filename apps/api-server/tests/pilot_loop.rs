@@ -410,6 +410,23 @@ async fn lists_ops_alerts_for_high_risk_routing() {
     let (status, alerts) = json_request(app.clone(), "GET", "/api/v1/ops/alerts", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
+    let medical_alert = alerts["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|alert| {
+            alert["claim_id"] == "CLM-ALERT-1" && alert["alert_type"] == "medical_review_required"
+        })
+        .expect("clinical evidence gap should create a medical review alert");
+    assert_eq!(medical_alert["status"], "open");
+    assert_eq!(medical_alert["case_id"], serde_json::Value::Null);
+    assert!(medical_alert["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference
+            == &serde_json::json!(format!("audit:{}", score["audit_id"].as_str().unwrap()))));
+
     let alert = alerts["alerts"]
         .as_array()
         .unwrap()
@@ -426,6 +443,26 @@ async fn lists_ops_alerts_for_high_risk_routing() {
     assert!(alert["lead_id"].as_str().unwrap().starts_with("lead_"));
     assert!(!alert["recommended_action"].as_str().unwrap().is_empty());
     assert!(!alert["evidence_refs"].as_array().unwrap().is_empty());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        &format!(
+            r#"{{
+          "claim_id": "CLM-ALERT-1",
+          "scoring_audit_id": "{}",
+          "reviewer": "medical-alert-owner",
+          "decision": "request_more_evidence",
+          "notes": "Medical review alert accepted and evidence request recorded.",
+          "evidence_refs": ["audit:{}", "claim_items:PROC-ALERT-1"]
+        }}"#,
+            score["audit_id"].as_str().unwrap(),
+            score["audit_id"].as_str().unwrap()
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
 
     let lead_id = alert["lead_id"].as_str().unwrap();
     let (status, _) = json_request(
@@ -450,7 +487,10 @@ async fn lists_ops_alerts_for_high_risk_routing() {
         .unwrap()
         .iter()
         .any(|alert| alert["claim_id"] == "CLM-ALERT-1"
-            && alert["alert_type"] == "high_risk_routing"));
+            && matches!(
+                alert["alert_type"].as_str().unwrap(),
+                "high_risk_routing" | "medical_review_required"
+            )));
 }
 
 #[tokio::test]

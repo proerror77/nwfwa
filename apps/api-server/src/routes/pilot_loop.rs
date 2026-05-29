@@ -2,10 +2,11 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AuditSampleLeadRecord, AuditSampleRecord, CaseRecord, InvestigationResultRecord,
-        LeadRecord, MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord,
-        QaReviewRecord, UpdateQaFeedbackStatusInput, UpdateQaFeedbackStatusRecord,
-        WebhookDeliveryAttemptInput, WebhookDeliveryAttemptRecord, WebhookEventRecord,
+        AuditEventListFilter, AuditHistoryEventRecord, AuditSampleLeadRecord, AuditSampleRecord,
+        CaseRecord, InvestigationResultRecord, LeadRecord, MemberProfileSummaryRecord,
+        OutcomeLabelRecord, QaFeedbackItemRecord, QaReviewRecord, UpdateQaFeedbackStatusInput,
+        UpdateQaFeedbackStatusRecord, WebhookDeliveryAttemptInput, WebhookDeliveryAttemptRecord,
+        WebhookEventRecord,
     },
 };
 use axum::{
@@ -444,8 +445,26 @@ pub async fn list_ops_alerts(
         .list_cases()
         .await
         .map_err(internal_error("CASE_LIST_FAILED"))?;
+    let scoring_events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 1_000,
+            event_type: Some("scoring.completed".into()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("ALERT_AUDIT_LIST_FAILED"))?;
+    let medical_review_events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 1_000,
+            event_type: Some("medical.review.recorded".into()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("ALERT_AUDIT_LIST_FAILED"))?;
     Ok(Json(OpsAlertListResponse {
-        alerts: build_ops_alerts(&leads, &cases),
+        alerts: build_ops_alerts(&leads, &cases, &scoring_events, &medical_review_events),
     }))
 }
 
@@ -562,7 +581,12 @@ fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryRespo
     }
 }
 
-fn build_ops_alerts(leads: &[LeadRecord], cases: &[CaseRecord]) -> Vec<OpsAlertRecord> {
+fn build_ops_alerts(
+    leads: &[LeadRecord],
+    cases: &[CaseRecord],
+    scoring_events: &[AuditHistoryEventRecord],
+    medical_review_events: &[AuditHistoryEventRecord],
+) -> Vec<OpsAlertRecord> {
     let mut alerts = leads
         .iter()
         .filter(|lead| lead.status != "triaged" && (lead.risk_score >= 70 || lead.rag == "RED"))
@@ -573,6 +597,10 @@ fn build_ops_alerts(leads: &[LeadRecord], cases: &[CaseRecord]) -> Vec<OpsAlertR
                 .filter(|case| matches!(case.sla_status.as_str(), "breached" | "closed_breached"))
                 .map(sla_breach_alert),
         )
+        .chain(build_medical_review_alerts(
+            scoring_events,
+            medical_review_events,
+        ))
         .collect::<Vec<_>>();
     alerts.sort_by(|left, right| {
         severity_rank(&left.severity)
@@ -581,6 +609,57 @@ fn build_ops_alerts(leads: &[LeadRecord], cases: &[CaseRecord]) -> Vec<OpsAlertR
             .then_with(|| left.alert_id.cmp(&right.alert_id))
     });
     alerts
+}
+
+fn build_medical_review_alerts(
+    scoring_events: &[AuditHistoryEventRecord],
+    medical_review_events: &[AuditHistoryEventRecord],
+) -> Vec<OpsAlertRecord> {
+    let reviewed_scoring_audit_ids = medical_review_events
+        .iter()
+        .filter_map(|event| event.payload["scoring_audit_id"].as_str())
+        .collect::<std::collections::BTreeSet<_>>();
+    scoring_events
+        .iter()
+        .filter(|event| !reviewed_scoring_audit_ids.contains(event.audit_id.as_str()))
+        .filter_map(medical_review_alert_from_scoring_event)
+        .collect()
+}
+
+fn medical_review_alert_from_scoring_event(
+    event: &AuditHistoryEventRecord,
+) -> Option<OpsAlertRecord> {
+    let clinical = &event.payload["clinical_evidence"];
+    let review_required = clinical["review_required"].as_bool().unwrap_or(false);
+    let review_route = clinical["review_route"].as_str().unwrap_or_default();
+    if !review_required && review_route != "medical_review" {
+        return None;
+    }
+    let claim_id = event.payload["claim_id"].as_str()?.to_string();
+    let medical_score = event.payload["scores"]["medical_reasonableness_score"]
+        .as_u64()
+        .unwrap_or_default();
+    let mut evidence_refs = vec![format!("audit:{}", event.audit_id)];
+    evidence_refs.extend(json_string_array(&clinical["evidence_refs"]));
+    Some(OpsAlertRecord {
+        alert_id: format!("alert_medical_review_{}", event.audit_id),
+        alert_type: "medical_review_required".into(),
+        severity: if medical_score >= 80 {
+            "high"
+        } else {
+            "medium"
+        }
+        .into(),
+        status: "open".into(),
+        claim_id: claim_id.clone(),
+        lead_id: None,
+        case_id: None,
+        scheme_family: "medically_unnecessary_service".into(),
+        message: format!("Claim {claim_id} has clinical evidence gaps requiring medical review."),
+        recommended_action:
+            "Assign a medical reviewer and record an evidence-backed review result.".into(),
+        evidence_refs: dedupe_strings(evidence_refs),
+    })
 }
 
 fn high_risk_routing_alert(lead: &LeadRecord) -> OpsAlertRecord {
@@ -649,6 +728,26 @@ fn case_evidence_refs(case: &CaseRecord) -> Vec<String> {
     } else {
         refs
     }
+}
+
+fn json_string_array(value: &serde_json::Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn dedupe_strings(values: Vec<String>) -> Vec<String> {
+    let mut seen = std::collections::BTreeSet::new();
+    values
+        .into_iter()
+        .filter(|value| seen.insert(value.clone()))
+        .collect()
 }
 
 fn severity_rank(severity: &str) -> u8 {
@@ -726,7 +825,7 @@ mod tests {
             time_to_closure_hours: None,
         };
 
-        let alerts = build_ops_alerts(&[], &[case]);
+        let alerts = build_ops_alerts(&[], &[case], &[], &[]);
 
         assert_eq!(alerts.len(), 1);
         assert_eq!(alerts[0].alert_type, "sla_breach");
@@ -741,5 +840,39 @@ mod tests {
                 "case_workflow:overdue".to_string()
             ]
         );
+    }
+
+    #[test]
+    fn build_ops_alerts_includes_open_medical_review_alerts() {
+        let scoring_event = AuditHistoryEventRecord {
+            audit_id: "audit_scoring_medical_1".into(),
+            run_id: "run_medical_1".into(),
+            event_type: "scoring.completed".into(),
+            event_status: "succeeded".into(),
+            summary: "FWA scoring completed".into(),
+            payload: serde_json::json!({
+                "claim_id": "CLM-MED-ALERT-1",
+                "scores": {
+                    "medical_reasonableness_score": 88
+                },
+                "clinical_evidence": {
+                    "review_required": true,
+                    "review_route": "medical_review",
+                    "evidence_refs": ["claim_items:IMG-900"]
+                }
+            }),
+            evidence_refs: vec!["claim_items:IMG-900".into()],
+            created_at: None,
+        };
+
+        let alerts = build_ops_alerts(&[], &[], &[scoring_event], &[]);
+
+        assert_eq!(alerts.len(), 1);
+        assert_eq!(alerts[0].alert_type, "medical_review_required");
+        assert_eq!(alerts[0].severity, "high");
+        assert_eq!(alerts[0].claim_id, "CLM-MED-ALERT-1");
+        assert!(alerts[0]
+            .evidence_refs
+            .contains(&"audit:audit_scoring_medical_1".to_string()));
     }
 }

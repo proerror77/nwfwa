@@ -591,6 +591,9 @@ export function buildOpsAlertSummary(alerts: OpsAlert[] = []) {
     criticalAlertCount: alerts.filter((alert) => alert.severity === "critical").length,
     routingAlertCount: alerts.filter((alert) => alert.alert_type === "high_risk_routing").length,
     slaBreachCount: alerts.filter((alert) => alert.alert_type === "sla_breach").length,
+    medicalReviewAlertCount: alerts.filter(
+      (alert) => alert.alert_type === "medical_review_required",
+    ).length,
   };
 }
 
@@ -1053,6 +1056,10 @@ export function GovernancePage() {
           <div>
             <span>SLA Breach</span>
             <strong>{alertSummary.slaBreachCount}</strong>
+          </div>
+          <div>
+            <span>Medical Review</span>
+            <strong>{alertSummary.medicalReviewAlertCount}</strong>
           </div>
         </div>
         {alertsQuery.data?.alerts.length ? (

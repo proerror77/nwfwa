@@ -589,14 +589,28 @@ describe("buildOpsAlertSummary", () => {
         recommended_action: "Escalate overdue case.",
         evidence_refs: ["case_workflow:overdue"],
       },
+      {
+        alert_id: "alert_3",
+        alert_type: "medical_review_required",
+        severity: "high",
+        status: "open",
+        claim_id: "CLM-3",
+        lead_id: null,
+        case_id: null,
+        scheme_family: "medically_unnecessary_service",
+        message: "Clinical evidence gap pending medical review.",
+        recommended_action: "Assign a medical reviewer.",
+        evidence_refs: ["audit:audit_1"],
+      },
     ]);
 
     expect(summary).toEqual({
-      alertCount: 2,
-      openAlertCount: 1,
+      alertCount: 3,
+      openAlertCount: 2,
       criticalAlertCount: 1,
       routingAlertCount: 1,
       slaBreachCount: 1,
+      medicalReviewAlertCount: 1,
     });
   });
 });

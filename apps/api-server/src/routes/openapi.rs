@@ -3017,7 +3017,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "alert_id": { "type": "string" },
                         "alert_type": {
                             "type": "string",
-                            "enum": ["high_risk_routing", "sla_breach"]
+                            "enum": ["high_risk_routing", "sla_breach", "medical_review_required"]
                         },
                         "severity": {
                             "type": "string",
