@@ -290,6 +290,7 @@ const governanceChangeEventTypes = new Set([
   "model.activation.completed",
   "model.rollback.completed",
   "agent.approval.decided",
+  "audit_sample.created",
   "qa.feedback.status.updated",
   "routing_policy.candidate.saved",
   "routing_policy.status.changed",
@@ -303,6 +304,7 @@ export const auditEventFilterShortcuts = [
   { label: "QA Feedback Status", eventType: "qa.feedback.status.updated" },
   { label: "Case Status", eventType: "case.status.updated" },
   { label: "Rule Candidates", eventType: "rule.candidate.saved" },
+  { label: "Audit Samples", eventType: "audit_sample.created" },
 ];
 
 export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
@@ -339,6 +341,7 @@ function governanceChangeDomain(eventType: string) {
   if (eventType.startsWith("rule.")) return "Rule";
   if (eventType.startsWith("model.")) return "Model";
   if (eventType.startsWith("agent.")) return "Agent";
+  if (eventType.startsWith("audit_sample.")) return "QA";
   if (eventType.startsWith("qa.")) return "QA";
   if (eventType.startsWith("routing_policy.")) return "Routing";
   return "Governance";
@@ -398,6 +401,9 @@ function governanceChangeTargetId(event: AuditEvent) {
       .filter(Boolean)
       .join(" / ");
   }
+  if (event.event_type === "audit_sample.created") {
+    return payloadString(payload, "sample_id");
+  }
   if (event.event_type.startsWith("routing_policy.")) {
     const policyId = payloadString(payload, "policy_id");
     const version = payloadString(payload, "version");
@@ -418,15 +424,19 @@ export function buildGovernanceChangeTimelineRows(
       const fromStatus = payloadString(event.payload, "from_status") || "-";
       const toStatus = payloadString(event.payload, "to_status") || "-";
       const decision = payloadString(event.payload, "decision");
+      const sampleMode = payloadString(event.payload, "sample_mode");
+      const selectionMethod = payloadString(event.payload, "selection_method");
       return {
         auditId: event.audit_id,
         domain: governanceChangeDomain(event.event_type),
         eventType: event.event_type,
         targetId: governanceChangeTargetId(event),
         statusTransition:
-          fromStatus === "-" && toStatus === "-" && decision
-            ? `review -> ${decision}`
-            : `${fromStatus} -> ${toStatus}`,
+          event.event_type === "audit_sample.created"
+            ? `created -> ${sampleMode || "sample"}`
+            : fromStatus === "-" && toStatus === "-" && decision
+              ? `review -> ${decision}`
+              : `${fromStatus} -> ${toStatus}`,
         actor:
           payloadString(event.payload, "reviewer") ||
           payloadString(event.payload, "owner") ||
@@ -434,7 +444,7 @@ export function buildGovernanceChangeTimelineRows(
           payloadString(event.payload, "approver") ||
           payloadString(event.payload, "requested_by") ||
           "system",
-        decision: decision || toStatus,
+        decision: decision || selectionMethod || toStatus,
         summary: event.summary,
         createdAt: event.created_at ?? event.run_id,
         evidenceRefs: event.evidence_refs,

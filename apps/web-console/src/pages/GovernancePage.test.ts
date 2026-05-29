@@ -26,6 +26,7 @@ describe("auditEventFilterShortcuts", () => {
       { label: "QA Feedback Status", eventType: "qa.feedback.status.updated" },
       { label: "Case Status", eventType: "case.status.updated" },
       { label: "Rule Candidates", eventType: "rule.candidate.saved" },
+      { label: "Audit Samples", eventType: "audit_sample.created" },
     ]);
   });
 });
@@ -185,6 +186,20 @@ describe("buildGovernanceChangeTimelineRows", () => {
         evidence_refs: ["agent_approval:manual_review_required"],
       },
       {
+        audit_id: "audit_sample_created",
+        run_id: "audit_sample_SAMPLE-1",
+        event_type: "audit_sample.created",
+        event_status: "succeeded",
+        summary: "Audit sample created: stratified",
+        payload: {
+          sample_id: "SAMPLE-1",
+          sample_mode: "stratified",
+          selection_method: "stratified_round_robin",
+          reviewer: "qa-governance-reviewer",
+        },
+        evidence_refs: ["audit_samples:SAMPLE-1"],
+      },
+      {
         audit_id: "audit_scoring",
         run_id: "run_scoring",
         event_type: "scoring.completed",
@@ -266,6 +281,18 @@ describe("buildGovernanceChangeTimelineRows", () => {
         summary: "Agent approval decision: approved",
         createdAt: "agent_approval_agent_CLM-1",
         evidenceRefs: ["agent_approval:manual_review_required"],
+      },
+      {
+        auditId: "audit_sample_created",
+        domain: "QA",
+        eventType: "audit_sample.created",
+        targetId: "SAMPLE-1",
+        statusTransition: "created -> stratified",
+        actor: "qa-governance-reviewer",
+        decision: "stratified_round_robin",
+        summary: "Audit sample created: stratified",
+        createdAt: "audit_sample_SAMPLE-1",
+        evidenceRefs: ["audit_samples:SAMPLE-1"],
       },
     ]);
   });
