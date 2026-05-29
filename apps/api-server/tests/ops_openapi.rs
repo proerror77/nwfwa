@@ -1088,6 +1088,11 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["minItems"],
         1
     );
+    assert_eq!(
+        schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]
+            ["evidence_refs"]["items"]["minLength"],
+        1
+    );
     assert!(schema["components"]["schemas"]["SimilarCase"]["required"]
         .as_array()
         .unwrap()

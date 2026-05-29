@@ -153,10 +153,11 @@ fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Res
             "case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, and outcome are required",
         ));
     }
-    if request
-        .evidence_refs
-        .iter()
-        .all(|reference| reference.trim().is_empty())
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
