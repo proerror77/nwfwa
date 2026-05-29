@@ -112,6 +112,23 @@ export function buildRoutingPolicyAuditFilters(policy: RoutingPolicyRecord, limi
   };
 }
 
+export function buildRoutingPolicyCandidateSaveSummary(policy?: RoutingPolicyRecord | null) {
+  if (!policy) {
+    return null;
+  }
+  return {
+    policyId: policy.policy_id,
+    versionLabel: `v${policy.version}`,
+    reviewMode: policy.review_mode,
+    status: policy.status,
+    owner: policy.owner,
+    riskThresholdLabel: `Low <= ${policy.risk_thresholds.low_max}, Medium >= ${policy.risk_thresholds.medium_min}, High >= ${policy.risk_thresholds.high_min}, Critical >= ${policy.risk_thresholds.critical_min}`,
+    confidenceThresholdLabel: `Low confidence < ${policy.confidence_thresholds.low_confidence_below}, High confidence >= ${policy.confidence_thresholds.high_confidence_min}`,
+    providerThresholdLabel: `Provider review >= ${policy.provider_review_threshold}`,
+    createdAt: policy.created_at ?? "not recorded",
+  };
+}
+
 export function RoutingPoliciesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedPolicyKey, setSelectedPolicyKey] = useState("");
@@ -175,6 +192,9 @@ export function RoutingPoliciesPage() {
       queryClient.invalidateQueries({ queryKey: ["routing-policy-audit-events"] });
     },
   });
+  const savedCandidateSummary = buildRoutingPolicyCandidateSaveSummary(
+    saveCandidateMutation.data as RoutingPolicyRecord | undefined,
+  );
 
   return (
     <section className="ops-grid">
@@ -391,8 +411,45 @@ export function RoutingPoliciesPage() {
         {saveCandidateMutation.error ? (
           <pre className="error">{String(saveCandidateMutation.error.message)}</pre>
         ) : null}
-        {saveCandidateMutation.data ? (
-          <pre>{JSON.stringify(saveCandidateMutation.data, null, 2)}</pre>
+        {savedCandidateSummary ? (
+          <dl className="result-grid">
+            <div>
+              <dt>Saved Policy</dt>
+              <dd>{savedCandidateSummary.policyId}</dd>
+            </div>
+            <div>
+              <dt>Version</dt>
+              <dd>{savedCandidateSummary.versionLabel}</dd>
+            </div>
+            <div>
+              <dt>Review Mode</dt>
+              <dd>{formatReviewModeLabel(savedCandidateSummary.reviewMode)}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{savedCandidateSummary.status}</dd>
+            </div>
+            <div>
+              <dt>Owner</dt>
+              <dd>{savedCandidateSummary.owner}</dd>
+            </div>
+            <div>
+              <dt>Risk Thresholds</dt>
+              <dd>{savedCandidateSummary.riskThresholdLabel}</dd>
+            </div>
+            <div>
+              <dt>Confidence Thresholds</dt>
+              <dd>{savedCandidateSummary.confidenceThresholdLabel}</dd>
+            </div>
+            <div>
+              <dt>Provider Route</dt>
+              <dd>{savedCandidateSummary.providerThresholdLabel}</dd>
+            </div>
+            <div>
+              <dt>Created</dt>
+              <dd>{savedCandidateSummary.createdAt}</dd>
+            </div>
+          </dl>
         ) : null}
       </div>
     </section>

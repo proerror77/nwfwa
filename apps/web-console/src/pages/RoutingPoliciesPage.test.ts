@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildRoutingPolicyCandidateSaveSummary,
   buildRoutingPolicyAuditFilters,
   buildRoutingPolicySummary,
   RoutingPolicyRecord,
@@ -68,5 +69,41 @@ describe("buildRoutingPolicyAuditFilters", () => {
       routing_policy_version: 1,
       review_mode: "pre_payment",
     });
+  });
+});
+
+describe("buildRoutingPolicyCandidateSaveSummary", () => {
+  it("summarizes saved routing policy candidate thresholds for governance review", () => {
+    expect(
+      buildRoutingPolicyCandidateSaveSummary({
+        ...basePolicy,
+        version: 2,
+        status: "draft",
+        owner: "policy-ops",
+        created_at: "2026-05-29T13:20:00Z",
+        risk_thresholds: {
+          low_max: 24,
+          medium_min: 25,
+          high_min: 65,
+          critical_min: 88,
+        },
+        confidence_thresholds: {
+          low_confidence_below: 55,
+          high_confidence_min: 85,
+        },
+        provider_review_threshold: 72,
+      }),
+    ).toEqual({
+      policyId: "fwa_risk_fusion_routing",
+      versionLabel: "v2",
+      reviewMode: "pre_payment",
+      status: "draft",
+      owner: "policy-ops",
+      riskThresholdLabel: "Low <= 24, Medium >= 25, High >= 65, Critical >= 88",
+      confidenceThresholdLabel: "Low confidence < 55, High confidence >= 85",
+      providerThresholdLabel: "Provider review >= 72",
+      createdAt: "2026-05-29T13:20:00Z",
+    });
+    expect(buildRoutingPolicyCandidateSaveSummary(null)).toBeNull();
   });
 });
