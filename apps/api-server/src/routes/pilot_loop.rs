@@ -8,6 +8,7 @@ use crate::{
         UpdateQaFeedbackStatusInput, UpdateQaFeedbackStatusRecord, WebhookDeliveryAttemptInput,
         WebhookDeliveryAttemptRecord, WebhookEventRecord,
     },
+    routes::pii,
 };
 use axum::{
     extract::{Path, Query, State},
@@ -242,6 +243,7 @@ fn validate_investigation_result_request(
             "investigation writeback requires notes and evidence_refs",
         ));
     }
+    validate_writeback_pii(&request.notes, &request.evidence_refs)?;
     Ok(())
 }
 
@@ -298,6 +300,18 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
             StatusCode::BAD_REQUEST,
             "MISSING_QA_RESULT_EVIDENCE",
             "QA writeback requires notes and evidence_refs",
+        ));
+    }
+    validate_writeback_pii(&request.notes, &request.evidence_refs)?;
+    Ok(())
+}
+
+fn validate_writeback_pii(notes: &str, evidence_refs: &[String]) -> Result<(), ApiError> {
+    if pii::contains_pii(std::iter::once(notes).chain(evidence_refs.iter().map(String::as_str))) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_WRITEBACK",
+            "writeback notes and evidence_refs must not contain PII",
         ));
     }
     Ok(())

@@ -2,6 +2,7 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent},
+    routes::pii,
 };
 use axum::{
     extract::{Query, State},
@@ -288,6 +289,16 @@ fn validate_medical_review_result(
             StatusCode::BAD_REQUEST,
             "MISSING_MEDICAL_REVIEW_EVIDENCE",
             "notes and evidence_refs are required for medical review auditability",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_WRITEBACK",
+            "medical review notes and evidence_refs must not contain PII",
         ));
     }
     Ok(())

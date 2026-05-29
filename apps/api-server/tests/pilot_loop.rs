@@ -255,6 +255,48 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
 }
 
 #[tokio::test]
+async fn rejects_pii_in_investigation_and_qa_writebacks() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-PII-WRITEBACK",
+          "investigation_id": "INV-PII-NOTES",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "Reviewer copied member email alice@example.com into notes.",
+          "evidence_refs": ["agent_run:agent_CLM-PII-WRITEBACK"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_WRITEBACK");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-PII-EVIDENCE",
+          "claim_id": "CLM-PII-WRITEBACK",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "Reviewer should attach provider history evidence.",
+          "evidence_refs": ["audit:scoring.completed", "phone:13800138000"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_WRITEBACK");
+}
+
+#[tokio::test]
 async fn rejects_unsupported_qa_feedback_target() {
     let app = build_app(test_config());
 
