@@ -749,6 +749,24 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(approval["approver"], "qa-lead");
 
     let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "rejected",
+          "approver": "qa-lead",
+          "reason": "Attempt to change a completed approval decision.",
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
+        }}"#,
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "AGENT_APPROVAL_NOT_PENDING");
+
+    let (status, body) = json_request(
         app,
         "GET",
         "/api/v1/ops/audit-events?event_group=governance&event_type=agent.approval.decided&actor_id=qa-lead&limit=10",

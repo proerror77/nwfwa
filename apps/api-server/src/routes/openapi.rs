@@ -873,6 +873,14 @@ pub async fn openapi_schema() -> Json<Value> {
                                     "schema": { "$ref": "#/components/schemas/SubmitAgentApprovalResponse" }
                                 }
                             }
+                        },
+                        "409": {
+                            "description": "Agent approval is not pending or has already been decided",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
                         }
                     }
                 }

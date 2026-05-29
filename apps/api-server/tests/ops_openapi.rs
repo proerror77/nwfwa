@@ -943,6 +943,11 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_eq!(
+        schema["paths"]["/api/v1/ops/agent-runs/{agent_run_id}/approvals"]["post"]["responses"]
+            ["409"]["content"]["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ErrorResponse"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]["reason"]
             ["minLength"],
         1

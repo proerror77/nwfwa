@@ -68,6 +68,7 @@ pub async fn submit_agent_approval(
             )
         })?;
     validate_agent_approval_run_evidence(&request, &run)?;
+    validate_agent_approval_is_pending(&run)?;
     let approval = AgentApprovalRecord {
         approval_id: format!("approval_{}", run.agent_run_id),
         agent_run_id: run.agent_run_id.clone(),
@@ -125,6 +126,19 @@ fn validate_agent_approval_run_evidence(
         StatusCode::BAD_REQUEST,
         "MISSING_AGENT_APPROVAL_RUN_EVIDENCE",
         format!("agent approval evidence_refs must include {required_ref}"),
+    ))
+}
+
+fn validate_agent_approval_is_pending(run: &AgentRunLogRecord) -> Result<(), ApiError> {
+    if run.approvals.iter().any(|approval| {
+        approval.proposed_action == "manual_review_required" && approval.decision == "pending"
+    }) {
+        return Ok(());
+    }
+    Err(ApiError::new(
+        StatusCode::CONFLICT,
+        "AGENT_APPROVAL_NOT_PENDING",
+        "agent approval has already been decided or is not pending",
     ))
 }
 
