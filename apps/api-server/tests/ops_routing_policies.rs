@@ -327,6 +327,18 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
 
     let (status, blocked) = post_json(
         app.clone(),
+        "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/submit",
+        r#"{"evidence_refs": ["phone:13800138000"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        blocked["code"],
+        "PII_NOT_ALLOWED_IN_ROUTING_POLICY_LIFECYCLE"
+    );
+
+    let (status, blocked) = post_json(
+        app.clone(),
         "/api/v1/ops/routing-policies/candidate_strict_prepay/pre_payment/2/activate",
         r#"{"evidence_refs": [" "]}"#,
     )

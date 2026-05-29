@@ -2,6 +2,7 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{PersistedAuditEvent, RoutingPolicyRecord},
+    routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -289,6 +290,13 @@ fn validate_routing_policy_lifecycle_request(
             StatusCode::BAD_REQUEST,
             "MISSING_ROUTING_POLICY_LIFECYCLE_EVIDENCE",
             "routing policy lifecycle evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(request.evidence_refs.iter().map(String::as_str)) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_ROUTING_POLICY_LIFECYCLE",
+            "routing policy lifecycle evidence_refs must not contain PII",
         ));
     }
     Ok(())

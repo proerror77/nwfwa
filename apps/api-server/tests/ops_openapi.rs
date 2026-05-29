@@ -796,6 +796,13 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["items"]["minLength"],
         1
     );
+    assert!(
+        schema["components"]["schemas"]["RoutingPolicyLifecycleRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
     assert_eq!(
         schema["paths"]
             ["/api/v1/ops/routing-policies/{policy_id}/{review_mode}/{version}/promotion-gates"]
