@@ -960,6 +960,69 @@ def assert_provider_risk_summary():
     }
 
 
+def assert_fwa_scheme_taxonomy():
+    taxonomy = request("GET", "/api/v1/ops/fwa-schemes")
+    schemes = taxonomy.get("schemes", [])
+    families = {scheme.get("scheme_family") for scheme in schemes}
+    assert_true(taxonomy.get("scheme_count", 0) >= 15, "FWA scheme taxonomy missing scheme families")
+    for family in [
+        "duplicate_billing",
+        "upcoding",
+        "unbundling",
+        "medically_unnecessary_service",
+        "excessive_utilization",
+        "diagnosis_procedure_mismatch",
+        "laboratory_testing_abuse",
+        "telehealth_abuse",
+        "genetic_testing_abuse",
+        "pharmacy_controlled_substance_abuse",
+        "dme_home_health_hospice_rehab_risk",
+        "provider_peer_outlier",
+        "relationship_concentration",
+    ]:
+        assert_true(family in families, f"FWA scheme taxonomy missing {family}")
+
+    provider_scheme = next(
+        scheme for scheme in schemes if scheme.get("scheme_family") == "provider_peer_outlier"
+    )
+    assert_true(
+        provider_scheme.get("default_review_route") == "provider_review",
+        "provider scheme review route mismatch",
+    )
+    assert_true(
+        "L6_PROVIDER_GRAPH_RISK" in provider_scheme.get("primary_layers", []),
+        "provider scheme missing L6 layer",
+    )
+    assert_true(
+        "peer_group_definition" in provider_scheme.get("minimum_evidence", []),
+        "provider scheme missing peer evidence requirement",
+    )
+
+    clinical_scheme = next(
+        scheme for scheme in schemes if scheme.get("scheme_family") == "diagnosis_procedure_mismatch"
+    )
+    assert_true(
+        clinical_scheme.get("default_review_route") == "medical_review",
+        "diagnosis-procedure scheme review route mismatch",
+    )
+    assert_true(
+        "L5_MEDICAL_REASONABLENESS" in clinical_scheme.get("primary_layers", []),
+        "diagnosis-procedure scheme missing L5 layer",
+    )
+
+    relationship_scheme = next(
+        scheme for scheme in schemes if scheme.get("scheme_family") == "relationship_concentration"
+    )
+    assert_true(
+        relationship_scheme.get("default_review_route") == "investigation",
+        "relationship concentration scheme review route mismatch",
+    )
+    return {
+        "scheme_count": taxonomy["scheme_count"],
+        "families": sorted(families),
+    }
+
+
 def govern_agent_run(agent):
     agent_run_id = agent["agent_run_id"]
     runs = request("GET", "/api/v1/ops/agent-runs").get("runs", [])
@@ -1115,6 +1178,7 @@ def main():
         any(check.get("name") == "http_router" and check.get("status") == "ok" for check in health_checks),
         "health endpoint missing http_router check",
     )
+    scheme_taxonomy = assert_fwa_scheme_taxonomy()
 
     score = request(
         "POST",
@@ -1148,6 +1212,10 @@ def main():
         "new lead should have pending_triage disposition",
     )
     assert_true(lead.get("scheme_family"), "lead missing scheme family")
+    assert_true(
+        lead.get("scheme_family") in scheme_taxonomy["families"],
+        "lead scheme family must be governed by FWA taxonomy",
+    )
     assert_true(lead.get("evidence_refs"), "lead missing evidence_refs")
     lead_id = lead["lead_id"]
 
@@ -1495,6 +1563,7 @@ def main():
                 "run_id": score["run_id"],
                 "audit_id": score["audit_id"],
                 "risk_score": score["risk_score"],
+                "scheme_taxonomy": {"scheme_count": scheme_taxonomy["scheme_count"]},
                 "member_profile": member_profile,
                 "provider_risk": provider_risk,
                 "similar_case": results[0]["case_id"],
