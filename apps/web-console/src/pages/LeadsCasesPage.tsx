@@ -118,6 +118,17 @@ export function buildCaseEvidenceSufficiencyRows(
   }));
 }
 
+export function caseEvidenceRefsFromPackage(
+  evidencePackage?: Record<string, unknown>,
+) {
+  return isStringArray(evidencePackage?.evidence_refs) ? evidencePackage.evidence_refs : [];
+}
+
+export function caseRoutingReason(item: CaseRecord) {
+  const packageReason = item.evidence_package?.reason;
+  return item.routing_reason || (typeof packageReason === "string" ? packageReason : "");
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -429,6 +440,8 @@ export function LeadsCasesPage() {
           {casesQuery.data?.cases.map((item) => {
             const evidenceSufficiency = caseEvidenceSufficiencyFromPackage(item.evidence_package);
             const evidenceRows = buildCaseEvidenceSufficiencyRows(evidenceSufficiency);
+            const evidenceRefs = caseEvidenceRefsFromPackage(item.evidence_package);
+            const routingReason = caseRoutingReason(item);
             return (
               <div className="factor-card" key={item.case_id}>
                 <div>
@@ -464,7 +477,12 @@ export function LeadsCasesPage() {
                     <dt>Reviewer</dt>
                     <dd>{item.reviewer}</dd>
                   </div>
+                  <div>
+                    <dt>Evidence Refs</dt>
+                    <dd>{evidenceRefs.length}</dd>
+                  </div>
                 </dl>
+                {routingReason ? <p>{routingReason}</p> : null}
                 {evidenceRows.length ? (
                   <ul className="result-list compact-list">
                     {evidenceRows.map((row) => (
@@ -472,6 +490,13 @@ export function LeadsCasesPage() {
                         <strong>{row.item}</strong>
                         <span>{row.status}</span>
                       </li>
+                    ))}
+                  </ul>
+                ) : null}
+                {evidenceRefs.length ? (
+                  <ul className="result-list compact-list">
+                    {evidenceRefs.slice(0, 4).map((reference) => (
+                      <li key={reference}>{reference}</li>
                     ))}
                   </ul>
                 ) : null}

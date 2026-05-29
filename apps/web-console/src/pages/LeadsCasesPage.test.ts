@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import {
   buildCaseEvidenceSufficiencyRows,
   buildLeadSummary,
+  caseEvidenceRefsFromPackage,
   caseEvidenceSufficiencyFromPackage,
+  caseRoutingReason,
 } from "./LeadsCasesPage";
 
 describe("buildLeadSummary", () => {
@@ -88,6 +90,45 @@ describe("buildLeadSummary", () => {
       highPriorityCases: 1,
       topScheme: "early_high_value_claim",
     });
+  });
+});
+
+describe("caseEvidenceRefsFromPackage", () => {
+  it("extracts case evidence refs from the evidence package", () => {
+    expect(
+      caseEvidenceRefsFromPackage({
+        evidence_refs: ["audit:scoring.completed", "rule_runs:EARLY_CLAIM"],
+      }),
+    ).toEqual(["audit:scoring.completed", "rule_runs:EARLY_CLAIM"]);
+  });
+
+  it("ignores malformed evidence refs", () => {
+    expect(caseEvidenceRefsFromPackage({ evidence_refs: "audit:scoring.completed" })).toEqual([]);
+  });
+});
+
+describe("caseRoutingReason", () => {
+  it("prefers the case routing reason and falls back to evidence package reason", () => {
+    const baseCase = {
+      case_id: "case_CLM-2",
+      lead_id: "lead_CLM-2",
+      claim_id: "CLM-2",
+      status: "triage",
+      priority: "high",
+      assignee: "siu-reviewer-1",
+      reviewer: "medical-reviewer-1",
+    };
+
+    expect(
+      caseRoutingReason({
+        ...baseCase,
+        routing_reason: "High risk provider pattern",
+        evidence_package: { reason: "Fallback reason" },
+      }),
+    ).toBe("High risk provider pattern");
+    expect(caseRoutingReason({ ...baseCase, evidence_package: { reason: "Fallback reason" } })).toBe(
+      "Fallback reason",
+    );
   });
 });
 
