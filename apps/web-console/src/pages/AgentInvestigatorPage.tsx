@@ -25,6 +25,7 @@ type AgentApprovalResponse = {
     decision: string;
     approver: string;
     proposed_action: string;
+    reason: string;
     evidence_refs: string[];
   };
   audit_id: string;
@@ -80,6 +81,27 @@ export function buildInvestigationApprovalPayload(
   };
 }
 
+export function buildAgentApprovalSummary(response?: AgentApprovalResponse | null) {
+  if (!response) {
+    return {
+      proposedAction: "manual_review_required",
+      decision: "pending",
+      approver: "not_assigned",
+      auditId: "-",
+      evidenceCount: 0,
+      reason: "Awaiting human approval.",
+    };
+  }
+  return {
+    proposedAction: response.approval.proposed_action,
+    decision: response.approval.decision,
+    approver: response.approval.approver,
+    auditId: response.audit_id,
+    evidenceCount: response.approval.evidence_refs.length,
+    reason: response.approval.reason,
+  };
+}
+
 export function AgentInvestigatorPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState("CLM-0287");
@@ -105,6 +127,7 @@ export function AgentInvestigatorPage() {
   const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const evidenceRows = buildEvidenceSufficiencyRows(result?.evidence_sufficiency);
   const similarCaseRows = buildAgentSimilarCaseRows(result?.similar_cases);
+  const approvalSummary = buildAgentApprovalSummary(approvalResult);
 
   async function runInvestigation() {
     setError(null);
@@ -291,17 +314,26 @@ export function AgentInvestigatorPage() {
               <div className="summary-grid">
                 <div>
                   <span>Proposed Action</span>
-                  <strong>manual_review_required</strong>
+                  <strong>{approvalSummary.proposedAction}</strong>
                 </div>
                 <div>
                   <span>Status</span>
-                  <strong>{approvalResult?.approval.decision ?? "pending"}</strong>
+                  <strong>{approvalSummary.decision}</strong>
                 </div>
                 <div>
                   <span>Audit</span>
-                  <strong>{approvalResult?.audit_id ?? "-"}</strong>
+                  <strong>{approvalSummary.auditId}</strong>
+                </div>
+                <div>
+                  <span>Approver</span>
+                  <strong>{approvalSummary.approver}</strong>
+                </div>
+                <div>
+                  <span>Evidence</span>
+                  <strong>{approvalSummary.evidenceCount}</strong>
                 </div>
               </div>
+              <p>{approvalSummary.reason}</p>
               <label>
                 Approver
                 <input

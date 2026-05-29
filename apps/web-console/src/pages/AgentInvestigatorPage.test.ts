@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAgentApprovalSummary,
   buildAgentSimilarCaseRows,
   buildEvidenceSufficiencyRows,
   buildInvestigationApprovalPayload,
@@ -52,6 +53,39 @@ describe("buildInvestigationApprovalPayload", () => {
       approver: "qa-lead",
       reason: "Evidence package approved for manual review routing.",
       evidence_refs: ["knowledge_cases:KC-1", "agent_run:agent_CLM-1"],
+    });
+  });
+});
+
+describe("buildAgentApprovalSummary", () => {
+  it("summarizes pending and decided human approval gates", () => {
+    expect(buildAgentApprovalSummary(null)).toEqual({
+      proposedAction: "manual_review_required",
+      decision: "pending",
+      approver: "not_assigned",
+      auditId: "-",
+      evidenceCount: 0,
+      reason: "Awaiting human approval.",
+    });
+
+    expect(
+      buildAgentApprovalSummary({
+        audit_id: "audit_agent_approval_1",
+        approval: {
+          decision: "approved",
+          approver: "qa-lead",
+          proposed_action: "manual_review_required",
+          reason: "Evidence package approved for manual review routing.",
+          evidence_refs: ["agent_run:agent_CLM-1", "knowledge_cases:KC-1"],
+        },
+      }),
+    ).toEqual({
+      proposedAction: "manual_review_required",
+      decision: "approved",
+      approver: "qa-lead",
+      auditId: "audit_agent_approval_1",
+      evidenceCount: 2,
+      reason: "Evidence package approved for manual review routing.",
     });
   });
 });
