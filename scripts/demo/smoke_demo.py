@@ -75,6 +75,76 @@ def main():
     assert_true(score.get("top_reasons"), "score response missing top_reasons")
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
 
+    leads = request("GET", "/api/v1/ops/leads").get("leads", [])
+    lead = next(
+        (
+            item
+            for item in leads
+            if item.get("claim_id") == CLAIM_ID and item.get("run_id") == score["run_id"]
+        ),
+        None,
+    )
+    assert_true(lead is not None, "high-risk scoring did not generate a lead")
+    assert_true(lead.get("lead_source") == "scoring_run", "lead source should be scoring_run")
+    assert_true(lead.get("status") == "new", "new lead should be pending triage")
+    assert_true(
+        lead.get("disposition") == "pending_triage",
+        "new lead should have pending_triage disposition",
+    )
+    assert_true(lead.get("scheme_family"), "lead missing scheme family")
+    assert_true(lead.get("evidence_refs"), "lead missing evidence_refs")
+    lead_id = lead["lead_id"]
+
+    triage = request(
+        "POST",
+        f"/api/v1/ops/leads/{lead_id}/triage",
+        {
+            "decision": "open_case",
+            "assignee": "siu-reviewer-demo",
+            "reviewer": "medical-reviewer-demo",
+            "priority": "high",
+            "notes": "Demo smoke opens a governed investigation case from the scored FWA lead.",
+        },
+    )
+    assert_true(triage.get("audit_id"), "lead triage missing audit_id")
+    case = triage.get("case") or {}
+    assert_true(case.get("lead_id") == lead_id, "triage did not open a case for the lead")
+    assert_true(case.get("claim_id") == CLAIM_ID, "case claim_id mismatch")
+    assert_true(case.get("status") == "triage", "new case should start in triage")
+    assert_true(case.get("scheme_family") == lead["scheme_family"], "case scheme family mismatch")
+    assert_true(
+        case.get("evidence_package", {})
+        .get("evidence_sufficiency", {})
+        .get("minimum_evidence"),
+        "case missing evidence sufficiency package",
+    )
+    case_id = case["case_id"]
+
+    case_status = request(
+        "POST",
+        f"/api/v1/ops/cases/{case_id}/status",
+        {
+            "status": "investigating",
+            "actor_id": "siu-reviewer-demo",
+            "notes": "Demo smoke investigation started from triaged FWA lead.",
+            "evidence_refs": [f"leads:{lead_id}", f"audit:{triage['audit_id']}"],
+        },
+    )
+    assert_true(case_status.get("audit_id"), "case status update missing audit_id")
+    assert_true(
+        case_status.get("case", {}).get("status") == "investigating",
+        "case status did not update to investigating",
+    )
+
+    cases = request("GET", "/api/v1/ops/cases").get("cases", [])
+    assert_true(
+        any(
+            item.get("case_id") == case_id and item.get("status") == "investigating"
+            for item in cases
+        ),
+        "case list missing investigating case",
+    )
+
     medical_queue = request("GET", "/api/v1/ops/medical-review/queue?limit=20")
     medical_items = medical_queue.get("items", [])
     medical_item = next(
@@ -201,6 +271,11 @@ def main():
     audit = request("GET", f"/api/v1/audit/claims/{CLAIM_ID}")
     event_types = [event.get("event_type") for event in audit.get("events", [])]
     assert_true("scoring.completed" in event_types, "audit history missing scoring.completed")
+    assert_true("lead.triaged" in event_types, "audit history missing lead.triaged")
+    assert_true(
+        "case.status.updated" in event_types,
+        "audit history missing case.status.updated",
+    )
     assert_true(
         "medical.review.recorded" in event_types,
         "audit history missing medical.review.recorded",
@@ -283,6 +358,9 @@ def main():
         label_pool.get("evidence_backed_labels", 0) >= 1,
         "dashboard missing evidence-backed labels",
     )
+    case_sla = dashboard.get("case_sla", {})
+    assert_true(case_sla.get("total_cases", 0) >= 1, "dashboard missing investigation cases")
+    assert_true(case_sla.get("open_cases", 0) >= 1, "dashboard missing open case SLA rollup")
 
     print(
         json.dumps(
@@ -296,6 +374,7 @@ def main():
                 "medical_review_audit_id": medical_review["audit_id"],
                 "agent_run_id": agent["agent_run_id"],
                 "investigation_audit_id": investigation["audit_id"],
+                "case_id": case_id,
                 "outcome_labels": label_pool["total_labels"],
             },
             ensure_ascii=True,

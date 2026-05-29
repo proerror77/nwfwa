@@ -2043,10 +2043,18 @@ impl ScoringRepository for InMemoryScoringRepository {
         let elapsed_hours = case.time_to_closure_hours.unwrap_or(0.0);
         case.sla_status = case_sla_status(&case.status, case.sla_target_hours, elapsed_hours);
         let case = case.clone();
+        drop(cases);
+        let audit_run_id = self
+            .leads
+            .lock()
+            .await
+            .get(&case.lead_id)
+            .map(|lead| lead.run_id.clone())
+            .unwrap_or_else(|| format!("case_status_{}", case.case_id));
         let audit_id = AuditEventId::new().to_string();
         self.audit_events.lock().await.push(PersistedAuditEvent {
             audit_id: audit_id.clone(),
-            run_id: format!("case_status_{}", case.case_id),
+            run_id: audit_run_id,
             claim_id: case.claim_id.clone(),
             source_system: case.source_system.clone(),
             actor_id: input.actor_id.clone(),
@@ -4483,6 +4491,10 @@ impl ScoringRepository for PostgresScoringRepository {
         let Some(mut case) = case else {
             return Ok(None);
         };
+        let audit_run_id = load_lead_in_tx(&mut tx, &case.lead_id)
+            .await?
+            .map(|lead| lead.run_id)
+            .unwrap_or_else(|| format!("case_status_{}", case.case_id));
         let from_status = case.status.clone();
         case.status = input.status.clone();
         sqlx::query(
@@ -4503,7 +4515,7 @@ impl ScoringRepository for PostgresScoringRepository {
             &mut tx,
             &PersistedAuditEvent {
                 audit_id: audit_id.clone(),
-                run_id: format!("case_status_{}", case.case_id),
+                run_id: audit_run_id,
                 claim_id: case.claim_id.clone(),
                 source_system: case.source_system.clone(),
                 actor_id: input.actor_id.clone(),

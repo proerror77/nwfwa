@@ -135,7 +135,7 @@ Run the same API smoke used by CI:
 scripts/demo/smoke_demo.py
 ```
 
-The smoke script verifies scoring, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`.
+The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`.
 
 ## 6. Verification Gates
 

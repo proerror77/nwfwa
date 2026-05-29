@@ -447,7 +447,7 @@ async fn merges_lead_into_target_without_opening_case() {
 async fn updates_case_status_with_audit_trail() {
     let app = build_app(test_config());
 
-    let (status, _) = json_request(
+    let (status, score) = json_request(
         app.clone(),
         "POST",
         "/api/v1/claims/score",
@@ -492,6 +492,7 @@ async fn updates_case_status_with_audit_trail() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
+    let scoring_run_id = score["run_id"].as_str().unwrap();
 
     let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
     assert_eq!(status, StatusCode::OK);
@@ -634,6 +635,7 @@ async fn updates_case_status_with_audit_trail() {
         .find(|event| event["event_type"] == "case.status.updated")
         .expect("case status update should be audited");
     assert_eq!(status_event["payload"]["case_id"], case_id);
+    assert_eq!(status_event["run_id"], scoring_run_id);
     assert_eq!(status_event["payload"]["to_status"], "investigating");
     assert!(status_event["evidence_refs"]
         .as_array()
