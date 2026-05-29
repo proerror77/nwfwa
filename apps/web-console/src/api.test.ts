@@ -24,6 +24,7 @@ import {
   listGovernanceChangeEvents,
   listLeads,
   listKnowledgeCases,
+  listMedicalReviewQueue,
   listOpsAlerts,
   listOutcomeLabels,
   listQaFeedbackItems,
@@ -539,6 +540,19 @@ describe("ops API helpers", () => {
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/members/MBR-1/profile-summary",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("calls medical review queue endpoint", async () => {
+    const fetchMock = mockFetch({ items: [] });
+
+    await listMedicalReviewQueue("dev-secret", 25);
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/medical-review/queue?limit=25",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

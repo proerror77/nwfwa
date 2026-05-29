@@ -15,6 +15,7 @@ import { AuditSamplingPage } from "./pages/AuditSamplingPage";
 import { RoutingPoliciesPage } from "./pages/RoutingPoliciesPage";
 import { ProviderRiskPage } from "./pages/ProviderRiskPage";
 import { MemberProfilePage } from "./pages/MemberProfilePage";
+import { MedicalReviewPage } from "./pages/MedicalReviewPage";
 
 const modules = [
   "Dashboard",
@@ -27,6 +28,7 @@ const modules = [
   "Leads & Cases",
   "Member Profile",
   "Provider Risk",
+  "Medical Review",
   "Audit Sampling",
   "Knowledge Base",
   "Agent Investigator",
@@ -61,6 +63,7 @@ export function App() {
         {active === "Leads & Cases" ? <LeadsCasesPage /> : null}
         {active === "Member Profile" ? <MemberProfilePage /> : null}
         {active === "Provider Risk" ? <ProviderRiskPage /> : null}
+        {active === "Medical Review" ? <MedicalReviewPage /> : null}
         {active === "Audit Sampling" ? <AuditSamplingPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
@@ -77,6 +80,7 @@ export function App() {
           "Leads & Cases",
           "Member Profile",
           "Provider Risk",
+          "Medical Review",
           "Audit Sampling",
           "Knowledge Base",
           "Agent Investigator",

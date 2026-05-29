@@ -1137,6 +1137,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/medical-review/queue": {
+                "get": {
+                    "summary": "List claims that require medical review from clinical evidence audit events",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Medical review queue",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/MedicalReviewQueueResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/fwa-schemes": {
                 "get": {
                     "summary": "List governed FWA scheme taxonomy and evidence requirements",
@@ -2436,6 +2460,34 @@ pub async fn openapi_schema() -> Json<Value> {
                         "providers": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ProviderRiskSummaryItem" }
+                        }
+                    }
+                },
+                "MedicalReviewQueueItem": {
+                    "type": "object",
+                    "required": ["claim_id", "run_id", "audit_id", "medical_reasonableness_score", "review_route", "evidence_status", "missing_evidence", "item_finding_count", "evidence_refs"],
+                    "properties": {
+                        "claim_id": { "type": "string" },
+                        "run_id": { "type": "string" },
+                        "audit_id": { "type": "string" },
+                        "medical_reasonableness_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "review_route": { "type": "string" },
+                        "evidence_status": { "type": "string" },
+                        "missing_evidence": { "type": "array", "items": { "type": "string" } },
+                        "item_finding_count": { "type": "integer" },
+                        "first_item_code": { "type": ["string", "null"] },
+                        "first_issue_type": { "type": ["string", "null"] },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "MedicalReviewQueueResponse": {
+                    "type": "object",
+                    "required": ["items"],
+                    "properties": {
+                        "items": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/MedicalReviewQueueItem" }
                         }
                     }
                 },
