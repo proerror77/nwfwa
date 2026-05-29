@@ -1720,6 +1720,8 @@ async fn openapi_includes_operations_paths() {
             .any(|field| field == "sla_breach_rate")
     );
     for field in [
+        "features_feedback",
+        "provider_profile_feedback",
         "case_status_labels",
         "medical_review_labels",
         "false_positive_labels",

@@ -276,6 +276,40 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    for (qa_case_id, issue_type, feedback_target, evidence_ref) in [
+        (
+            "QA-DASHBOARD-FEATURES",
+            "model_under_scored_confirmed_issue",
+            "features",
+            "features:claim_amount_to_limit_ratio",
+        ),
+        (
+            "QA-DASHBOARD-PROVIDER",
+            "provider_pattern",
+            "provider_profile",
+            "provider_profile:PRV-0287:90d",
+        ),
+    ] {
+        let (status, _) = json_request(
+            app.clone(),
+            "POST",
+            "/api/v1/qa/results",
+            &format!(
+                r#"{{
+          "qa_case_id": "{qa_case_id}",
+          "claim_id": "CLM-0287",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "{issue_type}",
+          "feedback_target": "{feedback_target}",
+          "notes": "Dashboard label pool should expose {feedback_target} feedback labels.",
+          "evidence_refs": ["{evidence_ref}"]
+        }}"#
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK);
+    }
+
     let (status, agent_investigation) = json_request(
         app.clone(),
         "POST",
@@ -359,27 +393,27 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(dashboard["suspected_claims"], 1);
     assert_eq!(dashboard["confirmed_fwa"], 1);
-    assert_eq!(dashboard["qa_reviews"], 1);
+    assert_eq!(dashboard["qa_reviews"], 3);
     assert_eq!(dashboard["investigation_results"], 1);
     assert_eq!(dashboard["qa_queue"]["sampled_cases"], 1);
     assert_eq!(dashboard["qa_queue"]["open_cases"], 0);
     assert_eq!(dashboard["qa_queue"]["reviewed_cases"], 1);
     assert_eq!(dashboard["qa_queue"]["disagreement_cases"], 1);
     assert_eq!(dashboard["qa_queue"]["disagreement_rate"], 1.0);
-    assert_eq!(dashboard["qa_queue"]["feedback_open_count"], 0);
+    assert_eq!(dashboard["qa_queue"]["feedback_open_count"], 2);
     assert_eq!(dashboard["qa_queue"]["feedback_in_progress_count"], 1);
     assert_eq!(dashboard["qa_queue"]["feedback_resolved_count"], 0);
     assert_eq!(dashboard["qa_queue"]["feedback_dismissed_count"], 0);
-    assert_eq!(dashboard["qa_queue"]["unresolved_feedback_count"], 1);
+    assert_eq!(dashboard["qa_queue"]["unresolved_feedback_count"], 3);
     assert_eq!(dashboard["qa_queue"]["rules_unresolved_feedback_count"], 1);
     assert_eq!(dashboard["qa_queue"]["models_unresolved_feedback_count"], 0);
     assert_eq!(
         dashboard["qa_queue"]["features_unresolved_feedback_count"],
-        0
+        1
     );
     assert_eq!(
         dashboard["qa_queue"]["provider_profile_unresolved_feedback_count"],
-        0
+        1
     );
     assert_eq!(
         dashboard["qa_queue"]["workflow_unresolved_feedback_count"],
@@ -482,16 +516,18 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
             .unwrap()
             >= 1
     );
-    assert_eq!(dashboard["label_pool"]["total_labels"], 4);
+    assert_eq!(dashboard["label_pool"]["total_labels"], 6);
     assert_eq!(dashboard["label_pool"]["approved_for_training"], 2);
-    assert_eq!(dashboard["label_pool"]["needs_review"], 2);
+    assert_eq!(dashboard["label_pool"]["needs_review"], 4);
     assert_eq!(dashboard["label_pool"]["rule_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["model_feedback"], 1);
+    assert_eq!(dashboard["label_pool"]["features_feedback"], 1);
+    assert_eq!(dashboard["label_pool"]["provider_profile_feedback"], 1);
     assert_eq!(dashboard["label_pool"]["workflow_feedback"], 2);
     assert_eq!(dashboard["label_pool"]["case_status_labels"], 0);
     assert_eq!(dashboard["label_pool"]["medical_review_labels"], 1);
     assert_eq!(dashboard["label_pool"]["false_positive_labels"], 0);
-    assert_eq!(dashboard["label_pool"]["evidence_backed_labels"], 4);
+    assert_eq!(dashboard["label_pool"]["evidence_backed_labels"], 6);
 }
 
 #[tokio::test]

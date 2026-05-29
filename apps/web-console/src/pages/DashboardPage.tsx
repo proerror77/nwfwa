@@ -24,6 +24,8 @@ type DashboardLabelPool = {
   needs_review: number;
   rule_feedback: number;
   model_feedback: number;
+  features_feedback: number;
+  provider_profile_feedback: number;
   workflow_feedback: number;
   case_status_labels?: number;
   medical_review_labels?: number;
@@ -174,6 +176,8 @@ export function buildDashboardLabelPoolSummary(labelPool?: DashboardLabelPool) {
     needsReview: labelPool?.needs_review ?? 0,
     ruleFeedback: labelPool?.rule_feedback ?? 0,
     modelFeedback: labelPool?.model_feedback ?? 0,
+    featuresFeedback: labelPool?.features_feedback ?? 0,
+    providerProfileFeedback: labelPool?.provider_profile_feedback ?? 0,
     workflowFeedback: labelPool?.workflow_feedback ?? 0,
     caseStatusLabels: labelPool?.case_status_labels ?? 0,
     medicalReviewLabels: labelPool?.medical_review_labels ?? 0,
@@ -767,6 +771,14 @@ export function DashboardPage() {
             <div className="metric-row compact-metric-row">
               <span>Models</span>
               <strong>{labelPoolSummary.modelFeedback}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Features</span>
+              <strong>{labelPoolSummary.featuresFeedback}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Provider Profile</span>
+              <strong>{labelPoolSummary.providerProfileFeedback}</strong>
             </div>
             <div className="metric-row compact-metric-row">
               <span>Workflow</span>

@@ -492,6 +492,8 @@ pub struct DashboardLabelPoolRecord {
     pub needs_review: u32,
     pub rule_feedback: u32,
     pub model_feedback: u32,
+    pub features_feedback: u32,
+    pub provider_profile_feedback: u32,
     pub workflow_feedback: u32,
     pub case_status_labels: u32,
     pub medical_review_labels: u32,
@@ -8480,6 +8482,14 @@ fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLab
         model_feedback: labels
             .iter()
             .filter(|label| label.feedback_target == "models")
+            .count() as u32,
+        features_feedback: labels
+            .iter()
+            .filter(|label| label.feedback_target == "features")
+            .count() as u32,
+        provider_profile_feedback: labels
+            .iter()
+            .filter(|label| label.feedback_target == "provider_profile")
             .count() as u32,
         workflow_feedback: labels
             .iter()
