@@ -515,6 +515,62 @@ def publish_demo_knowledge_case(investigation, qa):
     }
 
 
+def assert_factor_factory_readiness():
+    readiness = request("GET", "/api/v1/ops/factors/readiness")
+    assert_true(readiness.get("dataset_count", 0) >= 1, "factor readiness missing datasets")
+    assert_true(readiness.get("factor_count", 0) >= 8, "factor readiness missing seeded factor cards")
+    assert_true(
+        readiness.get("online_ready_count", 0) >= 4,
+        "factor readiness missing online-ready factors",
+    )
+    assert_true(
+        readiness.get("rule_convertible_count", 0) >= 4,
+        "factor readiness missing rule-convertible factors",
+    )
+    assert_true(
+        readiness.get("ready_factor_count", 0) >= 4,
+        "factor readiness missing ready factor cards",
+    )
+    cards = readiness.get("factor_cards", [])
+    amount_ratio = next(
+        (
+            card
+            for card in cards
+            if card.get("factor_name") == "claim_amount_to_limit_ratio"
+        ),
+        None,
+    )
+    assert_true(amount_ratio is not None, "factor card missing claim_amount_to_limit_ratio")
+    assert_true(amount_ratio.get("readiness_status") == "ready", "amount ratio factor not ready")
+    assert_true(amount_ratio.get("owner") == "feature-ops", "amount ratio factor owner mismatch")
+    assert_true(amount_ratio.get("online_available") is True, "amount ratio factor is not online available")
+    assert_true(amount_ratio.get("rule_convertible") is True, "amount ratio factor is not rule convertible")
+    assert_true(amount_ratio.get("business_meaning"), "amount ratio factor missing business meaning")
+    assert_true(amount_ratio.get("calculation_logic"), "amount ratio factor missing calculation logic")
+    assert_true(amount_ratio.get("source_fields"), "amount ratio factor missing source fields")
+    assert_true(amount_ratio.get("evidence_refs"), "amount ratio factor missing evidence refs")
+
+    confirmed_label = next(
+        (
+            card
+            for card in cards
+            if card.get("factor_name") == "confirmed_fwa"
+        ),
+        None,
+    )
+    assert_true(confirmed_label is not None, "factor card missing confirmed_fwa label")
+    assert_true(confirmed_label.get("is_label") is True, "confirmed_fwa should be marked as label")
+    assert_true(
+        "label_field" in confirmed_label.get("readiness_issues", []),
+        "confirmed_fwa label should be excluded from online factor readiness",
+    )
+    return {
+        "factor_count": readiness["factor_count"],
+        "ready_factor_count": readiness["ready_factor_count"],
+        "rule_convertible_count": readiness["rule_convertible_count"],
+    }
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -843,6 +899,8 @@ def main():
     assert_true(case_sla.get("total_cases", 0) >= 1, "dashboard missing investigation cases")
     assert_true(case_sla.get("open_cases", 0) >= 1, "dashboard missing open case SLA rollup")
 
+    factor_readiness = assert_factor_factory_readiness()
+
     readiness = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/retraining-readiness")
     assert_true(
         readiness.get("recommendation") == "prepare_retraining",
@@ -890,6 +948,7 @@ def main():
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,
                 "knowledge_publish": knowledge_publish,
+                "factor_readiness": factor_readiness,
                 "rule_release": rule_release,
             },
             ensure_ascii=True,
