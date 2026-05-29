@@ -86,6 +86,17 @@ fn validate_triage_request(lead_id: &str, request: &TriageLeadInput) -> Result<(
             ));
         }
     }
+    if request.assignee.trim().is_empty()
+        || request.reviewer.trim().is_empty()
+        || request.priority.trim().is_empty()
+        || request.notes.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_TRIAGE_REVIEW_CONTEXT",
+            "assignee, reviewer, priority, and notes are required",
+        ));
+    }
     Ok(())
 }
 

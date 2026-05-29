@@ -4025,10 +4025,10 @@ pub async fn openapi_schema() -> Json<Value> {
                             "enum": ["open_case", "reject_lead", "request_evidence", "merge_lead"]
                         },
                         "merge_target_lead_id": { "type": ["string", "null"] },
-                        "assignee": { "type": "string" },
-                        "reviewer": { "type": "string" },
-                        "priority": { "type": "string" },
-                        "notes": { "type": "string" }
+                        "assignee": { "type": "string", "minLength": 1 },
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "priority": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 }
                     }
                 },
                 "TriageLeadResponse": {
