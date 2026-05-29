@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildRuleAuditFilters,
   buildRuleCandidateSaveSummary,
+  buildRuleDetailSummary,
   buildRuleDiscoverySummary,
   buildRuleLabelReadinessSummary,
 } from "./RulesStudio";
@@ -89,6 +90,85 @@ describe("buildRuleDiscoverySummary", () => {
       topLiftLabel: "3.00x",
       topSaving: "8200.00",
     });
+  });
+});
+
+describe("buildRuleDetailSummary", () => {
+  it("summarizes rule detail versions and audit evidence", () => {
+    expect(
+      buildRuleDetailSummary({
+        summary: {
+          rule_id: "rule_early_claim",
+          name: "Early claim",
+          status: "active",
+          owner: "rule-governance",
+          active_version: 1,
+          latest_version: 2,
+          review_mode: "both",
+          scheme_family: "early_high_value_claim",
+          score: 25,
+          alert_code: "EARLY_CLAIM",
+          recommended_action: "ManualReview",
+        },
+        versions: [
+          {
+            version: 1,
+            status: "active",
+            dsl: { conditions: [{ field: "days_since_policy_start" }] },
+            review_mode: "both",
+            scheme_family: "early_high_value_claim",
+            score: 25,
+            alert_code: "EARLY_CLAIM",
+            recommended_action: "ManualReview",
+            reason: "保单生效后短期理赔",
+          },
+          {
+            version: 2,
+            status: "submitted",
+            dsl: {
+              conditions: [
+                { field: "days_since_policy_start" },
+                { field: "claim_amount_percentile_peer" },
+              ],
+            },
+            review_mode: "pre_payment",
+            scheme_family: "early_high_value_claim",
+            score: 40,
+            alert_code: "EARLY_HIGH_CLAIM",
+            recommended_action: "ManualReview",
+            reason: "保单生效后短期高额理赔",
+          },
+        ],
+        audit_events: [
+          {
+            audit_id: "audit_rule_submitted",
+            run_id: "rule_lifecycle",
+            event_type: "rule.submitted",
+            event_status: "succeeded",
+            summary: "Rule submitted",
+            evidence_refs: ["rules:rule_early_claim:v2"],
+          },
+        ],
+      }),
+    ).toEqual({
+      ruleId: "rule_early_claim",
+      name: "Early claim",
+      status: "active",
+      owner: "rule-governance",
+      activeVersionLabel: "v1",
+      latestVersionLabel: "v2",
+      versionCount: 2,
+      auditEventCount: 1,
+      latestStatus: "submitted",
+      latestReviewMode: "pre_payment",
+      latestSchemeFamily: "early_high_value_claim",
+      latestScore: 40,
+      latestAlertCode: "EARLY_HIGH_CLAIM",
+      latestAction: "ManualReview",
+      latestReason: "保单生效后短期高额理赔",
+      latestConditionCount: 2,
+    });
+    expect(buildRuleDetailSummary(null)).toBeNull();
   });
 });
 

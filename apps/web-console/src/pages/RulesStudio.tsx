@@ -125,6 +125,24 @@ type RuleCandidateSaveResponse = {
   audit_events: AuditEvent[];
 };
 
+type RuleVersion = {
+  version: number;
+  status: string;
+  dsl: Record<string, unknown>;
+  review_mode: string;
+  scheme_family: string;
+  score: number;
+  alert_code: string;
+  recommended_action: string;
+  reason: string;
+};
+
+type RuleDetailResponse = {
+  summary: RuleSummary;
+  versions: RuleVersion[];
+  audit_events: AuditEvent[];
+};
+
 export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
   const ruleLabels = labels.filter((label) => label.feedback_target === "rules");
   return {
@@ -152,6 +170,34 @@ export function buildRuleDiscoverySummary(discovery?: RuleDiscoveryResponse) {
     topPrecisionLabel: topCandidate ? `${(topCandidate.precision * 100).toFixed(1)}%` : "0.0%",
     topLiftLabel: topCandidate ? `${topCandidate.lift.toFixed(2)}x` : "0.00x",
     topSaving: topCandidate?.estimated_saving ?? "0.00",
+  };
+}
+
+export function buildRuleDetailSummary(detail?: RuleDetailResponse | null) {
+  if (!detail) {
+    return null;
+  }
+  const latestVersion =
+    detail.versions.find((version) => version.version === detail.summary.latest_version) ??
+    detail.versions[0];
+  const conditions = latestVersion?.dsl.conditions;
+  return {
+    ruleId: detail.summary.rule_id,
+    name: detail.summary.name,
+    status: detail.summary.status,
+    owner: detail.summary.owner,
+    activeVersionLabel: detail.summary.active_version ? `v${detail.summary.active_version}` : "none",
+    latestVersionLabel: `v${detail.summary.latest_version}`,
+    versionCount: detail.versions.length,
+    auditEventCount: detail.audit_events.length,
+    latestStatus: latestVersion?.status ?? "not_available",
+    latestReviewMode: latestVersion?.review_mode ?? "not_available",
+    latestSchemeFamily: latestVersion?.scheme_family ?? "not_available",
+    latestScore: latestVersion?.score ?? 0,
+    latestAlertCode: latestVersion?.alert_code ?? "not_available",
+    latestAction: latestVersion?.recommended_action ?? "not_available",
+    latestReason: latestVersion?.reason ?? "not_available",
+    latestConditionCount: Array.isArray(conditions) ? conditions.length : 0,
   };
 }
 
@@ -286,7 +332,7 @@ export function RulesStudio() {
   );
   const detailQuery = useQuery({
     queryKey: ["rule", selectedRule?.rule_id, apiKey],
-    queryFn: () => getRule(selectedRule!.rule_id, apiKey),
+    queryFn: () => getRule(selectedRule!.rule_id, apiKey) as Promise<RuleDetailResponse>,
     enabled: Boolean(selectedRule?.rule_id),
   });
   const promotionQuery = useQuery({
@@ -396,6 +442,7 @@ export function RulesStudio() {
     },
   });
   const savedCandidateSummary = buildRuleCandidateSaveSummary(saveCandidateMutation.data);
+  const ruleDetailSummary = buildRuleDetailSummary(detailQuery.data);
 
   return (
     <section className="ops-grid">
@@ -476,7 +523,69 @@ export function RulesStudio() {
             {auditQuery.error ? (
               <pre className="error">{String(auditQuery.error.message)}</pre>
             ) : null}
-            <pre>{JSON.stringify(detailQuery.data, null, 2)}</pre>
+            {detailQuery.error ? (
+              <pre className="error">{String(detailQuery.error.message)}</pre>
+            ) : null}
+            {ruleDetailSummary ? (
+              <dl className="result-grid">
+                <div>
+                  <dt>Loaded Rule</dt>
+                  <dd>{ruleDetailSummary.ruleId}</dd>
+                </div>
+                <div>
+                  <dt>Name</dt>
+                  <dd>{ruleDetailSummary.name}</dd>
+                </div>
+                <div>
+                  <dt>Active Version</dt>
+                  <dd>{ruleDetailSummary.activeVersionLabel}</dd>
+                </div>
+                <div>
+                  <dt>Latest Version</dt>
+                  <dd>{ruleDetailSummary.latestVersionLabel}</dd>
+                </div>
+                <div>
+                  <dt>Versions</dt>
+                  <dd>{ruleDetailSummary.versionCount}</dd>
+                </div>
+                <div>
+                  <dt>Audit Events</dt>
+                  <dd>{ruleDetailSummary.auditEventCount}</dd>
+                </div>
+                <div>
+                  <dt>Latest Status</dt>
+                  <dd>{ruleDetailSummary.latestStatus}</dd>
+                </div>
+                <div>
+                  <dt>Latest Review Mode</dt>
+                  <dd>{formatReviewModeLabel(ruleDetailSummary.latestReviewMode)}</dd>
+                </div>
+                <div>
+                  <dt>Latest Scheme</dt>
+                  <dd>{formatFwaSchemeLabel(ruleDetailSummary.latestSchemeFamily, schemeLabelMap)}</dd>
+                </div>
+                <div>
+                  <dt>Latest Score</dt>
+                  <dd>{ruleDetailSummary.latestScore}</dd>
+                </div>
+                <div>
+                  <dt>Alert</dt>
+                  <dd>{ruleDetailSummary.latestAlertCode}</dd>
+                </div>
+                <div>
+                  <dt>Action</dt>
+                  <dd>{ruleDetailSummary.latestAction}</dd>
+                </div>
+                <div>
+                  <dt>Conditions</dt>
+                  <dd>{ruleDetailSummary.latestConditionCount}</dd>
+                </div>
+                <div>
+                  <dt>Reason</dt>
+                  <dd>{ruleDetailSummary.latestReason}</dd>
+                </div>
+              </dl>
+            ) : null}
           </div>
         ) : (
           <p className="empty">No rules available</p>
