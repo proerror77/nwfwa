@@ -4,6 +4,7 @@ import {
   buildFeatureTraceRows,
   buildRuntimeEvidenceRefRows,
   buildRoutingPolicySummary,
+  buildTpaEmbeddedPanelSummary,
 } from "./RuntimeScoring";
 import { buildProviderProfileInspection } from "./providerProfileInspection";
 import {
@@ -48,6 +49,78 @@ describe("buildRoutingPolicySummary", () => {
       confidenceThresholdLabel: "Low < 60, High >= 80",
       providerThresholdLabel: "Provider review >= 70",
     });
+  });
+});
+
+describe("buildTpaEmbeddedPanelSummary", () => {
+  it("summarizes the scoring response fields needed by an embedded TPA panel", () => {
+    expect(
+      buildTpaEmbeddedPanelSummary({
+        run_id: "run_CLM-1",
+        audit_id: "audit_CLM-1",
+        claim_id: "CLM-1",
+        review_mode: "pre_payment",
+        risk_score: 87,
+        rag: "RED",
+        risk_level: "High",
+        recommended_action: "MANUAL_REVIEW",
+        confidence_score: 76,
+        confidence: "Medium",
+        routing_reason: "High risk manual review.",
+        routing_policy: {
+          policy_id: "fwa_risk_fusion_routing",
+          version: 1,
+          review_mode: "pre_payment",
+          risk_thresholds: {
+            low_max: 39,
+            medium_min: 40,
+            high_min: 70,
+            critical_min: 85,
+          },
+          confidence_thresholds: {
+            low_confidence_below: 60,
+            high_confidence_min: 80,
+          },
+          provider_review_threshold: 70,
+        },
+        scores: {
+          peer_deviation_score: 90,
+          rule_score: 80,
+          anomaly_score: 70,
+          ml_score: 75,
+          medical_reasonableness_score: 65,
+          provider_network_score: 60,
+          similar_case_score: 55,
+          final_score: 87,
+        },
+        alerts: [
+          {
+            alert_code: "EARLY_HIGH_CLAIM",
+            severity: "high",
+            reason: "Early high claim.",
+            rule_id: "rule_early_claim",
+            rule_version: 1,
+          },
+        ],
+        layers: [],
+        top_reasons: ["金额高于同病种 P99", "保单生效后短期理赔"],
+        similar_cases: [],
+        feature_values: [],
+        evidence_refs: ["rules:rule_early_claim:v1", "audit:audit_CLM-1"],
+      }),
+    ).toEqual({
+      claimId: "CLM-1",
+      riskScore: 87,
+      rag: "RED",
+      recommendedAction: "MANUAL_REVIEW",
+      reviewModeLabel: "Pre-payment",
+      confidenceLabel: "Medium (76)",
+      alertCount: 1,
+      topReasonCount: 2,
+      evidenceCount: 2,
+      auditId: "audit_CLM-1",
+    });
+    expect(buildTpaEmbeddedPanelSummary(null)).toBeNull();
   });
 });
 

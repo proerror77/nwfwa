@@ -131,6 +131,24 @@ export function buildRuntimeEvidenceRefRows(evidenceRefs: unknown[] = []) {
   });
 }
 
+export function buildTpaEmbeddedPanelSummary(result?: ScoringResponse | null) {
+  if (!result) {
+    return null;
+  }
+  return {
+    claimId: result.claim_id,
+    riskScore: result.risk_score,
+    rag: result.rag,
+    recommendedAction: result.recommended_action,
+    reviewModeLabel: formatReviewModeLabel(result.review_mode),
+    confidenceLabel: `${result.confidence} (${result.confidence_score})`,
+    alertCount: result.alerts.length,
+    topReasonCount: result.top_reasons.length,
+    evidenceCount: result.evidence_refs.length,
+    auditId: result.audit_id,
+  };
+}
+
 function formatFeatureValue(value: unknown) {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value);
@@ -285,6 +303,7 @@ export function RuntimeScoring() {
     : null;
   const featureTraceRows = result ? buildFeatureTraceRows(result.feature_values) : [];
   const evidenceRefRows = result ? buildRuntimeEvidenceRefRows(result.evidence_refs) : [];
+  const tpaPanelSummary = buildTpaEmbeddedPanelSummary(result);
 
   return (
     <section className="runtime">
@@ -416,6 +435,53 @@ export function RuntimeScoring() {
                 <dd>{result.scores.final_score}</dd>
               </div>
             </dl>
+            <section>
+              <h3>TPA Embedded Panel</h3>
+              {tpaPanelSummary ? (
+                <dl className="result-grid">
+                  <div>
+                    <dt>Claim</dt>
+                    <dd>{tpaPanelSummary.claimId}</dd>
+                  </div>
+                  <div>
+                    <dt>Risk</dt>
+                    <dd>{tpaPanelSummary.riskScore}</dd>
+                  </div>
+                  <div>
+                    <dt>RAG</dt>
+                    <dd>{tpaPanelSummary.rag}</dd>
+                  </div>
+                  <div>
+                    <dt>Action</dt>
+                    <dd>{tpaPanelSummary.recommendedAction}</dd>
+                  </div>
+                  <div>
+                    <dt>Mode</dt>
+                    <dd>{tpaPanelSummary.reviewModeLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Confidence</dt>
+                    <dd>{tpaPanelSummary.confidenceLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Alerts</dt>
+                    <dd>{tpaPanelSummary.alertCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Reasons</dt>
+                    <dd>{tpaPanelSummary.topReasonCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Evidence</dt>
+                    <dd>{tpaPanelSummary.evidenceCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Audit</dt>
+                    <dd>{tpaPanelSummary.auditId}</dd>
+                  </div>
+                </dl>
+              ) : null}
+            </section>
             <section>
               <h3>Routing Policy</h3>
               {routingPolicySummary ? (
