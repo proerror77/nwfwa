@@ -7249,7 +7249,7 @@ fn build_audit_sample(
     let selection_method = selection_method_for_mode(&input.sample_mode).to_string();
     let mut candidates = leads
         .into_iter()
-        .filter(|lead| lead_matches_inclusion(lead, &input.inclusion_criteria))
+        .filter(|lead| lead_matches_inclusion(lead, &input.inclusion_criteria, strata_contexts))
         .collect::<Vec<_>>();
     if input.sample_mode == "post_payment_audit" {
         candidates.retain(|lead| lead.review_mode == "post_payment");
@@ -8803,7 +8803,11 @@ fn selection_method_for_mode(sample_mode: &str) -> &'static str {
     }
 }
 
-fn lead_matches_inclusion(lead: &LeadRecord, criteria: &Value) -> bool {
+fn lead_matches_inclusion(
+    lead: &LeadRecord,
+    criteria: &Value,
+    strata_contexts: &HashMap<String, AuditSampleStrataContext>,
+) -> bool {
     if let Some(min_risk_score) = criteria["min_risk_score"].as_u64() {
         if lead.risk_score < min_risk_score as u8 {
             return false;
@@ -8821,6 +8825,27 @@ fn lead_matches_inclusion(lead: &LeadRecord, criteria: &Value) -> bool {
     }
     if let Some(review_mode) = criteria["review_mode"].as_str() {
         if lead.review_mode != review_mode {
+            return false;
+        }
+    }
+    let context = strata_context_for_lead(lead, strata_contexts);
+    if let Some(provider_type) = criteria["provider_type"].as_str() {
+        if context.provider_type != provider_type {
+            return false;
+        }
+    }
+    if let Some(provider_region) = criteria["provider_region"].as_str() {
+        if context.provider_region != provider_region {
+            return false;
+        }
+    }
+    if let Some(policy_type) = criteria["policy_type"].as_str() {
+        if context.policy_type != policy_type {
+            return false;
+        }
+    }
+    if let Some(risk_band) = criteria["risk_band"].as_str() {
+        if risk_band_for_score(lead.risk_score) != risk_band {
             return false;
         }
     }

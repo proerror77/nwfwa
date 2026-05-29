@@ -1151,6 +1151,23 @@ async fn openapi_includes_operations_paths() {
             "missing CreateAuditSampleRequest minLength for {field}"
         );
     }
+    let inclusion_properties = &schema["components"]["schemas"]["CreateAuditSampleRequest"]
+        ["properties"]["inclusion_criteria"]["properties"];
+    for field in [
+        "min_risk_score",
+        "scheme_family",
+        "rag",
+        "review_mode",
+        "provider_type",
+        "provider_region",
+        "policy_type",
+        "risk_band",
+    ] {
+        assert!(
+            inclusion_properties[field].is_object(),
+            "missing inclusion_criteria property {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["Case"]["properties"]["evidence_package"]["$ref"],
         "#/components/schemas/CaseEvidencePackage"

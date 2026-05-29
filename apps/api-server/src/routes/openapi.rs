@@ -4386,7 +4386,19 @@ pub async fn openapi_schema() -> Json<Value> {
                             "enum": ["risk_ranked", "random_control", "stratified", "post_payment_audit", "qa_calibration"]
                         },
                         "population_definition": { "type": "string", "minLength": 1 },
-                        "inclusion_criteria": { "type": "object" },
+                        "inclusion_criteria": {
+                            "type": "object",
+                            "properties": {
+                                "min_risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                                "scheme_family": { "type": "string" },
+                                "rag": { "type": "string", "enum": ["GREEN", "AMBER", "RED"] },
+                                "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                                "provider_type": { "type": "string" },
+                                "provider_region": { "type": "string" },
+                                "policy_type": { "type": "string" },
+                                "risk_band": { "type": "string", "enum": ["low", "medium", "high", "critical"] }
+                            }
+                        },
                         "deterministic_seed": { "type": ["string", "null"] },
                         "sample_size": { "type": "integer", "minimum": 1 },
                         "reviewer": { "type": "string", "minLength": 1 },

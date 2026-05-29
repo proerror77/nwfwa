@@ -386,6 +386,70 @@ async fn stratified_sample_spans_operational_strata() {
 }
 
 #[tokio::test]
+async fn stratified_sample_filters_by_operational_strata_criteria() {
+    let app = build_app(test_config());
+
+    score_high_risk_claim_with_context(
+        app.clone(),
+        "CLM-STRATA-FILTER-HOSPITAL",
+        "9900",
+        "MED",
+        "hospital",
+        "SH",
+        "Northwind Hospital",
+    )
+    .await;
+    score_high_risk_claim_with_context(
+        app.clone(),
+        "CLM-STRATA-FILTER-CLINIC",
+        "9000",
+        "DENTAL",
+        "clinic",
+        "BJ",
+        "Capital Clinic",
+    )
+    .await;
+
+    let (status, sample) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "stratified",
+          "population_definition": "Filtered stratified sample for clinic dental high-risk claims",
+          "inclusion_criteria": {
+            "min_risk_score": 70,
+            "provider_type": "clinic",
+            "provider_region": "BJ",
+            "policy_type": "DENTAL",
+            "risk_band": "critical"
+          },
+          "deterministic_seed": "strata-filter-week-1",
+          "sample_size": 2,
+          "reviewer": "qa-reviewer-3",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let selected = sample["selected_leads"].as_array().unwrap();
+    assert_eq!(selected.len(), 1);
+    assert_eq!(selected[0]["claim_id"], "CLM-STRATA-FILTER-CLINIC");
+    assert_eq!(selected[0]["provider_type"], "clinic");
+    assert_eq!(selected[0]["provider_region"], "BJ");
+    assert_eq!(selected[0]["policy_type"], "DENTAL");
+    assert_eq!(selected[0]["risk_band"], "critical");
+    assert_eq!(
+        sample["outcome_distribution"]["strata_distribution"]
+            .as_object()
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
 async fn post_payment_audit_samples_only_post_payment_leads() {
     let app = build_app(test_config());
 
