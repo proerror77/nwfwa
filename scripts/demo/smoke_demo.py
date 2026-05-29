@@ -67,6 +67,47 @@ def main():
     assert_true(score.get("top_reasons"), "score response missing top_reasons")
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
 
+    medical_queue = request("GET", "/api/v1/ops/medical-review/queue?limit=20")
+    medical_items = medical_queue.get("items", [])
+    medical_item = next(
+        (
+            item
+            for item in medical_items
+            if item.get("claim_id") == CLAIM_ID and item.get("audit_id") == score["audit_id"]
+        ),
+        None,
+    )
+    assert_true(medical_item is not None, "medical review queue missing scored claim")
+    assert_true(
+        medical_item.get("review_route") == "medical_review",
+        "medical review queue item missing medical_review route",
+    )
+    assert_true(
+        medical_item.get("evidence_refs"),
+        "medical review queue item missing evidence_refs",
+    )
+
+    medical_review = request(
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        {
+            "claim_id": CLAIM_ID,
+            "scoring_audit_id": score["audit_id"],
+            "reviewer": "medical-reviewer-demo",
+            "decision": "request_more_evidence",
+            "notes": "Demo smoke medical review requests supporting medical record evidence.",
+            "evidence_refs": [f"audit:{score['audit_id']}", "claim_items:PROC-001"],
+        },
+    )
+    assert_true(
+        medical_review.get("event_type") == "medical.review.recorded",
+        "medical review writeback was not audited",
+    )
+    assert_true(
+        medical_review.get("review_status") == "pending_evidence",
+        "medical review status should request evidence",
+    )
+
     similar = request(
         "POST",
         "/api/v1/knowledge/search-similar",
@@ -153,6 +194,10 @@ def main():
     event_types = [event.get("event_type") for event in audit.get("events", [])]
     assert_true("scoring.completed" in event_types, "audit history missing scoring.completed")
     assert_true(
+        "medical.review.recorded" in event_types,
+        "audit history missing medical.review.recorded",
+    )
+    assert_true(
         "investigation.result.received" in event_types,
         "audit history missing investigation.result.received",
     )
@@ -166,6 +211,7 @@ def main():
                 "audit_id": score["audit_id"],
                 "risk_score": score["risk_score"],
                 "similar_case": results[0]["case_id"],
+                "medical_review_audit_id": medical_review["audit_id"],
                 "agent_run_id": agent["agent_run_id"],
                 "investigation_audit_id": investigation["audit_id"],
             },
