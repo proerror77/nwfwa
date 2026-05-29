@@ -301,7 +301,7 @@ export function ModelOpsPage() {
   const rollbackMutation = useMutation({
     mutationFn: () => {
       if (!selectedModel) throw new Error("No model selected");
-      return rollbackModel(selectedModel.model_key, apiKey);
+      return rollbackModel(selectedModel.model_key, selectedModel.version, apiKey);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["models"] });

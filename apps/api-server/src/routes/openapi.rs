@@ -1550,6 +1550,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "schema": { "type": "string" }
                         }
                     ],
+                    "requestBody": model_lifecycle_request_body(),
                     "responses": {
                         "200": {
                             "description": "Model lifecycle status after activation",
@@ -1582,6 +1583,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "schema": { "type": "string" }
                         }
                     ],
+                    "requestBody": model_lifecycle_request_body(),
                     "responses": {
                         "200": {
                             "description": "Model lifecycle status after rollback",
@@ -3768,6 +3770,17 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status": { "type": "string" }
                     }
                 },
+                "ModelLifecycleRequest": {
+                    "type": "object",
+                    "required": ["evidence_refs"],
+                    "properties": {
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 }
+                        }
+                    }
+                },
                 "ModelPerformanceResponse": {
                     "type": "object",
                     "required": ["model_key", "data_status", "scored_runs", "average_score", "high_risk_count", "score_psi", "drift_status"],
@@ -4907,6 +4920,17 @@ fn routing_policy_lifecycle_request_body() -> Value {
         "content": {
             "application/json": {
                 "schema": { "$ref": "#/components/schemas/RoutingPolicyLifecycleRequest" }
+            }
+        }
+    })
+}
+
+fn model_lifecycle_request_body() -> Value {
+    json!({
+        "required": true,
+        "content": {
+            "application/json": {
+                "schema": { "$ref": "#/components/schemas/ModelLifecycleRequest" }
             }
         }
     })

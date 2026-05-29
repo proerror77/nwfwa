@@ -809,6 +809,24 @@ async fn openapi_includes_operations_paths() {
             ["content"]["application/json"]["schema"]["$ref"],
         "#/components/schemas/ModelLifecycleResponse"
     );
+    for action in ["activate", "rollback"] {
+        let operation =
+            &schema["paths"][format!("/api/v1/ops/models/{{model_key}}/{action}")]["post"];
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/ModelLifecycleRequest"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["ModelLifecycleRequest"]["properties"]["evidence_refs"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelLifecycleRequest"]["properties"]["evidence_refs"]
+            ["items"]["minLength"],
+        1
+    );
     assert!(
         schema["components"]["schemas"]["ModelLifecycleResponse"]["required"]
             .as_array()

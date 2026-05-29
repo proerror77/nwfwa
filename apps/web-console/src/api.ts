@@ -273,10 +273,16 @@ export async function submitModelPromotionReview(
   );
 }
 
-export async function rollbackModel(modelKey: string, apiKey: string) {
+function modelLifecycleBody(modelKey: string, version: string) {
+  return JSON.stringify({
+    evidence_refs: [`model_versions:${modelKey}:${version}`],
+  });
+}
+
+export async function rollbackModel(modelKey: string, version: string, apiKey: string) {
   return requestJson(`/api/v1/ops/models/${encodeURIComponent(modelKey)}/rollback`, apiKey, {
     method: "POST",
-    body: "{}",
+    body: modelLifecycleBody(modelKey, version),
   });
 }
 

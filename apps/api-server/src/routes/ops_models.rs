@@ -96,6 +96,11 @@ pub struct SubmitModelPromotionReviewRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct ModelLifecycleRequest {
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct CreateModelRetrainingJobRequest {
     pub requested_by: String,
     pub notes: String,
@@ -787,7 +792,9 @@ pub async fn activate_model(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(model_key): Path<String>,
+    Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
+    validate_model_lifecycle_request(&request)?;
     let actor = authorize(&state, &headers)?;
     let (candidate, gates) = load_model_promotion_gates(&state, &model_key).await?;
     if candidate.status == "active" {
@@ -845,6 +852,7 @@ pub async fn activate_model(
         "model.activation.completed",
         Some(&candidate.status),
         "Model activation completed",
+        request.evidence_refs,
     )
     .await
     .map_err(internal_error("MODEL_AUDIT_SAVE_FAILED"))?;
@@ -859,7 +867,9 @@ pub async fn rollback_model(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(model_key): Path<String>,
+    Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
+    validate_model_lifecycle_request(&request)?;
     let actor = authorize(&state, &headers)?;
     let previous = state
         .repository
@@ -893,6 +903,7 @@ pub async fn rollback_model(
         "model.rollback.completed",
         Some(&previous.status),
         "Model rollback completed",
+        request.evidence_refs,
     )
     .await
     .map_err(internal_error("MODEL_AUDIT_SAVE_FAILED"))?;
@@ -901,6 +912,22 @@ pub async fn rollback_model(
         version: model.version,
         status: model.status,
     }))
+}
+
+fn validate_model_lifecycle_request(request: &ModelLifecycleRequest) -> Result<(), ApiError> {
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MODEL_LIFECYCLE_EVIDENCE",
+            "model lifecycle evidence_refs are required",
+        ));
+    }
+    Ok(())
 }
 
 async fn load_model_promotion_gates(
@@ -1491,6 +1518,7 @@ async fn record_model_lifecycle_audit(
     event_type: &'static str,
     from_status: Option<&str>,
     summary: &'static str,
+    evidence_refs: Vec<String>,
 ) -> anyhow::Result<()> {
     state
         .repository
@@ -1512,10 +1540,10 @@ async fn record_model_lifecycle_audit(
                 "runtime_kind": model.runtime_kind,
                 "execution_provider": model.execution_provider,
             }),
-            evidence_refs: vec![serde_json::json!(format!(
-                "model_versions:{}:{}",
-                model.model_key, model.version
-            ))],
+            evidence_refs: evidence_refs
+                .into_iter()
+                .map(serde_json::Value::String)
+                .collect(),
         })
         .await
 }

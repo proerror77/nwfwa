@@ -307,7 +307,7 @@ describe("ops API helpers", () => {
       },
       "dev-secret",
     );
-    await rollbackModel("baseline_fwa", "dev-secret");
+    await rollbackModel("baseline_fwa", "0.1.0", "dev-secret");
 
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/models",
@@ -394,7 +394,9 @@ describe("ops API helpers", () => {
       "/api/v1/ops/models/baseline_fwa/rollback",
       expect.objectContaining({
         method: "POST",
-        body: "{}",
+        body: JSON.stringify({
+          evidence_refs: ["model_versions:baseline_fwa:0.1.0"],
+        }),
       }),
     );
   });

@@ -48,6 +48,10 @@ async fn json_request(
     (status, body)
 }
 
+fn model_lifecycle_payload(model_key: &str, version: &str) -> String {
+    format!(r#"{{"evidence_refs":["model_versions:{model_key}:{version}"]}}"#)
+}
+
 async fn register_model_dataset_for_test(app: axum::Router, suffix: &str) -> String {
     register_model_dataset_for_test_with_profiles(
         app,
@@ -1390,7 +1394,7 @@ async fn blocks_model_activation_when_promotion_gates_are_blocked() {
         app,
         "POST",
         "/api/v1/ops/models/baseline_fwa/activate",
-        "{}",
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
     )
     .await;
 
@@ -1426,11 +1430,31 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(review["model_version"], candidate_version);
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        r#"{"evidence_refs": []}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_MODEL_LIFECYCLE_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        r#"{"evidence_refs": [" "]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_MODEL_LIFECYCLE_EVIDENCE");
+
     let (status, activated) = json_request(
         app.clone(),
         "POST",
         "/api/v1/ops/models/baseline_fwa/activate",
-        "{}",
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -1465,7 +1489,7 @@ async fn rolls_back_active_model_version() {
         app.clone(),
         "POST",
         "/api/v1/ops/models/baseline_fwa/rollback",
-        "{}",
+        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
     )
     .await;
 
@@ -1477,6 +1501,17 @@ async fn rolls_back_active_model_version() {
     let (status, body) = get_json(app.clone(), "/api/v1/ops/models").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["models"][0]["status"], "approved");
+
+    let (status, audit) = get_json(
+        app.clone(),
+        "/api/v1/ops/audit-events?event_type=model.rollback.completed&limit=5",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        audit["events"][0]["evidence_refs"][0],
+        "model_versions:baseline_fwa:0.1.0"
+    );
 
     let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
     assert_eq!(status, StatusCode::OK);
@@ -1502,7 +1537,7 @@ async fn blocks_model_rollback_when_model_is_not_active() {
         app.clone(),
         "POST",
         "/api/v1/ops/models/baseline_fwa/rollback",
-        "{}",
+        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -1511,7 +1546,7 @@ async fn blocks_model_rollback_when_model_is_not_active() {
         app,
         "POST",
         "/api/v1/ops/models/baseline_fwa/rollback",
-        "{}",
+        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
     )
     .await;
 
