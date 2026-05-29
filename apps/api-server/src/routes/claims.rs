@@ -679,6 +679,9 @@ fn validate_provider_profile_payload(payload: &ProviderProfilePayload) -> Result
     if let Some(network_status) = &payload.network_status {
         require_nonblank(network_status, "provider_profile.network_status")?;
     }
+    if payload.windows.is_empty() {
+        return invalid_score_field("provider_profile.windows");
+    }
     for window in &payload.windows {
         validate_provider_profile_window_payload(window)?;
     }

@@ -1525,6 +1525,20 @@ async fn rejects_invalid_scoring_business_fields() {
             }"#,
             "provider_profile.windows.total_claim_amount",
         ),
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-EMPTY-PROVIDER-WINDOWS",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "provider_profile": {
+                "windows": []
+              }
+            }"#,
+            "provider_profile.windows",
+        ),
     ];
 
     for (payload, field) in cases {
@@ -1669,6 +1683,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             .as_str()
             .unwrap()
             .contains("Non-negative decimal")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderProfilePayload"]["properties"]["windows"]
+            ["minItems"],
+        1
     );
     assert_eq!(
         schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"]

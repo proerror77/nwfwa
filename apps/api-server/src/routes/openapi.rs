@@ -2143,6 +2143,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "network_status": { "type": "string" },
                         "windows": {
                             "type": "array",
+                            "minItems": 1,
                             "items": { "$ref": "#/components/schemas/ProviderProfileWindowPayload" }
                         }
                     }
