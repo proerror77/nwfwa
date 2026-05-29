@@ -87,6 +87,46 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_INVESTIGATION_RESULT_IDENTITY");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-0287",
+          "investigation_id": "INV-BAD-IMPACT",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "financial_impact_type": "unsupported_impact",
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "TPA investigation confirmed over-treatment signals.",
+          "evidence_refs": ["agent_run:agent_CLM-0287"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "UNSUPPORTED_FINANCIAL_IMPACT_TYPE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-0287",
+          "investigation_id": "INV-NEGATIVE-SAVING",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "financial_impact_type": "prevented_payment",
+          "saving_amount": "-1.00",
+          "currency": "CNY",
+          "notes": "TPA investigation confirmed over-treatment signals.",
+          "evidence_refs": ["agent_run:agent_CLM-0287"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_INVESTIGATION_SAVING_AMOUNT");
+
     let (status, investigation) = json_request(
         app.clone(),
         "POST",

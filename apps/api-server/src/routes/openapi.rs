@@ -4529,7 +4529,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": ["string", "null"],
                             "enum": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "deterrence_estimate", "estimated_impact", null]
                         },
-                        "saving_amount": { "type": ["string", "null"], "format": "decimal" },
+                        "saving_amount": {
+                            "type": ["string", "null"],
+                            "format": "decimal",
+                            "description": "Non-negative decimal string."
+                        },
                         "currency": { "type": ["string", "null"] },
                         "notes": { "type": "string", "minLength": 1 },
                         "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }

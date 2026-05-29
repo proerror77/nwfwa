@@ -1262,6 +1262,13 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["minItems"],
         1
     );
+    assert!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
+            ["saving_amount"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Non-negative decimal")
+    );
     assert_eq!(
         schema["components"]["schemas"]["QaResultRequest"]["properties"]["notes"]["minLength"],
         1

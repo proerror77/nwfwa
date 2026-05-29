@@ -15,6 +15,7 @@ use axum::{
     Json,
 };
 use fwa_auth::{validate_api_key, ApiKeyConfig};
+use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Serialize)]
@@ -200,6 +201,32 @@ fn validate_investigation_result_request(
             StatusCode::BAD_REQUEST,
             "INVALID_INVESTIGATION_RESULT_IDENTITY",
             "claim_id, investigation_id, and outcome are required",
+        ));
+    }
+    if let Some(financial_impact_type) = &request.financial_impact_type {
+        if !matches!(
+            financial_impact_type.as_str(),
+            "prevented_payment"
+                | "recovered_amount"
+                | "avoided_future_exposure"
+                | "deterrence_estimate"
+                | "estimated_impact"
+        ) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "UNSUPPORTED_FINANCIAL_IMPACT_TYPE",
+                "financial_impact_type is not supported",
+            ));
+        }
+    }
+    if request
+        .saving_amount
+        .is_some_and(|amount| amount < Decimal::ZERO)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_INVESTIGATION_SAVING_AMOUNT",
+            "saving_amount must be non-negative",
         ));
     }
     if request.notes.trim().is_empty()
