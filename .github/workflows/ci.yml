@@ -70,6 +70,48 @@ jobs:
         env:
           DATABASE_URL: postgres://fwa:fwa@localhost:5432/fwa
 
+  demo-seed:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: fwa
+          POSTGRES_PASSWORD: fwa
+          POSTGRES_DB: fwa
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fwa -d fwa"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    steps:
+      - uses: actions/checkout@v6
+      - run: scripts/demo/seed_demo.sh
+        env:
+          DATABASE_URL: postgres://fwa:fwa@localhost:5432/fwa
+      - run: scripts/demo/seed_demo.sh
+        env:
+          DATABASE_URL: postgres://fwa:fwa@localhost:5432/fwa
+      - run: |
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 <<'SQL'
+          DO $$
+          BEGIN
+            IF (SELECT COUNT(*) FROM claims WHERE external_claim_id IN ('CLM-0287', 'CLM-9100')) <> 2 THEN
+              RAISE EXCEPTION 'demo claims missing';
+            END IF;
+            IF (SELECT COUNT(*) FROM knowledge_cases WHERE case_id IN ('KC-1001', 'KC-1002')) <> 2 THEN
+              RAISE EXCEPTION 'demo knowledge cases missing';
+            END IF;
+            IF (SELECT COUNT(*) FROM model_evaluation_runs WHERE evaluation_run_id = 'eval-baseline-fwa-2026-05-demo') <> 1 THEN
+              RAISE EXCEPTION 'demo model evaluation missing';
+            END IF;
+          END $$;
+          SQL
+        env:
+          DATABASE_URL: postgres://fwa:fwa@localhost:5432/fwa
+
   python:
     runs-on: ubuntu-latest
     defaults:

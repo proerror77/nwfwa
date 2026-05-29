@@ -17,6 +17,7 @@ Current checks:
 - repository health check through `scripts/ci/check_repo.sh`
 - Rust: `cargo fetch --locked`, `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, and `cargo test --locked --workspace`
 - PostgreSQL migration idempotency
+- demo seed idempotency and minimum demo-data presence through `scripts/demo/seed_demo.sh`
 - Python ML service install and `pytest`
 - Web console `npm ci`, TypeScript lint, Vitest, and production build
 
