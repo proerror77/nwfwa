@@ -86,8 +86,11 @@ describe("buildRuleDiscoverySummary", () => {
       positiveCount: 3,
       candidateCount: 1,
       topRuleId: "candidate_early_high_amount",
+      topSupport: 4,
       topPrecisionLabel: "75.0%",
+      topRecallLabel: "100.0%",
       topLiftLabel: "3.00x",
+      topFalsePositiveRateLabel: "25.0%",
       topSaving: "8200.00",
     });
   });

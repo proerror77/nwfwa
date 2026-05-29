@@ -167,8 +167,13 @@ export function buildRuleDiscoverySummary(discovery?: RuleDiscoveryResponse) {
     positiveCount: discovery?.positive_count ?? 0,
     candidateCount: candidates.length,
     topRuleId: topCandidate?.rule.rule_id ?? "none",
+    topSupport: topCandidate?.support ?? 0,
     topPrecisionLabel: topCandidate ? `${(topCandidate.precision * 100).toFixed(1)}%` : "0.0%",
+    topRecallLabel: topCandidate ? `${(topCandidate.recall * 100).toFixed(1)}%` : "0.0%",
     topLiftLabel: topCandidate ? `${topCandidate.lift.toFixed(2)}x` : "0.00x",
+    topFalsePositiveRateLabel: topCandidate
+      ? `${(topCandidate.false_positive_rate * 100).toFixed(1)}%`
+      : "0.0%",
     topSaving: topCandidate?.estimated_saving ?? "0.00",
   };
 }
@@ -889,8 +894,20 @@ export function RulesStudio() {
                 <strong>{discoverySummary.topPrecisionLabel}</strong>
               </div>
               <div>
+                <span>Top Recall</span>
+                <strong>{discoverySummary.topRecallLabel}</strong>
+              </div>
+              <div>
+                <span>Top Support</span>
+                <strong>{discoverySummary.topSupport}</strong>
+              </div>
+              <div>
                 <span>Top Lift</span>
                 <strong>{discoverySummary.topLiftLabel}</strong>
+              </div>
+              <div>
+                <span>Top FPR</span>
+                <strong>{discoverySummary.topFalsePositiveRateLabel}</strong>
               </div>
               <div>
                 <span>Top Saving</span>
