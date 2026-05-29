@@ -1,0 +1,117 @@
+#!/usr/bin/env python3
+import json
+import os
+import sys
+import time
+import urllib.error
+import urllib.request
+
+
+BASE_URL = os.environ.get("FWA_API_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
+API_KEY = os.environ.get("FWA_API_KEY", "dev-secret")
+SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
+CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
+
+
+def request(method, path, payload=None, retries=1):
+    body = None
+    headers = {"x-api-key": API_KEY}
+    if payload is not None:
+        body = json.dumps(payload).encode("utf-8")
+        headers["content-type"] = "application/json"
+    req = urllib.request.Request(
+        f"{BASE_URL}{path}",
+        data=body,
+        headers=headers,
+        method=method,
+    )
+    last_error = None
+    for _ in range(retries):
+        try:
+            with urllib.request.urlopen(req, timeout=5) as response:
+                raw = response.read()
+                return json.loads(raw.decode("utf-8")) if raw else {}
+        except (urllib.error.URLError, TimeoutError) as error:
+            last_error = error
+            time.sleep(1)
+    raise RuntimeError(f"{method} {path} failed: {last_error}")
+
+
+def assert_true(condition, message):
+    if not condition:
+        raise AssertionError(message)
+
+
+def main():
+    health = request("GET", "/api/v1/health", retries=180)
+    assert_true(health.get("status") == "ok", "health endpoint did not return ok")
+
+    score = request(
+        "POST",
+        "/api/v1/claims/score",
+        {"source_system": SOURCE_SYSTEM, "claim_id": CLAIM_ID},
+    )
+    assert_true(score.get("claim_id") == CLAIM_ID, "score response claim_id mismatch")
+    assert_true(score.get("run_id"), "score response missing run_id")
+    assert_true(score.get("audit_id"), "score response missing audit_id")
+    assert_true(isinstance(score.get("risk_score"), int), "score response missing risk_score")
+    assert_true(len(score.get("layers", [])) == 7, "score response must include 7 layers")
+    assert_true(score.get("top_reasons"), "score response missing top_reasons")
+    assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
+
+    similar = request(
+        "POST",
+        "/api/v1/knowledge/search-similar",
+        {
+            "claim_id": CLAIM_ID,
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["early_claim", "high_amount"],
+        },
+    )
+    results = similar.get("results", [])
+    assert_true(results, "similar-case search returned no results")
+    assert_true(results[0].get("case_id") == "KC-1001", "expected KC-1001 as top similar case")
+    assert_true(results[0].get("evidence_refs"), "similar case missing evidence_refs")
+
+    qa = request(
+        "POST",
+        "/api/v1/qa/results",
+        {
+            "qa_case_id": "QA-DEMO-SMOKE",
+            "claim_id": CLAIM_ID,
+            "qa_conclusion": "issue_found_escalate",
+            "issue_type": "alert_handling_incomplete",
+            "feedback_target": "rules",
+            "notes": "Demo smoke review confirms alert handling evidence was reviewed.",
+            "evidence_refs": [f"audit:{score['audit_id']}", "rule_runs:EARLY_CLAIM"],
+        },
+    )
+    assert_true(qa.get("event_type") == "qa.result.received", "QA writeback was not audited")
+    assert_true(qa.get("audit_id"), "QA writeback missing audit_id")
+
+    audit = request("GET", f"/api/v1/audit/claims/{CLAIM_ID}")
+    event_types = [event.get("event_type") for event in audit.get("events", [])]
+    assert_true("scoring.completed" in event_types, "audit history missing scoring.completed")
+    assert_true("qa.result.received" in event_types, "audit history missing qa.result.received")
+    print(
+        json.dumps(
+            {
+                "status": "ok",
+                "claim_id": CLAIM_ID,
+                "run_id": score["run_id"],
+                "audit_id": score["audit_id"],
+                "risk_score": score["risk_score"],
+                "similar_case": results[0]["case_id"],
+            },
+            ensure_ascii=True,
+        )
+    )
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as error:
+        print(f"demo smoke failed: {error}", file=sys.stderr)
+        sys.exit(1)

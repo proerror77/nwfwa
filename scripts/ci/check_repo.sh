@@ -11,6 +11,7 @@ required_files=(
   "migrations/0001_initial.sql"
   "scripts/demo/seed_demo.sh"
   "scripts/demo/seed_demo.sql"
+  "scripts/demo/smoke_demo.py"
 )
 
 workspace_files=(
@@ -51,6 +52,7 @@ grep -q "hotfix/" docs/engineering/git-flow.md
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
+grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml
 grep -q "Rust Compile Rules" AGENTS.md

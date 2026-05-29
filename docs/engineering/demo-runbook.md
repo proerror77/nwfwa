@@ -129,6 +129,12 @@ curl -s http://127.0.0.1:8080/api/v1/audit/claims/CLM-0287 \
   -H 'x-api-key: dev-secret' | jq
 ```
 
+Run the same API smoke used by CI:
+
+```bash
+scripts/demo/smoke_demo.py
+```
+
 ## 6. Verification Gates
 
 ```bash
