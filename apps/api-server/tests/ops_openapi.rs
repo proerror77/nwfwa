@@ -766,6 +766,28 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["KnowledgeCase"]["properties"]["scheme_family"]["$ref"],
         "#/components/schemas/FwaSchemeFamily"
     );
+    for field in [
+        "case_id",
+        "title",
+        "fwa_type",
+        "diagnosis_code",
+        "provider_region",
+        "provider_type",
+        "summary",
+        "outcome",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"][field]
+                ["minLength"],
+            1,
+            "missing PublishKnowledgeCaseRequest minLength for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]
+            ["evidence_refs"]["minItems"],
+        1
+    );
     assert!(schema["components"]["schemas"]["SimilarCase"]["required"]
         .as_array()
         .unwrap()

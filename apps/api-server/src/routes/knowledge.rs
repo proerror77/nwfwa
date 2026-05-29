@@ -75,20 +75,7 @@ pub async fn publish_case(
     Json(request): Json<PublishKnowledgeCaseRequest>,
 ) -> Result<Json<PublishKnowledgeCaseResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
-    if request.case_id.trim().is_empty() {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "INVALID_KNOWLEDGE_CASE",
-            "case_id is required",
-        ));
-    }
-    if request.evidence_refs.is_empty() {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "INVALID_KNOWLEDGE_CASE",
-            "evidence_refs are required",
-        ));
-    }
+    validate_publish_knowledge_case(&request)?;
 
     let scheme_family = request
         .scheme_family
@@ -148,6 +135,36 @@ pub async fn publish_case(
         .await
         .map_err(internal_error("KNOWLEDGE_CASE_AUDIT_SAVE_FAILED"))?;
     Ok(Json(PublishKnowledgeCaseResponse { case, audit_id }))
+}
+
+fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Result<(), ApiError> {
+    if request.case_id.trim().is_empty()
+        || request.title.trim().is_empty()
+        || request.fwa_type.trim().is_empty()
+        || request.diagnosis_code.trim().is_empty()
+        || request.provider_region.trim().is_empty()
+        || request.provider_type.trim().is_empty()
+        || request.summary.trim().is_empty()
+        || request.outcome.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_KNOWLEDGE_CASE",
+            "case_id, title, fwa_type, diagnosis_code, provider_region, provider_type, summary, and outcome are required",
+        ));
+    }
+    if request
+        .evidence_refs
+        .iter()
+        .all(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_KNOWLEDGE_CASE",
+            "evidence_refs are required",
+        ));
+    }
+    Ok(())
 }
 
 pub async fn search_similar(

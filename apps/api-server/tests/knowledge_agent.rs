@@ -105,6 +105,54 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
         "POST",
         "/api/v1/ops/knowledge/cases",
         r#"{
+          "case_id": "KC-MISSING-EVIDENCE",
+          "title": "Missing evidence case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste.",
+          "tags": ["lab_overuse"],
+          "evidence_refs": [" "],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-MISSING-SUMMARY",
+          "title": "Missing summary case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": " ",
+          "outcome": "Confirmed waste.",
+          "tags": ["lab_overuse"],
+          "evidence_refs": ["investigation_results:INV-KB-1"],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
           "case_id": "KC-PUBLISHED-1",
           "title": "Published provider lab overuse case",
           "fwa_type": "Waste",
