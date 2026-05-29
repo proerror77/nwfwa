@@ -1385,6 +1385,166 @@ async fn rejects_invalid_provider_risk_signal_ranges() {
 }
 
 #[tokio::test]
+async fn rejects_invalid_scoring_business_fields() {
+    let app = build_app(test_config());
+    let cases = [
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-ZERO-AMOUNT",
+                "claim_amount": "0",
+                "currency": "CNY"
+              }
+            }"#,
+            "claim.claim_amount",
+        ),
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-ZERO-QUANTITY",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "items": [
+                  {
+                    "item_code": "MRI",
+                    "item_type": "procedure",
+                    "description": "MRI scan",
+                    "quantity": 0,
+                    "unit_amount": "8000",
+                    "total_amount": "8000",
+                    "currency": "CNY"
+                  }
+                ]
+              }
+            }"#,
+            "item.quantity",
+        ),
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-NEGATIVE-ITEM",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "items": [
+                  {
+                    "item_code": "MRI",
+                    "item_type": "procedure",
+                    "description": "MRI scan",
+                    "quantity": 1,
+                    "unit_amount": "-1",
+                    "total_amount": "8000",
+                    "currency": "CNY"
+                  }
+                ]
+              }
+            }"#,
+            "item.unit_amount",
+        ),
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-NEGATIVE-TOTAL",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "items": [
+                  {
+                    "item_code": "MRI",
+                    "item_type": "procedure",
+                    "description": "MRI scan",
+                    "quantity": 1,
+                    "unit_amount": "8000",
+                    "total_amount": "-1",
+                    "currency": "CNY"
+                  }
+                ]
+              }
+            }"#,
+            "item.total_amount",
+        ),
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-ZERO-LIMIT",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "policy": {
+                  "external_policy_id": "POL-ZERO-LIMIT",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": "0"
+                }
+              }
+            }"#,
+            "policy.coverage_limit",
+        ),
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-BAD-DATES",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "policy": {
+                  "external_policy_id": "POL-BAD-DATES",
+                  "coverage_start_date": "2026-12-31",
+                  "coverage_end_date": "2026-01-01",
+                  "coverage_limit": "10000"
+                }
+              }
+            }"#,
+            "policy.coverage_end_date",
+        ),
+        (
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-NEGATIVE-PROVIDER-TOTAL",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "provider_profile": {
+                "windows": [
+                  {
+                    "window_days": 90,
+                    "claim_count": 12,
+                    "total_claim_amount": "-1",
+                    "high_cost_item_ratio": 0.4,
+                    "diagnosis_procedure_mismatch_rate": 0.2,
+                    "peer_amount_percentile": 80,
+                    "peer_frequency_percentile": 75,
+                    "confirmed_fwa_count": 0,
+                    "false_positive_count": 0
+                  }
+                ]
+              }
+            }"#,
+            "provider_profile.windows.total_claim_amount",
+        ),
+    ];
+
+    for (payload, field) in cases {
+        let request = Request::builder()
+            .method("POST")
+            .uri("/api/v1/claims/score")
+            .header("content-type", "application/json")
+            .header("x-api-key", "dev-secret")
+            .body(Body::from(payload))
+            .unwrap();
+        let response = app.clone().oneshot(request).await.unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST, "{field}");
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let body = String::from_utf8(body.to_vec()).unwrap();
+        assert!(body.contains("INVALID_SCORE_REQUEST"), "{field}: {body}");
+        assert!(body.contains(field), "{field}: {body}");
+    }
+}
+
+#[tokio::test]
 async fn exposes_openapi_schema_for_scoring_contract() {
     let app = build_app(test_config());
 
@@ -1484,6 +1644,31 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         schema["components"]["schemas"]["DocumentPayload"]["properties"]["linked_item_codes"]
             ["items"]["minLength"],
         1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ClaimItemPayload"]["properties"]["quantity"]["minimum"],
+        1
+    );
+    assert!(
+        schema["components"]["schemas"]["FullClaimPayload"]["properties"]["claim_amount"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("Positive decimal")
+    );
+    assert!(
+        schema["components"]["schemas"]["PolicyPayload"]["properties"]["coverage_limit"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("Positive decimal")
+    );
+    assert!(
+        schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"]
+            ["total_claim_amount"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("Non-negative decimal")
     );
     assert_eq!(
         schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"]

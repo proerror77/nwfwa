@@ -581,6 +581,7 @@ fn validate_source_system_matches_actor(
 
 fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiError> {
     require_nonblank(&payload.external_claim_id, "claim.external_claim_id")?;
+    require_positive_decimal(payload.claim_amount, "claim.claim_amount")?;
     require_nonblank(&payload.currency, "claim.currency")?;
     if let Some(diagnosis_code) = &payload.diagnosis_code {
         require_nonblank(diagnosis_code, "claim.diagnosis_code")?;
@@ -617,6 +618,11 @@ fn validate_claim_item_payload(payload: &ClaimItemPayload) -> Result<(), ApiErro
     require_nonblank(&payload.item_code, "item.item_code")?;
     require_nonblank(&payload.item_type, "item.item_type")?;
     require_nonblank(&payload.description, "item.description")?;
+    if payload.quantity == 0 {
+        return invalid_score_field("item.quantity");
+    }
+    require_nonnegative_decimal(payload.unit_amount, "item.unit_amount")?;
+    require_nonnegative_decimal(payload.total_amount, "item.total_amount")?;
     if let Some(currency) = &payload.currency {
         require_nonblank(currency, "item.currency")?;
     }
@@ -632,6 +638,10 @@ fn validate_policy_payload(payload: &PolicyPayload) -> Result<(), ApiError> {
     if let Some(product_code) = &payload.product_code {
         require_nonblank(product_code, "policy.product_code")?;
     }
+    if payload.coverage_end_date < payload.coverage_start_date {
+        return invalid_score_field("policy.coverage_end_date");
+    }
+    require_positive_decimal(payload.coverage_limit, "policy.coverage_limit")?;
     if let Some(currency) = &payload.currency {
         require_nonblank(currency, "policy.currency")?;
     }
@@ -681,6 +691,10 @@ fn validate_provider_profile_window_payload(
     if !matches!(payload.window_days, 30 | 90 | 180) {
         return invalid_score_field("provider_profile.windows.window_days");
     }
+    require_nonnegative_decimal(
+        payload.total_claim_amount,
+        "provider_profile.windows.total_claim_amount",
+    )?;
     require_unit_interval(
         payload.high_cost_item_ratio,
         "provider_profile.windows.high_cost_item_ratio",
@@ -740,6 +754,22 @@ fn require_unit_interval(value: f64, field: &'static str) -> Result<(), ApiError
 
 fn require_percentile(value: u8, field: &'static str) -> Result<(), ApiError> {
     if value <= 100 {
+        Ok(())
+    } else {
+        invalid_score_field(field)
+    }
+}
+
+fn require_positive_decimal(value: Decimal, field: &'static str) -> Result<(), ApiError> {
+    if value > Decimal::ZERO {
+        Ok(())
+    } else {
+        invalid_score_field(field)
+    }
+}
+
+fn require_nonnegative_decimal(value: Decimal, field: &'static str) -> Result<(), ApiError> {
+    if value >= Decimal::ZERO {
         Ok(())
     } else {
         invalid_score_field(field)

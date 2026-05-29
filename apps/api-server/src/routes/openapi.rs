@@ -1958,7 +1958,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "claim_amount": {
                             "type": "string",
-                            "format": "decimal"
+                            "format": "decimal",
+                            "description": "Positive decimal string."
                         },
                         "currency": {
                             "type": "string",
@@ -2019,15 +2020,17 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "quantity": {
                             "type": "integer",
-                            "minimum": 0
+                            "minimum": 1
                         },
                         "unit_amount": {
                             "type": "string",
-                            "format": "decimal"
+                            "format": "decimal",
+                            "description": "Non-negative decimal string."
                         },
                         "total_amount": {
                             "type": "string",
-                            "format": "decimal"
+                            "format": "decimal",
+                            "description": "Non-negative decimal string."
                         },
                         "currency": {
                             "type": "string",
@@ -2075,7 +2078,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "coverage_limit": {
                             "type": "string",
-                            "format": "decimal"
+                            "format": "decimal",
+                            "description": "Positive decimal string."
                         },
                         "currency": {
                             "type": "string",
@@ -2159,7 +2163,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "window_days": { "type": "integer", "enum": [30, 90, 180] },
                         "claim_count": { "type": "integer", "minimum": 0 },
-                        "total_claim_amount": { "type": "string", "format": "decimal" },
+                        "total_claim_amount": { "type": "string", "format": "decimal", "description": "Non-negative decimal string." },
                         "high_cost_item_ratio": { "type": "number", "minimum": 0, "maximum": 1 },
                         "diagnosis_procedure_mismatch_rate": { "type": "number", "minimum": 0, "maximum": 1 },
                         "peer_amount_percentile": { "type": "integer", "minimum": 0, "maximum": 100 },
