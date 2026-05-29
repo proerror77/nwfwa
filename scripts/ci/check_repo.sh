@@ -79,6 +79,9 @@ grep -q "/api/v1/ops/providers/risk-summary" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/routing-policies" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/agent-runs" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/audit-samples" scripts/demo/smoke_demo.py
+grep -q "event_group=governance" scripts/demo/smoke_demo.py
+grep -q "routing_policy_id=" scripts/demo/smoke_demo.py
+grep -q "agent_run_id=" scripts/demo/smoke_demo.py
 grep -q "saving_attributions" scripts/demo/smoke_demo.py
 grep -q "saving_segments" scripts/demo/smoke_demo.py
 grep -q "npm run smoke:build" .github/workflows/ci.yml

@@ -987,6 +987,100 @@ def assert_model_governance_controls(dashboard):
     }
 
 
+def assert_governance_audit_trail(agent_governance, rule_release, routing_policy, qa_audit_sample, qa_feedback_update):
+    governance_events = request("GET", "/api/v1/ops/audit-events?event_group=governance&limit=200").get("events", [])
+    assert_true(governance_events, "governance audit trail returned no events")
+    expected_event_types = {
+        "rule.candidate.saved",
+        "rule.status.changed",
+        "rule.promotion.reviewed",
+        "routing_policy.candidate.saved",
+        "routing_policy.status.changed",
+        "routing_policy.activation.completed",
+        "agent.approval.decided",
+        "audit_sample.created",
+        "qa.feedback.status.updated",
+    }
+    observed_event_types = {event.get("event_type") for event in governance_events}
+    missing_event_types = expected_event_types - observed_event_types
+    assert_true(
+        not missing_event_types,
+        f"governance audit trail missing event types: {sorted(missing_event_types)}",
+    )
+    for event_type in expected_event_types:
+        event = next(event for event in governance_events if event.get("event_type") == event_type)
+        assert_true(event.get("evidence_refs"), f"governance event {event_type} missing evidence refs")
+
+    rule_events = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_group=governance&rule_id={rule_release['rule_id']}&rule_version=1&limit=50",
+    ).get("events", [])
+    assert_true(
+        any(event.get("event_type") == "rule.promotion.reviewed" for event in rule_events),
+        "rule governance audit filter missing promotion review",
+    )
+    assert_true(
+        any(
+            event.get("event_type") == "rule.status.changed"
+            and event.get("payload", {}).get("to_status") == "active"
+            for event in rule_events
+        ),
+        "rule governance audit filter missing active lifecycle event",
+    )
+
+    routing_events = request(
+        "GET",
+        "/api/v1/ops/audit-events"
+        f"?event_group=governance&routing_policy_id={routing_policy['policy_id']}"
+        "&routing_policy_version=1&review_mode=pre_payment&limit=50",
+    ).get("events", [])
+    for event_type in [
+        "routing_policy.candidate.saved",
+        "routing_policy.status.changed",
+        "routing_policy.activation.completed",
+    ]:
+        assert_true(
+            any(event.get("event_type") == event_type for event in routing_events),
+            f"routing governance audit filter missing {event_type}",
+        )
+
+    agent_events = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_group=governance&agent_run_id={agent_governance['agent_run_id']}&limit=20",
+    ).get("events", [])
+    assert_true(
+        any(event.get("event_type") == "agent.approval.decided" for event in agent_events),
+        "agent governance audit filter missing approval decision",
+    )
+
+    sample_events = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_group=governance&sample_id={qa_audit_sample['sample_id']}&limit=20",
+    ).get("events", [])
+    assert_true(
+        any(event.get("event_type") == "audit_sample.created" for event in sample_events),
+        "QA sample governance audit filter missing sample creation",
+    )
+
+    feedback_events = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_group=governance&feedback_id={qa_feedback_update['feedback_id']}&limit=20",
+    ).get("events", [])
+    assert_true(
+        any(event.get("event_type") == "qa.feedback.status.updated" for event in feedback_events),
+        "QA feedback governance audit filter missing status update",
+    )
+
+    return {
+        "event_type_count": len(observed_event_types),
+        "rule_event_count": len(rule_events),
+        "routing_event_count": len(routing_events),
+        "agent_event_count": len(agent_events),
+        "sample_event_count": len(sample_events),
+        "feedback_event_count": len(feedback_events),
+    }
+
+
 def assert_tpa_webhook_delivery(score):
     webhooks = request("GET", "/api/v1/ops/webhook-events").get("events", [])
     expected_event_types = {
@@ -1681,6 +1775,13 @@ def main():
         "knowledge.case.published" in event_types,
         "audit history missing knowledge.case.published",
     )
+    governance_audit = assert_governance_audit_trail(
+        agent_governance,
+        rule_release,
+        routing_policy,
+        qa_audit_sample,
+        qa_feedback_update,
+    )
     webhook_delivery = assert_tpa_webhook_delivery(score)
 
     labels = request("GET", "/api/v1/ops/labels").get("labels", [])
@@ -1839,6 +1940,7 @@ def main():
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,
                 "knowledge_publish": knowledge_publish,
+                "governance_audit": governance_audit,
                 "dataset_model_lineage": dataset_model_lineage,
                 "factor_readiness": factor_readiness,
                 "webhook_delivery": webhook_delivery,
