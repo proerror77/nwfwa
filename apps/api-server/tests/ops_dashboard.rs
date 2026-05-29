@@ -400,11 +400,19 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
         attribution["source_type"] == "agent"
             && attribution["source_id"] == "agent_CLM-0287"
             && attribution["saving_amount"] == "4100.00"
+            && attribution["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("agent_run:agent_CLM-0287"))
     }));
     assert!(attributions.iter().any(|attribution| {
         attribution["source_type"] == "rule"
             && attribution["source_id"] == "EARLY_CLAIM"
             && attribution["saving_amount"] == "4100.00"
+            && attribution["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("rule_runs:EARLY_CLAIM"))
     }));
     let saving_segments = dashboard["saving_segments"].as_array().unwrap();
     assert!(saving_segments.iter().any(|segment| {
@@ -505,6 +513,10 @@ async fn dashboard_attributes_savings_to_governed_rule_and_model_evidence() {
             && attribution["action"] == "investigation_confirmed"
             && attribution["saving_amount"] == "3000.00"
             && attribution["claim_count"] == 1
+            && attribution["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("rules:rule_early_claim:v1"))
     }));
     assert!(attributions.iter().any(|attribution| {
         attribution["source_type"] == "model"
@@ -512,6 +524,10 @@ async fn dashboard_attributes_savings_to_governed_rule_and_model_evidence() {
             && attribution["action"] == "investigation_confirmed"
             && attribution["saving_amount"] == "3000.00"
             && attribution["claim_count"] == 1
+            && attribution["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0"))
     }));
 }
 

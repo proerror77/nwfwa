@@ -11,6 +11,7 @@ describe("buildSavingAttributionRows", () => {
         saving_amount: "4100.00",
         currency: "CNY",
         claim_count: 1,
+        evidence_refs: ["rule_runs:EARLY_CLAIM"],
       },
       {
         source_type: "agent",
@@ -19,6 +20,7 @@ describe("buildSavingAttributionRows", () => {
         saving_amount: "4100.00",
         currency: "CNY",
         claim_count: 1,
+        evidence_refs: ["agent_run:agent_CLM-0287"],
       },
     ]);
 
@@ -31,6 +33,7 @@ describe("buildSavingAttributionRows", () => {
         currency: "CNY",
         claimCount: 1,
         averageSavingPerClaim: "4100.00",
+        evidenceRefs: ["agent_run:agent_CLM-0287"],
       },
       {
         key: "rule:EARLY_CLAIM:investigation_confirmed",
@@ -40,6 +43,7 @@ describe("buildSavingAttributionRows", () => {
         currency: "CNY",
         claimCount: 1,
         averageSavingPerClaim: "4100.00",
+        evidenceRefs: ["rule_runs:EARLY_CLAIM"],
       },
     ]);
   });
@@ -54,8 +58,25 @@ describe("buildSavingAttributionRows", () => {
           saving_amount: "9000.00",
           currency: "CNY",
           claim_count: 3,
+          evidence_refs: ["model_scores:baseline_fwa"],
         },
       ])[0].averageSavingPerClaim,
     ).toBe("3000.00");
+  });
+
+  it("sorts evidence references for stable dashboard rendering", () => {
+    expect(
+      buildSavingAttributionRows([
+        {
+          source_type: "rule",
+          source_id: "EARLY_CLAIM",
+          action: "investigation_confirmed",
+          saving_amount: "1000.00",
+          currency: "CNY",
+          claim_count: 1,
+          evidence_refs: ["rules:rule_early_claim:v1", "audit:audit_1"],
+        },
+      ])[0].evidenceRefs,
+    ).toEqual(["audit:audit_1", "rules:rule_early_claim:v1"]);
   });
 });

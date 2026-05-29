@@ -5,6 +5,7 @@ export type SavingAttributionSummary = {
   saving_amount: string;
   currency: string;
   claim_count: number;
+  evidence_refs: string[];
 };
 
 export type SavingAttributionRow = {
@@ -15,6 +16,7 @@ export type SavingAttributionRow = {
   currency: string;
   claimCount: number;
   averageSavingPerClaim: string;
+  evidenceRefs: string[];
 };
 
 const sourceOrder: Record<string, number> = {
@@ -47,5 +49,6 @@ export function buildSavingAttributionRows(
         attribution.claim_count === 0
           ? "0.00"
           : (Number(attribution.saving_amount) / attribution.claim_count).toFixed(2),
+      evidenceRefs: [...attribution.evidence_refs].sort(),
     }));
 }

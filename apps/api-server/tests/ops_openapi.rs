@@ -1766,6 +1766,18 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/DashboardRuleGovernance"
     );
     assert!(schema["components"]["schemas"]["SavingAttributionSummary"].is_object());
+    let saving_attribution_required = schema["components"]["schemas"]["SavingAttributionSummary"]
+        ["required"]
+        .as_array()
+        .unwrap();
+    assert!(saving_attribution_required
+        .iter()
+        .any(|field| field == "evidence_refs"));
+    assert_eq!(
+        schema["components"]["schemas"]["SavingAttributionSummary"]["properties"]["evidence_refs"]
+            ["items"]["minLength"],
+        1
+    );
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
             ["saving_attributions"]["items"]["$ref"],

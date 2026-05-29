@@ -446,6 +446,7 @@ pub struct DashboardSavingAttributionRecord {
     pub saving_amount: String,
     pub currency: String,
     pub claim_count: u32,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -5197,20 +5198,29 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .collect::<Vec<_>>();
 
-        let saving_attributions: Vec<(String, String, String, Option<Decimal>, String, i64)> =
-            sqlx::query_as(
-                "SELECT source_type,
+        let saving_attributions: Vec<(
+            String,
+            String,
+            String,
+            Option<Decimal>,
+            String,
+            i64,
+            Vec<String>,
+        )> = sqlx::query_as(
+            "SELECT source_type,
                         source_id,
                         action,
                         COALESCE(SUM(saving_amount), 0),
                         currency,
-                        COUNT(DISTINCT claim_id)::bigint
-                 FROM saving_attributions
+                        COUNT(DISTINCT claim_id)::bigint,
+                        ARRAY_REMOVE(ARRAY_AGG(DISTINCT ref.value ORDER BY ref.value), NULL)
+                 FROM saving_attributions s
+                 LEFT JOIN LATERAL jsonb_array_elements_text(s.evidence_refs) AS ref(value) ON TRUE
                  GROUP BY source_type, source_id, action, currency
                  ORDER BY source_type, source_id, action, currency",
-            )
-            .fetch_all(&self.pool)
-            .await?;
+        )
+        .fetch_all(&self.pool)
+        .await?;
         let saving_segments: Vec<(String, String, Option<Decimal>, String, i64, i64)> =
             sqlx::query_as(
                 "SELECT segment_type,
@@ -5314,7 +5324,15 @@ impl ScoringRepository for PostgresScoringRepository {
             saving_attributions: saving_attributions
                 .into_iter()
                 .map(
-                    |(source_type, source_id, action, saving_amount, currency, claim_count)| {
+                    |(
+                        source_type,
+                        source_id,
+                        action,
+                        saving_amount,
+                        currency,
+                        claim_count,
+                        evidence_refs,
+                    )| {
                         DashboardSavingAttributionRecord {
                             source_type,
                             source_id,
@@ -5324,6 +5342,7 @@ impl ScoringRepository for PostgresScoringRepository {
                             ),
                             currency,
                             claim_count: claim_count as u32,
+                            evidence_refs,
                         }
                     },
                 )
@@ -10162,7 +10181,8 @@ fn non_empty_prefix_before_version(reference_body: &str) -> Option<&str> {
 fn summarize_saving_attributions(
     records: &[SavingAttributionRecord],
 ) -> Vec<DashboardSavingAttributionRecord> {
-    let mut accumulators = BTreeMap::<(String, String, String, String), (Decimal, u32)>::new();
+    let mut accumulators =
+        BTreeMap::<(String, String, String, String), (Decimal, u32, BTreeSet<String>)>::new();
     for record in records {
         let key = (
             record.source_type.clone(),
@@ -10170,15 +10190,21 @@ fn summarize_saving_attributions(
             record.action.clone(),
             record.currency.clone(),
         );
-        let entry = accumulators.entry(key).or_insert((Decimal::ZERO, 0));
+        let entry = accumulators
+            .entry(key)
+            .or_insert((Decimal::ZERO, 0, BTreeSet::new()));
         entry.0 += record.saving_amount;
         entry.1 += 1;
+        entry.2.extend(record.evidence_refs.iter().cloned());
     }
 
     accumulators
         .into_iter()
         .map(
-            |((source_type, source_id, action, currency), (saving_amount, claim_count))| {
+            |(
+                (source_type, source_id, action, currency),
+                (saving_amount, claim_count, evidence_refs),
+            )| {
                 DashboardSavingAttributionRecord {
                     source_type,
                     source_id,
@@ -10186,6 +10212,7 @@ fn summarize_saving_attributions(
                     saving_amount: format_decimal_cents(saving_amount),
                     currency,
                     claim_count,
+                    evidence_refs: evidence_refs.into_iter().collect(),
                 }
             },
         )

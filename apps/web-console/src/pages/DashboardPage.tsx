@@ -827,6 +827,7 @@ export function DashboardPage() {
                 <small>
                   Avg {attribution.currency} {attribution.averageSavingPerClaim} / claim
                 </small>
+                <small>{attribution.evidenceRefs.join(" | ")}</small>
               </div>
             ))}
           </div>
