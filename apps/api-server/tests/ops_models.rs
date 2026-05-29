@@ -1151,6 +1151,20 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
         r#"{
           "decision": "approved",
           "reviewer": "model-governance",
+          "notes": " "
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_PROMOTION_REVIEW_NOTES");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
           "notes": "Approved for continued shadow evaluation only."
         }"#,
     )

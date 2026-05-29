@@ -2906,8 +2906,8 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["decision", "reviewer", "notes"],
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
-                        "reviewer": { "type": "string" },
-                        "notes": { "type": "string" }
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 }
                     }
                 },
                 "RulePromotionReview": {
@@ -3733,8 +3733,8 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["decision", "reviewer", "notes"],
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
-                        "reviewer": { "type": "string" },
-                        "notes": { "type": "string" }
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 }
                     }
                 },
                 "ModelPromotionReview": {

@@ -629,6 +629,13 @@ pub async fn submit_model_promotion_review(
             "reviewer is required",
         ));
     }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_PROMOTION_REVIEW_NOTES",
+            "promotion review notes are required",
+        ));
+    }
     let model = state
         .repository
         .list_models()

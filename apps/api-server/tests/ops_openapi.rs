@@ -930,6 +930,17 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["minItems"],
         1
     );
+    for schema_name in [
+        "SubmitRulePromotionReviewRequest",
+        "SubmitModelPromotionReviewRequest",
+    ] {
+        for field in ["reviewer", "notes"] {
+            assert_eq!(
+                schema["components"]["schemas"][schema_name]["properties"][field]["minLength"], 1,
+                "missing {schema_name}.{field} minLength"
+            );
+        }
+    }
     for field in ["assignee", "reviewer", "priority", "notes"] {
         assert_eq!(
             schema["components"]["schemas"]["TriageLeadRequest"]["properties"][field]["minLength"],
