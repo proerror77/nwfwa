@@ -89,7 +89,7 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
     assert_eq!(status, StatusCode::OK);
 
     let (status, queue) = json_request(
-        app,
+        app.clone(),
         "GET",
         "/api/v1/ops/medical-review/queue?limit=10",
         "{}",
@@ -115,4 +115,62 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("claim_items:IMG-900")));
+    assert_eq!(items[0]["review_status"], "open");
+
+    let scoring_audit_id = items[0]["audit_id"].as_str().unwrap();
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        &format!(
+            r#"{{
+              "claim_id": "CLM-MEDICAL-QUEUE-1",
+              "scoring_audit_id": "{scoring_audit_id}",
+              "reviewer": "medical-reviewer-1",
+              "decision": "request_more_evidence",
+              "notes": "Medical record is required before necessity can be confirmed.",
+              "evidence_refs": ["audit:{scoring_audit_id}", "claim_items:IMG-900"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(review["event_type"], "medical.review.recorded");
+    assert_eq!(review["review_status"], "pending_evidence");
+
+    let (status, queue) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/medical-review/queue?limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let item = &queue["items"].as_array().unwrap()[0];
+    assert_eq!(item["review_status"], "pending_evidence");
+    assert_eq!(item["review_decision"], "request_more_evidence");
+    assert_eq!(item["reviewer"], "medical-reviewer-1");
+    assert_eq!(item["review_audit_id"], review["audit_id"]);
+}
+
+#[tokio::test]
+async fn rejects_medical_review_result_without_evidence() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-MEDICAL-QUEUE-2",
+          "scoring_audit_id": "audit_scoring_1",
+          "reviewer": "medical-reviewer-1",
+          "decision": "request_more_evidence",
+          "notes": "",
+          "evidence_refs": []
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_MEDICAL_REVIEW_EVIDENCE");
 }

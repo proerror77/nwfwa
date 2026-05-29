@@ -1161,6 +1161,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/medical-review/results": {
+                "post": {
+                    "summary": "Record a medical review result with evidence references",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitMedicalReviewResultRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Medical review result recorded",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/MedicalReviewResultResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/fwa-schemes": {
                 "get": {
                     "summary": "List governed FWA scheme taxonomy and evidence requirements",
@@ -2463,9 +2487,37 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "SubmitMedicalReviewResultRequest": {
+                    "type": "object",
+                    "required": ["claim_id", "scoring_audit_id", "reviewer", "decision", "notes", "evidence_refs"],
+                    "properties": {
+                        "claim_id": { "type": "string" },
+                        "scoring_audit_id": { "type": "string" },
+                        "reviewer": { "type": "string" },
+                        "decision": {
+                            "type": "string",
+                            "enum": ["evidence_sufficient", "request_more_evidence", "medical_necessity_issue", "no_medical_issue"]
+                        },
+                        "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
+                "MedicalReviewResultResponse": {
+                    "type": "object",
+                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "review_status", "evidence_refs"],
+                    "properties": {
+                        "claim_id": { "type": "string" },
+                        "event_type": { "type": "string" },
+                        "event_status": { "type": "string" },
+                        "audit_id": { "type": "string" },
+                        "run_id": { "type": "string" },
+                        "review_status": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                    }
+                },
                 "MedicalReviewQueueItem": {
                     "type": "object",
-                    "required": ["claim_id", "run_id", "audit_id", "medical_reasonableness_score", "review_route", "evidence_status", "missing_evidence", "item_finding_count", "evidence_refs"],
+                    "required": ["claim_id", "run_id", "audit_id", "medical_reasonableness_score", "review_route", "evidence_status", "missing_evidence", "item_finding_count", "evidence_refs", "review_status"],
                     "properties": {
                         "claim_id": { "type": "string" },
                         "run_id": { "type": "string" },
@@ -2478,7 +2530,12 @@ pub async fn openapi_schema() -> Json<Value> {
                         "first_item_code": { "type": ["string", "null"] },
                         "first_issue_type": { "type": ["string", "null"] },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
-                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                        "created_at": { "type": ["string", "null"], "format": "date-time" },
+                        "review_status": { "type": "string" },
+                        "review_audit_id": { "type": ["string", "null"] },
+                        "review_decision": { "type": ["string", "null"] },
+                        "reviewer": { "type": ["string", "null"] },
+                        "reviewed_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 },
                 "MedicalReviewQueueResponse": {

@@ -209,6 +209,10 @@ pub fn build_app_with_parts(
             get(ops_medical::medical_review_queue),
         )
         .route(
+            "/api/v1/ops/medical-review/results",
+            post(ops_medical::submit_medical_review_result),
+        )
+        .route(
             "/api/v1/ops/fwa-schemes",
             get(ops_schemes::list_fwa_schemes),
         )

@@ -12,6 +12,8 @@ Pilot API endpoints:
 - `GET /api/v1/audit/claims/{claim_id}`
 - `POST /api/v1/knowledge/search-similar`
 - `POST /api/v1/agent/cases/investigate`
+- `GET /api/v1/ops/medical-review/queue`
+- `POST /api/v1/ops/medical-review/results`
 
 All endpoints require `x-api-key`. Customer-specific credentials, network allowlists, and key rotation are configured outside the repository before pilot start.
 
@@ -35,6 +37,15 @@ QA writeback captures:
 - `qa_conclusion`
 - `issue_type`
 - `feedback_target`
+- `notes`
+- `evidence_refs`
+
+Medical review writeback captures:
+
+- `claim_id`
+- `scoring_audit_id`
+- `reviewer`
+- `decision`
 - `notes`
 - `evidence_refs`
 

@@ -75,6 +75,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/agent-runs",
         "/api/v1/ops/agent-runs/{agent_run_id}/approvals",
         "/api/v1/ops/medical-review/queue",
+        "/api/v1/ops/medical-review/results",
         "/api/v1/ops/fwa-schemes",
         "/api/v1/ops/knowledge/cases",
         "/api/v1/knowledge/search-similar",
@@ -722,6 +723,8 @@ async fn openapi_includes_operations_paths() {
     );
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphPayload"].is_object());
     assert!(schema["components"]["schemas"]["ProviderRelationshipGraphAssessment"].is_object());
+    assert!(schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"].is_object());
+    assert!(schema["components"]["schemas"]["MedicalReviewResultResponse"].is_object());
     assert!(schema["components"]["schemas"]["MedicalReviewQueueResponse"].is_object());
     assert!(
         schema["components"]["schemas"]["MedicalReviewQueueItem"]["required"]

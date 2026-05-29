@@ -52,6 +52,7 @@ import {
   saveRoutingPolicyCandidate,
   searchSimilarCases,
   submitAgentApproval,
+  submitMedicalReviewResult,
   submitRoutingPolicy,
   submitRule,
   submitQaResult,
@@ -554,6 +555,29 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenCalledWith(
       "/api/v1/ops/medical-review/queue?limit=25",
       expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("posts medical review results", async () => {
+    const fetchMock = mockFetch({ event_type: "medical.review.recorded" });
+    const payload = {
+      claim_id: "CLM-1",
+      scoring_audit_id: "audit_scoring_1",
+      reviewer: "medical-reviewer-1",
+      decision: "request_more_evidence",
+      notes: "Missing medical record.",
+      evidence_refs: ["audit:audit_scoring_1"],
+    };
+
+    await submitMedicalReviewResult(payload, "dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/ops/medical-review/results",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );

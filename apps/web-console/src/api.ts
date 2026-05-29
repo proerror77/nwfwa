@@ -297,6 +297,13 @@ export async function listMedicalReviewQueue(apiKey: string, limit = 100) {
   return requestJson(`/api/v1/ops/medical-review/queue?limit=${encodeURIComponent(limit)}`, apiKey);
 }
 
+export async function submitMedicalReviewResult(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/ops/medical-review/results", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listFwaSchemes(apiKey: string) {
   return requestJson("/api/v1/ops/fwa-schemes", apiKey);
 }

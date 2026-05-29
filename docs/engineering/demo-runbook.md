@@ -70,6 +70,7 @@ Use API key `dev-secret` in the UI pages.
 - Models: baseline model registry and runtime performance
 - Knowledge Base: confirmed FWA cases and similar case search
 - Agent Investigator: evidence-backed investigation package for the scored claim
+- Medical Review: clinical evidence gap queue and medical reviewer result writeback
 - QA Review: QA queue and writeback form
 
 ## 5. Agent, Knowledge, and QA Writeback
@@ -102,6 +103,22 @@ curl -s http://127.0.0.1:8080/api/v1/qa/results \
     "feedback_target": "rules",
     "notes": "Reviewer should attach provider history evidence.",
     "evidence_refs": ["audit:scoring.completed", "rule_runs:EARLY_CLAIM"]
+  }' | jq
+```
+
+Record a medical review result for a scored claim:
+
+```bash
+curl -s http://127.0.0.1:8080/api/v1/ops/medical-review/results \
+  -H 'content-type: application/json' \
+  -H 'x-api-key: dev-secret' \
+  -d '{
+    "claim_id": "CLM-0287",
+    "scoring_audit_id": "audit-id-from-medical-review-queue",
+    "reviewer": "medical-reviewer-1",
+    "decision": "request_more_evidence",
+    "notes": "Medical record is required before necessity can be confirmed.",
+    "evidence_refs": ["audit:audit-id-from-medical-review-queue"]
   }' | jq
 ```
 

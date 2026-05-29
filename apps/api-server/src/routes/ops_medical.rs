@@ -1,7 +1,7 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{AuditEventListFilter, AuditHistoryEventRecord},
+    repository::{AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent},
 };
 use axum::{
     extract::{Query, State},
@@ -9,8 +9,10 @@ use axum::{
     Json,
 };
 use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
+use std::collections::BTreeMap;
 
 #[derive(Debug, Deserialize)]
 pub struct MedicalReviewQueueQuery {
@@ -20,6 +22,27 @@ pub struct MedicalReviewQueueQuery {
 #[derive(Debug, Serialize)]
 pub struct MedicalReviewQueueResponse {
     pub items: Vec<MedicalReviewQueueItem>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitMedicalReviewResultRequest {
+    pub claim_id: String,
+    pub scoring_audit_id: String,
+    pub reviewer: String,
+    pub decision: String,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MedicalReviewResultResponse {
+    pub claim_id: String,
+    pub event_type: String,
+    pub event_status: String,
+    pub audit_id: String,
+    pub run_id: String,
+    pub review_status: String,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -36,6 +59,11 @@ pub struct MedicalReviewQueueItem {
     pub first_issue_type: Option<String>,
     pub evidence_refs: Vec<String>,
     pub created_at: Option<String>,
+    pub review_status: String,
+    pub review_audit_id: Option<String>,
+    pub review_decision: Option<String>,
+    pub reviewer: Option<String>,
+    pub reviewed_at: Option<String>,
 }
 
 pub async fn medical_review_queue(
@@ -53,15 +81,75 @@ pub async fn medical_review_queue(
         })
         .await
         .map_err(internal_error("MEDICAL_REVIEW_QUEUE_FAILED"))?;
+    let review_events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 10_000,
+            event_type: Some("medical.review.recorded".into()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("MEDICAL_REVIEW_QUEUE_FAILED"))?;
+    let review_statuses = latest_medical_review_statuses(&review_events);
     let items = events
         .iter()
-        .filter_map(medical_review_item_from_event)
+        .filter_map(|event| medical_review_item_from_event(event, &review_statuses))
         .collect::<Vec<_>>();
     Ok(Json(MedicalReviewQueueResponse { items }))
 }
 
+pub async fn submit_medical_review_result(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<SubmitMedicalReviewResultRequest>,
+) -> Result<Json<MedicalReviewResultResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    validate_medical_review_result(&request)?;
+    let audit_id = AuditEventId::new().to_string();
+    let run_id = ScoringRunId::new().to_string();
+    let review_status = medical_review_status(&request.decision).to_string();
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: audit_id.clone(),
+            run_id: run_id.clone(),
+            claim_id: request.claim_id.clone(),
+            source_system: "ops-studio".into(),
+            actor_id: request.reviewer.clone(),
+            actor_role: "medical_reviewer".into(),
+            event_type: "medical.review.recorded".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Medical review recorded: {}", request.decision),
+            payload: json!({
+                "claim_id": request.claim_id,
+                "scoring_audit_id": request.scoring_audit_id,
+                "reviewer": request.reviewer,
+                "decision": request.decision,
+                "review_status": review_status,
+                "notes": request.notes,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .map(|value| Value::String(value.clone()))
+                .collect(),
+        })
+        .await
+        .map_err(internal_error("MEDICAL_REVIEW_RESULT_SAVE_FAILED"))?;
+    Ok(Json(MedicalReviewResultResponse {
+        claim_id: request.claim_id,
+        event_type: "medical.review.recorded".into(),
+        event_status: "succeeded".into(),
+        audit_id,
+        run_id,
+        review_status,
+        evidence_refs: request.evidence_refs,
+    }))
+}
+
 fn medical_review_item_from_event(
     event: &AuditHistoryEventRecord,
+    review_statuses: &BTreeMap<String, MedicalReviewStatus>,
 ) -> Option<MedicalReviewQueueItem> {
     let clinical = &event.payload["clinical_evidence"];
     let review_required = clinical["review_required"].as_bool().unwrap_or(false);
@@ -72,6 +160,7 @@ fn medical_review_item_from_event(
     let first_finding = clinical["item_findings"]
         .as_array()
         .and_then(|findings| findings.first());
+    let review_status = review_statuses.get(&event.audit_id);
     Some(MedicalReviewQueueItem {
         claim_id: event.payload["claim_id"]
             .as_str()
@@ -101,6 +190,13 @@ fn medical_review_item_from_event(
             .map(str::to_string),
         evidence_refs: json_array_to_strings(&clinical["evidence_refs"]),
         created_at: event.created_at.clone(),
+        review_status: review_status
+            .map(|status| status.review_status.clone())
+            .unwrap_or_else(|| "open".into()),
+        review_audit_id: review_status.map(|status| status.audit_id.clone()),
+        review_decision: review_status.map(|status| status.decision.clone()),
+        reviewer: review_status.map(|status| status.reviewer.clone()),
+        reviewed_at: review_status.and_then(|status| status.reviewed_at.clone()),
     })
 }
 
@@ -114,6 +210,89 @@ fn json_array_to_strings(value: &Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+#[derive(Debug)]
+struct MedicalReviewStatus {
+    audit_id: String,
+    review_status: String,
+    decision: String,
+    reviewer: String,
+    reviewed_at: Option<String>,
+}
+
+fn latest_medical_review_statuses(
+    events: &[AuditHistoryEventRecord],
+) -> BTreeMap<String, MedicalReviewStatus> {
+    let mut statuses = BTreeMap::new();
+    for event in events {
+        let Some(scoring_audit_id) = event.payload["scoring_audit_id"].as_str() else {
+            continue;
+        };
+        statuses
+            .entry(scoring_audit_id.to_string())
+            .or_insert_with(|| MedicalReviewStatus {
+                audit_id: event.audit_id.clone(),
+                review_status: event.payload["review_status"]
+                    .as_str()
+                    .unwrap_or("completed")
+                    .to_string(),
+                decision: event.payload["decision"]
+                    .as_str()
+                    .unwrap_or("unknown")
+                    .to_string(),
+                reviewer: event.payload["reviewer"]
+                    .as_str()
+                    .unwrap_or("unknown")
+                    .to_string(),
+                reviewed_at: event.created_at.clone(),
+            });
+    }
+    statuses
+}
+
+fn validate_medical_review_result(
+    request: &SubmitMedicalReviewResultRequest,
+) -> Result<(), ApiError> {
+    if request.claim_id.trim().is_empty()
+        || request.scoring_audit_id.trim().is_empty()
+        || request.reviewer.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MEDICAL_REVIEW_RESULT",
+            "claim_id, scoring_audit_id, and reviewer are required",
+        ));
+    }
+    if !matches!(
+        request.decision.as_str(),
+        "evidence_sufficient"
+            | "request_more_evidence"
+            | "medical_necessity_issue"
+            | "no_medical_issue"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_MEDICAL_REVIEW_DECISION",
+            "decision must be evidence_sufficient, request_more_evidence, medical_necessity_issue, or no_medical_issue",
+        ));
+    }
+    if request.notes.trim().is_empty() || request.evidence_refs.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MEDICAL_REVIEW_EVIDENCE",
+            "notes and evidence_refs are required for medical review auditability",
+        ));
+    }
+    Ok(())
+}
+
+fn medical_review_status(decision: &str) -> &'static str {
+    match decision {
+        "request_more_evidence" => "pending_evidence",
+        "medical_necessity_issue" => "completed_issue_found",
+        _ => "completed",
+    }
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
