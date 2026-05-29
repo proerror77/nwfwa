@@ -927,6 +927,14 @@ async fn openapi_includes_operations_paths() {
             ["minLength"],
         1
     );
+    for field in ["investigation_id", "claim_id", "outcome"] {
+        assert_eq!(
+            schema["components"]["schemas"]["InvestigationResultRequest"]["properties"][field]
+                ["minLength"],
+            1,
+            "missing InvestigationResultRequest minLength for {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["evidence_refs"]["minItems"],
@@ -936,6 +944,12 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["QaResultRequest"]["properties"]["notes"]["minLength"],
         1
     );
+    for field in ["qa_case_id", "claim_id"] {
+        assert_eq!(
+            schema["components"]["schemas"]["QaResultRequest"]["properties"][field]["minLength"], 1,
+            "missing QaResultRequest minLength for {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["QaResultRequest"]["properties"]["evidence_refs"]
             ["minItems"],

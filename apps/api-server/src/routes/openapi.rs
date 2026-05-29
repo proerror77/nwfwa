@@ -4393,9 +4393,9 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["investigation_id", "claim_id", "outcome", "confirmed_fwa", "notes", "evidence_refs"],
                     "properties": {
-                        "investigation_id": { "type": "string" },
-                        "claim_id": { "type": "string" },
-                        "outcome": { "type": "string" },
+                        "investigation_id": { "type": "string", "minLength": 1 },
+                        "claim_id": { "type": "string", "minLength": 1 },
+                        "outcome": { "type": "string", "minLength": 1 },
                         "confirmed_fwa": { "type": "boolean" },
                         "financial_impact_type": {
                             "type": ["string", "null"],
@@ -4411,8 +4411,8 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["qa_case_id", "claim_id", "qa_conclusion", "issue_type", "feedback_target", "notes", "evidence_refs"],
                     "properties": {
-                        "qa_case_id": { "type": "string" },
-                        "claim_id": { "type": "string" },
+                        "qa_case_id": { "type": "string", "minLength": 1 },
+                        "claim_id": { "type": "string", "minLength": 1 },
                         "qa_conclusion": {
                             "type": "string",
                             "enum": ["pass", "issue_found_return", "issue_found_escalate"]

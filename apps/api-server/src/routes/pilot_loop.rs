@@ -192,6 +192,16 @@ pub async fn write_qa_result(
 fn validate_investigation_result_request(
     request: &InvestigationResultRecord,
 ) -> Result<(), ApiError> {
+    if request.claim_id.trim().is_empty()
+        || request.investigation_id.trim().is_empty()
+        || request.outcome.trim().is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_INVESTIGATION_RESULT_IDENTITY",
+            "claim_id, investigation_id, and outcome are required",
+        ));
+    }
     if request.notes.trim().is_empty()
         || request
             .evidence_refs
@@ -208,6 +218,13 @@ fn validate_investigation_result_request(
 }
 
 fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> {
+    if request.qa_case_id.trim().is_empty() || request.claim_id.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_QA_RESULT_IDENTITY",
+            "qa_case_id and claim_id are required",
+        ));
+    }
     if !matches!(
         request.qa_conclusion.as_str(),
         "pass" | "issue_found_return" | "issue_found_escalate"

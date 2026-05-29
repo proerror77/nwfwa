@@ -68,6 +68,25 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "MISSING_INVESTIGATION_RESULT_EVIDENCE");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": " ",
+          "investigation_id": "INV-MISSING-CLAIM",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "TPA investigation confirmed over-treatment signals.",
+          "evidence_refs": ["agent_run:agent_CLM-0287"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_INVESTIGATION_RESULT_IDENTITY");
+
     let (status, investigation) = json_request(
         app.clone(),
         "POST",
@@ -106,6 +125,24 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "MISSING_QA_RESULT_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": " ",
+          "claim_id": "CLM-0287",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "Reviewer should attach provider history evidence.",
+          "evidence_refs": ["audit:investigation.result.received"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_QA_RESULT_IDENTITY");
 
     let (status, qa) = json_request(
         app.clone(),
