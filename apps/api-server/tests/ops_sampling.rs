@@ -85,6 +85,82 @@ async fn creates_audit_sample_from_ranked_leads() {
     score_high_risk_claim(app.clone(), "CLM-SAMPLE-1", "9000").await;
     score_high_risk_claim(app.clone(), "CLM-SAMPLE-2", "8200").await;
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "unknown",
+          "population_definition": "RED and high risk leads for weekly QA",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "sample_size": 1,
+          "reviewer": "qa-reviewer-1",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SAMPLE_MODE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "risk_ranked",
+          "population_definition": " ",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "sample_size": 1,
+          "reviewer": "qa-reviewer-1",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_POPULATION_DEFINITION");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "risk_ranked",
+          "population_definition": "RED and high risk leads for weekly QA",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "sample_size": 1,
+          "reviewer": " ",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_SAMPLE_REVIEWER");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "risk_ranked",
+          "population_definition": "RED and high risk leads for weekly QA",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "sample_size": 1,
+          "reviewer": "qa-reviewer-1",
+          "assignment_queue": " "
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_ASSIGNMENT_QUEUE");
+
     let (status, sample) = json_request(
         app.clone(),
         "POST",

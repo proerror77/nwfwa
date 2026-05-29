@@ -754,6 +754,14 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/EvidenceSufficiency"
     );
     assert!(schema["components"]["schemas"]["EvidenceSufficiency"].is_object());
+    for field in ["population_definition", "reviewer", "assignment_queue"] {
+        assert_eq!(
+            schema["components"]["schemas"]["CreateAuditSampleRequest"]["properties"][field]
+                ["minLength"],
+            1,
+            "missing CreateAuditSampleRequest minLength for {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["Case"]["properties"]["evidence_package"]["$ref"],
         "#/components/schemas/CaseEvidencePackage"

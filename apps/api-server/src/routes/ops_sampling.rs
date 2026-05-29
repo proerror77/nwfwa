@@ -35,11 +35,42 @@ pub async fn create_audit_sample(
     Json(request): Json<CreateAuditSampleInput>,
 ) -> Result<Json<AuditSampleRecord>, ApiError> {
     authorize(&state, &headers)?;
+    if !matches!(
+        request.sample_mode.as_str(),
+        "risk_ranked" | "random_control" | "stratified" | "post_payment_audit" | "qa_calibration"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SAMPLE_MODE",
+            "sample_mode must be risk_ranked, random_control, stratified, post_payment_audit, or qa_calibration",
+        ));
+    }
+    if request.population_definition.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_POPULATION_DEFINITION",
+            "population_definition is required",
+        ));
+    }
     if request.sample_size == 0 {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_SAMPLE_SIZE",
             "sample_size must be greater than zero",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_SAMPLE_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.assignment_queue.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_ASSIGNMENT_QUEUE",
+            "assignment_queue is required",
         ));
     }
     let sample = state

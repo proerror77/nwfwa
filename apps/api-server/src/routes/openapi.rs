@@ -4074,12 +4074,12 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["risk_ranked", "random_control", "stratified", "post_payment_audit", "qa_calibration"]
                         },
-                        "population_definition": { "type": "string" },
+                        "population_definition": { "type": "string", "minLength": 1 },
                         "inclusion_criteria": { "type": "object" },
                         "deterministic_seed": { "type": ["string", "null"] },
                         "sample_size": { "type": "integer", "minimum": 1 },
-                        "reviewer": { "type": "string" },
-                        "assignment_queue": { "type": "string" }
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "assignment_queue": { "type": "string", "minLength": 1 }
                     }
                 },
                 "AuditSampleLeadRecord": {
