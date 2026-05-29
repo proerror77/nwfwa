@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClaimIdScorePayload,
   buildFeatureTraceRows,
+  buildRuntimeEvidenceRefRows,
   buildRoutingPolicySummary,
 } from "./RuntimeScoring";
 import { buildProviderProfileInspection } from "./providerProfileInspection";
@@ -74,6 +75,38 @@ describe("buildFeatureTraceRows", () => {
         versionLabel: "v1",
         valueLabel: "0.8",
         evidenceLabel: "claim:CLM-0287.claim_amount",
+      },
+    ]);
+  });
+});
+
+describe("buildRuntimeEvidenceRefRows", () => {
+  it("formats mixed runtime evidence refs for audit display", () => {
+    expect(
+      buildRuntimeEvidenceRefRows([
+        {
+          entity_type: "claim",
+          entity_id: "CLM-0287",
+          field: "claim_amount",
+        },
+        "rule_runs:EARLY_CLAIM",
+        { source: "knowledge_cases", id: "KC-1001" },
+      ]),
+    ).toEqual([
+      {
+        key: "0:claim:CLM-0287.claim_amount",
+        label: "claim:CLM-0287.claim_amount",
+        kind: "feature",
+      },
+      {
+        key: "1:rule_runs:EARLY_CLAIM",
+        label: "rule_runs:EARLY_CLAIM",
+        kind: "reference",
+      },
+      {
+        key: '2:{"source":"knowledge_cases","id":"KC-1001"}',
+        label: '{"source":"knowledge_cases","id":"KC-1001"}',
+        kind: "reference",
       },
     ]);
   });

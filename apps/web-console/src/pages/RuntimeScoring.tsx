@@ -120,6 +120,17 @@ export function buildFeatureTraceRows(featureValues: FeatureTraceValue[] = []) {
   }));
 }
 
+export function buildRuntimeEvidenceRefRows(evidenceRefs: unknown[] = []) {
+  return evidenceRefs.map((reference, index) => {
+    const label = formatRuntimeEvidenceRef(reference);
+    return {
+      key: `${index}:${label}`,
+      label,
+      kind: isFeatureEvidenceRef(reference) ? "feature" : "reference",
+    };
+  });
+}
+
 function formatFeatureValue(value: unknown) {
   if (typeof value === "string" || typeof value === "number" || typeof value === "boolean") {
     return String(value);
@@ -128,6 +139,31 @@ function formatFeatureValue(value: unknown) {
     return "-";
   }
   return JSON.stringify(value);
+}
+
+function formatRuntimeEvidenceRef(reference: unknown) {
+  if (isFeatureEvidenceRef(reference)) {
+    return `${reference.entity_type}:${reference.entity_id}.${reference.field}`;
+  }
+  if (typeof reference === "string" || typeof reference === "number" || typeof reference === "boolean") {
+    return String(reference);
+  }
+  if (reference === null || reference === undefined) {
+    return "-";
+  }
+  return JSON.stringify(reference);
+}
+
+function isFeatureEvidenceRef(reference: unknown): reference is FeatureEvidenceRef {
+  if (!reference || typeof reference !== "object") {
+    return false;
+  }
+  const candidate = reference as Partial<FeatureEvidenceRef>;
+  return (
+    typeof candidate.entity_type === "string" &&
+    typeof candidate.entity_id === "string" &&
+    typeof candidate.field === "string"
+  );
 }
 
 const defaultPayload = JSON.stringify(
@@ -248,6 +284,7 @@ export function RuntimeScoring() {
     ? buildRoutingPolicySummary(result.routing_policy)
     : null;
   const featureTraceRows = result ? buildFeatureTraceRows(result.feature_values) : [];
+  const evidenceRefRows = result ? buildRuntimeEvidenceRefRows(result.evidence_refs) : [];
 
   return (
     <section className="runtime">
@@ -690,7 +727,18 @@ export function RuntimeScoring() {
             </section>
             <section>
               <h3>Evidence Refs</h3>
-              <pre>{JSON.stringify(result.evidence_refs, null, 2)}</pre>
+              {evidenceRefRows.length > 0 ? (
+                <ol className="audit-timeline">
+                  {evidenceRefRows.map((reference) => (
+                    <li key={reference.key}>
+                      <strong>{reference.kind}</strong>
+                      <span>{reference.label}</span>
+                    </li>
+                  ))}
+                </ol>
+              ) : (
+                <p className="empty">No evidence refs</p>
+              )}
             </section>
             <section>
               <h3>Raw JSON</h3>
