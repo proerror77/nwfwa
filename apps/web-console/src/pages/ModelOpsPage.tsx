@@ -185,6 +185,29 @@ export function buildModelRetrainingJobSummary(jobs: ModelRetrainingJob[] = []) 
   };
 }
 
+export function buildModelOperationalReadinessSummary(
+  performance?: ModelPerformanceResponse | null,
+  promotion?: ModelPromotionGatesResponse | null,
+  retraining?: ModelRetrainingReadinessResponse | null,
+) {
+  const highRiskRate =
+    performance && performance.scored_runs > 0
+      ? `${((performance.high_risk_count / performance.scored_runs) * 100).toFixed(1)}%`
+      : "0.0%";
+  return {
+    runtimeDataStatus: performance?.data_status ?? "not_loaded",
+    scoredRuns: performance?.scored_runs ?? 0,
+    highRiskRate,
+    driftStatus: performance?.drift_status ?? "not_loaded",
+    scorePsiLabel: performance?.score_psi == null ? "-" : performance.score_psi.toFixed(3),
+    promotionDecision: promotion?.decision ?? "not_loaded",
+    gatePassLabel: promotion ? `${promotion.passed_count}/${promotion.total_count}` : "0/0",
+    latestEvaluationId: promotion?.latest_evaluation_id ?? "not_loaded",
+    retrainingRecommendation: retraining?.recommendation ?? "not_loaded",
+    blockerCount: (promotion?.blockers.length ?? 0) + (retraining?.blockers.length ?? 0),
+  };
+}
+
 export function ModelOpsPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedModelKey, setSelectedModelKey] = useState("baseline_fwa");
@@ -396,6 +419,11 @@ export function ModelOpsPage() {
     : [];
   const retrainingSummary = buildModelRetrainingSummary(retrainingQuery.data);
   const retrainingJobSummary = buildModelRetrainingJobSummary(retrainingJobsQuery.data?.jobs);
+  const operationalReadinessSummary = buildModelOperationalReadinessSummary(
+    performanceQuery.data,
+    promotionQuery.data,
+    retrainingQuery.data,
+  );
 
   return (
     <section className="ops-grid">
@@ -460,6 +488,51 @@ export function ModelOpsPage() {
         ) : (
           <p className="empty">No models available</p>
         )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Operational Readiness</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Runtime Data</span>
+            <strong>{operationalReadinessSummary.runtimeDataStatus}</strong>
+          </div>
+          <div>
+            <span>Scored Runs</span>
+            <strong>{operationalReadinessSummary.scoredRuns}</strong>
+          </div>
+          <div>
+            <span>High Risk Rate</span>
+            <strong>{operationalReadinessSummary.highRiskRate}</strong>
+          </div>
+          <div>
+            <span>Drift</span>
+            <strong>{operationalReadinessSummary.driftStatus}</strong>
+          </div>
+          <div>
+            <span>Score PSI</span>
+            <strong>{operationalReadinessSummary.scorePsiLabel}</strong>
+          </div>
+          <div>
+            <span>Promotion</span>
+            <strong>{operationalReadinessSummary.promotionDecision}</strong>
+          </div>
+          <div>
+            <span>Gates</span>
+            <strong>{operationalReadinessSummary.gatePassLabel}</strong>
+          </div>
+          <div>
+            <span>Evaluation</span>
+            <strong>{operationalReadinessSummary.latestEvaluationId}</strong>
+          </div>
+          <div>
+            <span>Retraining</span>
+            <strong>{operationalReadinessSummary.retrainingRecommendation}</strong>
+          </div>
+          <div>
+            <span>Blockers</span>
+            <strong>{operationalReadinessSummary.blockerCount}</strong>
+          </div>
+        </div>
       </div>
       <div className="panel wide-panel">
         <h2>Performance</h2>

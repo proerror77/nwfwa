@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildModelAuditFilters,
   buildModelLabelReadinessSummary,
+  buildModelOperationalReadinessSummary,
   buildModelRetrainingJobSummary,
   buildModelRetrainingSummary,
   formatSourceDataQuality,
@@ -111,6 +112,80 @@ describe("buildModelRetrainingSummary", () => {
       approvedLabelCount: 5,
       sourceDataQualityLabel: "91.0%",
       sourceDataQualityStatus: "ready",
+    });
+  });
+});
+
+describe("buildModelOperationalReadinessSummary", () => {
+  it("combines runtime performance promotion gates and retraining readiness", () => {
+    expect(
+      buildModelOperationalReadinessSummary(
+        {
+          data_status: "ready",
+          scored_runs: 40,
+          average_score: 62,
+          high_risk_count: 10,
+          score_psi: 0.0432,
+          drift_status: "stable",
+        },
+        {
+          review_mode: "pre_payment",
+          decision: "routing_allowed",
+          passed_count: 8,
+          total_count: 9,
+          latest_evaluation_id: "eval_1",
+          source_dataset_id: "dataset_1",
+          source_data_quality_score: 0.92,
+          source_data_quality_status: "ready",
+          data_status: "ready",
+          scored_runs: 40,
+          open_model_feedback_count: 1,
+          unresolved_model_feedback_count: 1,
+          approved_label_count: 5,
+          needs_review_label_count: 0,
+          blockers: ["approval missing"],
+          gates: [],
+        },
+        {
+          recommendation: "monitor",
+          latest_evaluation_id: "eval_1",
+          drift_status: "stable",
+          source_dataset_id: "dataset_1",
+          source_data_quality_score: 0.92,
+          source_data_quality_status: "ready",
+          open_model_feedback_count: 1,
+          approved_label_count: 5,
+          needs_review_label_count: 0,
+          retraining_triggers: [],
+          blockers: [],
+        },
+      ),
+    ).toEqual({
+      runtimeDataStatus: "ready",
+      scoredRuns: 40,
+      highRiskRate: "25.0%",
+      driftStatus: "stable",
+      scorePsiLabel: "0.043",
+      promotionDecision: "routing_allowed",
+      gatePassLabel: "8/9",
+      latestEvaluationId: "eval_1",
+      retrainingRecommendation: "monitor",
+      blockerCount: 1,
+    });
+  });
+
+  it("returns unloaded defaults before model operations data arrives", () => {
+    expect(buildModelOperationalReadinessSummary(null, null, null)).toEqual({
+      runtimeDataStatus: "not_loaded",
+      scoredRuns: 0,
+      highRiskRate: "0.0%",
+      driftStatus: "not_loaded",
+      scorePsiLabel: "-",
+      promotionDecision: "not_loaded",
+      gatePassLabel: "0/0",
+      latestEvaluationId: "not_loaded",
+      retrainingRecommendation: "not_loaded",
+      blockerCount: 0,
     });
   });
 });
