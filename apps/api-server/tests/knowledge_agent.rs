@@ -177,6 +177,78 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
         "POST",
         "/api/v1/ops/knowledge/cases",
         r#"{
+          "case_id": "KC-PII-SUMMARY",
+          "title": "PII summary case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed pattern after contacting alice@example.com.",
+          "outcome": "Confirmed waste.",
+          "tags": ["lab_overuse"],
+          "evidence_refs": ["investigation_results:INV-KB-1"],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_KNOWLEDGE_CASE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-PII-TAG",
+          "title": "PII tag case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste.",
+          "tags": ["phone:13800138000"],
+          "evidence_refs": ["investigation_results:INV-KB-1"],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_KNOWLEDGE_CASE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-PII-EVIDENCE",
+          "title": "PII evidence case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste.",
+          "tags": ["lab_overuse"],
+          "evidence_refs": ["investigation_results:INV-KB-1", "id:11010519491231002X"],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_KNOWLEDGE_CASE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
           "case_id": "KC-WEAK-EVIDENCE",
           "title": "Weak evidence case",
           "fwa_type": "Waste",

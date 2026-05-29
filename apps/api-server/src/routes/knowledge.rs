@@ -5,6 +5,7 @@ use crate::{
         normalize_scheme_family, scheme_family_from_knowledge_signals, KnowledgeCaseRecord,
         PersistedAuditEvent, SimilarCaseQuery, SimilarCaseRecord,
     },
+    routes::pii,
 };
 use axum::{
     extract::State,
@@ -179,6 +180,22 @@ fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Res
             StatusCode::BAD_REQUEST,
             "INVALID_KNOWLEDGE_CASE",
             "tags are required",
+        ));
+    }
+    if pii::contains_pii(
+        [
+            request.title.as_str(),
+            request.summary.as_str(),
+            request.outcome.as_str(),
+        ]
+        .into_iter()
+        .chain(request.tags.iter().map(String::as_str))
+        .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_KNOWLEDGE_CASE",
+            "knowledge case title, summary, outcome, tags, and evidence_refs must not contain PII",
         ));
     }
     Ok(())

@@ -4590,19 +4590,36 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["case_id", "title", "fwa_type", "diagnosis_code", "provider_region", "provider_type", "summary", "outcome", "tags", "evidence_refs"],
                     "properties": {
                         "case_id": { "type": "string", "minLength": 1 },
-                        "title": { "type": "string", "minLength": 1 },
+                        "title": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Knowledge case title must not contain PII."
+                        },
                         "fwa_type": { "type": "string", "minLength": 1 },
                         "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "diagnosis_code": { "type": "string", "minLength": 1 },
                         "provider_region": { "type": "string", "minLength": 1 },
                         "provider_type": { "type": "string", "minLength": 1 },
-                        "summary": { "type": "string", "minLength": 1 },
-                        "outcome": { "type": "string", "minLength": 1 },
-                        "tags": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+                        "summary": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Knowledge case summary must not contain PII."
+                        },
+                        "outcome": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Knowledge case outcome must not contain PII."
+                        },
+                        "tags": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Knowledge case tags must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 }
+                        },
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Must include at least one confirmed review source: investigation_results:* or qa_reviews:*.",
+                            "description": "Must include at least one confirmed review source: investigation_results:* or qa_reviews:* and must not contain PII.",
                             "items": { "type": "string", "minLength": 1 },
                             "contains": {
                                 "type": "string",

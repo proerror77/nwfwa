@@ -1228,6 +1228,16 @@ async fn openapi_includes_operations_paths() {
             .unwrap()
             .contains("investigation_results")
     );
+    for field in ["title", "summary", "outcome", "tags", "evidence_refs"] {
+        assert!(
+            schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"][field]
+                ["description"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("must not contain PII"),
+            "missing PublishKnowledgeCaseRequest.{field} PII contract"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["PublishKnowledgeCaseRequest"]["properties"]["tags"]
             ["minItems"],
