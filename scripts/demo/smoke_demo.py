@@ -419,6 +419,45 @@ def run_rule_backtest_and_publish(score, investigation):
     }
 
 
+def resolve_demo_qa_feedback(qa):
+    feedback_id = "qa_feedback_QA-DEMO-SMOKE"
+    update = request(
+        "POST",
+        f"/api/v1/ops/qa/feedback-items/{feedback_id}/status",
+        {
+            "status": "resolved",
+            "actor_id": "rule-ops-demo",
+            "notes": "Demo smoke confirms rule operations reviewed and closed the QA feedback.",
+            "evidence_refs": [
+                f"qa_feedback:{feedback_id}",
+                f"audit:{qa['audit_id']}",
+                f"rules:{RULE_ID}:v1",
+            ],
+        },
+    )
+    assert_true(update.get("audit_id"), "QA feedback status update missing audit_id")
+    item = update.get("item", {})
+    assert_true(item.get("feedback_id") == feedback_id, "QA feedback status update id mismatch")
+    assert_true(item.get("status") == "resolved", "QA feedback item was not resolved")
+    assert_true(item.get("status_updated_by") == "rule-ops-demo", "QA feedback status actor mismatch")
+    assert_true(item.get("status_audit_id") == update["audit_id"], "QA feedback status audit mismatch")
+    assert_true(item.get("status_evidence_refs"), "QA feedback status update missing evidence refs")
+
+    resolved = request(
+        "GET",
+        "/api/v1/ops/qa/feedback-items?feedback_target=rules&status=resolved",
+    ).get("items", [])
+    assert_true(
+        any(entry.get("feedback_id") == feedback_id for entry in resolved),
+        "resolved QA feedback list missing demo feedback item",
+    )
+    return {
+        "feedback_id": feedback_id,
+        "status": item["status"],
+        "audit_id": update["audit_id"],
+    }
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -638,6 +677,7 @@ def main():
     )
     assert_true(qa.get("event_type") == "qa.result.received", "QA writeback was not audited")
     assert_true(qa.get("audit_id"), "QA writeback missing audit_id")
+    qa_feedback_update = resolve_demo_qa_feedback(qa)
 
     audit = request("GET", f"/api/v1/audit/claims/{CLAIM_ID}")
     event_types = [event.get("event_type") for event in audit.get("events", [])]
@@ -656,6 +696,10 @@ def main():
         "audit history missing investigation.result.received",
     )
     assert_true("qa.result.received" in event_types, "audit history missing qa.result.received")
+    assert_true(
+        "qa.feedback.status.updated" in event_types,
+        "audit history missing qa.feedback.status.updated",
+    )
 
     labels = request("GET", "/api/v1/ops/labels").get("labels", [])
     assert_true(
@@ -703,6 +747,10 @@ def main():
     assert_true(dashboard.get("suspected_claims", 0) >= 1, "dashboard missing suspected claims")
     assert_true(dashboard.get("investigation_results", 0) >= 1, "dashboard missing investigations")
     assert_true(dashboard.get("qa_reviews", 0) >= 1, "dashboard missing QA reviews")
+    assert_true(
+        dashboard.get("qa_queue", {}).get("feedback_resolved_count", 0) >= 1,
+        "dashboard missing resolved QA feedback count",
+    )
     assert_true(dashboard.get("confirmed_fwa", 0) >= 1, "dashboard missing confirmed FWA")
     assert_true(dashboard.get("rule_hits", 0) >= 1, "dashboard missing rule hits")
     assert_true(
@@ -778,6 +826,7 @@ def main():
                 "outcome_labels": label_pool["total_labels"],
                 "retraining_job_id": retraining_job["job_id"],
                 "discovered_rule": discovered_rule,
+                "qa_feedback_update": qa_feedback_update,
                 "rule_release": rule_release,
             },
             ensure_ascii=True,

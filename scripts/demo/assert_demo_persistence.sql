@@ -131,6 +131,27 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM qa_reviews
+  WHERE claim_id = demo_claim_id
+    AND qa_case_id = 'QA-DEMO-SMOKE'
+    AND feedback_target = 'rules'
+    AND feedback_status = 'resolved';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected resolved QA feedback for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_events
+  WHERE claim_id = demo_claim_uuid
+    AND event_type = 'qa.feedback.status.updated'
+    AND payload ->> 'feedback_id' = 'qa_feedback_QA-DEMO-SMOKE'
+    AND payload ->> 'to_status' = 'resolved'
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected QA feedback status audit for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM saving_attributions
   WHERE claim_id = demo_claim_id
     AND investigation_id = 'INV-DEMO-SMOKE'
