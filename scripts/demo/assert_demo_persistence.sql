@@ -152,6 +152,27 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM knowledge_cases
+  WHERE case_id = 'KC-DEMO-SMOKE'
+    AND scheme_family = 'diagnosis_procedure_mismatch'
+    AND evidence_refs ? 'investigation_results:INV-DEMO-SMOKE'
+    AND evidence_refs ? 'qa_reviews:QA-DEMO-SMOKE';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected published demo knowledge case';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_events
+  WHERE claim_id = demo_claim_uuid
+    AND event_type = 'knowledge.case.published'
+    AND payload ->> 'case_id' = 'KC-DEMO-SMOKE'
+    AND evidence_refs ? 'investigation_results:INV-DEMO-SMOKE'
+    AND evidence_refs ? 'qa_reviews:QA-DEMO-SMOKE';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected knowledge case publish audit for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM saving_attributions
   WHERE claim_id = demo_claim_id
     AND investigation_id = 'INV-DEMO-SMOKE'

@@ -458,6 +458,63 @@ def resolve_demo_qa_feedback(qa):
     }
 
 
+def publish_demo_knowledge_case(investigation, qa):
+    knowledge = request(
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        {
+            "case_id": "KC-DEMO-SMOKE",
+            "title": "Demo confirmed early high amount claim",
+            "fwa_type": "Abuse",
+            "scheme_family": "diagnosis_procedure_mismatch",
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "provider_type": "hospital",
+            "summary": "Confirmed early high amount respiratory claim with weak procedure support.",
+            "outcome": "Confirmed FWA review outcome added to the governed knowledge base.",
+            "tags": ["demo_confirmed_fwa", "early_claim", "high_amount"],
+            "evidence_refs": [
+                "investigation_results:INV-DEMO-SMOKE",
+                "qa_reviews:QA-DEMO-SMOKE",
+                f"audit:{investigation['audit_id']}",
+                f"audit:{qa['audit_id']}",
+            ],
+            "source_claim_id": CLAIM_ID,
+        },
+    )
+    assert_true(knowledge.get("audit_id"), "knowledge publish missing audit_id")
+    case = knowledge.get("case", {})
+    assert_true(case.get("case_id") == "KC-DEMO-SMOKE", "published knowledge case id mismatch")
+    assert_true(case.get("evidence_refs"), "published knowledge case missing evidence refs")
+
+    similar = request(
+        "POST",
+        "/api/v1/knowledge/search-similar",
+        {
+            "claim_id": CLAIM_ID,
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["demo_confirmed_fwa"],
+        },
+    )
+    results = similar.get("results", [])
+    assert_true(results, "published knowledge case search returned no results")
+    assert_true(
+        results[0].get("case_id") == "KC-DEMO-SMOKE",
+        f"published knowledge case was not top similar result: {results[:2]}",
+    )
+    assert_true(results[0].get("evidence_refs"), "published similar case missing evidence refs")
+    assert_true(
+        "knowledge_cases:KC-DEMO-SMOKE" in results[0].get("provenance_refs", []),
+        "published similar case missing provenance ref",
+    )
+    return {
+        "case_id": case["case_id"],
+        "audit_id": knowledge["audit_id"],
+        "similarity_score": results[0]["similarity_score"],
+    }
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -678,6 +735,7 @@ def main():
     assert_true(qa.get("event_type") == "qa.result.received", "QA writeback was not audited")
     assert_true(qa.get("audit_id"), "QA writeback missing audit_id")
     qa_feedback_update = resolve_demo_qa_feedback(qa)
+    knowledge_publish = publish_demo_knowledge_case(investigation, qa)
 
     audit = request("GET", f"/api/v1/audit/claims/{CLAIM_ID}")
     event_types = [event.get("event_type") for event in audit.get("events", [])]
@@ -699,6 +757,10 @@ def main():
     assert_true(
         "qa.feedback.status.updated" in event_types,
         "audit history missing qa.feedback.status.updated",
+    )
+    assert_true(
+        "knowledge.case.published" in event_types,
+        "audit history missing knowledge.case.published",
     )
 
     labels = request("GET", "/api/v1/ops/labels").get("labels", [])
@@ -827,6 +889,7 @@ def main():
                 "retraining_job_id": retraining_job["job_id"],
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,
+                "knowledge_publish": knowledge_publish,
                 "rule_release": rule_release,
             },
             ensure_ascii=True,
