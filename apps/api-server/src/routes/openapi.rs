@@ -1695,6 +1695,22 @@ pub async fn openapi_schema() -> Json<Value> {
                                     "schema": { "$ref": "#/components/schemas/SimilarCaseSearchResponse" }
                                 }
                             }
+                        },
+                        "400": {
+                            "description": "Invalid similar case search query",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
                         }
                     }
                 }
@@ -1744,6 +1760,14 @@ pub async fn openapi_schema() -> Json<Value> {
                                 }
                             }
                         },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        },
                         "404": {
                             "description": "Member was not found",
                             "content": {
@@ -1775,6 +1799,22 @@ pub async fn openapi_schema() -> Json<Value> {
                                     "schema": { "$ref": "#/components/schemas/PilotWritebackResponse" }
                                 }
                             }
+                        },
+                        "400": {
+                            "description": "Invalid investigation result writeback",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
                         }
                     }
                 }
@@ -1797,6 +1837,22 @@ pub async fn openapi_schema() -> Json<Value> {
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/PilotWritebackResponse" }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid QA result writeback",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
                                 }
                             }
                         }
@@ -1945,6 +2001,14 @@ pub async fn openapi_schema() -> Json<Value> {
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/ClaimAuditHistoryResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
                                 }
                             }
                         }

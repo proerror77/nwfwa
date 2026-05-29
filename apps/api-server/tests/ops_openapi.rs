@@ -1969,13 +1969,14 @@ async fn openapi_defines_core_tpa_integration_contract() {
         })
     );
 
-    for (path, method, request_ref, response_ref, path_param) in [
+    for (path, method, request_ref, response_ref, path_param, error_statuses) in [
         (
             "/api/v1/claims/score",
             "post",
             Some("#/components/schemas/ScoreClaimRequest"),
             "#/components/schemas/ScoreClaimResponse",
             None,
+            &["400", "401", "404", "502"][..],
         ),
         (
             "/api/v1/members/{member_id}/profile-summary",
@@ -1983,6 +1984,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             None,
             "#/components/schemas/MemberProfileSummaryResponse",
             Some("member_id"),
+            &["401", "404"][..],
         ),
         (
             "/api/v1/knowledge/search-similar",
@@ -1990,6 +1992,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             Some("#/components/schemas/SimilarCaseSearchRequest"),
             "#/components/schemas/SimilarCaseSearchResponse",
             None,
+            &["400", "401"][..],
         ),
         (
             "/api/v1/investigations/results",
@@ -1997,6 +2000,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             Some("#/components/schemas/InvestigationResultRequest"),
             "#/components/schemas/PilotWritebackResponse",
             None,
+            &["400", "401"][..],
         ),
         (
             "/api/v1/qa/results",
@@ -2004,6 +2008,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             Some("#/components/schemas/QaResultRequest"),
             "#/components/schemas/PilotWritebackResponse",
             None,
+            &["400", "401"][..],
         ),
         (
             "/api/v1/audit/claims/{claim_id}",
@@ -2011,6 +2016,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             None,
             "#/components/schemas/ClaimAuditHistoryResponse",
             Some("claim_id"),
+            &["401"][..],
         ),
     ] {
         let operation = &schema["paths"][path][method];
@@ -2057,6 +2063,29 @@ async fn openapi_defines_core_tpa_integration_contract() {
                 "missing {path_param} path parameter for {method} {path}"
             );
         }
+
+        for status in error_statuses {
+            assert_eq!(
+                operation["responses"][*status]["content"]["application/json"]["schema"]["$ref"],
+                "#/components/schemas/ErrorResponse",
+                "missing standard ErrorResponse for {method} {path} status {status}"
+            );
+        }
+    }
+
+    for field in ["code", "message"] {
+        assert!(
+            schema["components"]["schemas"]["ErrorResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing ErrorResponse field {field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["ErrorResponse"]["properties"][field]["type"],
+            "string"
+        );
     }
 }
 
