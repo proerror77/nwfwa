@@ -53,6 +53,7 @@ import {
   saveRoutingPolicyCandidate,
   searchSimilarCases,
   submitAgentApproval,
+  submitInvestigationResult,
   submitMedicalReviewResult,
   submitRoutingPolicy,
   submitRule,
@@ -675,6 +676,31 @@ describe("ops API helpers", () => {
       "/api/v1/ops/cases",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+  });
+
+  it("posts investigation result writebacks", async () => {
+    const fetchMock = mockFetch({ event_status: "succeeded" });
+    const payload = {
+      claim_id: "CLM-0287",
+      investigation_id: "INV-CLM-0287",
+      outcome: "confirmed_fwa",
+      confirmed_fwa: true,
+      financial_impact_type: "prevented_payment",
+      saving_amount: "8200.00",
+      currency: "CNY",
+      notes: "TPA investigation confirmed over-treatment signals.",
+      evidence_refs: ["investigation_cases:case_CLM-0287"],
+    };
+
+    await submitInvestigationResult(payload, "dev-secret");
+
+    expect(fetchMock).toHaveBeenCalledWith(
+      "/api/v1/investigations/results",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(payload),
       }),
     );
   });

@@ -1,6 +1,13 @@
 import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { listCases, listFwaSchemes, listLeads, triageLead, updateCaseStatus } from "../api";
+import {
+  listCases,
+  listFwaSchemes,
+  listLeads,
+  submitInvestigationResult,
+  triageLead,
+  updateCaseStatus,
+} from "../api";
 import {
   buildFwaSchemeLabelMap,
   formatFwaSchemeLabel,
@@ -66,6 +73,26 @@ type TriageLeadResponse = {
 type UpdateCaseStatusResponse = {
   case: CaseRecord;
   audit_id: string;
+};
+
+type InvestigationResultDraft = {
+  investigationId: string;
+  outcome: string;
+  confirmedFwa: boolean;
+  financialImpactType: string;
+  savingAmount: string;
+  currency: string;
+  notes: string;
+  evidenceRefsText: string;
+};
+
+type PilotWritebackResponse = {
+  claim_id: string;
+  event_type: string;
+  event_status: string;
+  audit_id: string;
+  run_id: string;
+  evidence_refs: string[];
 };
 
 export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseListResponse) {
@@ -179,6 +206,47 @@ export function buildCaseStatusUpdateSummary(response?: UpdateCaseStatusResponse
   };
 }
 
+export function buildInvestigationResultPayload(
+  item: CaseRecord,
+  draft: InvestigationResultDraft,
+) {
+  const caseEvidenceRefs = caseEvidenceRefsFromPackage(item.evidence_package);
+  const evidenceRefs = [
+    `investigation_cases:${item.case_id}`,
+    ...caseEvidenceRefs,
+    ...draft.evidenceRefsText
+      .split(/\n|,/)
+      .map((value) => value.trim())
+      .filter(Boolean),
+  ].filter((value, index, refs) => refs.indexOf(value) === index);
+  return {
+    claim_id: item.claim_id,
+    investigation_id: draft.investigationId.trim(),
+    outcome: draft.outcome,
+    confirmed_fwa: draft.confirmedFwa,
+    financial_impact_type: draft.financialImpactType || undefined,
+    saving_amount: draft.savingAmount || undefined,
+    currency: draft.currency || undefined,
+    notes: draft.notes,
+    evidence_refs: evidenceRefs,
+  };
+}
+
+export function buildInvestigationWritebackSummary(response?: PilotWritebackResponse | null) {
+  if (!response) {
+    return null;
+  }
+  return {
+    claimId: response.claim_id,
+    eventType: response.event_type,
+    eventStatus: response.event_status,
+    auditId: response.audit_id,
+    runId: response.run_id,
+    evidenceCount: response.evidence_refs.length,
+    evidenceRefs: response.evidence_refs,
+  };
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
@@ -199,6 +267,18 @@ export function LeadsCasesPage() {
   const [selectedCaseId, setSelectedCaseId] = useState("");
   const [caseStatus, setCaseStatus] = useState("investigating");
   const [caseNotes, setCaseNotes] = useState("Advance case workflow after reviewer action.");
+  const [investigationId, setInvestigationId] = useState("INV-CLM-0287");
+  const [investigationOutcome, setInvestigationOutcome] = useState("confirmed_fwa");
+  const [confirmedFwa, setConfirmedFwa] = useState(true);
+  const [financialImpactType, setFinancialImpactType] = useState("prevented_payment");
+  const [savingAmount, setSavingAmount] = useState("8200.00");
+  const [investigationCurrency, setInvestigationCurrency] = useState("CNY");
+  const [investigationNotes, setInvestigationNotes] = useState(
+    "TPA investigation confirmed over-treatment signals.",
+  );
+  const [investigationEvidenceRefs, setInvestigationEvidenceRefs] = useState(
+    "agent_run:agent_CLM-0287",
+  );
   const queryClient = useQueryClient();
 
   const leadsQuery = useQuery({
@@ -268,8 +348,33 @@ export function LeadsCasesPage() {
       queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
     },
   });
+  const investigationMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedCase) throw new Error("No case selected");
+      return submitInvestigationResult(
+        buildInvestigationResultPayload(selectedCase, {
+          investigationId,
+          outcome: investigationOutcome,
+          confirmedFwa,
+          financialImpactType,
+          savingAmount,
+          currency: investigationCurrency,
+          notes: investigationNotes,
+          evidenceRefsText: investigationEvidenceRefs,
+        }),
+        apiKey,
+      ) as Promise<PilotWritebackResponse>;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["cases"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+      queryClient.invalidateQueries({ queryKey: ["outcome-labels"] });
+      queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
+    },
+  });
   const triageSummary = buildLeadTriageSummary(triageMutation.data);
   const caseStatusSummary = buildCaseStatusUpdateSummary(caseStatusMutation.data);
+  const investigationSummary = buildInvestigationWritebackSummary(investigationMutation.data);
 
   return (
     <section className="ops-grid">
@@ -572,6 +677,114 @@ export function LeadsCasesPage() {
             </div>
           </dl>
         ) : null}
+        <div className="result-stack">
+          <h3>Investigation Result Writeback</h3>
+          <div className="form-grid">
+            <label>
+              Investigation
+              <input
+                value={investigationId}
+                onChange={(event) => setInvestigationId(event.target.value)}
+              />
+            </label>
+            <label>
+              Outcome
+              <select
+                value={investigationOutcome}
+                onChange={(event) => setInvestigationOutcome(event.target.value)}
+              >
+                <option value="confirmed_fwa">confirmed_fwa</option>
+                <option value="not_fwa">not_fwa</option>
+                <option value="inconclusive">inconclusive</option>
+              </select>
+            </label>
+            <label>
+              Confirmed FWA
+              <select
+                value={confirmedFwa ? "true" : "false"}
+                onChange={(event) => setConfirmedFwa(event.target.value === "true")}
+              >
+                <option value="true">true</option>
+                <option value="false">false</option>
+              </select>
+            </label>
+            <label>
+              Impact Type
+              <select
+                value={financialImpactType}
+                onChange={(event) => setFinancialImpactType(event.target.value)}
+              >
+                <option value="prevented_payment">prevented_payment</option>
+                <option value="recovered_amount">recovered_amount</option>
+                <option value="avoided_future_exposure">avoided_future_exposure</option>
+                <option value="deterrence_estimate">deterrence_estimate</option>
+                <option value="estimated_impact">estimated_impact</option>
+              </select>
+            </label>
+            <label>
+              Saving
+              <input value={savingAmount} onChange={(event) => setSavingAmount(event.target.value)} />
+            </label>
+            <label>
+              Currency
+              <input
+                value={investigationCurrency}
+                onChange={(event) => setInvestigationCurrency(event.target.value)}
+              />
+            </label>
+          </div>
+          <label>
+            Investigation Notes
+            <input
+              value={investigationNotes}
+              onChange={(event) => setInvestigationNotes(event.target.value)}
+            />
+          </label>
+          <label>
+            Evidence Refs
+            <textarea
+              value={investigationEvidenceRefs}
+              onChange={(event) => setInvestigationEvidenceRefs(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => investigationMutation.mutate()}
+            disabled={investigationMutation.isPending || !selectedCase}
+          >
+            Write Back Investigation
+          </button>
+          {investigationMutation.error ? (
+            <pre className="error">{String(investigationMutation.error.message)}</pre>
+          ) : null}
+          {investigationSummary ? (
+            <dl className="result-grid">
+              <div>
+                <dt>Investigation Audit</dt>
+                <dd>{investigationSummary.auditId}</dd>
+              </div>
+              <div>
+                <dt>Claim</dt>
+                <dd>{investigationSummary.claimId}</dd>
+              </div>
+              <div>
+                <dt>Event</dt>
+                <dd>{investigationSummary.eventType}</dd>
+              </div>
+              <div>
+                <dt>Status</dt>
+                <dd>{investigationSummary.eventStatus}</dd>
+              </div>
+              <div>
+                <dt>Run</dt>
+                <dd>{investigationSummary.runId}</dd>
+              </div>
+              <div>
+                <dt>Evidence</dt>
+                <dd>{investigationSummary.evidenceCount}</dd>
+              </div>
+            </dl>
+          ) : null}
+        </div>
         <div className="case-grid">
           {casesQuery.data?.cases.map((item) => {
             const evidenceSufficiency = caseEvidenceSufficiencyFromPackage(item.evidence_package);

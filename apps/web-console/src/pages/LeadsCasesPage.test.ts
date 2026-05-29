@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
   buildCaseStatusUpdateSummary,
   buildCaseEvidenceSufficiencyRows,
+  buildInvestigationResultPayload,
+  buildInvestigationWritebackSummary,
   buildLeadTriageSummary,
   buildLeadSummary,
   caseEvidenceRefsFromPackage,
@@ -184,6 +186,76 @@ describe("buildCaseStatusUpdateSummary", () => {
       evidenceCount: 2,
     });
     expect(buildCaseStatusUpdateSummary(null)).toBeNull();
+  });
+});
+
+describe("buildInvestigationResultPayload", () => {
+  it("builds a TPA investigation result writeback with deduplicated evidence refs", () => {
+    expect(
+      buildInvestigationResultPayload(
+        {
+          case_id: "case_CLM-1",
+          lead_id: "lead_CLM-1",
+          claim_id: "CLM-1",
+          status: "investigating",
+          priority: "high",
+          assignee: "siu-reviewer-1",
+          reviewer: "medical-reviewer-1",
+          evidence_package: {
+            evidence_refs: ["audit:scoring.completed", "agent_run:agent_CLM-1"],
+          },
+        },
+        {
+          investigationId: " INV-CLM-1 ",
+          outcome: "confirmed_fwa",
+          confirmedFwa: true,
+          financialImpactType: "prevented_payment",
+          savingAmount: "8200.00",
+          currency: "CNY",
+          notes: "TPA investigation confirmed over-treatment signals.",
+          evidenceRefsText: "agent_run:agent_CLM-1\nmedical_review:MR-1",
+        },
+      ),
+    ).toEqual({
+      claim_id: "CLM-1",
+      investigation_id: "INV-CLM-1",
+      outcome: "confirmed_fwa",
+      confirmed_fwa: true,
+      financial_impact_type: "prevented_payment",
+      saving_amount: "8200.00",
+      currency: "CNY",
+      notes: "TPA investigation confirmed over-treatment signals.",
+      evidence_refs: [
+        "investigation_cases:case_CLM-1",
+        "audit:scoring.completed",
+        "agent_run:agent_CLM-1",
+        "medical_review:MR-1",
+      ],
+    });
+  });
+});
+
+describe("buildInvestigationWritebackSummary", () => {
+  it("summarizes investigation writeback audit output", () => {
+    expect(
+      buildInvestigationWritebackSummary({
+        claim_id: "CLM-1",
+        event_type: "investigation.result.received",
+        event_status: "succeeded",
+        audit_id: "audit_investigation_1",
+        run_id: "investigation_INV-CLM-1",
+        evidence_refs: ["investigation_results:INV-CLM-1"],
+      }),
+    ).toEqual({
+      claimId: "CLM-1",
+      eventType: "investigation.result.received",
+      eventStatus: "succeeded",
+      auditId: "audit_investigation_1",
+      runId: "investigation_INV-CLM-1",
+      evidenceCount: 1,
+      evidenceRefs: ["investigation_results:INV-CLM-1"],
+    });
+    expect(buildInvestigationWritebackSummary(null)).toBeNull();
   });
 });
 

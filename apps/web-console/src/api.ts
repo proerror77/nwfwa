@@ -425,6 +425,13 @@ export async function updateCaseStatus(caseId: string, payload: unknown, apiKey:
   });
 }
 
+export async function submitInvestigationResult(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/investigations/results", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listAuditSamples(apiKey: string) {
   return requestJson("/api/v1/ops/audit-samples", apiKey);
 }
