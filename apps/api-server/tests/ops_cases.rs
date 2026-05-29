@@ -473,6 +473,36 @@ async fn updates_case_status_with_audit_trail() {
     assert_eq!(status, StatusCode::OK);
     let case_id = triage["case"]["case_id"].as_str().unwrap();
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        r#"{
+          "status": "investigating",
+          "actor_id": "siu-reviewer-2",
+          "notes": " ",
+          "evidence_refs": ["case_workflow:investigation_started"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_CASE_STATUS_NOTES");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        r#"{
+          "status": "investigating",
+          "actor_id": "siu-reviewer-2",
+          "notes": "Investigation started with provider history review.",
+          "evidence_refs": []
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_CASE_STATUS_EVIDENCE");
+
     let (status, update) = json_request(
         app.clone(),
         "POST",

@@ -123,6 +123,24 @@ pub async fn update_case_status(
             "actor_id is required",
         ));
     }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CASE_STATUS_NOTES",
+            "case status updates require notes",
+        ));
+    }
+    if request
+        .evidence_refs
+        .iter()
+        .all(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CASE_STATUS_EVIDENCE",
+            "case status updates require evidence_refs",
+        ));
+    }
     let record = state
         .repository
         .update_case_status(&case_id, request)

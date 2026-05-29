@@ -4053,9 +4053,9 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["triage", "investigating", "pending_evidence", "confirmed", "rejected", "closed"]
                         },
-                        "actor_id": { "type": "string" },
-                        "notes": { "type": "string" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "actor_id": { "type": "string", "minLength": 1 },
+                        "notes": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
                     }
                 },
                 "UpdateCaseStatusResponse": {

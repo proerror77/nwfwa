@@ -896,6 +896,21 @@ async fn openapi_includes_operations_paths() {
             .any(|event_type| event_type == "agent_approval_pending")
     );
     assert_eq!(
+        schema["components"]["schemas"]["UpdateCaseStatusRequest"]["properties"]["actor_id"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["UpdateCaseStatusRequest"]["properties"]["notes"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["UpdateCaseStatusRequest"]["properties"]["evidence_refs"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["financial_impact_type"]["enum"][1],
         "recovered_amount"
