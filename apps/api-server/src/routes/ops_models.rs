@@ -242,6 +242,7 @@ pub async fn create_model_retraining_job(
             "retraining job notes are required",
         ));
     }
+    validate_retraining_notes_without_pii(&request.notes)?;
 
     let readiness = load_model_retraining_readiness(&state, &model_key).await?;
     if readiness.recommendation != "prepare_retraining" {
@@ -317,6 +318,7 @@ pub async fn update_model_retraining_job_status(
             "retraining job notes are required",
         ));
     }
+    validate_retraining_notes_without_pii(&request.notes)?;
     let job = state
         .repository
         .update_model_retraining_job_status(
@@ -360,6 +362,7 @@ pub async fn claim_next_model_retraining_job(
             "retraining job notes are required",
         ));
     }
+    validate_retraining_notes_without_pii(&request.notes)?;
     let job = state
         .repository
         .claim_next_model_retraining_job(
@@ -646,6 +649,7 @@ fn validate_retraining_output_request(
             ));
         }
     }
+    validate_retraining_notes_without_pii(&request.notes)?;
     for (metric_name, metric) in [
         ("auc", &request.auc),
         ("ks", &request.ks),
@@ -687,6 +691,17 @@ fn validate_retraining_output_request(
             feature_importance_uri,
             "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
         )?;
+    }
+    Ok(())
+}
+
+fn validate_retraining_notes_without_pii(notes: &str) -> Result<(), ApiError> {
+    if pii::contains_pii([notes]) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB",
+            "model retraining notes must not contain PII",
+        ));
     }
     Ok(())
 }

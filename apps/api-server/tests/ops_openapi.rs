@@ -523,6 +523,20 @@ async fn openapi_includes_operations_paths() {
             );
         }
     }
+    for schema_name in [
+        "CreateModelRetrainingJobRequest",
+        "UpdateModelRetrainingJobStatusRequest",
+        "ClaimModelRetrainingJobRequest",
+        "CompleteModelRetrainingJobRequest",
+    ] {
+        assert!(
+            schema["components"]["schemas"][schema_name]["properties"]["notes"]["description"]
+                .as_str()
+                .unwrap_or_default()
+                .contains("must not contain PII"),
+            "missing {schema_name}.notes PII contract"
+        );
+    }
     for field in [
         "auc",
         "ks",

@@ -970,6 +970,19 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_JOB_NOTES");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+        r#"{
+          "requested_by": "model-ops",
+          "notes": "Queue retraining after contacting alice@example.com."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB");
+
     let (status, created) = json_request(
         app.clone(),
         "POST",
@@ -1013,6 +1026,20 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_JOB_NOTES");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/claim-next",
+        r#"{
+          "actor": "trainer-worker",
+          "model_key": "baseline_fwa",
+          "notes": "Worker called 13800138000 before claiming the job."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB");
 
     let (status, updated) = json_request(
         app.clone(),
@@ -1060,6 +1087,20 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_JOB_NOTES");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
+        r#"{
+          "status": "validation",
+          "actor": "trainer-worker",
+          "notes": "Validation notes include ID 11010519491231002X."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB");
+
     let (status, updated) = json_request(
         app.clone(),
         "POST",
@@ -1092,6 +1133,25 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_NOTES");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
+        r#"{
+          "actor": "trainer-worker",
+          "notes": "Candidate report sent to alice@example.com.",
+          "candidate_model_version": "0.2.0-candidate",
+          "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+          "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+          "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
+          "metrics_json": {"score_psi": 0.04}
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB");
 
     let (status, completed) = json_request(
         app.clone(),

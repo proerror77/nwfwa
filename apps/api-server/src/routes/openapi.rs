@@ -3922,7 +3922,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["requested_by", "notes"],
                     "properties": {
                         "requested_by": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 }
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Model retraining notes must not contain PII."
+                        }
                     }
                 },
                 "UpdateModelRetrainingJobStatusRequest": {
@@ -3931,7 +3935,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
                         "actor": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 }
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Model retraining notes must not contain PII."
+                        }
                     }
                 },
                 "ClaimModelRetrainingJobRequest": {
@@ -3939,7 +3947,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["actor", "notes"],
                     "properties": {
                         "actor": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Model retraining notes must not contain PII."
+                        },
                         "model_key": { "type": ["string", "null"] }
                     }
                 },
@@ -3948,7 +3960,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["actor", "notes", "candidate_model_version", "artifact_uri", "validation_report_uri", "evaluation_run_id", "confusion_matrix_json", "metrics_json"],
                     "properties": {
                         "actor": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Model retraining notes must not contain PII."
+                        },
                         "candidate_model_version": { "type": "string", "minLength": 1 },
                         "artifact_uri": { "type": "string", "minLength": 1 },
                         "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
