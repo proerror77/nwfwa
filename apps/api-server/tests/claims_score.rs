@@ -2107,9 +2107,37 @@ async fn returns_invalid_model_response_code() {
         ))
         .unwrap();
 
-    let response = app.oneshot(request).await.unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = String::from_utf8(body.to_vec()).unwrap();
     assert!(body.contains("MODEL_RESPONSE_INVALID"));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-BAD-MODEL")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let failed_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.failed")
+        .expect("failed model scoring should be audited");
+    assert_eq!(failed_event["event_status"], "failed");
+    assert_eq!(failed_event["summary"], "model scoring failed");
+    assert_eq!(failed_event["payload"]["claim_id"], "CLM-BAD-MODEL");
+    assert_eq!(failed_event["payload"]["review_mode"], "pre_payment");
+    assert!(failed_event["payload"]["error"]
+        .as_str()
+        .unwrap()
+        .contains("missing score"));
+    assert!(!failed_event["evidence_refs"].as_array().unwrap().is_empty());
 }
