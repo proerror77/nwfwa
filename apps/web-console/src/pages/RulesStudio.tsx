@@ -114,6 +114,17 @@ type RuleDiscoveryResponse = {
   candidates: RuleDiscoveryCandidate[];
 };
 
+type RuleCandidateSaveResponse = {
+  summary: RuleSummary;
+  versions: Array<{
+    version: number;
+    status: string;
+    review_mode: string;
+    scheme_family: string;
+  }>;
+  audit_events: AuditEvent[];
+};
+
 export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
   const ruleLabels = labels.filter((label) => label.feedback_target === "rules");
   return {
@@ -149,6 +160,26 @@ export function buildRuleAuditFilters(rule: RuleSummary, limit = 25) {
     limit,
     rule_id: rule.rule_id,
     rule_version: rule.latest_version,
+  };
+}
+
+export function buildRuleCandidateSaveSummary(response?: RuleCandidateSaveResponse | null) {
+  if (!response) {
+    return null;
+  }
+  return {
+    ruleId: response.summary.rule_id,
+    name: response.summary.name,
+    status: response.summary.status,
+    owner: response.summary.owner,
+    versionLabel: `v${response.summary.latest_version}`,
+    reviewMode: response.summary.review_mode,
+    schemeFamily: response.summary.scheme_family,
+    score: response.summary.score,
+    alertCode: response.summary.alert_code,
+    recommendedAction: response.summary.recommended_action,
+    versionCount: response.versions.length,
+    auditEventCount: response.audit_events.length,
   };
 }
 
@@ -353,7 +384,10 @@ export function RulesStudio() {
     mutationFn: () => {
       const rule = discoveryMutation.data?.candidates?.[0]?.rule;
       if (!rule) throw new Error("No candidate rule available");
-      return saveRuleCandidate({ owner: "rule-discovery", rule }, apiKey);
+      return saveRuleCandidate(
+        { owner: "rule-discovery", rule },
+        apiKey,
+      ) as Promise<RuleCandidateSaveResponse>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
@@ -361,6 +395,7 @@ export function RulesStudio() {
       queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
     },
   });
+  const savedCandidateSummary = buildRuleCandidateSaveSummary(saveCandidateMutation.data);
 
   return (
     <section className="ops-grid">
@@ -685,7 +720,27 @@ export function RulesStudio() {
               </div>
             </div>
             <p className="empty">Blockers: {backtestSummary.blockerLabel}</p>
-            <pre>{JSON.stringify(backtestMutation.data, null, 2)}</pre>
+            {backtestSummary.matchedClaimIds.length > 0 ? (
+              <div className="table-list">
+                {backtestSummary.matchedClaimIds.map((claimId) => (
+                  <div className="metric-row compact-metric-row" key={claimId}>
+                    <span>{claimId}</span>
+                    <strong>matched</strong>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="empty">No matched claims</p>
+            )}
+            {backtestSummary.evidenceRefs.length > 0 ? (
+              <ol className="audit-timeline">
+                {backtestSummary.evidenceRefs.map((reference) => (
+                  <li key={reference}>
+                    <span>{reference}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -761,10 +816,58 @@ export function RulesStudio() {
             {saveCandidateMutation.error ? (
               <pre className="error">{String(saveCandidateMutation.error.message)}</pre>
             ) : null}
-            {saveCandidateMutation.data ? (
-              <pre>{JSON.stringify(saveCandidateMutation.data, null, 2)}</pre>
+            {savedCandidateSummary ? (
+              <dl className="result-grid">
+                <div>
+                  <dt>Saved Rule</dt>
+                  <dd>{savedCandidateSummary.ruleId}</dd>
+                </div>
+                <div>
+                  <dt>Name</dt>
+                  <dd>{savedCandidateSummary.name}</dd>
+                </div>
+                <div>
+                  <dt>Status</dt>
+                  <dd>{savedCandidateSummary.status}</dd>
+                </div>
+                <div>
+                  <dt>Owner</dt>
+                  <dd>{savedCandidateSummary.owner}</dd>
+                </div>
+                <div>
+                  <dt>Version</dt>
+                  <dd>{savedCandidateSummary.versionLabel}</dd>
+                </div>
+                <div>
+                  <dt>Review Mode</dt>
+                  <dd>{formatReviewModeLabel(savedCandidateSummary.reviewMode)}</dd>
+                </div>
+                <div>
+                  <dt>Scheme</dt>
+                  <dd>{formatFwaSchemeLabel(savedCandidateSummary.schemeFamily, schemeLabelMap)}</dd>
+                </div>
+                <div>
+                  <dt>Score</dt>
+                  <dd>{savedCandidateSummary.score}</dd>
+                </div>
+                <div>
+                  <dt>Alert</dt>
+                  <dd>{savedCandidateSummary.alertCode}</dd>
+                </div>
+                <div>
+                  <dt>Action</dt>
+                  <dd>{savedCandidateSummary.recommendedAction}</dd>
+                </div>
+                <div>
+                  <dt>Versions</dt>
+                  <dd>{savedCandidateSummary.versionCount}</dd>
+                </div>
+                <div>
+                  <dt>Embedded Audits</dt>
+                  <dd>{savedCandidateSummary.auditEventCount}</dd>
+                </div>
+              </dl>
             ) : null}
-            <pre>{JSON.stringify(discoveryMutation.data, null, 2)}</pre>
           </div>
         ) : null}
       </div>

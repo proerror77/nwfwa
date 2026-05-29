@@ -36,6 +36,8 @@ describe("buildRuleBacktestSummary", () => {
       recommendation: "eligible_for_review",
       blockerLabel: "none",
       evidenceCount: 1,
+      matchedClaimIds: ["CLM-1"],
+      evidenceRefs: ["rules:candidate:v1"],
     });
   });
 });

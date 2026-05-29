@@ -32,6 +32,8 @@ export function buildRuleBacktestSummary(result: RuleBacktestResponse) {
     recommendation: result.promotion_recommendation,
     blockerLabel: result.blockers.length === 0 ? "none" : result.blockers.join(", "),
     evidenceCount: result.evidence_refs.length,
+    matchedClaimIds: result.matched_claim_ids,
+    evidenceRefs: result.evidence_refs,
   };
 }
 

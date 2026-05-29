@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildRuleAuditFilters,
+  buildRuleCandidateSaveSummary,
   buildRuleDiscoverySummary,
   buildRuleLabelReadinessSummary,
 } from "./RulesStudio";
@@ -112,5 +113,59 @@ describe("buildRuleAuditFilters", () => {
       rule_id: "candidate_early_claim",
       rule_version: 2,
     });
+  });
+});
+
+describe("buildRuleCandidateSaveSummary", () => {
+  it("summarizes saved rule candidate metadata for governance review", () => {
+    expect(
+      buildRuleCandidateSaveSummary({
+        summary: {
+          rule_id: "candidate_early_claim",
+          name: "Candidate early claim",
+          status: "draft",
+          owner: "rule-discovery",
+          active_version: null,
+          latest_version: 1,
+          review_mode: "pre_payment",
+          scheme_family: "early_high_value_claim",
+          score: 25,
+          alert_code: "EARLY_CLAIM",
+          recommended_action: "ManualReview",
+        },
+        versions: [
+          {
+            version: 1,
+            status: "draft",
+            review_mode: "pre_payment",
+            scheme_family: "early_high_value_claim",
+          },
+        ],
+        audit_events: [
+          {
+            audit_id: "audit_rule_candidate_saved",
+            run_id: "rule_candidate_saved",
+            event_type: "rule.candidate.saved",
+            event_status: "succeeded",
+            summary: "Rule candidate saved",
+            evidence_refs: ["rules:candidate_early_claim:v1"],
+          },
+        ],
+      }),
+    ).toEqual({
+      ruleId: "candidate_early_claim",
+      name: "Candidate early claim",
+      status: "draft",
+      owner: "rule-discovery",
+      versionLabel: "v1",
+      reviewMode: "pre_payment",
+      schemeFamily: "early_high_value_claim",
+      score: 25,
+      alertCode: "EARLY_CLAIM",
+      recommendedAction: "ManualReview",
+      versionCount: 1,
+      auditEventCount: 1,
+    });
+    expect(buildRuleCandidateSaveSummary(null)).toBeNull();
   });
 });
