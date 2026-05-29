@@ -16,6 +16,7 @@ required_files=(
   "scripts/demo/smoke_demo.py"
   "scripts/demo/smoke_web_console.mjs"
   "scripts/ci/assert_worker_health.py"
+  "apps/api-server/tests/tpa_contract_docs.rs"
 )
 
 workspace_files=(
@@ -61,6 +62,9 @@ grep -q "POST /api/v1/qa/results" docs/engineering/tpa-integration-contract.md
 grep -q "GET /api/v1/audit/claims/{claim_id}" docs/engineering/tpa-integration-contract.md
 grep -q "idempotency_key" docs/engineering/tpa-integration-contract.md
 grep -q "Error shape" docs/engineering/tpa-integration-contract.md
+grep -q "docs/engineering/tpa-integration-contract.md" apps/api-server/tests/tpa_contract_docs.rs
+grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_docs.rs
+grep -q "ErrorResponse" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
 grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
