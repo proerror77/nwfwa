@@ -140,6 +140,52 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM rule_backtest_runs
+  WHERE rule_id = 'rule_early_claim'
+    AND rule_version = 1
+    AND promotion_recommendation = 'eligible_for_review'
+    AND precision_value >= 0.70
+    AND recall_value >= 0.60
+    AND false_positive_rate <= 0.30
+    AND estimated_saving::numeric > 0
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected eligible rule_early_claim backtest evidence';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM rule_promotion_reviews
+  WHERE rule_id = 'rule_early_claim'
+    AND rule_version = 1
+    AND decision = 'approved'
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected approved rule_early_claim promotion review';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM rules
+  WHERE rule_key = 'rule_early_claim'
+    AND status = 'active';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected rule_early_claim to be active after publish';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_events
+  WHERE event_type IN (
+      'rule.backtest.completed',
+      'rule.promotion.reviewed',
+      'rule.status.changed'
+    )
+    AND payload ->> 'rule_id' = 'rule_early_claim'
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 5 THEN
+    RAISE EXCEPTION 'expected rule backtest, promotion, and lifecycle audit events, found %',
+      row_count;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM model_retraining_jobs
   WHERE model_key = 'baseline_fwa'
     AND model_version = '0.1.0'

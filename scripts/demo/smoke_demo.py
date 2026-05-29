@@ -12,6 +12,7 @@ API_KEY = os.environ.get("FWA_API_KEY", "dev-secret")
 SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
 CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
 MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
+RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
 
 
 def request(method, path, payload=None, retries=1):
@@ -163,6 +164,144 @@ def govern_retraining_candidate():
             ensure_ascii=True,
         )
     )
+
+
+def demo_rule_backtest_payload():
+    return {
+        "rule": {
+            "rule_id": RULE_ID,
+            "version": 1,
+            "name": "Early claim after policy start",
+            "conditions": [
+                {
+                    "field": "days_since_policy_start",
+                    "operator": "<=",
+                    "value": 7,
+                }
+            ],
+            "action": {
+                "score": 25,
+                "alert_code": "EARLY_CLAIM",
+                "recommended_action": "ManualReview",
+                "reason": "Policy-start early claim requires manual review.",
+            },
+        },
+        "samples": [
+            {
+                "external_claim_id": "CLM-RULE-BT-TP-1",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "confirmed_fwa": True,
+                "policy": {
+                    "external_policy_id": "POL-RULE-BT-TP-1",
+                    "coverage_start_date": "2026-01-01",
+                    "coverage_end_date": "2026-12-31",
+                    "coverage_limit": "10000",
+                },
+            },
+            {
+                "external_claim_id": "CLM-RULE-BT-TP-2",
+                "claim_amount": "7000",
+                "currency": "CNY",
+                "service_date": "2026-01-07",
+                "confirmed_fwa": True,
+                "policy": {
+                    "external_policy_id": "POL-RULE-BT-TP-2",
+                    "coverage_start_date": "2026-01-01",
+                    "coverage_end_date": "2026-12-31",
+                    "coverage_limit": "10000",
+                },
+            },
+            {
+                "external_claim_id": "CLM-RULE-BT-TN",
+                "claim_amount": "500",
+                "currency": "CNY",
+                "service_date": "2026-03-01",
+                "confirmed_fwa": False,
+                "policy": {
+                    "external_policy_id": "POL-RULE-BT-TN",
+                    "coverage_start_date": "2026-01-01",
+                    "coverage_end_date": "2026-12-31",
+                    "coverage_limit": "10000",
+                },
+            },
+        ],
+        "expected_review_capacity": 5,
+    }
+
+
+def run_rule_backtest_and_publish(score, investigation):
+    backtest = request("POST", "/api/v1/ops/rules/backtest", demo_rule_backtest_payload())
+    assert_true(
+        backtest.get("promotion_recommendation") == "eligible_for_review",
+        f"rule backtest should be eligible for review: {backtest}",
+    )
+    assert_true(backtest.get("precision", 0) >= 0.70, "rule backtest precision below threshold")
+    assert_true(backtest.get("recall", 0) >= 0.60, "rule backtest recall below threshold")
+    assert_true(backtest.get("lift", 0) > 1.0, "rule backtest lift should show enrichment")
+    assert_true(backtest.get("estimated_saving") != "0.00", "rule backtest missing saving estimate")
+
+    gates = request("GET", f"/api/v1/ops/rules/{RULE_ID}/promotion-gates")
+    assert_true(
+        "backtest evidence missing" not in gates.get("blockers", []),
+        f"rule promotion gates did not consume backtest evidence: {gates}",
+    )
+    assert_true(
+        "shadow rollout missing" not in gates.get("blockers", []),
+        f"rule promotion gates missing runtime rollout evidence: {gates}",
+    )
+
+    review = request(
+        "POST",
+        f"/api/v1/ops/rules/{RULE_ID}/promotion-reviews",
+        {
+            "decision": "approved",
+            "reviewer": "rule-governance-demo",
+            "notes": "Demo smoke approves rule release after deterministic backtest.",
+            "evidence_refs": [
+                f"rules:{RULE_ID}:v1",
+                f"audit:{score['audit_id']}",
+                f"audit:{investigation['audit_id']}",
+            ],
+        },
+    )
+    assert_true(review.get("decision") == "approved", "rule promotion review was not approved")
+
+    lifecycle_payload = {
+        "evidence_refs": [
+            f"rules:{RULE_ID}:v1",
+            f"rule_backtest_runs:{RULE_ID}:v1",
+            f"rule_promotion_reviews:{RULE_ID}:v1",
+        ]
+    }
+    for path, expected_status in [
+        (f"/api/v1/ops/rules/{RULE_ID}/submit", "submitted"),
+        (f"/api/v1/ops/rules/{RULE_ID}/approve", "approved"),
+        (f"/api/v1/ops/rules/{RULE_ID}/publish", "active"),
+    ]:
+        result = request("POST", path, lifecycle_payload)
+        assert_true(
+            result.get("status") == expected_status,
+            f"rule lifecycle {path} did not reach {expected_status}",
+        )
+
+    published = request("GET", f"/api/v1/ops/rules/{RULE_ID}")
+    assert_true(published.get("summary", {}).get("status") == "active", "rule was not published")
+    assert_true(
+        any(
+            event.get("event_type") == "rule.status.changed"
+            and event.get("payload", {}).get("to_status") == "active"
+            for event in published.get("audit_events", [])
+        ),
+        "published rule missing lifecycle audit event",
+    )
+    return {
+        "rule_id": RULE_ID,
+        "matched_count": backtest["matched_count"],
+        "precision": backtest["precision"],
+        "lift": backtest["lift"],
+    }
 
 
 def main():
@@ -366,6 +505,8 @@ def main():
     )
     assert_true(investigation.get("audit_id"), "investigation writeback missing audit_id")
 
+    rule_release = run_rule_backtest_and_publish(score, investigation)
+
     qa = request(
         "POST",
         "/api/v1/qa/results",
@@ -520,6 +661,7 @@ def main():
                 "case_id": case_id,
                 "outcome_labels": label_pool["total_labels"],
                 "retraining_job_id": retraining_job["job_id"],
+                "rule_release": rule_release,
             },
             ensure_ascii=True,
         )
