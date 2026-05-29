@@ -9,6 +9,7 @@ import {
   createAuditSample,
   discoverRules,
   createModelRetrainingJob,
+  FRONTEND_API_CONTRACT_PATHS,
   getDashboardSummary,
   getClaimAuditHistory,
   getMemberProfileSummary,
@@ -77,6 +78,30 @@ afterEach(() => {
 });
 
 describe("ops API helpers", () => {
+  it("keeps frontend contract paths OpenAPI-shaped", () => {
+    const paths = [...FRONTEND_API_CONTRACT_PATHS];
+
+    expect(new Set(paths).size).toBe(paths.length);
+    expect(paths).toEqual([...paths].sort());
+    expect(paths).toContain("/api/v1/claims/score");
+    expect(paths).toContain("/api/v1/members/{member_id}/profile-summary");
+    expect(paths).toContain("/api/v1/knowledge/search-similar");
+    expect(paths).toContain("/api/v1/qa/results");
+    expect(paths).toContain("/api/v1/audit/claims/{claim_id}");
+
+    for (const path of paths) {
+      expect(path).toMatch(/^\/api\/v1\//);
+      expect(path).not.toContain("?");
+      expect(path).not.toMatch(/\/\//);
+      expect(path).not.toMatch(/:\w/);
+
+      const params = [...path.matchAll(/{([^}]+)}/g)].map((match) => match[1]);
+      for (const param of params) {
+        expect(param).toMatch(/^[a-z][a-z0-9_]*$/);
+      }
+    }
+  });
+
   it("calls rule operations endpoints with API key", async () => {
     const fetchMock = mockFetch({ rules: [] });
 

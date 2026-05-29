@@ -29,6 +29,7 @@ async fn openapi_includes_operations_paths() {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let schema: serde_json::Value = serde_json::from_slice(&body).unwrap();
     for path in [
+        "/api/v1/claims/score",
         "/api/v1/ops/rules",
         "/api/v1/ops/rules/{rule_id}",
         "/api/v1/ops/rules/backtest",
@@ -62,10 +63,12 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/datasets/{dataset_id}",
         "/api/v1/ops/datasets/{dataset_id}/mappings",
         "/api/v1/ops/feature-sets",
+        "/api/v1/ops/factors/readiness",
         "/api/v1/ops/model-datasets",
         "/api/v1/ops/model-evaluations",
         "/api/v1/ops/model-evaluations/{evaluation_run_id}",
         "/api/v1/ops/dashboard/summary",
+        "/api/v1/ops/providers/risk-summary",
         "/api/v1/ops/webhook-events",
         "/api/v1/ops/webhook-events/{event_id}/delivery-attempts",
         "/api/v1/ops/alerts",
@@ -83,6 +86,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/knowledge/cases",
         "/api/v1/knowledge/search-similar",
         "/api/v1/agent/cases/investigate",
+        "/api/v1/members/{member_id}/profile-summary",
         "/api/v1/investigations/results",
         "/api/v1/qa/results",
         "/api/v1/ops/qa/feedback-items",
