@@ -71,6 +71,11 @@ pub struct SubmitRulePromotionReviewRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct RuleLifecycleRequest {
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct RuleBacktestRequest {
     pub rule: Rule,
     pub samples: Vec<RuleBacktestSample>,
@@ -852,6 +857,7 @@ pub async fn save_rule_candidate(
             from_status: None,
             to_status: &detail.summary.status,
             summary: "Rule candidate saved",
+            evidence_refs: default_rule_evidence_refs(&detail.summary),
         },
     )
     .await
@@ -863,23 +869,29 @@ pub async fn submit_rule(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    update_status(state, headers, rule_id, "submitted").await
+    validate_rule_lifecycle_request(&request)?;
+    update_status(state, headers, rule_id, "submitted", request.evidence_refs).await
 }
 
 pub async fn approve_rule(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    update_status(state, headers, rule_id, "approved").await
+    validate_rule_lifecycle_request(&request)?;
+    update_status(state, headers, rule_id, "approved", request.evidence_refs).await
 }
 
 pub async fn publish_rule(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    validate_rule_lifecycle_request(&request)?;
     let actor = authorize(&state, &headers)?;
     let previous = state
         .repository
@@ -921,6 +933,7 @@ pub async fn publish_rule(
             from_status: Some(&previous.status),
             to_status: &rule.status,
             summary: "Rule status changed",
+            evidence_refs: request.evidence_refs,
         },
     )
     .await
@@ -937,7 +950,9 @@ pub async fn rollback_rule(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(rule_id): Path<String>,
+    Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
+    validate_rule_lifecycle_request(&request)?;
     let actor = authorize(&state, &headers)?;
     let previous = state
         .repository
@@ -968,6 +983,7 @@ pub async fn rollback_rule(
             from_status: Some(&previous.status),
             to_status: &rule.status,
             summary: "Rule rollback completed",
+            evidence_refs: request.evidence_refs,
         },
     )
     .await
@@ -985,8 +1001,9 @@ async fn update_status(
     headers: HeaderMap,
     rule_id: String,
     status: &'static str,
+    evidence_refs: Vec<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    update_status_with_required_previous(state, headers, rule_id, status, None).await
+    update_status_with_required_previous(state, headers, rule_id, status, None, evidence_refs).await
 }
 
 async fn update_status_with_required_previous(
@@ -995,6 +1012,7 @@ async fn update_status_with_required_previous(
     rule_id: String,
     status: &'static str,
     required_previous_status: Option<&'static str>,
+    evidence_refs: Vec<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
     let previous = state
@@ -1028,6 +1046,7 @@ async fn update_status_with_required_previous(
             from_status: Some(&previous.status),
             to_status: &rule.status,
             summary: "Rule status changed",
+            evidence_refs,
         },
     )
     .await
@@ -1038,6 +1057,22 @@ async fn update_status_with_required_previous(
         active_version: rule.active_version,
         latest_version: rule.latest_version,
     }))
+}
+
+fn validate_rule_lifecycle_request(request: &RuleLifecycleRequest) -> Result<(), ApiError> {
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_RULE_LIFECYCLE_EVIDENCE",
+            "rule lifecycle evidence_refs are required",
+        ));
+    }
+    Ok(())
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
@@ -1066,6 +1101,7 @@ struct RuleAuditInput<'a> {
     from_status: Option<&'a str>,
     to_status: &'a str,
     summary: &'static str,
+    evidence_refs: Vec<String>,
 }
 
 async fn record_rule_audit(
@@ -1095,12 +1131,17 @@ async fn record_rule_audit(
             event_status: "succeeded".into(),
             summary: input.summary.into(),
             payload,
-            evidence_refs: vec![serde_json::json!(format!(
-                "rules:{}:v{}",
-                input.rule.rule_id, input.rule.latest_version
-            ))],
+            evidence_refs: input
+                .evidence_refs
+                .into_iter()
+                .map(serde_json::Value::String)
+                .collect(),
         })
         .await
+}
+
+fn default_rule_evidence_refs(rule: &RuleSummaryRecord) -> Vec<String> {
+    vec![format!("rules:{}:v{}", rule.rule_id, rule.latest_version)]
 }
 
 async fn record_rule_backtest_audit(

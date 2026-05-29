@@ -267,10 +267,10 @@ export function RulesStudio() {
   const lifecycleMutation = useMutation({
     mutationFn: (action: "submit" | "approve" | "publish" | "rollback") => {
       if (!selectedRule) throw new Error("No rule selected");
-      if (action === "submit") return submitRule(selectedRule.rule_id, apiKey);
-      if (action === "approve") return approveRule(selectedRule.rule_id, apiKey);
-      if (action === "rollback") return rollbackRule(selectedRule.rule_id, apiKey);
-      return publishRule(selectedRule.rule_id, apiKey);
+      if (action === "submit") return submitRule(selectedRule.rule_id, apiKey, selectedRule.latest_version);
+      if (action === "approve") return approveRule(selectedRule.rule_id, apiKey, selectedRule.latest_version);
+      if (action === "rollback") return rollbackRule(selectedRule.rule_id, apiKey, selectedRule.latest_version);
+      return publishRule(selectedRule.rule_id, apiKey, selectedRule.latest_version);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });

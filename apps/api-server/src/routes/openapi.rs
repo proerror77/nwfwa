@@ -220,18 +220,74 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/{rule_id}/submit": {
+                "post": {
+                    "summary": "Submit a draft rule for governance review",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": rule_lifecycle_parameters(),
+                    "requestBody": rule_lifecycle_request_body(),
+                    "responses": {
+                        "200": {
+                            "description": "Rule submitted for review",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleLifecycleResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/rules/{rule_id}/approve": {
+                "post": {
+                    "summary": "Approve a submitted rule",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": rule_lifecycle_parameters(),
+                    "requestBody": rule_lifecycle_request_body(),
+                    "responses": {
+                        "200": {
+                            "description": "Rule approved",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleLifecycleResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/rules/{rule_id}/publish": {
+                "post": {
+                    "summary": "Publish an approved rule into production routing",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": rule_lifecycle_parameters(),
+                    "requestBody": rule_lifecycle_request_body(),
+                    "responses": {
+                        "200": {
+                            "description": "Rule published",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleLifecycleResponse" }
+                                }
+                            }
+                        },
+                        "409": {
+                            "description": "Rule approval or promotion gates block publication",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/{rule_id}/rollback": {
                 "post": {
                     "summary": "Rollback an active rule out of production routing",
                     "security": [{ "ApiKeyAuth": [] }],
-                    "parameters": [
-                        {
-                            "name": "rule_id",
-                            "in": "path",
-                            "required": true,
-                            "schema": { "type": "string" }
-                        }
-                    ],
+                    "parameters": rule_lifecycle_parameters(),
+                    "requestBody": rule_lifecycle_request_body(),
                     "responses": {
                         "200": {
                             "description": "Rule rolled back to approved status",
@@ -2862,6 +2918,13 @@ pub async fn openapi_schema() -> Json<Value> {
                         "latest_version": { "type": "integer" }
                     }
                 },
+                "RuleLifecycleRequest": {
+                    "type": "object",
+                    "required": ["evidence_refs"],
+                    "properties": {
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                    }
+                },
                 "RulePerformanceRecord": {
                     "type": "object",
                     "required": [
@@ -4814,6 +4877,28 @@ fn routing_policy_lifecycle_parameters() -> Value {
             "schema": { "type": "integer", "minimum": 1 }
         }
     ])
+}
+
+fn rule_lifecycle_parameters() -> Value {
+    json!([
+        {
+            "name": "rule_id",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" }
+        }
+    ])
+}
+
+fn rule_lifecycle_request_body() -> Value {
+    json!({
+        "required": true,
+        "content": {
+            "application/json": {
+                "schema": { "$ref": "#/components/schemas/RuleLifecycleRequest" }
+            }
+        }
+    })
 }
 
 fn routing_policy_lifecycle_request_body() -> Value {

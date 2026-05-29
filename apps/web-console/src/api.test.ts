@@ -94,6 +94,9 @@ describe("ops API helpers", () => {
     await approveRule("rule_early_claim", "dev-secret");
     await publishRule("rule_early_claim", "dev-secret");
     await rollbackRule("rule_early_claim", "dev-secret");
+    const ruleLifecycleBody = JSON.stringify({
+      evidence_refs: ["rules:rule_early_claim:v1"],
+    });
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -125,22 +128,22 @@ describe("ops API helpers", () => {
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
       "/api/v1/ops/rules/rule_early_claim/submit",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
       "/api/v1/ops/rules/rule_early_claim/approve",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
       "/api/v1/ops/rules/rule_early_claim/publish",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       7,
       "/api/v1/ops/rules/rule_early_claim/rollback",
-      expect.objectContaining({ method: "POST" }),
+      expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );
   });
 

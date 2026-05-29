@@ -76,31 +76,37 @@ export async function saveRuleCandidate(payload: unknown, apiKey: string) {
   });
 }
 
-export async function submitRule(ruleId: string, apiKey: string) {
+function ruleLifecycleBody(ruleId: string, version = 1) {
+  return JSON.stringify({
+    evidence_refs: [`rules:${ruleId}:v${version}`],
+  });
+}
+
+export async function submitRule(ruleId: string, apiKey: string, version = 1) {
   return requestJson(`/api/v1/ops/rules/${encodeURIComponent(ruleId)}/submit`, apiKey, {
     method: "POST",
-    body: "{}",
+    body: ruleLifecycleBody(ruleId, version),
   });
 }
 
-export async function approveRule(ruleId: string, apiKey: string) {
+export async function approveRule(ruleId: string, apiKey: string, version = 1) {
   return requestJson(`/api/v1/ops/rules/${encodeURIComponent(ruleId)}/approve`, apiKey, {
     method: "POST",
-    body: "{}",
+    body: ruleLifecycleBody(ruleId, version),
   });
 }
 
-export async function publishRule(ruleId: string, apiKey: string) {
+export async function publishRule(ruleId: string, apiKey: string, version = 1) {
   return requestJson(`/api/v1/ops/rules/${encodeURIComponent(ruleId)}/publish`, apiKey, {
     method: "POST",
-    body: "{}",
+    body: ruleLifecycleBody(ruleId, version),
   });
 }
 
-export async function rollbackRule(ruleId: string, apiKey: string) {
+export async function rollbackRule(ruleId: string, apiKey: string, version = 1) {
   return requestJson(`/api/v1/ops/rules/${encodeURIComponent(ruleId)}/rollback`, apiKey, {
     method: "POST",
-    body: "{}",
+    body: ruleLifecycleBody(ruleId, version),
   });
 }
 

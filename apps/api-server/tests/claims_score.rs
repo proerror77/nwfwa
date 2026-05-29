@@ -895,7 +895,9 @@ async fn scoring_uses_only_active_rule_versions() {
         .uri("/api/v1/ops/rules/rule_early_claim/submit")
         .header("content-type", "application/json")
         .header("x-api-key", "dev-secret")
-        .body(Body::from("{}"))
+        .body(Body::from(
+            r#"{"evidence_refs":["rules:rule_early_claim:v1"]}"#,
+        ))
         .unwrap();
     let submit_response = app.clone().oneshot(submit_request).await.unwrap();
     assert_eq!(submit_response.status(), StatusCode::OK);

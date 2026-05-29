@@ -360,7 +360,7 @@ async fn filters_rule_and_model_audit_events_for_lifecycle_history() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/candidate_audit_filter_rule/submit",
-        "{}",
+        r#"{"evidence_refs":["rules:candidate_audit_filter_rule:v1"]}"#,
     )
     .await;
     assert_eq!(status, StatusCode::OK);

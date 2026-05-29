@@ -37,6 +37,9 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/rules/{rule_id}/promotion-reviews",
         "/api/v1/ops/rules/candidates",
         "/api/v1/ops/rules/discover",
+        "/api/v1/ops/rules/{rule_id}/submit",
+        "/api/v1/ops/rules/{rule_id}/approve",
+        "/api/v1/ops/rules/{rule_id}/publish",
         "/api/v1/ops/rules/{rule_id}/rollback",
         "/api/v1/ops/models",
         "/api/v1/ops/routing-policies",
@@ -678,6 +681,23 @@ async fn openapi_includes_operations_paths() {
         schema["paths"]["/api/v1/ops/rules/{rule_id}/rollback"]["post"]["responses"]["200"]
             ["content"]["application/json"]["schema"]["$ref"],
         "#/components/schemas/RuleLifecycleResponse"
+    );
+    for action in ["submit", "approve", "publish", "rollback"] {
+        let operation = &schema["paths"][format!("/api/v1/ops/rules/{{rule_id}}/{action}")]["post"];
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"],
+            "#/components/schemas/RuleLifecycleRequest"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["RuleLifecycleRequest"]["properties"]["evidence_refs"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleLifecycleRequest"]["properties"]["evidence_refs"]
+            ["items"]["minLength"],
+        1
     );
     assert_eq!(
         schema["components"]["schemas"]["RuleLifecycleResponse"]["properties"]["active_version"]

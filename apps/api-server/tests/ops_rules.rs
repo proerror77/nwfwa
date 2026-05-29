@@ -33,6 +33,10 @@ async fn json_request(
     (status, String::from_utf8(body.to_vec()).unwrap())
 }
 
+fn rule_lifecycle_payload(rule_id: &str, version: u32) -> String {
+    format!(r#"{{"evidence_refs":["rules:{rule_id}:v{version}"]}}"#)
+}
+
 async fn seed_rule_promotion_evidence(app: axum::Router) {
     let (status, _) = json_request(
         app.clone(),
@@ -857,7 +861,7 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/candidate_early_high_amount/submit",
-        "{}",
+        &rule_lifecycle_payload("candidate_early_high_amount", 1),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -913,7 +917,7 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/candidate_audit_rule/submit",
-        "{}",
+        &rule_lifecycle_payload("candidate_audit_rule", 1),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -933,6 +937,10 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
     assert_eq!(audit_events[1]["event_type"], "rule.status.changed");
     assert_eq!(audit_events[1]["payload"]["from_status"], "draft");
     assert_eq!(audit_events[1]["payload"]["to_status"], "submitted");
+    assert_eq!(
+        audit_events[1]["evidence_refs"][0],
+        "rules:candidate_audit_rule:v1"
+    );
 }
 
 #[tokio::test]
@@ -1066,12 +1074,40 @@ async fn advances_rule_lifecycle() {
     let app = build_app(test_config());
     seed_rule_promotion_evidence(app.clone()).await;
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/submit",
+        r#"{"evidence_refs": []}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_RULE_LIFECYCLE_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/submit",
+        r#"{"evidence_refs": [" "]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_RULE_LIFECYCLE_EVIDENCE");
+
     for (uri, expected_status) in [
         ("/api/v1/ops/rules/rule_early_claim/submit", "submitted"),
         ("/api/v1/ops/rules/rule_early_claim/approve", "approved"),
         ("/api/v1/ops/rules/rule_early_claim/publish", "active"),
     ] {
-        let (status, body) = json_request(app.clone(), "POST", uri, "{}").await;
+        let (status, body) = json_request(
+            app.clone(),
+            "POST",
+            uri,
+            &rule_lifecycle_payload("rule_early_claim", 1),
+        )
+        .await;
 
         assert_eq!(status, StatusCode::OK);
         let body: serde_json::Value = serde_json::from_str(&body).unwrap();
@@ -1088,7 +1124,7 @@ async fn blocks_rule_publish_before_approval() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/publish",
-        "{}",
+        &rule_lifecycle_payload("rule_early_claim", 1),
     )
     .await;
 
@@ -1110,7 +1146,7 @@ async fn blocks_rule_publish_when_promotion_gates_are_blocked() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/submit",
-        "{}",
+        &rule_lifecycle_payload("rule_early_claim", 1),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -1119,7 +1155,7 @@ async fn blocks_rule_publish_when_promotion_gates_are_blocked() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/approve",
-        "{}",
+        &rule_lifecycle_payload("rule_early_claim", 1),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -1128,7 +1164,7 @@ async fn blocks_rule_publish_when_promotion_gates_are_blocked() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/publish",
-        "{}",
+        &rule_lifecycle_payload("rule_early_claim", 1),
     )
     .await;
 
@@ -1155,7 +1191,7 @@ async fn rolls_back_active_rule_with_audit_event() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/rollback",
-        "{}",
+        &rule_lifecycle_payload("rule_early_claim", 1),
     )
     .await;
 
@@ -1180,6 +1216,10 @@ async fn rolls_back_active_rule_with_audit_event() {
     assert_eq!(rollback_event["payload"]["from_status"], "active");
     assert_eq!(rollback_event["payload"]["to_status"], "approved");
     assert_eq!(rollback_event["payload"]["rule_version"], 1);
+    assert_eq!(
+        rollback_event["evidence_refs"][0],
+        "rules:rule_early_claim:v1"
+    );
 }
 
 #[tokio::test]
@@ -1190,7 +1230,7 @@ async fn blocks_rule_rollback_when_rule_is_not_active() {
         app.clone(),
         "POST",
         "/api/v1/ops/rules/rule_early_claim/rollback",
-        "{}",
+        &rule_lifecycle_payload("rule_early_claim", 1),
     )
     .await;
     assert_eq!(status, StatusCode::OK);
@@ -1199,7 +1239,7 @@ async fn blocks_rule_rollback_when_rule_is_not_active() {
         app,
         "POST",
         "/api/v1/ops/rules/rule_early_claim/rollback",
-        "{}",
+        &rule_lifecycle_payload("rule_early_claim", 1),
     )
     .await;
 
