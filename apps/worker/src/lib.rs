@@ -676,7 +676,12 @@ fn build_mock_retraining_output(
         }),
         feature_importance_uri: Some(feature_importance_uri),
         metrics_json: serde_json::json!({
+            "out_of_time_auc": 0.82,
             "score_psi": 0.04,
+            "leakage_check_status": "passed",
+            "feature_reproducibility_hash": "sha256:demo-retraining-feature-reproducibility",
+            "label_provenance_status": "passed",
+            "label_reviewer_source": "investigation_results",
             "shadow_comparison_status": "passed",
             "review_capacity_threshold_status": "passed"
         }),
@@ -973,6 +978,8 @@ mod tests {
         assert_eq!(output.endpoint_url, None);
         assert_eq!(output.confusion_matrix_json["tp"], 24);
         assert_eq!(output.metrics_json["shadow_comparison_status"], "passed");
+        assert_eq!(output.metrics_json["leakage_check_status"], "passed");
+        assert_eq!(output.metrics_json["label_provenance_status"], "passed");
     }
 
     #[test]

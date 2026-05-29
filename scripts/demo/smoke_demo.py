@@ -59,7 +59,7 @@ def has_label(labels, **expected):
     )
 
 
-def assert_retraining_completed():
+def latest_completed_retraining_job():
     jobs = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/retraining-jobs").get("jobs", [])
     completed_jobs = [
         job
@@ -69,17 +69,87 @@ def assert_retraining_completed():
         and job.get("output_evaluation_id")
     ]
     assert_true(completed_jobs, "worker did not complete a retraining job")
-    candidate_versions = {job["candidate_model_version"] for job in completed_jobs}
+    return completed_jobs[0]
+
+
+def govern_retraining_candidate():
+    completed_job = latest_completed_retraining_job()
+    candidate_version = completed_job["candidate_model_version"]
+    output_evaluation_id = completed_job["output_evaluation_id"]
+    job_id = completed_job["job_id"]
+
+    gates = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    assert_true(gates.get("model_version") == candidate_version, "promotion gates did not target latest candidate")
+    assert_true(
+        "approval missing" in gates.get("blockers", []),
+        f"candidate gates should require approval before activation: {gates}",
+    )
+    active_gate = next(
+        gate for gate in gates.get("gates", []) if gate.get("label") == "Active version"
+    )
+    assert_true(active_gate.get("passed") is False, "candidate should not be active before activation")
+
+    review = request(
+        "POST",
+        f"/api/v1/ops/models/{MODEL_KEY}/promotion-reviews",
+        {
+            "decision": "approved",
+            "reviewer": "model-governance-demo",
+            "notes": "Demo smoke approves the retrained candidate after governance gates.",
+            "evidence_refs": [
+                f"model_versions:{MODEL_KEY}:{candidate_version}",
+                f"model_retraining_jobs:{job_id}",
+                f"model_evaluations:{output_evaluation_id}",
+            ],
+        },
+    )
+    assert_true(review.get("decision") == "approved", "promotion review was not approved")
+    assert_true(review.get("model_version") == candidate_version, "promotion review target mismatch")
+
+    gates_after_review = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    assert_true(
+        gates_after_review.get("blockers") == ["model is not active"],
+        f"candidate should only be blocked by activation status after approval: {gates_after_review}",
+    )
+
+    activated = request(
+        "POST",
+        f"/api/v1/ops/models/{MODEL_KEY}/activate",
+        {
+            "evidence_refs": [
+                f"model_versions:{MODEL_KEY}:{candidate_version}",
+                f"model_promotion_reviews:{MODEL_KEY}:{candidate_version}",
+                f"model_retraining_jobs:{job_id}",
+            ],
+        },
+    )
+    assert_true(activated.get("status") == "active", "candidate model was not activated")
+    assert_true(activated.get("version") == candidate_version, "activated model version mismatch")
 
     models = request("GET", "/api/v1/ops/models").get("models", [])
     assert_true(
         any(
             model.get("model_key") == MODEL_KEY
-            and model.get("version") in candidate_versions
-            and model.get("status") == "candidate"
+            and model.get("version") == candidate_version
+            and model.get("status") == "active"
             for model in models
         ),
-        "completed retraining job did not register a candidate model",
+        "approved retraining candidate did not become active",
+    )
+    assert_true(
+        any(
+            model.get("model_key") == MODEL_KEY
+            and model.get("version") == completed_job["model_version"]
+            and model.get("status") == "approved"
+            for model in models
+        ),
+        "previous active model was not moved to approved",
+    )
+
+    activated_gates = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    assert_true(
+        activated_gates.get("decision") == "routing_allowed",
+        f"activated candidate should pass routing gates: {activated_gates}",
     )
 
     print(
@@ -87,8 +157,8 @@ def assert_retraining_completed():
             {
                 "status": "ok",
                 "model_key": MODEL_KEY,
-                "completed_retraining_jobs": len(completed_jobs),
-                "candidate_versions": sorted(candidate_versions),
+                "completed_retraining_job": job_id,
+                "activated_version": candidate_version,
             },
             ensure_ascii=True,
         )
@@ -458,12 +528,12 @@ def main():
 
 if __name__ == "__main__":
     try:
-        if len(sys.argv) == 2 and sys.argv[1] == "--verify-retraining-completed":
-            assert_retraining_completed()
+        if len(sys.argv) == 2 and sys.argv[1] == "--govern-retraining-candidate":
+            govern_retraining_candidate()
         elif len(sys.argv) == 1:
             main()
         else:
-            raise RuntimeError("usage: smoke_demo.py [--verify-retraining-completed]")
+            raise RuntimeError("usage: smoke_demo.py [--govern-retraining-candidate]")
     except Exception as error:
         print(f"demo smoke failed: {error}", file=sys.stderr)
         sys.exit(1)

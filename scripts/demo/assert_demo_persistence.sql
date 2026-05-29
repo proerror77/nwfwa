@@ -160,10 +160,19 @@ BEGIN
    AND mrj.candidate_model_version = mv.version
   WHERE mrj.model_key = 'baseline_fwa'
     AND mrj.status = 'completed'
-    AND mv.status = 'candidate'
+    AND mv.status = 'active'
     AND mv.artifact_uri = mrj.candidate_artifact_uri;
   IF row_count < 1 THEN
-    RAISE EXCEPTION 'expected candidate model registered from retraining output';
+    RAISE EXCEPTION 'expected retraining candidate activated after governance approval';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM model_versions
+  WHERE model_key = 'baseline_fwa'
+    AND version = '0.1.0'
+    AND status = 'approved';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected previous baseline_fwa model version moved to approved';
   END IF;
 
   SELECT COUNT(*) INTO row_count
@@ -178,15 +187,30 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM model_promotion_reviews mpr
+  JOIN model_retraining_jobs mrj
+    ON mrj.model_key = mpr.model_key
+   AND mrj.candidate_model_version = mpr.model_version
+  WHERE mrj.model_key = 'baseline_fwa'
+    AND mrj.status = 'completed'
+    AND mpr.decision = 'approved'
+    AND mpr.evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected approved promotion review for retraining candidate';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM audit_events
   WHERE event_type IN (
       'model.retraining.queued',
       'model.retraining.claimed',
       'model.retraining.status_updated',
-      'model.retraining.output_registered'
+      'model.retraining.output_registered',
+      'model.promotion.reviewed',
+      'model.activation.completed'
     )
     AND evidence_refs <> '[]'::jsonb;
-  IF row_count < 4 THEN
-    RAISE EXCEPTION 'expected retraining job audit events, found %', row_count;
+  IF row_count < 6 THEN
+    RAISE EXCEPTION 'expected retraining governance audit events, found %', row_count;
   END IF;
 END $$;
