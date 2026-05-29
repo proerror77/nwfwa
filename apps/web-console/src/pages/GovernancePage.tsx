@@ -285,6 +285,13 @@ export type GlobalAuditEventFilterState = {
   feedbackId: string;
   qaCaseId: string;
   sampleId: string;
+  ruleId: string;
+  ruleVersion: string;
+  modelKey: string;
+  modelVersion: string;
+  routingPolicyId: string;
+  routingPolicyVersion: string;
+  reviewMode: string;
   limit: string;
 };
 
@@ -332,6 +339,13 @@ export function buildGlobalAuditEventFilters(
     feedback_id: filters.feedbackId,
     qa_case_id: filters.qaCaseId,
     sample_id: filters.sampleId,
+    rule_id: filters.ruleId,
+    rule_version: filters.ruleVersion,
+    model_key: filters.modelKey,
+    model_version: filters.modelVersion,
+    routing_policy_id: filters.routingPolicyId,
+    routing_policy_version: filters.routingPolicyVersion,
+    review_mode: filters.reviewMode,
   };
 }
 
@@ -734,6 +748,13 @@ export function GovernancePage() {
     feedbackId: "",
     qaCaseId: "",
     sampleId: "",
+    ruleId: "",
+    ruleVersion: "",
+    modelKey: "",
+    modelVersion: "",
+    routingPolicyId: "",
+    routingPolicyVersion: "",
+    reviewMode: "",
     limit: "50",
   });
   const parsedAuditEventLimit = Number.parseInt(auditEventFilters.limit, 10);
@@ -758,6 +779,13 @@ export function GovernancePage() {
       auditEventFilters.feedbackId,
       auditEventFilters.qaCaseId,
       auditEventFilters.sampleId,
+      auditEventFilters.ruleId,
+      auditEventFilters.ruleVersion,
+      auditEventFilters.modelKey,
+      auditEventFilters.modelVersion,
+      auditEventFilters.routingPolicyId,
+      auditEventFilters.routingPolicyVersion,
+      auditEventFilters.reviewMode,
     ],
     queryFn: () =>
       listAuditEvents(
@@ -1334,6 +1362,90 @@ export function GovernancePage() {
               setAuditEventFilters((filters) => ({
                 ...filters,
                 sampleId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Rule ID
+          <input
+            value={auditEventFilters.ruleId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                ruleId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Rule Version
+          <input
+            value={auditEventFilters.ruleVersion}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                ruleVersion: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Model Key
+          <input
+            value={auditEventFilters.modelKey}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                modelKey: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Model Version
+          <input
+            value={auditEventFilters.modelVersion}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                modelVersion: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Routing Policy ID
+          <input
+            value={auditEventFilters.routingPolicyId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                routingPolicyId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Routing Policy Version
+          <input
+            value={auditEventFilters.routingPolicyVersion}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                routingPolicyVersion: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Review Mode
+          <input
+            value={auditEventFilters.reviewMode}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                reviewMode: event.target.value,
               }))
             }
           />

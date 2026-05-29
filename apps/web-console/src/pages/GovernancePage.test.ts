@@ -44,6 +44,13 @@ describe("buildGlobalAuditEventFilters", () => {
           feedbackId: "qa_feedback_QA-1",
           qaCaseId: "QA-1",
           sampleId: "sample_1",
+          ruleId: "rule_early_claim",
+          ruleVersion: "2",
+          modelKey: "baseline_fwa",
+          modelVersion: "0.2.0",
+          routingPolicyId: "fwa_risk_fusion_routing",
+          routingPolicyVersion: "3",
+          reviewMode: "post_payment",
           limit: "25",
         },
         25,
@@ -57,6 +64,13 @@ describe("buildGlobalAuditEventFilters", () => {
       feedback_id: "qa_feedback_QA-1",
       qa_case_id: "QA-1",
       sample_id: "sample_1",
+      rule_id: "rule_early_claim",
+      rule_version: "2",
+      model_key: "baseline_fwa",
+      model_version: "0.2.0",
+      routing_policy_id: "fwa_risk_fusion_routing",
+      routing_policy_version: "3",
+      review_mode: "post_payment",
     });
   });
 });
