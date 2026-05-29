@@ -409,7 +409,7 @@ def main():
     readiness = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/retraining-readiness")
     assert_true(
         readiness.get("recommendation") == "prepare_retraining",
-        "baseline model should be ready for governed retraining",
+        f"baseline model should be ready for governed retraining: {readiness}",
     )
     assert_true(
         readiness.get("approved_label_count", 0) >= 1,

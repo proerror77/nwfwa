@@ -553,11 +553,11 @@ INSERT INTO external_schema_fields (
   profile_json
 )
 VALUES
-  ('71000000-0000-0000-0000-000000000001', 'claim_amount', 'decimal', false, 'measure', 'Submitted claim amount.', '{"missing_rate":0.0,"p50":420,"p95":6800,"p99":15800,"top_values":[]}'::jsonb),
-  ('71000000-0000-0000-0000-000000000001', 'days_since_policy_start', 'integer', false, 'feature', 'Days between policy start and service date.', '{"missing_rate":0.0,"p50":141,"p95":320,"p99":365,"top_values":[{"value":"0-7","count":920}]}'::jsonb),
-  ('71000000-0000-0000-0000-000000000001', 'claim_amount_to_limit_ratio', 'decimal', false, 'feature', 'Claim amount divided by policy limit.', '{"missing_rate":0.0,"p50":0.08,"p95":0.62,"p99":0.93,"top_values":[]}'::jsonb),
-  ('71000000-0000-0000-0000-000000000001', 'provider_high_cost_item_ratio_30d', 'decimal', true, 'feature', 'Provider share of high-cost items over 30 days.', '{"missing_rate":0.03,"p50":0.12,"p95":0.47,"p99":0.71,"top_values":[]}'::jsonb),
-  ('71000000-0000-0000-0000-000000000001', 'confirmed_fwa', 'boolean', false, 'label', 'Confirmed FWA label from investigation or QA.', '{"missing_rate":0.0,"top_values":[{"value":false,"count":23000},{"value":true,"count":2000}]}'::jsonb)
+  ('71000000-0000-0000-0000-000000000001', 'claim_amount', 'decimal', false, 'measure', 'Submitted claim amount.', '{"owner":"data-ops","missing_rate":0.0,"p50":420,"p95":6800,"p99":15800,"top_values":[]}'::jsonb),
+  ('71000000-0000-0000-0000-000000000001', 'days_since_policy_start', 'integer', false, 'feature', 'Days between policy start and service date.', '{"owner":"feature-ops","missing_rate":0.0,"p50":141,"p95":320,"p99":365,"top_values":[{"value":"0-7","count":920}]}'::jsonb),
+  ('71000000-0000-0000-0000-000000000001', 'claim_amount_to_limit_ratio', 'decimal', false, 'feature', 'Claim amount divided by policy limit.', '{"owner":"feature-ops","missing_rate":0.0,"p50":0.08,"p95":0.62,"p99":0.93,"top_values":[]}'::jsonb),
+  ('71000000-0000-0000-0000-000000000001', 'provider_high_cost_item_ratio_30d', 'decimal', true, 'feature', 'Provider share of high-cost items over 30 days.', '{"owner":"provider-ops","missing_rate":0.03,"p50":0.12,"p95":0.47,"p99":0.71,"top_values":[]}'::jsonb),
+  ('71000000-0000-0000-0000-000000000001', 'confirmed_fwa', 'boolean', false, 'label', 'Confirmed FWA label from investigation or QA.', '{"owner":"model-ops","missing_rate":0.0,"top_values":[{"value":false,"count":23000},{"value":true,"count":2000}]}'::jsonb)
 ON CONFLICT (dataset_id, field_name) DO UPDATE
 SET logical_type = EXCLUDED.logical_type,
     nullable = EXCLUDED.nullable,
