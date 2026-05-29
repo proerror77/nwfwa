@@ -1000,6 +1000,11 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["items"]["minLength"],
         1
     );
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
+            ["evidence_refs"]["contains"]["pattern"],
+        "^agent_run:"
+    );
     assert!(
         schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
             ["evidence_refs"]["description"]

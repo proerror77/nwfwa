@@ -4473,7 +4473,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "minItems": 1,
                             "description": "Must include agent_run:{agent_run_id} for the approved or rejected run.",
-                            "items": { "type": "string", "minLength": 1 }
+                            "items": { "type": "string", "minLength": 1 },
+                            "contains": {
+                                "type": "string",
+                                "pattern": "^agent_run:"
+                            }
                         }
                     }
                 },
