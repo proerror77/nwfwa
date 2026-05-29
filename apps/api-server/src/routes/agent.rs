@@ -62,6 +62,11 @@ pub async fn investigate_case(
         .scheme_family
         .clone()
         .unwrap_or_else(|| infer_scheme_family(&request));
+    let governed_top_reasons = request
+        .top_reasons
+        .iter()
+        .map(|reason| sanitize_unconfirmed_fraud_language(reason))
+        .collect::<Vec<_>>();
     let tool_call_id = format!("tool_call_{}", masked_claim_ref);
     let tool_result_id = format!("tool_result_{}", masked_claim_ref);
     let policy_check = AgentPolicyCheckRecord {
@@ -118,7 +123,7 @@ pub async fn investigate_case(
         "risk_score": request.risk_score,
         "rag": request.rag.clone(),
         "scheme_family": &scheme_family,
-        "top_reasons": request.top_reasons.clone(),
+        "top_reasons": governed_top_reasons.clone(),
         "similar_case_query": {
             "diagnosis_code": request.similar_case_query.diagnosis_code.clone(),
             "provider_region": request.similar_case_query.provider_region.clone(),
@@ -136,7 +141,7 @@ pub async fn investigate_case(
         risk_score: request.risk_score,
         rag: request.rag,
         scheme_family,
-        top_reasons: request.top_reasons,
+        top_reasons: governed_top_reasons,
         similar_cases,
     });
     let output_json = serde_json::to_value(&package).map_err(|error| {
@@ -345,6 +350,35 @@ fn context_checksum(context_json: &Value) -> String {
 
 fn mask_agent_claim_ref(claim_id: &str) -> String {
     format!("masked:claim:{:016x}", stable_fnv1a64("claim", claim_id))
+}
+
+fn sanitize_unconfirmed_fraud_language(value: &str) -> String {
+    [
+        ("confirmed fraud", "suspected FWA risk"),
+        ("confirmed FWA", "suspected FWA risk"),
+        ("已确认欺诈", "疑似 FWA 风险"),
+        ("确认欺诈", "疑似 FWA 风险"),
+        ("确认为欺诈", "疑似 FWA 风险"),
+    ]
+    .into_iter()
+    .fold(value.to_string(), |current, (needle, replacement)| {
+        replace_case_insensitive(&current, needle, replacement)
+    })
+}
+
+fn replace_case_insensitive(value: &str, needle: &str, replacement: &str) -> String {
+    let mut result = String::new();
+    let lower_value = value.to_ascii_lowercase();
+    let lower_needle = needle.to_ascii_lowercase();
+    let mut cursor = 0;
+    while let Some(offset) = lower_value[cursor..].find(&lower_needle) {
+        let start = cursor + offset;
+        result.push_str(&value[cursor..start]);
+        result.push_str(replacement);
+        cursor = start + needle.len();
+    }
+    result.push_str(&value[cursor..]);
+    result
 }
 
 fn stable_fnv1a64(scope: &str, value: &str) -> u64 {

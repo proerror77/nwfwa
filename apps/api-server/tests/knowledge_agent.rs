@@ -561,6 +561,53 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
 }
 
 #[tokio::test]
+async fn downgrades_unconfirmed_fraud_language_in_agent_outputs() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-LANGUAGE-GUARD",
+          "risk_score": 92,
+          "rag": "RED",
+          "top_reasons": [
+            "Confirmed fraud ring pattern in provider billing",
+            "已确认欺诈，需要人工调查"
+          ],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let output_text = investigation.to_string().to_ascii_lowercase();
+    assert!(!output_text.contains("confirmed fraud"));
+    assert!(!investigation.to_string().contains("已确认欺诈"));
+    assert!(output_text.contains("suspected fwa risk"));
+    assert!(investigation.to_string().contains("疑似 FWA 风险"));
+
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|run| run["agent_run_id"] == agent_run_id)
+        .expect("agent run should be listed for governance review");
+    let run_text = run.to_string().to_ascii_lowercase();
+    assert!(!run_text.contains("confirmed fraud"));
+    assert!(!run.to_string().contains("已确认欺诈"));
+}
+
+#[tokio::test]
 async fn lists_agent_run_logs_for_governance_review() {
     let app = build_app(test_config());
 
