@@ -2575,7 +2575,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ProviderRiskSummaryItem": {
                     "type": "object",
-                    "required": ["provider_id", "risk_score", "risk_tier", "review_required", "review_route", "claim_count", "outlier_flags", "evidence_refs"],
+                    "required": ["provider_id", "risk_score", "risk_tier", "review_required", "review_route", "claim_count", "specialty", "network_status", "outlier_flags", "evidence_refs"],
                     "properties": {
                         "provider_id": { "type": "string" },
                         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
@@ -2583,6 +2583,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "review_required": { "type": "boolean" },
                         "review_route": { "type": "string" },
                         "claim_count": { "type": "integer" },
+                        "specialty": { "type": ["string", "null"] },
+                        "network_status": { "type": ["string", "null"] },
                         "latest_claim_id": { "type": ["string", "null"] },
                         "outlier_flags": { "type": "array", "items": { "type": "string" } },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }

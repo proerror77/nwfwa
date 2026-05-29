@@ -1170,6 +1170,20 @@ async fn openapi_includes_operations_paths() {
             ["items"]["minLength"],
         1
     );
+    for field in ["specialty", "network_status"] {
+        assert!(
+            schema["components"]["schemas"]["ProviderRiskSummaryItem"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing ProviderRiskSummaryItem required field {field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderRiskSummaryItem"]["properties"][field]["type"],
+            serde_json::json!(["string", "null"])
+        );
+    }
     assert!(
         schema["components"]["schemas"]["CaseEvidencePackage"]["required"]
             .as_array()

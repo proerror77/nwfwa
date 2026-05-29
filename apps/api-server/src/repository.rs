@@ -442,6 +442,8 @@ pub struct ProviderRiskSummaryItemRecord {
     pub review_required: bool,
     pub review_route: String,
     pub claim_count: u32,
+    pub specialty: Option<String>,
+    pub network_status: Option<String>,
     pub latest_claim_id: Option<String>,
     pub outlier_flags: Vec<String>,
     pub evidence_refs: Vec<String>,
@@ -8354,6 +8356,8 @@ struct ProviderRiskAccumulator {
     review_required: bool,
     review_route: String,
     claim_count: u32,
+    specialty: Option<String>,
+    network_status: Option<String>,
     latest_claim_id: Option<String>,
     outlier_flags: BTreeSet<String>,
     evidence_refs: BTreeSet<String>,
@@ -8409,6 +8413,14 @@ fn summarize_provider_risk_profiles<'a>(
                 .and_then(Value::as_str)
                 .unwrap_or("none")
                 .to_string();
+            entry.specialty = profile
+                .get("specialty")
+                .and_then(Value::as_str)
+                .map(str::to_string);
+            entry.network_status = profile
+                .get("network_status")
+                .and_then(Value::as_str)
+                .map(str::to_string);
         }
 
         extend_string_set(&mut entry.outlier_flags, profile.get("outlier_flags"));
@@ -8424,6 +8436,8 @@ fn summarize_provider_risk_profiles<'a>(
             review_required: provider.review_required,
             review_route: provider.review_route,
             claim_count: provider.claim_count,
+            specialty: provider.specialty,
+            network_status: provider.network_status,
             latest_claim_id: provider.latest_claim_id,
             outlier_flags: provider.outlier_flags.into_iter().collect(),
             evidence_refs: provider.evidence_refs.into_iter().collect(),
