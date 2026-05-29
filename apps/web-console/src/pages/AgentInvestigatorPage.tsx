@@ -61,6 +61,19 @@ export function buildAgentSimilarCaseRows(cases: SimilarCase[] = []) {
   }));
 }
 
+export function buildAgentEvidencePackageSummary(result?: InvestigationResponse | null) {
+  return {
+    agentRunId: result?.agent_run_id ?? "-",
+    decisionBoundary: result?.decision_boundary ?? "assistive_only",
+    findingCount: result?.findings.length ?? 0,
+    checklistCount: result?.investigation_checklist.length ?? 0,
+    similarCaseCount: result?.similar_cases.length ?? 0,
+    evidenceRefCount: result?.evidence_refs.length ?? 0,
+    missingEvidenceCount: result?.evidence_sufficiency.missing_evidence.length ?? 0,
+    evidenceStatus: result?.evidence_sufficiency.status ?? "not_started",
+  };
+}
+
 export function buildInvestigationApprovalPayload(
   result: InvestigationResponse,
   decision: "approved" | "rejected",
@@ -127,6 +140,7 @@ export function AgentInvestigatorPage() {
   const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const evidenceRows = buildEvidenceSufficiencyRows(result?.evidence_sufficiency);
   const similarCaseRows = buildAgentSimilarCaseRows(result?.similar_cases);
+  const evidencePackageSummary = buildAgentEvidencePackageSummary(result);
   const approvalSummary = buildAgentApprovalSummary(approvalResult);
 
   async function runInvestigation() {
@@ -245,13 +259,39 @@ export function AgentInvestigatorPage() {
             <dl className="result-grid">
               <div>
                 <dt>Agent Run</dt>
-                <dd>{result.agent_run_id}</dd>
+                <dd>{evidencePackageSummary.agentRunId}</dd>
               </div>
               <div>
                 <dt>Boundary</dt>
-                <dd>{result.decision_boundary}</dd>
+                <dd>{evidencePackageSummary.decisionBoundary}</dd>
               </div>
             </dl>
+            <div className="summary-grid">
+              <div>
+                <span>Findings</span>
+                <strong>{evidencePackageSummary.findingCount}</strong>
+              </div>
+              <div>
+                <span>Checklist</span>
+                <strong>{evidencePackageSummary.checklistCount}</strong>
+              </div>
+              <div>
+                <span>Similar Cases</span>
+                <strong>{evidencePackageSummary.similarCaseCount}</strong>
+              </div>
+              <div>
+                <span>Evidence Refs</span>
+                <strong>{evidencePackageSummary.evidenceRefCount}</strong>
+              </div>
+              <div>
+                <span>Missing Evidence</span>
+                <strong>{evidencePackageSummary.missingEvidenceCount}</strong>
+              </div>
+              <div>
+                <span>Evidence Status</span>
+                <strong>{evidencePackageSummary.evidenceStatus}</strong>
+              </div>
+            </div>
             <p>{result.risk_summary}</p>
             <ul className="result-list">
               {result.findings.map((finding) => (

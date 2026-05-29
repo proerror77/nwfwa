@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAgentApprovalSummary,
+  buildAgentEvidencePackageSummary,
   buildAgentSimilarCaseRows,
   buildEvidenceSufficiencyRows,
   buildInvestigationApprovalPayload,
@@ -53,6 +54,48 @@ describe("buildInvestigationApprovalPayload", () => {
       approver: "qa-lead",
       reason: "Evidence package approved for manual review routing.",
       evidence_refs: ["knowledge_cases:KC-1", "agent_run:agent_CLM-1"],
+    });
+  });
+});
+
+describe("buildAgentEvidencePackageSummary", () => {
+  it("summarizes evidence package completeness for governed review", () => {
+    expect(
+      buildAgentEvidencePackageSummary({
+        agent_run_id: "agent_CLM-1",
+        decision_boundary: "assistive_only",
+        risk_summary: "High risk evidence package.",
+        findings: [
+          { finding: "Peer outlier", evidence_refs: ["features:peer_amount"] },
+          { finding: "Similar case match", evidence_refs: ["knowledge_cases:KC-1"] },
+        ],
+        investigation_checklist: ["Check diagnosis support", "Verify provider peer group"],
+        similar_cases: [
+          {
+            case_id: "KC-1",
+            similarity_score: 0.91,
+            matched_signals: ["diagnosis_code"],
+          },
+        ],
+        qa_opinion_draft: "Review manually.",
+        evidence_sufficiency: {
+          scheme_family: "provider_peer_outlier",
+          status: "needs_more_evidence",
+          minimum_evidence: ["peer_group_definition", "specialty"],
+          present_evidence: ["peer_group_definition"],
+          missing_evidence: ["specialty"],
+        },
+        evidence_refs: ["features:peer_amount", "knowledge_cases:KC-1"],
+      }),
+    ).toEqual({
+      agentRunId: "agent_CLM-1",
+      decisionBoundary: "assistive_only",
+      findingCount: 2,
+      checklistCount: 2,
+      similarCaseCount: 1,
+      evidenceRefCount: 2,
+      missingEvidenceCount: 1,
+      evidenceStatus: "needs_more_evidence",
     });
   });
 });
