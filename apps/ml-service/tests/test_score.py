@@ -19,7 +19,15 @@ def test_health_returns_ok():
     response = client.get("/health")
 
     assert response.status_code == 200
-    assert response.json() == {"status": "ok"}
+    assert response.json() == {
+        "status": "ok",
+        "service": "ml-service",
+        "version": "0.1.0",
+        "checks": [
+            {"name": "http_router", "status": "ok"},
+            {"name": "baseline_scorer", "status": "ok"},
+        ],
+    }
 
 
 def test_score_returns_high_risk_for_large_amount_ratio():

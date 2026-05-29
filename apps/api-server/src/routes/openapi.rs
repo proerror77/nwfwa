@@ -15,7 +15,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "summary": "Health check",
                     "responses": {
                         "200": {
-                            "description": "Service is healthy"
+                            "description": "Service is healthy",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/HealthResponse" }
+                                }
+                            }
                         }
                     }
                 }
@@ -2870,6 +2875,27 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "message": {
                             "type": "string"
+                        }
+                    }
+                },
+                "HealthCheck": {
+                    "type": "object",
+                    "required": ["name", "status"],
+                    "properties": {
+                        "name": { "type": "string" },
+                        "status": { "type": "string", "enum": ["ok"] }
+                    }
+                },
+                "HealthResponse": {
+                    "type": "object",
+                    "required": ["status", "service", "version", "checks"],
+                    "properties": {
+                        "status": { "type": "string", "enum": ["ok"] },
+                        "service": { "type": "string" },
+                        "version": { "type": "string" },
+                        "checks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/HealthCheck" }
                         }
                     }
                 },

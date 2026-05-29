@@ -99,6 +99,25 @@ async fn openapi_includes_operations_paths() {
         assert!(schema["paths"][path].is_object(), "missing {path}");
     }
     assert!(schema["paths"]["/api/v1/ops/knowledge/cases"]["post"].is_object());
+    assert_eq!(
+        schema["paths"]["/api/v1/health"]["get"]["responses"]["200"]["content"]["application/json"]
+            ["schema"]["$ref"],
+        "#/components/schemas/HealthResponse"
+    );
+    for field in ["status", "service", "version", "checks"] {
+        assert!(
+            schema["components"]["schemas"]["HealthResponse"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing health response field {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["HealthResponse"]["properties"]["checks"]["items"]["$ref"],
+        "#/components/schemas/HealthCheck"
+    );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
     assert!(

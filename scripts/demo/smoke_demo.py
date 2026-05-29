@@ -61,6 +61,13 @@ def has_label(labels, **expected):
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
+    assert_true(health.get("service") == "api-server", "health endpoint missing service metadata")
+    assert_true(health.get("version"), "health endpoint missing version metadata")
+    health_checks = health.get("checks", [])
+    assert_true(
+        any(check.get("name") == "http_router" and check.get("status") == "ok" for check in health_checks),
+        "health endpoint missing http_router check",
+    )
 
     score = request(
         "POST",
