@@ -1296,6 +1296,11 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["minItems"],
         1
     );
+    assert_eq!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
+            ["evidence_refs"]["items"]["minLength"],
+        1
+    );
     assert!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["saving_amount"]["description"]
@@ -1316,6 +1321,11 @@ async fn openapi_includes_operations_paths() {
     assert_eq!(
         schema["components"]["schemas"]["QaResultRequest"]["properties"]["evidence_refs"]
             ["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["QaResultRequest"]["properties"]["evidence_refs"]["items"]
+            ["minLength"],
         1
     );
     assert!(

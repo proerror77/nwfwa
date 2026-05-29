@@ -4536,7 +4536,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "currency": { "type": ["string", "null"] },
                         "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
                     }
                 },
                 "QaResultRequest": {
@@ -4558,7 +4558,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
                         },
                         "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
                     }
                 },
                 "PilotWritebackResponse": {

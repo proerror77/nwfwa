@@ -230,10 +230,11 @@ fn validate_investigation_result_request(
         ));
     }
     if request.notes.trim().is_empty()
+        || request.evidence_refs.is_empty()
         || request
             .evidence_refs
             .iter()
-            .all(|reference| reference.trim().is_empty())
+            .any(|reference| reference.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -287,10 +288,11 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
         ));
     }
     if request.notes.trim().is_empty()
+        || request.evidence_refs.is_empty()
         || request
             .evidence_refs
             .iter()
-            .all(|reference| reference.trim().is_empty())
+            .any(|reference| reference.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
