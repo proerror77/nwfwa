@@ -5,6 +5,7 @@ import sys
 import time
 import urllib.error
 import urllib.request
+from decimal import Decimal
 
 
 BASE_URL = os.environ.get("FWA_API_BASE_URL", "http://127.0.0.1:8080").rstrip("/")
@@ -62,6 +63,10 @@ def has_label(labels, **expected):
         and label.get("evidence_refs")
         for label in labels
     )
+
+
+def decimal_value(value):
+    return Decimal(str(value))
 
 
 def latest_completed_retraining_job():
@@ -659,6 +664,35 @@ def assert_tpa_webhook_delivery(score):
     }
 
 
+def assert_member_profile_summary():
+    profile = request("GET", "/api/v1/members/MBR-0287/profile-summary")
+    assert_true(profile.get("member_id") == "MBR-0287", "member profile summary id mismatch")
+    assert_true(profile.get("claim_count", 0) >= 1, "member profile missing claim history")
+    assert_true(profile.get("policy_count", 0) >= 1, "member profile missing policy history")
+    assert_true(profile.get("currency") == "CNY", "member profile currency mismatch")
+    assert_true(
+        decimal_value(profile.get("total_claim_amount", "0")) >= Decimal("8000"),
+        "member profile total claim amount below seeded demo claim",
+    )
+    assert_true(
+        profile.get("high_risk_claim_count", 0) >= 1,
+        "member profile missing high-risk scoring history",
+    )
+    assert_true(profile.get("latest_claim_id") == CLAIM_ID, "member profile latest claim mismatch")
+    assert_true(profile.get("risk_level_summary"), "member profile missing risk level summary")
+    assert_true("历史理赔" in profile.get("profile_summary", ""), "member profile missing Chinese summary")
+    assert_true(
+        "members:MBR-0287" in profile.get("evidence_refs", []),
+        "member profile missing member evidence ref",
+    )
+    return {
+        "member_id": profile["member_id"],
+        "claim_count": profile["claim_count"],
+        "high_risk_claim_count": profile["high_risk_claim_count"],
+        "latest_claim_id": profile["latest_claim_id"],
+    }
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -682,6 +716,7 @@ def main():
     assert_true(len(score.get("layers", [])) == 7, "score response must include 7 layers")
     assert_true(score.get("top_reasons"), "score response missing top_reasons")
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
+    member_profile = assert_member_profile_summary()
 
     leads = request("GET", "/api/v1/ops/leads").get("leads", [])
     lead = next(
@@ -1027,6 +1062,7 @@ def main():
                 "run_id": score["run_id"],
                 "audit_id": score["audit_id"],
                 "risk_score": score["risk_score"],
+                "member_profile": member_profile,
                 "similar_case": results[0]["case_id"],
                 "medical_review_audit_id": medical_review["audit_id"],
                 "agent_run_id": agent["agent_run_id"],
