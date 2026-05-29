@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { buildAuditSampleRequest, buildAuditSamplingSummary } from "./AuditSamplingPage";
+import {
+  buildAuditSampleLeadDetailRows,
+  buildAuditSampleRequest,
+  buildAuditSamplingSummary,
+} from "./AuditSamplingPage";
 
 describe("buildAuditSamplingSummary", () => {
   it("summarizes sample coverage and latest assignment", () => {
@@ -116,5 +120,39 @@ describe("buildAuditSampleRequest", () => {
       reviewer: "qa-reviewer-1",
       assignment_queue: "QA Review",
     });
+  });
+});
+
+describe("buildAuditSampleLeadDetailRows", () => {
+  it("shows operational strata fields for selected leads", () => {
+    expect(
+      buildAuditSampleLeadDetailRows({
+        lead_id: "lead_1",
+        claim_id: "CLM-1",
+        scheme_family: "provider_peer_outlier",
+        review_mode: "post_payment",
+        provider_id: "PRV-1",
+        provider_type: "clinic",
+        provider_region: "BJ",
+        policy_type: "DENTAL",
+        risk_band: "critical",
+        strata_key:
+          "scheme=provider_peer_outlier|provider_type=clinic|region=BJ|policy_type=DENTAL|risk_band=critical",
+        prior_reviewer_sample_count: 2,
+        risk_score: 94,
+        rag: "RED",
+        evidence_refs: ["audit:scoring.completed"],
+      }),
+    ).toEqual([
+      ["Review Mode", "post_payment"],
+      ["Provider", "clinic / BJ"],
+      ["Policy Type", "DENTAL"],
+      ["Risk Band", "critical"],
+      ["Prior Reviewer Samples", "2"],
+      [
+        "Strata",
+        "scheme=provider_peer_outlier|provider_type=clinic|region=BJ|policy_type=DENTAL|risk_band=critical",
+      ],
+    ]);
   });
 });

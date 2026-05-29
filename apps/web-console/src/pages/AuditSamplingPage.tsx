@@ -11,6 +11,14 @@ type AuditSampleLead = {
   lead_id: string;
   claim_id: string;
   scheme_family: string;
+  review_mode?: string;
+  provider_id?: string;
+  provider_type?: string;
+  provider_region?: string;
+  policy_type?: string;
+  risk_band?: string;
+  strata_key?: string;
+  prior_reviewer_sample_count?: number;
   risk_score: number;
   rag: string;
   evidence_refs: string[];
@@ -112,6 +120,17 @@ export function buildAuditSampleRequest(form: AuditSampleRequestForm) {
     reviewer: form.reviewer,
     assignment_queue: form.assignmentQueue,
   };
+}
+
+export function buildAuditSampleLeadDetailRows(lead: AuditSampleLead) {
+  return [
+    ["Review Mode", lead.review_mode ?? "unknown"],
+    ["Provider", `${lead.provider_type ?? "unknown"} / ${lead.provider_region ?? "unknown"}`],
+    ["Policy Type", lead.policy_type ?? "unknown"],
+    ["Risk Band", lead.risk_band ?? "unknown"],
+    ["Prior Reviewer Samples", String(lead.prior_reviewer_sample_count ?? 0)],
+    ["Strata", lead.strata_key ?? "unknown"],
+  ];
 }
 
 export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
@@ -449,6 +468,12 @@ export function AuditSamplingPage() {
                     <dt>Evidence</dt>
                     <dd>{lead.evidence_refs.length}</dd>
                   </div>
+                  {buildAuditSampleLeadDetailRows(lead).map(([label, value]) => (
+                    <div key={label}>
+                      <dt>{label}</dt>
+                      <dd>{value}</dd>
+                    </div>
+                  ))}
                 </dl>
               </div>
             )),
