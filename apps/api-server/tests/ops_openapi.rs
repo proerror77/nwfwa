@@ -1259,6 +1259,11 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["UpdateCaseStatusRequest"]["properties"]["evidence_refs"]
+            ["items"]["minLength"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["financial_impact_type"]["enum"][1],
         "recovered_amount"
