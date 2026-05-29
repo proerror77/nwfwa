@@ -821,8 +821,20 @@ export function RulesStudio() {
                 <strong>{backtestSummary.falsePositiveRateLabel}</strong>
               </div>
               <div>
+                <span>FP Burden</span>
+                <strong>{backtestSummary.falsePositiveBurdenLabel}</strong>
+              </div>
+              <div>
                 <span>Recommendation</span>
                 <strong>{backtestSummary.recommendation}</strong>
+              </div>
+              <div>
+                <span>Promotion Gate</span>
+                <strong>{backtestSummary.promotionGateStatus}</strong>
+              </div>
+              <div>
+                <span>Approval Gate</span>
+                <strong>{backtestSummary.approvalGateLabel}</strong>
               </div>
               <div>
                 <span>Saving</span>

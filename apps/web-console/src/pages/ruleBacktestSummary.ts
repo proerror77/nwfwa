@@ -23,6 +23,9 @@ export function buildRuleBacktestSummary(result: RuleBacktestResponse) {
     reviewedCount: result.reviewed_count,
     confirmedFwaCount: result.confirmed_fwa_count,
     falsePositiveCount: result.false_positive_count,
+    falsePositiveBurdenLabel: `${result.false_positive_count} cases / ${formatPercent(
+      result.false_positive_rate,
+    )}`,
     matchRateLabel: formatPercent(result.match_rate),
     precisionLabel: formatPercent(result.precision),
     recallLabel: formatPercent(result.recall),
@@ -30,6 +33,8 @@ export function buildRuleBacktestSummary(result: RuleBacktestResponse) {
     falsePositiveRateLabel: formatPercent(result.false_positive_rate),
     estimatedSaving: result.estimated_saving,
     recommendation: result.promotion_recommendation,
+    approvalGateLabel: "approval required before publish",
+    promotionGateStatus: result.blockers.length === 0 ? "ready_for_human_review" : "blocked",
     blockerLabel: result.blockers.length === 0 ? "none" : result.blockers.join(", "),
     evidenceCount: result.evidence_refs.length,
     matchedClaimIds: result.matched_claim_ids,
