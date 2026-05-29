@@ -6,6 +6,7 @@ import {
   buildAgentApprovalPayload,
   buildGlobalAuditEventFilters,
   canSubmitAgentApproval,
+  focusGlobalAuditFiltersOnAgentRun,
   buildFwaSchemeGovernanceRows,
   buildFwaSchemeGovernanceSummary,
   buildGovernanceChangeTimelineRows,
@@ -81,6 +82,70 @@ describe("buildGlobalAuditEventFilters", () => {
       feature_set_id: "feature_set_1",
       model_dataset_id: "model_dataset_1",
       evaluation_run_id: "eval_1",
+    });
+  });
+});
+
+describe("focusGlobalAuditFiltersOnAgentRun", () => {
+  it("focuses global audit search on one agent run and clears stale filters", () => {
+    const filters = {
+      eventType: "qa.result.received",
+      actorId: "qa-lead",
+      runId: "pilot_qa_QA-1",
+      claimId: "CLM-1",
+      feedbackId: "qa_feedback_QA-1",
+      qaCaseId: "QA-1",
+      sampleId: "sample_1",
+      agentRunId: "agent_old",
+      ruleId: "rule_early_claim",
+      ruleVersion: "2",
+      modelKey: "baseline_fwa",
+      modelVersion: "0.2.0",
+      routingPolicyId: "fwa_risk_fusion_routing",
+      routingPolicyVersion: "3",
+      reviewMode: "post_payment",
+      datasetId: "dataset_1",
+      featureSetId: "feature_set_1",
+      modelDatasetId: "model_dataset_1",
+      evaluationRunId: "eval_1",
+      limit: "25",
+    };
+
+    expect(
+      focusGlobalAuditFiltersOnAgentRun(filters, {
+        agent_run_id: "agent_1",
+        claim_id: "CLM-1",
+        status: "succeeded",
+        decision_boundary: "assistive_only",
+        evidence_refs: [],
+        steps: [],
+        context_snapshots: [],
+        tool_calls: [],
+        policy_checks: [],
+        tool_results: [],
+        approvals: [],
+      }),
+    ).toEqual({
+      ...filters,
+      eventType: "",
+      actorId: "",
+      runId: "",
+      claimId: "",
+      feedbackId: "",
+      qaCaseId: "",
+      sampleId: "",
+      agentRunId: "agent_1",
+      ruleId: "",
+      ruleVersion: "",
+      modelKey: "",
+      modelVersion: "",
+      routingPolicyId: "",
+      routingPolicyVersion: "",
+      reviewMode: "",
+      datasetId: "",
+      featureSetId: "",
+      modelDatasetId: "",
+      evaluationRunId: "",
     });
   });
 });

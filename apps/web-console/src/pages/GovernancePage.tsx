@@ -359,6 +359,34 @@ export function buildGlobalAuditEventFilters(
   };
 }
 
+export function focusGlobalAuditFiltersOnAgentRun(
+  filters: GlobalAuditEventFilterState,
+  run: AgentRunLog,
+): GlobalAuditEventFilterState {
+  return {
+    ...filters,
+    eventType: "",
+    actorId: "",
+    runId: "",
+    claimId: "",
+    feedbackId: "",
+    qaCaseId: "",
+    sampleId: "",
+    agentRunId: run.agent_run_id,
+    ruleId: "",
+    ruleVersion: "",
+    modelKey: "",
+    modelVersion: "",
+    routingPolicyId: "",
+    routingPolicyVersion: "",
+    reviewMode: "",
+    datasetId: "",
+    featureSetId: "",
+    modelDatasetId: "",
+    evaluationRunId: "",
+  };
+}
+
 export function buildAuditSummary(data?: { events: AuditEvent[]; claim_id?: string }) {
   const events = data?.events ?? [];
   const latestDatedEvent = events.filter((event) => event.created_at).reduce<
@@ -1781,6 +1809,18 @@ export function GovernancePage() {
                   {run.approvals.filter((approval) => approval.decision === "pending").length}{" "}
                   pending
                 </p>
+                <div className="button-row">
+                  <button
+                    onClick={() =>
+                      setAuditEventFilters((filters) =>
+                        focusGlobalAuditFiltersOnAgentRun(filters, run),
+                      )
+                    }
+                    type="button"
+                  >
+                    View Audit Trail
+                  </button>
+                </div>
                 {hasPendingAgentApproval(run) ? (
                   <div className="button-row">
                     <button
