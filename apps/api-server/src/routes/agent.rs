@@ -65,7 +65,13 @@ pub async fn investigate_case(
     let governed_top_reasons = request
         .top_reasons
         .iter()
-        .map(|reason| sanitize_unconfirmed_fraud_language(reason))
+        .map(|reason| sanitize_agent_free_text(reason))
+        .collect::<Vec<_>>();
+    let governed_tags = request
+        .similar_case_query
+        .tags
+        .iter()
+        .map(|tag| sanitize_agent_free_text(tag))
         .collect::<Vec<_>>();
     let tool_call_id = format!("tool_call_{}", masked_claim_ref);
     let tool_result_id = format!("tool_result_{}", masked_claim_ref);
@@ -87,7 +93,7 @@ pub async fn investigate_case(
         "claim_id": masked_claim_ref,
         "diagnosis_code": request.similar_case_query.diagnosis_code,
         "provider_region": request.similar_case_query.provider_region,
-        "tags": request.similar_case_query.tags,
+        "tags": governed_tags.clone(),
     });
     let query_evidence_refs = vec![format!("knowledge_query:{}", masked_claim_ref)];
     let similar_cases = state
@@ -96,7 +102,7 @@ pub async fn investigate_case(
             claim_id: Some(masked_claim_ref.clone()),
             diagnosis_code: request.similar_case_query.diagnosis_code.clone(),
             provider_region: request.similar_case_query.provider_region.clone(),
-            tags: request.similar_case_query.tags.clone(),
+            tags: governed_tags.clone(),
         })
         .await
         .map_err(internal_error("AGENT_SIMILAR_CASE_SEARCH_FAILED"))?
@@ -127,7 +133,7 @@ pub async fn investigate_case(
         "similar_case_query": {
             "diagnosis_code": request.similar_case_query.diagnosis_code.clone(),
             "provider_region": request.similar_case_query.provider_region.clone(),
-            "tags": request.similar_case_query.tags.clone(),
+            "tags": governed_tags,
         }
     });
     let context_source_refs = vec![
@@ -364,6 +370,83 @@ fn sanitize_unconfirmed_fraud_language(value: &str) -> String {
     .fold(value.to_string(), |current, (needle, replacement)| {
         replace_case_insensitive(&current, needle, replacement)
     })
+}
+
+fn sanitize_agent_free_text(value: &str) -> String {
+    redact_pii_tokens(&sanitize_unconfirmed_fraud_language(value))
+}
+
+fn redact_pii_tokens(value: &str) -> String {
+    value
+        .split_whitespace()
+        .map(redact_pii_token)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn redact_pii_token(token: &str) -> String {
+    let trimmed = token.trim_matches(|character: char| {
+        matches!(
+            character,
+            ',' | '.'
+                | ';'
+                | ':'
+                | '!'
+                | '?'
+                | '('
+                | ')'
+                | '['
+                | ']'
+                | '{'
+                | '}'
+                | '<'
+                | '>'
+                | '，'
+                | '。'
+                | '；'
+                | '：'
+                | '！'
+                | '？'
+                | '（'
+                | '）'
+                | '【'
+                | '】'
+        )
+    });
+    if is_email_like(trimmed) {
+        "[REDACTED_EMAIL]".into()
+    } else if is_cn_id_like(trimmed) {
+        "[REDACTED_ID]".into()
+    } else if is_phone_like(trimmed) {
+        "[REDACTED_PHONE]".into()
+    } else {
+        token.into()
+    }
+}
+
+fn is_email_like(value: &str) -> bool {
+    let Some((local, domain)) = value.split_once('@') else {
+        return false;
+    };
+    !local.is_empty() && domain.contains('.') && domain.len() >= 3
+}
+
+fn is_cn_id_like(value: &str) -> bool {
+    value.len() == 18
+        && value
+            .chars()
+            .take(17)
+            .all(|character| character.is_ascii_digit())
+        && value
+            .chars()
+            .last()
+            .is_some_and(|character| character.is_ascii_digit() || matches!(character, 'X' | 'x'))
+}
+
+fn is_phone_like(value: &str) -> bool {
+    value.len() >= 10
+        && value.len() <= 15
+        && value.chars().all(|character| character.is_ascii_digit())
 }
 
 fn replace_case_insensitive(value: &str, needle: &str, replacement: &str) -> String {

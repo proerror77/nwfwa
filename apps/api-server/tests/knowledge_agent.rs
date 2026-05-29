@@ -636,6 +636,56 @@ async fn downgrades_unconfirmed_fraud_language_in_agent_outputs() {
 }
 
 #[tokio::test]
+async fn redacts_pii_from_agent_free_text_outputs_and_logs() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-PII-GUARD",
+          "risk_score": 89,
+          "rag": "RED",
+          "top_reasons": [
+            "Member email alice@example.com appears in notes",
+            "Phone 13800138000 and ID 11010519491231002X were attached to the risk reason"
+          ],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let response_text = investigation.to_string();
+    assert!(!response_text.contains("alice@example.com"));
+    assert!(!response_text.contains("13800138000"));
+    assert!(!response_text.contains("11010519491231002X"));
+    assert!(response_text.contains("[REDACTED_EMAIL]"));
+    assert!(response_text.contains("[REDACTED_PHONE]"));
+    assert!(response_text.contains("[REDACTED_ID]"));
+
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|run| run["agent_run_id"] == agent_run_id)
+        .expect("agent run should be listed for governance review");
+    let run_text = run.to_string();
+    assert!(!run_text.contains("alice@example.com"));
+    assert!(!run_text.contains("13800138000"));
+    assert!(!run_text.contains("11010519491231002X"));
+}
+
+#[tokio::test]
 async fn lists_agent_run_logs_for_governance_review() {
     let app = build_app(test_config());
 
