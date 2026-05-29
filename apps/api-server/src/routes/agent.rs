@@ -275,10 +275,11 @@ fn validate_agent_investigation_request(
             "rag must be GREEN, AMBER, or RED",
         ));
     }
-    if request
-        .top_reasons
-        .iter()
-        .all(|reason| reason.trim().is_empty())
+    if request.top_reasons.is_empty()
+        || request
+            .top_reasons
+            .iter()
+            .any(|reason| reason.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -295,11 +296,12 @@ fn validate_agent_investigation_request(
             "diagnosis_code and provider_region are required",
         ));
     }
-    if request
-        .similar_case_query
-        .tags
-        .iter()
-        .all(|tag| tag.trim().is_empty())
+    if request.similar_case_query.tags.is_empty()
+        || request
+            .similar_case_query
+            .tags
+            .iter()
+            .any(|tag| tag.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,

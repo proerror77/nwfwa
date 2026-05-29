@@ -165,6 +165,13 @@ fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Res
             "evidence_refs are required",
         ));
     }
+    if request.tags.is_empty() || request.tags.iter().any(|tag| tag.trim().is_empty()) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_KNOWLEDGE_CASE",
+            "tags are required",
+        ));
+    }
     Ok(())
 }
 
@@ -196,7 +203,7 @@ fn validate_similar_case_search(request: &SimilarCaseSearchRequest) -> Result<()
             "diagnosis_code and provider_region are required",
         ));
     }
-    if request.tags.iter().all(|tag| tag.trim().is_empty()) {
+    if request.tags.is_empty() || request.tags.iter().any(|tag| tag.trim().is_empty()) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_SIMILAR_CASE_QUERY",

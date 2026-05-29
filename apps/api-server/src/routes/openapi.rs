@@ -4419,7 +4419,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "provider_type": { "type": "string", "minLength": 1 },
                         "summary": { "type": "string", "minLength": 1 },
                         "outcome": { "type": "string", "minLength": 1 },
-                        "tags": { "type": "array", "items": { "type": "string" } },
+                        "tags": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
                         "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
                         "source_claim_id": { "type": ["string", "null"] }
                     }

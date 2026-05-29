@@ -90,6 +90,22 @@ async fn searches_similar_knowledge_cases_with_evidence() {
     assert_eq!(body["code"], "INVALID_SIMILAR_CASE_QUERY");
 
     let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/knowledge/search-similar",
+        r#"{
+          "claim_id": "CLM-BLANK-TAG",
+          "diagnosis_code": "J10",
+          "provider_region": "Shanghai",
+          "tags": ["early_claim", " "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_SIMILAR_CASE_QUERY");
+
+    let (status, body) = json_request(
         app,
         "POST",
         "/api/v1/knowledge/search-similar",
@@ -148,6 +164,30 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
           "outcome": "Confirmed waste.",
           "tags": ["lab_overuse"],
           "evidence_refs": [" "],
+          "source_claim_id": "CLM-KB-1"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_KNOWLEDGE_CASE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-BLANK-TAG",
+          "title": "Blank tag case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste.",
+          "tags": ["lab_overuse", " "],
+          "evidence_refs": ["investigation_results:INV-KB-1"],
           "source_claim_id": "CLM-KB-1"
         }"#,
     )
@@ -369,6 +409,27 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         "POST",
         "/api/v1/agent/cases/investigate",
         r#"{
+          "claim_id": "CLM-AGENT-BLANK-REASON",
+          "risk_score": 87,
+          "rag": "RED",
+          "top_reasons": ["金额高于同病种同地区 P99", " "],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["early_claim"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_TOP_REASONS");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
           "claim_id": "CLM-AGENT-BAD-SIMILAR",
           "risk_score": 87,
           "rag": "RED",
@@ -398,6 +459,27 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
             "diagnosis_code": "J10",
             "provider_region": "Shanghai",
             "tags": [" "]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_AGENT_SIMILAR_CASE_QUERY");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-BLANK-TAG",
+          "risk_score": 87,
+          "rag": "RED",
+          "top_reasons": ["金额高于同病种同地区 P99"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["early_claim", " "]
           }
         }"#,
     )
