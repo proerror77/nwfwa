@@ -517,6 +517,7 @@ describe("ops API helpers", () => {
       feedback_id: "qa_feedback_QA-1",
       qa_case_id: "QA-1",
       sample_id: "sample_1",
+      agent_run_id: "agent_1",
       dataset_id: "dataset_1",
       feature_set_id: "feature_set_1",
       model_dataset_id: "model_dataset_1",
@@ -536,7 +537,7 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/api/v1/ops/audit-events?limit=25&event_type=qa.result.received&actor_id=qa_reviewer&run_id=pilot_qa_QA-1&claim_id=CLM-1&rule_id=rule_early_claim&rule_version=1&model_key=baseline_fwa&model_version=0.1.0&routing_policy_id=fwa_risk_fusion_routing&routing_policy_version=2&review_mode=pre_payment&feedback_id=qa_feedback_QA-1&qa_case_id=QA-1&sample_id=sample_1&dataset_id=dataset_1&feature_set_id=feature_set_1&model_dataset_id=model_dataset_1&evaluation_run_id=eval_1",
+      "/api/v1/ops/audit-events?limit=25&event_type=qa.result.received&actor_id=qa_reviewer&run_id=pilot_qa_QA-1&claim_id=CLM-1&rule_id=rule_early_claim&rule_version=1&model_key=baseline_fwa&model_version=0.1.0&routing_policy_id=fwa_risk_fusion_routing&routing_policy_version=2&review_mode=pre_payment&feedback_id=qa_feedback_QA-1&qa_case_id=QA-1&sample_id=sample_1&agent_run_id=agent_1&dataset_id=dataset_1&feature_set_id=feature_set_1&model_dataset_id=model_dataset_1&evaluation_run_id=eval_1",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

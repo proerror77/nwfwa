@@ -285,6 +285,7 @@ export type GlobalAuditEventFilterState = {
   feedbackId: string;
   qaCaseId: string;
   sampleId: string;
+  agentRunId: string;
   ruleId: string;
   ruleVersion: string;
   modelKey: string;
@@ -343,6 +344,7 @@ export function buildGlobalAuditEventFilters(
     feedback_id: filters.feedbackId,
     qa_case_id: filters.qaCaseId,
     sample_id: filters.sampleId,
+    agent_run_id: filters.agentRunId,
     rule_id: filters.ruleId,
     rule_version: filters.ruleVersion,
     model_key: filters.modelKey,
@@ -756,6 +758,7 @@ export function GovernancePage() {
     feedbackId: "",
     qaCaseId: "",
     sampleId: "",
+    agentRunId: "",
     ruleId: "",
     ruleVersion: "",
     modelKey: "",
@@ -791,6 +794,7 @@ export function GovernancePage() {
       auditEventFilters.feedbackId,
       auditEventFilters.qaCaseId,
       auditEventFilters.sampleId,
+      auditEventFilters.agentRunId,
       auditEventFilters.ruleId,
       auditEventFilters.ruleVersion,
       auditEventFilters.modelKey,
@@ -1378,6 +1382,18 @@ export function GovernancePage() {
               setAuditEventFilters((filters) => ({
                 ...filters,
                 sampleId: event.target.value,
+              }))
+            }
+          />
+        </label>
+        <label>
+          Agent Run ID
+          <input
+            value={auditEventFilters.agentRunId}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                agentRunId: event.target.value,
               }))
             }
           />

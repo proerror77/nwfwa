@@ -99,6 +99,7 @@ pub struct AuditEventListFilter {
     pub feedback_id: Option<String>,
     pub qa_case_id: Option<String>,
     pub sample_id: Option<String>,
+    pub agent_run_id: Option<String>,
     pub dataset_id: Option<String>,
     pub feature_set_id: Option<String>,
     pub model_dataset_id: Option<String>,
@@ -6409,10 +6410,11 @@ impl ScoringRepository for PostgresScoringRepository {
                  )
                )
                AND ($15::text IS NULL OR ae.payload ->> 'sample_id' = $15)
-               AND ($16::text IS NULL OR ae.payload ->> 'dataset_id' = $16)
-               AND ($17::text IS NULL OR ae.payload ->> 'feature_set_id' = $17)
-               AND ($18::text IS NULL OR ae.payload ->> 'model_dataset_id' = $18)
-               AND ($19::text IS NULL OR ae.payload ->> 'evaluation_run_id' = $19)
+               AND ($16::text IS NULL OR ae.payload ->> 'agent_run_id' = $16)
+               AND ($17::text IS NULL OR ae.payload ->> 'dataset_id' = $17)
+               AND ($18::text IS NULL OR ae.payload ->> 'feature_set_id' = $18)
+               AND ($19::text IS NULL OR ae.payload ->> 'model_dataset_id' = $19)
+               AND ($20::text IS NULL OR ae.payload ->> 'evaluation_run_id' = $20)
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -6431,6 +6433,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.event_group.as_deref())
         .bind(GOVERNANCE_AUDIT_EVENT_TYPES)
         .bind(filter.sample_id.as_deref())
+        .bind(filter.agent_run_id.as_deref())
         .bind(filter.dataset_id.as_deref())
         .bind(filter.feature_set_id.as_deref())
         .bind(filter.model_dataset_id.as_deref())
@@ -7774,6 +7777,9 @@ fn persisted_audit_event_matches_filter(
     if !audit_event_payload_matches_audit_sample_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_agent_filter(&event.payload, filter) {
+        return false;
+    }
     if !audit_event_payload_matches_data_lineage_filter(&event.payload, filter) {
         return false;
     }
@@ -7826,6 +7832,9 @@ fn pilot_audit_event_matches_filter(
         return false;
     }
     if !audit_event_payload_matches_audit_sample_filter(&event.payload, filter) {
+        return false;
+    }
+    if !audit_event_payload_matches_agent_filter(&event.payload, filter) {
         return false;
     }
     if !audit_event_payload_matches_data_lineage_filter(&event.payload, filter) {
@@ -7946,6 +7955,20 @@ fn audit_event_payload_matches_audit_sample_filter(
         .sample_id
         .as_deref()
         .is_some_and(|sample_id| payload["sample_id"].as_str() != Some(sample_id))
+    {
+        return false;
+    }
+    true
+}
+
+fn audit_event_payload_matches_agent_filter(
+    payload: &Value,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter
+        .agent_run_id
+        .as_deref()
+        .is_some_and(|agent_run_id| payload["agent_run_id"].as_str() != Some(agent_run_id))
     {
         return false;
     }

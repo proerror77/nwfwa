@@ -984,6 +984,7 @@ async fn openapi_includes_operations_paths() {
         "feedback_id",
         "qa_case_id",
         "sample_id",
+        "agent_run_id",
         "dataset_id",
         "feature_set_id",
         "model_dataset_id",

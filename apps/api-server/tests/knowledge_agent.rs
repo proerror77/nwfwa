@@ -1008,7 +1008,7 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(body["code"], "AGENT_APPROVAL_NOT_PENDING");
 
     let (status, body) = json_request(
-        app,
+        app.clone(),
         "GET",
         "/api/v1/ops/audit-events?event_group=governance&event_type=agent.approval.decided&actor_id=qa-lead&limit=10",
         "{}",
@@ -1020,6 +1020,37 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "agent.approval.decided");
     assert_eq!(events[0]["payload"]["agent_run_id"], agent_run_id);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        &format!("/api/v1/ops/audit-events?agent_run_id={agent_run_id}&limit=10"),
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let events = body["events"].as_array().unwrap();
+    assert_eq!(events.len(), 2);
+    assert!(events.iter().any(
+        |event| event["event_type"] == "agent.investigation.completed"
+            && event["payload"]["agent_run_id"] == agent_run_id
+    ));
+    assert!(events
+        .iter()
+        .any(|event| event["event_type"] == "agent.approval.decided"
+            && event["payload"]["agent_run_id"] == agent_run_id));
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?agent_run_id=missing-agent-run&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(body["events"].as_array().unwrap().is_empty());
 }
 
 #[tokio::test]

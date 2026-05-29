@@ -356,6 +356,7 @@ export type AuditEventListFilters = {
   feedback_id?: string;
   qa_case_id?: string;
   sample_id?: string;
+  agent_run_id?: string;
   dataset_id?: string;
   feature_set_id?: string;
   model_dataset_id?: string;

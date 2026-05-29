@@ -879,6 +879,12 @@ pub async fn openapi_schema() -> Json<Value> {
                             "schema": { "type": "string" }
                         },
                         {
+                            "name": "agent_run_id",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "string" }
+                        },
+                        {
                             "name": "dataset_id",
                             "in": "query",
                             "required": false,
