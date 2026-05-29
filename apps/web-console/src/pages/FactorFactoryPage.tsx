@@ -121,6 +121,7 @@ export type FactorCard = {
   readiness_issues: string[];
   is_label: boolean;
   is_entity_key: boolean;
+  evidence_refs: string[];
   top_values: string[];
 };
 
@@ -284,6 +285,7 @@ export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
       readiness_issues: [],
       is_label: isLabel,
       is_entity_key: isEntityKey,
+      evidence_refs: [`dataset_fields:${dataset.dataset_key}:${field.field_name}`],
       top_values: (field.profile_json.top_values ?? []).map(
         (item) => `${String(item.value)} (${item.count})`,
       ),
@@ -325,6 +327,7 @@ export function buildApiFactorCards(cards: ApiFactorCard[], datasetId?: string):
       readiness_issues: card.readiness_issues,
       is_label: card.is_label,
       is_entity_key: card.is_entity_key,
+      evidence_refs: card.evidence_refs,
       top_values: [],
     }));
 }
@@ -640,6 +643,13 @@ export function FactorFactoryPage() {
                 <ul className="result-list compact-list">
                   {factor.readiness_issues.map((issue) => (
                     <li key={issue}>{issue}</li>
+                  ))}
+                </ul>
+              ) : null}
+              {factor.evidence_refs.length > 0 ? (
+                <ul className="result-list compact-list">
+                  {factor.evidence_refs.slice(0, 4).map((reference) => (
+                    <li key={reference}>{reference}</li>
                   ))}
                 </ul>
               ) : null}

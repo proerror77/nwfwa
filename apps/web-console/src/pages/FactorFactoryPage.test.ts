@@ -79,6 +79,7 @@ describe("buildFactorCards", () => {
       readiness_issues: [],
       is_label: false,
       is_entity_key: false,
+      evidence_refs: ["dataset_fields:demo_claims_fwa:claim_amount_to_limit_ratio"],
       top_values: ["0.8 (12)"],
     });
     expect(cards[1]).toMatchObject({
@@ -92,6 +93,7 @@ describe("buildFactorCards", () => {
       online_available: false,
       readiness_issues: [],
       is_label: true,
+      evidence_refs: ["dataset_fields:demo_claims_fwa:confirmed_fwa"],
     });
   });
 });
@@ -152,6 +154,7 @@ describe("buildApiFactorCards", () => {
       convertible_to_rule: true,
       online_available: true,
       readiness_issues: [],
+      evidence_refs: ["dataset_fields:demo_claims_fwa:v1:claim_amount_to_limit_ratio"],
     });
   });
 
@@ -199,6 +202,7 @@ describe("buildApiFactorCards", () => {
       readiness_issues: ["online_missing_rate_above_threshold", "unstable_distribution"],
       stability_label: "drift",
       missing_rate_label: "12.0%",
+      evidence_refs: ["dataset_fields:demo_claims_fwa:v1:provider_high_cost_ratio_30d"],
     });
   });
 });
@@ -277,6 +281,7 @@ describe("filterFactorCards", () => {
       readiness_issues: [],
       is_label: false,
       is_entity_key: false,
+      evidence_refs: ["dataset_fields:demo_claims_fwa:v1:claim_amount_to_limit_ratio"],
       top_values: [],
       ...overrides,
     };
@@ -344,6 +349,7 @@ describe("buildFactorRuleCandidate", () => {
       readiness_issues: [],
       is_label: false,
       is_entity_key: false,
+      evidence_refs: ["dataset_fields:demo_claims_fwa:v1:claim_amount_percentile_peer"],
       top_values: [],
       ...overrides,
     };
