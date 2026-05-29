@@ -553,7 +553,10 @@ def create_and_review_qa_audit_sample(score):
     )
     assert_true(sample.get("sample_id"), "audit sample missing sample_id")
     assert_true(sample.get("sample_mode") == "qa_calibration", "audit sample mode mismatch")
-    assert_true(sample.get("selection_method") == "reviewer_rotation", "audit sample selection method mismatch")
+    assert_true(
+        sample.get("selection_method") == "reviewer_consistency_rotation",
+        "audit sample selection method mismatch",
+    )
     assert_true(sample.get("reviewer") == "qa-sampling-demo", "audit sample reviewer mismatch")
     assert_true(sample.get("assignment_queue") == "QA Review", "audit sample queue mismatch")
     selected_leads = sample.get("selected_leads", [])
