@@ -4228,9 +4228,9 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["decision", "approver", "reason", "evidence_refs"],
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
-                        "approver": { "type": "string" },
-                        "reason": { "type": "string" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "approver": { "type": "string", "minLength": 1 },
+                        "reason": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
                     }
                 },
                 "SubmitAgentApprovalResponse": {

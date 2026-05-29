@@ -693,6 +693,21 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/AgentApprovalRecord"
     );
     assert_eq!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]["approver"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]["reason"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
+            ["evidence_refs"]["minItems"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["scheme_family"]
             ["$ref"],
         "#/components/schemas/FwaSchemeFamily"

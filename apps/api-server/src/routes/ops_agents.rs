@@ -52,13 +52,7 @@ pub async fn submit_agent_approval(
     Json(request): Json<SubmitAgentApprovalRequest>,
 ) -> Result<Json<SubmitAgentApprovalResponse>, ApiError> {
     authorize(&state, &headers)?;
-    if request.decision != "approved" && request.decision != "rejected" {
-        return Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            "INVALID_AGENT_APPROVAL_DECISION",
-            "decision must be approved or rejected",
-        ));
-    }
+    validate_agent_approval_request(&request)?;
     let run = state
         .repository
         .list_agent_runs()
@@ -112,6 +106,42 @@ pub async fn submit_agent_approval(
         .await
         .map_err(internal_error("AGENT_APPROVAL_AUDIT_FAILED"))?;
     Ok(Json(SubmitAgentApprovalResponse { approval, audit_id }))
+}
+
+fn validate_agent_approval_request(request: &SubmitAgentApprovalRequest) -> Result<(), ApiError> {
+    if request.decision != "approved" && request.decision != "rejected" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_AGENT_APPROVAL_DECISION",
+            "decision must be approved or rejected",
+        ));
+    }
+    if request.approver.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_AGENT_APPROVER",
+            "approver is required",
+        ));
+    }
+    if request.reason.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_AGENT_APPROVAL_REASON",
+            "approval reason is required",
+        ));
+    }
+    if request
+        .evidence_refs
+        .iter()
+        .all(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_AGENT_APPROVAL_EVIDENCE",
+            "agent approval decisions require evidence_refs",
+        ));
+    }
+    Ok(())
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {

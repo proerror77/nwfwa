@@ -430,3 +430,77 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(approval["decision"], "approved");
     assert_eq!(approval["approver"], "qa-lead");
 }
+
+#[tokio::test]
+async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-APPROVAL-GUARD",
+          "risk_score": 91,
+          "rag": "RED",
+          "top_reasons": ["Agent 建议必须经过有证据的人审"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": []
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
+          "approver": " ",
+          "reason": " ",
+          "evidence_refs": ["agent_approval:manual_review_required"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_AGENT_APPROVER");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": " ",
+          "evidence_refs": ["agent_approval:manual_review_required"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_REASON");
+}
