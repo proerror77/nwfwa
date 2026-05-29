@@ -7,6 +7,42 @@ use std::{
     path::{Path, PathBuf},
 };
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct WorkerHealthResponse {
+    pub status: &'static str,
+    pub service: &'static str,
+    pub version: &'static str,
+    pub checks: Vec<WorkerHealthCheck>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct WorkerHealthCheck {
+    pub name: &'static str,
+    pub status: &'static str,
+}
+
+pub fn worker_health() -> WorkerHealthResponse {
+    WorkerHealthResponse {
+        status: "ok",
+        service: "worker",
+        version: env!("CARGO_PKG_VERSION"),
+        checks: vec![
+            WorkerHealthCheck {
+                name: "cli_commands",
+                status: "ok",
+            },
+            WorkerHealthCheck {
+                name: "parquet_profiler",
+                status: "ok",
+            },
+            WorkerHealthCheck {
+                name: "retraining_job_runner",
+                status: "ok",
+            },
+        ],
+    }
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 pub struct ClaimedRetrainingJob {
     pub job_id: String,
@@ -879,6 +915,27 @@ mod tests {
             ),
             "http://127.0.0.1:8080/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
         );
+    }
+
+    #[test]
+    fn returns_worker_health_metadata() {
+        let health = worker_health();
+
+        assert_eq!(health.status, "ok");
+        assert_eq!(health.service, "worker");
+        assert_eq!(health.version, env!("CARGO_PKG_VERSION"));
+        assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "cli_commands",
+            status: "ok"
+        }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "parquet_profiler",
+            status: "ok"
+        }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "retraining_job_runner",
+            status: "ok"
+        }));
     }
 
     #[test]

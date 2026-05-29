@@ -8,6 +8,15 @@ async fn main() -> anyhow::Result<()> {
     }
 
     match args.remove(0).as_str() {
+        "health" => {
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&worker::worker_health())?
+            );
+        }
         "profile-parquet" => {
             let manifest = take_flag_value(&mut args, "--manifest")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;
