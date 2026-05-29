@@ -534,6 +534,125 @@ def run_routing_policy_governance():
     }
 
 
+def create_and_review_qa_audit_sample(score):
+    sample = request(
+        "POST",
+        "/api/v1/ops/audit-samples",
+        {
+            "sample_mode": "qa_calibration",
+            "population_definition": "Demo high-risk FWA claims sampled for QA calibration.",
+            "inclusion_criteria": {
+                "min_risk_score": 70,
+                "review_mode": "pre_payment",
+            },
+            "deterministic_seed": f"demo-qa-calibration-{score['run_id']}",
+            "sample_size": 1,
+            "reviewer": "qa-sampling-demo",
+            "assignment_queue": "QA Review",
+        },
+    )
+    assert_true(sample.get("sample_id"), "audit sample missing sample_id")
+    assert_true(sample.get("sample_mode") == "qa_calibration", "audit sample mode mismatch")
+    assert_true(sample.get("selection_method") == "reviewer_rotation", "audit sample selection method mismatch")
+    assert_true(sample.get("reviewer") == "qa-sampling-demo", "audit sample reviewer mismatch")
+    assert_true(sample.get("assignment_queue") == "QA Review", "audit sample queue mismatch")
+    selected_leads = sample.get("selected_leads", [])
+    assert_true(len(selected_leads) == 1, "audit sample should select exactly one lead")
+    selected_lead = selected_leads[0]
+    assert_true(selected_lead.get("claim_id"), "sampled lead missing claim_id")
+    assert_true(selected_lead.get("risk_score", 0) >= 70, "sampled lead should be high risk")
+    assert_true(selected_lead.get("evidence_refs"), "sampled lead missing evidence refs")
+    assert_true(sample.get("outcome_distribution", {}).get("selected_count") == 1, "sample selected count mismatch")
+    assert_true(sample.get("outcome_distribution", {}).get("open_count") == 1, "sample should start open")
+
+    queue_items = request("GET", "/api/v1/ops/qa/queue").get("items", [])
+    queue_item = next(
+        (
+            item
+            for item in queue_items
+            if item.get("sample_id") == sample["sample_id"]
+            and item.get("lead_id") == selected_lead["lead_id"]
+        ),
+        None,
+    )
+    assert_true(queue_item is not None, "QA queue missing sampled audit item")
+    assert_true(queue_item.get("status") == "open", "sampled QA queue item should start open")
+    assert_true(queue_item.get("reviewer") == "qa-sampling-demo", "sampled QA queue reviewer mismatch")
+    assert_true(queue_item.get("assignment_queue") == "QA Review", "sampled QA queue mismatch")
+    assert_true(queue_item.get("risk_score") == selected_lead["risk_score"], "sampled QA queue risk mismatch")
+    assert_true(queue_item.get("evidence_refs"), "sampled QA queue item missing evidence refs")
+
+    qa_case_id = queue_item["qa_case_id"]
+    qa_result = request(
+        "POST",
+        "/api/v1/qa/results",
+        {
+            "qa_case_id": qa_case_id,
+            "claim_id": queue_item["claim_id"],
+            "qa_conclusion": "pass",
+            "issue_type": "qa_review_completed",
+            "feedback_target": "workflow",
+            "notes": "Demo smoke completed the sampled QA calibration review.",
+            "evidence_refs": [
+                f"qa_queue:{qa_case_id}",
+                f"audit_samples:{sample['sample_id']}",
+                f"leads:{selected_lead['lead_id']}",
+            ],
+        },
+    )
+    assert_true(qa_result.get("event_type") == "qa.result.received", "sampled QA result was not audited")
+    assert_true(qa_result.get("audit_id"), "sampled QA result missing audit id")
+
+    reviewed_queue_items = request("GET", "/api/v1/ops/qa/queue").get("items", [])
+    reviewed_item = next(
+        (
+            item
+            for item in reviewed_queue_items
+            if item.get("qa_case_id") == qa_case_id
+        ),
+        None,
+    )
+    assert_true(reviewed_item is not None, "reviewed sampled QA queue item missing")
+    assert_true(reviewed_item.get("status") == "reviewed", "sampled QA queue item was not reviewed")
+    assert_true(reviewed_item.get("qa_conclusion") == "pass", "sampled QA queue conclusion mismatch")
+    assert_true(reviewed_item.get("issue_type") == "qa_review_completed", "sampled QA queue issue mismatch")
+
+    samples = request("GET", "/api/v1/ops/audit-samples").get("samples", [])
+    listed_sample = next(
+        (item for item in samples if item.get("sample_id") == sample["sample_id"]),
+        None,
+    )
+    assert_true(listed_sample is not None, "audit sample list missing demo sample")
+    distribution = listed_sample.get("outcome_distribution", {})
+    assert_true(distribution.get("selected_count") == 1, "listed sample selected count mismatch")
+    assert_true(distribution.get("reviewed_count") == 1, "listed sample reviewed count mismatch")
+    assert_true(distribution.get("open_count") == 0, "listed sample should have no open cases")
+    assert_true(
+        distribution.get("qa_conclusions", {}).get("pass") == 1,
+        "listed sample missing pass conclusion count",
+    )
+    assert_true(
+        distribution.get("feedback_targets", {}).get("workflow") == 1,
+        "listed sample missing workflow feedback count",
+    )
+
+    sample_audit = request(
+        "GET",
+        f"/api/v1/ops/audit-events?sample_id={sample['sample_id']}&limit=10",
+    ).get("events", [])
+    assert_true(
+        any(event.get("event_type") == "audit_sample.created" for event in sample_audit),
+        "audit sample creation was not present in governance audit log",
+    )
+    return {
+        "sample_id": sample["sample_id"],
+        "qa_case_id": qa_case_id,
+        "claim_id": queue_item["claim_id"],
+        "reviewed_count": distribution["reviewed_count"],
+        "audit_id": qa_result["audit_id"],
+    }
+
+
 def resolve_demo_qa_feedback(qa):
     feedback_id = "qa_feedback_QA-DEMO-SMOKE"
     update = request(
@@ -1042,6 +1161,7 @@ def main():
         ),
         "case list missing investigating case",
     )
+    qa_audit_sample = create_and_review_qa_audit_sample(score)
 
     medical_queue = request("GET", "/api/v1/ops/medical-review/queue?limit=20")
     medical_items = medical_queue.get("items", [])
@@ -1247,6 +1367,14 @@ def main():
     assert_true(dashboard.get("investigation_results", 0) >= 1, "dashboard missing investigations")
     assert_true(dashboard.get("qa_reviews", 0) >= 1, "dashboard missing QA reviews")
     assert_true(
+        dashboard.get("qa_queue", {}).get("sampled_cases", 0) >= 1,
+        "dashboard missing sampled QA cases",
+    )
+    assert_true(
+        dashboard.get("qa_queue", {}).get("reviewed_cases", 0) >= 1,
+        "dashboard missing reviewed sampled QA cases",
+    )
+    assert_true(
         dashboard.get("qa_queue", {}).get("feedback_resolved_count", 0) >= 1,
         "dashboard missing resolved QA feedback count",
     )
@@ -1335,6 +1463,7 @@ def main():
                 "agent_governance": agent_governance,
                 "investigation_audit_id": investigation["audit_id"],
                 "case_id": case_id,
+                "qa_audit_sample": qa_audit_sample,
                 "outcome_labels": label_pool["total_labels"],
                 "retraining_job_id": retraining_job["job_id"],
                 "discovered_rule": discovered_rule,

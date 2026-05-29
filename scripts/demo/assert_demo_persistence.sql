@@ -152,6 +152,49 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM audit_samples sample
+  CROSS JOIN LATERAL jsonb_array_elements(sample.selected_leads_json) AS lead(value)
+  WHERE sample.sample_mode = 'qa_calibration'
+    AND sample.selection_method = 'reviewer_rotation'
+    AND sample.reviewer = 'qa-sampling-demo'
+    AND sample.assignment_queue = 'QA Review'
+    AND sample.outcome_distribution_json ->> 'selected_count' = '1'
+    AND lead.value ->> 'claim_id' = demo_claim_id
+    AND (lead.value ->> 'risk_score')::integer >= 70
+    AND jsonb_array_length(lead.value -> 'evidence_refs') >= 1;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected QA calibration audit sample for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_samples sample
+  CROSS JOIN LATERAL jsonb_array_elements(sample.selected_leads_json) AS lead(value)
+  JOIN qa_reviews review
+    ON review.qa_case_id = 'qa_' || sample.sample_id || '_' || (lead.value ->> 'lead_id')
+  WHERE sample.sample_mode = 'qa_calibration'
+    AND sample.reviewer = 'qa-sampling-demo'
+    AND lead.value ->> 'claim_id' = review.claim_id
+    AND review.qa_conclusion = 'pass'
+    AND review.issue_type = 'qa_review_completed'
+    AND review.feedback_target = 'workflow'
+    AND review.evidence_refs ? ('audit_samples:' || sample.sample_id);
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected reviewed QA calibration sample result';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_events event
+  JOIN audit_samples sample
+    ON event.payload ->> 'sample_id' = sample.sample_id
+  WHERE sample.sample_mode = 'qa_calibration'
+    AND sample.reviewer = 'qa-sampling-demo'
+    AND event.event_type = 'audit_sample.created'
+    AND event.evidence_refs ? ('audit_samples:' || sample.sample_id);
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected audit_sample.created governance audit event';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM knowledge_cases
   WHERE case_id = 'KC-DEMO-SMOKE'
     AND scheme_family = 'diagnosis_procedure_mismatch'
