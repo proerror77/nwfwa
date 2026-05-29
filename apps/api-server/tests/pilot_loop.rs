@@ -516,6 +516,20 @@ async fn lists_webhook_events_for_tpa_integrations() {
         .unwrap()
         .to_string();
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/webhook-events/{score_event_id}/delivery-attempts"),
+        r#"{
+          "delivery_status": "failed",
+          "response_status_code": 503,
+          "error_message": "TPA webhook failed for alice@example.com"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_WEBHOOK_DELIVERY");
+
     let (status, attempt) = json_request(
         app.clone(),
         "POST",

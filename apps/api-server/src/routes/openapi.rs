@@ -3130,7 +3130,10 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "delivery_status": { "type": "string", "enum": ["delivered", "failed"] },
                         "response_status_code": { "type": ["integer", "null"] },
-                        "error_message": { "type": ["string", "null"] }
+                        "error_message": {
+                            "type": ["string", "null"],
+                            "description": "Webhook delivery error message; must not contain PII."
+                        }
                     }
                 },
                 "WebhookDeliveryAttempt": {

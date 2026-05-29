@@ -523,6 +523,17 @@ pub async fn submit_webhook_delivery_attempt(
             "delivery_status must be delivered or failed",
         ));
     }
+    if request
+        .error_message
+        .as_deref()
+        .is_some_and(|message| pii::contains_pii([message]))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_WEBHOOK_DELIVERY",
+            "webhook delivery error_message must not contain PII",
+        ));
+    }
     let known_event = state
         .repository
         .list_webhook_events()

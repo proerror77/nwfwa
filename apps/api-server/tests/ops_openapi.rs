@@ -1361,6 +1361,13 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/WebhookDeliveryAttempt"
     );
     assert!(schema["components"]["schemas"]["SubmitWebhookDeliveryAttemptRequest"].is_object());
+    assert!(
+        schema["components"]["schemas"]["SubmitWebhookDeliveryAttemptRequest"]["properties"]
+            ["error_message"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("PII")
+    );
     assert_eq!(
         schema["components"]["schemas"]["WebhookEventListResponse"]["properties"]["events"]
             ["items"]["$ref"],
