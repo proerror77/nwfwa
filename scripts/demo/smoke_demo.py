@@ -803,6 +803,151 @@ def assert_member_profile_summary():
     }
 
 
+def govern_agent_run(agent):
+    agent_run_id = agent["agent_run_id"]
+    runs = request("GET", "/api/v1/ops/agent-runs").get("runs", [])
+    run = next((item for item in runs if item.get("agent_run_id") == agent_run_id), None)
+    assert_true(run is not None, "agent run log missing demo agent run")
+    assert_true(run.get("claim_id") == CLAIM_ID, "agent run log claim_id mismatch")
+    assert_true(run.get("status") == "succeeded", "agent run log status mismatch")
+    assert_true(run.get("decision_boundary") == "assistive_only", "agent run must stay assistive only")
+    assert_true(run.get("steps"), "agent run log missing steps")
+    assert_true(run.get("context_snapshots"), "agent run log missing redacted context snapshot")
+    context_snapshot = run["context_snapshots"][0]
+    assert_true(
+        context_snapshot.get("redaction_status") == "pii_masked",
+        "agent context snapshot was not PII masked",
+    )
+    assert_true(context_snapshot.get("checksum", "").startswith("snapshot:"), "agent context snapshot missing checksum")
+    assert_true(run.get("tool_calls"), "agent run log missing tool call audit")
+    tool_call = next(
+        (
+            call
+            for call in run["tool_calls"]
+            if call.get("tool_name") == "knowledge.search_similar"
+        ),
+        None,
+    )
+    assert_true(tool_call is not None, "agent run log missing knowledge search tool call")
+    assert_true(tool_call.get("status") == "succeeded", "agent tool call did not succeed")
+    assert_true(tool_call.get("evidence_refs"), "agent tool call missing evidence refs")
+    policy_check = next(
+        (
+            check
+            for check in run.get("policy_checks", [])
+            if check.get("tool_call_id") == tool_call.get("tool_call_id")
+        ),
+        None,
+    )
+    assert_true(policy_check is not None, "agent run log missing tool policy check")
+    assert_true(policy_check.get("decision") == "allowed", "agent tool policy check did not allow tool")
+    assert_true(
+        policy_check.get("policy_name") == "agent_tool_allowlist",
+        "agent tool policy check policy mismatch",
+    )
+    tool_result = next(
+        (
+            result
+            for result in run.get("tool_results", [])
+            if result.get("tool_call_id") == tool_call.get("tool_call_id")
+        ),
+        None,
+    )
+    assert_true(tool_result is not None, "agent run log missing tool result")
+    assert_true(tool_result.get("status") == "succeeded", "agent tool result did not succeed")
+    assert_true(tool_result.get("output_json", {}).get("result_count", 0) > 0, "agent tool result missing matches")
+    pending_approval = next(
+        (
+            approval
+            for approval in run.get("approvals", [])
+            if approval.get("proposed_action") == "manual_review_required"
+        ),
+        None,
+    )
+    assert_true(pending_approval is not None, "agent run missing pending human approval")
+    assert_true(pending_approval.get("decision") == "pending", "agent approval should start pending")
+
+    alerts = request("GET", "/api/v1/ops/alerts").get("alerts", [])
+    assert_true(
+        any(
+            alert.get("alert_type") == "agent_approval_pending"
+            and alert.get("claim_id") == CLAIM_ID
+            and f"agent_run:{agent_run_id}" in alert.get("evidence_refs", [])
+            for alert in alerts
+        ),
+        "ops alerts missing pending agent approval",
+    )
+
+    approval = request(
+        "POST",
+        f"/api/v1/ops/agent-runs/{agent_run_id}/approvals",
+        {
+            "decision": "approved",
+            "approver": "agent-governance-demo",
+            "reason": "Evidence package is sufficient for manual review routing.",
+            "evidence_refs": [
+                f"agent_run:{agent_run_id}",
+                "agent_approval:manual_review_required",
+            ],
+        },
+    )
+    assert_true(approval.get("audit_id"), "agent approval response missing audit id")
+    approval_record = approval.get("approval", {})
+    assert_true(approval_record.get("agent_run_id") == agent_run_id, "agent approval run id mismatch")
+    assert_true(approval_record.get("decision") == "approved", "agent approval was not approved")
+    assert_true(
+        approval_record.get("approver") == "agent-governance-demo",
+        "agent approval approver mismatch",
+    )
+    assert_true(
+        f"agent_run:{agent_run_id}" in approval_record.get("evidence_refs", []),
+        "agent approval missing run evidence ref",
+    )
+
+    approved_runs = request("GET", "/api/v1/ops/agent-runs").get("runs", [])
+    approved_run = next((item for item in approved_runs if item.get("agent_run_id") == agent_run_id), None)
+    assert_true(approved_run is not None, "approved agent run log missing")
+    approved_approval = next(
+        (
+            item
+            for item in approved_run.get("approvals", [])
+            if item.get("proposed_action") == "manual_review_required"
+        ),
+        None,
+    )
+    assert_true(approved_approval is not None, "approved agent run missing approval record")
+    assert_true(approved_approval.get("decision") == "approved", "agent run approval log not approved")
+
+    resolved_alerts = request("GET", "/api/v1/ops/alerts").get("alerts", [])
+    assert_true(
+        not any(
+            alert.get("alert_type") == "agent_approval_pending"
+            and alert.get("claim_id") == CLAIM_ID
+            for alert in resolved_alerts
+        ),
+        "pending agent approval alert remained after approval",
+    )
+
+    audit_events = request(
+        "GET",
+        f"/api/v1/ops/audit-events?agent_run_id={agent_run_id}&limit=10",
+    ).get("events", [])
+    assert_true(
+        any(event.get("event_type") == "agent.investigation.completed" for event in audit_events),
+        "agent audit log missing investigation completion",
+    )
+    assert_true(
+        any(event.get("event_type") == "agent.approval.decided" for event in audit_events),
+        "agent audit log missing approval decision",
+    )
+    return {
+        "agent_run_id": agent_run_id,
+        "approval_id": approval_record["approval_id"],
+        "approval_decision": approval_record["decision"],
+        "audit_id": approval["audit_id"],
+    }
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -979,6 +1124,7 @@ def main():
         agent.get("similar_cases", [{}])[0].get("case_id") == "KC-1001",
         "agent response missing expected similar case",
     )
+    agent_governance = govern_agent_run(agent)
 
     investigation = request(
         "POST",
@@ -1133,6 +1279,15 @@ def main():
     case_sla = dashboard.get("case_sla", {})
     assert_true(case_sla.get("total_cases", 0) >= 1, "dashboard missing investigation cases")
     assert_true(case_sla.get("open_cases", 0) >= 1, "dashboard missing open case SLA rollup")
+    agent_governance_summary = dashboard.get("agent_governance", {})
+    assert_true(
+        agent_governance_summary.get("total_runs", 0) >= 1,
+        "dashboard missing agent governance runs",
+    )
+    assert_true(
+        agent_governance_summary.get("approved_approvals", 0) >= 1,
+        "dashboard missing approved agent approvals",
+    )
 
     factor_readiness = assert_factor_factory_readiness()
 
@@ -1177,6 +1332,7 @@ def main():
                 "similar_case": results[0]["case_id"],
                 "medical_review_audit_id": medical_review["audit_id"],
                 "agent_run_id": agent["agent_run_id"],
+                "agent_governance": agent_governance,
                 "investigation_audit_id": investigation["audit_id"],
                 "case_id": case_id,
                 "outcome_labels": label_pool["total_labels"],

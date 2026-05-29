@@ -198,6 +198,91 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM agent_runs
+  WHERE claim_id = demo_claim_id
+    AND status = 'succeeded'
+    AND decision_boundary = 'assistive_only'
+    AND output_json ? 'evidence_sufficiency'
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected governed agent run for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM agent_runs ar
+  JOIN agent_steps ast ON ast.agent_run_id = ar.agent_run_id
+  WHERE ar.claim_id = demo_claim_id
+    AND ast.step_name = 'evidence_finding'
+    AND ast.evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected evidence-backed agent steps for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM agent_runs ar
+  JOIN agent_context_snapshots acs ON acs.agent_run_id = ar.agent_run_id
+  WHERE ar.claim_id = demo_claim_id
+    AND acs.redaction_status = 'pii_masked'
+    AND acs.checksum LIKE 'snapshot:%'
+    AND acs.context_json ->> 'claim_id' LIKE 'masked:claim:%'
+    AND acs.source_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected PII-masked agent context snapshot for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM agent_runs ar
+  JOIN tool_calls tc ON tc.agent_run_id = ar.agent_run_id
+  JOIN agent_policy_checks apc
+    ON apc.agent_run_id = ar.agent_run_id
+   AND apc.tool_call_id = tc.tool_call_id
+  JOIN tool_results tr
+    ON tr.agent_run_id = ar.agent_run_id
+   AND tr.tool_call_id = tc.tool_call_id
+  WHERE ar.claim_id = demo_claim_id
+    AND tc.tool_name = 'knowledge.search_similar'
+    AND tc.status = 'succeeded'
+    AND tc.evidence_refs <> '[]'::jsonb
+    AND apc.policy_name = 'agent_tool_allowlist'
+    AND apc.decision = 'allowed'
+    AND apc.evidence_refs <> '[]'::jsonb
+    AND tr.status = 'succeeded'
+    AND (tr.output_json ->> 'result_count')::integer > 0
+    AND tr.evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected audited agent tool call, policy check, and result for %',
+      demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM agent_runs ar
+  JOIN agent_approvals aa ON aa.agent_run_id = ar.agent_run_id
+  WHERE ar.claim_id = demo_claim_id
+    AND aa.proposed_action = 'manual_review_required'
+    AND aa.decision = 'approved'
+    AND aa.approver = 'agent-governance-demo'
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(aa.evidence_refs) AS ref(value)
+      WHERE ref.value = 'agent_run:' || ar.agent_run_id
+    );
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected approved human agent approval for %', demo_claim_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM agent_runs ar
+  JOIN audit_events ae
+    ON ae.payload ->> 'agent_run_id' = ar.agent_run_id
+  WHERE ar.claim_id = demo_claim_id
+    AND ae.event_type IN ('agent.investigation.completed', 'agent.approval.decided')
+    AND ae.evidence_refs <> '[]'::jsonb;
+  IF row_count < 2 THEN
+    RAISE EXCEPTION 'expected agent investigation and approval audit events for %, found %',
+      demo_claim_id, row_count;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM rule_backtest_runs
   WHERE rule_id = 'rule_early_claim'
     AND rule_version = 1

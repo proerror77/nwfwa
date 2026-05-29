@@ -68,6 +68,7 @@ grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py
 grep -q "/api/v1/members/MBR-0287/profile-summary" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/routing-policies" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/agent-runs" scripts/demo/smoke_demo.py
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml
