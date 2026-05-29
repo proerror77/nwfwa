@@ -1023,6 +1023,81 @@ def assert_fwa_scheme_taxonomy():
     }
 
 
+def assert_dashboard_roi(dashboard, agent, lead):
+    value = dashboard.get("value_measurement", {})
+    assert_true(
+        decimal_value(value.get("estimated_impact", "0")) >= Decimal("8200"),
+        "dashboard value measurement missing estimated impact",
+    )
+    assert_true(
+        decimal_value(value.get("net_value", "0")) > Decimal("0"),
+        "dashboard value measurement missing positive net value",
+    )
+    assert_true(value.get("currency") == "CNY", "dashboard value measurement currency mismatch")
+    assert_true(
+        "estimated" in value.get("evidence_caveat", ""),
+        "dashboard value measurement missing evidence caveat",
+    )
+
+    attributions = dashboard.get("saving_attributions", [])
+    assert_true(
+        any(
+            item.get("source_type") == "agent"
+            and item.get("source_id") == agent["agent_run_id"]
+            and decimal_value(item.get("saving_amount", "0")) > Decimal("0")
+            and f"agent_run:{agent['agent_run_id']}" in item.get("evidence_refs", [])
+            for item in attributions
+        ),
+        "dashboard saving attribution missing agent source",
+    )
+    assert_true(
+        any(
+            item.get("source_type") == "rule"
+            and item.get("source_id") == "EARLY_CLAIM"
+            and decimal_value(item.get("saving_amount", "0")) > Decimal("0")
+            and "rule_runs:EARLY_CLAIM" in item.get("evidence_refs", [])
+            for item in attributions
+        ),
+        "dashboard saving attribution missing rule source",
+    )
+
+    segments = dashboard.get("saving_segments", [])
+    assert_true(
+        any(
+            item.get("segment_type") == "provider"
+            and item.get("segment_id") == "PRV-0287"
+            and decimal_value(item.get("saving_amount", "0")) >= Decimal("8200")
+            and item.get("roi", 0) > 0
+            for item in segments
+        ),
+        "dashboard segment ROI missing provider attribution",
+    )
+    assert_true(
+        any(
+            item.get("segment_type") == "scheme"
+            and item.get("segment_id") == lead["scheme_family"]
+            and decimal_value(item.get("saving_amount", "0")) >= Decimal("8200")
+            for item in segments
+        ),
+        "dashboard segment ROI missing scheme attribution",
+    )
+    assert_true(
+        any(
+            item.get("segment_type") == "campaign"
+            and item.get("segment_id") == "prepay-fwa-sprint-q1"
+            and item.get("roi", 0) > 0
+            for item in segments
+        ),
+        "dashboard segment ROI missing campaign attribution",
+    )
+    return {
+        "net_value": value["net_value"],
+        "estimated_impact": value["estimated_impact"],
+        "attribution_count": len(attributions),
+        "segment_count": len(segments),
+    }
+
+
 def govern_agent_run(agent):
     agent_run_id = agent["agent_run_id"]
     runs = request("GET", "/api/v1/ops/agent-runs").get("runs", [])
@@ -1368,7 +1443,9 @@ def main():
             "evidence_refs": [
                 f"agent_run:{agent['agent_run_id']}",
                 f"audit:{score['audit_id']}",
+                "rule_runs:EARLY_CLAIM",
                 "knowledge_cases:KC-1001",
+                "campaigns:prepay-fwa-sprint-q1",
             ],
         },
     )
@@ -1523,6 +1600,7 @@ def main():
         agent_governance_summary.get("approved_approvals", 0) >= 1,
         "dashboard missing approved agent approvals",
     )
+    roi_summary = assert_dashboard_roi(dashboard, agent, lead)
 
     factor_readiness = assert_factor_factory_readiness()
 
@@ -1574,6 +1652,7 @@ def main():
                 "case_id": case_id,
                 "qa_audit_sample": qa_audit_sample,
                 "outcome_labels": label_pool["total_labels"],
+                "roi_summary": roi_summary,
                 "retraining_job_id": retraining_job["job_id"],
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,

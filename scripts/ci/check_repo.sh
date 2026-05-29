@@ -72,6 +72,8 @@ grep -q "/api/v1/ops/providers/risk-summary" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/routing-policies" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/agent-runs" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/audit-samples" scripts/demo/smoke_demo.py
+grep -q "saving_attributions" scripts/demo/smoke_demo.py
+grep -q "saving_segments" scripts/demo/smoke_demo.py
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml
