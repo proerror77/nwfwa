@@ -1223,6 +1223,144 @@ async fn rejects_blank_scoring_identity_fields() {
 }
 
 #[tokio::test]
+async fn rejects_invalid_provider_risk_signal_ranges() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-BAD-PROVIDER-PROFILE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "provider_profile": {
+                "windows": [
+                  {
+                    "window_days": 7,
+                    "claim_count": 12,
+                    "total_claim_amount": "42000",
+                    "high_cost_item_ratio": 0.4,
+                    "diagnosis_procedure_mismatch_rate": 0.2,
+                    "peer_amount_percentile": 80,
+                    "peer_frequency_percentile": 75,
+                    "confirmed_fwa_count": 0,
+                    "false_positive_count": 0
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("INVALID_SCORE_REQUEST"));
+    assert!(body.contains("provider_profile.windows.window_days"));
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-BAD-PROVIDER-RATIO",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "provider_profile": {
+                "windows": [
+                  {
+                    "window_days": 90,
+                    "claim_count": 12,
+                    "total_claim_amount": "42000",
+                    "high_cost_item_ratio": 1.2,
+                    "diagnosis_procedure_mismatch_rate": 0.2,
+                    "peer_amount_percentile": 80,
+                    "peer_frequency_percentile": 75,
+                    "confirmed_fwa_count": 0,
+                    "false_positive_count": 0
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("provider_profile.windows.high_cost_item_ratio"));
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-BAD-GRAPH-SIGNAL",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "provider_relationships": {
+                "high_risk_neighbor_ratio": 0.2,
+                "provider_patient_overlap_score": 0.3,
+                "referral_concentration_score": 1.4,
+                "connected_confirmed_fwa_count": 2,
+                "network_component_risk_score": 101,
+                "evidence_refs": ["relationship_edges:PRV-1"]
+              }
+            }"#,
+        ))
+        .unwrap();
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("provider_relationships.referral_concentration_score"));
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-BAD-GRAPH-EVIDENCE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "provider_relationships": {
+                "high_risk_neighbor_ratio": 0.2,
+                "provider_patient_overlap_score": 0.3,
+                "connected_confirmed_fwa_count": 2,
+                "evidence_refs": [" "]
+              }
+            }"#,
+        ))
+        .unwrap();
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("provider_relationships.evidence_refs"));
+}
+
+#[tokio::test]
 async fn exposes_openapi_schema_for_scoring_contract() {
     let app = build_app(test_config());
 
@@ -1312,6 +1450,56 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         schema["components"]["schemas"]["DocumentPayload"]["properties"]["linked_item_codes"]
             ["items"]["minLength"],
         1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"]
+            ["window_days"]["enum"],
+        serde_json::json!([30, 90, 180])
+    );
+    for field in ["high_cost_item_ratio", "diagnosis_procedure_mismatch_rate"] {
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"][field]
+                ["minimum"],
+            0,
+            "missing ProviderProfileWindowPayload.{field} minimum"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"][field]
+                ["maximum"],
+            1,
+            "missing ProviderProfileWindowPayload.{field} maximum"
+        );
+    }
+    for field in ["peer_amount_percentile", "peer_frequency_percentile"] {
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderProfileWindowPayload"]["properties"][field]
+                ["maximum"],
+            100,
+            "missing ProviderProfileWindowPayload.{field} maximum"
+        );
+    }
+    for field in [
+        "high_risk_neighbor_ratio",
+        "provider_patient_overlap_score",
+        "referral_concentration_score",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderRelationshipGraphPayload"]["properties"]
+                [field]["minimum"],
+            0,
+            "missing ProviderRelationshipGraphPayload.{field} minimum"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderRelationshipGraphPayload"]["properties"]
+                [field]["maximum"],
+            1,
+            "missing ProviderRelationshipGraphPayload.{field} maximum"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["ProviderRelationshipGraphPayload"]["properties"]
+            ["network_component_risk_score"]["maximum"],
+        100
     );
 
     let response_properties = &schema["components"]["schemas"]["ScoreClaimResponse"]["properties"];

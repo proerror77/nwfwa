@@ -554,6 +554,12 @@ fn validate_score_request_contract(request: &ScoreClaimRequest) -> Result<(), Ap
             validate_document_payload(document)?;
         }
     }
+    if let Some(provider_profile) = &request.provider_profile {
+        validate_provider_profile_payload(provider_profile)?;
+    }
+    if let Some(provider_relationships) = &request.provider_relationships {
+        validate_provider_relationship_graph_payload(provider_relationships)?;
+    }
     Ok(())
 }
 
@@ -581,6 +587,12 @@ fn validate_full_claim_payload(payload: &FullClaimPayload) -> Result<(), ApiErro
         for document in documents {
             validate_document_payload(document)?;
         }
+    }
+    if let Some(provider_profile) = &payload.provider_profile {
+        validate_provider_profile_payload(provider_profile)?;
+    }
+    if let Some(provider_relationships) = &payload.provider_relationships {
+        validate_provider_relationship_graph_payload(provider_relationships)?;
     }
     Ok(())
 }
@@ -634,16 +646,104 @@ fn validate_document_payload(payload: &DocumentPayload) -> Result<(), ApiError> 
     Ok(())
 }
 
+fn validate_provider_profile_payload(payload: &ProviderProfilePayload) -> Result<(), ApiError> {
+    if let Some(specialty) = &payload.specialty {
+        require_nonblank(specialty, "provider_profile.specialty")?;
+    }
+    if let Some(network_status) = &payload.network_status {
+        require_nonblank(network_status, "provider_profile.network_status")?;
+    }
+    for window in &payload.windows {
+        validate_provider_profile_window_payload(window)?;
+    }
+    Ok(())
+}
+
+fn validate_provider_profile_window_payload(
+    payload: &ProviderProfileWindowPayload,
+) -> Result<(), ApiError> {
+    if !matches!(payload.window_days, 30 | 90 | 180) {
+        return invalid_score_field("provider_profile.windows.window_days");
+    }
+    require_unit_interval(
+        payload.high_cost_item_ratio,
+        "provider_profile.windows.high_cost_item_ratio",
+    )?;
+    require_unit_interval(
+        payload.diagnosis_procedure_mismatch_rate,
+        "provider_profile.windows.diagnosis_procedure_mismatch_rate",
+    )?;
+    require_percentile(
+        payload.peer_amount_percentile,
+        "provider_profile.windows.peer_amount_percentile",
+    )?;
+    require_percentile(
+        payload.peer_frequency_percentile,
+        "provider_profile.windows.peer_frequency_percentile",
+    )
+}
+
+fn validate_provider_relationship_graph_payload(
+    payload: &ProviderRelationshipGraphPayload,
+) -> Result<(), ApiError> {
+    require_unit_interval(
+        payload.high_risk_neighbor_ratio,
+        "provider_relationships.high_risk_neighbor_ratio",
+    )?;
+    require_unit_interval(
+        payload.provider_patient_overlap_score,
+        "provider_relationships.provider_patient_overlap_score",
+    )?;
+    if let Some(referral_concentration_score) = payload.referral_concentration_score {
+        require_unit_interval(
+            referral_concentration_score,
+            "provider_relationships.referral_concentration_score",
+        )?;
+    }
+    if let Some(network_component_risk_score) = payload.network_component_risk_score {
+        require_percentile(
+            network_component_risk_score,
+            "provider_relationships.network_component_risk_score",
+        )?;
+    }
+    if let Some(evidence_refs) = &payload.evidence_refs {
+        for evidence_ref in evidence_refs {
+            require_nonblank(evidence_ref, "provider_relationships.evidence_refs")?;
+        }
+    }
+    Ok(())
+}
+
+fn require_unit_interval(value: f64, field: &'static str) -> Result<(), ApiError> {
+    if (0.0..=1.0).contains(&value) {
+        Ok(())
+    } else {
+        invalid_score_field(field)
+    }
+}
+
+fn require_percentile(value: u8, field: &'static str) -> Result<(), ApiError> {
+    if value <= 100 {
+        Ok(())
+    } else {
+        invalid_score_field(field)
+    }
+}
+
 fn require_nonblank(value: &str, field: &'static str) -> Result<(), ApiError> {
     if value.trim().is_empty() {
-        Err(ApiError::new(
-            axum::http::StatusCode::BAD_REQUEST,
-            "INVALID_SCORE_REQUEST",
-            format!("{field} must not be blank"),
-        ))
+        invalid_score_field(field)
     } else {
         Ok(())
     }
+}
+
+fn invalid_score_field(field: &'static str) -> Result<(), ApiError> {
+    Err(ApiError::new(
+        axum::http::StatusCode::BAD_REQUEST,
+        "INVALID_SCORE_REQUEST",
+        format!("{field} is invalid"),
+    ))
 }
 
 async fn active_scoring_model(
