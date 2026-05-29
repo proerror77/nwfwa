@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildQaFeedbackLoopSummary,
   buildQaSubmitSummary,
   buildQaEvidenceRefs,
   canSubmitQaQueueItem,
@@ -146,6 +147,45 @@ describe("QAReviewPage helpers", () => {
       evidenceRefs: ["qa_queue:QA-1", "audit:scoring.completed"],
     });
     expect(buildQaSubmitSummary(null)).toBeNull();
+  });
+
+  it("summarizes QA feedback loop readiness for rules models and TPA", () => {
+    expect(
+      buildQaFeedbackLoopSummary({
+        open_count: 3,
+        in_progress_count: 1,
+        resolved_count: 2,
+        dismissed_count: 1,
+        unresolved_count: 4,
+        rules_feedback_count: 2,
+        models_feedback_count: 1,
+        features_feedback_count: 1,
+        provider_profile_feedback_count: 1,
+        workflow_feedback_count: 1,
+        tpa_feedback_count: 2,
+        high_priority_count: 3,
+        evidence_backed_count: 6,
+        highest_priority: "high",
+      }),
+    ).toEqual({
+      totalFeedbackCount: 8,
+      unresolvedRateLabel: "50.0%",
+      evidenceCoverageLabel: "75.0%",
+      modelRuleFeedbackCount: 3,
+      workflowFeedbackCount: 3,
+      tpaWritebackFeedbackCount: 2,
+      highestPriority: "high",
+    });
+
+    expect(buildQaFeedbackLoopSummary(null)).toEqual({
+      totalFeedbackCount: 0,
+      unresolvedRateLabel: "0.0%",
+      evidenceCoverageLabel: "0.0%",
+      modelRuleFeedbackCount: 0,
+      workflowFeedbackCount: 0,
+      tpaWritebackFeedbackCount: 0,
+      highestPriority: "none",
+    });
   });
 
   it("exposes QA review options that match the governed API labels", () => {

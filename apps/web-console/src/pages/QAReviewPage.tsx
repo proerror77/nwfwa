@@ -158,6 +158,31 @@ export function buildQaSubmitSummary(response?: PilotWritebackResponse | null) {
   };
 }
 
+export function buildQaFeedbackLoopSummary(summary?: QaQueueSummary | null) {
+  const totalFeedbackCount = QA_SUMMARY_FEEDBACK_ROWS.reduce(
+    (total, row) => total + (summary?.[row.field] ?? 0),
+    0,
+  );
+  const workflowCount =
+    (summary?.workflow_feedback_count ?? 0) + (summary?.tpa_feedback_count ?? 0);
+  return {
+    totalFeedbackCount,
+    unresolvedRateLabel:
+      totalFeedbackCount === 0
+        ? "0.0%"
+        : `${(((summary?.unresolved_count ?? 0) / totalFeedbackCount) * 100).toFixed(1)}%`,
+    evidenceCoverageLabel:
+      totalFeedbackCount === 0
+        ? "0.0%"
+        : `${(((summary?.evidence_backed_count ?? 0) / totalFeedbackCount) * 100).toFixed(1)}%`,
+    modelRuleFeedbackCount:
+      (summary?.rules_feedback_count ?? 0) + (summary?.models_feedback_count ?? 0),
+    workflowFeedbackCount: workflowCount,
+    tpaWritebackFeedbackCount: summary?.tpa_feedback_count ?? 0,
+    highestPriority: summary?.highest_priority ?? "none",
+  };
+}
+
 export function QAReviewPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -190,6 +215,7 @@ export function QAReviewPage() {
     queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
   });
   const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
+  const feedbackLoopSummary = buildQaFeedbackLoopSummary(queueSummaryQuery.data);
 
   useEffect(() => {
     setEvidenceRefs(buildQaEvidenceRefs(selectedCase));
@@ -274,46 +300,74 @@ export function QAReviewPage() {
           <pre className="error">{String(queueSummaryQuery.error.message)}</pre>
         ) : null}
         {queueSummaryQuery.data ? (
-          <dl className="result-grid">
-            <div>
-              <dt>Open Feedback</dt>
-              <dd>{queueSummaryQuery.data.open_count}</dd>
-            </div>
-            <div>
-              <dt>In Progress</dt>
-              <dd>{queueSummaryQuery.data.in_progress_count}</dd>
-            </div>
-            <div>
-              <dt>Resolved</dt>
-              <dd>{queueSummaryQuery.data.resolved_count}</dd>
-            </div>
-            <div>
-              <dt>Dismissed</dt>
-              <dd>{queueSummaryQuery.data.dismissed_count}</dd>
-            </div>
-            <div>
-              <dt>Unresolved</dt>
-              <dd>{queueSummaryQuery.data.unresolved_count}</dd>
-            </div>
-            <div>
-              <dt>High Priority</dt>
-              <dd>{queueSummaryQuery.data.high_priority_count}</dd>
-            </div>
-            <div>
-              <dt>Evidence Backed</dt>
-              <dd>{queueSummaryQuery.data.evidence_backed_count}</dd>
-            </div>
-            <div>
-              <dt>Highest Priority</dt>
-              <dd>{queueSummaryQuery.data.highest_priority}</dd>
-            </div>
-            {QA_SUMMARY_FEEDBACK_ROWS.map((row) => (
-              <div key={row.field}>
-                <dt>{row.label}</dt>
-                <dd>{queueSummaryQuery.data[row.field]}</dd>
+          <>
+            <div className="summary-grid">
+              <div>
+                <span>Total Feedback</span>
+                <strong>{feedbackLoopSummary.totalFeedbackCount}</strong>
               </div>
-            ))}
-          </dl>
+              <div>
+                <span>Unresolved Rate</span>
+                <strong>{feedbackLoopSummary.unresolvedRateLabel}</strong>
+              </div>
+              <div>
+                <span>Evidence Coverage</span>
+                <strong>{feedbackLoopSummary.evidenceCoverageLabel}</strong>
+              </div>
+              <div>
+                <span>Rules / Models</span>
+                <strong>{feedbackLoopSummary.modelRuleFeedbackCount}</strong>
+              </div>
+              <div>
+                <span>Workflow / TPA</span>
+                <strong>{feedbackLoopSummary.workflowFeedbackCount}</strong>
+              </div>
+              <div>
+                <span>TPA Writeback</span>
+                <strong>{feedbackLoopSummary.tpaWritebackFeedbackCount}</strong>
+              </div>
+            </div>
+            <dl className="result-grid">
+              <div>
+                <dt>Open Feedback</dt>
+                <dd>{queueSummaryQuery.data.open_count}</dd>
+              </div>
+              <div>
+                <dt>In Progress</dt>
+                <dd>{queueSummaryQuery.data.in_progress_count}</dd>
+              </div>
+              <div>
+                <dt>Resolved</dt>
+                <dd>{queueSummaryQuery.data.resolved_count}</dd>
+              </div>
+              <div>
+                <dt>Dismissed</dt>
+                <dd>{queueSummaryQuery.data.dismissed_count}</dd>
+              </div>
+              <div>
+                <dt>Unresolved</dt>
+                <dd>{queueSummaryQuery.data.unresolved_count}</dd>
+              </div>
+              <div>
+                <dt>High Priority</dt>
+                <dd>{queueSummaryQuery.data.high_priority_count}</dd>
+              </div>
+              <div>
+                <dt>Evidence Backed</dt>
+                <dd>{queueSummaryQuery.data.evidence_backed_count}</dd>
+              </div>
+              <div>
+                <dt>Highest Priority</dt>
+                <dd>{feedbackLoopSummary.highestPriority}</dd>
+              </div>
+              {QA_SUMMARY_FEEDBACK_ROWS.map((row) => (
+                <div key={row.field}>
+                  <dt>{row.label}</dt>
+                  <dd>{queueSummaryQuery.data[row.field]}</dd>
+                </div>
+              ))}
+            </dl>
+          </>
         ) : null}
       </div>
 
