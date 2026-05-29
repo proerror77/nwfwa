@@ -368,7 +368,8 @@ async fn filters_rule_and_model_audit_events_for_lifecycle_history() {
         r#"{
           "decision": "approved",
           "reviewer": "model-governance",
-          "notes": "Approved for audit filter verification."
+          "notes": "Approved for audit filter verification.",
+          "evidence_refs": ["model_versions:baseline_fwa:0.1.0"]
         }"#,
     )
     .await;

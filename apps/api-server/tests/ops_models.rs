@@ -1301,7 +1301,8 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
         r#"{
           "decision": "approved",
           "reviewer": "model-governance",
-          "notes": " "
+          "notes": " ",
+          "evidence_refs": ["model_versions:baseline_fwa:0.1.0"]
         }"#,
     )
     .await;
@@ -1315,7 +1316,38 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
         r#"{
           "decision": "approved",
           "reviewer": "model-governance",
-          "notes": "Approved for continued shadow evaluation only."
+          "notes": "Approved for continued shadow evaluation only.",
+          "evidence_refs": []
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_PROMOTION_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
+          "notes": "Approved for continued shadow evaluation only.",
+          "evidence_refs": ["model_versions:baseline_fwa:0.1.0", " "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_PROMOTION_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
+          "notes": "Approved for continued shadow evaluation only.",
+          "evidence_refs": ["model_versions:baseline_fwa:0.1.0"]
         }"#,
     )
     .await;
@@ -1325,6 +1357,10 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
     assert_eq!(body["model_version"], "0.1.0");
     assert_eq!(body["decision"], "approved");
     assert_eq!(body["reviewer"], "model-governance");
+    assert_eq!(
+        body["evidence_refs"][0],
+        "model_versions:baseline_fwa:0.1.0"
+    );
 
     let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
 
@@ -1382,7 +1418,8 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
         r#"{
           "decision": "approved",
           "reviewer": "model-governance",
-          "notes": "Approved candidate for production activation."
+          "notes": "Approved candidate for production activation.",
+          "evidence_refs": ["model_versions:baseline_fwa:{candidate_version}"]
         }"#,
     )
     .await;

@@ -2947,22 +2947,24 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "SubmitRulePromotionReviewRequest": {
                     "type": "object",
-                    "required": ["decision", "reviewer", "notes"],
+                    "required": ["decision", "reviewer", "notes", "evidence_refs"],
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 }
+                        "notes": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
                     }
                 },
                 "RulePromotionReview": {
                     "type": "object",
-                    "required": ["rule_id", "rule_version", "decision", "reviewer", "notes"],
+                    "required": ["rule_id", "rule_version", "decision", "reviewer", "notes", "evidence_refs"],
                     "properties": {
                         "rule_id": { "type": "string" },
                         "rule_version": { "type": "integer" },
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string" },
                         "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "created_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 },
@@ -3858,22 +3860,24 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "SubmitModelPromotionReviewRequest": {
                     "type": "object",
-                    "required": ["decision", "reviewer", "notes"],
+                    "required": ["decision", "reviewer", "notes", "evidence_refs"],
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 }
+                        "notes": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
                     }
                 },
                 "ModelPromotionReview": {
                     "type": "object",
-                    "required": ["model_key", "model_version", "decision", "reviewer", "notes"],
+                    "required": ["model_key", "model_version", "decision", "reviewer", "notes", "evidence_refs"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string" },
                         "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "created_at": { "type": ["string", "null"], "format": "date-time" }
                     }
                 },

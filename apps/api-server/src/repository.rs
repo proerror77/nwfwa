@@ -192,6 +192,7 @@ pub struct RulePromotionReviewRecord {
     pub decision: String,
     pub reviewer: String,
     pub notes: String,
+    pub evidence_refs: Vec<String>,
     pub created_at: Option<String>,
 }
 
@@ -355,6 +356,7 @@ pub struct ModelPromotionReviewRecord {
     pub decision: String,
     pub reviewer: String,
     pub notes: String,
+    pub evidence_refs: Vec<String>,
     pub created_at: Option<String>,
 }
 
@@ -4244,8 +4246,8 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<RulePromotionReviewRecord> {
         let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
             "INSERT INTO rule_promotion_reviews
-             (rule_id, rule_version, decision, reviewer, notes)
-             VALUES ($1, $2, $3, $4, $5)
+             (rule_id, rule_version, decision, reviewer, notes, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING created_at",
         )
         .bind(&record.rule_id)
@@ -4253,6 +4255,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&record.decision)
         .bind(&record.reviewer)
         .bind(&record.notes)
+        .bind(serde_json::json!(record.evidence_refs.clone()))
         .fetch_one(&self.pool)
         .await?;
         Ok(RulePromotionReviewRecord {
@@ -4272,9 +4275,10 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            serde_json::Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT rule_id, rule_version, decision, reviewer, notes, created_at
+            "SELECT rule_id, rule_version, decision, reviewer, notes, evidence_refs, created_at
                  FROM rule_promotion_reviews
                  WHERE rule_id = $1 AND rule_version = $2
                  ORDER BY created_at DESC
@@ -4285,13 +4289,14 @@ impl ScoringRepository for PostgresScoringRepository {
         .fetch_optional(&self.pool)
         .await?;
         Ok(row.map(
-            |(rule_id, rule_version, decision, reviewer, notes, created_at)| {
+            |(rule_id, rule_version, decision, reviewer, notes, evidence_refs, created_at)| {
                 RulePromotionReviewRecord {
                     rule_id,
                     rule_version: rule_version as u32,
                     decision,
                     reviewer,
                     notes,
+                    evidence_refs: json_array_to_strings(evidence_refs),
                     created_at: Some(created_at.to_rfc3339()),
                 }
             },
@@ -4758,8 +4763,8 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<ModelPromotionReviewRecord> {
         let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
             "INSERT INTO model_promotion_reviews
-             (model_key, model_version, decision, reviewer, notes)
-             VALUES ($1, $2, $3, $4, $5)
+             (model_key, model_version, decision, reviewer, notes, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6)
              RETURNING created_at",
         )
         .bind(&record.model_key)
@@ -4767,6 +4772,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&record.decision)
         .bind(&record.reviewer)
         .bind(&record.notes)
+        .bind(serde_json::json!(record.evidence_refs.clone()))
         .fetch_one(&self.pool)
         .await?;
         Ok(ModelPromotionReviewRecord {
@@ -4786,9 +4792,10 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            serde_json::Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT model_key, model_version, decision, reviewer, notes, created_at
+            "SELECT model_key, model_version, decision, reviewer, notes, evidence_refs, created_at
                  FROM model_promotion_reviews
                  WHERE model_key = $1 AND model_version = $2
                  ORDER BY created_at DESC
@@ -4799,13 +4806,14 @@ impl ScoringRepository for PostgresScoringRepository {
         .fetch_optional(&self.pool)
         .await?;
         Ok(row.map(
-            |(model_key, model_version, decision, reviewer, notes, created_at)| {
+            |(model_key, model_version, decision, reviewer, notes, evidence_refs, created_at)| {
                 ModelPromotionReviewRecord {
                     model_key,
                     model_version,
                     decision,
                     reviewer,
                     notes,
+                    evidence_refs: json_array_to_strings(evidence_refs),
                     created_at: Some(created_at.to_rfc3339()),
                 }
             },

@@ -92,6 +92,7 @@ pub struct SubmitModelPromotionReviewRequest {
     pub decision: String,
     pub reviewer: String,
     pub notes: String,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -741,6 +742,18 @@ pub async fn submit_model_promotion_review(
             "promotion review notes are required",
         ));
     }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_PROMOTION_REVIEW_EVIDENCE",
+            "promotion review evidence_refs are required",
+        ));
+    }
     let model = state
         .repository
         .list_models()
@@ -759,6 +772,7 @@ pub async fn submit_model_promotion_review(
             decision: request.decision,
             reviewer: request.reviewer,
             notes: request.notes,
+            evidence_refs: request.evidence_refs,
             created_at: None,
         })
         .await
@@ -1421,10 +1435,12 @@ async fn record_model_promotion_audit(
                 "reviewer": review.reviewer,
                 "note_present": !review.notes.trim().is_empty(),
             }),
-            evidence_refs: vec![serde_json::json!(format!(
-                "model_versions:{}:{}",
-                review.model_key, review.model_version
-            ))],
+            evidence_refs: review
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
         })
         .await
 }

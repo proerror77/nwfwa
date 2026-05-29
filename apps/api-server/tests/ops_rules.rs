@@ -270,7 +270,8 @@ async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
         r#"{
           "decision": "rejected",
           "reviewer": "rule-governance",
-          "notes": " "
+          "notes": " ",
+          "evidence_refs": ["rules:rule_early_claim:v1"]
         }"#,
     )
     .await;
@@ -285,7 +286,40 @@ async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
         r#"{
           "decision": "rejected",
           "reviewer": "rule-governance",
-          "notes": "Rejected until backtest evidence is attached."
+          "notes": "Rejected until backtest evidence is attached.",
+          "evidence_refs": []
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_PROMOTION_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/promotion-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-governance",
+          "notes": "Rejected until backtest evidence is attached.",
+          "evidence_refs": ["rules:rule_early_claim:v1", " "]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_PROMOTION_REVIEW_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/promotion-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-governance",
+          "notes": "Rejected until backtest evidence is attached.",
+          "evidence_refs": ["rules:rule_early_claim:v1"]
         }"#,
     )
     .await;
@@ -296,6 +330,7 @@ async fn records_rule_promotion_review_and_uses_it_for_approval_gate() {
     assert_eq!(body["rule_version"], 1);
     assert_eq!(body["decision"], "rejected");
     assert_eq!(body["reviewer"], "rule-governance");
+    assert_eq!(body["evidence_refs"][0], "rules:rule_early_claim:v1");
 
     let (status, body) = json_request(
         app,

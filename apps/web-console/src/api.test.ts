@@ -82,7 +82,12 @@ describe("ops API helpers", () => {
     await getRulePromotionGates("rule_early_claim", "dev-secret");
     await submitRulePromotionReview(
       "rule_early_claim",
-      { decision: "approved", reviewer: "rule-governance", notes: "limited rollout" },
+      {
+        decision: "approved",
+        reviewer: "rule-governance",
+        notes: "limited rollout",
+        evidence_refs: ["rules:rule_early_claim:v1"],
+      },
       "dev-secret",
     );
     await submitRule("rule_early_claim", "dev-secret");
@@ -113,6 +118,7 @@ describe("ops API helpers", () => {
           decision: "approved",
           reviewer: "rule-governance",
           notes: "limited rollout",
+          evidence_refs: ["rules:rule_early_claim:v1"],
         }),
       }),
     );
@@ -286,7 +292,12 @@ describe("ops API helpers", () => {
     );
     await submitModelPromotionReview(
       "baseline_fwa",
-      { decision: "approved", reviewer: "model-governance", notes: "shadow only" },
+      {
+        decision: "approved",
+        reviewer: "model-governance",
+        notes: "shadow only",
+        evidence_refs: ["model_versions:baseline_fwa:0.1.0"],
+      },
       "dev-secret",
     );
     await rollbackModel("baseline_fwa", "dev-secret");
@@ -368,6 +379,7 @@ describe("ops API helpers", () => {
           decision: "approved",
           reviewer: "model-governance",
           notes: "shadow only",
+          evidence_refs: ["model_versions:baseline_fwa:0.1.0"],
         }),
       }),
     );

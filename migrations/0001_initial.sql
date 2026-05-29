@@ -508,8 +508,11 @@ CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   decision TEXT NOT NULL CHECK (decision IN ('approved', 'rejected')),
   reviewer TEXT NOT NULL,
   notes TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE model_promotion_reviews ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS model_retraining_jobs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -549,8 +552,11 @@ CREATE TABLE IF NOT EXISTS rule_promotion_reviews (
   decision TEXT NOT NULL CHECK (decision IN ('approved', 'rejected')),
   reviewer TEXT NOT NULL,
   notes TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE rule_promotion_reviews ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
 
 CREATE TABLE IF NOT EXISTS rule_backtest_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -283,7 +283,12 @@ export function RulesStudio() {
       if (!selectedRule) throw new Error("No rule selected");
       return submitRulePromotionReview(
         selectedRule.rule_id,
-        { decision, reviewer, notes: reviewNotes },
+        {
+          decision,
+          reviewer,
+          notes: reviewNotes,
+          evidence_refs: [`rules:${selectedRule.rule_id}:v${selectedRule.latest_version}`],
+        },
         apiKey,
       );
     },

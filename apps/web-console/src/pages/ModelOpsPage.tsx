@@ -284,7 +284,12 @@ export function ModelOpsPage() {
       if (!selectedModel) throw new Error("No model selected");
       return submitModelPromotionReview(
         selectedModel.model_key,
-        { decision, reviewer, notes },
+        {
+          decision,
+          reviewer,
+          notes,
+          evidence_refs: [`model_versions:${selectedModel.model_key}:${selectedModel.version}`],
+        },
         apiKey,
       );
     },
