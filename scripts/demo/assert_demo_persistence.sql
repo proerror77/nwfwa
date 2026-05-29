@@ -508,7 +508,16 @@ BEGIN
     AND mer.auc >= 0.8
     AND mer.precision_value >= 0.7
     AND mer.recall_value >= 0.6
-    AND (mer.metrics_json ->> 'psi')::numeric <= 0.1;
+    AND mer.threshold IS NOT NULL
+    AND mer.feature_importance_uri IS NOT NULL
+    AND (mer.metrics_json ->> 'psi')::numeric <= 0.1
+    AND mer.metrics_json ->> 'review_capacity_threshold_status' = 'passed'
+    AND mer.metrics_json ->> 'leakage_check_status' = 'passed'
+    AND mer.metrics_json ->> 'shadow_comparison_status' = 'passed'
+    AND mer.metrics_json ->> 'label_provenance_status' = 'passed'
+    AND mer.metrics_json ->> 'approval_status' = 'approved'
+    AND mer.metrics_json ->> 'feature_reproducibility_hash' = 'sha256:demo-baseline-feature-reproducibility'
+    AND mer.metrics_json ? 'out_of_time_auc';
   IF row_count < 1 THEN
     RAISE EXCEPTION 'expected governed baseline_fwa evaluation linked to demo model dataset';
   END IF;

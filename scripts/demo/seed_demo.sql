@@ -715,7 +715,21 @@ VALUES (
   0.70,
   '{"tp":181,"fp":70,"tn":3155,"fn":94}'::jsonb,
   's3://fwa-demo/model-evaluations/baseline_fwa/2026-05-demo/feature_importance.json',
-  '{"psi":0.08,"lift_at_5_pct":4.8,"false_positive_rate":0.14}'::jsonb
+  '{
+    "psi": 0.08,
+    "score_psi": 0.08,
+    "lift_at_5_pct": 4.8,
+    "false_positive_rate": 0.14,
+    "out_of_time_auc": 0.804,
+    "out_of_time_precision": 0.70,
+    "review_capacity_threshold_status": "passed",
+    "leakage_check_status": "passed",
+    "shadow_comparison_status": "passed",
+    "feature_reproducibility_hash": "sha256:demo-baseline-feature-reproducibility",
+    "label_provenance_status": "passed",
+    "label_reviewer_source": "investigation_results",
+    "approval_status": "approved"
+  }'::jsonb
 )
 ON CONFLICT (evaluation_run_id) DO UPDATE
 SET model_key = EXCLUDED.model_key,

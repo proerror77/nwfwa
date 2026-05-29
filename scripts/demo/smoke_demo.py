@@ -909,6 +909,84 @@ def assert_dataset_model_lineage():
     }
 
 
+def assert_model_governance_controls(dashboard):
+    performance = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/performance")
+    assert_true(performance.get("model_key") == MODEL_KEY, "model performance key mismatch")
+    assert_true(performance.get("scored_runs", 0) >= 1, "model performance missing scored runs")
+    assert_true(performance.get("drift_status") == "stable", "baseline model drift should be stable")
+    assert_true(
+        decimal_value(performance.get("score_psi")) == Decimal("0.08"),
+        "baseline model PSI mismatch",
+    )
+
+    gates = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    assert_true(gates.get("model_key") == MODEL_KEY, "model promotion gate key mismatch")
+    assert_true(gates.get("model_version") == "0.1.0", "model promotion gate version mismatch")
+    assert_true(gates.get("decision") == "routing_allowed", f"model gates should allow routing: {gates}")
+    assert_true(gates.get("blockers") == [], f"model gates should not have blockers: {gates}")
+    assert_true(gates.get("passed_count") == gates.get("total_count"), "not all model gates passed")
+    assert_true(
+        gates.get("latest_evaluation_id") == "eval-baseline-fwa-2026-05-demo",
+        "model gates missing baseline evaluation evidence",
+    )
+    assert_true(gates.get("source_data_quality_status") == "ready", "model gates source data not ready")
+    assert_true(gates.get("approved_label_count", 0) >= 1, "model gates missing approved labels")
+    gate_rows = {gate.get("label"): gate for gate in gates.get("gates", [])}
+    for label in [
+        "Immutable dataset",
+        "Holdout metrics",
+        "Out-of-time evidence",
+        "Review-capacity threshold",
+        "Explanation artifact",
+        "Leakage check",
+        "Shadow comparison",
+        "Source data quality",
+        "Feature reproducibility",
+        "Label provenance",
+        "Drift status",
+        "Model QA feedback closure",
+        "Label governance",
+        "Approval",
+        "Active version",
+    ]:
+        assert_true(label in gate_rows, f"model promotion gates missing {label}")
+        assert_true(gate_rows[label].get("passed") is True, f"model gate {label} did not pass")
+        assert_true(
+            gate_rows[label].get("evidence_source") != "missing",
+            f"model gate {label} missing evidence source",
+        )
+
+    governance = dashboard.get("model_governance", {})
+    assert_true(governance.get("total_models", 0) >= 1, "dashboard model governance missing models")
+    assert_true(
+        governance.get("evaluated_models", 0) >= 1,
+        "dashboard model governance missing evaluation coverage",
+    )
+    assert_true(
+        governance.get("drift_watch_count", 0) == 0,
+        "dashboard model governance should not show drift watch",
+    )
+    assert_true(
+        governance.get("drift_detected_count", 0) == 0,
+        "dashboard model governance should not show detected drift",
+    )
+    assert_true(
+        decimal_value(governance.get("average_precision")) >= Decimal("0.70"),
+        "dashboard model governance precision too low",
+    )
+    assert_true(
+        decimal_value(governance.get("average_recall")) >= Decimal("0.60"),
+        "dashboard model governance recall too low",
+    )
+
+    return {
+        "promotion_decision": gates["decision"],
+        "passed_count": gates["passed_count"],
+        "latest_evaluation_id": gates["latest_evaluation_id"],
+        "drift_status": performance["drift_status"],
+    }
+
+
 def assert_tpa_webhook_delivery(score):
     webhooks = request("GET", "/api/v1/ops/webhook-events").get("events", [])
     expected_event_types = {
@@ -1702,6 +1780,7 @@ def main():
         "dashboard missing approved agent approvals",
     )
     roi_summary = assert_dashboard_roi(dashboard, agent, lead)
+    model_governance = assert_model_governance_controls(dashboard)
 
     dataset_model_lineage = assert_dataset_model_lineage()
     factor_readiness = assert_factor_factory_readiness()
@@ -1755,6 +1834,7 @@ def main():
                 "qa_audit_sample": qa_audit_sample,
                 "outcome_labels": label_pool["total_labels"],
                 "roi_summary": roi_summary,
+                "model_governance": model_governance,
                 "retraining_job_id": retraining_job["job_id"],
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,
