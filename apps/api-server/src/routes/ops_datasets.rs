@@ -7,6 +7,7 @@ use crate::{
         RegisterFeatureSetInput, RegisterModelDatasetInput, RegisterModelEvaluationInput,
         SchemaFieldRecord,
     },
+    routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -1050,6 +1051,7 @@ fn validate_dataset_contract(request: &RegisterDatasetInput) -> Result<(), ApiEr
         "profile.json",
         "DATASET_PROFILE_INVALID",
     )?;
+    validate_dataset_metadata_has_no_pii(request)?;
 
     if request
         .splits
@@ -1112,6 +1114,47 @@ fn validate_dataset_contract(request: &RegisterDatasetInput) -> Result<(), ApiEr
         }
     }
 
+    Ok(())
+}
+
+fn validate_dataset_metadata_has_no_pii(request: &RegisterDatasetInput) -> Result<(), ApiError> {
+    let mut metadata = Vec::new();
+    metadata.extend([
+        request.source_key.as_str(),
+        request.display_name.as_str(),
+        request.business_domain.as_str(),
+        request.owner.as_str(),
+        request.description.as_str(),
+        request.dataset_key.as_str(),
+        request.dataset_version.as_str(),
+        request.sample_grain.as_str(),
+        request.label_column.as_str(),
+        request.manifest_uri.as_str(),
+        request.schema_uri.as_str(),
+        request.profile_uri.as_str(),
+        request.schema_hash.as_str(),
+        request.status.as_str(),
+    ]);
+    metadata.extend(request.entity_keys.iter().map(String::as_str));
+    for split in &request.splits {
+        metadata.extend([split.split_name.as_str(), split.data_uri.as_str()]);
+    }
+    for field in &request.fields {
+        metadata.extend([
+            field.field_name.as_str(),
+            field.logical_type.as_str(),
+            field.semantic_role.as_str(),
+            field.description.as_str(),
+        ]);
+    }
+
+    if pii::contains_pii(metadata) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_DATASET_METADATA",
+            "dataset and factor metadata must not contain PII",
+        ));
+    }
     Ok(())
 }
 

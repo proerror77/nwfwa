@@ -235,6 +235,19 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/DatasetHealth"
     );
+    assert!(
+        schema["components"]["schemas"]["DatasetRegistrationRequest"]["properties"]["description"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("PII")
+    );
+    assert!(
+        schema["components"]["schemas"]["SchemaField"]["properties"]["description"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("PII")
+    );
     for field in ["external_field", "canonical_target", "feature_name"] {
         assert_eq!(
             schema["components"]["schemas"]["FieldMappingRequest"]["properties"][field]

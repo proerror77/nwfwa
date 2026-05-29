@@ -3361,7 +3361,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "logical_type": { "type": "string" },
                         "nullable": { "type": "boolean" },
                         "semantic_role": { "type": "string" },
-                        "description": { "type": "string" },
+                        "description": {
+                            "type": "string",
+                            "description": "Business description for the factor; must not contain PII."
+                        },
                         "profile_json": { "type": "object" }
                     }
                 },
@@ -3412,7 +3415,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "display_name": { "type": "string" },
                         "business_domain": { "type": "string" },
                         "owner": { "type": "string" },
-                        "description": { "type": "string" },
+                        "description": {
+                            "type": "string",
+                            "description": "Dataset business description; must not contain PII."
+                        },
                         "dataset_key": { "type": "string" },
                         "dataset_version": { "type": "string" },
                         "sample_grain": { "type": "string" },

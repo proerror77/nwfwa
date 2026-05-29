@@ -345,6 +345,21 @@ async fn requires_entity_keys_to_be_string_fields() {
 }
 
 #[tokio::test]
+async fn rejects_pii_in_dataset_factor_metadata() {
+    let app = build_app(test_config());
+
+    let payload = renewal_dataset_payload("parquet").replace(
+        "External policy number stored as string to avoid scientific notation corruption.",
+        "External policy number from alice@example.com.",
+    );
+
+    let (status, body) = json_request(app, "POST", "/api/v1/ops/datasets", &payload).await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_DATASET_METADATA");
+}
+
+#[tokio::test]
 async fn adds_external_field_mapping_to_dataset() {
     let app = build_app(test_config());
     let (_, created) = json_request(
