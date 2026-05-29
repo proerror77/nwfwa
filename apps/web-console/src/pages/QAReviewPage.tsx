@@ -73,6 +73,15 @@ type QaQueueListResponse = {
   items: QaQueueItem[];
 };
 
+type PilotWritebackResponse = {
+  claim_id: string;
+  event_type: string;
+  event_status: string;
+  audit_id: string;
+  run_id: string;
+  evidence_refs: string[];
+};
+
 export const QA_SUMMARY_FEEDBACK_ROWS = [
   { field: "rules_feedback_count", label: "Rules" },
   { field: "models_feedback_count", label: "Models" },
@@ -134,6 +143,21 @@ export function buildQaEvidenceRefs(item: QaQueueItem | null) {
     .join("\n");
 }
 
+export function buildQaSubmitSummary(response?: PilotWritebackResponse | null) {
+  if (!response) {
+    return null;
+  }
+  return {
+    claimId: response.claim_id,
+    eventType: response.event_type,
+    eventStatus: response.event_status,
+    auditId: response.audit_id,
+    runId: response.run_id,
+    evidenceCount: response.evidence_refs.length,
+    evidenceRefs: response.evidence_refs,
+  };
+}
+
 export function QAReviewPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedCaseId, setSelectedCaseId] = useState("");
@@ -190,7 +214,7 @@ export function QAReviewPage() {
             .filter(Boolean),
         },
         apiKey,
-      );
+      ) as Promise<PilotWritebackResponse>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["qa-queue"] });
@@ -198,6 +222,7 @@ export function QAReviewPage() {
       queryClient.invalidateQueries({ queryKey: ["qa-queue-summary"] });
     },
   });
+  const qaSubmitSummary = buildQaSubmitSummary(submitMutation.data);
   const feedbackStatusMutation = useMutation({
     mutationFn: ({ item, status }: { item: QaFeedbackItem; status: string }) =>
       updateQaFeedbackStatus(
@@ -399,8 +424,44 @@ export function QAReviewPage() {
         {feedbackStatusMutation.error ? (
           <pre className="error">{String(feedbackStatusMutation.error.message)}</pre>
         ) : null}
-        {submitMutation.data ? (
-          <pre>{JSON.stringify(submitMutation.data, null, 2)}</pre>
+        {qaSubmitSummary ? (
+          <>
+            <dl className="result-grid">
+              <div>
+                <dt>Writeback Claim</dt>
+                <dd>{qaSubmitSummary.claimId}</dd>
+              </div>
+              <div>
+                <dt>Event Type</dt>
+                <dd>{qaSubmitSummary.eventType}</dd>
+              </div>
+              <div>
+                <dt>Event Status</dt>
+                <dd>{qaSubmitSummary.eventStatus}</dd>
+              </div>
+              <div>
+                <dt>Audit ID</dt>
+                <dd>{qaSubmitSummary.auditId}</dd>
+              </div>
+              <div>
+                <dt>Run ID</dt>
+                <dd>{qaSubmitSummary.runId}</dd>
+              </div>
+              <div>
+                <dt>Evidence Refs</dt>
+                <dd>{qaSubmitSummary.evidenceCount}</dd>
+              </div>
+            </dl>
+            {qaSubmitSummary.evidenceRefs.length > 0 ? (
+              <ol className="audit-timeline">
+                {qaSubmitSummary.evidenceRefs.map((reference) => (
+                  <li key={reference}>
+                    <span>{reference}</span>
+                  </li>
+                ))}
+              </ol>
+            ) : null}
+          </>
         ) : null}
       </div>
 

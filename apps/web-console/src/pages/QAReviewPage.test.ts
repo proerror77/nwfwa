@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildQaSubmitSummary,
   buildQaEvidenceRefs,
   canSubmitQaQueueItem,
   canUpdateQaFeedbackItem,
@@ -123,6 +124,28 @@ describe("QAReviewPage helpers", () => {
       "audit:scoring.completed",
     ]);
     expect(buildQaEvidenceRefs(null)).toBe("");
+  });
+
+  it("summarizes QA writeback audit metadata for the operator surface", () => {
+    expect(
+      buildQaSubmitSummary({
+        claim_id: "CLM-1",
+        event_type: "qa.result.received",
+        event_status: "accepted",
+        audit_id: "audit_qa_1",
+        run_id: "pilot_qa_QA-1",
+        evidence_refs: ["qa_queue:QA-1", "audit:scoring.completed"],
+      }),
+    ).toEqual({
+      claimId: "CLM-1",
+      eventType: "qa.result.received",
+      eventStatus: "accepted",
+      auditId: "audit_qa_1",
+      runId: "pilot_qa_QA-1",
+      evidenceCount: 2,
+      evidenceRefs: ["qa_queue:QA-1", "audit:scoring.completed"],
+    });
+    expect(buildQaSubmitSummary(null)).toBeNull();
   });
 
   it("exposes QA review options that match the governed API labels", () => {
