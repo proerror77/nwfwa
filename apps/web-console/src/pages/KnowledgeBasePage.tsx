@@ -51,6 +51,28 @@ export function buildSimilarCaseEvidenceRefs(item: SimilarCase) {
   );
 }
 
+export function buildSimilarSearchSummary(results?: SimilarCase[] | null) {
+  const cases = results ?? [];
+  const topCase = cases
+    .slice()
+    .sort((left, right) => right.similarity_score - left.similarity_score)[0];
+  const retrievalMethods = Array.from(new Set(cases.map((item) => item.retrieval_method))).filter(
+    Boolean,
+  );
+  const evidenceRefs = cases.flatMap((item) => buildSimilarCaseEvidenceRefs(item));
+  const matchedSignals = cases.flatMap((item) => item.matched_signals);
+  return {
+    resultCount: cases.length,
+    topCaseLabel: topCase
+      ? `${topCase.case_id} · ${(topCase.similarity_score * 100).toFixed(0)}%`
+      : "none",
+    topSchemeFamily: topCase?.scheme_family ?? "none",
+    retrievalMethods: retrievalMethods.length ? retrievalMethods.join(", ") : "none",
+    evidenceRefCount: new Set(evidenceRefs).size,
+    matchedSignalCount: new Set(matchedSignals).size,
+  };
+}
+
 export function buildPublishedCaseSummary(response?: PublishKnowledgeCaseResponse | null) {
   if (!response) {
     return null;
@@ -95,6 +117,7 @@ export function KnowledgeBasePage() {
       casesQuery.data?.cases[0],
     [casesQuery.data?.cases, selectedCaseId],
   );
+  const similarSearchSummary = buildSimilarSearchSummary(lastSearch);
 
   async function runSearch() {
     const response = (await searchSimilarCases(
@@ -227,21 +250,49 @@ export function KnowledgeBasePage() {
         </div>
         <button onClick={runSearch}>Search</button>
         {lastSearch ? (
-          <ul className="result-list">
-            {lastSearch.map((item) => (
-              <li key={item.case_id}>
-                <strong>
-                  {item.case_id} · {(item.similarity_score * 100).toFixed(0)}%
-                </strong>
-                <small>{item.retrieval_method}</small>
-                <span>{formatFwaSchemeLabel(item.scheme_family, schemeLabelMap)}</span>
-                <span>{item.summary}</span>
-                <span>{item.outcome}</span>
-                <span>{item.matched_signals.join(", ")}</span>
-                <span>{buildSimilarCaseEvidenceRefs(item).join(", ")}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="result-stack">
+            <dl className="result-grid">
+              <div>
+                <dt>Results</dt>
+                <dd>{similarSearchSummary.resultCount}</dd>
+              </div>
+              <div>
+                <dt>Top Case</dt>
+                <dd>{similarSearchSummary.topCaseLabel}</dd>
+              </div>
+              <div>
+                <dt>Top Scheme</dt>
+                <dd>{formatFwaSchemeLabel(similarSearchSummary.topSchemeFamily, schemeLabelMap)}</dd>
+              </div>
+              <div>
+                <dt>Retrieval</dt>
+                <dd>{similarSearchSummary.retrievalMethods}</dd>
+              </div>
+              <div>
+                <dt>Signals</dt>
+                <dd>{similarSearchSummary.matchedSignalCount}</dd>
+              </div>
+              <div>
+                <dt>Evidence Refs</dt>
+                <dd>{similarSearchSummary.evidenceRefCount}</dd>
+              </div>
+            </dl>
+            <ul className="result-list">
+              {lastSearch.map((item) => (
+                <li key={item.case_id}>
+                  <strong>
+                    {item.case_id} · {(item.similarity_score * 100).toFixed(0)}%
+                  </strong>
+                  <small>{item.retrieval_method}</small>
+                  <span>{formatFwaSchemeLabel(item.scheme_family, schemeLabelMap)}</span>
+                  <span>{item.summary}</span>
+                  <span>{item.outcome}</span>
+                  <span>{item.matched_signals.join(", ")}</span>
+                  <span>{buildSimilarCaseEvidenceRefs(item).join(", ")}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
         ) : (
           <p className="empty">No search run yet</p>
         )}

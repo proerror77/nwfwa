@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildPublishedCaseSummary,
   buildSimilarCaseEvidenceRefs,
+  buildSimilarSearchSummary,
   type SimilarCase,
 } from "./KnowledgeBasePage";
 
@@ -25,6 +26,57 @@ describe("buildSimilarCaseEvidenceRefs", () => {
       "audit:knowledge.publish",
       "qa_reviews:QA-1001",
     ]);
+  });
+});
+
+describe("buildSimilarSearchSummary", () => {
+  it("summarizes search results for TPA and agent evidence packages", () => {
+    expect(
+      buildSimilarSearchSummary([
+        {
+          case_id: "KC-LOW",
+          title: "Lower match",
+          scheme_family: "provider_peer_outlier",
+          similarity_score: 0.72,
+          matched_signals: ["provider_region"],
+          retrieval_method: "structured_similarity",
+          provenance_refs: ["knowledge_cases:KC-LOW"],
+          summary: "Lower match.",
+          outcome: "Provider education.",
+          evidence_refs: ["qa_reviews:QA-LOW"],
+        },
+        {
+          case_id: "KC-HIGH",
+          title: "Higher match",
+          scheme_family: "early_high_value_claim",
+          similarity_score: 0.91,
+          matched_signals: ["provider_region", "early_claim"],
+          retrieval_method: "hybrid",
+          provenance_refs: ["knowledge_cases:KC-HIGH", "audit:knowledge.publish"],
+          summary: "Higher match.",
+          outcome: "Confirmed FWA.",
+          evidence_refs: ["audit:knowledge.publish", "investigation_results:INV-HIGH"],
+        },
+      ]),
+    ).toEqual({
+      resultCount: 2,
+      topCaseLabel: "KC-HIGH · 91%",
+      topSchemeFamily: "early_high_value_claim",
+      retrievalMethods: "structured_similarity, hybrid",
+      evidenceRefCount: 5,
+      matchedSignalCount: 2,
+    });
+  });
+
+  it("returns empty search labels before a search is run", () => {
+    expect(buildSimilarSearchSummary(null)).toEqual({
+      resultCount: 0,
+      topCaseLabel: "none",
+      topSchemeFamily: "none",
+      retrievalMethods: "none",
+      evidenceRefCount: 0,
+      matchedSignalCount: 0,
+    });
   });
 });
 
