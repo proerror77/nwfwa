@@ -141,7 +141,12 @@ async fn openapi_includes_operations_paths() {
     );
     assert_eq!(
         schema["components"]["schemas"]["OutcomeLabel"]["properties"]["source_type"]["enum"],
-        serde_json::json!(["investigation_result", "qa_review", "case_status"])
+        serde_json::json!([
+            "investigation_result",
+            "qa_review",
+            "case_status",
+            "medical_review"
+        ])
     );
     for field in [
         "open_rule_feedback_count",

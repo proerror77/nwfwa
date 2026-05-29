@@ -1787,7 +1787,7 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "/api/v1/ops/labels": {
                 "get": {
-                    "summary": "List governed outcome labels from investigation and QA writeback",
+                    "summary": "List governed outcome labels from human review writeback",
                     "security": [{ "ApiKeyAuth": [] }],
                     "responses": {
                         "200": {
@@ -4586,7 +4586,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_id": { "type": "string" },
                         "label_name": { "type": "string" },
                         "label_value": { "type": "string" },
-                        "source_type": { "type": "string", "enum": ["investigation_result", "qa_review", "case_status"] },
+                        "source_type": { "type": "string", "enum": ["investigation_result", "qa_review", "case_status", "medical_review"] },
                         "source_id": { "type": "string" },
                         "governance_status": { "type": "string", "enum": ["approved_for_training", "needs_review"] },
                         "feedback_target": {
