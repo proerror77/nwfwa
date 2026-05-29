@@ -155,7 +155,7 @@ BEGIN
   FROM audit_samples sample
   CROSS JOIN LATERAL jsonb_array_elements(sample.selected_leads_json) AS lead(value)
   WHERE sample.sample_mode = 'qa_calibration'
-    AND sample.selection_method = 'reviewer_rotation'
+    AND sample.selection_method = 'reviewer_consistency_rotation'
     AND sample.reviewer = 'qa-sampling-demo'
     AND sample.assignment_queue = 'QA Review'
     AND sample.outcome_distribution_json ->> 'selected_count' = '1'
