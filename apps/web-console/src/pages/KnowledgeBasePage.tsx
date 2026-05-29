@@ -27,7 +27,7 @@ type KnowledgeCase = {
   evidence_refs: string[];
 };
 
-type SimilarCase = {
+export type SimilarCase = {
   case_id: string;
   title: string;
   scheme_family: string;
@@ -39,6 +39,12 @@ type SimilarCase = {
   outcome: string;
   evidence_refs: string[];
 };
+
+export function buildSimilarCaseEvidenceRefs(item: SimilarCase) {
+  return [...item.provenance_refs, ...item.evidence_refs].filter(
+    (reference, index, references) => references.indexOf(reference) === index,
+  );
+}
 
 export function KnowledgeBasePage() {
   const [apiKey, setApiKey] = useState("dev-secret");
@@ -206,8 +212,10 @@ export function KnowledgeBasePage() {
                 </strong>
                 <small>{item.retrieval_method}</small>
                 <span>{formatFwaSchemeLabel(item.scheme_family, schemeLabelMap)}</span>
+                <span>{item.summary}</span>
+                <span>{item.outcome}</span>
                 <span>{item.matched_signals.join(", ")}</span>
-                <span>{item.provenance_refs.join(", ")}</span>
+                <span>{buildSimilarCaseEvidenceRefs(item).join(", ")}</span>
               </li>
             ))}
           </ul>
