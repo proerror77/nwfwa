@@ -634,6 +634,8 @@ export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
     ruleFeedbackCount: labels.filter((label) => label.feedback_target === "rules").length,
     falsePositiveCount: labels.filter((label) => label.label_name === "false_positive").length,
     caseStatusLabelCount: labels.filter((label) => label.source_type === "case_status").length,
+    medicalReviewLabelCount: labels.filter((label) => label.source_type === "medical_review")
+      .length,
     evidenceBackedCount: labels.filter((label) => label.evidence_refs.length > 0).length,
     sourceTypeRows: Object.entries(sourceTypeCounts)
       .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
@@ -1429,6 +1431,10 @@ export function GovernancePage() {
           <div>
             <span>Case Status Labels</span>
             <strong>{filteredLabelSummary.caseStatusLabelCount}</strong>
+          </div>
+          <div>
+            <span>Medical Review Labels</span>
+            <strong>{filteredLabelSummary.medicalReviewLabelCount}</strong>
           </div>
           <div>
             <span>False Positives</span>

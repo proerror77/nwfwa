@@ -666,18 +666,36 @@ describe("buildOutcomeLabelSummary", () => {
         currency: null,
         evidence_refs: ["investigation_cases:case_CLM-3"],
       },
+      {
+        label_id: "label_5",
+        claim_id: "CLM-4",
+        label_name: "clinical_evidence_sufficient",
+        label_value: "true",
+        source_type: "medical_review",
+        source_id: "audit_medical_review_1",
+        governance_status: "approved_for_training",
+        feedback_target: "workflow",
+        currency: null,
+        evidence_refs: ["medical_review:MR-1"],
+      },
     ]);
 
     expect(summary).toEqual({
-      labelCount: 4,
-      approvedForTrainingCount: 2,
+      labelCount: 5,
+      approvedForTrainingCount: 3,
       needsReviewCount: 2,
       modelFeedbackCount: 2,
       ruleFeedbackCount: 1,
       falsePositiveCount: 1,
       caseStatusLabelCount: 1,
-      evidenceBackedCount: 4,
-      sourceTypeRows: ["investigation_result: 2", "case_status: 1", "qa_review: 1"],
+      medicalReviewLabelCount: 1,
+      evidenceBackedCount: 5,
+      sourceTypeRows: [
+        "investigation_result: 2",
+        "case_status: 1",
+        "medical_review: 1",
+        "qa_review: 1",
+      ],
       amountPreventedTotal: 8200,
       amountPreventedCurrency: "CNY",
     });
@@ -723,6 +741,18 @@ describe("filterOutcomeLabels", () => {
         currency: null,
         evidence_refs: ["qa_reviews:QA-1"],
       },
+      {
+        label_id: "label_4",
+        claim_id: "CLM-4",
+        label_name: "clinical_evidence_sufficient",
+        label_value: "true",
+        source_type: "medical_review",
+        source_id: "audit_medical_review_1",
+        governance_status: "approved_for_training",
+        feedback_target: "workflow",
+        currency: null,
+        evidence_refs: ["medical_review:MR-1"],
+      },
     ];
 
     expect(
@@ -733,7 +763,12 @@ describe("filterOutcomeLabels", () => {
       }).map((label) => label.label_id),
     ).toEqual(["label_2"]);
     expect(filterOutcomeLabels(labels, { feedbackTarget: "models" })).toHaveLength(2);
-    expect(filterOutcomeLabels(labels, {})).toHaveLength(3);
+    expect(
+      filterOutcomeLabels(labels, { sourceType: "medical_review" }).map(
+        (label) => label.label_id,
+      ),
+    ).toEqual(["label_4"]);
+    expect(filterOutcomeLabels(labels, {})).toHaveLength(4);
   });
 });
 
