@@ -795,6 +795,16 @@ fn build_factor_card(dataset: &DatasetRecord, field: &SchemaFieldRecord) -> Fact
     } else {
         "needs_review"
     };
+    let mut evidence_refs = vec![format!(
+        "dataset_fields:{}:{}:{}",
+        dataset.dataset_key, dataset.dataset_version, field.field_name
+    )];
+    if let Some(profile_refs) = string_array_profile_value(&field.profile_json, "evidence_refs") {
+        evidence_refs.extend(profile_refs);
+        evidence_refs.sort();
+        evidence_refs.dedup();
+    }
+
     FactorCardRecord {
         dataset_id: dataset.dataset_id.clone(),
         dataset_key: dataset.dataset_key.clone(),
@@ -842,10 +852,7 @@ fn build_factor_card(dataset: &DatasetRecord, field: &SchemaFieldRecord) -> Fact
         owner,
         is_label,
         is_entity_key,
-        evidence_refs: vec![format!(
-            "dataset_fields:{}:{}:{}",
-            dataset.dataset_key, dataset.dataset_version, field.field_name
-        )],
+        evidence_refs,
     }
 }
 

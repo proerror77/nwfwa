@@ -154,6 +154,10 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
         &renewal_dataset_payload("parquet").replace(
             r#""profile_json": {"allowed_values": [0, 1]}"#,
             r#""profile_json": {"allowed_values": [0, 1], "missing_rate": 0.0}"#,
+        )
+        .replace(
+            r#""profile_json": {"source_type": "legacy_csv_identifier"}"#,
+            r#""profile_json": {"source_type": "legacy_csv_identifier", "evidence_refs": ["profiles:renewal_automl_20211105:v1:policy_no"]}"#,
         ),
     )
     .await;
@@ -246,6 +250,12 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
         .unwrap()
         .contains(&serde_json::json!(
             "dataset_fields:renewal_automl_20211105:v1:policy_no"
+        )));
+    assert!(readiness["factor_cards"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "profiles:renewal_automl_20211105:v1:policy_no"
         )));
 }
 

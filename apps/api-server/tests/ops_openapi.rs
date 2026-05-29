@@ -635,6 +635,15 @@ async fn openapi_includes_operations_paths() {
             "missing factor card field {field}"
         );
     }
+    assert_eq!(
+        schema["components"]["schemas"]["FactorCard"]["properties"]["evidence_refs"]["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["FactorCard"]["properties"]["evidence_refs"]["items"]
+            ["minLength"],
+        1
+    );
     assert!(schema["components"]["schemas"]["RuleSummary"]["required"]
         .as_array()
         .unwrap()

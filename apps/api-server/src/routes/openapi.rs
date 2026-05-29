@@ -3616,7 +3616,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "owner": { "type": "string" },
                         "is_label": { "type": "boolean" },
                         "is_entity_key": { "type": "boolean" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "ModelVersion": {
