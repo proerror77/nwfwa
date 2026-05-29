@@ -17,21 +17,27 @@ describe("buildMemberProfileInsight", () => {
         evidence_refs: ["members:MBR-1", "claims:CLM-4"],
       }),
     ).toEqual({
+      memberIdLabel: "MBR-1",
       exposureLabel: "CNY 12800.00",
+      highRiskClaimLabel: "1 / 4",
       highRiskRateLabel: "25.0%",
       latestClaimLabel: "CLM-4",
       riskLevelLabel: "High risk history",
       evidenceCount: 2,
+      evidenceRefLabel: "2 refs",
     });
   });
 
   it("returns empty labels before a profile is loaded", () => {
     expect(buildMemberProfileInsight(null)).toEqual({
+      memberIdLabel: "none",
       exposureLabel: "-",
+      highRiskClaimLabel: "0 / 0",
       highRiskRateLabel: "0.0%",
       latestClaimLabel: "none",
       riskLevelLabel: "no profile",
       evidenceCount: 0,
+      evidenceRefLabel: "0 refs",
     });
   });
 });

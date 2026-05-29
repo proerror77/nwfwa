@@ -18,15 +18,20 @@ type MemberProfileSummary = {
 export function buildMemberProfileInsight(profile?: MemberProfileSummary | null) {
   if (!profile) {
     return {
+      memberIdLabel: "none",
       exposureLabel: "-",
+      highRiskClaimLabel: "0 / 0",
       highRiskRateLabel: "0.0%",
       latestClaimLabel: "none",
       riskLevelLabel: "no profile",
       evidenceCount: 0,
+      evidenceRefLabel: "0 refs",
     };
   }
   return {
+    memberIdLabel: profile.member_id,
     exposureLabel: `${profile.currency} ${profile.total_claim_amount}`,
+    highRiskClaimLabel: `${profile.high_risk_claim_count} / ${profile.claim_count}`,
     highRiskRateLabel:
       profile.claim_count === 0
         ? "0.0%"
@@ -37,6 +42,7 @@ export function buildMemberProfileInsight(profile?: MemberProfileSummary | null)
         ? "High risk history"
         : "No high risk history",
     evidenceCount: profile.evidence_refs.length,
+    evidenceRefLabel: `${profile.evidence_refs.length} refs`,
   };
 }
 
@@ -90,6 +96,10 @@ export function MemberProfilePage() {
         <h2>Risk Summary</h2>
         <div className="summary-grid">
           <div>
+            <span>Member</span>
+            <strong>{insight.memberIdLabel}</strong>
+          </div>
+          <div>
             <span>Claims</span>
             <strong>{profile?.claim_count ?? 0}</strong>
           </div>
@@ -106,12 +116,20 @@ export function MemberProfilePage() {
             <strong>{insight.highRiskRateLabel}</strong>
           </div>
           <div>
+            <span>High Risk Claims</span>
+            <strong>{insight.highRiskClaimLabel}</strong>
+          </div>
+          <div>
             <span>Risk History</span>
             <strong>{insight.riskLevelLabel}</strong>
           </div>
           <div>
             <span>Latest Claim</span>
             <strong>{insight.latestClaimLabel}</strong>
+          </div>
+          <div>
+            <span>Evidence Refs</span>
+            <strong>{insight.evidenceRefLabel}</strong>
           </div>
         </div>
       </div>
