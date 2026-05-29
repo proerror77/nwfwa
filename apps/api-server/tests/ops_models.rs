@@ -1525,6 +1525,16 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "MISSING_MODEL_LIFECYCLE_EVIDENCE");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        r#"{"evidence_refs": ["phone:13800138000"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_LIFECYCLE");
+
     let (status, activated) = json_request(
         app.clone(),
         "POST",

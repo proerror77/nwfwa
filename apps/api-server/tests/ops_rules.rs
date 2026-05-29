@@ -1112,6 +1112,17 @@ async fn advances_rule_lifecycle() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["code"], "MISSING_RULE_LIFECYCLE_EVIDENCE");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/submit",
+        r#"{"evidence_refs": ["email:alice@example.com"]}"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_RULE_LIFECYCLE");
+
     for (uri, expected_status) in [
         ("/api/v1/ops/rules/rule_early_claim/submit", "submitted"),
         ("/api/v1/ops/rules/rule_early_claim/approve", "approved"),

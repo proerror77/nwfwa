@@ -2929,7 +2929,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["evidence_refs"],
                     "properties": {
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Structured evidence references must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "RulePerformanceRecord": {
@@ -3788,6 +3793,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
+                            "description": "Structured evidence references must not contain PII.",
                             "items": { "type": "string", "minLength": 1 }
                         }
                     }

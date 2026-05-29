@@ -713,6 +713,13 @@ async fn openapi_includes_operations_paths() {
             ["items"]["minLength"],
         1
     );
+    assert!(
+        schema["components"]["schemas"]["RuleLifecycleRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
     assert_eq!(
         schema["components"]["schemas"]["RuleLifecycleResponse"]["properties"]["active_version"]
             ["type"],
@@ -847,6 +854,13 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["ModelLifecycleRequest"]["properties"]["evidence_refs"]
             ["items"]["minLength"],
         1
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelLifecycleRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
     );
     assert!(
         schema["components"]["schemas"]["ModelLifecycleResponse"]["required"]

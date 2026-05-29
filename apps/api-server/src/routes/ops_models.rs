@@ -957,6 +957,13 @@ fn validate_model_lifecycle_request(request: &ModelLifecycleRequest) -> Result<(
             "model lifecycle evidence_refs are required",
         ));
     }
+    if pii::contains_pii(request.evidence_refs.iter().map(String::as_str)) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MODEL_LIFECYCLE",
+            "model lifecycle evidence_refs must not contain PII",
+        ));
+    }
     Ok(())
 }
 
