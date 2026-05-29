@@ -4,6 +4,7 @@ import {
   buildAgentRunLogSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
+  canSubmitAgentApproval,
   buildFwaSchemeGovernanceRows,
   buildFwaSchemeGovernanceSummary,
   buildGovernanceChangeTimelineRows,
@@ -523,6 +524,8 @@ describe("agent approval helpers", () => {
     };
 
     expect(hasPendingAgentApproval(run)).toBe(true);
+    expect(canSubmitAgentApproval(run, " qa-lead ")).toBe(true);
+    expect(canSubmitAgentApproval(run, " ")).toBe(false);
     expect(buildAgentApprovalPayload(run, "approved", " qa-lead ")).toEqual({
       decision: "approved",
       approver: "qa-lead",

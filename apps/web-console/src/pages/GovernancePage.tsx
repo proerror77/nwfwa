@@ -562,6 +562,10 @@ export function hasPendingAgentApproval(run: AgentRunLog) {
   return run.approvals.some((approval) => approval.decision === "pending");
 }
 
+export function canSubmitAgentApproval(run: AgentRunLog, approver: string) {
+  return hasPendingAgentApproval(run) && approver.trim().length > 0;
+}
+
 export function buildAgentApprovalPayload(
   run: AgentRunLog,
   decision: "approved" | "rejected",
@@ -1526,7 +1530,10 @@ export function GovernancePage() {
                 {hasPendingAgentApproval(run) ? (
                   <div className="button-row">
                     <button
-                      disabled={agentApprovalMutation.isPending}
+                      disabled={
+                        agentApprovalMutation.isPending ||
+                        !canSubmitAgentApproval(run, agentApprover)
+                      }
                       onClick={() =>
                         agentApprovalMutation.mutate({
                           run,
@@ -1538,7 +1545,10 @@ export function GovernancePage() {
                       Approve Agent Output
                     </button>
                     <button
-                      disabled={agentApprovalMutation.isPending}
+                      disabled={
+                        agentApprovalMutation.isPending ||
+                        !canSubmitAgentApproval(run, agentApprover)
+                      }
                       onClick={() =>
                         agentApprovalMutation.mutate({
                           run,
