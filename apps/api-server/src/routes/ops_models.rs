@@ -871,23 +871,28 @@ pub async fn rollback_model(
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
     let actor = authorize(&state, &headers)?;
-    let previous = state
+    let models = state
         .repository
         .list_models()
         .await
-        .map_err(internal_error("MODEL_LIST_FAILED"))?
-        .into_iter()
-        .find(|model| model.model_key == model_key)
-        .ok_or_else(|| {
-            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
-        })?;
-    if previous.status != "active" {
+        .map_err(internal_error("MODEL_LIST_FAILED"))?;
+    if !models.iter().any(|model| model.model_key == model_key) {
         return Err(ApiError::new(
-            StatusCode::CONFLICT,
-            "MODEL_ROLLBACK_REQUIRES_ACTIVE",
-            "only active models can be rolled back",
+            StatusCode::NOT_FOUND,
+            "MODEL_NOT_FOUND",
+            "model not found",
         ));
     }
+    let previous = models
+        .into_iter()
+        .find(|model| model.model_key == model_key && model.status == "active")
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "MODEL_ROLLBACK_REQUIRES_ACTIVE",
+                "only active models can be rolled back",
+            )
+        })?;
     let model = state
         .repository
         .update_model_status(&previous.model_key, &previous.version, "approved")

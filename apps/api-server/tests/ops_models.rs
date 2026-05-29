@@ -1530,6 +1530,38 @@ async fn rolls_back_active_model_version() {
 }
 
 #[tokio::test]
+async fn rolls_back_active_model_when_newer_candidate_exists() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["model_key"], "baseline_fwa");
+    assert_eq!(body["version"], "0.1.0");
+    assert_eq!(body["status"], "approved");
+
+    let (status, models) = get_json(app, "/api/v1/ops/models").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(models["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|model| { model["version"] == candidate_version && model["status"] == "candidate" }));
+    assert!(models["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|model| model["version"] == "0.1.0" && model["status"] == "approved"));
+}
+
+#[tokio::test]
 async fn blocks_model_rollback_when_model_is_not_active() {
     let app = build_app(test_config());
 
