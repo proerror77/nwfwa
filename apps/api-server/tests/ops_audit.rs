@@ -86,6 +86,79 @@ async fn lists_global_audit_events_for_governance_review() {
 }
 
 #[tokio::test]
+async fn records_audit_sample_creation_for_governance_review() {
+    let app = build_app(test_config());
+
+    let (status, sample) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "stratified",
+          "population_definition": "Governance-visible stratified sample",
+          "inclusion_criteria": {
+            "min_risk_score": 70,
+            "provider_type": "clinic",
+            "provider_region": "BJ",
+            "policy_type": "DENTAL",
+            "risk_band": "critical"
+          },
+          "deterministic_seed": "audit-sample-governance-week-1",
+          "sample_size": 5,
+          "reviewer": "qa-governance-reviewer",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let sample_id = sample["sample_id"].as_str().unwrap();
+    let (status, audit_events) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?event_type=audit_sample.created&actor_id=tpa-demo&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let event = audit_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["payload"]["sample_id"] == sample_id)
+        .expect("audit sample creation should be written to global audit events");
+    assert_eq!(event["event_status"], "succeeded");
+    assert_eq!(event["payload"]["sample_mode"], "stratified");
+    assert_eq!(
+        event["payload"]["selection_method"],
+        "stratified_round_robin"
+    );
+    assert_eq!(
+        event["payload"]["inclusion_criteria"]["provider_type"],
+        "clinic"
+    );
+    assert_eq!(
+        event["evidence_refs"][0],
+        format!("audit_samples:{sample_id}")
+    );
+
+    let (status, governance_events) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_group=governance&limit=20",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(governance_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "audit_sample.created"
+            && event["payload"]["sample_id"] == sample_id));
+}
+
+#[tokio::test]
 async fn filters_global_audit_events_for_governance_search() {
     let app = build_app(test_config());
 

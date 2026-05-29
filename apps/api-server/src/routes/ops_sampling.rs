@@ -1,7 +1,7 @@
 use crate::{
     app::AppState,
     error::ApiError,
-    repository::{AuditSampleRecord, CreateAuditSampleInput},
+    repository::{AuditSampleRecord, CreateAuditSampleInput, PersistedAuditEvent},
 };
 use axum::{
     extract::State,
@@ -9,6 +9,7 @@ use axum::{
     Json,
 };
 use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_core::AuditEventId;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -78,7 +79,46 @@ pub async fn create_audit_sample(
         .create_audit_sample(request)
         .await
         .map_err(internal_error("AUDIT_SAMPLE_CREATE_FAILED"))?;
+    record_audit_sample_created(&state, &sample)
+        .await
+        .map_err(internal_error("AUDIT_SAMPLE_AUDIT_FAILED"))?;
     Ok(Json(sample))
+}
+
+async fn record_audit_sample_created(
+    state: &AppState,
+    sample: &AuditSampleRecord,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: format!("audit_sample_{}", sample.sample_id),
+            claim_id: String::new(),
+            source_system: state.config.source_system.clone(),
+            actor_id: state.config.source_system.clone(),
+            actor_role: "fwa_operator".into(),
+            event_type: "audit_sample.created".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Audit sample created: {}", sample.sample_mode),
+            payload: serde_json::json!({
+                "sample_id": sample.sample_id,
+                "sample_mode": sample.sample_mode,
+                "population_definition": sample.population_definition,
+                "inclusion_criteria": sample.inclusion_criteria,
+                "deterministic_seed": sample.deterministic_seed,
+                "selection_method": sample.selection_method,
+                "sample_size": sample.sample_size,
+                "reviewer": sample.reviewer,
+                "assignment_queue": sample.assignment_queue,
+                "selected_lead_count": sample.selected_leads.len()
+            }),
+            evidence_refs: vec![serde_json::Value::String(format!(
+                "audit_samples:{}",
+                sample.sample_id
+            ))],
+        })
+        .await
 }
 
 fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
