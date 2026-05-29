@@ -824,6 +824,9 @@ export function DashboardPage() {
                 </strong>
                 <small>{attribution.action}</small>
                 <small>{attribution.claimCount} claims</small>
+                <small>
+                  Avg {attribution.currency} {attribution.averageSavingPerClaim} / claim
+                </small>
               </div>
             ))}
           </div>

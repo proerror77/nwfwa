@@ -30,6 +30,7 @@ describe("buildSavingAttributionRows", () => {
         savingAmount: "4100.00",
         currency: "CNY",
         claimCount: 1,
+        averageSavingPerClaim: "4100.00",
       },
       {
         key: "rule:EARLY_CLAIM:investigation_confirmed",
@@ -38,7 +39,23 @@ describe("buildSavingAttributionRows", () => {
         savingAmount: "4100.00",
         currency: "CNY",
         claimCount: 1,
+        averageSavingPerClaim: "4100.00",
       },
     ]);
+  });
+
+  it("computes average saving per confirmed claim", () => {
+    expect(
+      buildSavingAttributionRows([
+        {
+          source_type: "model",
+          source_id: "baseline_fwa",
+          action: "investigation_confirmed",
+          saving_amount: "9000.00",
+          currency: "CNY",
+          claim_count: 3,
+        },
+      ])[0].averageSavingPerClaim,
+    ).toBe("3000.00");
   });
 });
