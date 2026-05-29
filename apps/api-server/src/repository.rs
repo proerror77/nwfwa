@@ -5162,6 +5162,16 @@ impl ScoringRepository for PostgresScoringRepository {
                           s.claim_id
                    FROM saving_attributions s
                    LEFT JOIN fwa_leads l ON l.claim_id = s.claim_id
+                   UNION ALL
+                   SELECT 'campaign'::text AS segment_type,
+                          COALESCE(NULLIF(regexp_replace(ref.value, '^campaigns?:', ''), ''), 'unknown') AS segment_id,
+                          s.saving_amount,
+                          s.currency,
+                          s.claim_id
+                   FROM saving_attributions s
+                   CROSS JOIN LATERAL jsonb_array_elements_text(s.evidence_refs) AS ref(value)
+                   WHERE ref.value LIKE 'campaign:%'
+                      OR ref.value LIKE 'campaigns:%'
                  ) segments
                  GROUP BY segment_type, segment_id, currency
                  ORDER BY segment_type, segment_id, currency",
@@ -9665,10 +9675,16 @@ fn summarize_saving_segments(
             .get(record.claim_id.as_str())
             .copied()
             .unwrap_or(("unknown", "unknown"));
-        for (segment_type, segment_id) in [
+        let mut segments = vec![
             ("provider", provider_id.to_string()),
             ("scheme", scheme_family.to_string()),
-        ] {
+        ];
+        segments.extend(
+            campaign_ids_from_evidence_refs(&record.evidence_refs)
+                .into_iter()
+                .map(|campaign_id| ("campaign", campaign_id)),
+        );
+        for (segment_type, segment_id) in segments {
             let key = (
                 segment_type.to_string(),
                 segment_id,
@@ -9699,6 +9715,20 @@ fn summarize_saving_segments(
                 }
             },
         )
+        .collect()
+}
+
+fn campaign_ids_from_evidence_refs(evidence_refs: &[String]) -> BTreeSet<String> {
+    evidence_refs
+        .iter()
+        .filter_map(|reference| {
+            reference
+                .strip_prefix("campaigns:")
+                .or_else(|| reference.strip_prefix("campaign:"))
+        })
+        .map(str::trim)
+        .filter(|campaign_id| !campaign_id.is_empty())
+        .map(ToString::to_string)
         .collect()
 }
 

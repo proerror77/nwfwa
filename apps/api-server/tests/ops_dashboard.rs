@@ -210,7 +210,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
           "saving_amount": "8200.00",
           "currency": "CNY",
           "notes": "TPA investigation confirmed over-treatment signals.",
-          "evidence_refs": ["agent_run:agent_CLM-0287", "rule_runs:EARLY_CLAIM", "knowledge_cases:KC-1001"]
+          "evidence_refs": ["agent_run:agent_CLM-0287", "rule_runs:EARLY_CLAIM", "campaigns:prepay-fwa-sprint-q1", "knowledge_cases:KC-1001"]
         }"#,
     )
     .await;
@@ -421,6 +421,14 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
             && segment["saving_amount"] == "8200.00"
             && segment["claim_count"] == 1
             && segment["attribution_count"] == 2
+    }));
+    assert!(saving_segments.iter().any(|segment| {
+        segment["segment_type"] == "campaign"
+            && segment["segment_id"] == "prepay-fwa-sprint-q1"
+            && segment["saving_amount"] == "8200.00"
+            && segment["claim_count"] == 1
+            && segment["attribution_count"] == 2
+            && segment["roi"].as_f64().unwrap() > 0.0
     }));
     assert_eq!(dashboard["rag_distribution"]["Red"], 1);
     assert!(dashboard["rule_hits"].as_u64().unwrap() >= 1);

@@ -4082,7 +4082,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["segment_type", "segment_id", "saving_amount", "currency", "claim_count", "attribution_count", "roi"],
                     "properties": {
-                        "segment_type": { "type": "string", "enum": ["provider", "scheme"] },
+                        "segment_type": { "type": "string", "enum": ["provider", "scheme", "campaign"] },
                         "segment_id": { "type": "string" },
                         "saving_amount": { "type": "string", "format": "decimal" },
                         "currency": { "type": "string" },

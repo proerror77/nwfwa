@@ -1347,11 +1347,13 @@ async fn openapi_includes_operations_paths() {
             ["saving_segments"]["items"]["$ref"],
         "#/components/schemas/SavingSegmentSummary"
     );
-    assert_eq!(
-        schema["components"]["schemas"]["SavingSegmentSummary"]["properties"]["segment_type"]
-            ["enum"][0],
-        "provider"
-    );
+    let saving_segment_types = schema["components"]["schemas"]["SavingSegmentSummary"]
+        ["properties"]["segment_type"]["enum"]
+        .as_array()
+        .unwrap();
+    assert!(saving_segment_types.iter().any(|value| value == "provider"));
+    assert!(saving_segment_types.iter().any(|value| value == "scheme"));
+    assert!(saving_segment_types.iter().any(|value| value == "campaign"));
     assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
             .as_array()
