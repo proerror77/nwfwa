@@ -4,7 +4,25 @@ pub fn contains_pii(values: impl IntoIterator<Item = impl AsRef<str>>) -> bool {
         .any(|value| value.as_ref().split_whitespace().any(token_has_pii))
 }
 
+pub fn redact_text(value: &str) -> String {
+    value
+        .split_whitespace()
+        .map(redact_pii_token)
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
 fn token_has_pii(token: &str) -> bool {
+    pii_placeholder(trim_token(token)).is_some()
+}
+
+fn redact_pii_token(token: &str) -> String {
+    pii_placeholder(trim_token(token))
+        .map(str::to_string)
+        .unwrap_or_else(|| token.to_string())
+}
+
+fn trim_token(token: &str) -> &str {
     let value = token.trim_matches(|character: char| {
         matches!(
             character,
@@ -33,14 +51,27 @@ fn token_has_pii(token: &str) -> bool {
                 | '】'
         )
     });
-    is_pii_value(value)
-        || value
-            .rsplit_once(':')
-            .is_some_and(|(_, suffix)| is_pii_value(suffix))
+    value
 }
 
-fn is_pii_value(value: &str) -> bool {
-    is_email_like(value) || is_cn_id_like(value) || is_phone_like(value)
+fn pii_placeholder(value: &str) -> Option<&'static str> {
+    pii_value_placeholder(value).or_else(|| {
+        value
+            .rsplit_once(':')
+            .and_then(|(_, suffix)| pii_value_placeholder(suffix))
+    })
+}
+
+fn pii_value_placeholder(value: &str) -> Option<&'static str> {
+    if is_email_like(value) {
+        Some("[REDACTED_EMAIL]")
+    } else if is_cn_id_like(value) {
+        Some("[REDACTED_ID]")
+    } else if is_phone_like(value) {
+        Some("[REDACTED_PHONE]")
+    } else {
+        None
+    }
 }
 
 fn is_email_like(value: &str) -> bool {
@@ -80,5 +111,13 @@ mod tests {
         assert!(contains_pii(["id 11010519491231002X"]));
         assert!(!contains_pii(["audit:scoring.completed"]));
         assert!(!contains_pii(["claim_items:IMG-900"]));
+    }
+
+    #[test]
+    fn redacts_common_pii_tokens() {
+        assert_eq!(
+            redact_text("email alice@example.com phone:13800138000 id 11010519491231002X"),
+            "email [REDACTED_EMAIL] [REDACTED_PHONE] id [REDACTED_ID]"
+        );
     }
 }

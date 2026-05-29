@@ -6,6 +6,7 @@ use crate::{
         AgentToolCallRecord, AgentToolResultRecord, PersistedAgentRun, PersistedAuditEvent,
         SimilarCaseQuery,
     },
+    routes::pii,
 };
 use axum::{
     extract::State,
@@ -373,80 +374,7 @@ fn sanitize_unconfirmed_fraud_language(value: &str) -> String {
 }
 
 fn sanitize_agent_free_text(value: &str) -> String {
-    redact_pii_tokens(&sanitize_unconfirmed_fraud_language(value))
-}
-
-fn redact_pii_tokens(value: &str) -> String {
-    value
-        .split_whitespace()
-        .map(redact_pii_token)
-        .collect::<Vec<_>>()
-        .join(" ")
-}
-
-fn redact_pii_token(token: &str) -> String {
-    let trimmed = token.trim_matches(|character: char| {
-        matches!(
-            character,
-            ',' | '.'
-                | ';'
-                | ':'
-                | '!'
-                | '?'
-                | '('
-                | ')'
-                | '['
-                | ']'
-                | '{'
-                | '}'
-                | '<'
-                | '>'
-                | '，'
-                | '。'
-                | '；'
-                | '：'
-                | '！'
-                | '？'
-                | '（'
-                | '）'
-                | '【'
-                | '】'
-        )
-    });
-    if is_email_like(trimmed) {
-        "[REDACTED_EMAIL]".into()
-    } else if is_cn_id_like(trimmed) {
-        "[REDACTED_ID]".into()
-    } else if is_phone_like(trimmed) {
-        "[REDACTED_PHONE]".into()
-    } else {
-        token.into()
-    }
-}
-
-fn is_email_like(value: &str) -> bool {
-    let Some((local, domain)) = value.split_once('@') else {
-        return false;
-    };
-    !local.is_empty() && domain.contains('.') && domain.len() >= 3
-}
-
-fn is_cn_id_like(value: &str) -> bool {
-    value.len() == 18
-        && value
-            .chars()
-            .take(17)
-            .all(|character| character.is_ascii_digit())
-        && value
-            .chars()
-            .last()
-            .is_some_and(|character| character.is_ascii_digit() || matches!(character, 'X' | 'x'))
-}
-
-fn is_phone_like(value: &str) -> bool {
-    value.len() >= 10
-        && value.len() <= 15
-        && value.chars().all(|character| character.is_ascii_digit())
+    pii::redact_text(&sanitize_unconfirmed_fraud_language(value))
 }
 
 fn replace_case_insensitive(value: &str, needle: &str, replacement: &str) -> String {
