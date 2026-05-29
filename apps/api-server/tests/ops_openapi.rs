@@ -1012,6 +1012,20 @@ async fn openapi_includes_operations_paths() {
             .unwrap()
             .contains("agent_run:{agent_run_id}")
     );
+    assert!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]["reason"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
+    assert!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("must not contain PII")
+    );
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["scheme_family"]
             ["$ref"],

@@ -2,6 +2,7 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{AgentApprovalRecord, AgentRunLogRecord, PersistedAuditEvent},
+    routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -174,6 +175,16 @@ fn validate_agent_approval_request(request: &SubmitAgentApprovalRequest) -> Resu
             StatusCode::BAD_REQUEST,
             "MISSING_AGENT_APPROVAL_EVIDENCE",
             "agent approval decisions require evidence_refs",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.reason.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_AGENT_APPROVAL",
+            "agent approval reason and evidence_refs must not contain PII",
         ));
     }
     Ok(())

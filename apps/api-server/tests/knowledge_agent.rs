@@ -1057,6 +1057,68 @@ async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
 }
 
 #[tokio::test]
+async fn rejects_agent_approval_with_pii_in_reason_or_evidence_refs() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-APPROVAL-PII",
+          "risk_score": 91,
+          "rag": "RED",
+          "top_reasons": ["Agent approval must remain PII controlled"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Reviewer copied member email alice@example.com into approval reason.",
+          "evidence_refs": ["agent_run:{agent_run_id}"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_AGENT_APPROVAL");
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_run:{agent_run_id}", "phone:13800138000"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_AGENT_APPROVAL");
+}
+
+#[tokio::test]
 async fn lists_agent_approval_alert_until_decision_is_recorded() {
     let app = build_app(test_config());
 

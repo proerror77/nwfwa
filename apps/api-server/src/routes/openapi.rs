@@ -4473,11 +4473,15 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "approver": { "type": "string", "minLength": 1 },
-                        "reason": { "type": "string", "minLength": 1 },
+                        "reason": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Agent approval reason must not contain PII."
+                        },
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Must include agent_run:{agent_run_id} for the approved or rejected run.",
+                            "description": "Must include agent_run:{agent_run_id} for the approved or rejected run and must not contain PII.",
                             "items": { "type": "string", "minLength": 1 },
                             "contains": {
                                 "type": "string",
