@@ -1050,6 +1050,11 @@ async fn openapi_includes_operations_paths() {
             ["enum"],
         serde_json::json!(["open", "in_progress", "resolved", "dismissed"])
     );
+    assert_eq!(
+        schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]
+            ["evidence_refs"]["minItems"],
+        1
+    );
     assert!(schema["components"]["schemas"]["UpdateQaFeedbackStatusResponse"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationResponse"]["properties"]

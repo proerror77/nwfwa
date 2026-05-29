@@ -268,6 +268,17 @@ pub async fn update_qa_feedback_status(
             "actor_id is required",
         ));
     }
+    if request
+        .evidence_refs
+        .iter()
+        .all(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_QA_FEEDBACK_STATUS_EVIDENCE",
+            "QA feedback status updates require evidence_refs",
+        ));
+    }
     let record = state
         .repository
         .update_qa_feedback_status(&feedback_id, request)

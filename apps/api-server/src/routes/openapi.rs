@@ -4509,7 +4509,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "actor_id": { "type": "string" },
                         "notes": { "type": "string" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string" } }
                     }
                 },
                 "UpdateQaFeedbackStatusResponse": {
