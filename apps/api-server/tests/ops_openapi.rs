@@ -1680,6 +1680,20 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_writeback_pii_contract(&schema, "QaResultRequest");
+    assert!(
+        schema["components"]["schemas"]["PilotWritebackResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "idempotency_key")
+    );
+    assert!(
+        schema["components"]["schemas"]["PilotWritebackResponse"]["properties"]["idempotency_key"]
+            ["description"]
+            .as_str()
+            .unwrap()
+            .contains("retry-safe TPA writeback")
+    );
     assert_writeback_pii_contract(&schema, "UpdateQaFeedbackStatusRequest");
     assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]

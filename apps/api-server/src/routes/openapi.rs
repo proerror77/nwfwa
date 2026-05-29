@@ -4920,13 +4920,17 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "PilotWritebackResponse": {
                     "type": "object",
-                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "evidence_refs"],
+                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "idempotency_key", "evidence_refs"],
                     "properties": {
                         "claim_id": { "type": "string" },
                         "event_type": { "type": "string" },
                         "event_status": { "type": "string" },
                         "audit_id": { "type": "string" },
                         "run_id": { "type": "string" },
+                        "idempotency_key": {
+                            "type": "string",
+                            "description": "Stable key for retry-safe TPA writeback processing."
+                        },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },

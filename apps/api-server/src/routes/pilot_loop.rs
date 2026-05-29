@@ -26,6 +26,7 @@ pub struct PilotWritebackResponse {
     pub event_status: String,
     pub audit_id: String,
     pub run_id: String,
+    pub idempotency_key: String,
     pub evidence_refs: Vec<String>,
 }
 
@@ -160,6 +161,7 @@ pub async fn write_investigation_result(
         .map_err(internal_error("INVESTIGATION_RESULT_SAVE_FAILED"))?;
     Ok(Json(PilotWritebackResponse {
         claim_id,
+        idempotency_key: writeback_idempotency_key(&event),
         event_type: event.event_type,
         event_status: event.event_status,
         audit_id: event.audit_id,
@@ -183,12 +185,17 @@ pub async fn write_qa_result(
         .map_err(internal_error("QA_RESULT_SAVE_FAILED"))?;
     Ok(Json(PilotWritebackResponse {
         claim_id,
+        idempotency_key: writeback_idempotency_key(&event),
         event_type: event.event_type,
         event_status: event.event_status,
         audit_id: event.audit_id,
         run_id: event.run_id,
         evidence_refs: event.evidence_refs,
     }))
+}
+
+fn writeback_idempotency_key(event: &AuditHistoryEventRecord) -> String {
+    format!("tpa-writeback:{}:{}", event.event_type, event.audit_id)
 }
 
 fn validate_investigation_result_request(

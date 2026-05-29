@@ -166,6 +166,32 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(investigation["claim_id"], "CLM-0287");
     assert_eq!(investigation["event_type"], "investigation.result.received");
+    assert!(investigation["idempotency_key"]
+        .as_str()
+        .unwrap()
+        .starts_with("tpa-writeback:investigation.result.received:"));
+
+    let (status, repeated_investigation) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-0287",
+          "investigation_id": "INV-1001",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "TPA investigation confirmed over-treatment signals.",
+          "evidence_refs": ["agent_run:agent_CLM-0287", "knowledge_cases:KC-1001"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        repeated_investigation["idempotency_key"],
+        investigation["idempotency_key"]
+    );
 
     let (status, body) = json_request(
         app.clone(),
@@ -240,6 +266,28 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(qa["claim_id"], "CLM-0287");
     assert_eq!(qa["event_type"], "qa.result.received");
+    assert!(qa["idempotency_key"]
+        .as_str()
+        .unwrap()
+        .starts_with("tpa-writeback:qa.result.received:"));
+
+    let (status, repeated_qa) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-9001",
+          "claim_id": "CLM-0287",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "Reviewer should attach provider history evidence.",
+          "evidence_refs": ["audit:investigation.result.received", "rule_runs:EARLY_CLAIM"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(repeated_qa["idempotency_key"], qa["idempotency_key"]);
 
     let (status, audit) = json_request(app, "GET", "/api/v1/audit/claims/CLM-0287", "{}").await;
 

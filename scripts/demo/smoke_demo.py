@@ -1727,6 +1727,10 @@ def main():
         "investigation writeback was not audited",
     )
     assert_true(investigation.get("audit_id"), "investigation writeback missing audit_id")
+    assert_true(
+        investigation.get("idempotency_key", "").startswith("tpa-writeback:investigation.result.received:"),
+        "investigation writeback missing idempotency key",
+    )
 
     discovered_rule = run_rule_discovery_candidate_lifecycle()
     rule_release = run_rule_backtest_and_publish(score, investigation)
@@ -1747,6 +1751,10 @@ def main():
     )
     assert_true(qa.get("event_type") == "qa.result.received", "QA writeback was not audited")
     assert_true(qa.get("audit_id"), "QA writeback missing audit_id")
+    assert_true(
+        qa.get("idempotency_key", "").startswith("tpa-writeback:qa.result.received:"),
+        "QA writeback missing idempotency key",
+    )
     qa_feedback_update = resolve_demo_qa_feedback(qa)
     knowledge_publish = publish_demo_knowledge_case(investigation, qa)
 

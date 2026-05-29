@@ -1559,6 +1559,23 @@ pub struct InMemoryScoringRepository {
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
 }
 
+async fn upsert_pilot_audit_event(
+    events: &Mutex<Vec<(String, AuditHistoryEventRecord)>>,
+    claim_id: String,
+    event: AuditHistoryEventRecord,
+) {
+    let mut events = events.lock().await;
+    if let Some((stored_claim_id, stored_event)) = events
+        .iter_mut()
+        .find(|(_, stored_event)| stored_event.audit_id == event.audit_id)
+    {
+        *stored_claim_id = claim_id;
+        *stored_event = event;
+    } else {
+        events.push((claim_id, event));
+    }
+}
+
 impl InMemoryScoringRepository {
     pub fn shared() -> SharedRepository {
         Arc::new(Self::default())
@@ -2720,10 +2737,12 @@ impl ScoringRepository for InMemoryScoringRepository {
             evidence_refs: record.evidence_refs.clone(),
             created_at: None,
         };
-        self.pilot_audit_events
-            .lock()
-            .await
-            .push((record.claim_id.clone(), event.clone()));
+        upsert_pilot_audit_event(
+            &self.pilot_audit_events,
+            record.claim_id.clone(),
+            event.clone(),
+        )
+        .await;
         let mut stored_attributions = self.saving_attributions.lock().await;
         stored_attributions
             .retain(|attribution| attribution.investigation_id != record.investigation_id);
@@ -2745,10 +2764,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             evidence_refs: record.evidence_refs.clone(),
             created_at: None,
         };
-        self.pilot_audit_events
-            .lock()
-            .await
-            .push((record.claim_id, event.clone()));
+        upsert_pilot_audit_event(&self.pilot_audit_events, record.claim_id, event.clone()).await;
         Ok(event)
     }
 
