@@ -4809,8 +4809,17 @@ pub async fn openapi_schema() -> Json<Value> {
                             "enum": ["open", "in_progress", "resolved", "dismissed"]
                         },
                         "actor_id": { "type": "string", "minLength": 1 },
-                        "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "QA feedback status notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Structured evidence references must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "UpdateQaFeedbackStatusResponse": {

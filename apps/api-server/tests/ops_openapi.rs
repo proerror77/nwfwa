@@ -1477,6 +1477,7 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_writeback_pii_contract(&schema, "QaResultRequest");
+    assert_writeback_pii_contract(&schema, "UpdateQaFeedbackStatusRequest");
     assert!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["required"]
             .as_array()

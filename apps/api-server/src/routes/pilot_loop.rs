@@ -378,6 +378,16 @@ pub async fn update_qa_feedback_status(
             "QA feedback status updates require evidence_refs",
         ));
     }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_QA_FEEDBACK_STATUS",
+            "QA feedback status notes and evidence_refs must not contain PII",
+        ));
+    }
     let record = state
         .repository
         .update_qa_feedback_status(&feedback_id, request)
