@@ -154,6 +154,39 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM rules
+  WHERE rule_key = 'candidate_early_high_amount'
+    AND status = 'draft'
+    AND owner = 'rule-discovery-demo';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected saved rule discovery candidate';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM rule_backtest_runs
+  WHERE rule_id = 'candidate_early_high_amount'
+    AND rule_version = 1
+    AND promotion_recommendation = 'eligible_for_review'
+    AND precision_value >= 0.70
+    AND recall_value >= 0.60
+    AND false_positive_rate <= 0.30
+    AND estimated_saving::numeric > 0
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected eligible discovered candidate backtest evidence';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
+  FROM audit_events
+  WHERE event_type IN ('rule.candidate.saved', 'rule.backtest.completed')
+    AND payload ->> 'rule_id' = 'candidate_early_high_amount'
+    AND evidence_refs <> '[]'::jsonb;
+  IF row_count < 2 THEN
+    RAISE EXCEPTION 'expected rule discovery candidate audit events, found %',
+      row_count;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM rule_promotion_reviews
   WHERE rule_id = 'rule_early_claim'
     AND rule_version = 1

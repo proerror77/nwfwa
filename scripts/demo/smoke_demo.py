@@ -13,6 +13,7 @@ SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
 CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
 MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
+CANDIDATE_RULE_ID = "candidate_early_high_amount"
 
 
 def request(method, path, payload=None, retries=1):
@@ -231,6 +232,117 @@ def demo_rule_backtest_payload():
             },
         ],
         "expected_review_capacity": 5,
+    }
+
+
+def demo_rule_discovery_samples():
+    return [
+        {
+            "external_claim_id": "CLM-RULE-DISC-TP",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-01-05",
+            "confirmed_fwa": True,
+            "policy": {
+                "external_policy_id": "POL-RULE-DISC-TP",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+            },
+        },
+        {
+            "external_claim_id": "CLM-RULE-DISC-TN-LOW",
+            "claim_amount": "500",
+            "currency": "CNY",
+            "service_date": "2026-03-01",
+            "confirmed_fwa": False,
+            "policy": {
+                "external_policy_id": "POL-RULE-DISC-TN-LOW",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+            },
+        },
+        {
+            "external_claim_id": "CLM-RULE-DISC-TN-HIGH",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-03-01",
+            "confirmed_fwa": False,
+            "policy": {
+                "external_policy_id": "POL-RULE-DISC-TN-HIGH",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000",
+            },
+        },
+    ]
+
+
+def run_rule_discovery_candidate_lifecycle():
+    samples = demo_rule_discovery_samples()
+    discovery = request(
+        "POST",
+        "/api/v1/ops/rules/discover",
+        {"min_support": 1, "samples": samples},
+    )
+    assert_true(discovery.get("sample_count") == len(samples), "rule discovery sample count mismatch")
+    assert_true(discovery.get("positive_count") == 1, "rule discovery positive count mismatch")
+    candidates = discovery.get("candidates", [])
+    assert_true(candidates, "rule discovery returned no candidates")
+    candidate = candidates[0]
+    assert_true(
+        candidate.get("rule", {}).get("rule_id") == CANDIDATE_RULE_ID,
+        f"unexpected top discovered rule candidate: {candidate}",
+    )
+    assert_true(candidate.get("precision", 0) >= 0.70, "discovered rule precision below threshold")
+    assert_true(candidate.get("lift", 0) > 1.0, "discovered rule should enrich FWA labels")
+    assert_true(candidate.get("estimated_saving") != "0.00", "discovered rule missing saving estimate")
+    assert_true(candidate.get("explanation"), "discovered rule missing explanation")
+
+    saved = request(
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        {
+            "owner": "rule-discovery-demo",
+            "rule": candidate["rule"],
+        },
+    )
+    assert_true(
+        saved.get("summary", {}).get("rule_id") == CANDIDATE_RULE_ID,
+        "saved candidate rule id mismatch",
+    )
+    assert_true(saved.get("summary", {}).get("status") == "draft", "saved candidate should stay draft")
+    assert_true(saved.get("summary", {}).get("owner") == "rule-discovery-demo", "saved candidate owner mismatch")
+
+    backtest = request(
+        "POST",
+        "/api/v1/ops/rules/backtest",
+        {
+            "rule": candidate["rule"],
+            "samples": samples,
+            "expected_review_capacity": 3,
+        },
+    )
+    assert_true(
+        backtest.get("promotion_recommendation") == "eligible_for_review",
+        f"discovered candidate backtest should be eligible: {backtest}",
+    )
+
+    gates = request("GET", f"/api/v1/ops/rules/{CANDIDATE_RULE_ID}/promotion-gates")
+    assert_true(
+        "backtest evidence missing" not in gates.get("blockers", []),
+        f"candidate promotion gates did not consume discovery backtest evidence: {gates}",
+    )
+    assert_true(
+        "approval missing" in gates.get("blockers", []),
+        "candidate should still require approval before routing",
+    )
+    return {
+        "rule_id": CANDIDATE_RULE_ID,
+        "support": candidate["support"],
+        "precision": candidate["precision"],
+        "lift": candidate["lift"],
     }
 
 
@@ -508,6 +620,7 @@ def main():
     )
     assert_true(investigation.get("audit_id"), "investigation writeback missing audit_id")
 
+    discovered_rule = run_rule_discovery_candidate_lifecycle()
     rule_release = run_rule_backtest_and_publish(score, investigation)
 
     qa = request(
@@ -664,6 +777,7 @@ def main():
                 "case_id": case_id,
                 "outcome_labels": label_pool["total_labels"],
                 "retraining_job_id": retraining_job["job_id"],
+                "discovered_rule": discovered_rule,
                 "rule_release": rule_release,
             },
             ensure_ascii=True,

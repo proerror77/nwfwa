@@ -60,6 +60,8 @@ grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
 grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
 grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/rules/candidates" scripts/demo/smoke_demo.py
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml
