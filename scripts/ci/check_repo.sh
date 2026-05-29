@@ -67,6 +67,7 @@ grep -q "/api/v1/ops/knowledge/cases" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py
 grep -q "/api/v1/members/MBR-0287/profile-summary" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/providers/risk-summary" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/routing-policies" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/agent-runs" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/audit-samples" scripts/demo/smoke_demo.py

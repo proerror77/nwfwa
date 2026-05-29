@@ -925,6 +925,41 @@ def assert_member_profile_summary():
     }
 
 
+def assert_provider_risk_summary():
+    summary = request("GET", "/api/v1/ops/providers/risk-summary")
+    assert_true(summary.get("provider_count", 0) >= 1, "provider risk summary missing providers")
+    assert_true(
+        summary.get("review_required_count", 0) >= 1,
+        "provider risk summary missing review-required providers",
+    )
+    assert_true(summary.get("high_risk_count", 0) >= 1, "provider risk summary missing high-risk providers")
+    provider = next(
+        (
+            item
+            for item in summary.get("providers", [])
+            if item.get("provider_id") == "PRV-0287"
+        ),
+        None,
+    )
+    assert_true(provider is not None, "provider risk summary missing demo provider")
+    assert_true(provider.get("risk_score", 0) >= 70, "demo provider risk score should be high")
+    assert_true(provider.get("risk_tier") == "high", "demo provider risk tier mismatch")
+    assert_true(provider.get("review_required") is True, "demo provider should require review")
+    assert_true(provider.get("review_route") == "provider_review", "demo provider review route mismatch")
+    assert_true(provider.get("claim_count", 0) >= 1, "demo provider missing claim count")
+    assert_true(provider.get("latest_claim_id") == CLAIM_ID, "demo provider latest claim mismatch")
+    assert_true(
+        "providers:PRV-0287" in provider.get("evidence_refs", []),
+        "demo provider missing provider evidence ref",
+    )
+    return {
+        "provider_id": provider["provider_id"],
+        "risk_score": provider["risk_score"],
+        "review_route": provider["review_route"],
+        "latest_claim_id": provider["latest_claim_id"],
+    }
+
+
 def govern_agent_run(agent):
     agent_run_id = agent["agent_run_id"]
     runs = request("GET", "/api/v1/ops/agent-runs").get("runs", [])
@@ -1094,6 +1129,7 @@ def main():
     assert_true(score.get("top_reasons"), "score response missing top_reasons")
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
     member_profile = assert_member_profile_summary()
+    provider_risk = assert_provider_risk_summary()
 
     leads = request("GET", "/api/v1/ops/leads").get("leads", [])
     lead = next(
@@ -1460,6 +1496,7 @@ def main():
                 "audit_id": score["audit_id"],
                 "risk_score": score["risk_score"],
                 "member_profile": member_profile,
+                "provider_risk": provider_risk,
                 "similar_case": results[0]["case_id"],
                 "medical_review_audit_id": medical_review["audit_id"],
                 "agent_run_id": agent["agent_run_id"],

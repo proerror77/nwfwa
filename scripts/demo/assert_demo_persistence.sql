@@ -70,6 +70,21 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM audit_events
+  WHERE run_id = demo_run_id
+    AND claim_id = demo_claim_uuid
+    AND event_type = 'scoring.completed'
+    AND payload -> 'provider_profile' ->> 'provider_id' = 'PRV-0287'
+    AND (payload -> 'provider_profile' ->> 'risk_score')::integer >= 70
+    AND payload -> 'provider_profile' ->> 'risk_tier' = 'high'
+    AND payload -> 'provider_profile' ->> 'review_route' = 'provider_review'
+    AND (payload -> 'provider_profile' ->> 'review_required')::boolean = true
+    AND payload -> 'provider_profile' -> 'evidence_refs' ? 'providers:PRV-0287';
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected provider risk profile in scoring audit payload for %', demo_run_id;
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM fwa_leads
   WHERE run_id = demo_run_id
     AND claim_id = demo_claim_id
