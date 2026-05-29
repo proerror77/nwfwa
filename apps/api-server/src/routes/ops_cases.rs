@@ -5,6 +5,7 @@ use crate::{
         CaseRecord, LeadRecord, TriageLeadInput, TriageLeadRecord, UpdateCaseStatusInput,
         UpdateCaseStatusRecord,
     },
+    routes::pii,
 };
 use axum::{
     extract::{Path, State},
@@ -97,6 +98,13 @@ fn validate_triage_request(lead_id: &str, request: &TriageLeadInput) -> Result<(
             "assignee, reviewer, priority, and notes are required",
         ));
     }
+    if pii::contains_pii([request.notes.as_str()]) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_CASE_WORKFLOW",
+            "case workflow notes and evidence_refs must not contain PII",
+        ));
+    }
     Ok(())
 }
 
@@ -151,6 +159,16 @@ pub async fn update_case_status(
             StatusCode::BAD_REQUEST,
             "MISSING_CASE_STATUS_EVIDENCE",
             "case status updates require evidence_refs",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_CASE_WORKFLOW",
+            "case workflow notes and evidence_refs must not contain PII",
         ));
     }
     let record = state

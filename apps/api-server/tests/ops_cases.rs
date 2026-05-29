@@ -184,6 +184,22 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_TRIAGE_REVIEW_CONTEXT");
 
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "siu-reviewer-1",
+          "reviewer": "medical-reviewer-1",
+          "priority": "high",
+          "notes": "Contact alice@example.com for records."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_CASE_WORKFLOW");
+
     let (status, triage) = json_request(
         app.clone(),
         "POST",
@@ -549,6 +565,36 @@ async fn updates_case_status_with_audit_trail() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "MISSING_CASE_STATUS_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        r#"{
+          "status": "investigating",
+          "actor_id": "siu-reviewer-2",
+          "notes": "Investigation started for ID 11010519491231002X.",
+          "evidence_refs": ["case_workflow:investigation_started"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_CASE_WORKFLOW");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        r#"{
+          "status": "investigating",
+          "actor_id": "siu-reviewer-2",
+          "notes": "Investigation started with provider history review.",
+          "evidence_refs": ["phone:13800138000"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_CASE_WORKFLOW");
 
     let (status, update) = json_request(
         app.clone(),

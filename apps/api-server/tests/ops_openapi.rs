@@ -1400,6 +1400,26 @@ async fn openapi_includes_operations_paths() {
             ["items"]["minLength"],
         1
     );
+    assert!(
+        schema["components"]["schemas"]["TriageLeadRequest"]["properties"]["notes"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
+    assert!(
+        schema["components"]["schemas"]["UpdateCaseStatusRequest"]["properties"]["notes"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
+    assert!(
+        schema["components"]["schemas"]["UpdateCaseStatusRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
     assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["financial_impact_type"]["enum"][1],
