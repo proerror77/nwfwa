@@ -709,12 +709,14 @@ async fn submits_agent_approval_decision_for_governance_review() {
         app.clone(),
         "POST",
         &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
+        &format!(
+            r#"{{
           "decision": "approved",
           "approver": "qa-lead",
           "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_approval:manual_review_required"]
-        }"#,
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
+        }}"#,
+        ),
     )
     .await;
 
@@ -723,6 +725,10 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(body["approval"]["agent_run_id"], agent_run_id);
     assert_eq!(body["approval"]["decision"], "approved");
     assert_eq!(body["approval"]["approver"], "qa-lead");
+    assert!(body["approval"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!("agent_run:{agent_run_id}"))));
     assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, body) = json_request(app.clone(), "GET", "/api/v1/ops/agent-runs", "{}").await;
@@ -797,6 +803,22 @@ async fn rejects_agent_approval_without_evidence_or_reviewer_context() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_EVIDENCE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        r#"{
+          "decision": "approved",
+          "approver": "qa-lead",
+          "reason": "Evidence package is sufficient for manual review routing.",
+          "evidence_refs": ["agent_approval:manual_review_required"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "MISSING_AGENT_APPROVAL_RUN_EVIDENCE");
 
     let (status, body) = json_request(
         app.clone(),
@@ -891,12 +913,14 @@ async fn lists_agent_approval_alert_until_decision_is_recorded() {
         app.clone(),
         "POST",
         &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
+        &format!(
+            r#"{{
           "decision": "approved",
           "approver": "qa-lead",
           "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_approval:manual_review_required"]
-        }"#,
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
+        }}"#,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);

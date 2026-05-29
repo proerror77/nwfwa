@@ -2547,7 +2547,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "enum": ["evidence_sufficient", "request_more_evidence", "medical_necessity_issue", "no_medical_issue"]
                         },
                         "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "MedicalReviewResultResponse": {
@@ -2956,7 +2960,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string", "minLength": 1 },
                         "notes": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "RulePromotionReview": {
@@ -3642,7 +3650,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["evidence_refs"],
                     "properties": {
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "RoutingPolicyPromotionGate": {
@@ -4373,7 +4385,12 @@ pub async fn openapi_schema() -> Json<Value> {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "approver": { "type": "string", "minLength": 1 },
                         "reason": { "type": "string", "minLength": 1 },
-                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Must include agent_run:{agent_run_id} for the approved or rejected run.",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "SubmitAgentApprovalResponse": {

@@ -299,12 +299,14 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
         app.clone(),
         "POST",
         &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
-        r#"{
+        &format!(
+            r#"{{
           "decision": "approved",
           "approver": "qa-lead",
           "reason": "Evidence package is sufficient for manual review routing.",
-          "evidence_refs": ["agent_approval:manual_review_required"]
-        }"#,
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
+        }}"#,
+        ),
     )
     .await;
     assert_eq!(status, StatusCode::OK);

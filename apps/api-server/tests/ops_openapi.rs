@@ -957,6 +957,13 @@ async fn openapi_includes_operations_paths() {
             ["evidence_refs"]["items"]["minLength"],
         1
     );
+    assert!(
+        schema["components"]["schemas"]["SubmitAgentApprovalRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap()
+            .contains("agent_run:{agent_run_id}")
+    );
     assert_eq!(
         schema["components"]["schemas"]["AgentInvestigationRequest"]["properties"]["scheme_family"]
             ["$ref"],

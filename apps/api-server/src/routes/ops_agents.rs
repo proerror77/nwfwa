@@ -67,6 +67,7 @@ pub async fn submit_agent_approval(
                 "agent run not found",
             )
         })?;
+    validate_agent_approval_run_evidence(&request, &run)?;
     let approval = AgentApprovalRecord {
         approval_id: format!("approval_{}", run.agent_run_id),
         agent_run_id: run.agent_run_id.clone(),
@@ -106,6 +107,25 @@ pub async fn submit_agent_approval(
         .await
         .map_err(internal_error("AGENT_APPROVAL_AUDIT_FAILED"))?;
     Ok(Json(SubmitAgentApprovalResponse { approval, audit_id }))
+}
+
+fn validate_agent_approval_run_evidence(
+    request: &SubmitAgentApprovalRequest,
+    run: &AgentRunLogRecord,
+) -> Result<(), ApiError> {
+    let required_ref = format!("agent_run:{}", run.agent_run_id);
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference == &required_ref)
+    {
+        return Ok(());
+    }
+    Err(ApiError::new(
+        StatusCode::BAD_REQUEST,
+        "MISSING_AGENT_APPROVAL_RUN_EVIDENCE",
+        format!("agent approval evidence_refs must include {required_ref}"),
+    ))
 }
 
 fn validate_agent_approval_request(request: &SubmitAgentApprovalRequest) -> Result<(), ApiError> {
