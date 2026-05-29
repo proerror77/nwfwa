@@ -631,7 +631,86 @@ fn validate_retraining_output_request(
             return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
         }
     }
+    if let Some(endpoint_url) = &request.endpoint_url {
+        if endpoint_url.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_RETRAINING_OUTPUT_ENDPOINT",
+                "endpoint_url must not be blank when provided",
+            ));
+        }
+    }
+    for (metric_name, metric) in [
+        ("auc", &request.auc),
+        ("ks", &request.ks),
+        ("precision", &request.precision),
+        ("recall", &request.recall),
+        ("f1", &request.f1),
+        ("accuracy", &request.accuracy),
+        ("threshold", &request.threshold),
+    ] {
+        validate_unit_interval_metric(metric_name, metric)?;
+    }
+    let confusion_matrix = request.confusion_matrix_json.as_object();
+    if confusion_matrix.is_none()
+        || confusion_matrix.is_some_and(|confusion_matrix| confusion_matrix.is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_CONFUSION_MATRIX",
+            "confusion_matrix_json must be a non-empty object",
+        ));
+    }
+    let metrics = request.metrics_json.as_object();
+    if metrics.is_none() || metrics.is_some_and(|metrics| metrics.is_empty()) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_METRICS",
+            "metrics_json must be a non-empty object",
+        ));
+    }
+    if let Some(feature_importance_uri) = &request.feature_importance_uri {
+        if feature_importance_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
+                "feature_importance_uri must not be blank when provided",
+            ));
+        }
+        validate_parquet_artifact_uri(
+            feature_importance_uri,
+            "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
+        )?;
+    }
     Ok(())
+}
+
+fn validate_unit_interval_metric(
+    metric_name: &'static str,
+    metric: &Option<Decimal>,
+) -> Result<(), ApiError> {
+    if let Some(metric) = metric {
+        if *metric < Decimal::ZERO || *metric > Decimal::ONE {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_RETRAINING_OUTPUT_METRIC",
+                format!("{metric_name} must be between 0 and 1"),
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn validate_parquet_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    if value.to_ascii_lowercase().contains(".csv") {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "model evaluation artifact URIs must point to parquet files or parquet partition directories",
+        ))
+    } else {
+        Ok(())
+    }
 }
 
 pub async fn submit_model_promotion_review(

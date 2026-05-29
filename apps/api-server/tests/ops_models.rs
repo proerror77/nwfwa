@@ -1145,6 +1145,96 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
 }
 
 #[tokio::test]
+async fn rejects_invalid_model_retraining_output_contract() {
+    let app = build_app(test_config());
+    let valid_request = serde_json::json!({
+        "actor": "trainer-worker",
+        "notes": "Candidate model and validation report registered.",
+        "candidate_model_version": "0.2.0-candidate",
+        "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
+        "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+        "auc": "0.86",
+        "ks": "0.48",
+        "precision": "0.78",
+        "recall": "0.71",
+        "f1": "0.74",
+        "accuracy": "0.79",
+        "threshold": "0.52",
+        "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
+        "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "metrics_json": {"score_psi": 0.04}
+    });
+
+    let mut invalid_metric = valid_request.clone();
+    invalid_metric["threshold"] = serde_json::json!("1.01");
+    let payload = invalid_metric.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_METRIC");
+
+    let mut blank_endpoint = valid_request.clone();
+    blank_endpoint["endpoint_url"] = serde_json::json!(" ");
+    let payload = blank_endpoint.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_ENDPOINT");
+
+    let mut empty_confusion_matrix = valid_request.clone();
+    empty_confusion_matrix["confusion_matrix_json"] = serde_json::json!({});
+    let payload = empty_confusion_matrix.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_CONFUSION_MATRIX");
+
+    let mut empty_metrics = valid_request.clone();
+    empty_metrics["metrics_json"] = serde_json::json!({});
+    let payload = empty_metrics.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_METRICS");
+
+    let mut csv_feature_importance = valid_request.clone();
+    csv_feature_importance["feature_importance_uri"] =
+        serde_json::json!("data/eval/feature_importance.csv");
+    let payload = csv_feature_importance.to_string();
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
+}
+
+#[tokio::test]
 async fn blocks_model_promotion_when_score_drift_is_detected() {
     let app = build_app(test_config());
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "drift_gate").await;

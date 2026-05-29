@@ -506,8 +506,10 @@ async fn openapi_includes_operations_paths() {
                 "notes",
                 "candidate_model_version",
                 "artifact_uri",
+                "endpoint_url",
                 "validation_report_uri",
                 "evaluation_run_id",
+                "feature_importance_uri",
             ][..],
         ),
     ] {
@@ -518,6 +520,38 @@ async fn openapi_includes_operations_paths() {
             );
         }
     }
+    for field in [
+        "auc",
+        "ks",
+        "precision",
+        "recall",
+        "f1",
+        "accuracy",
+        "threshold",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+                [field]["minimum"],
+            0,
+            "missing CompleteModelRetrainingJobRequest minimum for {field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+                [field]["maximum"],
+            1,
+            "missing CompleteModelRetrainingJobRequest maximum for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["confusion_matrix_json"]["minProperties"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["metrics_json"]["minProperties"],
+        1
+    );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
             ["data_quality_status"]["enum"][1],
