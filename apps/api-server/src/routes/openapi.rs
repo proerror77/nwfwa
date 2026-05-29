@@ -4217,9 +4217,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         "lead_id": { "type": "string" },
                         "claim_id": { "type": "string" },
                         "scheme_family": { "type": "string" },
-                        "risk_score": { "type": "integer" },
-                        "rag": { "type": "string" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "rag": { "type": "string", "enum": ["GREEN", "AMBER", "RED"] },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
                     }
                 },
                 "AuditSampleRecord": {

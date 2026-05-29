@@ -1010,6 +1010,25 @@ async fn openapi_includes_operations_paths() {
             ["evidence_sufficiency"]["$ref"],
         "#/components/schemas/EvidenceSufficiency"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["risk_score"]
+            ["maximum"],
+        100
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["rag"]["enum"],
+        serde_json::json!(["GREEN", "AMBER", "RED"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["evidence_refs"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["evidence_refs"]
+            ["items"]["minLength"],
+        1
+    );
     assert!(
         schema["components"]["schemas"]["CaseEvidencePackage"]["required"]
             .as_array()
