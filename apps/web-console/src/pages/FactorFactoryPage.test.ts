@@ -5,6 +5,7 @@ import {
   buildFactorOwnerOptions,
   buildFactorReadinessSummary,
   buildFactorRuleCandidate,
+  buildSavedFactorCandidateSummary,
   filterFactorCards,
 } from "./FactorFactoryPage";
 import type { FactorCard } from "./FactorFactoryPage";
@@ -402,5 +403,58 @@ describe("buildFactorRuleCandidate", () => {
       operator: "<=",
       value: 0.2,
     });
+  });
+});
+
+describe("buildSavedFactorCandidateSummary", () => {
+  it("summarizes a saved factor-derived rule candidate", () => {
+    expect(
+      buildSavedFactorCandidateSummary({
+        summary: {
+          rule_id: "candidate_factor_claim_amount_percentile_peer",
+          name: "Claim Amount Percentile Peer candidate",
+          status: "draft",
+          owner: "feature-ops",
+          active_version: null,
+          latest_version: 1,
+          review_mode: "both",
+          scheme_family: "factor_factory",
+          score: 20,
+          alert_code: "FACTOR_CLAIM_AMOUNT_PERCENTILE_PEER",
+          recommended_action: "ManualReview",
+        },
+        versions: [
+          {
+            version: 1,
+            status: "draft",
+            dsl: {
+              conditions: [
+                {
+                  field: "claim_amount_percentile_peer",
+                  operator: ">=",
+                  value: 98,
+                },
+              ],
+            },
+          },
+        ],
+        audit_events: [{ audit_id: "audit_factor_candidate_saved" }],
+      }),
+    ).toEqual({
+      ruleId: "candidate_factor_claim_amount_percentile_peer",
+      name: "Claim Amount Percentile Peer candidate",
+      status: "draft",
+      owner: "feature-ops",
+      versionLabel: "v1",
+      reviewMode: "both",
+      schemeFamily: "factor_factory",
+      score: 20,
+      alertCode: "FACTOR_CLAIM_AMOUNT_PERCENTILE_PEER",
+      recommendedAction: "ManualReview",
+      conditionLabel: "claim_amount_percentile_peer >= 98",
+      versionCount: 1,
+      auditEventCount: 1,
+    });
+    expect(buildSavedFactorCandidateSummary(null)).toBeNull();
   });
 });

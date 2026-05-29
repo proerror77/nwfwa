@@ -148,6 +148,34 @@ export type FactorRuleCandidate = {
   };
 };
 
+type FactorCandidateSaveResponse = {
+  summary: {
+    rule_id: string;
+    name: string;
+    status: string;
+    owner: string;
+    active_version: number | null;
+    latest_version: number;
+    review_mode: string;
+    scheme_family: string;
+    score: number;
+    alert_code: string;
+    recommended_action: string;
+  };
+  versions: Array<{
+    version: number;
+    status: string;
+    dsl: {
+      conditions?: Array<{
+        field: string;
+        operator: string;
+        value: number;
+      }>;
+    };
+  }>;
+  audit_events: Array<unknown>;
+};
+
 export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
   const factorCount = readiness?.factor_count ?? 0;
   const onlineReadyCount = readiness?.online_ready_count ?? 0;
@@ -222,6 +250,30 @@ export function buildFactorRuleCandidate(card: FactorCard): FactorRuleCandidate 
         reason: `${card.display_label} generated from Factor Factory rule-convertible factor`,
       },
     },
+  };
+}
+
+export function buildSavedFactorCandidateSummary(response?: FactorCandidateSaveResponse | null) {
+  if (!response) {
+    return null;
+  }
+  const firstCondition = response.versions[0]?.dsl.conditions?.[0];
+  return {
+    ruleId: response.summary.rule_id,
+    name: response.summary.name,
+    status: response.summary.status,
+    owner: response.summary.owner,
+    versionLabel: `v${response.summary.latest_version}`,
+    reviewMode: response.summary.review_mode,
+    schemeFamily: response.summary.scheme_family,
+    score: response.summary.score,
+    alertCode: response.summary.alert_code,
+    recommendedAction: response.summary.recommended_action,
+    conditionLabel: firstCondition
+      ? `${firstCondition.field} ${firstCondition.operator} ${firstCondition.value}`
+      : "no condition",
+    versionCount: response.versions.length,
+    auditEventCount: response.audit_events.length,
   };
 }
 
@@ -422,7 +474,7 @@ export function FactorFactoryPage() {
       if (!factorRuleCandidate) {
         throw new Error("No rule-convertible factor selected");
       }
-      return saveRuleCandidate(factorRuleCandidate, apiKey);
+      return saveRuleCandidate(factorRuleCandidate, apiKey) as Promise<FactorCandidateSaveResponse>;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["rules"] });
@@ -430,6 +482,9 @@ export function FactorFactoryPage() {
       queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
     },
   });
+  const savedFactorCandidateSummary = buildSavedFactorCandidateSummary(
+    saveFactorCandidateMutation.data,
+  );
   const readinessSummary = buildFactorReadinessSummary(readinessQuery.data);
 
   return (
@@ -577,8 +632,57 @@ export function FactorFactoryPage() {
               {saveFactorCandidateMutation.error ? (
                 <pre className="error">{String(saveFactorCandidateMutation.error.message)}</pre>
               ) : null}
-              {saveFactorCandidateMutation.data ? (
-                <pre>{JSON.stringify(saveFactorCandidateMutation.data, null, 2)}</pre>
+              {savedFactorCandidateSummary ? (
+                <dl className="result-grid">
+                  <div>
+                    <dt>Saved Rule</dt>
+                    <dd>{savedFactorCandidateSummary.ruleId}</dd>
+                  </div>
+                  <div>
+                    <dt>Status</dt>
+                    <dd>{savedFactorCandidateSummary.status}</dd>
+                  </div>
+                  <div>
+                    <dt>Owner</dt>
+                    <dd>{savedFactorCandidateSummary.owner}</dd>
+                  </div>
+                  <div>
+                    <dt>Version</dt>
+                    <dd>{savedFactorCandidateSummary.versionLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Review Mode</dt>
+                    <dd>{savedFactorCandidateSummary.reviewMode}</dd>
+                  </div>
+                  <div>
+                    <dt>Scheme</dt>
+                    <dd>{savedFactorCandidateSummary.schemeFamily}</dd>
+                  </div>
+                  <div>
+                    <dt>Condition</dt>
+                    <dd>{savedFactorCandidateSummary.conditionLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Score</dt>
+                    <dd>{savedFactorCandidateSummary.score}</dd>
+                  </div>
+                  <div>
+                    <dt>Alert</dt>
+                    <dd>{savedFactorCandidateSummary.alertCode}</dd>
+                  </div>
+                  <div>
+                    <dt>Action</dt>
+                    <dd>{savedFactorCandidateSummary.recommendedAction}</dd>
+                  </div>
+                  <div>
+                    <dt>Versions</dt>
+                    <dd>{savedFactorCandidateSummary.versionCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Embedded Audits</dt>
+                    <dd>{savedFactorCandidateSummary.auditEventCount}</dd>
+                  </div>
+                </dl>
               ) : null}
             </article>
           ) : null}
