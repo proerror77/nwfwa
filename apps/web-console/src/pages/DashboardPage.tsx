@@ -1,7 +1,11 @@
 import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getDashboardSummary, getProviderRiskSummary, listFwaSchemes } from "../api";
-import { buildDashboardLayerRows, type DashboardLayerScore } from "./dashboardLayerRows";
+import {
+  buildDashboardLayerCoverageSummary,
+  buildDashboardLayerRows,
+  type DashboardLayerScore,
+} from "./dashboardLayerRows";
 import {
   buildSavingAttributionRows,
   type SavingAttributionSummary,
@@ -404,6 +408,7 @@ export function DashboardPage() {
   );
   const modelRows = Object.entries(summary?.model_scores ?? {});
   const layerRows = buildDashboardLayerRows(summary?.layer_scores ?? {});
+  const layerCoverageSummary = buildDashboardLayerCoverageSummary(summary?.layer_scores);
   const savingAttributionRows = buildSavingAttributionRows(summary?.saving_attributions ?? []);
   const savingSegmentRows = buildDashboardSavingSegmentRows(
     summary?.saving_segments ?? [],
@@ -867,6 +872,20 @@ export function DashboardPage() {
 
         <div className="panel wide-panel">
           <h2>Seven Layer Detection</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Layer Coverage</span>
+              <strong>{layerCoverageSummary.coverageLabel}</strong>
+            </div>
+            <div>
+              <span>Expected Layers</span>
+              <strong>{layerCoverageSummary.expectedCount}</strong>
+            </div>
+            <div>
+              <span>Missing Layers</span>
+              <strong>{layerCoverageSummary.missingLayerLabel}</strong>
+            </div>
+          </div>
           <div className="table-list">
             {layerRows.map((layer) => (
               <div className="metric-row" key={layer.layerId}>

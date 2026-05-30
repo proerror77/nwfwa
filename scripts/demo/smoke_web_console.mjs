@@ -102,6 +102,7 @@ async function main() {
       "Graph Risk",
       "Clinical Signals",
       "Evidence Status",
+      "Layer Coverage",
       "Knowledge Base",
     ]) {
       assertContains(bundle, expectedPanel, "web console operations panel bundle");

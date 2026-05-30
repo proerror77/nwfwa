@@ -81,6 +81,7 @@ grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
 grep -q "Graph Risk" scripts/demo/smoke_web_console.mjs
 grep -q "Clinical Signals" scripts/demo/smoke_web_console.mjs
 grep -q "Evidence Status" scripts/demo/smoke_web_console.mjs
+grep -q "Layer Coverage" scripts/demo/smoke_web_console.mjs
 grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py
