@@ -9,8 +9,10 @@ const providers = [
     review_required: true,
     review_route: "provider_review",
     claim_count: 3,
+    network_risk_score: null,
     latest_claim_id: "CLM-1",
     outlier_flags: ["peer_amount_p97"],
+    graph_reasons: [],
     evidence_refs: ["provider_profile:PRV-1:90d"],
   },
   {
@@ -20,8 +22,10 @@ const providers = [
     review_required: false,
     review_route: "standard_review",
     claim_count: 1,
+    network_risk_score: 82,
     latest_claim_id: "CLM-2",
     outlier_flags: [],
+    graph_reasons: ["Provider 所在关系社区整体风险偏高"],
     evidence_refs: [],
   },
 ];
@@ -39,6 +43,8 @@ describe("buildProviderRiskOpsSummary", () => {
       providerCount: 4,
       reviewRequiredCount: 2,
       highRiskCount: 1,
+      graphRiskCount: 1,
+      evidenceBackedCount: 1,
       reviewRateLabel: "50.0%",
     });
   });

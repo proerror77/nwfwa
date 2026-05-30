@@ -9,8 +9,10 @@ type ProviderRiskSummaryItem = {
   review_required: boolean;
   review_route: string;
   claim_count: number;
+  network_risk_score?: number | null;
   latest_claim_id?: string | null;
   outlier_flags: string[];
+  graph_reasons: string[];
   evidence_refs: string[];
 };
 
@@ -25,10 +27,21 @@ export function buildProviderRiskOpsSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
   const highRiskCount = summary?.high_risk_count ?? 0;
+  const graphRiskCount =
+    summary?.providers.filter(
+      (provider) =>
+        provider.review_route === "provider_graph_review" ||
+        (provider.network_risk_score ?? 0) >= 70 ||
+        provider.graph_reasons.length > 0,
+    ).length ?? 0;
+  const evidenceBackedCount =
+    summary?.providers.filter((provider) => provider.evidence_refs.length > 0).length ?? 0;
   return {
     providerCount,
     reviewRequiredCount,
     highRiskCount,
+    graphRiskCount,
+    evidenceBackedCount,
     reviewRateLabel:
       providerCount === 0
         ? "0.0%"
@@ -94,6 +107,16 @@ export function ProviderRiskPage() {
             <strong>{summary.highRiskCount}</strong>
           </div>
           <div>
+            <span>Graph Risk</span>
+            <strong>{summary.graphRiskCount}</strong>
+          </div>
+          <div>
+            <span>Evidence</span>
+            <strong>
+              {summary.evidenceBackedCount}/{summary.providerCount}
+            </strong>
+          </div>
+          <div>
             <span>Review Rate</span>
             <strong>{summary.reviewRateLabel}</strong>
           </div>
@@ -122,9 +145,13 @@ export function ProviderRiskPage() {
               <strong>{provider.risk_score}</strong>
               <small>{provider.review_route}</small>
               <small>{provider.risk_tier}</small>
+              <small>
+                network {provider.network_risk_score == null ? "n/a" : provider.network_risk_score}
+              </small>
               <small>{provider.claim_count} claims</small>
               <small>{provider.latest_claim_id ?? "no latest claim"}</small>
               <small>{provider.outlier_flags.join(", ") || "no outliers"}</small>
+              <small>{provider.graph_reasons.join(", ") || "no graph signals"}</small>
               <small>{provider.evidence_refs.join(", ") || "no evidence refs"}</small>
             </div>
           ))}

@@ -85,6 +85,7 @@ Required signals:
 - provider enrollment, credential, specialty, location, and network status;
 - provider ownership or affiliation concentration when customer data provides
   it;
+- provider-member, provider-referral, and high-risk-neighbor graph signals;
 - high-cost code usage rate;
 - duplicate or repeated service patterns;
 - diagnosis-procedure mismatch rate;

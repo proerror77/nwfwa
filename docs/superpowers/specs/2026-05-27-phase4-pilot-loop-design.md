@@ -8,6 +8,7 @@ Phase 4 turns the demoable runtime into a pilot integration loop:
 - TPA or QA can write back QA review results.
 - Operators can query claim audit history.
 - Operators can inspect audit-backed TPA API call records in Governance.
+- Operators can inspect Provider/L6 graph-risk signals in Operations Studio.
 - Pilot readiness is documented with what is implemented and what remains operational.
 
 This phase stays inside the Rust modular monolith and uses the same API key boundary as the earlier APIs.
