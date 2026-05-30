@@ -14,6 +14,7 @@ Pilot API endpoints:
 - `POST /api/v1/agent/cases/investigate`
 - `GET /api/v1/ops/medical-review/queue`
 - `POST /api/v1/ops/medical-review/results`
+- `GET /api/v1/ops/api-calls`
 
 All endpoints require `x-api-key`. Customer-specific credentials, network allowlists, and key rotation are configured outside the repository before pilot start.
 
@@ -61,6 +62,7 @@ Minimum pilot monitoring:
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
 - Runtime logs: request path, status, run id, audit id, event type, source system
+- API call records: audit-backed scoring, investigation, and QA writeback calls in Governance
 - Database checks: migration success and audit event append rate
 
 OpenTelemetry, Grafana, Loki, and alert routing are production setup tasks after pilot environment selection.

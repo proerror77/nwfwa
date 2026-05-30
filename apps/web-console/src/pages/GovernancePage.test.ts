@@ -3,6 +3,7 @@ import {
   auditEventFilterShortcuts,
   buildAgentEvidenceRefRows,
   buildAgentRunLogSummary,
+  buildApiCallSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
   buildGlobalAuditEventFilters,
@@ -1181,6 +1182,64 @@ describe("filterOutcomeLabels", () => {
       ),
     ).toEqual(["label_4"]);
     expect(filterOutcomeLabels(labels, {})).toHaveLength(4);
+  });
+});
+
+describe("buildApiCallSummary", () => {
+  it("summarizes audit-backed TPA API call records", () => {
+    expect(
+      buildApiCallSummary([
+        {
+          call_id: "audit_score",
+          endpoint: "/api/v1/claims/score",
+          method: "POST",
+          status_code: 200,
+          result: "succeeded",
+          source_system: "tpa-demo",
+          claim_id: "CLM-1",
+          run_id: "run_score",
+          audit_id: "audit_score",
+          event_type: "scoring.completed",
+          idempotency_key: null,
+          evidence_refs: ["scoring_runs:run_score"],
+        },
+        {
+          call_id: "audit_investigation",
+          endpoint: "/api/v1/investigations/results",
+          method: "POST",
+          status_code: 200,
+          result: "succeeded",
+          source_system: "tpa-demo",
+          claim_id: "CLM-1",
+          run_id: "pilot_investigation_INV-1",
+          audit_id: "audit_investigation",
+          event_type: "investigation.result.received",
+          idempotency_key: "tpa-writeback:investigation.result.received:audit_investigation",
+          evidence_refs: ["investigation_results:INV-1"],
+        },
+        {
+          call_id: "audit_qa_failed",
+          endpoint: "/api/v1/qa/results",
+          method: "POST",
+          status_code: 500,
+          result: "failed",
+          source_system: "tpa-demo",
+          claim_id: "CLM-1",
+          run_id: "pilot_qa_QA-1",
+          audit_id: "audit_qa_failed",
+          event_type: "qa.result.received",
+          idempotency_key: "tpa-writeback:qa.result.received:audit_qa_failed",
+          evidence_refs: [],
+        },
+      ]),
+    ).toEqual({
+      callCount: 3,
+      succeededCount: 2,
+      failedCount: 1,
+      writebackCount: 2,
+      idempotentCount: 2,
+      evidenceBackedCount: 2,
+    });
   });
 });
 

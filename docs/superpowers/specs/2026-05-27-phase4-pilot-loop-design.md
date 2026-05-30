@@ -7,6 +7,7 @@ Phase 4 turns the demoable runtime into a pilot integration loop:
 - TPA can write back investigation outcomes.
 - TPA or QA can write back QA review results.
 - Operators can query claim audit history.
+- Operators can inspect audit-backed TPA API call records in Governance.
 - Pilot readiness is documented with what is implemented and what remains operational.
 
 This phase stays inside the Rust modular monolith and uses the same API key boundary as the earlier APIs.
@@ -52,6 +53,17 @@ Acceptance:
 - Returns audit events ordered by creation.
 - Includes `audit_id`, `run_id`, `event_type`, `event_status`, `summary`, `evidence_refs`, and payload.
 
+### `GET /api/v1/ops/api-calls`
+
+Returns audit-backed TPA API call records for Operations Studio governance.
+
+Acceptance:
+
+- Requires `x-api-key`.
+- Derives records from scoring, investigation writeback, and QA writeback audit events.
+- Includes endpoint, method, status code, result, source system, claim id, run id, audit id, event type, idempotency key, evidence refs, and observed time.
+- Does not claim to be a full HTTP access log for failed requests or read-only calls without audit events.
+
 ## Data Model
 
 Phase 4 adds:
@@ -67,6 +79,7 @@ Implemented in this phase:
 
 - Integration endpoints for outcome and QA writeback.
 - Audit query endpoint for claim traceability.
+- API call record endpoint and Governance Studio display for audit-backed TPA calls.
 - Dataset catalog API from the Phase 3 branch as data integration groundwork.
 
 Deferred to customer pilot setup:
@@ -79,6 +92,6 @@ Deferred to customer pilot setup:
 
 ## Verification
 
-- API tests cover investigation writeback, QA writeback, and audit query.
-- OpenAPI includes the three pilot loop paths.
+- API tests cover investigation writeback, QA writeback, audit query, and API call records.
+- OpenAPI includes the pilot loop paths.
 - Full Rust/frontend/Python verification remains green.

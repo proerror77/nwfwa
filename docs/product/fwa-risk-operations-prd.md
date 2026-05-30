@@ -194,6 +194,8 @@ MVP supports a generic TPA scoring integration:
 - scoring response with risk score, alerts, recommended action, evidence refs,
   and audit ids;
 - investigation and QA result writeback for pilot feedback.
+- audit-backed API call records for scoring, investigation, and QA writeback
+  observability in Governance.
 
 ### Pilot Integration Targets
 

@@ -98,6 +98,7 @@ async function main() {
       "Factor Cards",
       "QA Queue",
       "Promotion Gate Governance",
+      "API Call Records",
       "Knowledge Base",
     ]) {
       assertContains(bundle, expectedPanel, "web console operations panel bundle");

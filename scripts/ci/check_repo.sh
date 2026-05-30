@@ -77,6 +77,7 @@ grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
 grep -q "Management Dashboard" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Promotion Gate Governance" scripts/demo/smoke_web_console.mjs
+grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
 grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py

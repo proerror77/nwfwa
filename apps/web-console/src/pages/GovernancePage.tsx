@@ -5,6 +5,7 @@ import {
   getClaimAuditHistory,
   getRoutingPolicyPromotionGates,
   getRulePromotionGates,
+  listApiCalls,
   listAuditEvents,
   listAgentRuns,
   listFwaSchemes,
@@ -152,6 +153,26 @@ type WebhookEvent = {
 
 type WebhookEventListResponse = {
   events: WebhookEvent[];
+};
+
+type ApiCallRecord = {
+  call_id: string;
+  endpoint: string;
+  method: string;
+  status_code: number;
+  result: string;
+  source_system: string;
+  claim_id: string;
+  run_id: string;
+  audit_id: string;
+  event_type: string;
+  idempotency_key?: string | null;
+  evidence_refs: string[];
+  observed_at?: string | null;
+};
+
+type ApiCallListResponse = {
+  calls: ApiCallRecord[];
 };
 
 export type OutcomeLabel = {
@@ -808,6 +829,21 @@ export function buildWebhookDeliverySummary(events: WebhookEvent[] = []) {
   };
 }
 
+export function buildApiCallSummary(calls: ApiCallRecord[] = []) {
+  return {
+    callCount: calls.length,
+    succeededCount: calls.filter((call) => call.result === "succeeded").length,
+    failedCount: calls.filter((call) => call.result === "failed").length,
+    writebackCount: calls.filter(
+      (call) =>
+        call.event_type === "investigation.result.received" ||
+        call.event_type === "qa.result.received",
+    ).length,
+    idempotentCount: calls.filter((call) => Boolean(call.idempotency_key)).length,
+    evidenceBackedCount: calls.filter((call) => call.evidence_refs.length > 0).length,
+  };
+}
+
 export function canRecordWebhookDeliveryAttempt(event: WebhookEvent) {
   return event.delivery_status === "pending" || event.delivery_status === "retry_wait";
 }
@@ -950,6 +986,10 @@ export function GovernancePage() {
     queryKey: ["webhook-events", apiKey],
     queryFn: () => listWebhookEvents(apiKey) as Promise<WebhookEventListResponse>,
   });
+  const apiCallsQuery = useQuery({
+    queryKey: ["api-calls", apiKey],
+    queryFn: () => listApiCalls(apiKey, 50) as Promise<ApiCallListResponse>,
+  });
   const governanceChangeEventsQuery = useQuery({
     queryKey: ["governance-change-events", apiKey],
     queryFn: () => listGovernanceChangeEvents(apiKey, 100) as Promise<AuditEventListResponse>,
@@ -974,6 +1014,7 @@ export function GovernancePage() {
   const outcomeLabelFeedbackTargets = sortedUniqueLabels(outcomeLabels, "feedback_target");
   const outcomeLabelGovernanceStatuses = sortedUniqueLabels(outcomeLabels, "governance_status");
   const webhookSummary = buildWebhookDeliverySummary(webhookQuery.data?.events);
+  const apiCallSummary = buildApiCallSummary(apiCallsQuery.data?.calls);
   const writebackAuditSummary = buildWritebackAuditSummary(globalAuditQuery.data?.events);
   const governanceChangeTimelineRows = buildGovernanceChangeTimelineRows(
     governanceChangeEventsQuery.data?.events,
@@ -1105,6 +1146,10 @@ export function GovernancePage() {
             <strong>{webhookSummary.eventCount}</strong>
           </div>
           <div>
+            <span>API Calls</span>
+            <strong>{apiCallSummary.callCount}</strong>
+          </div>
+          <div>
             <span>QA Writebacks</span>
             <strong>{writebackAuditSummary.qaWritebackCount}</strong>
           </div>
@@ -1144,6 +1189,9 @@ export function GovernancePage() {
         {labelsQuery.error ? <pre className="error">{String(labelsQuery.error.message)}</pre> : null}
         {webhookQuery.error ? (
           <pre className="error">{String(webhookQuery.error.message)}</pre>
+        ) : null}
+        {apiCallsQuery.error ? (
+          <pre className="error">{String(apiCallsQuery.error.message)}</pre>
         ) : null}
         {deliveryAttemptMutation.error ? (
           <pre className="error">{String(deliveryAttemptMutation.error.message)}</pre>
@@ -1330,6 +1378,64 @@ export function GovernancePage() {
           </ol>
         ) : (
           <p className="empty">No operations alerts loaded</p>
+        )}
+      </div>
+
+      <div className="panel">
+        <h2>API Call Records</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Total</span>
+            <strong>{apiCallSummary.callCount}</strong>
+          </div>
+          <div>
+            <span>Succeeded</span>
+            <strong>{apiCallSummary.succeededCount}</strong>
+          </div>
+          <div>
+            <span>Failed</span>
+            <strong>{apiCallSummary.failedCount}</strong>
+          </div>
+          <div>
+            <span>Writebacks</span>
+            <strong>{apiCallSummary.writebackCount}</strong>
+          </div>
+          <div>
+            <span>Idempotent</span>
+            <strong>{apiCallSummary.idempotentCount}</strong>
+          </div>
+          <div>
+            <span>Evidence</span>
+            <strong>
+              {apiCallSummary.evidenceBackedCount}/{apiCallSummary.callCount}
+            </strong>
+          </div>
+        </div>
+        {apiCallsQuery.data?.calls.length ? (
+          <ol className="audit-timeline">
+            {apiCallsQuery.data.calls.map((call) => (
+              <li key={call.call_id}>
+                <div>
+                  <strong>
+                    {call.method} {call.endpoint}
+                  </strong>
+                  <span>{call.result}</span>
+                </div>
+                <small>
+                  {call.claim_id} / {call.source_system} / HTTP {call.status_code}
+                </small>
+                <p>{call.event_type}</p>
+                <p>{call.idempotency_key ?? "non-idempotent read/score call"}</p>
+                <ul className="result-list">
+                  {call.evidence_refs.map((reference) => (
+                    <li key={reference}>{reference}</li>
+                  ))}
+                </ul>
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="empty">No API call records loaded</p>
         )}
       </div>
 

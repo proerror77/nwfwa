@@ -72,6 +72,7 @@ Use API key `dev-secret` in the UI pages.
 - Agent Investigator: evidence-backed investigation package for the scored claim
 - Medical Review: clinical evidence gap queue and medical reviewer result writeback
 - QA Review: QA queue and writeback form
+- Governance: audit timeline, API call records, webhook delivery, approvals, and promotion gates
 
 ## 5. Agent, Knowledge, and QA Writeback
 
@@ -136,7 +137,7 @@ scripts/demo/smoke_demo.py
 psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/demo/assert_demo_persistence.sql
 ```
 
-The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`. The SQL assertion verifies the same demo run was persisted across `scoring_runs`, `feature_values`, `rule_runs`, `model_scores`, `audit_events`, lead/case tables, QA, investigation, and saving attribution tables.
+The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, API call records, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`. The SQL assertion verifies the same demo run was persisted across `scoring_runs`, `feature_values`, `rule_runs`, `model_scores`, `audit_events`, lead/case tables, QA, investigation, and saving attribution tables.
 
 ## 6. Verification Gates
 
