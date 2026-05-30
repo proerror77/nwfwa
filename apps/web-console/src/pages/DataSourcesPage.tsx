@@ -1,6 +1,16 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { listDatasets, listModelEvaluations } from "../api";
+import { getDataset, listDatasets, listModelEvaluations } from "../api";
+
+export type FieldMappingRecord = {
+  mapping_id: string;
+  dataset_id: string;
+  external_field: string;
+  canonical_target: string;
+  feature_name?: string | null;
+  transform_kind: string;
+  status: string;
+};
 
 export type DatasetRecord = {
   dataset_id: string;
@@ -15,6 +25,7 @@ export type DatasetRecord = {
   status: string;
   splits: Array<{ split_name: string; row_count: number }>;
   fields: Array<{ field_name: string; semantic_role: string }>;
+  mappings?: FieldMappingRecord[];
 };
 
 export type DatasetHealthRecord = {
@@ -68,6 +79,22 @@ export type DatasetModelLineageRow = {
   dataQualityStatus: string;
   metricLabel: string;
 };
+
+export function buildDatasetMappingSummary(mappings: FieldMappingRecord[] = []) {
+  const activeMappings = mappings.filter((mapping) => mapping.status === "active");
+  const featureMappings = mappings.filter((mapping) => mapping.feature_name?.trim());
+  const transformKinds = new Set(mappings.map((mapping) => mapping.transform_kind));
+  return {
+    mappingCount: mappings.length,
+    activeMappingCount: activeMappings.length,
+    featureMappingCount: featureMappings.length,
+    transformKindCount: transformKinds.size,
+    activeCoverageLabel:
+      mappings.length === 0
+        ? "0.0%"
+        : `${((activeMappings.length / mappings.length) * 100).toFixed(1)}%`,
+  };
+}
 
 export function buildDatasetFieldGovernanceSummary(dataset?: DatasetRecord | null) {
   const fields = dataset?.fields ?? [];
@@ -176,6 +203,12 @@ export function DataSourcesPage() {
       datasetsQuery.data?.datasets[0],
     [datasetsQuery.data?.datasets, selectedDatasetId],
   );
+  const selectedDatasetDetailQuery = useQuery({
+    queryKey: ["dataset-detail", selectedDataset?.dataset_id, apiKey],
+    queryFn: () => getDataset(selectedDataset!.dataset_id, apiKey) as Promise<DatasetRecord>,
+    enabled: Boolean(selectedDataset?.dataset_id),
+  });
+  const selectedDatasetDetail = selectedDatasetDetailQuery.data ?? selectedDataset;
   const selectedDatasetHealth = useMemo(
     () =>
       datasetsQuery.data?.health.find(
@@ -184,9 +217,10 @@ export function DataSourcesPage() {
     [datasetsQuery.data?.health, selectedDataset?.dataset_id],
   );
   const healthSummary = buildDatasetHealthSummary(selectedDatasetHealth);
-  const fieldGovernanceSummary = buildDatasetFieldGovernanceSummary(selectedDataset);
+  const fieldGovernanceSummary = buildDatasetFieldGovernanceSummary(selectedDatasetDetail);
+  const mappingSummary = buildDatasetMappingSummary(selectedDatasetDetail?.mappings);
   const modelLineageRows = buildDatasetModelLineageRows(
-    selectedDataset,
+    selectedDatasetDetail,
     evaluationsQuery.data?.lineage,
     evaluationsQuery.data?.evaluations,
   );
@@ -226,30 +260,33 @@ export function DataSourcesPage() {
         <h2>Dataset Detail</h2>
         {selectedDataset ? (
           <div className="result-stack">
+            {selectedDatasetDetailQuery.error ? (
+              <pre className="error">{String(selectedDatasetDetailQuery.error.message)}</pre>
+            ) : null}
             <dl className="result-grid">
               <div>
                 <dt>Dataset</dt>
-                <dd>{selectedDataset.dataset_key}</dd>
+                <dd>{selectedDatasetDetail?.dataset_key ?? selectedDataset.dataset_key}</dd>
               </div>
               <div>
                 <dt>Version</dt>
-                <dd>{selectedDataset.dataset_version}</dd>
+                <dd>{selectedDatasetDetail?.dataset_version ?? selectedDataset.dataset_version}</dd>
               </div>
               <div>
                 <dt>Grain</dt>
-                <dd>{selectedDataset.sample_grain}</dd>
+                <dd>{selectedDatasetDetail?.sample_grain ?? selectedDataset.sample_grain}</dd>
               </div>
               <div>
                 <dt>Label</dt>
-                <dd>{selectedDataset.label_column}</dd>
+                <dd>{selectedDatasetDetail?.label_column ?? selectedDataset.label_column}</dd>
               </div>
               <div>
                 <dt>Rows</dt>
-                <dd>{selectedDataset.row_count}</dd>
+                <dd>{selectedDatasetDetail?.row_count ?? selectedDataset.row_count}</dd>
               </div>
               <div>
                 <dt>Format</dt>
-                <dd>{selectedDataset.storage_format}</dd>
+                <dd>{selectedDatasetDetail?.storage_format ?? selectedDataset.storage_format}</dd>
               </div>
             </dl>
             <h3>Field Governance</h3>
@@ -322,7 +359,44 @@ export function DataSourcesPage() {
               </div>
             </dl>
             <div className="summary-grid">
-              {selectedDataset.splits.map((split) => (
+              <div>
+                <span>Mappings</span>
+                <strong>{mappingSummary.mappingCount}</strong>
+              </div>
+              <div>
+                <span>Active Mappings</span>
+                <strong>{mappingSummary.activeMappingCount}</strong>
+              </div>
+              <div>
+                <span>Feature Mappings</span>
+                <strong>{mappingSummary.featureMappingCount}</strong>
+              </div>
+              <div>
+                <span>Active Coverage</span>
+                <strong>{mappingSummary.activeCoverageLabel}</strong>
+              </div>
+              <div>
+                <span>Transform Kinds</span>
+                <strong>{mappingSummary.transformKindCount}</strong>
+              </div>
+            </div>
+            <div className="table-list">
+              {(selectedDatasetDetail?.mappings ?? []).slice(0, 8).map((mapping) => (
+                <div className="metric-row compact-metric-row" key={mapping.mapping_id}>
+                  <span>{mapping.external_field}</span>
+                  <strong>{mapping.status}</strong>
+                  <small>{mapping.canonical_target}</small>
+                  <small>
+                    {mapping.feature_name ?? "no feature"} · {mapping.transform_kind}
+                  </small>
+                </div>
+              ))}
+            </div>
+            {(selectedDatasetDetail?.mappings ?? []).length === 0 ? (
+              <p className="empty">No field mappings registered</p>
+            ) : null}
+            <div className="summary-grid">
+              {(selectedDatasetDetail?.splits ?? selectedDataset.splits).map((split) => (
                 <div key={split.split_name}>
                   <span>{split.split_name}</span>
                   <strong>{split.row_count}</strong>
@@ -330,7 +404,7 @@ export function DataSourcesPage() {
               ))}
             </div>
             <ul className="result-list compact-list">
-              {selectedDataset.fields.slice(0, 12).map((field) => (
+              {(selectedDatasetDetail?.fields ?? selectedDataset.fields).slice(0, 12).map((field) => (
                 <li key={field.field_name}>
                   <strong>{field.field_name}</strong>
                   <span>{field.semantic_role}</span>

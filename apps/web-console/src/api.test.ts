@@ -1,5 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
+  addFieldMapping,
   activateModel,
   approveRule,
   activateRoutingPolicy,
@@ -12,7 +13,9 @@ import {
   FRONTEND_API_CONTRACT_PATHS,
   getDashboardSummary,
   getClaimAuditHistory,
+  getDataset,
   getMemberProfileSummary,
+  getModelEvaluation,
   getModelPerformance,
   getProviderRiskSummary,
   getRule,
@@ -51,6 +54,10 @@ import {
   listRules,
   publishKnowledgeCase,
   publishRule,
+  registerDataset,
+  registerFeatureSet,
+  registerModelDataset,
+  registerModelEvaluation,
   rollbackModel,
   rollbackRoutingPolicy,
   rollbackRule,
@@ -487,10 +494,39 @@ describe("ops API helpers", () => {
 
   it("calls dataset lineage endpoints", async () => {
     const fetchMock = mockFetch({ datasets: [], evaluations: [] });
+    const datasetPayload = { dataset_key: "claims_fwa", storage_format: "parquet" };
+    const mappingPayload = {
+      external_field: "claim_amount",
+      canonical_target: "claim.amount",
+      feature_name: "claim_amount",
+      transform_kind: "direct",
+      status: "active",
+    };
+    const featureSetPayload = {
+      feature_set_key: "claims_features",
+      dataset_id: "dataset_1",
+      features_uri: "data/features/claims/v1/",
+    };
+    const modelDatasetPayload = {
+      feature_set_id: "feature_set_1",
+      train_uri: "data/features/claims/v1/split=train/",
+    };
+    const evaluationPayload = {
+      evaluation_run_id: "eval_1",
+      model_key: "baseline_fwa",
+      model_dataset_id: "model_dataset_1",
+    };
 
     await listDatasets("dev-secret");
+    await registerDataset(datasetPayload, "dev-secret");
+    await getDataset("dataset_1", "dev-secret");
+    await addFieldMapping("dataset_1", mappingPayload, "dev-secret");
     await listFactorReadiness("dev-secret");
+    await registerFeatureSet(featureSetPayload, "dev-secret");
+    await registerModelDataset(modelDatasetPayload, "dev-secret");
     await listModelEvaluations("dev-secret");
+    await registerModelEvaluation(evaluationPayload, "dev-secret");
+    await getModelEvaluation("eval_1", "dev-secret");
 
     expect(fetchMock).toHaveBeenNthCalledWith(
       1,
@@ -501,14 +537,68 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
+      "/api/v1/ops/datasets",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(datasetPayload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      3,
+      "/api/v1/ops/datasets/dataset_1",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
+      "/api/v1/ops/datasets/dataset_1/mappings",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(mappingPayload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      5,
       "/api/v1/ops/factors/readiness",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      3,
+      6,
+      "/api/v1/ops/feature-sets",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(featureSetPayload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
+      "/api/v1/ops/model-datasets",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(modelDatasetPayload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      8,
       "/api/v1/ops/model-evaluations",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      9,
+      "/api/v1/ops/model-evaluations",
+      expect.objectContaining({
+        method: "POST",
+        body: JSON.stringify(evaluationPayload),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      10,
+      "/api/v1/ops/model-evaluations/eval_1",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),

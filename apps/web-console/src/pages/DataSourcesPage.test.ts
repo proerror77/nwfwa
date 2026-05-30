@@ -2,8 +2,52 @@ import { describe, expect, it } from "vitest";
 import {
   buildDatasetFieldGovernanceSummary,
   buildDatasetHealthSummary,
+  buildDatasetMappingSummary,
   buildDatasetModelLineageRows,
 } from "./DataSourcesPage";
+
+describe("buildDatasetMappingSummary", () => {
+  it("summarizes field mapping coverage for the selected dataset", () => {
+    expect(
+      buildDatasetMappingSummary([
+        {
+          mapping_id: "mapping_1",
+          dataset_id: "dataset_1",
+          external_field: "policy_no",
+          canonical_target: "feature.policy_no",
+          feature_name: "policy_no",
+          transform_kind: "direct",
+          status: "active",
+        },
+        {
+          mapping_id: "mapping_2",
+          dataset_id: "dataset_1",
+          external_field: "raw_note",
+          canonical_target: "document.raw_note",
+          feature_name: null,
+          transform_kind: "derived",
+          status: "draft",
+        },
+      ]),
+    ).toEqual({
+      mappingCount: 2,
+      activeMappingCount: 1,
+      featureMappingCount: 1,
+      transformKindCount: 2,
+      activeCoverageLabel: "50.0%",
+    });
+  });
+
+  it("uses empty mapping defaults when no mappings are registered", () => {
+    expect(buildDatasetMappingSummary()).toEqual({
+      mappingCount: 0,
+      activeMappingCount: 0,
+      featureMappingCount: 0,
+      transformKindCount: 0,
+      activeCoverageLabel: "0.0%",
+    });
+  });
+});
 
 describe("buildDatasetFieldGovernanceSummary", () => {
   it("summarizes semantic roles for the dataset field dictionary", () => {

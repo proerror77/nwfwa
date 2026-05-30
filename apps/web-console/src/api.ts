@@ -35,7 +35,10 @@ export const FRONTEND_API_CONTRACT_PATHS = [
   "/api/v1/ops/cases/{case_id}/status",
   "/api/v1/ops/dashboard/summary",
   "/api/v1/ops/datasets",
+  "/api/v1/ops/datasets/{dataset_id}",
+  "/api/v1/ops/datasets/{dataset_id}/mappings",
   "/api/v1/ops/factors/readiness",
+  "/api/v1/ops/feature-sets",
   "/api/v1/ops/fwa-schemes",
   "/api/v1/ops/knowledge/cases",
   "/api/v1/ops/labels",
@@ -43,7 +46,9 @@ export const FRONTEND_API_CONTRACT_PATHS = [
   "/api/v1/ops/leads/{lead_id}/triage",
   "/api/v1/ops/medical-review/queue",
   "/api/v1/ops/medical-review/results",
+  "/api/v1/ops/model-datasets",
   "/api/v1/ops/model-evaluations",
+  "/api/v1/ops/model-evaluations/{evaluation_run_id}",
   "/api/v1/ops/model-retraining-jobs/claim-next",
   "/api/v1/ops/model-retraining-jobs/{job_id}/output",
   "/api/v1/ops/model-retraining-jobs/{job_id}/status",
@@ -366,12 +371,62 @@ export async function listDatasets(apiKey: string) {
   return requestJson("/api/v1/ops/datasets", apiKey);
 }
 
+export async function registerDataset(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/ops/datasets", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getDataset(datasetId: string, apiKey: string) {
+  return requestJson(`/api/v1/ops/datasets/${encodeURIComponent(datasetId)}`, apiKey);
+}
+
+export async function addFieldMapping(datasetId: string, payload: unknown, apiKey: string) {
+  return requestJson(
+    `/api/v1/ops/datasets/${encodeURIComponent(datasetId)}/mappings`,
+    apiKey,
+    {
+      method: "POST",
+      body: JSON.stringify(payload),
+    },
+  );
+}
+
 export async function listFactorReadiness(apiKey: string) {
   return requestJson("/api/v1/ops/factors/readiness", apiKey);
 }
 
+export async function registerFeatureSet(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/ops/feature-sets", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function registerModelDataset(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/ops/model-datasets", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
 export async function listModelEvaluations(apiKey: string) {
   return requestJson("/api/v1/ops/model-evaluations", apiKey);
+}
+
+export async function registerModelEvaluation(payload: unknown, apiKey: string) {
+  return requestJson("/api/v1/ops/model-evaluations", apiKey, {
+    method: "POST",
+    body: JSON.stringify(payload),
+  });
+}
+
+export async function getModelEvaluation(evaluationRunId: string, apiKey: string) {
+  return requestJson(
+    `/api/v1/ops/model-evaluations/${encodeURIComponent(evaluationRunId)}`,
+    apiKey,
+  );
 }
 
 export async function getDashboardSummary(apiKey: string) {
