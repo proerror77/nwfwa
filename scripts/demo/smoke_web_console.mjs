@@ -94,6 +94,8 @@ async function main() {
     for (const expectedPanel of [
       "Management Dashboard",
       "Rule Promotion Gates",
+      "Discovery Mode",
+      "Candidate Source",
       "Model Governance",
       "Deployment Boundary",
       "Factor Cards",

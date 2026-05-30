@@ -82,8 +82,13 @@ describe("buildRuleDiscoverySummary", () => {
     });
 
     expect(summary).toEqual({
+      discoveryMode: "deterministic_template_backtest",
+      candidateSource: "labeled_samples",
+      saveOwner: "rule-discovery",
+      approvalPath: "draft_to_promotion_gates",
       sampleCount: 12,
       positiveCount: 3,
+      labelCoverageLabel: "25.0%",
       candidateCount: 1,
       topRuleId: "candidate_early_high_amount",
       topSupport: 4,

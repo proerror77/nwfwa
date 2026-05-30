@@ -68,7 +68,7 @@ Use API key `dev-secret` in the UI pages.
 - Data Sources: profiled Parquet dataset, splits, fields, model evaluation
 - Factor Factory: factor cards with source, readiness, and predictive metrics from dataset field profiles
 - Provider Risk: provider profile, peer outlier, graph/network risk, and evidence refs
-- Rules: active rule library, lifecycle controls, backtest
+- Rules: active rule library, lifecycle controls, backtest, and discovery provenance
 - Models: baseline model registry, deployment boundary, and runtime performance
 - Knowledge Base: confirmed FWA cases, tag/evidence provenance, and similar case search
 - Agent Investigator: evidence-backed investigation package for the scored claim

@@ -37,7 +37,7 @@ Models:
 Studio:
 
 - navigation can switch between pages,
-- Rules page displays rule library, selected rule details, lifecycle controls, and a JSON backtest panel,
+- Rules page displays rule library, selected rule details, lifecycle controls, discovery provenance, and JSON backtest panels,
 - Models page displays model versions, deployment boundary metadata, and selected performance metrics,
 - Runtime Scoring remains unchanged except for shared API helpers.
 
@@ -166,6 +166,7 @@ Required tests:
 
 - Rule operators can inspect rule IDs, status, version, owner, score, and action.
 - Rule operators can run a candidate JSON rule against sample payloads and see match rate and estimated saving.
+- Rule operators can see whether discovered candidates came from labeled samples, which deterministic discovery mode produced them, and which governance path saves them into the rule lifecycle.
 - Rule operators can submit, approve, and publish a rule through API calls.
 - Model operators can inspect model versions, deployment boundary metadata, and basic performance metrics.
 - Operations Studio Rules and Models pages are backed by API calls, not placeholder text.

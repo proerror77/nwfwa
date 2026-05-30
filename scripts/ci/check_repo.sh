@@ -76,6 +76,8 @@ grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
 grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
 grep -q "Management Dashboard" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
+grep -q "Discovery Mode" scripts/demo/smoke_web_console.mjs
+grep -q "Candidate Source" scripts/demo/smoke_web_console.mjs
 grep -q "Deployment Boundary" scripts/demo/smoke_web_console.mjs
 grep -q "Promotion Gate Governance" scripts/demo/smoke_web_console.mjs
 grep -q "AUC Gain" scripts/demo/smoke_web_console.mjs

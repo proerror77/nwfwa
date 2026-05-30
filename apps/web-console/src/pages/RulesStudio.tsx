@@ -162,9 +162,18 @@ export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
 export function buildRuleDiscoverySummary(discovery?: RuleDiscoveryResponse) {
   const candidates = discovery?.candidates ?? [];
   const topCandidate = candidates[0];
+  const labeledSampleCoverage =
+    discovery?.sample_count && discovery.sample_count > 0
+      ? discovery.positive_count / discovery.sample_count
+      : 0;
   return {
+    discoveryMode: "deterministic_template_backtest",
+    candidateSource: "labeled_samples",
+    saveOwner: "rule-discovery",
+    approvalPath: "draft_to_promotion_gates",
     sampleCount: discovery?.sample_count ?? 0,
     positiveCount: discovery?.positive_count ?? 0,
+    labelCoverageLabel: `${(labeledSampleCoverage * 100).toFixed(1)}%`,
     candidateCount: candidates.length,
     topRuleId: topCandidate?.rule.rule_id ?? "none",
     topSupport: topCandidate?.support ?? 0,
@@ -894,8 +903,28 @@ export function RulesStudio() {
                 <strong>{discoverySummary.positiveCount}</strong>
               </div>
               <div>
+                <span>Label Coverage</span>
+                <strong>{discoverySummary.labelCoverageLabel}</strong>
+              </div>
+              <div>
                 <span>Candidates</span>
                 <strong>{discoverySummary.candidateCount}</strong>
+              </div>
+              <div>
+                <span>Discovery Mode</span>
+                <strong>{discoverySummary.discoveryMode}</strong>
+              </div>
+              <div>
+                <span>Candidate Source</span>
+                <strong>{discoverySummary.candidateSource}</strong>
+              </div>
+              <div>
+                <span>Save Owner</span>
+                <strong>{discoverySummary.saveOwner}</strong>
+              </div>
+              <div>
+                <span>Approval Path</span>
+                <strong>{discoverySummary.approvalPath}</strong>
               </div>
               <div>
                 <span>Top Rule</span>
