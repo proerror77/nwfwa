@@ -10,6 +10,7 @@ import {
   listFwaSchemes,
   listOutcomeLabels,
   listQaFeedbackItems,
+  listRulePerformance,
   listRules,
   publishRule,
   rollbackRule,
@@ -68,6 +69,20 @@ type RulePromotionGatesResponse = {
   needs_review_label_count: number;
   blockers: string[];
   gates: PromotionGate[];
+};
+
+export type RulePerformanceRecord = {
+  rule_id: string;
+  alert_code: string;
+  trigger_count: number;
+  reviewed_count: number;
+  confirmed_fwa_count: number;
+  false_positive_count: number;
+  mark_rate: number;
+  precision: number;
+  false_positive_rate: number;
+  saving_amount: string;
+  roi: number;
 };
 
 type OutcomeLabel = {
@@ -156,6 +171,47 @@ export function buildRuleLabelReadinessSummary(labels: OutcomeLabel[] = []) {
     confirmedFwaCount: ruleLabels.filter(
       (label) => label.label_name === "confirmed_fwa" && label.label_value === "true",
     ).length,
+  };
+}
+
+function formatPercent(value: number) {
+  return `${(value * 100).toFixed(1)}%`;
+}
+
+export function buildRulePerformanceSummary(performance?: RulePerformanceRecord | null) {
+  if (!performance) {
+    return {
+      ruleId: "none",
+      alertCode: "not_available",
+      triggerCount: 0,
+      reviewedCount: 0,
+      confirmedFwaCount: 0,
+      falsePositiveCount: 0,
+      markRateLabel: "0.0%",
+      precisionLabel: "0.0%",
+      falsePositiveRateLabel: "0.0%",
+      savingAmount: "0.00",
+      roiLabel: "0.00",
+      reviewCoverageLabel: "0.0%",
+    };
+  }
+
+  return {
+    ruleId: performance.rule_id,
+    alertCode: performance.alert_code,
+    triggerCount: performance.trigger_count,
+    reviewedCount: performance.reviewed_count,
+    confirmedFwaCount: performance.confirmed_fwa_count,
+    falsePositiveCount: performance.false_positive_count,
+    markRateLabel: formatPercent(performance.mark_rate),
+    precisionLabel: formatPercent(performance.precision),
+    falsePositiveRateLabel: formatPercent(performance.false_positive_rate),
+    savingAmount: performance.saving_amount,
+    roiLabel: performance.roi.toFixed(2),
+    reviewCoverageLabel:
+      performance.trigger_count === 0
+        ? "0.0%"
+        : formatPercent(performance.reviewed_count / performance.trigger_count),
   };
 }
 
@@ -330,6 +386,10 @@ export function RulesStudio() {
     queryKey: ["rules", apiKey],
     queryFn: () => listRules(apiKey) as Promise<{ rules: RuleSummary[] }>,
   });
+  const performanceQuery = useQuery({
+    queryKey: ["rule-performance", apiKey],
+    queryFn: () => listRulePerformance(apiKey) as Promise<{ rules: RulePerformanceRecord[] }>,
+  });
   const schemesQuery = useQuery({
     queryKey: ["fwa-schemes", apiKey],
     queryFn: () => listFwaSchemes(apiKey) as Promise<{ schemes: FwaSchemeDefinition[] }>,
@@ -343,6 +403,11 @@ export function RulesStudio() {
       rulesQuery.data?.rules.find((rule) => rule.rule_id === selectedRuleId) ??
       rulesQuery.data?.rules[0],
     [rulesQuery.data?.rules, selectedRuleId],
+  );
+  const selectedRulePerformance = useMemo(
+    () =>
+      performanceQuery.data?.rules.find((rule) => rule.rule_id === selectedRule?.rule_id) ?? null,
+    [performanceQuery.data?.rules, selectedRule?.rule_id],
   );
   const detailQuery = useQuery({
     queryKey: ["rule", selectedRule?.rule_id, apiKey],
@@ -457,6 +522,7 @@ export function RulesStudio() {
   });
   const savedCandidateSummary = buildRuleCandidateSaveSummary(saveCandidateMutation.data);
   const ruleDetailSummary = buildRuleDetailSummary(detailQuery.data);
+  const rulePerformanceSummary = buildRulePerformanceSummary(selectedRulePerformance);
 
   return (
     <section className="ops-grid">
@@ -604,6 +670,79 @@ export function RulesStudio() {
         ) : (
           <p className="empty">No rules available</p>
         )}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Rule Performance</h2>
+        {performanceQuery.error ? (
+          <pre className="error">{String(performanceQuery.error.message)}</pre>
+        ) : null}
+        <div className="summary-grid">
+          <div>
+            <span>Selected Rule</span>
+            <strong>{rulePerformanceSummary.ruleId}</strong>
+          </div>
+          <div>
+            <span>Alert</span>
+            <strong>{rulePerformanceSummary.alertCode}</strong>
+          </div>
+          <div>
+            <span>Triggers</span>
+            <strong>{rulePerformanceSummary.triggerCount}</strong>
+          </div>
+          <div>
+            <span>Reviewed</span>
+            <strong>{rulePerformanceSummary.reviewedCount}</strong>
+          </div>
+          <div>
+            <span>Confirmed FWA</span>
+            <strong>{rulePerformanceSummary.confirmedFwaCount}</strong>
+          </div>
+          <div>
+            <span>False Positives</span>
+            <strong>{rulePerformanceSummary.falsePositiveCount}</strong>
+          </div>
+          <div>
+            <span>Mark Rate</span>
+            <strong>{rulePerformanceSummary.markRateLabel}</strong>
+          </div>
+          <div>
+            <span>Precision</span>
+            <strong>{rulePerformanceSummary.precisionLabel}</strong>
+          </div>
+          <div>
+            <span>False Positive</span>
+            <strong>{rulePerformanceSummary.falsePositiveRateLabel}</strong>
+          </div>
+          <div>
+            <span>Review Coverage</span>
+            <strong>{rulePerformanceSummary.reviewCoverageLabel}</strong>
+          </div>
+          <div>
+            <span>Saving</span>
+            <strong>{rulePerformanceSummary.savingAmount}</strong>
+          </div>
+          <div>
+            <span>ROI</span>
+            <strong>{rulePerformanceSummary.roiLabel}</strong>
+          </div>
+        </div>
+        <div className="table-list">
+          {performanceQuery.data?.rules.map((rule) => (
+            <div className="metric-row compact-metric-row" key={rule.rule_id}>
+              <span>{rule.rule_id}</span>
+              <strong>{formatPercent(rule.precision)}</strong>
+              <small>
+                triggers {rule.trigger_count} · FPR {formatPercent(rule.false_positive_rate)}
+              </small>
+              <small>
+                saving {rule.saving_amount} · ROI {rule.roi.toFixed(2)}
+              </small>
+            </div>
+          ))}
+        </div>
+        {performanceQuery.data?.rules.length === 0 ? (
+          <p className="empty">No rule performance metrics loaded</p>
+        ) : null}
       </div>
       <div className="panel wide-panel">
         <h2>Rule Audit Trail</h2>

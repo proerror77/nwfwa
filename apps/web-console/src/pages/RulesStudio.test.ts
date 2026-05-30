@@ -5,6 +5,7 @@ import {
   buildRuleDetailSummary,
   buildRuleDiscoverySummary,
   buildRuleLabelReadinessSummary,
+  buildRulePerformanceSummary,
 } from "./RulesStudio";
 
 describe("buildRuleLabelReadinessSummary", () => {
@@ -54,6 +55,56 @@ describe("buildRuleLabelReadinessSummary", () => {
       needsReviewCount: 1,
       evidenceBackedCount: 2,
       confirmedFwaCount: 1,
+    });
+  });
+});
+
+describe("buildRulePerformanceSummary", () => {
+  it("formats selected rule performance and ROI metrics", () => {
+    expect(
+      buildRulePerformanceSummary({
+        rule_id: "rule_early_claim",
+        alert_code: "EARLY_CLAIM",
+        trigger_count: 20,
+        reviewed_count: 10,
+        confirmed_fwa_count: 7,
+        false_positive_count: 3,
+        mark_rate: 0.08,
+        precision: 0.7,
+        false_positive_rate: 0.3,
+        saving_amount: "82000.00",
+        roi: 4.25,
+      }),
+    ).toEqual({
+      ruleId: "rule_early_claim",
+      alertCode: "EARLY_CLAIM",
+      triggerCount: 20,
+      reviewedCount: 10,
+      confirmedFwaCount: 7,
+      falsePositiveCount: 3,
+      markRateLabel: "8.0%",
+      precisionLabel: "70.0%",
+      falsePositiveRateLabel: "30.0%",
+      savingAmount: "82000.00",
+      roiLabel: "4.25",
+      reviewCoverageLabel: "50.0%",
+    });
+  });
+
+  it("uses empty performance defaults when no rule metrics are loaded", () => {
+    expect(buildRulePerformanceSummary(null)).toEqual({
+      ruleId: "none",
+      alertCode: "not_available",
+      triggerCount: 0,
+      reviewedCount: 0,
+      confirmedFwaCount: 0,
+      falsePositiveCount: 0,
+      markRateLabel: "0.0%",
+      precisionLabel: "0.0%",
+      falsePositiveRateLabel: "0.0%",
+      savingAmount: "0.00",
+      roiLabel: "0.00",
+      reviewCoverageLabel: "0.0%",
     });
   });
 });

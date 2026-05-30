@@ -35,6 +35,7 @@ import {
   listQaFeedbackItems,
   listQaQueue,
   listQaQueueSummary,
+  listRulePerformance,
   listWebhookEvents,
   listModelEvaluations,
   listModelRetrainingJobs,
@@ -137,6 +138,7 @@ describe("ops API helpers", () => {
     const fetchMock = mockFetch({ rules: [] });
 
     await listRules("dev-secret");
+    await listRulePerformance("dev-secret");
     await getRulePromotionGates("rule_early_claim", "dev-secret");
     await submitRulePromotionReview(
       "rule_early_claim",
@@ -165,13 +167,20 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       2,
-      "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+      "/api/v1/ops/rules/performance",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       3,
+      "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      4,
       "/api/v1/ops/rules/rule_early_claim/promotion-reviews",
       expect.objectContaining({
         method: "POST",
@@ -184,22 +193,22 @@ describe("ops API helpers", () => {
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      4,
+      5,
       "/api/v1/ops/rules/rule_early_claim/submit",
       expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      5,
+      6,
       "/api/v1/ops/rules/rule_early_claim/approve",
       expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      6,
+      7,
       "/api/v1/ops/rules/rule_early_claim/publish",
       expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
-      7,
+      8,
       "/api/v1/ops/rules/rule_early_claim/rollback",
       expect.objectContaining({ method: "POST", body: ruleLifecycleBody }),
     );

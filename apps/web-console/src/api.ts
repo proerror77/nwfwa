@@ -70,6 +70,7 @@ export const FRONTEND_API_CONTRACT_PATHS = [
   "/api/v1/ops/rules/backtest",
   "/api/v1/ops/rules/candidates",
   "/api/v1/ops/rules/discover",
+  "/api/v1/ops/rules/performance",
   "/api/v1/ops/rules/{rule_id}",
   "/api/v1/ops/rules/{rule_id}/approve",
   "/api/v1/ops/rules/{rule_id}/promotion-gates",
@@ -91,6 +92,10 @@ export async function scoreClaim(payload: unknown, apiKey: string) {
 
 export async function listRules(apiKey: string) {
   return requestJson("/api/v1/ops/rules", apiKey);
+}
+
+export async function listRulePerformance(apiKey: string) {
+  return requestJson("/api/v1/ops/rules/performance", apiKey);
 }
 
 export async function getRule(ruleId: string, apiKey: string) {
