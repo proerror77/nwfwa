@@ -770,6 +770,36 @@ export function buildAgentEvidenceRefRows(run: AgentRunLog) {
     .sort((left, right) => left.source.localeCompare(right.source));
 }
 
+export function buildAgentGuardrailSummary(run: AgentRunLog) {
+  const deniedPolicyCheckCount = run.policy_checks.filter((check) => check.decision === "denied")
+    .length;
+  const failedToolCallCount = run.tool_calls.filter((call) => call.status === "failed").length;
+  const hasContextSnapshots = run.context_snapshots.length > 0;
+  const allContextsMasked =
+    hasContextSnapshots &&
+    run.context_snapshots.every((snapshot) => snapshot.redaction_status === "pii_masked");
+  const pendingApproval = run.approvals.some((approval) => approval.decision === "pending");
+  const rejectedApproval = run.approvals.some((approval) => approval.decision === "rejected");
+  const approvedApproval = run.approvals.some((approval) => approval.decision === "approved");
+  return {
+    boundary: run.decision_boundary,
+    piiStatus: !hasContextSnapshots
+      ? "no_context"
+      : allContextsMasked
+        ? "pii_masked"
+        : "needs_review",
+    policyStatus: deniedPolicyCheckCount > 0 ? "blocked" : "passed",
+    toolStatus: failedToolCallCount > 0 ? "tool_errors" : "tools_completed",
+    humanGate: pendingApproval
+      ? "pending_human_approval"
+      : rejectedApproval
+        ? "rejected"
+        : approvedApproval
+          ? "approved"
+          : "not_required",
+  };
+}
+
 export function hasPendingAgentApproval(run: AgentRunLog) {
   return run.approvals.some((approval) => approval.decision === "pending");
 }
@@ -2014,6 +2044,33 @@ export function GovernancePage() {
           <ol className="audit-timeline">
             {agentRunsQuery.data.runs.map((run) => (
               <li key={run.agent_run_id}>
+                {(() => {
+                  const guardrailSummary = buildAgentGuardrailSummary(run);
+                  return (
+                    <dl className="result-grid">
+                      <div>
+                        <dt>Guardrail Boundary</dt>
+                        <dd>{guardrailSummary.boundary}</dd>
+                      </div>
+                      <div>
+                        <dt>PII Context</dt>
+                        <dd>{guardrailSummary.piiStatus}</dd>
+                      </div>
+                      <div>
+                        <dt>Tool Policy</dt>
+                        <dd>{guardrailSummary.policyStatus}</dd>
+                      </div>
+                      <div>
+                        <dt>Tool Status</dt>
+                        <dd>{guardrailSummary.toolStatus}</dd>
+                      </div>
+                      <div>
+                        <dt>Human Gate</dt>
+                        <dd>{guardrailSummary.humanGate}</dd>
+                      </div>
+                    </dl>
+                  );
+                })()}
                 <div>
                   <strong>{run.agent_run_id}</strong>
                   <span>{run.status}</span>

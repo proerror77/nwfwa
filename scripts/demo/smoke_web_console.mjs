@@ -103,6 +103,8 @@ async function main() {
       "QA Queue",
       "Promotion Gate Governance",
       "API Call Records",
+      "Guardrail Boundary",
+      "Human Gate",
       "Graph Risk",
       "Clinical Signals",
       "Evidence Status",

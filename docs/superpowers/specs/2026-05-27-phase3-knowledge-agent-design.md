@@ -7,6 +7,7 @@ Phase 3 adds the first production-shaped slice for:
 - FWA Knowledge Base case listing and similar-case search.
 - Agent Case Investigator deterministic evidence package.
 - Agent audit trail records that keep every generated conclusion traceable.
+- Agent guardrail summaries for PII context redaction, tool policy checks, tool status, and human approval gates.
 
 This phase stays inside the Rust modular monolith. It does not introduce external LLM providers, pgvector, Temporal, or autonomous claim decisions.
 
@@ -68,6 +69,7 @@ Acceptance:
 - Every conclusion has evidence references.
 - The response explicitly states `decision_boundary = "assistive_only"`.
 - Saves an agent run record and audit event.
+- Governance surfaces summarize each agent run's assistive boundary, PII context status, tool policy status, tool status, and human approval gate.
 - Does not modify `scoring_runs.recommended_action` or any claim adjudication state.
 
 ## Data Model

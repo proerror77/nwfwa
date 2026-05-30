@@ -82,6 +82,8 @@ grep -q "Deployment Boundary" scripts/demo/smoke_web_console.mjs
 grep -q "Promotion Gate Governance" scripts/demo/smoke_web_console.mjs
 grep -q "AUC Gain" scripts/demo/smoke_web_console.mjs
 grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
+grep -q "Guardrail Boundary" scripts/demo/smoke_web_console.mjs
+grep -q "Human Gate" scripts/demo/smoke_web_console.mjs
 grep -q "Graph Risk" scripts/demo/smoke_web_console.mjs
 grep -q "Clinical Signals" scripts/demo/smoke_web_console.mjs
 grep -q "Evidence Status" scripts/demo/smoke_web_console.mjs

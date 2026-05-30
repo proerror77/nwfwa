@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   auditEventFilterShortcuts,
   buildAgentEvidenceRefRows,
+  buildAgentGuardrailSummary,
   buildAgentRunLogSummary,
   buildApiCallSummary,
   buildAuditSummary,
@@ -890,6 +891,130 @@ describe("buildAgentEvidenceRefRows", () => {
       { source: "policies", count: 1, refs: ["policies:POL-1"] },
       { source: "policy", count: 1, refs: ["policy:agent_tool_allowlist"] },
     ]);
+  });
+});
+
+describe("buildAgentGuardrailSummary", () => {
+  it("summarizes one agent run's assistive boundary and safety gates", () => {
+    expect(
+      buildAgentGuardrailSummary({
+        agent_run_id: "agent_1",
+        claim_id: "CLM-1",
+        status: "succeeded",
+        decision_boundary: "assistive_only",
+        evidence_refs: ["agent_run:agent_1"],
+        steps: [],
+        context_snapshots: [
+          {
+            snapshot_id: "snapshot_1",
+            redaction_status: "pii_masked",
+            context_json: { claim_id: "CLM-1" },
+            source_refs: ["claims:CLM-1"],
+            checksum: "snapshot:abc123",
+          },
+        ],
+        tool_calls: [
+          {
+            tool_call_id: "tool_call_1",
+            tool_name: "knowledge.search_similar",
+            status: "succeeded",
+            input_json: { claim_id: "CLM-1" },
+            evidence_refs: ["knowledge_query:CLM-1"],
+          },
+        ],
+        policy_checks: [
+          {
+            policy_check_id: "policy_check_1",
+            agent_run_id: "agent_1",
+            tool_call_id: "tool_call_1",
+            tool_name: "knowledge.search_similar",
+            policy_name: "agent_tool_allowlist",
+            decision: "allowed",
+            reason: "Tool is allowlisted.",
+            evidence_refs: ["policy:agent_tool_allowlist"],
+          },
+        ],
+        tool_results: [],
+        approvals: [
+          {
+            approval_id: "approval_1",
+            agent_run_id: "agent_1",
+            proposed_action: "manual_review_required",
+            decision: "pending",
+            approver: "unassigned",
+            reason: "Agent output requires human approval before downstream action.",
+            evidence_refs: ["agent_run:agent_1"],
+          },
+        ],
+      }),
+    ).toEqual({
+      boundary: "assistive_only",
+      piiStatus: "pii_masked",
+      policyStatus: "passed",
+      toolStatus: "tools_completed",
+      humanGate: "pending_human_approval",
+    });
+  });
+
+  it("flags unmasked context denied policy checks and failed tool calls", () => {
+    expect(
+      buildAgentGuardrailSummary({
+        agent_run_id: "agent_2",
+        claim_id: "CLM-2",
+        status: "failed",
+        decision_boundary: "assistive_only",
+        evidence_refs: [],
+        steps: [],
+        context_snapshots: [
+          {
+            snapshot_id: "snapshot_2",
+            redaction_status: "raw",
+            context_json: { claim_id: "CLM-2" },
+            source_refs: [],
+            checksum: "snapshot:def456",
+          },
+        ],
+        tool_calls: [
+          {
+            tool_call_id: "tool_call_2",
+            tool_name: "restricted.write",
+            status: "failed",
+            input_json: {},
+            evidence_refs: [],
+          },
+        ],
+        policy_checks: [
+          {
+            policy_check_id: "policy_check_2",
+            agent_run_id: "agent_2",
+            tool_call_id: "tool_call_2",
+            tool_name: "restricted.write",
+            policy_name: "agent_tool_allowlist",
+            decision: "denied",
+            reason: "Tool is not allowlisted.",
+            evidence_refs: ["policy:agent_tool_allowlist"],
+          },
+        ],
+        tool_results: [],
+        approvals: [
+          {
+            approval_id: "approval_2",
+            agent_run_id: "agent_2",
+            proposed_action: "manual_review_required",
+            decision: "rejected",
+            approver: "qa-lead",
+            reason: "Rejected.",
+            evidence_refs: [],
+          },
+        ],
+      }),
+    ).toEqual({
+      boundary: "assistive_only",
+      piiStatus: "needs_review",
+      policyStatus: "blocked",
+      toolStatus: "tool_errors",
+      humanGate: "rejected",
+    });
   });
 });
 

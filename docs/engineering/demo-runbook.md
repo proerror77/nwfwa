@@ -74,7 +74,7 @@ Use API key `dev-secret` in the UI pages.
 - Agent Investigator: evidence-backed investigation package for the scored claim
 - Medical Review: clinical evidence gap queue, L5 clinical signal panel, and medical reviewer result writeback
 - QA Review: QA queue and writeback form
-- Governance: audit timeline, API call records, webhook delivery, approvals, and promotion gates
+- Governance: audit timeline, API call records, webhook delivery, approvals, promotion gates, and Agent guardrail status
 
 ## 5. Agent, Knowledge, and QA Writeback
 
