@@ -521,12 +521,24 @@ export function RuntimeScoring() {
                       <strong>{layerSummary.layerCount}</strong>
                     </div>
                     <div>
+                      <span>Layer Coverage</span>
+                      <strong>{layerSummary.coverageLabel}</strong>
+                    </div>
+                    <div>
+                      <span>Expected Layers</span>
+                      <strong>{layerSummary.expectedLayerCount}</strong>
+                    </div>
+                    <div>
                       <span>Active</span>
                       <strong>{layerSummary.activeCount}</strong>
                     </div>
                     <div>
                       <span>Baseline</span>
                       <strong>{layerSummary.baselineCount}</strong>
+                    </div>
+                    <div>
+                      <span>Missing Layers</span>
+                      <strong>{layerSummary.missingLayerLabel}</strong>
                     </div>
                     <div>
                       <span>Highest</span>

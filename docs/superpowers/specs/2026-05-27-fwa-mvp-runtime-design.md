@@ -467,7 +467,7 @@ Runtime Scoring supports:
 - full claim payload JSON mode
 - dev API key and source system input
 - submit to `POST /api/v1/claims/score`
-- display run id, audit id, risk score, RAG, recommended action, alerts, model score, top reasons, evidence refs, and raw response JSON
+- display run id, audit id, risk score, RAG, recommended action, alerts, model score, seven-layer coverage, top reasons, evidence refs, and raw response JSON
 
 Placeholder pages must not show fake KPIs, fake charts, fake claim lists, or fake model data. They may describe the planned module and phase status.
 

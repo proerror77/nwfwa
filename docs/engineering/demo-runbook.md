@@ -57,6 +57,7 @@ Expected demo signal:
 
 - `rag` is usually `Red`
 - `alerts` include active rule hits
+- `layers` should cover the seven-layer detection stack
 - response includes `run_id`, `audit_id`, `top_reasons`, and `evidence_refs`
 
 ## 4. Show Operations Studio
