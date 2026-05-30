@@ -736,6 +736,22 @@ export function FactorFactoryPage() {
                   <dd>{factor.model_contribution_label}</dd>
                 </div>
                 <div>
+                  <dt>IV</dt>
+                  <dd>{factor.iv_label}</dd>
+                </div>
+                <div>
+                  <dt>AUC Gain</dt>
+                  <dd>{factor.auc_gain_label}</dd>
+                </div>
+                <div>
+                  <dt>Lift</dt>
+                  <dd>{factor.lift_label}</dd>
+                </div>
+                <div>
+                  <dt>Online Available</dt>
+                  <dd>{factor.online_available ? "yes" : "no"}</dd>
+                </div>
+                <div>
                   <dt>Rule Ready</dt>
                   <dd>{factor.convertible_to_rule ? "yes" : "no"}</dd>
                 </div>

@@ -66,7 +66,7 @@ Use API key `dev-secret` in the UI pages.
 
 - Dashboard: suspected claims, risk amount, RAG distribution, rule hits, model scores, seven-layer coverage, QA and investigation writebacks
 - Data Sources: profiled Parquet dataset, splits, fields, model evaluation
-- Factor Factory: factor cards from dataset field profiles
+- Factor Factory: factor cards with source, readiness, and predictive metrics from dataset field profiles
 - Provider Risk: provider profile, peer outlier, graph/network risk, and evidence refs
 - Rules: active rule library, lifecycle controls, backtest
 - Models: baseline model registry, deployment boundary, and runtime performance

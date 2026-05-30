@@ -339,12 +339,14 @@ Verification:
 1. Add a Parquet profiler command or worker job.
 2. Input is a Parquet dataset directory and manifest, not a CSV path.
 3. Output is `schema.json`, `profile.json`, and catalog rows.
+4. Show Factor Factory cards with source lineage, readiness, and predictive metrics such as IV, AUC gain, lift, stability, and model contribution.
 
 Verification:
 
 - profiler rejects non-Parquet dataset manifests
 - ids remain strings
 - label distribution and missing rates match the registered profile
+- Factor Factory exposes factor card evaluation metrics without inventing missing values
 
 ### Phase C: Feature Matrix
 

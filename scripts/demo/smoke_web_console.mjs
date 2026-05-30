@@ -97,6 +97,7 @@ async function main() {
       "Model Governance",
       "Deployment Boundary",
       "Factor Cards",
+      "AUC Gain",
       "QA Queue",
       "Promotion Gate Governance",
       "API Call Records",
