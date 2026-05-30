@@ -85,6 +85,7 @@ grep -q "Promotion Gate Governance" scripts/demo/smoke_web_console.mjs
 grep -q "AUC Gain" scripts/demo/smoke_web_console.mjs
 grep -q "Field Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Leakage Candidates" scripts/demo/smoke_web_console.mjs
+grep -q "SLA Breached" scripts/demo/smoke_web_console.mjs
 grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
 grep -q "Guardrail Boundary" scripts/demo/smoke_web_console.mjs
 grep -q "Human Gate" scripts/demo/smoke_web_console.mjs

@@ -68,6 +68,10 @@ describe("buildLeadSummary", () => {
             priority: "high",
             assignee: "siu-reviewer-1",
             reviewer: "medical-reviewer-1",
+            sla_target_hours: 48,
+            sla_status: "breached",
+            time_to_triage_hours: 1.25,
+            time_to_closure_hours: null,
             evidence_package: {
               evidence_sufficiency: {
                 scheme_family: "provider_peer_outlier",
@@ -91,6 +95,9 @@ describe("buildLeadSummary", () => {
       closedLeads: 1,
       openCases: 1,
       casesMissingEvidence: 1,
+      breachedCases: 1,
+      onTrackCases: 0,
+      closedCases: 0,
       highPriorityCases: 1,
       topScheme: "early_high_value_claim",
     });
@@ -169,6 +176,10 @@ describe("buildCaseStatusUpdateSummary", () => {
           priority: "high",
           assignee: "siu-reviewer-1",
           reviewer: "medical-reviewer-1",
+          sla_target_hours: 48,
+          sla_status: "on_track",
+          time_to_triage_hours: 1.5,
+          time_to_closure_hours: null,
           evidence_package: {
             evidence_refs: ["case_workflow:investigating", "audit:scoring.completed"],
           },
@@ -182,7 +193,10 @@ describe("buildCaseStatusUpdateSummary", () => {
       priority: "high",
       assignee: "siu-reviewer-1",
       reviewer: "medical-reviewer-1",
-      slaStatus: "not_available",
+      slaStatus: "on_track",
+      slaTargetHours: 48,
+      timeToTriageHours: "1.5",
+      timeToClosureHours: "open",
       evidenceCount: 2,
     });
     expect(buildCaseStatusUpdateSummary(null)).toBeNull();

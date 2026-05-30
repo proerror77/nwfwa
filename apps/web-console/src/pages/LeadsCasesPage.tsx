@@ -46,6 +46,10 @@ type CaseRecord = {
   priority: string;
   routing_reason?: string;
   evidence_package?: Record<string, unknown>;
+  sla_target_hours?: number;
+  sla_status?: string;
+  time_to_triage_hours?: number;
+  time_to_closure_hours?: number | null;
 };
 
 type EvidenceSufficiency = {
@@ -107,6 +111,13 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
   const casesMissingEvidence = cases.filter(
     (item) => caseEvidenceSufficiencyFromPackage(item.evidence_package)?.missing_evidence.length,
   ).length;
+  const breachedCases = cases.filter((item) =>
+    ["breached", "closed_breached"].includes(item.sla_status ?? ""),
+  ).length;
+  const onTrackCases = cases.filter((item) => item.sla_status === "on_track").length;
+  const closedCases = cases.filter((item) =>
+    ["confirmed", "rejected", "closed"].includes(item.status),
+  ).length;
   return {
     totalLeads: leads.length,
     pendingTriage: leads.filter((lead) => lead.disposition === "pending_triage").length,
@@ -118,6 +129,9 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
     ).length,
     openCases: cases.length,
     casesMissingEvidence,
+    breachedCases,
+    onTrackCases,
+    closedCases,
     highPriorityCases: cases.filter((item) => item.priority === "high").length,
     topScheme,
   };
@@ -199,9 +213,16 @@ export function buildCaseStatusUpdateSummary(response?: UpdateCaseStatusResponse
     priority: response.case.priority,
     assignee: response.case.assignee,
     reviewer: response.case.reviewer,
-    slaStatus: response.case.evidence_package?.sla_status
-      ? String(response.case.evidence_package.sla_status)
-      : "not_available",
+    slaStatus: response.case.sla_status ?? "not_available",
+    slaTargetHours: response.case.sla_target_hours ?? "not_available",
+    timeToTriageHours:
+      response.case.time_to_triage_hours == null
+        ? "not_available"
+        : response.case.time_to_triage_hours.toFixed(1),
+    timeToClosureHours:
+      response.case.time_to_closure_hours == null
+        ? "open"
+        : response.case.time_to_closure_hours.toFixed(1),
     evidenceCount: evidenceRefs.length,
   };
 }
@@ -417,6 +438,18 @@ export function LeadsCasesPage() {
           <div>
             <span>Open Cases</span>
             <strong>{summary.openCases}</strong>
+          </div>
+          <div>
+            <span>SLA Breached</span>
+            <strong>{summary.breachedCases}</strong>
+          </div>
+          <div>
+            <span>SLA On Track</span>
+            <strong>{summary.onTrackCases}</strong>
+          </div>
+          <div>
+            <span>Closed Cases</span>
+            <strong>{summary.closedCases}</strong>
           </div>
           <div>
             <span>Missing Evidence Cases</span>
@@ -672,6 +705,18 @@ export function LeadsCasesPage() {
               <dd>{caseStatusSummary.slaStatus}</dd>
             </div>
             <div>
+              <dt>SLA Target</dt>
+              <dd>{caseStatusSummary.slaTargetHours}</dd>
+            </div>
+            <div>
+              <dt>Triage Hours</dt>
+              <dd>{caseStatusSummary.timeToTriageHours}</dd>
+            </div>
+            <div>
+              <dt>Closure Hours</dt>
+              <dd>{caseStatusSummary.timeToClosureHours}</dd>
+            </div>
+            <div>
               <dt>Evidence</dt>
               <dd>{caseStatusSummary.evidenceCount}</dd>
             </div>
@@ -813,6 +858,30 @@ export function LeadsCasesPage() {
                   <div>
                     <dt>Evidence Status</dt>
                     <dd>{evidenceSufficiency?.status ?? "not_available"}</dd>
+                  </div>
+                  <div>
+                    <dt>SLA Status</dt>
+                    <dd>{item.sla_status ?? "not_available"}</dd>
+                  </div>
+                  <div>
+                    <dt>SLA Target</dt>
+                    <dd>{item.sla_target_hours ?? "not_available"}</dd>
+                  </div>
+                  <div>
+                    <dt>Triage Hours</dt>
+                    <dd>
+                      {item.time_to_triage_hours == null
+                        ? "not_available"
+                        : item.time_to_triage_hours.toFixed(1)}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Closure Hours</dt>
+                    <dd>
+                      {item.time_to_closure_hours == null
+                        ? "open"
+                        : item.time_to_closure_hours.toFixed(1)}
+                    </dd>
                   </div>
                   <div>
                     <dt>Missing Evidence</dt>

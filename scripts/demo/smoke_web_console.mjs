@@ -104,6 +104,7 @@ async function main() {
       "AUC Gain",
       "Field Governance",
       "Leakage Candidates",
+      "SLA Breached",
       "QA Queue",
       "Promotion Gate Governance",
       "API Call Records",
