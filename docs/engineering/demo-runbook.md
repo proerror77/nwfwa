@@ -69,7 +69,7 @@ Use API key `dev-secret` in the UI pages.
 - Factor Factory: factor cards from dataset field profiles
 - Provider Risk: provider profile, peer outlier, graph/network risk, and evidence refs
 - Rules: active rule library, lifecycle controls, backtest
-- Models: baseline model registry and runtime performance
+- Models: baseline model registry, deployment boundary, and runtime performance
 - Knowledge Base: confirmed FWA cases and similar case search
 - Agent Investigator: evidence-backed investigation package for the scored claim
 - Medical Review: clinical evidence gap queue, L5 clinical signal panel, and medical reviewer result writeback

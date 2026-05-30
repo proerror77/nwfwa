@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildModelAuditFilters,
+  buildModelDeploymentSummary,
   buildModelLabelReadinessSummary,
   buildModelOperationalReadinessSummary,
   buildModelRetrainingJobSummary,
@@ -26,6 +27,59 @@ describe("buildModelAuditFilters", () => {
       limit: 25,
       model_key: "baseline_fwa",
       model_version: "0.2.0-candidate",
+    });
+  });
+});
+
+describe("buildModelDeploymentSummary", () => {
+  it("summarizes runtime artifact and endpoint deployment boundary", () => {
+    expect(
+      buildModelDeploymentSummary({
+        model_key: "baseline_fwa",
+        version: "0.2.0-candidate",
+        model_type: "baseline_classifier",
+        runtime_kind: "onnx",
+        execution_provider: "cuda",
+        status: "approved",
+        review_mode: "pre_payment",
+        artifact_uri: "s3://models/baseline_fwa/model.onnx",
+        endpoint_url: "http://ml-service:8001",
+      }),
+    ).toEqual({
+      runtimeLabel: "onnx / cuda",
+      artifactStatus: "available",
+      artifactUri: "s3://models/baseline_fwa/model.onnx",
+      endpointStatus: "available",
+      endpointUrl: "http://ml-service:8001",
+    });
+  });
+
+  it("uses explicit missing labels before deployment metadata is configured", () => {
+    expect(
+      buildModelDeploymentSummary({
+        model_key: "baseline_fwa",
+        version: "0.1.0",
+        model_type: "baseline_classifier",
+        runtime_kind: "python_http",
+        execution_provider: "cpu",
+        status: "active",
+        review_mode: "post_payment",
+        artifact_uri: null,
+        endpoint_url: null,
+      }),
+    ).toEqual({
+      runtimeLabel: "python_http / cpu",
+      artifactStatus: "missing",
+      artifactUri: "none",
+      endpointStatus: "not_configured",
+      endpointUrl: "none",
+    });
+    expect(buildModelDeploymentSummary(null)).toEqual({
+      runtimeLabel: "not_loaded",
+      artifactStatus: "missing",
+      artifactUri: "none",
+      endpointStatus: "not_configured",
+      endpointUrl: "none",
     });
   });
 });

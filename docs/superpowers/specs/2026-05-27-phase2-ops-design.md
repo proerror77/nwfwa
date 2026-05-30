@@ -38,7 +38,7 @@ Studio:
 
 - navigation can switch between pages,
 - Rules page displays rule library, selected rule details, lifecycle controls, and a JSON backtest panel,
-- Models page displays model versions and selected performance metrics,
+- Models page displays model versions, deployment boundary metadata, and selected performance metrics,
 - Runtime Scoring remains unchanged except for shared API helpers.
 
 Persistence:
@@ -167,6 +167,6 @@ Required tests:
 - Rule operators can inspect rule IDs, status, version, owner, score, and action.
 - Rule operators can run a candidate JSON rule against sample payloads and see match rate and estimated saving.
 - Rule operators can submit, approve, and publish a rule through API calls.
-- Model operators can inspect model versions and basic performance metrics.
+- Model operators can inspect model versions, deployment boundary metadata, and basic performance metrics.
 - Operations Studio Rules and Models pages are backed by API calls, not placeholder text.
 - CI passes for repository health, Rust fmt/clippy/tests, Python tests, frontend lint/test/build, and migrations.

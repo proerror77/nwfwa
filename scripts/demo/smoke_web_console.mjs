@@ -95,6 +95,7 @@ async function main() {
       "Management Dashboard",
       "Rule Promotion Gates",
       "Model Governance",
+      "Deployment Boundary",
       "Factor Cards",
       "QA Queue",
       "Promotion Gate Governance",

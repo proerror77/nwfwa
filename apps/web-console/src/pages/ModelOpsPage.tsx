@@ -151,6 +151,18 @@ export function buildModelAuditFilters(model: ModelVersion, limit = 25) {
   };
 }
 
+export function buildModelDeploymentSummary(model?: ModelVersion | null) {
+  return {
+    runtimeLabel: model
+      ? `${model.runtime_kind} / ${model.execution_provider}`
+      : "not_loaded",
+    artifactStatus: model?.artifact_uri ? "available" : "missing",
+    artifactUri: model?.artifact_uri ?? "none",
+    endpointStatus: model?.endpoint_url ? "available" : "not_configured",
+    endpointUrl: model?.endpoint_url ?? "none",
+  };
+}
+
 export function formatSourceDataQuality(score?: number | null) {
   return score == null ? "-" : `${(score * 100).toFixed(1)}%`;
 }
@@ -424,6 +436,7 @@ export function ModelOpsPage() {
     promotionQuery.data,
     retrainingQuery.data,
   );
+  const deploymentSummary = buildModelDeploymentSummary(selectedModel);
 
   return (
     <section className="ops-grid">
@@ -488,6 +501,31 @@ export function ModelOpsPage() {
         ) : (
           <p className="empty">No models available</p>
         )}
+      </div>
+      <div className="panel">
+        <h2>Deployment Boundary</h2>
+        <dl className="result-grid">
+          <div>
+            <dt>Runtime / Provider</dt>
+            <dd>{deploymentSummary.runtimeLabel}</dd>
+          </div>
+          <div>
+            <dt>Artifact Status</dt>
+            <dd>{deploymentSummary.artifactStatus}</dd>
+          </div>
+          <div>
+            <dt>Artifact URI</dt>
+            <dd>{deploymentSummary.artifactUri}</dd>
+          </div>
+          <div>
+            <dt>Endpoint Status</dt>
+            <dd>{deploymentSummary.endpointStatus}</dd>
+          </div>
+          <div>
+            <dt>Endpoint URL</dt>
+            <dd>{deploymentSummary.endpointUrl}</dd>
+          </div>
+        </dl>
       </div>
       <div className="panel wide-panel">
         <h2>Operational Readiness</h2>
