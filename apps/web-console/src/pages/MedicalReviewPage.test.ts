@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildMedicalReviewClinicalSignalSummary,
   buildMedicalReviewDecisionSummary,
   buildMedicalReviewEvidenceRefs,
   buildMedicalReviewQueueSummary,
   buildMedicalReviewSubmitSummary,
+  buildSelectedMedicalReviewSignal,
 } from "./MedicalReviewPage";
 
 describe("buildMedicalReviewQueueSummary", () => {
@@ -85,6 +87,80 @@ describe("buildMedicalReviewQueueSummary", () => {
   });
 });
 
+describe("buildMedicalReviewClinicalSignalSummary", () => {
+  it("summarizes L5 clinical issue and evidence gap signals", () => {
+    expect(
+      buildMedicalReviewClinicalSignalSummary([
+        {
+          claim_id: "CLM-1",
+          run_id: "run_1",
+          audit_id: "audit_1",
+          medical_reasonableness_score: 100,
+          review_route: "medical_review",
+          evidence_status: "missing_required_evidence",
+          missing_evidence: ["clinical_order", "medical_record"],
+          item_finding_count: 1,
+          first_item_code: "IMG-900",
+          first_issue_type: "medical_necessity_review_required",
+          evidence_refs: ["claim_items:IMG-900"],
+          created_at: null,
+          review_status: "open",
+          review_audit_id: null,
+          review_decision: null,
+          reviewer: null,
+          reviewed_at: null,
+        },
+        {
+          claim_id: "CLM-2",
+          run_id: "run_2",
+          audit_id: "audit_2",
+          medical_reasonableness_score: 82,
+          review_route: "medical_review",
+          evidence_status: "missing_required_evidence",
+          missing_evidence: ["clinical_order", "prescription"],
+          item_finding_count: 1,
+          first_item_code: "RX-100",
+          first_issue_type: "drug_reasonableness_review_required",
+          evidence_refs: ["claim_items:RX-100"],
+          created_at: null,
+          review_status: "open",
+          review_audit_id: null,
+          review_decision: null,
+          reviewer: null,
+          reviewed_at: null,
+        },
+        {
+          claim_id: "CLM-3",
+          run_id: "run_3",
+          audit_id: "audit_3",
+          medical_reasonableness_score: 80,
+          review_route: "medical_review",
+          evidence_status: "missing_required_evidence",
+          missing_evidence: ["lab_result"],
+          item_finding_count: 1,
+          first_item_code: "LAB-7",
+          first_issue_type: "lab_evidence_review_required",
+          evidence_refs: ["claim_items:LAB-7"],
+          created_at: null,
+          review_status: "open",
+          review_audit_id: null,
+          review_decision: null,
+          reviewer: null,
+          reviewed_at: null,
+        },
+      ]),
+    ).toEqual({
+      medicalNecessityIssueCount: 1,
+      drugReasonablenessIssueCount: 1,
+      labEvidenceIssueCount: 1,
+      clinicalOrderMissingCount: 2,
+      medicalRecordMissingCount: 1,
+      topMissingEvidence: "clinical_order",
+      topMissingEvidenceCount: 2,
+    });
+  });
+});
+
 describe("buildMedicalReviewDecisionSummary", () => {
   it("summarizes structured medical review decision fields", () => {
     expect(
@@ -119,6 +195,49 @@ describe("buildMedicalReviewDecisionSummary", () => {
       decision: "pending",
       reviewer: "unassigned",
       reviewedAt: "not reviewed",
+    });
+  });
+});
+
+describe("buildSelectedMedicalReviewSignal", () => {
+  it("formats selected L5 signal details for review", () => {
+    expect(
+      buildSelectedMedicalReviewSignal({
+        claim_id: "CLM-1",
+        run_id: "run_1",
+        audit_id: "audit_1",
+        medical_reasonableness_score: 100,
+        review_route: "medical_review",
+        evidence_status: "missing_required_evidence",
+        missing_evidence: ["clinical_order", "medical_record"],
+        item_finding_count: 2,
+        first_item_code: "IMG-900",
+        first_issue_type: "medical_necessity_review_required",
+        evidence_refs: ["claim_items:IMG-900", "documents:DOC-1"],
+        created_at: null,
+        review_status: "open",
+        review_audit_id: null,
+        review_decision: null,
+        reviewer: null,
+        reviewed_at: null,
+      }),
+    ).toEqual({
+      medicalScore: 100,
+      evidenceStatus: "missing_required_evidence",
+      issueType: "medical_necessity_review_required",
+      itemCode: "IMG-900",
+      itemFindingCount: 2,
+      missingEvidence: "clinical_order, medical_record",
+      evidenceRefCount: 2,
+    });
+    expect(buildSelectedMedicalReviewSignal(null)).toEqual({
+      medicalScore: "none",
+      evidenceStatus: "none",
+      issueType: "none",
+      itemCode: "none",
+      itemFindingCount: 0,
+      missingEvidence: "none",
+      evidenceRefCount: 0,
     });
   });
 });

@@ -9,6 +9,7 @@ Phase 4 turns the demoable runtime into a pilot integration loop:
 - Operators can query claim audit history.
 - Operators can inspect audit-backed TPA API call records in Governance.
 - Operators can inspect Provider/L6 graph-risk signals in Operations Studio.
+- Operators can inspect Medical Review/L5 clinical issue and evidence-gap signals in Operations Studio.
 - Pilot readiness is documented with what is implemented and what remains operational.
 
 This phase stays inside the Rust modular monolith and uses the same API key boundary as the earlier APIs.
@@ -82,6 +83,7 @@ Implemented in this phase:
 - Audit query endpoint for claim traceability.
 - API call record endpoint and Governance Studio display for audit-backed TPA calls.
 - Dataset catalog API from the Phase 3 branch as data integration groundwork.
+- Medical Review Studio display for L5 clinical issue types, evidence status, missing-evidence gaps, and selected-item evidence refs.
 
 Deferred to customer pilot setup:
 

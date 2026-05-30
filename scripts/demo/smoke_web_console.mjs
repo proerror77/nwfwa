@@ -100,6 +100,8 @@ async function main() {
       "Promotion Gate Governance",
       "API Call Records",
       "Graph Risk",
+      "Clinical Signals",
+      "Evidence Status",
       "Knowledge Base",
     ]) {
       assertContains(bundle, expectedPanel, "web console operations panel bundle");

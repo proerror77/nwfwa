@@ -55,6 +55,37 @@ export function buildMedicalReviewQueueSummary(items: MedicalReviewQueueItem[]) 
   };
 }
 
+function countBy(values: string[]) {
+  return values.reduce<Record<string, number>>((counts, value) => {
+    counts[value] = (counts[value] ?? 0) + 1;
+    return counts;
+  }, {});
+}
+
+function topCount(counts: Record<string, number>) {
+  return (
+    Object.entries(counts).sort(
+      ([leftValue, leftCount], [rightValue, rightCount]) =>
+        rightCount - leftCount || leftValue.localeCompare(rightValue),
+    )[0] ?? ["none", 0]
+  );
+}
+
+export function buildMedicalReviewClinicalSignalSummary(items: MedicalReviewQueueItem[]) {
+  const issueCounts = countBy(items.flatMap((item) => item.first_issue_type ?? []));
+  const missingEvidenceCounts = countBy(items.flatMap((item) => item.missing_evidence));
+  const [topMissingEvidence, topMissingEvidenceCount] = topCount(missingEvidenceCounts);
+  return {
+    medicalNecessityIssueCount: issueCounts.medical_necessity_review_required ?? 0,
+    drugReasonablenessIssueCount: issueCounts.drug_reasonableness_review_required ?? 0,
+    labEvidenceIssueCount: issueCounts.lab_evidence_review_required ?? 0,
+    clinicalOrderMissingCount: missingEvidenceCounts.clinical_order ?? 0,
+    medicalRecordMissingCount: missingEvidenceCounts.medical_record ?? 0,
+    topMissingEvidence,
+    topMissingEvidenceCount,
+  };
+}
+
 export function buildMedicalReviewEvidenceRefs(item: MedicalReviewQueueItem | null) {
   if (!item) {
     return "";
@@ -69,6 +100,18 @@ export function buildMedicalReviewDecisionSummary(item: MedicalReviewQueueItem |
     decision: item?.review_decision ?? "pending",
     reviewer: item?.reviewer ?? "unassigned",
     reviewedAt: item?.reviewed_at ?? "not reviewed",
+  };
+}
+
+export function buildSelectedMedicalReviewSignal(item: MedicalReviewQueueItem | null) {
+  return {
+    medicalScore: item?.medical_reasonableness_score ?? "none",
+    evidenceStatus: item?.evidence_status ?? "none",
+    issueType: item?.first_issue_type ?? "none",
+    itemCode: item?.first_item_code ?? "none",
+    itemFindingCount: item?.item_finding_count ?? 0,
+    missingEvidence: item?.missing_evidence.join(", ") || "none",
+    evidenceRefCount: item?.evidence_refs.length ?? 0,
   };
 }
 
@@ -107,7 +150,9 @@ export function MedicalReviewPage() {
   });
   const items = queueQuery.data?.items ?? [];
   const summary = buildMedicalReviewQueueSummary(items);
+  const clinicalSignals = buildMedicalReviewClinicalSignalSummary(items);
   const selectedItem = selectedMedicalReviewItem(items, selectedAuditId);
+  const selectedSignal = buildSelectedMedicalReviewSignal(selectedItem);
   const decisionSummary = buildMedicalReviewDecisionSummary(selectedItem);
   const submitMutation = useMutation({
     mutationFn: () => {
@@ -231,6 +276,34 @@ export function MedicalReviewPage() {
               <dt>Reviewed At</dt>
               <dd>{decisionSummary.reviewedAt}</dd>
             </div>
+            <div>
+              <dt>Medical Score</dt>
+              <dd>{selectedSignal.medicalScore}</dd>
+            </div>
+            <div>
+              <dt>Evidence Status</dt>
+              <dd>{selectedSignal.evidenceStatus}</dd>
+            </div>
+            <div>
+              <dt>Issue Type</dt>
+              <dd>{selectedSignal.issueType}</dd>
+            </div>
+            <div>
+              <dt>Item Code</dt>
+              <dd>{selectedSignal.itemCode}</dd>
+            </div>
+            <div>
+              <dt>Item Findings</dt>
+              <dd>{selectedSignal.itemFindingCount}</dd>
+            </div>
+            <div>
+              <dt>Missing Evidence</dt>
+              <dd>{selectedSignal.missingEvidence}</dd>
+            </div>
+            <div>
+              <dt>Evidence Ref Count</dt>
+              <dd>{selectedSignal.evidenceRefCount}</dd>
+            </div>
           </dl>
         ) : (
           <p className="empty">No medical review item selected</p>
@@ -311,6 +384,38 @@ export function MedicalReviewPage() {
             ) : null}
           </>
         ) : null}
+      </div>
+
+      <div className="panel">
+        <h2>Clinical Signals</h2>
+        <div className="summary-grid">
+          <div>
+            <span>Medical Necessity</span>
+            <strong>{clinicalSignals.medicalNecessityIssueCount}</strong>
+          </div>
+          <div>
+            <span>Drug Reasonableness</span>
+            <strong>{clinicalSignals.drugReasonablenessIssueCount}</strong>
+          </div>
+          <div>
+            <span>Lab Evidence</span>
+            <strong>{clinicalSignals.labEvidenceIssueCount}</strong>
+          </div>
+          <div>
+            <span>Missing Orders</span>
+            <strong>{clinicalSignals.clinicalOrderMissingCount}</strong>
+          </div>
+          <div>
+            <span>Missing Records</span>
+            <strong>{clinicalSignals.medicalRecordMissingCount}</strong>
+          </div>
+          <div>
+            <span>Top Gap</span>
+            <strong>
+              {clinicalSignals.topMissingEvidence} ({clinicalSignals.topMissingEvidenceCount})
+            </strong>
+          </div>
+        </div>
       </div>
 
       <div className="panel wide-panel">

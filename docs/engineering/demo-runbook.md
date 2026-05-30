@@ -71,7 +71,7 @@ Use API key `dev-secret` in the UI pages.
 - Models: baseline model registry and runtime performance
 - Knowledge Base: confirmed FWA cases and similar case search
 - Agent Investigator: evidence-backed investigation package for the scored claim
-- Medical Review: clinical evidence gap queue and medical reviewer result writeback
+- Medical Review: clinical evidence gap queue, L5 clinical signal panel, and medical reviewer result writeback
 - QA Review: QA queue and writeback form
 - Governance: audit timeline, API call records, webhook delivery, approvals, and promotion gates
 
