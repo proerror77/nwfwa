@@ -12,6 +12,7 @@ Phase 4 turns the demoable runtime into a pilot integration loop:
 - Operators can inspect Medical Review/L5 clinical issue and evidence-gap signals in Operations Studio.
 - Operators can inspect Leads & Cases SLA governance, evidence sufficiency, and investigation writeback.
 - Operators can inspect Audit Sampling control cohorts and missed-risk/false-positive calibration signals.
+- Operators can inspect L7 routing policy threshold integrity, route boundary, promotion gates, and lifecycle audit trail.
 - Operators can inspect Dashboard seven-layer detection coverage for pilot scoring data.
 - Pilot readiness is documented with what is implemented and what remains operational.
 
@@ -89,6 +90,7 @@ Implemented in this phase:
 - Dataset catalog API from the Phase 3 branch as data integration groundwork.
 - Leads & Cases Studio display for lead triage, case SLA status, evidence sufficiency, and investigation writeback audit output.
 - Audit Sampling Studio display for deterministic QA samples, control cohorts, and calibration targets.
+- Routing Policies Studio display for L7 threshold integrity, risk/confidence route bands, provider route boundary, promotion gates, and audit trail.
 - Medical Review Studio display for L5 clinical issue types, evidence status, missing-evidence gaps, and selected-item evidence refs.
 - Dashboard display for expected-versus-present seven-layer detection coverage.
 

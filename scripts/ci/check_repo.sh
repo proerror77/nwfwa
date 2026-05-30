@@ -78,6 +78,7 @@ grep -q "Management Dashboard" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Discovery Mode" scripts/demo/smoke_web_console.mjs
 grep -q "Candidate Source" scripts/demo/smoke_web_console.mjs
+grep -q "Threshold Integrity" scripts/demo/smoke_web_console.mjs
 grep -q "Deployment Boundary" scripts/demo/smoke_web_console.mjs
 grep -q "Candidate Governance" scripts/demo/smoke_web_console.mjs
 grep -q "promotion_review_ready" scripts/demo/smoke_web_console.mjs

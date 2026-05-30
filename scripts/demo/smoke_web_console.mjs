@@ -96,6 +96,7 @@ async function main() {
       "Rule Promotion Gates",
       "Discovery Mode",
       "Candidate Source",
+      "Threshold Integrity",
       "Model Governance",
       "Deployment Boundary",
       "Candidate Governance",

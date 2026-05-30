@@ -129,6 +129,42 @@ export function buildRoutingPolicyCandidateSaveSummary(policy?: RoutingPolicyRec
   };
 }
 
+export function buildRoutingPolicyThresholdGovernance(policy?: RoutingPolicyRecord | null) {
+  if (!policy) {
+    return {
+      thresholdIntegrity: "not_available",
+      riskRouteBand: "not_available",
+      confidenceRouteBand: "not_available",
+      providerRouteBand: "not_available",
+      routeBoundaryStatus: "not_available",
+    };
+  }
+  const thresholds = policy.risk_thresholds;
+  const confidence = policy.confidence_thresholds;
+  const riskThresholdsAreOrdered =
+    thresholds.low_max < thresholds.medium_min &&
+    thresholds.medium_min < thresholds.high_min &&
+    thresholds.high_min < thresholds.critical_min;
+  const confidenceThresholdsAreOrdered =
+    confidence.low_confidence_below < confidence.high_confidence_min;
+  const providerThresholdIsRoutable =
+    policy.provider_review_threshold >= thresholds.medium_min &&
+    policy.provider_review_threshold <= 100;
+  return {
+    thresholdIntegrity:
+      riskThresholdsAreOrdered && confidenceThresholdsAreOrdered && providerThresholdIsRoutable
+        ? "thresholds_ordered"
+        : "threshold_review_required",
+    riskRouteBand: `low<=${thresholds.low_max} medium>=${thresholds.medium_min} high>=${thresholds.high_min} critical>=${thresholds.critical_min}`,
+    confidenceRouteBand: `low_confidence<${confidence.low_confidence_below} high_confidence>=${confidence.high_confidence_min}`,
+    providerRouteBand: `provider_review>=${policy.provider_review_threshold}`,
+    routeBoundaryStatus:
+      policy.provider_review_threshold >= thresholds.high_min
+        ? "provider_route_high_risk_aligned"
+        : "provider_route_medium_risk",
+  };
+}
+
 export function RoutingPoliciesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedPolicyKey, setSelectedPolicyKey] = useState("");
@@ -168,6 +204,7 @@ export function RoutingPoliciesPage() {
   const promotionGateRows = promotionQuery.data
     ? buildPromotionGateEvidenceRows(promotionQuery.data.gates)
     : [];
+  const thresholdGovernance = buildRoutingPolicyThresholdGovernance(selectedPolicy);
   const lifecycleMutation = useMutation({
     mutationFn: (action: "submit" | "approve" | "activate" | "rollback") => {
       if (!selectedPolicy) throw new Error("No routing policy selected");
@@ -309,7 +346,29 @@ export function RoutingPoliciesPage() {
                 <span>High Confidence</span>
                 <strong>{selectedPolicy.confidence_thresholds.high_confidence_min}</strong>
               </div>
+              <div>
+                <span>Threshold Integrity</span>
+                <strong>{thresholdGovernance.thresholdIntegrity}</strong>
+              </div>
+              <div>
+                <span>Route Boundary</span>
+                <strong>{thresholdGovernance.routeBoundaryStatus}</strong>
+              </div>
             </div>
+            <dl className="result-grid">
+              <div>
+                <dt>Risk Route Band</dt>
+                <dd>{thresholdGovernance.riskRouteBand}</dd>
+              </div>
+              <div>
+                <dt>Confidence Route Band</dt>
+                <dd>{thresholdGovernance.confidenceRouteBand}</dd>
+              </div>
+              <div>
+                <dt>Provider Route Band</dt>
+                <dd>{thresholdGovernance.providerRouteBand}</dd>
+              </div>
+            </dl>
             <div className="button-row">
               <button onClick={() => lifecycleMutation.mutate("submit")}>Submit</button>
               <button onClick={() => lifecycleMutation.mutate("approve")}>Approve</button>
