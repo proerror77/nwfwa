@@ -156,6 +156,24 @@ export function buildAuditSampleRunDetailRows(sample: AuditSampleRecord) {
   ];
 }
 
+export function buildAuditSampleBaselineSummary(sample: AuditSampleRecord) {
+  const measurement = baselineMeasurement(sample);
+  const missedRiskTargets = baselineMeasurementCount(sample, "missed_risk_review_targets");
+  const falsePositiveTargets = baselineMeasurementCount(
+    sample,
+    "false_positive_review_targets",
+  );
+  return {
+    controlCohort: measurement?.control_cohort === true ? "yes" : "no",
+    measurementGoal:
+      typeof measurement?.measurement_goal === "string" ? measurement.measurement_goal : "none",
+    missedRiskTargets,
+    falsePositiveTargets,
+    calibrationSignal:
+      missedRiskTargets > 0 || falsePositiveTargets > 0 ? "needs_feedback_review" : "none",
+  };
+}
+
 export function buildAuditSampleCreateSummary(sample?: AuditSampleRecord | null) {
   if (!sample) {
     return null;
@@ -526,12 +544,18 @@ export function AuditSamplingPage() {
         <div className="table-list">
           {samplesQuery.data?.samples.map((sample) => {
             const topQaConclusion = topDistributionKey(sample.outcome_distribution.qa_conclusions);
+            const baselineSummary = buildAuditSampleBaselineSummary(sample);
             return (
               <div className="row-button" key={sample.sample_id}>
                 <span>{sample.sample_id}</span>
                 <strong>{sample.sample_size}</strong>
                 <small>{sample.sample_mode}</small>
                 <small>{sample.assignment_queue}</small>
+                <small>Calibration Signal: {baselineSummary.calibrationSignal}</small>
+                <small>Baseline Goal: {baselineSummary.measurementGoal}</small>
+                <small>Control Cohort: {baselineSummary.controlCohort}</small>
+                <small>Missed Risk Targets: {baselineSummary.missedRiskTargets}</small>
+                <small>False Positive Targets: {baselineSummary.falsePositiveTargets}</small>
                 <small>
                   reviewed {outcomeCount(sample, "reviewed_count")} / open{" "}
                   {outcomeCount(sample, "open_count")}

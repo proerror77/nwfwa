@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildAuditSampleBaselineSummary,
   buildAuditSampleCreateSummary,
   buildAuditSampleLeadDetailRows,
   buildAuditSampleRequest,
@@ -245,5 +246,58 @@ describe("buildAuditSampleRunDetailRows", () => {
       ["Seed", "strata-week-1"],
       ["Reviewer", "qa-reviewer-1"],
     ]);
+  });
+});
+
+describe("buildAuditSampleBaselineSummary", () => {
+  it("surfaces calibration targets for QA feedback review", () => {
+    expect(
+      buildAuditSampleBaselineSummary({
+        sample_id: "sample_control_1",
+        sample_mode: "random_control",
+        population_definition: "Weekly control group",
+        selection_method: "deterministic_hash",
+        sample_size: 10,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "Calibration",
+        selected_leads: [],
+        outcome_distribution: {
+          baseline_measurement: {
+            control_cohort: true,
+            measurement_goal: "false_positive_and_missed_risk_baseline",
+            missed_risk_review_targets: 3,
+            false_positive_review_targets: 2,
+          },
+        },
+      }),
+    ).toEqual({
+      controlCohort: "yes",
+      measurementGoal: "false_positive_and_missed_risk_baseline",
+      missedRiskTargets: 3,
+      falsePositiveTargets: 2,
+      calibrationSignal: "needs_feedback_review",
+    });
+  });
+
+  it("uses empty calibration labels when no baseline measurement exists", () => {
+    expect(
+      buildAuditSampleBaselineSummary({
+        sample_id: "sample_ordinary_1",
+        sample_mode: "risk_ranked",
+        population_definition: "RED claims",
+        selection_method: "risk_score_desc",
+        sample_size: 5,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        selected_leads: [],
+        outcome_distribution: {},
+      }),
+    ).toEqual({
+      controlCohort: "no",
+      measurementGoal: "none",
+      missedRiskTargets: 0,
+      falsePositiveTargets: 0,
+      calibrationSignal: "none",
+    });
   });
 });
