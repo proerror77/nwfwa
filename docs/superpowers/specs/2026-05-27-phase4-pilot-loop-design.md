@@ -8,7 +8,7 @@ Phase 4 turns the demoable runtime into a pilot integration loop:
 - TPA or QA can write back QA review results.
 - Operators can query claim audit history.
 - Operators can inspect audit-backed TPA API call records in Governance.
-- Operators can inspect Provider/L6 graph-risk signals in Operations Studio.
+- Operators can inspect Provider/L6 graph-risk signals and graph evidence gap status in Operations Studio.
 - Operators can inspect Medical Review/L5 clinical issue and evidence-gap signals in Operations Studio.
 - Operators can inspect Leads & Cases SLA governance, evidence sufficiency, and investigation writeback.
 - Operators can inspect Audit Sampling control cohorts and missed-risk/false-positive calibration signals.
@@ -85,6 +85,7 @@ Implemented in this phase:
 - Integration endpoints for outcome and QA writeback.
 - Audit query endpoint for claim traceability.
 - API call record endpoint and Governance Studio display for audit-backed TPA calls.
+- Provider Risk Studio display for L6 graph/network score coverage, graph reasons, and graph evidence gaps.
 - Dataset catalog API from the Phase 3 branch as data integration groundwork.
 - Leads & Cases Studio display for lead triage, case SLA status, evidence sufficiency, and investigation writeback audit output.
 - Audit Sampling Studio display for deterministic QA samples, control cohorts, and calibration targets.

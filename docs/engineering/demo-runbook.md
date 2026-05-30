@@ -69,7 +69,7 @@ Use API key `dev-secret` in the UI pages.
 - Factor Factory: factor cards with source, readiness, and predictive metrics from dataset field profiles
 - Leads & Cases: lead triage, investigation writeback, case evidence sufficiency, and SLA governance
 - Audit Sampling: deterministic QA samples, control cohorts, and missed-risk/false-positive calibration signals
-- Provider Risk: provider profile, peer outlier, graph/network risk, and evidence refs
+- Provider Risk: provider profile, peer outlier, graph/network risk, evidence refs, and graph evidence gap status
 - Rules: active rule library, lifecycle controls, backtest, and discovery provenance
 - Models: baseline model registry, deployment boundary, candidate governance, and runtime performance
 - Knowledge Base: confirmed FWA cases, tag/evidence provenance, similar case search, and source trace completeness

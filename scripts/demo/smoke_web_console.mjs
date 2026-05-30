@@ -116,6 +116,7 @@ async function main() {
       "Evidence Status",
       "Layer Coverage",
       "Knowledge Base",
+      "Graph Evidence Status",
       "Confirmed Evidence",
       "Source Trace",
       "Lineage",

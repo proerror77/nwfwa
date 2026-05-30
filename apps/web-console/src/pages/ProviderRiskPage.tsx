@@ -27,21 +27,35 @@ export function buildProviderRiskOpsSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
   const highRiskCount = summary?.high_risk_count ?? 0;
+  const providers = summary?.providers ?? [];
   const graphRiskCount =
-    summary?.providers.filter(
+    providers.filter(
       (provider) =>
         provider.review_route === "provider_graph_review" ||
         (provider.network_risk_score ?? 0) >= 70 ||
         provider.graph_reasons.length > 0,
-    ).length ?? 0;
+    ).length;
   const evidenceBackedCount =
-    summary?.providers.filter((provider) => provider.evidence_refs.length > 0).length ?? 0;
+    providers.filter((provider) => provider.evidence_refs.length > 0).length;
+  const networkScoreCount = providers.filter(
+    (provider) => provider.network_risk_score != null,
+  ).length;
+  const graphReasonCount = providers.filter((provider) => provider.graph_reasons.length > 0).length;
   return {
     providerCount,
     reviewRequiredCount,
     highRiskCount,
     graphRiskCount,
     evidenceBackedCount,
+    networkScoreCount,
+    graphReasonCount,
+    graphEvidenceGapCount: Math.max(graphRiskCount - evidenceBackedCount, 0),
+    graphEvidenceStatus:
+      graphRiskCount === 0
+        ? "no_graph_risk"
+        : graphRiskCount <= evidenceBackedCount
+          ? "graph_evidence_complete"
+          : "graph_evidence_gap",
     reviewRateLabel:
       providerCount === 0
         ? "0.0%"
@@ -111,10 +125,26 @@ export function ProviderRiskPage() {
             <strong>{summary.graphRiskCount}</strong>
           </div>
           <div>
+            <span>Network Scores</span>
+            <strong>{summary.networkScoreCount}</strong>
+          </div>
+          <div>
+            <span>Graph Reasons</span>
+            <strong>{summary.graphReasonCount}</strong>
+          </div>
+          <div>
             <span>Evidence</span>
             <strong>
               {summary.evidenceBackedCount}/{summary.providerCount}
             </strong>
+          </div>
+          <div>
+            <span>Graph Evidence Gaps</span>
+            <strong>{summary.graphEvidenceGapCount}</strong>
+          </div>
+          <div>
+            <span>Graph Evidence Status</span>
+            <strong>{summary.graphEvidenceStatus}</strong>
           </div>
           <div>
             <span>Review Rate</span>
