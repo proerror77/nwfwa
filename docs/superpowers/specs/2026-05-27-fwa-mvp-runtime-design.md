@@ -528,7 +528,7 @@ Migration checks should validate SQLx migrations against PostgreSQL once the dat
 - Agent-generated summaries
 - QA workflow
 - Knowledge vector search
-- ROI attribution
+- ROI attribution with visible `source_id -> action -> saving` lineage and source-specific evidence refs
 - Full RBAC
 - Branch protection automation
 - Kubernetes deployment

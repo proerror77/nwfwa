@@ -911,6 +911,8 @@ export function DashboardPage() {
                 <strong>
                   {attribution.currency} {attribution.savingAmount}
                 </strong>
+                <small>Lineage {attribution.lineageStatus}</small>
+                <small>{attribution.lineageLabel}</small>
                 <small>{attribution.action}</small>
                 <small>{attribution.claimCount} claims</small>
                 <small>

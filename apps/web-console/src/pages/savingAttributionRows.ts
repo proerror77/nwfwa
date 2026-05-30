@@ -11,6 +11,8 @@ export type SavingAttributionSummary = {
 export type SavingAttributionRow = {
   key: string;
   sourceLabel: string;
+  lineageLabel: string;
+  lineageStatus: string;
   action: string;
   savingAmount: string;
   currency: string;
@@ -24,6 +26,19 @@ const sourceOrder: Record<string, number> = {
   rule: 1,
   model: 2,
 };
+
+const lineageEvidencePrefixes: Record<string, string[]> = {
+  agent: ["agent_run:"],
+  rule: ["rule_runs:", "rules:"],
+  model: ["model_scores:", "model_versions:"],
+};
+
+function attributionHasLineageEvidence(attribution: SavingAttributionSummary) {
+  const prefixes = lineageEvidencePrefixes[attribution.source_type] ?? [];
+  return prefixes.some((prefix) =>
+    attribution.evidence_refs.some((reference) => reference.startsWith(prefix)),
+  );
+}
 
 export function buildSavingAttributionRows(
   attributions: SavingAttributionSummary[],
@@ -41,6 +56,10 @@ export function buildSavingAttributionRows(
     .map((attribution) => ({
       key: `${attribution.source_type}:${attribution.source_id}:${attribution.action}`,
       sourceLabel: `${attribution.source_type} / ${attribution.source_id}`,
+      lineageLabel: `${attribution.source_type}:${attribution.source_id} -> ${attribution.action} -> ${attribution.currency} ${attribution.saving_amount}`,
+      lineageStatus: attributionHasLineageEvidence(attribution)
+        ? "lineage_evidence_present"
+        : "lineage_evidence_missing",
       action: attribution.action,
       savingAmount: attribution.saving_amount,
       currency: attribution.currency,
