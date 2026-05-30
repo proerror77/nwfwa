@@ -77,6 +77,9 @@ export function buildSimilarSearchSummary(results?: SimilarCase[] | null) {
   );
   const evidenceRefs = cases.flatMap((item) => buildSimilarCaseEvidenceRefs(item));
   const matchedSignals = cases.flatMap((item) => item.matched_signals);
+  const provenanceRefs = cases.flatMap((item) => item.provenance_refs);
+  const casesWithProvenance = cases.filter((item) => item.provenance_refs.length > 0).length;
+  const casesWithEvidence = cases.filter((item) => item.evidence_refs.length > 0).length;
   return {
     resultCount: cases.length,
     topCaseLabel: topCase
@@ -86,6 +89,13 @@ export function buildSimilarSearchSummary(results?: SimilarCase[] | null) {
     retrievalMethods: retrievalMethods.length ? retrievalMethods.join(", ") : "none",
     evidenceRefCount: new Set(evidenceRefs).size,
     matchedSignalCount: new Set(matchedSignals).size,
+    provenanceRefCount: new Set(provenanceRefs).size,
+    sourceTraceStatus:
+      cases.length === 0
+        ? "no_results"
+        : casesWithProvenance === cases.length && casesWithEvidence === cases.length
+          ? "trace_complete"
+          : "trace_incomplete",
   };
 }
 
@@ -308,6 +318,14 @@ export function KnowledgeBasePage() {
               <div>
                 <dt>Evidence Refs</dt>
                 <dd>{similarSearchSummary.evidenceRefCount}</dd>
+              </div>
+              <div>
+                <dt>Provenance Refs</dt>
+                <dd>{similarSearchSummary.provenanceRefCount}</dd>
+              </div>
+              <div>
+                <dt>Source Trace</dt>
+                <dd>{similarSearchSummary.sourceTraceStatus}</dd>
               </div>
             </dl>
             <ul className="result-list">

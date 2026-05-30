@@ -104,6 +104,30 @@ describe("buildSimilarSearchSummary", () => {
       retrievalMethods: "structured_similarity, hybrid",
       evidenceRefCount: 5,
       matchedSignalCount: 2,
+      provenanceRefCount: 3,
+      sourceTraceStatus: "trace_complete",
+    });
+  });
+
+  it("flags incomplete similar-case source trace evidence", () => {
+    expect(
+      buildSimilarSearchSummary([
+        {
+          case_id: "KC-INCOMPLETE",
+          title: "Incomplete trace",
+          scheme_family: "provider_peer_outlier",
+          similarity_score: 0.8,
+          matched_signals: ["provider_region"],
+          retrieval_method: "structured_similarity",
+          provenance_refs: [],
+          summary: "Missing provenance.",
+          outcome: "Needs curation.",
+          evidence_refs: ["qa_reviews:QA-INCOMPLETE"],
+        },
+      ]),
+    ).toMatchObject({
+      provenanceRefCount: 0,
+      sourceTraceStatus: "trace_incomplete",
     });
   });
 
@@ -115,6 +139,8 @@ describe("buildSimilarSearchSummary", () => {
       retrievalMethods: "none",
       evidenceRefCount: 0,
       matchedSignalCount: 0,
+      provenanceRefCount: 0,
+      sourceTraceStatus: "no_results",
     });
   });
 });

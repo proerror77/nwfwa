@@ -93,6 +93,7 @@ grep -q "Clinical Signals" scripts/demo/smoke_web_console.mjs
 grep -q "Evidence Status" scripts/demo/smoke_web_console.mjs
 grep -q "Layer Coverage" scripts/demo/smoke_web_console.mjs
 grep -q "Confirmed Evidence" scripts/demo/smoke_web_console.mjs
+grep -q "Source Trace" scripts/demo/smoke_web_console.mjs
 grep -q "Lineage" scripts/demo/smoke_web_console.mjs
 grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
