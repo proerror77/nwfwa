@@ -105,6 +105,7 @@ async function main() {
       "Evidence Status",
       "Layer Coverage",
       "Knowledge Base",
+      "Confirmed Evidence",
     ]) {
       assertContains(bundle, expectedPanel, "web console operations panel bundle");
     }

@@ -51,6 +51,22 @@ export function buildSimilarCaseEvidenceRefs(item: SimilarCase) {
   );
 }
 
+export function buildKnowledgeCaseDetailSummary(item?: KnowledgeCase | null) {
+  return {
+    caseId: item?.case_id ?? "none",
+    schemeFamily: item?.scheme_family ?? "none",
+    tagLabel: item?.tags.length ? item.tags.join(", ") : "none",
+    tagCount: item?.tags.length ?? 0,
+    evidenceCount: item?.evidence_refs.length ?? 0,
+    confirmedEvidence:
+      item?.evidence_refs.some(
+        (reference) =>
+          reference.startsWith("investigation_results:") ||
+          reference.startsWith("qa_reviews:"),
+      ) ?? false,
+  };
+}
+
 export function buildSimilarSearchSummary(results?: SimilarCase[] | null) {
   const cases = results ?? [];
   const topCase = cases
@@ -118,6 +134,7 @@ export function KnowledgeBasePage() {
     [casesQuery.data?.cases, selectedCaseId],
   );
   const similarSearchSummary = buildSimilarSearchSummary(lastSearch);
+  const selectedCaseSummary = buildKnowledgeCaseDetailSummary(selectedCase);
 
   async function runSearch() {
     const response = (await searchSimilarCases(
@@ -201,7 +218,7 @@ export function KnowledgeBasePage() {
             <dl className="result-grid">
               <div>
                 <dt>Case</dt>
-                <dd>{selectedCase.case_id}</dd>
+                <dd>{selectedCaseSummary.caseId}</dd>
               </div>
               <div>
                 <dt>Diagnosis</dt>
@@ -218,6 +235,22 @@ export function KnowledgeBasePage() {
               <div>
                 <dt>Provider</dt>
                 <dd>{selectedCase.provider_type}</dd>
+              </div>
+              <div>
+                <dt>Tags</dt>
+                <dd>{selectedCaseSummary.tagLabel}</dd>
+              </div>
+              <div>
+                <dt>Tag Count</dt>
+                <dd>{selectedCaseSummary.tagCount}</dd>
+              </div>
+              <div>
+                <dt>Evidence Count</dt>
+                <dd>{selectedCaseSummary.evidenceCount}</dd>
+              </div>
+              <div>
+                <dt>Confirmed Evidence</dt>
+                <dd>{selectedCaseSummary.confirmedEvidence ? "yes" : "no"}</dd>
               </div>
             </dl>
             <p>{selectedCase.summary}</p>

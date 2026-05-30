@@ -1,10 +1,49 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildKnowledgeCaseDetailSummary,
   buildPublishedCaseSummary,
   buildSimilarCaseEvidenceRefs,
   buildSimilarSearchSummary,
   type SimilarCase,
 } from "./KnowledgeBasePage";
+
+describe("buildKnowledgeCaseDetailSummary", () => {
+  it("summarizes case tags and confirmed evidence provenance", () => {
+    expect(
+      buildKnowledgeCaseDetailSummary({
+        case_id: "KC-1001",
+        title: "Confirmed provider overuse case",
+        fwa_type: "Waste",
+        scheme_family: "provider_peer_outlier",
+        diagnosis_code: "J10",
+        provider_region: "Shanghai",
+        provider_type: "hospital",
+        summary: "Provider pattern matched prior confirmed overuse.",
+        outcome: "Provider education and post-payment audit opened.",
+        tags: ["provider_outlier", "high_amount"],
+        evidence_refs: ["knowledge_cases:KC-1001", "qa_reviews:QA-1001"],
+      }),
+    ).toEqual({
+      caseId: "KC-1001",
+      schemeFamily: "provider_peer_outlier",
+      tagLabel: "provider_outlier, high_amount",
+      tagCount: 2,
+      evidenceCount: 2,
+      confirmedEvidence: true,
+    });
+  });
+
+  it("uses explicit empty labels before a case is selected", () => {
+    expect(buildKnowledgeCaseDetailSummary(null)).toEqual({
+      caseId: "none",
+      schemeFamily: "none",
+      tagLabel: "none",
+      tagCount: 0,
+      evidenceCount: 0,
+      confirmedEvidence: false,
+    });
+  });
+});
 
 describe("buildSimilarCaseEvidenceRefs", () => {
   it("deduplicates provenance and evidence refs for similar case audit display", () => {

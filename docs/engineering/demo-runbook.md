@@ -70,7 +70,7 @@ Use API key `dev-secret` in the UI pages.
 - Provider Risk: provider profile, peer outlier, graph/network risk, and evidence refs
 - Rules: active rule library, lifecycle controls, backtest
 - Models: baseline model registry, deployment boundary, and runtime performance
-- Knowledge Base: confirmed FWA cases and similar case search
+- Knowledge Base: confirmed FWA cases, tag/evidence provenance, and similar case search
 - Agent Investigator: evidence-backed investigation package for the scored claim
 - Medical Review: clinical evidence gap queue, L5 clinical signal panel, and medical reviewer result writeback
 - QA Review: QA queue and writeback form

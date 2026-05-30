@@ -93,7 +93,7 @@ The API layer handles auth, request/response shaping, and persistence orchestrat
 
 Operations Studio adds real pages for:
 
-- Knowledge Base: list curated cases and run similar-case search.
+- Knowledge Base: list curated cases, inspect tag/evidence provenance, and run similar-case search.
 - Agent Investigator: submit case signals and view evidence-backed summary/checklist.
 
 Both pages use the existing API helper and navigation pattern.
