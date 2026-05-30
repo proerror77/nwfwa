@@ -98,6 +98,8 @@ async function main() {
       "Candidate Source",
       "Model Governance",
       "Deployment Boundary",
+      "Candidate Governance",
+      "promotion_review_ready",
       "Factor Cards",
       "AUC Gain",
       "Field Governance",

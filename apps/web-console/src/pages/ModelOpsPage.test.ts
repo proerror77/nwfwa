@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildModelAuditFilters,
+  buildModelCandidateGovernanceRows,
   buildModelDeploymentSummary,
   buildModelLabelReadinessSummary,
   buildModelOperationalReadinessSummary,
@@ -300,5 +301,71 @@ describe("buildModelRetrainingJobSummary", () => {
       latestStatus: "running",
       latestArtifactStatus: "available",
     });
+  });
+});
+
+describe("buildModelCandidateGovernanceRows", () => {
+  it("marks candidate models ready for promotion review when required artifacts exist", () => {
+    expect(
+      buildModelCandidateGovernanceRows([
+        {
+          job_id: "job_ready",
+          model_key: "baseline_fwa",
+          model_version: "0.1.0",
+          status: "completed",
+          requested_by: "model-ops",
+          request_notes: "drift",
+          status_note: "completed",
+          updated_by: "trainer-worker",
+          readiness_recommendation: "prepare_retraining",
+          trigger_summary: ["score drift status: drift"],
+          blocker_summary: [],
+          candidate_model_version: "0.2.0-candidate",
+          candidate_artifact_uri: "s3://models/model.onnx",
+          candidate_endpoint_url: null,
+          validation_report_uri: "s3://models/validation.json",
+          output_evaluation_id: "eval_candidate",
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          job_id: "job_incomplete",
+          model_key: "baseline_fwa",
+          model_version: "0.1.0",
+          status: "validation",
+          requested_by: "model-ops",
+          request_notes: "drift",
+          status_note: "validation",
+          updated_by: "trainer-worker",
+          readiness_recommendation: "prepare_retraining",
+          trigger_summary: ["approved model labels available"],
+          blocker_summary: [],
+          candidate_model_version: "0.2.0-candidate",
+          candidate_artifact_uri: "s3://models/model.onnx",
+          candidate_endpoint_url: null,
+          validation_report_uri: null,
+          output_evaluation_id: null,
+          created_at: null,
+          updated_at: null,
+        },
+      ]),
+    ).toEqual([
+      {
+        jobId: "job_ready",
+        candidateVersion: "0.2.0-candidate",
+        artifactStatus: "artifact_ready",
+        validationStatus: "validation_ready",
+        evaluationStatus: "evaluation_ready",
+        promotionPath: "promotion_review_ready",
+      },
+      {
+        jobId: "job_incomplete",
+        candidateVersion: "0.2.0-candidate",
+        artifactStatus: "artifact_ready",
+        validationStatus: "validation_missing",
+        evaluationStatus: "evaluation_missing",
+        promotionPath: "candidate_evidence_incomplete",
+      },
+    ]);
   });
 });

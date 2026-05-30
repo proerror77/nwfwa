@@ -127,6 +127,15 @@ type AuditEvent = {
   created_at?: string | null;
 };
 
+export type ModelCandidateGovernanceRow = {
+  jobId: string;
+  candidateVersion: string;
+  artifactStatus: string;
+  validationStatus: string;
+  evaluationStatus: string;
+  promotionPath: string;
+};
+
 export function buildModelLabelReadinessSummary(labels: OutcomeLabel[] = []) {
   const modelLabels = labels.filter((label) => label.feedback_target === "models");
   return {
@@ -195,6 +204,29 @@ export function buildModelRetrainingJobSummary(jobs: ModelRetrainingJob[] = []) 
       ? "available"
       : "missing",
   };
+}
+
+export function buildModelCandidateGovernanceRows(
+  jobs: ModelRetrainingJob[] = [],
+): ModelCandidateGovernanceRow[] {
+  return jobs
+    .filter((job) => job.candidate_model_version || job.candidate_artifact_uri)
+    .map((job) => {
+      const artifactReady = Boolean(job.candidate_artifact_uri);
+      const validationReady = Boolean(job.validation_report_uri);
+      const evaluationReady = Boolean(job.output_evaluation_id);
+      return {
+        jobId: job.job_id,
+        candidateVersion: job.candidate_model_version ?? "not_registered",
+        artifactStatus: artifactReady ? "artifact_ready" : "artifact_missing",
+        validationStatus: validationReady ? "validation_ready" : "validation_missing",
+        evaluationStatus: evaluationReady ? "evaluation_ready" : "evaluation_missing",
+        promotionPath:
+          artifactReady && validationReady && evaluationReady
+            ? "promotion_review_ready"
+            : "candidate_evidence_incomplete",
+      };
+    });
 }
 
 export function buildModelOperationalReadinessSummary(
@@ -431,6 +463,9 @@ export function ModelOpsPage() {
     : [];
   const retrainingSummary = buildModelRetrainingSummary(retrainingQuery.data);
   const retrainingJobSummary = buildModelRetrainingJobSummary(retrainingJobsQuery.data?.jobs);
+  const candidateGovernanceRows = buildModelCandidateGovernanceRows(
+    retrainingJobsQuery.data?.jobs,
+  );
   const operationalReadinessSummary = buildModelOperationalReadinessSummary(
     performanceQuery.data,
     promotionQuery.data,
@@ -851,6 +886,22 @@ export function ModelOpsPage() {
         </div>
         {(retrainingJobsQuery.data?.jobs ?? []).length === 0 ? (
           <p className="empty">No retraining jobs</p>
+        ) : null}
+        {candidateGovernanceRows.length ? (
+          <div className="result-stack">
+            <h3>Candidate Governance</h3>
+            <div className="table-list">
+              {candidateGovernanceRows.map((row) => (
+                <div className="metric-row compact-metric-row" key={row.jobId}>
+                  <span>{row.candidateVersion}</span>
+                  <strong>{row.promotionPath}</strong>
+                  <small>{row.artifactStatus}</small>
+                  <small>{row.validationStatus}</small>
+                  <small>{row.evaluationStatus}</small>
+                </div>
+              ))}
+            </div>
+          </div>
         ) : null}
       </div>
       <div className="panel wide-panel">

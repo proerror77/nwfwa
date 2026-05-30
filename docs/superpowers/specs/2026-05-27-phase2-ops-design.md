@@ -38,7 +38,7 @@ Studio:
 
 - navigation can switch between pages,
 - Rules page displays rule library, selected rule details, lifecycle controls, discovery provenance, and JSON backtest panels,
-- Models page displays model versions, deployment boundary metadata, and selected performance metrics,
+- Models page displays model versions, deployment boundary metadata, candidate governance evidence, and selected performance metrics,
 - Runtime Scoring remains unchanged except for shared API helpers.
 
 Persistence:
@@ -169,5 +169,6 @@ Required tests:
 - Rule operators can see whether discovered candidates came from labeled samples, which deterministic discovery mode produced them, and which governance path saves them into the rule lifecycle.
 - Rule operators can submit, approve, and publish a rule through API calls.
 - Model operators can inspect model versions, deployment boundary metadata, and basic performance metrics.
+- Model operators can see whether a retrained candidate has artifact, validation report, and evaluation evidence before promotion review.
 - Operations Studio Rules and Models pages are backed by API calls, not placeholder text.
 - CI passes for repository health, Rust fmt/clippy/tests, Python tests, frontend lint/test/build, and migrations.
