@@ -78,6 +78,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/cases/{case_id}/status",
         "/api/v1/ops/audit-samples",
         "/api/v1/ops/audit-events",
+        "/api/v1/ops/api-calls",
         "/api/v1/ops/agent-runs",
         "/api/v1/ops/agent-runs/{agent_run_id}/approvals",
         "/api/v1/ops/medical-review/queue",
@@ -1025,6 +1026,38 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/AuditHistoryEvent"
     );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/api-calls"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ApiCallListResponse"
+    );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/api-calls"]["get"]["responses"]["401"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/ErrorResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ApiCallListResponse"]["properties"]["calls"]["items"]
+            ["$ref"],
+        "#/components/schemas/ApiCallRecord"
+    );
+    for field in [
+        "endpoint",
+        "method",
+        "status_code",
+        "source_system",
+        "audit_id",
+        "idempotency_key",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["ApiCallRecord"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing API call field {field}"
+        );
+    }
     assert!(schema["components"]["schemas"]["AgentRunLogRecord"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["AgentRunLogRecord"]["properties"]["steps"]["items"]

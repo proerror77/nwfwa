@@ -75,6 +75,7 @@ pub fn build_app_with_parts(
             "/api/v1/ops/audit-events",
             get(ops_audit::list_audit_events),
         )
+        .route("/api/v1/ops/api-calls", get(ops_audit::list_api_calls))
         .route("/api/v1/ops/agent-runs", get(ops_agents::list_agent_runs))
         .route(
             "/api/v1/ops/agent-runs/:agent_run_id/approvals",

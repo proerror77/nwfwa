@@ -28,6 +28,7 @@ export const FRONTEND_API_CONTRACT_PATHS = [
   "/api/v1/ops/agent-runs",
   "/api/v1/ops/agent-runs/{agent_run_id}/approvals",
   "/api/v1/ops/alerts",
+  "/api/v1/ops/api-calls",
   "/api/v1/ops/audit-events",
   "/api/v1/ops/audit-samples",
   "/api/v1/ops/cases",
@@ -445,6 +446,13 @@ export async function listAuditEvents(
 
 export async function listGovernanceChangeEvents(apiKey: string, limit = 100) {
   return listAuditEvents(apiKey, { limit, event_group: "governance" });
+}
+
+export async function listApiCalls(apiKey: string, limit = 50) {
+  return requestJson(
+    `/api/v1/ops/api-calls?limit=${encodeURIComponent(String(limit))}`,
+    apiKey,
+  );
 }
 
 export async function listWebhookEvents(apiKey: string) {

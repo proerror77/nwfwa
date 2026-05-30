@@ -90,6 +90,8 @@ grep -q "/api/v1/ops/models/{MODEL_KEY}/performance" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/api-calls" scripts/demo/smoke_demo.py
+grep -q "/api/v1/ops/api-calls" apps/web-console/src/api.ts
 grep -q "/api/v1/claims/score" scripts/demo/smoke_demo.py
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py

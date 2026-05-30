@@ -926,6 +926,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/api-calls": {
+                "get": {
+                    "summary": "List audit-backed TPA API call records",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "limit",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "integer", "minimum": 1, "maximum": 200 }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "TPA API call records derived from audit events",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ApiCallListResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/agent-runs": {
                 "get": {
                     "summary": "List agent run logs for governance review",
@@ -3226,6 +3258,38 @@ pub async fn openapi_schema() -> Json<Value> {
                         "events": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/AuditHistoryEvent" }
+                        }
+                    }
+                },
+                "ApiCallRecord": {
+                    "type": "object",
+                    "required": ["call_id", "endpoint", "method", "status_code", "result", "source_system", "claim_id", "run_id", "audit_id", "event_type", "idempotency_key", "evidence_refs", "observed_at"],
+                    "properties": {
+                        "call_id": { "type": "string" },
+                        "endpoint": { "type": "string" },
+                        "method": { "type": "string" },
+                        "status_code": { "type": "integer" },
+                        "result": { "type": "string" },
+                        "source_system": { "type": "string" },
+                        "claim_id": { "type": "string" },
+                        "run_id": { "type": "string" },
+                        "audit_id": { "type": "string" },
+                        "event_type": { "type": "string" },
+                        "idempotency_key": { "type": ["string", "null"] },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "observed_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "ApiCallListResponse": {
+                    "type": "object",
+                    "required": ["calls"],
+                    "properties": {
+                        "calls": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ApiCallRecord" }
                         }
                     }
                 },

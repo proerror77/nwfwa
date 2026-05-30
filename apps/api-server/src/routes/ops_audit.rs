@@ -36,9 +36,36 @@ pub struct AuditEventListQuery {
     pub evaluation_run_id: Option<String>,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ApiCallListQuery {
+    pub limit: Option<u32>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct AuditEventListResponse {
     pub events: Vec<AuditHistoryEventRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiCallRecord {
+    pub call_id: String,
+    pub endpoint: String,
+    pub method: String,
+    pub status_code: u16,
+    pub result: String,
+    pub source_system: String,
+    pub claim_id: String,
+    pub run_id: String,
+    pub audit_id: String,
+    pub event_type: String,
+    pub idempotency_key: Option<String>,
+    pub evidence_refs: Vec<String>,
+    pub observed_at: Option<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ApiCallListResponse {
+    pub calls: Vec<ApiCallRecord>,
 }
 
 pub async fn list_audit_events(
@@ -76,6 +103,79 @@ pub async fn list_audit_events(
         .await
         .map_err(internal_error("AUDIT_EVENT_LIST_FAILED"))?;
     Ok(Json(AuditEventListResponse { events }))
+}
+
+pub async fn list_api_calls(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Query(query): Query<ApiCallListQuery>,
+) -> Result<Json<ApiCallListResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let limit = query.limit.unwrap_or(50).clamp(1, 200);
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 200,
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("API_CALL_LIST_FAILED"))?;
+    let calls = events
+        .into_iter()
+        .filter_map(|event| api_call_from_audit_event(event, &state.config.source_system))
+        .take(limit as usize)
+        .collect();
+    Ok(Json(ApiCallListResponse { calls }))
+}
+
+fn api_call_from_audit_event(
+    event: AuditHistoryEventRecord,
+    default_source_system: &str,
+) -> Option<ApiCallRecord> {
+    let (method, endpoint) = tpa_endpoint_for_event(&event)?;
+    let claim_id = event
+        .payload
+        .get("claim_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
+    let source_system = event
+        .payload
+        .get("source_system")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(default_source_system)
+        .to_string();
+    let idempotency_key = match event.event_type.as_str() {
+        "investigation.result.received" | "qa.result.received" => Some(format!(
+            "tpa-writeback:{}:{}",
+            event.event_type, event.audit_id
+        )),
+        _ => None,
+    };
+    Some(ApiCallRecord {
+        call_id: event.audit_id.clone(),
+        endpoint: endpoint.to_string(),
+        method: method.to_string(),
+        status_code: 200,
+        result: event.event_status.clone(),
+        source_system,
+        claim_id,
+        run_id: event.run_id.clone(),
+        audit_id: event.audit_id,
+        event_type: event.event_type,
+        idempotency_key,
+        evidence_refs: event.evidence_refs,
+        observed_at: event.created_at,
+    })
+}
+
+fn tpa_endpoint_for_event(event: &AuditHistoryEventRecord) -> Option<(&'static str, &'static str)> {
+    match event.event_type.as_str() {
+        "scoring.completed" => Some(("POST", "/api/v1/claims/score")),
+        "investigation.result.received" => Some(("POST", "/api/v1/investigations/results")),
+        "qa.result.received" => Some(("POST", "/api/v1/qa/results")),
+        _ => None,
+    }
 }
 
 fn normalize_filter(value: Option<String>) -> Option<String> {

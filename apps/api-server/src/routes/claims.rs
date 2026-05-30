@@ -441,6 +441,7 @@ pub async fn score_claim(
     let feature_values = features.values().cloned().collect::<Vec<_>>();
     let audit_payload = serde_json::json!({
         "claim_id": context.claim.external_claim_id,
+        "source_system": &request.source_system,
         "review_mode": &review_mode,
         "risk_score": decision.risk_score.value(),
         "rag": format!("{:?}", decision.rag),

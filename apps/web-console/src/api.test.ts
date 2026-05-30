@@ -19,6 +19,7 @@ import {
   getRulePromotionGates,
   submitRulePromotionReview,
   investigateCase,
+  listApiCalls,
   listAgentRuns,
   listAuditSamples,
   listCases,
@@ -587,6 +588,7 @@ describe("ops API helpers", () => {
       evaluation_run_id: "eval_1",
     });
     await listGovernanceChangeEvents("dev-secret", 100);
+    await listApiCalls("dev-secret", 25);
     await listAgentRuns("dev-secret");
     await listOpsAlerts("dev-secret");
     await listFwaSchemes("dev-secret");
@@ -614,20 +616,27 @@ describe("ops API helpers", () => {
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       4,
-      "/api/v1/ops/agent-runs",
+      "/api/v1/ops/api-calls?limit=25",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       5,
-      "/api/v1/ops/alerts",
+      "/api/v1/ops/agent-runs",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
       }),
     );
     expect(fetchMock).toHaveBeenNthCalledWith(
       6,
+      "/api/v1/ops/alerts",
+      expect.objectContaining({
+        headers: expect.objectContaining({ "x-api-key": "dev-secret" }),
+      }),
+    );
+    expect(fetchMock).toHaveBeenNthCalledWith(
+      7,
       "/api/v1/ops/fwa-schemes",
       expect.objectContaining({
         headers: expect.objectContaining({ "x-api-key": "dev-secret" }),

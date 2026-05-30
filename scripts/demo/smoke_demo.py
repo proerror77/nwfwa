@@ -1081,6 +1081,53 @@ def assert_governance_audit_trail(agent_governance, rule_release, routing_policy
     }
 
 
+def assert_tpa_api_call_observability(score, investigation, qa):
+    api_calls = request("GET", "/api/v1/ops/api-calls?limit=50").get("calls", [])
+    expected = {
+        "scoring.completed": {
+            "endpoint": "/api/v1/claims/score",
+            "audit_id": score["audit_id"],
+            "run_id": score["run_id"],
+            "idempotency_key": None,
+        },
+        "investigation.result.received": {
+            "endpoint": "/api/v1/investigations/results",
+            "audit_id": investigation["audit_id"],
+            "run_id": investigation["run_id"],
+            "idempotency_key": investigation["idempotency_key"],
+        },
+        "qa.result.received": {
+            "endpoint": "/api/v1/qa/results",
+            "audit_id": qa["audit_id"],
+            "run_id": qa["run_id"],
+            "idempotency_key": qa["idempotency_key"],
+        },
+    }
+    observed = {call.get("event_type"): call for call in api_calls}
+    missing = set(expected) - set(observed)
+    assert_true(not missing, f"API call observability missing event types: {sorted(missing)}")
+
+    for event_type, contract in expected.items():
+        call = observed[event_type]
+        assert_true(call.get("endpoint") == contract["endpoint"], f"{event_type} endpoint mismatch")
+        assert_true(call.get("method") == "POST", f"{event_type} method mismatch")
+        assert_true(call.get("status_code") == 200, f"{event_type} status code mismatch")
+        assert_true(call.get("result") == "succeeded", f"{event_type} result mismatch")
+        assert_true(call.get("claim_id") == CLAIM_ID, f"{event_type} claim id mismatch")
+        assert_true(call.get("audit_id") == contract["audit_id"], f"{event_type} audit id mismatch")
+        assert_true(call.get("run_id") == contract["run_id"], f"{event_type} run id mismatch")
+        assert_true(
+            call.get("idempotency_key") == contract["idempotency_key"],
+            f"{event_type} idempotency key mismatch",
+        )
+        assert_true(call.get("evidence_refs"), f"{event_type} evidence refs missing")
+
+    return {
+        "api_call_count": len(api_calls),
+        "observed_event_types": sorted(expected),
+    }
+
+
 def assert_tpa_webhook_delivery(score):
     webhooks = request("GET", "/api/v1/ops/webhook-events").get("events", [])
     expected_event_types = {
@@ -1783,6 +1830,7 @@ def main():
         "knowledge.case.published" in event_types,
         "audit history missing knowledge.case.published",
     )
+    api_call_observability = assert_tpa_api_call_observability(score, investigation, qa)
     governance_audit = assert_governance_audit_trail(
         agent_governance,
         rule_release,
@@ -1948,6 +1996,7 @@ def main():
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,
                 "knowledge_publish": knowledge_publish,
+                "api_call_observability": api_call_observability,
                 "governance_audit": governance_audit,
                 "dataset_model_lineage": dataset_model_lineage,
                 "factor_readiness": factor_readiness,

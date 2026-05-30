@@ -86,6 +86,152 @@ async fn lists_global_audit_events_for_governance_review() {
 }
 
 #[tokio::test]
+async fn lists_audit_backed_tpa_api_calls() {
+    let app = build_app(test_config());
+
+    let (status, score) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-API-CALLS",
+            "claim_amount": "9000.00",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "PROC-001",
+              "item_type": "procedure",
+              "description": "Imaging",
+              "quantity": 1,
+              "unit_amount": "9000.00",
+              "total_amount": "9000.00"
+            }
+          ],
+          "member": { "external_member_id": "MBR-API-CALLS" },
+          "policy": {
+            "external_policy_id": "POL-API-CALLS",
+            "product_code": "HEALTH",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000.00",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-API-CALLS",
+            "name": "API Call Clinic",
+            "provider_type": "clinic",
+            "region": "Shanghai",
+            "risk_tier": "High"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, investigation) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-API-CALLS",
+          "investigation_id": "INV-API-CALLS",
+          "outcome": "confirmed_fwa_review_needed",
+          "confirmed_fwa": true,
+          "financial_impact_type": "estimated_impact",
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "API call observability test writeback.",
+          "evidence_refs": ["audit:score", "investigation_results:INV-API-CALLS"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, qa) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-API-CALLS",
+          "claim_id": "CLM-API-CALLS",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "alert_handling_incomplete",
+          "feedback_target": "rules",
+          "notes": "API call observability test QA writeback.",
+          "evidence_refs": ["audit:score", "qa_reviews:QA-API-CALLS"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/api-calls?limit=20", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let calls = body["calls"].as_array().unwrap();
+    let scoring_call = calls
+        .iter()
+        .find(|call| call["event_type"] == "scoring.completed")
+        .expect("scoring API call should be visible");
+    assert_eq!(scoring_call["endpoint"], "/api/v1/claims/score");
+    assert_eq!(scoring_call["method"], "POST");
+    assert_eq!(scoring_call["status_code"], 200);
+    assert_eq!(scoring_call["result"], "succeeded");
+    assert_eq!(scoring_call["source_system"], "tpa-demo");
+    assert_eq!(scoring_call["claim_id"], "CLM-API-CALLS");
+    assert_eq!(scoring_call["run_id"], score["run_id"]);
+    assert_eq!(scoring_call["audit_id"], score["audit_id"]);
+    assert!(!scoring_call["evidence_refs"].as_array().unwrap().is_empty());
+
+    let investigation_call = calls
+        .iter()
+        .find(|call| call["event_type"] == "investigation.result.received")
+        .expect("investigation writeback API call should be visible");
+    assert_eq!(
+        investigation_call["endpoint"],
+        "/api/v1/investigations/results"
+    );
+    assert_eq!(investigation_call["method"], "POST");
+    assert_eq!(investigation_call["status_code"], 200);
+    assert_eq!(investigation_call["result"], "succeeded");
+    assert_eq!(investigation_call["source_system"], "tpa-demo");
+    assert_eq!(investigation_call["claim_id"], "CLM-API-CALLS");
+    assert_eq!(investigation_call["run_id"], investigation["run_id"]);
+    assert_eq!(investigation_call["audit_id"], investigation["audit_id"]);
+    assert_eq!(
+        investigation_call["idempotency_key"],
+        investigation["idempotency_key"]
+    );
+    assert!(investigation_call["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference == "investigation_results:INV-API-CALLS"));
+
+    let qa_call = calls
+        .iter()
+        .find(|call| call["event_type"] == "qa.result.received")
+        .expect("QA writeback API call should be visible");
+    assert_eq!(qa_call["endpoint"], "/api/v1/qa/results");
+    assert_eq!(qa_call["method"], "POST");
+    assert_eq!(qa_call["status_code"], 200);
+    assert_eq!(qa_call["result"], "succeeded");
+    assert_eq!(qa_call["source_system"], "tpa-demo");
+    assert_eq!(qa_call["claim_id"], "CLM-API-CALLS");
+    assert_eq!(qa_call["run_id"], qa["run_id"]);
+    assert_eq!(qa_call["audit_id"], qa["audit_id"]);
+    assert_eq!(qa_call["idempotency_key"], qa["idempotency_key"]);
+    assert!(qa_call["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference == "qa_reviews:QA-API-CALLS"));
+}
+
+#[tokio::test]
 async fn records_audit_sample_creation_for_governance_review() {
     let app = build_app(test_config());
 
