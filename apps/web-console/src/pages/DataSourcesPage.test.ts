@@ -1,10 +1,68 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildDataLineageRegistrationSummary,
   buildDatasetFieldGovernanceSummary,
   buildDatasetHealthSummary,
   buildDatasetMappingSummary,
   buildDatasetModelLineageRows,
 } from "./DataSourcesPage";
+
+describe("buildDataLineageRegistrationSummary", () => {
+  it("summarizes direct dataset and feature-set registration responses", () => {
+    expect(
+      buildDataLineageRegistrationSummary("dataset", {
+        dataset_id: "dataset_1",
+        status: "draft",
+      }),
+    ).toEqual({
+      kind: "dataset",
+      id: "dataset_1",
+      status: "draft",
+      evidenceTarget: "dataset:dataset_1",
+    });
+
+    expect(
+      buildDataLineageRegistrationSummary("feature_set", {
+        feature_set_id: "feature_set_1",
+        status: "registered",
+      }),
+    ).toEqual({
+      kind: "feature_set",
+      id: "feature_set_1",
+      status: "registered",
+      evidenceTarget: "feature_set:feature_set_1",
+    });
+  });
+
+  it("unwraps nested field mapping and model evaluation registration responses", () => {
+    expect(
+      buildDataLineageRegistrationSummary("field_mapping", {
+        mapping: {
+          mapping_id: "mapping_1",
+          status: "active",
+        },
+      }),
+    ).toEqual({
+      kind: "field_mapping",
+      id: "mapping_1",
+      status: "active",
+      evidenceTarget: "field_mapping:mapping_1",
+    });
+
+    expect(
+      buildDataLineageRegistrationSummary("model_evaluation", {
+        evaluation: {
+          evaluation_run_id: "eval_1",
+        },
+      }),
+    ).toEqual({
+      kind: "model_evaluation",
+      id: "eval_1",
+      status: "not_available",
+      evidenceTarget: "model_evaluation:eval_1",
+    });
+  });
+});
 
 describe("buildDatasetMappingSummary", () => {
   it("summarizes field mapping coverage for the selected dataset", () => {

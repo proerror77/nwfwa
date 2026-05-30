@@ -1,6 +1,15 @@
 import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
-import { getDataset, listDatasets, listModelEvaluations } from "../api";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  addFieldMapping,
+  getDataset,
+  listDatasets,
+  listModelEvaluations,
+  registerDataset,
+  registerFeatureSet,
+  registerModelDataset,
+  registerModelEvaluation,
+} from "../api";
 
 export type FieldMappingRecord = {
   mapping_id: string;
@@ -79,6 +88,187 @@ export type DatasetModelLineageRow = {
   dataQualityStatus: string;
   metricLabel: string;
 };
+
+type DataLineageRegistrationKind =
+  | "dataset"
+  | "field_mapping"
+  | "feature_set"
+  | "model_dataset"
+  | "model_evaluation";
+
+const defaultDatasetRegistration = JSON.stringify(
+  {
+    source_key: "claims_fwa_demo",
+    display_name: "Claims FWA Demo Dataset",
+    business_domain: "claims_fwa",
+    owner: "data-ops",
+    description: "Demo FWA claim analytical dataset registered from parquet artifacts.",
+    dataset_key: "claims_fwa_demo",
+    dataset_version: "v1",
+    sample_grain: "claim",
+    label_column: "confirmed_fwa",
+    entity_keys: ["claim_id", "member_id"],
+    manifest_uri: "data/external/claims_fwa_demo/v1/manifest.json",
+    schema_uri: "data/external/claims_fwa_demo/v1/schema.json",
+    profile_uri: "data/external/claims_fwa_demo/v1/profile.json",
+    storage_format: "parquet",
+    schema_hash: "sha256:claims-fwa-demo",
+    row_count: 1000,
+    status: "draft",
+    splits: [
+      {
+        split_name: "train",
+        data_uri: "data/external/claims_fwa_demo/v1/split=train/",
+        row_count: 800,
+        positive_count: 120,
+        negative_count: 680,
+        label_distribution_json: { true: 120, false: 680 },
+      },
+      {
+        split_name: "validation",
+        data_uri: "data/external/claims_fwa_demo/v1/split=validation/",
+        row_count: 200,
+        positive_count: 30,
+        negative_count: 170,
+        label_distribution_json: { true: 30, false: 170 },
+      },
+    ],
+    fields: [
+      {
+        field_name: "claim_id",
+        logical_type: "string",
+        nullable: false,
+        semantic_role: "key",
+        description: "Claim identifier.",
+        profile_json: {},
+      },
+      {
+        field_name: "claim_amount",
+        logical_type: "decimal",
+        nullable: false,
+        semantic_role: "feature",
+        description: "Submitted claim amount.",
+        profile_json: { missing_rate: 0.0 },
+      },
+      {
+        field_name: "confirmed_fwa",
+        logical_type: "boolean",
+        nullable: false,
+        semantic_role: "label",
+        description: "Confirmed FWA outcome label.",
+        profile_json: { missing_rate: 0.0 },
+      },
+    ],
+  },
+  null,
+  2,
+);
+
+const defaultFieldMapping = JSON.stringify(
+  {
+    external_field: "claim_amount",
+    canonical_target: "claim.amount",
+    feature_name: "claim_amount",
+    transform_kind: "direct",
+    transform_json: {},
+    status: "active",
+  },
+  null,
+  2,
+);
+
+const defaultFeatureSetRegistration = JSON.stringify(
+  {
+    business_domain: "claims_fwa",
+    feature_set_key: "claims_fwa_features",
+    version: "v1",
+    dataset_id: "dataset_1",
+    features_uri: "data/features/claims_fwa_demo/v1/",
+    feature_list_json: ["claim_amount"],
+    row_count: 1000,
+    label_column: "confirmed_fwa",
+    status: "draft",
+  },
+  null,
+  2,
+);
+
+const defaultModelDatasetRegistration = JSON.stringify(
+  {
+    business_domain: "claims_fwa",
+    task_type: "binary_classification",
+    label_name: "confirmed_fwa",
+    feature_set_id: "feature_set_1",
+    train_uri: "data/features/claims_fwa_demo/v1/split=train/",
+    validation_uri: "data/features/claims_fwa_demo/v1/split=validation/",
+    test_uri: null,
+    row_counts_json: { train: 800, validation: 200 },
+    label_distribution_json: {
+      train: { true: 120, false: 680 },
+      validation: { true: 30, false: 170 },
+    },
+    status: "draft",
+  },
+  null,
+  2,
+);
+
+const defaultModelEvaluationRegistration = JSON.stringify(
+  {
+    evaluation_run_id: "eval_claims_fwa_v1",
+    model_key: "baseline_fwa",
+    model_version: "0.1.0",
+    model_dataset_id: "model_dataset_1",
+    auc: "0.81",
+    ks: "0.42",
+    precision: "0.73",
+    recall: "0.68",
+    f1: "0.70",
+    accuracy: "0.77",
+    threshold: "0.50",
+    confusion_matrix_json: { tp: 82, fp: 30, tn: 650, fn: 38 },
+    feature_importance_uri: "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.json",
+    metrics_json: { psi: 0.08 },
+  },
+  null,
+  2,
+);
+
+function recordFromRegistrationResponse(
+  kind: DataLineageRegistrationKind,
+  response?: unknown,
+): Record<string, unknown> {
+  if (!response || typeof response !== "object") return {};
+  const body = response as Record<string, unknown>;
+  if (kind === "field_mapping" && body.mapping && typeof body.mapping === "object") {
+    return body.mapping as Record<string, unknown>;
+  }
+  if (kind === "model_evaluation" && body.evaluation && typeof body.evaluation === "object") {
+    return body.evaluation as Record<string, unknown>;
+  }
+  return body;
+}
+
+export function buildDataLineageRegistrationSummary(
+  kind: DataLineageRegistrationKind,
+  response?: unknown,
+) {
+  const record = recordFromRegistrationResponse(kind, response);
+  const idFieldByKind: Record<DataLineageRegistrationKind, string> = {
+    dataset: "dataset_id",
+    field_mapping: "mapping_id",
+    feature_set: "feature_set_id",
+    model_dataset: "model_dataset_id",
+    model_evaluation: "evaluation_run_id",
+  };
+  const idField = idFieldByKind[kind];
+  return {
+    kind,
+    id: String(record[idField] ?? "not_available"),
+    status: String(record.status ?? "not_available"),
+    evidenceTarget: `${kind}:${String(record[idField] ?? "not_available")}`,
+  };
+}
 
 export function buildDatasetMappingSummary(mappings: FieldMappingRecord[] = []) {
   const activeMappings = mappings.filter((mapping) => mapping.status === "active");
@@ -181,6 +371,18 @@ export function buildDatasetModelLineageRows(
 export function DataSourcesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
+  const [datasetPayload, setDatasetPayload] = useState(defaultDatasetRegistration);
+  const [fieldMappingPayload, setFieldMappingPayload] = useState(defaultFieldMapping);
+  const [featureSetPayload, setFeatureSetPayload] = useState(defaultFeatureSetRegistration);
+  const [modelDatasetPayload, setModelDatasetPayload] = useState(defaultModelDatasetRegistration);
+  const [modelEvaluationPayload, setModelEvaluationPayload] = useState(
+    defaultModelEvaluationRegistration,
+  );
+  const [lastRegistration, setLastRegistration] = useState<{
+    kind: DataLineageRegistrationKind;
+    response: unknown;
+  } | null>(null);
+  const queryClient = useQueryClient();
   const datasetsQuery = useQuery({
     queryKey: ["datasets", apiKey],
     queryFn: () =>
@@ -224,6 +426,52 @@ export function DataSourcesPage() {
     evaluationsQuery.data?.lineage,
     evaluationsQuery.data?.evaluations,
   );
+  const invalidateLineageQueries = () => {
+    queryClient.invalidateQueries({ queryKey: ["datasets"] });
+    queryClient.invalidateQueries({ queryKey: ["dataset-detail"] });
+    queryClient.invalidateQueries({ queryKey: ["model-evaluations"] });
+  };
+  const datasetRegistrationMutation = useMutation({
+    mutationFn: () => registerDataset(JSON.parse(datasetPayload), apiKey),
+    onSuccess: (response) => {
+      setLastRegistration({ kind: "dataset", response });
+      invalidateLineageQueries();
+    },
+  });
+  const fieldMappingMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedDataset) throw new Error("No dataset selected");
+      return addFieldMapping(selectedDataset.dataset_id, JSON.parse(fieldMappingPayload), apiKey);
+    },
+    onSuccess: (response) => {
+      setLastRegistration({ kind: "field_mapping", response });
+      invalidateLineageQueries();
+    },
+  });
+  const featureSetMutation = useMutation({
+    mutationFn: () => registerFeatureSet(JSON.parse(featureSetPayload), apiKey),
+    onSuccess: (response) => {
+      setLastRegistration({ kind: "feature_set", response });
+      invalidateLineageQueries();
+    },
+  });
+  const modelDatasetMutation = useMutation({
+    mutationFn: () => registerModelDataset(JSON.parse(modelDatasetPayload), apiKey),
+    onSuccess: (response) => {
+      setLastRegistration({ kind: "model_dataset", response });
+      invalidateLineageQueries();
+    },
+  });
+  const modelEvaluationMutation = useMutation({
+    mutationFn: () => registerModelEvaluation(JSON.parse(modelEvaluationPayload), apiKey),
+    onSuccess: (response) => {
+      setLastRegistration({ kind: "model_evaluation", response });
+      invalidateLineageQueries();
+    },
+  });
+  const lastRegistrationSummary = lastRegistration
+    ? buildDataLineageRegistrationSummary(lastRegistration.kind, lastRegistration.response)
+    : null;
 
   return (
     <section className="ops-grid">
@@ -448,6 +696,111 @@ export function DataSourcesPage() {
         {modelLineageRows.length === 0 ? (
           <p className="empty">No model evaluations linked to this dataset</p>
         ) : null}
+      </div>
+      <div className="panel wide-panel">
+        <h2>Data Lineage Registration</h2>
+        {lastRegistrationSummary ? (
+          <dl className="result-grid">
+            <div>
+              <dt>Last Type</dt>
+              <dd>{lastRegistrationSummary.kind}</dd>
+            </div>
+            <div>
+              <dt>Last ID</dt>
+              <dd>{lastRegistrationSummary.id}</dd>
+            </div>
+            <div>
+              <dt>Status</dt>
+              <dd>{lastRegistrationSummary.status}</dd>
+            </div>
+            <div>
+              <dt>Evidence Target</dt>
+              <dd>{lastRegistrationSummary.evidenceTarget}</dd>
+            </div>
+          </dl>
+        ) : null}
+        <div className="result-stack">
+          <label>
+            Dataset Registration
+            <textarea
+              value={datasetPayload}
+              onChange={(event) => setDatasetPayload(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => datasetRegistrationMutation.mutate()}
+            disabled={datasetRegistrationMutation.isPending}
+          >
+            Register Dataset
+          </button>
+          {datasetRegistrationMutation.error ? (
+            <pre className="error">{String(datasetRegistrationMutation.error.message)}</pre>
+          ) : null}
+          <label>
+            Field Mapping
+            <textarea
+              value={fieldMappingPayload}
+              onChange={(event) => setFieldMappingPayload(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => fieldMappingMutation.mutate()}
+            disabled={fieldMappingMutation.isPending || !selectedDataset}
+          >
+            Add Field Mapping
+          </button>
+          {fieldMappingMutation.error ? (
+            <pre className="error">{String(fieldMappingMutation.error.message)}</pre>
+          ) : null}
+          <label>
+            Feature Set Registration
+            <textarea
+              value={featureSetPayload}
+              onChange={(event) => setFeatureSetPayload(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => featureSetMutation.mutate()}
+            disabled={featureSetMutation.isPending}
+          >
+            Register Feature Set
+          </button>
+          {featureSetMutation.error ? (
+            <pre className="error">{String(featureSetMutation.error.message)}</pre>
+          ) : null}
+          <label>
+            Model Dataset Registration
+            <textarea
+              value={modelDatasetPayload}
+              onChange={(event) => setModelDatasetPayload(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => modelDatasetMutation.mutate()}
+            disabled={modelDatasetMutation.isPending}
+          >
+            Register Model Dataset
+          </button>
+          {modelDatasetMutation.error ? (
+            <pre className="error">{String(modelDatasetMutation.error.message)}</pre>
+          ) : null}
+          <label>
+            Model Evaluation Registration
+            <textarea
+              value={modelEvaluationPayload}
+              onChange={(event) => setModelEvaluationPayload(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => modelEvaluationMutation.mutate()}
+            disabled={modelEvaluationMutation.isPending}
+          >
+            Register Model Evaluation
+          </button>
+          {modelEvaluationMutation.error ? (
+            <pre className="error">{String(modelEvaluationMutation.error.message)}</pre>
+          ) : null}
+        </div>
       </div>
     </section>
   );
