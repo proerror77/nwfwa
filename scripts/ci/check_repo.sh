@@ -80,6 +80,7 @@ grep -q "Discovery Mode" scripts/demo/smoke_web_console.mjs
 grep -q "Candidate Source" scripts/demo/smoke_web_console.mjs
 grep -q "Threshold Integrity" scripts/demo/smoke_web_console.mjs
 grep -q "Deployment Boundary" scripts/demo/smoke_web_console.mjs
+grep -q "Profile Evidence" scripts/demo/smoke_web_console.mjs
 grep -q "Candidate Governance" scripts/demo/smoke_web_console.mjs
 grep -q "promotion_review_ready" scripts/demo/smoke_web_console.mjs
 grep -q "Promotion Gate Governance" scripts/demo/smoke_web_console.mjs

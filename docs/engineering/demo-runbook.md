@@ -71,6 +71,7 @@ Use API key `dev-secret` in the UI pages.
 - Audit Sampling: deterministic QA samples, control cohorts, and missed-risk/false-positive calibration signals
 - Provider Risk: provider profile, peer outlier, graph/network risk, evidence refs, and graph evidence gap status
 - Routing Policies: L7 routing policy lifecycle, threshold integrity, route boundary, promotion gates, and audit trail
+- Member Profile: TPA-facing member profile summary, exposure, high-risk history, and profile evidence trace readiness
 - Rules: active rule library, lifecycle controls, backtest, and discovery provenance
 - Models: baseline model registry, deployment boundary, candidate governance, and runtime performance
 - Knowledge Base: confirmed FWA cases, tag/evidence provenance, similar case search, and source trace completeness

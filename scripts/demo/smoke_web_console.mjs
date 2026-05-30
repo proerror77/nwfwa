@@ -99,6 +99,7 @@ async function main() {
       "Threshold Integrity",
       "Model Governance",
       "Deployment Boundary",
+      "Profile Evidence",
       "Candidate Governance",
       "promotion_review_ready",
       "Factor Cards",

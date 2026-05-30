@@ -26,8 +26,41 @@ export function buildMemberProfileInsight(profile?: MemberProfileSummary | null)
       riskLevelLabel: "no profile",
       evidenceCount: 0,
       evidenceRefLabel: "0 refs",
+      memberEvidenceStatus: "not_available",
+      claimEvidenceStatus: "not_available",
+      policyEvidenceStatus: "not_available",
+      tpaEmbedReadiness: "profile_not_loaded",
     };
   }
+  const memberEvidencePresent = profile.evidence_refs.some((reference) =>
+    reference.startsWith(`members:${profile.member_id}`),
+  );
+  const claimEvidenceCount = new Set(
+    profile.evidence_refs.filter((reference) => reference.startsWith("claims:")),
+  ).size;
+  const policyEvidenceCount = new Set(
+    profile.evidence_refs.filter((reference) => reference.startsWith("policies:")),
+  ).size;
+  const claimEvidenceStatus =
+    profile.claim_count === 0
+      ? "no_claim_history"
+      : claimEvidenceCount >= profile.claim_count
+        ? "claim_evidence_complete"
+        : claimEvidenceCount > 0
+          ? "claim_evidence_partial"
+          : "claim_evidence_missing";
+  const policyEvidenceStatus =
+    profile.policy_count === 0
+      ? "no_policy_history"
+      : policyEvidenceCount >= profile.policy_count
+        ? "policy_evidence_complete"
+        : policyEvidenceCount > 0
+          ? "policy_evidence_partial"
+          : "policy_evidence_missing";
+  const tpaEmbedReadiness =
+    memberEvidencePresent && claimEvidenceStatus !== "claim_evidence_missing"
+      ? "profile_trace_ready"
+      : "profile_trace_incomplete";
   return {
     memberIdLabel: profile.member_id,
     exposureLabel: `${profile.currency} ${profile.total_claim_amount}`,
@@ -43,6 +76,12 @@ export function buildMemberProfileInsight(profile?: MemberProfileSummary | null)
         : "No high risk history",
     evidenceCount: profile.evidence_refs.length,
     evidenceRefLabel: `${profile.evidence_refs.length} refs`,
+    memberEvidenceStatus: memberEvidencePresent
+      ? "member_evidence_present"
+      : "member_evidence_missing",
+    claimEvidenceStatus,
+    policyEvidenceStatus,
+    tpaEmbedReadiness,
   };
 }
 
@@ -130,6 +169,22 @@ export function MemberProfilePage() {
           <div>
             <span>Evidence Refs</span>
             <strong>{insight.evidenceRefLabel}</strong>
+          </div>
+          <div>
+            <span>Profile Evidence</span>
+            <strong>{insight.tpaEmbedReadiness}</strong>
+          </div>
+          <div>
+            <span>Member Evidence</span>
+            <strong>{insight.memberEvidenceStatus}</strong>
+          </div>
+          <div>
+            <span>Claim Evidence</span>
+            <strong>{insight.claimEvidenceStatus}</strong>
+          </div>
+          <div>
+            <span>Policy Evidence</span>
+            <strong>{insight.policyEvidenceStatus}</strong>
           </div>
         </div>
       </div>
