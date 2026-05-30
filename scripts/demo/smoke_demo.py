@@ -1103,8 +1103,17 @@ def assert_tpa_api_call_observability(score, investigation, qa):
             "idempotency_key": qa["idempotency_key"],
         },
     }
-    observed = {call.get("event_type"): call for call in api_calls}
-    missing = set(expected) - set(observed)
+    observed = {}
+    for event_type, contract in expected.items():
+        observed[event_type] = next(
+            (
+                call
+                for call in api_calls
+                if call.get("event_type") == event_type and call.get("audit_id") == contract["audit_id"]
+            ),
+            None,
+        )
+    missing = {event_type for event_type, call in observed.items() if call is None}
     assert_true(not missing, f"API call observability missing event types: {sorted(missing)}")
 
     for event_type, contract in expected.items():
