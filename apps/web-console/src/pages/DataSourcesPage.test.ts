@@ -1,5 +1,61 @@
 import { describe, expect, it } from "vitest";
-import { buildDatasetHealthSummary, buildDatasetModelLineageRows } from "./DataSourcesPage";
+import {
+  buildDatasetFieldGovernanceSummary,
+  buildDatasetHealthSummary,
+  buildDatasetModelLineageRows,
+} from "./DataSourcesPage";
+
+describe("buildDatasetFieldGovernanceSummary", () => {
+  it("summarizes semantic roles for the dataset field dictionary", () => {
+    expect(
+      buildDatasetFieldGovernanceSummary({
+        dataset_id: "dataset_1",
+        source_key: "claims",
+        business_domain: "claims_fwa",
+        dataset_key: "demo_claims_fwa",
+        dataset_version: "v1",
+        sample_grain: "claim",
+        label_column: "confirmed_fwa",
+        storage_format: "parquet",
+        row_count: 100,
+        status: "registered",
+        splits: [],
+        fields: [
+          { field_name: "claim_id", semantic_role: "key" },
+          { field_name: "member_id", semantic_role: "key" },
+          { field_name: "claim_amount", semantic_role: "feature" },
+          { field_name: "provider_region", semantic_role: "feature" },
+          { field_name: "confirmed_fwa", semantic_role: "label" },
+          { field_name: "snapshot_date", semantic_role: "partition" },
+          { field_name: "raw_note", semantic_role: "ignored" },
+          { field_name: "post_decision_code", semantic_role: "leakage_candidate" },
+        ],
+      }),
+    ).toEqual({
+      fieldCount: 8,
+      keyCount: 2,
+      featureCount: 2,
+      labelCount: 1,
+      partitionCount: 1,
+      ignoredCount: 1,
+      leakageCandidateCount: 1,
+      roleCoverageLabel: "100.0%",
+    });
+  });
+
+  it("uses empty field governance defaults when no dataset is selected", () => {
+    expect(buildDatasetFieldGovernanceSummary(null)).toEqual({
+      fieldCount: 0,
+      keyCount: 0,
+      featureCount: 0,
+      labelCount: 0,
+      partitionCount: 0,
+      ignoredCount: 0,
+      leakageCandidateCount: 0,
+      roleCoverageLabel: "0.0%",
+    });
+  });
+});
 
 describe("buildDatasetHealthSummary", () => {
   it("formats dataset data quality health for the data sources page", () => {

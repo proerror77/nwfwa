@@ -346,7 +346,8 @@ Verification:
 - profiler rejects non-Parquet dataset manifests
 - ids remain strings
 - label distribution and missing rates match the registered profile
-- Factor Factory exposes factor card evaluation metrics without inventing missing values
+- Data Sources exposes field governance by semantic role, including key, feature, label, partition, ignored, and leakage-candidate counts.
+- Factor Factory exposes factor card evaluation metrics without inventing missing values.
 
 ### Phase C: Feature Matrix
 

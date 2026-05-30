@@ -69,6 +69,31 @@ export type DatasetModelLineageRow = {
   metricLabel: string;
 };
 
+export function buildDatasetFieldGovernanceSummary(dataset?: DatasetRecord | null) {
+  const fields = dataset?.fields ?? [];
+  const roleCounts = fields.reduce<Record<string, number>>((counts, field) => {
+    counts[field.semantic_role] = (counts[field.semantic_role] ?? 0) + 1;
+    return counts;
+  }, {});
+  return {
+    fieldCount: fields.length,
+    keyCount: roleCounts.key ?? 0,
+    featureCount: roleCounts.feature ?? 0,
+    labelCount: roleCounts.label ?? 0,
+    partitionCount: roleCounts.partition ?? 0,
+    ignoredCount: roleCounts.ignored ?? 0,
+    leakageCandidateCount: roleCounts.leakage_candidate ?? 0,
+    roleCoverageLabel:
+      fields.length === 0
+        ? "0.0%"
+        : `${(
+            (fields.filter((field) => field.semantic_role.trim().length > 0).length /
+              fields.length) *
+            100
+          ).toFixed(1)}%`,
+  };
+}
+
 export function buildDatasetHealthSummary(health?: DatasetHealthRecord | null) {
   if (!health) {
     return {
@@ -159,6 +184,7 @@ export function DataSourcesPage() {
     [datasetsQuery.data?.health, selectedDataset?.dataset_id],
   );
   const healthSummary = buildDatasetHealthSummary(selectedDatasetHealth);
+  const fieldGovernanceSummary = buildDatasetFieldGovernanceSummary(selectedDataset);
   const modelLineageRows = buildDatasetModelLineageRows(
     selectedDataset,
     evaluationsQuery.data?.lineage,
@@ -224,6 +250,43 @@ export function DataSourcesPage() {
               <div>
                 <dt>Format</dt>
                 <dd>{selectedDataset.storage_format}</dd>
+              </div>
+            </dl>
+            <h3>Field Governance</h3>
+            <div className="summary-grid">
+              <div>
+                <span>Fields</span>
+                <strong>{fieldGovernanceSummary.fieldCount}</strong>
+              </div>
+              <div>
+                <span>Role Coverage</span>
+                <strong>{fieldGovernanceSummary.roleCoverageLabel}</strong>
+              </div>
+              <div>
+                <span>Features</span>
+                <strong>{fieldGovernanceSummary.featureCount}</strong>
+              </div>
+              <div>
+                <span>Labels</span>
+                <strong>{fieldGovernanceSummary.labelCount}</strong>
+              </div>
+              <div>
+                <span>Keys</span>
+                <strong>{fieldGovernanceSummary.keyCount}</strong>
+              </div>
+              <div>
+                <span>Leakage Candidates</span>
+                <strong>{fieldGovernanceSummary.leakageCandidateCount}</strong>
+              </div>
+            </div>
+            <dl className="result-grid">
+              <div>
+                <dt>Partitions</dt>
+                <dd>{fieldGovernanceSummary.partitionCount}</dd>
+              </div>
+              <div>
+                <dt>Ignored</dt>
+                <dd>{fieldGovernanceSummary.ignoredCount}</dd>
               </div>
             </dl>
             <div className="summary-grid">

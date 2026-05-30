@@ -100,6 +100,8 @@ async function main() {
       "Deployment Boundary",
       "Factor Cards",
       "AUC Gain",
+      "Field Governance",
+      "Leakage Candidates",
       "QA Queue",
       "Promotion Gate Governance",
       "API Call Records",
