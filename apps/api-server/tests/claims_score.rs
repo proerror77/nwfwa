@@ -294,9 +294,7 @@ async fn scores_spec_style_top_level_full_payload() {
         .expect("response should include evidence refs");
     assert!(evidence_refs.contains(&serde_json::json!("rule_runs:EARLY_HIGH_AMOUNT")));
     assert!(evidence_refs.contains(&serde_json::json!("model_scores:baseline_fwa")));
-    assert!(evidence_refs.contains(&serde_json::json!(
-        "model_versions:baseline_fwa:0.1.0"
-    )));
+    assert!(evidence_refs.contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0")));
     let feature_values = body["feature_values"]
         .as_array()
         .expect("response should include feature values");
@@ -364,9 +362,7 @@ async fn scores_spec_style_top_level_full_payload() {
     assert!(scoring_event["evidence_refs"]
         .as_array()
         .unwrap()
-        .contains(&serde_json::json!(
-            "model_versions:baseline_fwa:0.1.0"
-        )));
+        .contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0")));
 }
 
 #[tokio::test]
