@@ -11,6 +11,7 @@ def score_payload(features: dict[str, object]) -> dict[str, object]:
         "run_id": "run_test",
         "claim_id": "CLM-1",
         "model_key": "baseline_fwa",
+        "model_version": "0.1.0",
         "features": features,
     }
 
@@ -70,6 +71,16 @@ def test_score_returns_low_risk_for_low_amount_ratio():
     assert payload["label"] == "LOW_RISK"
     assert payload["metadata"]["execution_provider"] == "cpu"
     assert payload["explanations"][0]["feature"] == "claim_amount_to_limit_ratio"
+
+
+def test_score_echoes_requested_model_version():
+    payload = score_payload({"claim_amount_to_limit_ratio": 0.72})
+    payload["model_version"] = "0.2.0-active"
+
+    response = client.post("/score", json=payload)
+
+    assert response.status_code == 200
+    assert response.json()["model_version"] == "0.2.0-active"
 
 
 def test_score_clamps_score_to_response_contract_range():

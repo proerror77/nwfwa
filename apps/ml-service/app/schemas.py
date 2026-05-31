@@ -5,6 +5,7 @@ class ScoreRequest(BaseModel):
     run_id: str
     claim_id: str
     model_key: str = "baseline_fwa"
+    model_version: str = "0.1.0"
     features: dict[str, object]
 
 

@@ -13,7 +13,7 @@ def score_claim(request: ScoreRequest) -> ScoreResponse:
     waste_probability = round(max(0.0, min(1.0, high_cost_item_ratio * 0.7 + ratio * 0.2)), 4)
     return ScoreResponse(
         model_key=request.model_key,
-        model_version="0.1.0",
+        model_version=request.model_version,
         score=score,
         label=label,
         explanations=[
