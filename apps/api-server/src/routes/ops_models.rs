@@ -641,11 +641,19 @@ fn validate_retraining_output_request(
         }
     }
     if let Some(endpoint_url) = &request.endpoint_url {
-        if endpoint_url.trim().is_empty() {
+        let endpoint_url = endpoint_url.trim();
+        if endpoint_url.is_empty() {
             return Err(ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "INVALID_RETRAINING_OUTPUT_ENDPOINT",
                 "endpoint_url must not be blank when provided",
+            ));
+        }
+        if !endpoint_url.starts_with("http://") && !endpoint_url.starts_with("https://") {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_RETRAINING_OUTPUT_ENDPOINT",
+                "endpoint_url must use http or https",
             ));
         }
     }

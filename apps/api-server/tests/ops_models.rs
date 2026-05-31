@@ -1383,6 +1383,20 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_ENDPOINT");
 
+    let mut unsupported_endpoint = valid_request.clone();
+    unsupported_endpoint["endpoint_url"] =
+        serde_json::json!("s3://fwa-models/baseline_fwa/0.2.0-candidate/score");
+    let payload = unsupported_endpoint.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_ENDPOINT");
+
     let mut empty_confusion_matrix = valid_request.clone();
     empty_confusion_matrix["confusion_matrix_json"] = serde_json::json!({});
     let payload = empty_confusion_matrix.to_string();
