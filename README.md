@@ -385,6 +385,7 @@ Do not use local demo credentials outside local development.
 
 ## Project Documentation
 
+- [Detailed Project Handbook](docs/project/README.md)
 - [Product PRD](docs/product/fwa-risk-operations-prd.md)
 - [Infrastructure Architecture](docs/engineering/infrastructure-architecture.md)
 - [TPA Integration Contract](docs/engineering/tpa-integration-contract.md)
