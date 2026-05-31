@@ -293,6 +293,12 @@ async fn register_activation_candidate(app: axum::Router) -> String {
               "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/{candidate_version}",
               "validation_report_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/validation.json",
               "evaluation_run_id": "eval_baseline_activation_candidate",
+              "evidence_refs": [
+                "model_retraining_jobs:{job_id}",
+                "model_artifacts:s3://fwa-models/baseline_fwa/{candidate_version}/model.onnx",
+                "model_validation_reports:s3://fwa-models/baseline_fwa/{candidate_version}/validation.json",
+                "model_evaluations:eval_baseline_activation_candidate"
+              ],
               "auc": "0.86",
               "ks": "0.48",
               "precision": "0.78",
@@ -1252,6 +1258,11 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
           "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+          "evidence_refs": [
+            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+            "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+            "model_evaluations:eval_baseline_retraining_job_candidate"
+          ],
           "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
           "metrics_json": {"score_psi": 0.04}
         }"#,
@@ -1271,6 +1282,11 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
           "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+          "evidence_refs": [
+            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+            "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+            "model_evaluations:eval_baseline_retraining_job_candidate"
+          ],
           "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
           "metrics_json": {"score_psi": 0.04}
         }"#,
@@ -1291,6 +1307,12 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
           "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+          "evidence_refs": [
+            "model_retraining_jobs:{job_id}",
+            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+            "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+            "model_evaluations:eval_baseline_retraining_job_candidate"
+          ],
           "auc": "0.86",
           "ks": "0.48",
           "precision": "0.78",
@@ -1325,6 +1347,38 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     );
     assert_eq!(completed["evaluation"]["model_version"], "0.2.0-candidate");
 
+    let (status, audit) = get_json(
+        app.clone(),
+        "/api/v1/ops/audit-events?event_type=model.retraining.output_registered&limit=5",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let output_event = &audit["events"][0];
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!(
+            "model_retraining_jobs:{job_id}"
+        ))));
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx"
+        )));
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json"
+        )));
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_evaluations:eval_baseline_retraining_job_candidate"
+        )));
+
     let (status, models) = get_json(app, "/api/v1/ops/models").await;
     assert_eq!(status, StatusCode::OK);
     assert!(models["models"]
@@ -1345,6 +1399,12 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
         "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "evaluation_run_id": "eval_baseline_retraining_job_candidate",
+        "evidence_refs": [
+          "model_retraining_jobs:job_1",
+          "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+          "model_evaluations:eval_baseline_retraining_job_candidate"
+        ],
         "auc": "0.86",
         "ks": "0.48",
         "precision": "0.78",
@@ -1436,6 +1496,33 @@ async fn rejects_invalid_model_retraining_output_contract() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
+
+    let mut missing_evidence_refs = valid_request.clone();
+    missing_evidence_refs["evidence_refs"] = serde_json::json!([]);
+    let payload = missing_evidence_refs.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
+
+    let mut pii_evidence_refs = valid_request.clone();
+    pii_evidence_refs["evidence_refs"] =
+        serde_json::json!(["model_artifacts:s3://fwa-models/alice@example.com/model.onnx"]);
+    let payload = pii_evidence_refs.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB");
 
     let mut csv_model_artifact = valid_request.clone();
     csv_model_artifact["artifact_uri"] =

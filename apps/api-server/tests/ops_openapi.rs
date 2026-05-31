@@ -606,6 +606,30 @@ async fn openapi_includes_operations_paths() {
             ["metrics_json"]["minProperties"],
         1
     );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evidence_refs")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["evidence_refs"]["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["evidence_refs"]["items"]["minLength"],
+        1
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("must not contain PII")
+    );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
             ["data_quality_status"]["enum"][1],

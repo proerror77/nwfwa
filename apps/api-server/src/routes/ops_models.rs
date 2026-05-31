@@ -129,6 +129,7 @@ pub struct CompleteModelRetrainingJobRequest {
     pub endpoint_url: Option<String>,
     pub validation_report_uri: String,
     pub evaluation_run_id: String,
+    pub evidence_refs: Vec<String>,
     pub auc: Option<Decimal>,
     pub ks: Option<Decimal>,
     pub precision: Option<Decimal>,
@@ -281,7 +282,7 @@ pub async fn create_model_retraining_job(
         })
         .await
         .map_err(internal_error("MODEL_RETRAINING_JOB_SAVE_FAILED"))?;
-    record_model_retraining_audit(&state, &actor, &job, "model.retraining.queued")
+    record_model_retraining_audit(&state, &actor, &job, "model.retraining.queued", &[])
         .await
         .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(job))
@@ -336,7 +337,7 @@ pub async fn update_model_retraining_job_status(
                 "model retraining job not found",
             )
         })?;
-    record_model_retraining_audit(&state, &actor, &job, "model.retraining.status_updated")
+    record_model_retraining_audit(&state, &actor, &job, "model.retraining.status_updated", &[])
         .await
         .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(job))
@@ -379,7 +380,7 @@ pub async fn claim_next_model_retraining_job(
                 "queued model retraining job not found",
             )
         })?;
-    record_model_retraining_audit(&state, &actor, &job, "model.retraining.claimed")
+    record_model_retraining_audit(&state, &actor, &job, "model.retraining.claimed", &[])
         .await
         .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(job))
@@ -506,6 +507,7 @@ pub async fn complete_model_retraining_job(
         &actor,
         &completed_job,
         "model.retraining.output_registered",
+        &request.evidence_refs,
     )
     .await
     .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
@@ -663,6 +665,7 @@ fn validate_retraining_output_request(
         "INVALID_VALIDATION_REPORT_URI",
     )?;
     validate_retraining_notes_without_pii(&request.notes)?;
+    validate_retraining_output_evidence_refs(request)?;
     for (metric_name, metric) in [
         ("auc", &request.auc),
         ("ks", &request.ks),
@@ -704,6 +707,48 @@ fn validate_retraining_output_request(
             feature_importance_uri,
             "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
         )?;
+    }
+    Ok(())
+}
+
+fn validate_retraining_output_evidence_refs(
+    request: &CompleteModelRetrainingJobRequest,
+) -> Result<(), ApiError> {
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+            "model retraining output evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(request.evidence_refs.iter().map(String::as_str)) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB",
+            "model retraining output evidence_refs must not contain PII",
+        ));
+    }
+    for expected_ref in [
+        format!("model_artifacts:{}", request.artifact_uri),
+        format!("model_validation_reports:{}", request.validation_report_uri),
+        format!("model_evaluations:{}", request.evaluation_run_id),
+    ] {
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!("model retraining output evidence_refs must include {expected_ref}"),
+            ));
+        }
     }
     Ok(())
 }
@@ -1641,7 +1686,18 @@ async fn record_model_retraining_audit(
     actor: &ActorContext,
     job: &ModelRetrainingJobRecord,
     event_type: &'static str,
+    output_evidence_refs: &[String],
 ) -> anyhow::Result<()> {
+    let mut evidence_refs = vec![serde_json::json!(format!(
+        "model_retraining_jobs:{}",
+        job.job_id
+    ))];
+    evidence_refs.extend(
+        output_evidence_refs
+            .iter()
+            .cloned()
+            .map(serde_json::Value::String),
+    );
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -1667,10 +1723,7 @@ async fn record_model_retraining_audit(
                 "validation_report_uri": &job.validation_report_uri,
                 "output_evaluation_id": &job.output_evaluation_id,
             }),
-            evidence_refs: vec![serde_json::json!(format!(
-                "model_retraining_jobs:{}",
-                job.job_id
-            ))],
+            evidence_refs,
         })
         .await
 }

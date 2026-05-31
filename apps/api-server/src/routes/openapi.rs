@@ -4226,7 +4226,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "CompleteModelRetrainingJobRequest": {
                     "type": "object",
-                    "required": ["actor", "notes", "candidate_model_version", "artifact_uri", "validation_report_uri", "evaluation_run_id", "confusion_matrix_json", "metrics_json"],
+                    "required": ["actor", "notes", "candidate_model_version", "artifact_uri", "validation_report_uri", "evaluation_run_id", "evidence_refs", "confusion_matrix_json", "metrics_json"],
                     "properties": {
                         "actor": { "type": "string", "minLength": 1 },
                         "notes": {
@@ -4239,6 +4239,12 @@ pub async fn openapi_schema() -> Json<Value> {
                         "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
                         "validation_report_uri": { "type": "string", "minLength": 1 },
                         "evaluation_run_id": { "type": "string", "minLength": 1 },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 },
+                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, and model_evaluations refs."
+                        },
                         "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "precision": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
