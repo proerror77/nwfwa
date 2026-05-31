@@ -1827,6 +1827,14 @@ def main():
         "audit history missing medical.review.recorded",
     )
     assert_true(
+        "agent.investigation.completed" in event_types,
+        "audit history missing agent.investigation.completed",
+    )
+    assert_true(
+        "agent.approval.decided" in event_types,
+        "audit history missing agent.approval.decided",
+    )
+    assert_true(
         "investigation.result.received" in event_types,
         "audit history missing investigation.result.received",
     )

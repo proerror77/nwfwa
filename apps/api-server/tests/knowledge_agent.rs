@@ -1042,6 +1042,24 @@ async fn submits_agent_approval_decision_for_governance_review() {
             && event["payload"]["agent_run_id"] == agent_run_id));
 
     let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/audit/claims/CLM-AGENT-APPROVAL",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let claim_events = body["events"].as_array().unwrap();
+    assert!(claim_events.iter().any(|event| event["event_type"]
+        == "agent.investigation.completed"
+        && event["payload"]["agent_run_id"] == agent_run_id));
+    assert!(claim_events
+        .iter()
+        .any(|event| event["event_type"] == "agent.approval.decided"
+            && event["payload"]["agent_run_id"] == agent_run_id));
+
+    let (status, body) = json_request(
         app,
         "GET",
         "/api/v1/ops/audit-events?agent_run_id=missing-agent-run&limit=10",
