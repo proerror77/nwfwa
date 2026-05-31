@@ -99,10 +99,17 @@ export const QA_CONCLUSION_OPTIONS = [
 
 export const QA_ISSUE_TYPE_OPTIONS = [
   { value: "none", label: "None" },
+  { value: "confirmed_fwa", label: "Confirmed FWA" },
+  { value: "false_positive", label: "False Positive" },
+  { value: "improper_payment", label: "Improper Payment" },
+  { value: "insufficient_evidence", label: "Insufficient Evidence" },
+  { value: "abuse_not_fraud", label: "Abuse Not Fraud" },
+  { value: "documentation_issue", label: "Documentation Issue" },
+  { value: "medical_necessity_issue", label: "Medical Necessity Issue" },
+  { value: "policy_exclusion", label: "Policy Exclusion" },
   { value: "qa_review_completed", label: "QA Review Completed" },
   { value: "alert_handling_incomplete", label: "Alert Handling Incomplete" },
   { value: "medical_reasonableness", label: "Medical Reasonableness" },
-  { value: "medical_necessity_issue", label: "Medical Necessity Issue" },
   { value: "provider_pattern", label: "Provider Pattern" },
   { value: "model_under_scored_confirmed_issue", label: "Model Under-Scored Confirmed Issue" },
   { value: "workflow_missing_evidence", label: "Workflow Missing Evidence" },

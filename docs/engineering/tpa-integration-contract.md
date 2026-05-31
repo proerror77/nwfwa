@@ -200,6 +200,17 @@ Request:
 }
 ```
 
+Allowed `issue_type` values include the PRD-governed QA labels:
+
+- `confirmed_fwa`
+- `false_positive`
+- `improper_payment`
+- `insufficient_evidence`
+- `abuse_not_fraud`
+- `documentation_issue`
+- `medical_necessity_issue`
+- `policy_exclusion`
+
 Response:
 
 ```json

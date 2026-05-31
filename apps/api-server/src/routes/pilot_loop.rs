@@ -275,10 +275,17 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
     if !matches!(
         request.issue_type.as_str(),
         "none"
+            | "confirmed_fwa"
+            | "false_positive"
+            | "improper_payment"
+            | "insufficient_evidence"
+            | "abuse_not_fraud"
+            | "documentation_issue"
+            | "medical_necessity_issue"
+            | "policy_exclusion"
             | "qa_review_completed"
             | "alert_handling_incomplete"
             | "medical_reasonableness"
-            | "medical_necessity_issue"
             | "provider_pattern"
             | "model_under_scored_confirmed_issue"
             | "workflow_missing_evidence"

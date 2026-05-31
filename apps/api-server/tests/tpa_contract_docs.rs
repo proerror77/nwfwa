@@ -80,6 +80,29 @@ async fn tpa_contract_docs_and_mock_client_match_openapi() {
             "TPA Score Claim contract missing recommended_action value {recommended_action}"
         );
     }
+
+    let qa_writeback_section = docs
+        .split("### QA Result Writeback")
+        .nth(1)
+        .expect("missing QA Result Writeback contract section")
+        .split("\n### ")
+        .next()
+        .unwrap();
+    for issue_type in [
+        "confirmed_fwa",
+        "false_positive",
+        "improper_payment",
+        "insufficient_evidence",
+        "abuse_not_fraud",
+        "documentation_issue",
+        "medical_necessity_issue",
+        "policy_exclusion",
+    ] {
+        assert!(
+            qa_writeback_section.contains(issue_type),
+            "TPA QA Result Writeback contract missing issue_type value {issue_type}"
+        );
+    }
 }
 
 async fn openapi_schema() -> serde_json::Value {

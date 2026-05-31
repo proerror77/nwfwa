@@ -417,6 +417,46 @@ async fn rejects_unsupported_qa_issue_type() {
 }
 
 #[tokio::test]
+async fn accepts_prd_issue_types_for_qa_writeback() {
+    let app = build_app(test_config());
+
+    for issue_type in [
+        "confirmed_fwa",
+        "false_positive",
+        "improper_payment",
+        "insufficient_evidence",
+        "abuse_not_fraud",
+        "documentation_issue",
+        "medical_necessity_issue",
+        "policy_exclusion",
+    ] {
+        let (status, body) = json_request(
+            app.clone(),
+            "POST",
+            "/api/v1/qa/results",
+            &format!(
+                r#"{{
+                  "qa_case_id": "QA-PRD-{issue_type}",
+                  "claim_id": "CLM-0287",
+                  "qa_conclusion": "issue_found_escalate",
+                  "issue_type": "{issue_type}",
+                  "feedback_target": "rules",
+                  "notes": "PRD governed QA label should enter feedback and label governance.",
+                  "evidence_refs": ["audit:scoring.completed", "qa_reviews:QA-PRD-{issue_type}"]
+                }}"#
+            ),
+        )
+        .await;
+        assert_eq!(
+            status,
+            StatusCode::OK,
+            "expected PRD issue_type {issue_type} to be accepted: {body:?}"
+        );
+        assert_eq!(body["event_type"], "qa.result.received");
+    }
+}
+
+#[tokio::test]
 async fn lists_webhook_events_for_tpa_integrations() {
     let app = build_app(test_config());
 
