@@ -5189,8 +5189,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Structured evidence references must not contain PII.",
-                            "items": { "type": "string", "minLength": 1 }
+                            "description": "Structured evidence references must include qa_feedback:{feedback_id} for the updated feedback item and must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 },
+                            "contains": { "type": "string", "pattern": "^qa_feedback:" }
                         }
                     }
                 },

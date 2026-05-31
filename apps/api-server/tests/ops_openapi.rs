@@ -1933,6 +1933,18 @@ async fn openapi_includes_operations_paths() {
         1
     );
     assert_eq!(
+        schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]
+            ["evidence_refs"]["contains"]["pattern"],
+        "^qa_feedback:"
+    );
+    assert!(
+        schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("qa_feedback:{feedback_id}")
+    );
+    assert_eq!(
         schema["components"]["schemas"]["UpdateQaFeedbackStatusRequest"]["properties"]["actor_id"]
             ["minLength"],
         1

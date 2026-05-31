@@ -395,6 +395,18 @@ pub async fn update_qa_feedback_status(
             "QA feedback status notes and evidence_refs must not contain PII",
         ));
     }
+    let required_ref = format!("qa_feedback:{feedback_id}");
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == required_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_QA_FEEDBACK_TARGET_EVIDENCE",
+            format!("QA feedback status evidence_refs must include {required_ref}"),
+        ));
+    }
     let record = state
         .repository
         .update_qa_feedback_status(&feedback_id, request)
