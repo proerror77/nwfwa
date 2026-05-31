@@ -1632,6 +1632,7 @@ def main():
             "reviewer": "medical-reviewer-demo",
             "priority": "high",
             "notes": "Demo smoke opens a governed investigation case from the scored FWA lead.",
+            "evidence_refs": [f"leads:{lead_id}", "triage_decisions:demo_open_case"],
         },
     )
     assert_true(triage.get("audit_id"), "lead triage missing audit_id")

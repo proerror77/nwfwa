@@ -487,7 +487,8 @@ async fn lists_webhook_events_for_tpa_integrations() {
           "assignee": "siu-reviewer-1",
           "reviewer": "medical-reviewer-1",
           "priority": "high",
-          "notes": "Open case for webhook contract coverage."
+          "notes": "Open case for webhook contract coverage.",
+          "evidence_refs": ["triage_decisions:webhook_contract"]
         }"#,
     )
     .await;
@@ -729,7 +730,8 @@ async fn lists_ops_alerts_for_high_risk_routing() {
           "assignee": "siu-alert-owner",
           "reviewer": "medical-alert-owner",
           "priority": "high",
-          "notes": "Alert accepted into investigation workflow."
+          "notes": "Alert accepted into investigation workflow.",
+          "evidence_refs": ["triage_decisions:alert_acceptance"]
         }"#,
     )
     .await;
@@ -1435,7 +1437,8 @@ async fn lists_governed_outcome_labels_from_terminal_case_status() {
           "assignee": "siu-case-label-owner",
           "reviewer": "medical-case-label-owner",
           "priority": "high",
-          "notes": "Open case for terminal status label generation."
+          "notes": "Open case for terminal status label generation.",
+          "evidence_refs": ["triage_decisions:case_label_generation"]
         }"#,
     )
     .await;

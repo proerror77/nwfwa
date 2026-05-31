@@ -718,7 +718,8 @@ async fn dashboard_summarizes_case_sla_metrics() {
           "assignee": "siu-reviewer-1",
           "reviewer": "medical-reviewer-1",
           "priority": "high",
-          "notes": "Open SLA-tracked investigation."
+          "notes": "Open SLA-tracked investigation.",
+          "evidence_refs": ["triage_decisions:sla_dashboard"]
         }"#,
     )
     .await;
