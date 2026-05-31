@@ -315,13 +315,13 @@ fn recommended_action(
             return RecommendedAction::ProviderReview;
         }
         return match risk_level {
-            "Low" => RecommendedAction::AutoApprove,
+            "Low" => RecommendedAction::StandardProcessing,
             "Medium" | "High" => RecommendedAction::PostPaymentAudit,
             _ => RecommendedAction::PostPaymentAudit,
         };
     }
     match risk_level {
-        "Low" => RecommendedAction::AutoApprove,
+        "Low" => RecommendedAction::StandardProcessing,
         "Medium" => RecommendedAction::QaSample,
         "High" => RecommendedAction::ManualReview,
         "Critical" => RecommendedAction::EscalateInvestigation,
@@ -653,6 +653,42 @@ mod tests {
         assert_eq!(decision.confidence, "High");
         assert_eq!(decision.recommended_action, RecommendedAction::QaSample);
         assert!(decision.routing_reason.contains("QA 抽样"));
+    }
+
+    #[test]
+    fn routes_low_risk_to_standard_processing() {
+        let policy = RoutingPolicy {
+            policy_id: "low_risk_standard_processing".into(),
+            version: 1,
+            review_mode: "pre_payment".into(),
+            risk_thresholds: RiskThresholds {
+                low_max: 100,
+                medium_min: 101,
+                high_min: 150,
+                critical_min: 200,
+            },
+            confidence_thresholds: ConfidenceThresholds {
+                low_confidence_below: 50,
+                high_confidence_min: 80,
+            },
+            provider_review_threshold: 70,
+        };
+
+        let decision = aggregate_with_routing_policy(
+            &BTreeMap::new(),
+            &[rule(80)],
+            &model(80),
+            &anomaly(80),
+            0,
+            policy,
+        );
+
+        assert_eq!(decision.risk_level, "Low");
+        assert_eq!(decision.confidence, "High");
+        assert_eq!(
+            format!("{:?}", decision.recommended_action),
+            "StandardProcessing"
+        );
     }
 
     #[test]

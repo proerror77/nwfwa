@@ -491,7 +491,7 @@ impl RiskLevel {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RecommendedAction {
-    AutoApprove,
+    StandardProcessing,
     ManualReview,
     EscalateInvestigation,
 }
@@ -1221,7 +1221,7 @@ pub fn aggregate(rule_matches: &[RuleMatch], model_score: &ModelScore) -> Scorin
     let risk_score = RiskScore::new(final_score_value).expect("clamped score is valid");
     let rag = RiskLevel::from_score(risk_score);
     let recommended_action = match rag {
-        RiskLevel::Green => RecommendedAction::AutoApprove,
+        RiskLevel::Green => RecommendedAction::StandardProcessing,
         RiskLevel::Amber => RecommendedAction::ManualReview,
         RiskLevel::Red => RecommendedAction::EscalateInvestigation,
     };

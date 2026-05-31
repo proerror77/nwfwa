@@ -1825,7 +1825,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     assert_eq!(
         response_properties["recommended_action"]["enum"],
         serde_json::json!([
-            "AutoApprove",
+            "StandardProcessing",
             "QaSample",
             "ManualReview",
             "RequestEvidence",

@@ -43,7 +43,7 @@ impl RiskLevel {
 
 #[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub enum RecommendedAction {
-    AutoApprove,
+    StandardProcessing,
     QaSample,
     ManualReview,
     RequestEvidence,

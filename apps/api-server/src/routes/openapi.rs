@@ -2456,7 +2456,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "recommended_action": {
                             "type": "string",
                             "enum": [
-                                "AutoApprove",
+                                "StandardProcessing",
                                 "QaSample",
                                 "ManualReview",
                                 "RequestEvidence",
@@ -3546,7 +3546,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "alert_code": { "type": "string" },
                         "recommended_action": {
                             "type": "string",
-                            "enum": ["AutoApprove", "QaSample", "ManualReview", "RequestEvidence", "EscalateInvestigation", "PostPaymentAudit", "ProviderReview", "RecoveryReview"]
+                            "enum": ["StandardProcessing", "QaSample", "ManualReview", "RequestEvidence", "EscalateInvestigation", "PostPaymentAudit", "ProviderReview", "RecoveryReview"]
                         },
                         "reason": { "type": "string" }
                     }
