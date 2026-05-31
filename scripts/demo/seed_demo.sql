@@ -714,7 +714,7 @@ VALUES (
   0.914,
   0.70,
   '{"tp":181,"fp":70,"tn":3155,"fn":94}'::jsonb,
-  's3://fwa-demo/model-evaluations/baseline_fwa/2026-05-demo/feature_importance.json',
+  's3://fwa-demo/model-evaluations/baseline_fwa/2026-05-demo/feature_importance.parquet',
   '{
     "psi": 0.08,
     "score_psi": 0.08,

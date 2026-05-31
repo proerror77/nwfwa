@@ -227,7 +227,7 @@ const defaultModelEvaluationRegistration = JSON.stringify(
     accuracy: "0.77",
     threshold: "0.50",
     confusion_matrix_json: { tp: 82, fp: 30, tn: 650, fn: 38 },
-    feature_importance_uri: "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.json",
+    feature_importance_uri: "s3://fwa-models/baseline_fwa/0.1.0/feature_importance.parquet",
     metrics_json: { psi: 0.08 },
   },
   null,

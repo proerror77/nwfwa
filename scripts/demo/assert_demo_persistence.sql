@@ -510,6 +510,10 @@ BEGIN
     AND mer.recall_value >= 0.6
     AND mer.threshold IS NOT NULL
     AND mer.feature_importance_uri IS NOT NULL
+    AND (
+      lower(split_part(split_part(mer.feature_importance_uri, '?', 1), '#', 1)) LIKE '%.parquet'
+      OR lower(split_part(split_part(mer.feature_importance_uri, '?', 1), '#', 1)) LIKE '%/'
+    )
     AND (mer.metrics_json ->> 'psi')::numeric <= 0.1
     AND mer.metrics_json ->> 'review_capacity_threshold_status' = 'passed'
     AND mer.metrics_json ->> 'leakage_check_status' = 'passed'
@@ -519,7 +523,7 @@ BEGIN
     AND mer.metrics_json ->> 'feature_reproducibility_hash' = 'sha256:demo-baseline-feature-reproducibility'
     AND mer.metrics_json ? 'out_of_time_auc';
   IF row_count < 1 THEN
-    RAISE EXCEPTION 'expected governed baseline_fwa evaluation linked to demo model dataset';
+    RAISE EXCEPTION 'expected governed baseline_fwa evaluation linked to demo model dataset with parquet feature importance artifact';
   END IF;
 
   SELECT COUNT(*) INTO row_count
