@@ -156,6 +156,12 @@ impl ModelScorer for HttpModelScorer {
             .json::<HttpScoreResponse>()
             .await
             .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        if body.model_key != payload.model_key || body.model_version != payload.model_version {
+            return Err(ModelRuntimeError::InvalidResponse(format!(
+                "model identity mismatch: expected {}:{}, got {}:{}",
+                payload.model_key, payload.model_version, body.model_key, body.model_version
+            )));
+        }
         Ok(ModelScore {
             model_key: body.model_key,
             model_version: body.model_version,
@@ -267,5 +273,38 @@ mod tests {
         server.join().unwrap();
         assert_eq!(result.score, 74);
         assert!(result.latency_ms >= 5);
+    }
+
+    #[tokio::test]
+    async fn http_scorer_rejects_mismatched_model_version() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 2048];
+            let _ = stream.read(&mut buffer);
+            let body = r#"{"model_key":"baseline_fwa","model_version":"0.2.0","score":74,"label":"HIGH_RISK","explanations":[],"metadata":{}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+
+        let scorer = HttpModelScorer::new(format!("http://{address}"));
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_http_mismatch"),
+                claim_id: ClaimId::from_external("CLM-HTTP-MISMATCH"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.1.0".into(),
+                endpoint_url: None,
+                features: BTreeMap::new(),
+            })
+            .await;
+
+        server.join().unwrap();
+        assert!(matches!(result, Err(ModelRuntimeError::InvalidResponse(_))));
     }
 }
