@@ -1199,17 +1199,26 @@ fn build_model_promotion_gates(
     let active_version = model.status == "active";
     let open_model_feedback_count = feedback_items
         .iter()
-        .filter(|item| item.feedback_target == "models" && item.status == "open")
+        .filter(|item| {
+            item.feedback_target == "models"
+                && item.status == "open"
+                && evidence_refs_apply_to_model_version(&item.evidence_refs, model)
+        })
         .count();
     let unresolved_model_feedback_count = feedback_items
         .iter()
         .filter(|item| {
-            item.feedback_target == "models" && is_unresolved_feedback_status(&item.status)
+            item.feedback_target == "models"
+                && is_unresolved_feedback_status(&item.status)
+                && evidence_refs_apply_to_model_version(&item.evidence_refs, model)
         })
         .count();
     let model_labels = outcome_labels
         .iter()
-        .filter(|label| label.feedback_target == "models")
+        .filter(|label| {
+            label.feedback_target == "models"
+                && evidence_refs_apply_to_model_version(&label.evidence_refs, model)
+        })
         .collect::<Vec<_>>();
     let approved_model_labels = model_labels
         .iter()
@@ -1434,6 +1443,24 @@ fn build_model_retraining_readiness(
 
 fn is_unresolved_feedback_status(status: &str) -> bool {
     matches!(status, "open" | "in_progress")
+}
+
+fn evidence_refs_apply_to_model_version(
+    evidence_refs: &[String],
+    model: &ModelVersionRecord,
+) -> bool {
+    let mut has_model_version_ref = false;
+    let expected = format!("{}:{}", model.model_key, model.version);
+    for evidence_ref in evidence_refs {
+        let Some(model_version_ref) = evidence_ref.trim().strip_prefix("model_versions:") else {
+            continue;
+        };
+        has_model_version_ref = true;
+        if model_version_ref == expected {
+            return true;
+        }
+    }
+    !has_model_version_ref
 }
 
 fn evidence_source(passed: bool, source: &'static str) -> &'static str {

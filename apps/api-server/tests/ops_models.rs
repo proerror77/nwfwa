@@ -196,7 +196,7 @@ async fn register_model_dataset_for_test_with_profiles(
 async fn register_activation_candidate(app: axum::Router) -> String {
     let model_dataset_id = register_model_dataset_for_test(app.clone(), "activation").await;
 
-    let (status, _) = json_request(
+    let (status, body) = json_request(
         app.clone(),
         "POST",
         "/api/v1/ops/model-evaluations",
@@ -220,9 +220,9 @@ async fn register_activation_candidate(app: axum::Router) -> String {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{body}");
 
-    let (status, _) = json_request(
+    let (status, body) = json_request(
         app.clone(),
         "POST",
         "/api/v1/investigations/results",
@@ -238,7 +238,7 @@ async fn register_activation_candidate(app: axum::Router) -> String {
         }"#,
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{body}");
 
     let (status, created) = json_request(
         app.clone(),
@@ -859,6 +859,53 @@ async fn model_promotion_gates_include_label_governance_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("unresolved model QA feedback")));
+}
+
+#[tokio::test]
+async fn model_promotion_gates_ignore_feedback_and_labels_for_other_model_versions() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-MODEL-OTHER-VERSION-1",
+          "claim_id": "CLM-MODEL-OTHER-VERSION-1",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "model_under_scored_confirmed_issue",
+          "feedback_target": "models",
+          "notes": "Feedback applies to the currently active baseline, not the candidate.",
+          "evidence_refs": [
+            "qa_reviews:QA-MODEL-OTHER-VERSION-1",
+            "model_versions:baseline_fwa:0.1.0"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["model_version"], candidate_version);
+    assert_eq!(body["unresolved_model_feedback_count"], 0);
+    assert_eq!(body["needs_review_label_count"], 0);
+    let closure_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Model QA feedback closure")
+        .expect("model promotion gates should include QA feedback closure");
+    assert_eq!(closure_gate["passed"], true);
+    let label_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Label governance")
+        .expect("model promotion gates should include label governance");
+    assert_eq!(label_gate["passed"], true);
 }
 
 #[tokio::test]
