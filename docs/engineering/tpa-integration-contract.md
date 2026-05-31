@@ -75,6 +75,17 @@ The response is audit-backed and must be treated as assistive risk routing, not 
 
 `model_score` exposes the L4 supervised model boundary for TPA panels and audit review: model key/version, runtime backend, score, explanations, and baseline FWA sub-probabilities. `evidence_refs` also carries the exact `model_versions:{model_key}:{model_version}` reference used for scoring so audit replay can bind the score to a governed model version. These fields remain assistive signals and do not make an automatic claim decision.
 
+Allowed `recommended_action` values:
+
+- `StandardProcessing`
+- `QaSample`
+- `ManualReview`
+- `RequestEvidence`
+- `EscalateInvestigation`
+- `PostPaymentAudit`
+- `ProviderReview`
+- `RecoveryReview`
+
 Documented errors:
 
 - `400` invalid or ambiguous scoring request.

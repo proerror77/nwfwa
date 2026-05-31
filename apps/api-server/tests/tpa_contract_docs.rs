@@ -57,6 +57,29 @@ async fn tpa_contract_docs_and_mock_client_match_openapi() {
     ] {
         assert!(mock_client.contains(term), "TPA mock client missing {term}");
     }
+
+    let score_claim_section = docs
+        .split("### Score Claim")
+        .nth(1)
+        .expect("missing Score Claim contract section")
+        .split("\n### ")
+        .next()
+        .unwrap();
+    for recommended_action in [
+        "StandardProcessing",
+        "QaSample",
+        "ManualReview",
+        "RequestEvidence",
+        "EscalateInvestigation",
+        "PostPaymentAudit",
+        "ProviderReview",
+        "RecoveryReview",
+    ] {
+        assert!(
+            score_claim_section.contains(recommended_action),
+            "TPA Score Claim contract missing recommended_action value {recommended_action}"
+        );
+    }
 }
 
 async fn openapi_schema() -> serde_json::Value {
