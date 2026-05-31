@@ -4,6 +4,7 @@ use fwa_features::FeatureMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
+use std::time::Instant;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -140,6 +141,7 @@ impl ModelScorer for HttpModelScorer {
         let target_url = request
             .endpoint_url
             .unwrap_or_else(|| format!("{}/score", self.base_url));
+        let started_at = Instant::now();
         let response = self
             .client
             .post(target_url)
@@ -163,7 +165,11 @@ impl ModelScorer for HttpModelScorer {
             label: body.label,
             explanations: body.explanations,
             metadata: body.metadata,
-            latency_ms: 0,
+            latency_ms: started_at
+                .elapsed()
+                .as_millis()
+                .try_into()
+                .unwrap_or(u64::MAX),
         })
     }
 }
@@ -173,6 +179,10 @@ mod tests {
     use super::*;
     use fwa_features::FeatureValue;
     use std::collections::BTreeMap;
+    use std::io::{Read, Write};
+    use std::net::TcpListener;
+    use std::thread;
+    use std::time::Duration;
 
     #[tokio::test]
     async fn heuristic_scorer_maps_amount_ratio_to_score() {
@@ -221,5 +231,41 @@ mod tests {
     fn http_scorer_normalizes_base_url() {
         let scorer = HttpModelScorer::new("http://localhost:8001/");
         assert_eq!(scorer.base_url, "http://localhost:8001");
+    }
+
+    #[tokio::test]
+    async fn http_scorer_records_request_latency() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 2048];
+            let _ = stream.read(&mut buffer);
+            thread::sleep(Duration::from_millis(5));
+            let body = r#"{"model_key":"baseline_fwa","model_version":"0.1.0","score":74,"label":"HIGH_RISK","explanations":[],"metadata":{"fraud_probability":0.74}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+
+        let scorer = HttpModelScorer::new(format!("http://{address}"));
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_http_latency"),
+                claim_id: ClaimId::from_external("CLM-HTTP-LATENCY"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.1.0".into(),
+                endpoint_url: None,
+                features: BTreeMap::new(),
+            })
+            .await
+            .unwrap();
+
+        server.join().unwrap();
+        assert_eq!(result.score, 74);
+        assert!(result.latency_ms >= 5);
     }
 }

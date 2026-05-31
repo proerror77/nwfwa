@@ -63,7 +63,7 @@ The response is audit-backed and must be treated as assistive risk routing, not 
       "abuse_probability": 0.61,
       "waste_probability": 0.47
     },
-    "latency_ms": 0
+    "latency_ms": 12
   },
   "top_reasons": ["..."],
   "evidence_refs": ["..."]

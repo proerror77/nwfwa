@@ -236,6 +236,7 @@ Every failure that occurs after request admission must write a failed audit even
     "execution_provider": "cpu",
     "score": 83,
     "label": "HIGH_RISK",
+    "latency_ms": 12,
     "explanations": [
       {
         "feature": "claim_amount_to_limit_ratio",
