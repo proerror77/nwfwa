@@ -4054,8 +4054,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Structured evidence references must not contain PII.",
-                            "items": { "type": "string", "minLength": 1 }
+                            "description": "Structured evidence references must not contain PII and must include model_versions:{model_key}:{model_version} for the exact target model version.",
+                            "items": { "type": "string", "minLength": 1 },
+                            "contains": { "type": "string", "pattern": "^model_versions:[^:]+:[^:]+$" }
                         }
                     }
                 },
@@ -4273,8 +4274,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Structured evidence references must not contain PII.",
-                            "items": { "type": "string", "minLength": 1 }
+                            "description": "Structured evidence references must not contain PII and must include model_versions:{model_key}:{model_version} for the exact model under review.",
+                            "items": { "type": "string", "minLength": 1 },
+                            "contains": { "type": "string", "pattern": "^model_versions:[^:]+:[^:]+$" }
                         }
                     }
                 },

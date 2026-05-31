@@ -908,6 +908,18 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("must not contain PII")
     );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelLifecycleRequest"]["properties"]["evidence_refs"]
+            ["contains"]["pattern"],
+        "^model_versions:[^:]+:[^:]+$"
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelLifecycleRequest"]["properties"]["evidence_refs"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("model_versions:{model_key}:{model_version}")
+    );
     assert!(
         schema["components"]["schemas"]["ModelLifecycleResponse"]["required"]
             .as_array()
@@ -1609,6 +1621,18 @@ async fn openapi_includes_operations_paths() {
         );
         assert_writeback_pii_contract(&schema, schema_name);
     }
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitModelPromotionReviewRequest"]["properties"]
+            ["evidence_refs"]["contains"]["pattern"],
+        "^model_versions:[^:]+:[^:]+$"
+    );
+    assert!(
+        schema["components"]["schemas"]["SubmitModelPromotionReviewRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("model_versions:{model_key}:{model_version}")
+    );
     for field in ["assignee", "reviewer", "priority", "notes"] {
         assert_eq!(
             schema["components"]["schemas"]["TriageLeadRequest"]["properties"][field]["minLength"],
