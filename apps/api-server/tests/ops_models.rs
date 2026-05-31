@@ -747,7 +747,11 @@ async fn model_promotion_gates_include_label_governance_evidence() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
-    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+    let (status, body) = get_json(
+        app.clone(),
+        "/api/v1/ops/models/baseline_fwa/promotion-gates",
+    )
+    .await;
 
     assert_eq!(status, StatusCode::OK);
     let label_gate = body["gates"]
@@ -777,6 +781,48 @@ async fn model_promotion_gates_include_label_governance_evidence() {
         .unwrap()
         .contains(&serde_json::json!("model outcome labels need review")));
     assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("unresolved model QA feedback")));
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-MODEL-LABEL-1/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "model-ops",
+          "notes": "Model operator approved the label after review.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-MODEL-LABEL-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+    assert_eq!(status, StatusCode::OK);
+    let label_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Label governance")
+        .unwrap();
+    assert_eq!(label_gate["passed"], true);
+    let closure_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Model QA feedback closure")
+        .unwrap();
+    assert_eq!(closure_gate["passed"], true);
+    assert_eq!(body["unresolved_model_feedback_count"], 0);
+    assert_eq!(body["approved_label_count"], 2);
+    assert_eq!(body["needs_review_label_count"], 0);
+    assert!(!body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model outcome labels need review")));
+    assert!(!body["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("unresolved model QA feedback")));

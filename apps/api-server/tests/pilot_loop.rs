@@ -1337,6 +1337,30 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     assert!(labels
         .iter()
         .all(|label| !label["evidence_refs"].as_array().unwrap().is_empty()));
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-LABEL-1001/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "model-ops",
+          "notes": "Model operator approved the QA feedback label for training.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-LABEL-1001"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(labels["labels"].as_array().unwrap().iter().any(|label| {
+        label["claim_id"] == "CLM-LABEL-1001"
+            && label["label_name"] == "medical_necessity_issue"
+            && label["source_type"] == "qa_review"
+            && label["feedback_target"] == "models"
+            && label["governance_status"] == "approved_for_training"
+    }));
 }
 
 #[tokio::test]

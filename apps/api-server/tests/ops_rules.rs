@@ -713,7 +713,7 @@ async fn rule_promotion_gates_include_rule_feedback_labels() {
     assert_eq!(status, StatusCode::OK);
 
     let (status, body) = json_request(
-        app,
+        app.clone(),
         "GET",
         "/api/v1/ops/rules/rule_early_claim/promotion-gates",
         "{}",
@@ -749,6 +749,55 @@ async fn rule_promotion_gates_include_rule_feedback_labels() {
         .unwrap()
         .contains(&serde_json::json!("rule feedback labels need review")));
     assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("unresolved rule QA feedback")));
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-RULE-GATE-1/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "rule-ops",
+          "notes": "Rule operator resolved the feedback after threshold review.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-RULE-GATE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let feedback_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Rule feedback governance")
+        .unwrap();
+    assert_eq!(feedback_gate["passed"], true);
+    let closure_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Rule QA feedback closure")
+        .unwrap();
+    assert_eq!(closure_gate["passed"], true);
+    assert_eq!(body["unresolved_rule_feedback_count"], 0);
+    assert_eq!(body["approved_label_count"], 1);
+    assert_eq!(body["needs_review_label_count"], 0);
+    assert!(!body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rule feedback labels need review")));
+    assert!(!body["blockers"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("unresolved rule QA feedback")));

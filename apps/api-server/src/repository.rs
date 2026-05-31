@@ -2419,6 +2419,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut qa_reviews = 0_u32;
         let mut outcome_labels = Vec::new();
         let mut financial_impacts = Vec::new();
+        let feedback_statuses = latest_qa_feedback_statuses(&pilot_events);
 
         for (_, event) in pilot_events.iter() {
             match event.event_type.as_str() {
@@ -2444,7 +2445,12 @@ impl ScoringRepository for InMemoryScoringRepository {
                     if let Ok(record) =
                         serde_json::from_value::<QaReviewRecord>(event.payload.clone())
                     {
-                        outcome_labels.push(label_from_qa_review(record));
+                        let feedback_id = qa_feedback_id(&record.qa_case_id);
+                        let feedback_status = feedback_statuses
+                            .get(&feedback_id)
+                            .map(|update| update.status.as_str())
+                            .unwrap_or("open");
+                        outcome_labels.push(label_from_qa_review(record, feedback_status));
                     }
                 }
                 "medical.review.recorded" => {
@@ -2858,10 +2864,9 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
-        let mut labels = self
-            .pilot_audit_events
-            .lock()
-            .await
+        let events = self.pilot_audit_events.lock().await.clone();
+        let feedback_statuses = latest_qa_feedback_statuses(&events);
+        let mut labels = events
             .iter()
             .filter_map(|(_, event)| match event.event_type.as_str() {
                 "investigation.result.received" => {
@@ -2872,7 +2877,14 @@ impl ScoringRepository for InMemoryScoringRepository {
                 "qa.result.received" => {
                     serde_json::from_value::<QaReviewRecord>(event.payload.clone())
                         .ok()
-                        .map(|review| vec![label_from_qa_review(review)])
+                        .map(|review| {
+                            let feedback_id = qa_feedback_id(&review.qa_case_id);
+                            let feedback_status = feedback_statuses
+                                .get(&feedback_id)
+                                .map(|update| update.status.as_str())
+                                .unwrap_or("open");
+                            vec![label_from_qa_review(review, feedback_status)]
+                        })
                 }
                 "medical.review.recorded" => {
                     label_from_medical_review_event(event).map(|label| vec![label])
@@ -6297,9 +6309,9 @@ impl ScoringRepository for PostgresScoringRepository {
         )
         .fetch_all(&self.pool)
         .await?;
-        let qa_rows: Vec<(String, String, String, String, String, String, Value)> =
+        let qa_rows: Vec<(String, String, String, String, String, String, String, Value)> =
             sqlx::query_as(
-                "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs
+                "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, feedback_status, notes, evidence_refs
                  FROM qa_reviews
                  ORDER BY created_at, qa_case_id",
             )
@@ -6349,18 +6361,22 @@ impl ScoringRepository for PostgresScoringRepository {
                     qa_conclusion,
                     issue_type,
                     feedback_target,
+                    feedback_status,
                     notes,
                     evidence_refs,
                 )| {
-                    label_from_qa_review(QaReviewRecord {
-                        qa_case_id,
-                        claim_id,
-                        qa_conclusion,
-                        issue_type,
-                        feedback_target,
-                        notes,
-                        evidence_refs: json_array_to_strings(evidence_refs),
-                    })
+                    label_from_qa_review(
+                        QaReviewRecord {
+                            qa_case_id,
+                            claim_id,
+                            qa_conclusion,
+                            issue_type,
+                            feedback_target,
+                            notes,
+                            evidence_refs: json_array_to_strings(evidence_refs),
+                        },
+                        &feedback_status,
+                    )
                 },
             ))
             .chain(medical_review_rows.into_iter().filter_map(
@@ -8341,7 +8357,7 @@ fn labels_from_investigation_result(record: InvestigationResultRecord) -> Vec<Ou
     labels
 }
 
-fn label_from_qa_review(record: QaReviewRecord) -> OutcomeLabelRecord {
+fn label_from_qa_review(record: QaReviewRecord, feedback_status: &str) -> OutcomeLabelRecord {
     OutcomeLabelRecord {
         label_id: format!("label_qa_{}_{}", record.qa_case_id, record.issue_type),
         claim_id: record.claim_id,
@@ -8349,10 +8365,18 @@ fn label_from_qa_review(record: QaReviewRecord) -> OutcomeLabelRecord {
         label_value: "true".into(),
         source_type: "qa_review".into(),
         source_id: record.qa_case_id,
-        governance_status: "needs_review".into(),
+        governance_status: qa_label_governance_status(feedback_status).into(),
         feedback_target: record.feedback_target,
         currency: None,
         evidence_refs: record.evidence_refs,
+    }
+}
+
+fn qa_label_governance_status(feedback_status: &str) -> &'static str {
+    if feedback_status == "resolved" {
+        "approved_for_training"
+    } else {
+        "needs_review"
     }
 }
 
