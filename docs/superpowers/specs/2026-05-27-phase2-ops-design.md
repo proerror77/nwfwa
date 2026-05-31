@@ -170,5 +170,7 @@ Required tests:
 - Rule operators can submit, approve, and publish a rule through API calls.
 - Model operators can inspect model versions, deployment boundary metadata, and basic performance metrics.
 - Model operators can see whether a retrained candidate has artifact, validation report, and evaluation evidence before promotion review.
+- Model promotion, activation, and rollback requests cite the target model version with
+  `model_versions:{model_key}:{model_version}` evidence refs so audit history stays version-specific.
 - Operations Studio Rules and Models pages are backed by API calls, not placeholder text.
 - CI passes for repository health, Rust fmt/clippy/tests, Python tests, frontend lint/test/build, and migrations.

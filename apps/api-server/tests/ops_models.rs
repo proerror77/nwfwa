@@ -1396,6 +1396,25 @@ async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
           "decision": "approved",
           "reviewer": "model-governance",
           "notes": "Approved for continued shadow evaluation only.",
+          "evidence_refs": ["model_versions:baseline_fwa:0.0.1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_TARGET_MODEL_VERSION_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("model_versions:baseline_fwa:0.1.0"));
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        r#"{
+          "decision": "approved",
+          "reviewer": "model-governance",
+          "notes": "Approved for continued shadow evaluation only.",
           "evidence_refs": ["phone:13800138000"]
         }"#,
     )
@@ -1502,6 +1521,23 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
         }"#,
     )
     .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(review["code"], "MISSING_TARGET_MODEL_VERSION_EVIDENCE");
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        &format!(
+            r#"{{
+              "decision": "approved",
+              "reviewer": "model-governance",
+              "notes": "Approved candidate for production activation.",
+              "evidence_refs": ["model_versions:baseline_fwa:{candidate_version}"]
+            }}"#
+        ),
+    )
+    .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(review["model_version"], candidate_version);
 
@@ -1534,6 +1570,20 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "PII_NOT_ALLOWED_IN_MODEL_LIFECYCLE");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_TARGET_MODEL_VERSION_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains(&candidate_version));
 
     let (status, activated) = json_request(
         app.clone(),
@@ -1569,6 +1619,21 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
 #[tokio::test]
 async fn rolls_back_active_model_version() {
     let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        &model_lifecycle_payload("baseline_fwa", "0.2.0"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_TARGET_MODEL_VERSION_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("model_versions:baseline_fwa:0.1.0"));
 
     let (status, body) = json_request(
         app.clone(),

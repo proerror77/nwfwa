@@ -794,6 +794,12 @@ pub async fn submit_model_promotion_review(
         .ok_or_else(|| {
             ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
         })?;
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &model.model_key,
+        &model.version,
+        "model promotion review",
+    )?;
     let review = state
         .repository
         .save_model_promotion_review(ModelPromotionReviewRecord {
@@ -831,6 +837,12 @@ pub async fn activate_model(
     }
 
     let blockers = activation_blockers(&gates);
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &candidate.model_key,
+        &candidate.version,
+        "model activation",
+    )?;
     if !blockers.is_empty() {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -918,6 +930,12 @@ pub async fn rollback_model(
                 "only active models can be rolled back",
             )
         })?;
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &previous.model_key,
+        &previous.version,
+        "model rollback",
+    )?;
     let model = state
         .repository
         .update_model_status(&previous.model_key, &previous.version, "approved")
@@ -965,6 +983,30 @@ fn validate_model_lifecycle_request(request: &ModelLifecycleRequest) -> Result<(
         ));
     }
     Ok(())
+}
+
+fn validate_target_model_version_evidence(
+    evidence_refs: &[String],
+    model_key: &str,
+    model_version: &str,
+    action: &str,
+) -> Result<(), ApiError> {
+    let expected_ref = model_version_evidence_ref(model_key, model_version);
+    if evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        return Ok(());
+    }
+    Err(ApiError::new(
+        StatusCode::BAD_REQUEST,
+        "MISSING_TARGET_MODEL_VERSION_EVIDENCE",
+        format!("{action} evidence_refs must include {expected_ref}"),
+    ))
+}
+
+fn model_version_evidence_ref(model_key: &str, model_version: &str) -> String {
+    format!("model_versions:{model_key}:{model_version}")
 }
 
 async fn load_model_promotion_gates(
