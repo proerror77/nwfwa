@@ -1646,7 +1646,7 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "/api/v1/ops/models/{model_key}/rollback": {
                 "post": {
-                    "summary": "Roll back an active model to approved status",
+                    "summary": "Roll back an active model to a referenced approved version",
                     "security": [{ "ApiKeyAuth": [] }],
                     "parameters": [
                         {

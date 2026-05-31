@@ -322,6 +322,39 @@ async fn register_activation_candidate(app: axum::Router) -> String {
     candidate_version.to_string()
 }
 
+async fn approve_activation_candidate(app: axum::Router, candidate_version: &str) {
+    let (status, review) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/promotion-reviews",
+        &format!(
+            r#"{{
+              "decision": "approved",
+              "reviewer": "model-governance",
+              "notes": "Approved candidate for production activation.",
+              "evidence_refs": ["model_versions:baseline_fwa:{candidate_version}"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(review["model_version"], candidate_version);
+}
+
+async fn activate_candidate_for_test(app: axum::Router, candidate_version: &str) {
+    approve_activation_candidate(app.clone(), candidate_version).await;
+    let (status, activated) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/activate",
+        &model_lifecycle_payload("baseline_fwa", candidate_version),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(activated["version"], candidate_version);
+    assert_eq!(activated["status"], "active");
+}
+
 #[tokio::test]
 async fn lists_baseline_model_versions() {
     let app = build_app(test_config());
@@ -1665,6 +1698,8 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
 #[tokio::test]
 async fn rolls_back_active_model_version() {
     let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+    activate_candidate_for_test(app.clone(), &candidate_version).await;
 
     let (status, body) = json_request(
         app.clone(),
@@ -1692,11 +1727,20 @@ async fn rolls_back_active_model_version() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body["model_key"], "baseline_fwa");
     assert_eq!(body["version"], "0.1.0");
-    assert_eq!(body["status"], "approved");
+    assert_eq!(body["status"], "active");
 
     let (status, body) = get_json(app.clone(), "/api/v1/ops/models").await;
     assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["models"][0]["status"], "approved");
+    assert!(body["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|model| model["version"] == "0.1.0" && model["status"] == "active"));
+    assert!(body["models"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|model| model["version"] == candidate_version && model["status"] == "approved"));
 
     let (status, audit) = get_json(
         app.clone(),
@@ -1708,25 +1752,14 @@ async fn rolls_back_active_model_version() {
         audit["events"][0]["evidence_refs"][0],
         "model_versions:baseline_fwa:0.1.0"
     );
-
-    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
-    assert_eq!(status, StatusCode::OK);
-    let active_gate = body["gates"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|gate| gate["label"] == "Active version")
-        .expect("model promotion gates should include active-version gate");
-    assert_eq!(active_gate["passed"], false);
-    assert_eq!(active_gate["evidence_source"], "missing");
-    assert!(body["blockers"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!("model is not active")));
+    assert_eq!(
+        audit["events"][0]["payload"]["replaced_active_version"],
+        candidate_version
+    );
 }
 
 #[tokio::test]
-async fn rolls_back_active_model_when_newer_candidate_exists() {
+async fn rejects_rollback_to_active_model_when_newer_candidate_exists() {
     let app = build_app(test_config());
     let candidate_version = register_activation_candidate(app.clone()).await;
 
@@ -1738,10 +1771,8 @@ async fn rolls_back_active_model_when_newer_candidate_exists() {
     )
     .await;
 
-    assert_eq!(status, StatusCode::OK);
-    assert_eq!(body["model_key"], "baseline_fwa");
-    assert_eq!(body["version"], "0.1.0");
-    assert_eq!(body["status"], "approved");
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(body["code"], "MODEL_ROLLBACK_TARGET_NOT_FOUND");
 
     let (status, models) = get_json(app, "/api/v1/ops/models").await;
     assert_eq!(status, StatusCode::OK);
@@ -1754,21 +1785,12 @@ async fn rolls_back_active_model_when_newer_candidate_exists() {
         .as_array()
         .unwrap()
         .iter()
-        .any(|model| model["version"] == "0.1.0" && model["status"] == "approved"));
+        .any(|model| model["version"] == "0.1.0" && model["status"] == "active"));
 }
 
 #[tokio::test]
-async fn blocks_model_rollback_when_model_is_not_active() {
+async fn blocks_model_rollback_without_approved_target() {
     let app = build_app(test_config());
-
-    let (status, _) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/models/baseline_fwa/rollback",
-        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
-    )
-    .await;
-    assert_eq!(status, StatusCode::OK);
 
     let (status, body) = json_request(
         app,
@@ -1779,7 +1801,7 @@ async fn blocks_model_rollback_when_model_is_not_active() {
     .await;
 
     assert_eq!(status, StatusCode::CONFLICT);
-    assert_eq!(body["code"], "MODEL_ROLLBACK_REQUIRES_ACTIVE");
+    assert_eq!(body["code"], "MODEL_ROLLBACK_TARGET_NOT_FOUND");
 }
 
 #[tokio::test]

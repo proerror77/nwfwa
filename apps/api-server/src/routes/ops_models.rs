@@ -920,9 +920,10 @@ pub async fn rollback_model(
             "model not found",
         ));
     }
-    let previous = models
-        .into_iter()
+    let active = models
+        .iter()
         .find(|model| model.model_key == model_key && model.status == "active")
+        .cloned()
         .ok_or_else(|| {
             ApiError::new(
                 StatusCode::CONFLICT,
@@ -930,35 +931,67 @@ pub async fn rollback_model(
                 "only active models can be rolled back",
             )
         })?;
-    validate_target_model_version_evidence(
-        &request.evidence_refs,
-        &previous.model_key,
-        &previous.version,
-        "model rollback",
-    )?;
-    let model = state
+    let approved_targets = models
+        .iter()
+        .filter(|model| model.model_key == model_key && model.status == "approved")
+        .collect::<Vec<_>>();
+    let target = approved_targets
+        .iter()
+        .find(|model| {
+            request.evidence_refs.iter().any(|reference| {
+                reference.trim() == model_version_evidence_ref(&model_key, &model.version)
+            })
+        })
+        .copied()
+        .ok_or_else(|| {
+            if let Some(target) = approved_targets.first() {
+                ApiError::new(
+                    StatusCode::BAD_REQUEST,
+                    "MISSING_TARGET_MODEL_VERSION_EVIDENCE",
+                    format!(
+                        "model rollback evidence_refs must include {}",
+                        model_version_evidence_ref(&model_key, &target.version)
+                    ),
+                )
+            } else {
+                ApiError::new(
+                    StatusCode::CONFLICT,
+                    "MODEL_ROLLBACK_TARGET_NOT_FOUND",
+                    "model rollback requires an approved non-active target version",
+                )
+            }
+        })?;
+
+    state
         .repository
-        .update_model_status(&previous.model_key, &previous.version, "approved")
+        .update_model_status(&active.model_key, &active.version, "approved")
         .await
         .map_err(internal_error("MODEL_STATUS_UPDATE_FAILED"))?
         .ok_or_else(|| {
             ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
         })?;
-    record_model_lifecycle_audit(
+    let restored = state
+        .repository
+        .update_model_status(&target.model_key, &target.version, "active")
+        .await
+        .map_err(internal_error("MODEL_STATUS_UPDATE_FAILED"))?
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    record_model_rollback_audit(
         &state,
         &actor,
-        &model,
-        "model.rollback.completed",
-        Some(&previous.status),
-        "Model rollback completed",
+        &restored,
+        &active,
+        &target.status,
         request.evidence_refs,
     )
     .await
     .map_err(internal_error("MODEL_AUDIT_SAVE_FAILED"))?;
     Ok(Json(ModelLifecycleResponse {
-        model_key: model.model_key,
-        version: model.version,
-        status: model.status,
+        model_key: restored.model_key,
+        version: restored.version,
+        status: restored.status,
     }))
 }
 
@@ -1618,6 +1651,44 @@ async fn record_model_lifecycle_audit(
                 "to_status": model.status,
                 "runtime_kind": model.runtime_kind,
                 "execution_provider": model.execution_provider,
+            }),
+            evidence_refs: evidence_refs
+                .into_iter()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_model_rollback_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    restored: &ModelVersionRecord,
+    replaced_active: &ModelVersionRecord,
+    restored_from_status: &str,
+    evidence_refs: Vec<String>,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "model.rollback.completed".into(),
+            event_status: "succeeded".into(),
+            summary: "Model rollback completed".into(),
+            payload: serde_json::json!({
+                "model_key": restored.model_key,
+                "model_version": restored.version,
+                "from_status": restored_from_status,
+                "to_status": restored.status,
+                "replaced_active_version": replaced_active.version,
+                "replaced_active_to_status": "approved",
+                "runtime_kind": restored.runtime_kind,
+                "execution_provider": restored.execution_provider,
             }),
             evidence_refs: evidence_refs
                 .into_iter()
