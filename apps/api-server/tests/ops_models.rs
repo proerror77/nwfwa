@@ -1538,10 +1538,50 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
 
+    let mut unsupported_model_artifact = valid_request.clone();
+    unsupported_model_artifact["artifact_uri"] =
+        serde_json::json!("s3://fwa-models/baseline_fwa/model.txt");
+    unsupported_model_artifact["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/model.txt",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = unsupported_model_artifact.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
+
     let mut csv_validation_report = valid_request.clone();
     csv_validation_report["validation_report_uri"] =
         serde_json::json!("s3://fwa-models/baseline_fwa/validation.csv");
     let payload = csv_validation_report.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_VALIDATION_REPORT_URI");
+
+    let mut unsupported_validation_report = valid_request.clone();
+    unsupported_validation_report["validation_report_uri"] =
+        serde_json::json!("s3://fwa-models/baseline_fwa/validation.txt");
+    unsupported_validation_report["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/validation.txt",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = unsupported_validation_report.to_string();
     let (status, body) = json_request(
         app,
         "POST",

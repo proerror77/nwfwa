@@ -630,6 +630,22 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("must not contain PII")
     );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["artifact_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Supported model artifact formats"),
+        "missing CompleteModelRetrainingJobRequest.artifact_uri format contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["validation_report_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("JSON"),
+        "missing CompleteModelRetrainingJobRequest.validation_report_uri format contract"
+    );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
             ["data_quality_status"]["enum"][1],

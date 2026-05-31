@@ -659,8 +659,8 @@ fn validate_retraining_output_request(
             ));
         }
     }
-    validate_non_csv_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
-    validate_non_csv_artifact_uri(
+    validate_model_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
+    validate_json_report_uri(
         &request.validation_report_uri,
         "INVALID_VALIDATION_REPORT_URI",
     )?;
@@ -792,16 +792,38 @@ fn validate_parquet_artifact_uri(value: &str, code: &'static str) -> Result<(), 
     }
 }
 
-fn validate_non_csv_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
-    if value.to_ascii_lowercase().contains(".csv") {
+fn validate_model_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    if has_supported_uri_suffix(value, &[".onnx", ".pkl", ".joblib"]) {
+        Ok(())
+    } else {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             code,
-            "model retraining artifacts must not point to csv files",
+            "model retraining artifact_uri must use a supported model artifact format: .onnx, .pkl, or .joblib",
         ))
-    } else {
-        Ok(())
     }
+}
+
+fn validate_json_report_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    if has_supported_uri_suffix(value, &[".json"]) {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "model retraining validation_report_uri must point to a JSON report",
+        ))
+    }
+}
+
+fn has_supported_uri_suffix(value: &str, suffixes: &[&str]) -> bool {
+    let normalized = value
+        .trim()
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    suffixes.iter().any(|suffix| normalized.ends_with(suffix))
 }
 
 pub async fn submit_model_promotion_review(

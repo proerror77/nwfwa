@@ -4235,9 +4235,17 @@ pub async fn openapi_schema() -> Json<Value> {
                             "description": "Model retraining notes must not contain PII."
                         },
                         "candidate_model_version": { "type": "string", "minLength": 1 },
-                        "artifact_uri": { "type": "string", "minLength": 1 },
+                        "artifact_uri": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Supported model artifact formats: .onnx, .pkl, or .joblib."
+                        },
                         "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
-                        "validation_report_uri": { "type": "string", "minLength": 1 },
+                        "validation_report_uri": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Validation report URI must point to a JSON report."
+                        },
                         "evaluation_run_id": { "type": "string", "minLength": 1 },
                         "evidence_refs": {
                             "type": "array",
