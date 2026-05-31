@@ -44,6 +44,22 @@ type ScoringResponse = {
     similar_case_score: number;
     final_score: number;
   };
+  model_score: {
+    model_key: string;
+    model_version: string;
+    runtime_kind: string;
+    execution_provider: string;
+    score: number;
+    label: string;
+    explanations: Array<{
+      feature: string;
+      direction: string;
+      contribution: number;
+      reason: string;
+    }>;
+    metadata: Record<string, unknown>;
+    latency_ms: number;
+  };
   alerts: Array<{
     alert_code: string;
     severity: string;
@@ -147,6 +163,28 @@ export function buildTpaEmbeddedPanelSummary(result?: ScoringResponse | null) {
     evidenceCount: result.evidence_refs.length,
     auditId: result.audit_id,
   };
+}
+
+export function buildModelScoreSummary(result?: ScoringResponse | null) {
+  const model = result?.model_score;
+  if (!model) {
+    return null;
+  }
+  return {
+    modelLabel: `${model.model_key}:${model.model_version}`,
+    runtimeLabel: `${model.runtime_kind} / ${model.execution_provider}`,
+    scoreLabel: `${model.score} · ${model.label}`,
+    fraudProbabilityLabel: formatProbability(model.metadata.fraud_probability),
+    abuseProbabilityLabel: formatProbability(model.metadata.abuse_probability),
+    wasteProbabilityLabel: formatProbability(model.metadata.waste_probability),
+    explanationCount: model.explanations.length,
+    topExplanation:
+      model.explanations[0]?.reason ?? "No model explanation returned",
+  };
+}
+
+function formatProbability(value: unknown) {
+  return typeof value === "number" ? `${(value * 100).toFixed(1)}%` : "-";
 }
 
 function formatFeatureValue(value: unknown) {
@@ -304,6 +342,7 @@ export function RuntimeScoring() {
   const featureTraceRows = result ? buildFeatureTraceRows(result.feature_values) : [];
   const evidenceRefRows = result ? buildRuntimeEvidenceRefRows(result.evidence_refs) : [];
   const tpaPanelSummary = buildTpaEmbeddedPanelSummary(result);
+  const modelScoreSummary = buildModelScoreSummary(result);
 
   return (
     <section className="runtime">
@@ -435,6 +474,47 @@ export function RuntimeScoring() {
                 <dd>{result.scores.final_score}</dd>
               </div>
             </dl>
+            <section>
+              <h3>ML Classification</h3>
+              {modelScoreSummary ? (
+                <dl className="result-grid">
+                  <div>
+                    <dt>Model</dt>
+                    <dd>{modelScoreSummary.modelLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Runtime</dt>
+                    <dd>{modelScoreSummary.runtimeLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Score</dt>
+                    <dd>{modelScoreSummary.scoreLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Fraud</dt>
+                    <dd>{modelScoreSummary.fraudProbabilityLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Abuse</dt>
+                    <dd>{modelScoreSummary.abuseProbabilityLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Waste</dt>
+                    <dd>{modelScoreSummary.wasteProbabilityLabel}</dd>
+                  </div>
+                  <div>
+                    <dt>Explanations</dt>
+                    <dd>{modelScoreSummary.explanationCount}</dd>
+                  </div>
+                  <div>
+                    <dt>Top Explanation</dt>
+                    <dd>{modelScoreSummary.topExplanation}</dd>
+                  </div>
+                </dl>
+              ) : (
+                <p className="empty">No model score</p>
+              )}
+            </section>
             <section>
               <h3>TPA Embedded Panel</h3>
               {tpaPanelSummary ? (

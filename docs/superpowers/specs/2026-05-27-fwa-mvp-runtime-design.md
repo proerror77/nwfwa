@@ -229,6 +229,27 @@ Every failure that occurs after request admission must write a failed audit even
     "ml_score": 83,
     "final_score": 87
   },
+  "model_score": {
+    "model_key": "baseline_fwa",
+    "model_version": "0.1.0",
+    "runtime_kind": "python_http",
+    "execution_provider": "cpu",
+    "score": 83,
+    "label": "HIGH_RISK",
+    "explanations": [
+      {
+        "feature": "claim_amount_to_limit_ratio",
+        "direction": "increases_risk",
+        "contribution": 0.82,
+        "reason": "理赔金额占保障额度比例较高"
+      }
+    ],
+    "metadata": {
+      "fraud_probability": 0.83,
+      "abuse_probability": 0.61,
+      "waste_probability": 0.47
+    }
+  },
   "alerts": [
     {
       "alert_code": "EARLY_HIGH_AMOUNT",
@@ -252,7 +273,7 @@ Every failure that occurs after request admission must write a failed audit even
 }
 ```
 
-All successful responses include `run_id`, `audit_id`, score fields, top reasons, and evidence references.
+All successful responses include `run_id`, `audit_id`, score fields, model score details, top reasons, and evidence references.
 
 ## Database Design
 

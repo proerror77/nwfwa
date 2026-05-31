@@ -77,7 +77,10 @@ impl ModelScorer for HeuristicModelScorer {
             }],
             metadata: serde_json::json!({
                 "source": "heuristic",
-                "calibration": "none"
+                "calibration": "none",
+                "fraud_probability": score as f64 / 100.0,
+                "abuse_probability": (ratio * 0.70).clamp(0.0, 1.0),
+                "waste_probability": (ratio * 0.40).clamp(0.0, 1.0)
             }),
             latency_ms: 0,
         })
@@ -200,6 +203,18 @@ mod tests {
         assert_eq!(result.score, 82);
         assert_eq!(result.model_version, "0.1.0");
         assert_eq!(result.runtime_kind, "heuristic");
+        assert_eq!(
+            result.metadata["fraud_probability"],
+            serde_json::json!(0.82)
+        );
+        assert_eq!(
+            result.metadata["abuse_probability"],
+            serde_json::json!(0.574)
+        );
+        assert_eq!(
+            result.metadata["waste_probability"],
+            serde_json::json!(0.328)
+        );
     }
 
     #[test]

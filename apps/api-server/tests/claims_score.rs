@@ -247,6 +247,15 @@ async fn scores_spec_style_top_level_full_payload() {
         );
     }
     assert!(body["scores"]["anomaly_score"].as_u64().unwrap() > 0);
+    assert_eq!(body["model_score"]["model_key"], "baseline_fwa");
+    assert_eq!(body["model_score"]["model_version"], "0.1.0");
+    assert!(!body["model_score"]["explanations"]
+        .as_array()
+        .unwrap()
+        .is_empty());
+    assert!(body["model_score"]["metadata"]["fraud_probability"].is_number());
+    assert!(body["model_score"]["metadata"]["abuse_probability"].is_number());
+    assert!(body["model_score"]["metadata"]["waste_probability"].is_number());
     assert_eq!(body["risk_level"], "Critical");
     assert!(body["confidence_score"].as_u64().unwrap() >= 80);
     assert_eq!(body["confidence"], "High");
@@ -1757,6 +1766,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "routing_reason",
         "routing_policy",
         "scores",
+        "model_score",
         "top_reasons",
         "evidence_refs",
         "clinical_evidence",
@@ -1790,6 +1800,20 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "#/components/schemas/RoutingPolicy"
     );
     assert_eq!(
+        response_properties["model_score"]["$ref"],
+        "#/components/schemas/ModelScore"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelScore"]["properties"]["metadata"]["properties"]
+            ["fraud_probability"]["maximum"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelScore"]["properties"]["explanations"]["items"]
+            ["$ref"],
+        "#/components/schemas/ModelExplanation"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["RoutingPolicy"]["required"],
         serde_json::json!([
             "policy_id",
@@ -1811,6 +1835,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "rag",
         "recommended_action",
         "scores",
+        "model_score",
         "top_reasons",
         "layers",
         "evidence_refs",
@@ -1967,6 +1992,9 @@ async fn scoring_uses_active_model_version_from_model_registry() {
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body["scores"]["ml_score"], 72);
+    assert_eq!(body["model_score"]["score"], 72);
+    assert_eq!(body["model_score"]["model_version"], "0.2.0-active");
+    assert_eq!(body["model_score"]["runtime_kind"], "test_echo");
 
     let audit_request = Request::builder()
         .method("GET")

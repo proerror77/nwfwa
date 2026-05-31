@@ -43,10 +43,34 @@ The response is audit-backed and must be treated as assistive risk routing, not 
   "risk_score": 87,
   "rag": "Red",
   "recommended_action": "ManualReview",
+  "model_score": {
+    "model_key": "baseline_fwa",
+    "model_version": "0.1.0",
+    "runtime_kind": "python_http",
+    "execution_provider": "cpu",
+    "score": 83,
+    "label": "HIGH_RISK",
+    "explanations": [
+      {
+        "feature": "claim_amount_to_limit_ratio",
+        "direction": "increases_risk",
+        "contribution": 0.82,
+        "reason": "理赔金额占保障额度比例较高"
+      }
+    ],
+    "metadata": {
+      "fraud_probability": 0.83,
+      "abuse_probability": 0.61,
+      "waste_probability": 0.47
+    },
+    "latency_ms": 0
+  },
   "top_reasons": ["..."],
   "evidence_refs": ["..."]
 }
 ```
+
+`model_score` exposes the L4 supervised model boundary for TPA panels and audit review: model key/version, runtime backend, score, explanations, and baseline FWA sub-probabilities. These fields remain assistive signals and do not make an automatic claim decision.
 
 Documented errors:
 

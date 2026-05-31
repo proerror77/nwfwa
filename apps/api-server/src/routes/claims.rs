@@ -16,7 +16,7 @@ use fwa_clinical::{
 };
 use fwa_core::*;
 use fwa_features::{calculate_features, EvidenceRef, FeatureMap, FeatureValue};
-use fwa_ml_runtime::{ModelRuntimeError, ModelScoreRequest};
+use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest};
 use fwa_provider::{
     assess_provider_profile, assess_provider_relationship_graph, ProviderProfileAssessment,
     ProviderProfileInput, ProviderProfileWindow, ProviderRelationshipGraphAssessment,
@@ -149,6 +149,7 @@ pub struct ScoreClaimResponse {
     pub routing_reason: String,
     pub routing_policy: fwa_scoring::RoutingPolicy,
     pub scores: ScoreBreakdown,
+    pub model_score: ModelScore,
     pub alerts: Vec<AlertResponse>,
     pub top_reasons: Vec<String>,
     pub layers: Vec<DetectionLayerScore>,
@@ -517,6 +518,7 @@ pub async fn score_claim(
         routing_reason: decision.routing_reason,
         routing_policy: decision.routing_policy,
         scores,
+        model_score,
         alerts,
         top_reasons: decision.top_reasons,
         layers: decision.layers,

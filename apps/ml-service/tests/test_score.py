@@ -37,6 +37,7 @@ def test_score_returns_high_risk_for_large_amount_ratio():
             {
                 "claim_amount_to_limit_ratio": 0.82,
                 "provider_risk_tier": "MEDIUM",
+                "high_cost_item_ratio": 0.6,
             },
         ),
     )
@@ -47,6 +48,9 @@ def test_score_returns_high_risk_for_large_amount_ratio():
     assert payload["label"] == "HIGH_RISK"
     assert payload["model_version"] == "0.1.0"
     assert payload["metadata"]["runtime_kind"] == "python_fastapi"
+    assert payload["metadata"]["fraud_probability"] == 0.9
+    assert payload["metadata"]["abuse_probability"] == 0.614
+    assert payload["metadata"]["waste_probability"] == 0.584
 
 
 def test_score_returns_low_risk_for_low_amount_ratio():

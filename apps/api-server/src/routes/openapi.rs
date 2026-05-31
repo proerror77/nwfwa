@@ -2415,6 +2415,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "routing_reason",
                         "routing_policy",
                         "scores",
+                        "model_score",
                         "alerts",
                         "top_reasons",
                         "layers",
@@ -2483,6 +2484,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         "scores": {
                             "$ref": "#/components/schemas/ScoreBreakdown"
                         },
+                        "model_score": {
+                            "$ref": "#/components/schemas/ModelScore"
+                        },
                         "alerts": {
                             "type": "array",
                             "items": {
@@ -2535,6 +2539,52 @@ pub async fn openapi_schema() -> Json<Value> {
                                 ]
                             }
                         }
+                    }
+                },
+                "ModelScore": {
+                    "type": "object",
+                    "required": [
+                        "model_key",
+                        "model_version",
+                        "runtime_kind",
+                        "execution_provider",
+                        "score",
+                        "label",
+                        "explanations",
+                        "metadata",
+                        "latency_ms"
+                    ],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "runtime_kind": { "type": "string" },
+                        "execution_provider": { "type": "string" },
+                        "score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "label": { "type": "string" },
+                        "explanations": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ModelExplanation" }
+                        },
+                        "metadata": {
+                            "type": "object",
+                            "properties": {
+                                "fraud_probability": { "type": "number", "minimum": 0, "maximum": 1 },
+                                "abuse_probability": { "type": "number", "minimum": 0, "maximum": 1 },
+                                "waste_probability": { "type": "number", "minimum": 0, "maximum": 1 }
+                            },
+                            "additionalProperties": true
+                        },
+                        "latency_ms": { "type": "integer", "minimum": 0 }
+                    }
+                },
+                "ModelExplanation": {
+                    "type": "object",
+                    "required": ["feature", "direction", "contribution", "reason"],
+                    "properties": {
+                        "feature": { "type": "string" },
+                        "direction": { "type": "string" },
+                        "contribution": { "type": "number" },
+                        "reason": { "type": "string" }
                     }
                 },
                 "FeatureValue": {

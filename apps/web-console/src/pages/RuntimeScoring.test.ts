@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildClaimIdScorePayload,
   buildFeatureTraceRows,
+  buildModelScoreSummary,
   buildRuntimeEvidenceRefRows,
   buildRoutingPolicySummary,
   buildTpaEmbeddedPanelSummary,
@@ -93,6 +94,28 @@ describe("buildTpaEmbeddedPanelSummary", () => {
           similar_case_score: 55,
           final_score: 87,
         },
+        model_score: {
+          model_key: "baseline_fwa",
+          model_version: "0.1.0",
+          runtime_kind: "python_fastapi",
+          execution_provider: "cpu",
+          score: 75,
+          label: "HIGH_RISK",
+          explanations: [
+            {
+              feature: "claim_amount_to_limit_ratio",
+              direction: "increases_risk",
+              contribution: 0.8,
+              reason: "理赔金额占保障额度比例较高",
+            },
+          ],
+          metadata: {
+            fraud_probability: 0.75,
+            abuse_probability: 0.62,
+            waste_probability: 0.48,
+          },
+          latency_ms: 12,
+        },
         alerts: [
           {
             alert_code: "EARLY_HIGH_CLAIM",
@@ -121,6 +144,91 @@ describe("buildTpaEmbeddedPanelSummary", () => {
       auditId: "audit_CLM-1",
     });
     expect(buildTpaEmbeddedPanelSummary(null)).toBeNull();
+  });
+});
+
+describe("buildModelScoreSummary", () => {
+  it("summarizes model version, runtime, probabilities, and top explanation", () => {
+    expect(
+      buildModelScoreSummary({
+        run_id: "run_CLM-1",
+        audit_id: "audit_CLM-1",
+        claim_id: "CLM-1",
+        review_mode: "pre_payment",
+        risk_score: 87,
+        rag: "RED",
+        risk_level: "High",
+        recommended_action: "MANUAL_REVIEW",
+        confidence_score: 76,
+        confidence: "Medium",
+        routing_reason: "High risk manual review.",
+        routing_policy: {
+          policy_id: "fwa_risk_fusion_routing",
+          version: 1,
+          review_mode: "pre_payment",
+          risk_thresholds: {
+            low_max: 39,
+            medium_min: 40,
+            high_min: 70,
+            critical_min: 85,
+          },
+          confidence_thresholds: {
+            low_confidence_below: 60,
+            high_confidence_min: 80,
+          },
+          provider_review_threshold: 70,
+        },
+        scores: {
+          peer_deviation_score: 90,
+          rule_score: 80,
+          anomaly_score: 70,
+          ml_score: 75,
+          medical_reasonableness_score: 65,
+          provider_network_score: 60,
+          similar_case_score: 55,
+          final_score: 87,
+        },
+        model_score: {
+          model_key: "baseline_fwa",
+          model_version: "0.1.0",
+          runtime_kind: "python_fastapi",
+          execution_provider: "cpu",
+          score: 75,
+          label: "HIGH_RISK",
+          explanations: [
+            {
+              feature: "claim_amount_to_limit_ratio",
+              direction: "increases_risk",
+              contribution: 0.8,
+              reason: "理赔金额占保障额度比例较高",
+            },
+          ],
+          metadata: {
+            fraud_probability: 0.75,
+            abuse_probability: 0.62,
+            waste_probability: 0.48,
+          },
+          latency_ms: 12,
+        },
+        alerts: [],
+        layers: [],
+        top_reasons: [],
+        similar_cases: [],
+        feature_values: [],
+        evidence_refs: [],
+      }),
+    ).toEqual({
+      modelLabel: "baseline_fwa:0.1.0",
+      runtimeLabel: "python_fastapi / cpu",
+      scoreLabel: "75 · HIGH_RISK",
+      fraudProbabilityLabel: "75.0%",
+      abuseProbabilityLabel: "62.0%",
+      wasteProbabilityLabel: "48.0%",
+      explanationCount: 1,
+      topExplanation: "理赔金额占保障额度比例较高",
+    });
+
+    expect(buildModelScoreSummary(null)).toBeNull();
   });
 });
 
