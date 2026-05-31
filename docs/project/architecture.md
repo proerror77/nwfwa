@@ -51,6 +51,14 @@ flowchart LR
 
 ## Main Workflows
 
+### Review Mode Boundary
+
+`review_mode` separates pre-payment and post-payment use cases. It is a shared
+governance dimension for scoring, rules, models, thresholds, and routing
+policies. Pre-payment behavior should bias toward precise intervention before
+payment. Post-payment behavior may support audit, recovery, model evaluation,
+and ROI analysis.
+
 ### Claim Scoring
 
 1. TPA or UI calls `POST /api/v1/claims/score`.
@@ -99,7 +107,19 @@ QA, investigation, and medical review writebacks create audit events and
 structured labels. Labels feed governance views, rule tuning, model evaluation,
 and workflow analysis.
 
+### Evidence Sufficiency And Clinical Routing
+
+Evidence sufficiency is evaluated by FWA scheme family. Case and agent evidence
+packages should preserve claim, rule, model, anomaly, document, and similar-case
+references. Clinical and medical necessity workflows should identify missing
+records, diagnosis/procedure mismatches, documentation issues, and insufficient
+evidence before any customer adjudication process.
+
 ## Web Console Modules
+
+These modules are demo and pilot-operator surfaces. A page existing in the
+console does not mean the corresponding customer environment, object storage,
+backup, retention, or production monitoring setup is complete.
 
 | Module | Purpose |
 | --- | --- |
@@ -132,3 +152,8 @@ The current repository supports a local modular monolith path:
 Production deployment is not configured yet. Environment-specific deployment,
 secrets, key rotation, observability, object storage, and customer network
 controls must be selected before production use.
+
+Pilot foundation work is also still required before customer data is used:
+object storage health, backup and restore, retention and legal hold, tenant or
+customer scoping, prompt/log/vector PII masking, minimum metrics, and alert
+routing.

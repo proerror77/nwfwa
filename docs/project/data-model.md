@@ -19,9 +19,16 @@ erDiagram
     scoring_runs ||--o{ model_scores : records
     scoring_runs ||--o{ audit_events : audits
     scoring_runs ||--o{ fwa_leads : generates
+    rules ||--o{ rule_versions : versions
+    rule_versions ||--o{ rule_runs : evaluates
+    model_versions ||--o{ model_scores : scores
     fwa_leads ||--o{ investigation_cases : opens
+    fwa_leads ||--o{ audit_samples : sampled
     agent_runs ||--o{ agent_steps : contains
+    agent_runs ||--o{ agent_context_snapshots : captures
     agent_runs ||--o{ tool_calls : invokes
+    agent_runs ||--o{ agent_policy_checks : checks
+    agent_runs ||--o{ agent_approvals : approves
     tool_calls ||--o{ tool_results : returns
     external_dataset_versions ||--o{ external_dataset_splits : has
     external_dataset_versions ||--o{ external_schema_fields : profiles
@@ -85,6 +92,10 @@ persistence checks.
 
 Agent data is auditable and assistive-only.
 
+Current agent persistence stores run headers, steps, context snapshots, tool
+calls, tool results, policy checks, and human approvals. Object-storage-backed
+agent workspace artifacts are a future infrastructure item, not a current table.
+
 ### Lead, Case, And Review Workflow
 
 | Table | Purpose |
@@ -98,6 +109,11 @@ Agent data is auditable and assistive-only.
 
 These tables connect scoring to human workflow and feedback labels.
 
+Audit samples should preserve sampling mode, population definition, inclusion
+criteria, seed or selection method, sample size, reviewer assignment, assignment
+queue, and outcome distribution. This is the evidence trail for QA coverage,
+control cohorts, missed-risk checks, and false-positive calibration.
+
 ### External Data And Feature Lineage
 
 | Table | Purpose |
@@ -110,10 +126,15 @@ These tables connect scoring to human workflow and feedback labels.
 | `feature_definitions` | Reusable feature definitions. |
 | `feature_set_versions` | Feature-set versions tied to datasets. |
 | `model_dataset_versions` | Model-ready dataset versions tied to feature sets. |
-| `model_evaluation_runs` | Evaluation metrics, confusion matrix, and artifact URIs. |
+| `model_evaluation_runs` | Evaluation metrics, scheme family, confusion matrix, and artifact URIs. |
 
 The schema stores metadata and lineage. Large data rows should live in Parquet
 files outside PostgreSQL for real pilots.
+
+Model evaluations should carry `scheme_family` so holdout quality, drift,
+promotion readiness, and ROI can be interpreted by FWA pattern. The API should
+validate this value against the FWA scheme taxonomy and propagate it into
+retraining candidate evaluations.
 
 ### Promotion And Retraining
 
@@ -130,13 +151,65 @@ These tables support governed lifecycle changes and rollback evidence.
 
 - Claims reference members, policies, and providers.
 - Claim items cascade when a claim is deleted.
-- Scoring evidence cascades from `scoring_runs` where configured.
+- Feature values, rule runs, model scores, audit events, and leads cascade from
+  `scoring_runs` where configured.
 - Leads reference scoring runs.
 - Cases reference leads.
 - Feature sets reference external dataset versions.
 - Model datasets reference feature-set versions.
 - Model evaluations reference model datasets.
 - Agent steps, tool calls, results, checks, and approvals reference agent runs.
+
+## Constraints And Indexes
+
+Primary keys use UUIDs on most relational tables. Several integration-facing
+identifiers are also unique:
+
+- `members.external_member_id`
+- `policies.external_policy_id`
+- `providers.external_provider_id`
+- `claims.external_claim_id`
+- `rules.rule_key`
+- `scoring_runs.run_id`
+- `audit_events.audit_id`
+- `knowledge_cases.case_id`
+- `agent_runs.agent_run_id`
+- `fwa_leads.lead_id`
+- `investigation_cases.case_id`
+- `audit_samples.sample_id`
+- `investigation_results.investigation_id`
+- `saving_attributions.attribution_id`
+- `qa_reviews.qa_case_id`
+
+Composite uniqueness protects versioned governance records:
+
+- `rule_versions(rule_id, version)`
+- `model_versions(model_key, version)`
+- `routing_policies(policy_key, version, review_mode)`
+- `external_dataset_versions(dataset_key, dataset_version)`
+- `external_dataset_splits(dataset_id, split_name)`
+- `external_schema_fields(dataset_id, field_name)`
+- `feature_definitions(feature_name, business_domain, version)`
+- `feature_set_versions(feature_set_key, version)`
+
+Important checks:
+
+- `external_dataset_versions.storage_format = 'parquet'`
+- `model_promotion_reviews.decision in ('approved', 'rejected')`
+- `model_retraining_jobs.status in ('queued', 'running', 'validation',
+  'completed', 'failed', 'cancelled')`
+- `rule_promotion_reviews.decision in ('approved', 'rejected')`
+
+The current schema has no explicit `CREATE INDEX` statements beyond indexes
+created implicitly by primary keys and unique constraints. High-volume pilot
+queries over `run_id`, `claim_id`, `scheme_family`, `created_at`, and audit
+filters should be reviewed before production-scale use.
+
+## Compatibility ALTERs
+
+The migration file includes `CREATE TABLE IF NOT EXISTS` and targeted
+`ALTER TABLE ... ADD COLUMN IF NOT EXISTS` statements. This keeps local and CI
+schema setup idempotent while the demo schema evolves.
 
 ## JSONB Usage
 

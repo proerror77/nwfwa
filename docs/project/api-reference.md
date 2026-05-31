@@ -3,6 +3,9 @@
 All local and pilot APIs use JSON. Except for `GET /api/v1/health` and
 `GET /api/openapi.json`, callers should send `x-api-key`.
 
+`GET /api/openapi.json` is an application route that returns the API contract.
+It is not itself listed as an OpenAPI `paths` item.
+
 Local demo API key:
 
 ```text
@@ -40,6 +43,15 @@ Main request modes:
 - stored demo claim by `source_system` and `claim_id`
 - submitted claim payload with member, policy, provider, diagnosis, procedure,
   amount, dates, and context fields
+
+Request fields that affect policy selection:
+
+- `review_mode`: separates `pre_payment` and `post_payment` behavior.
+- `source_system`: scopes stored-claim lookup and audit source.
+- `claim_id`: identifies stored demo or pilot claim records.
+
+`review_mode` participates in routing policy, active model, and threshold
+selection. It does not change the assistive-only decision boundary.
 
 Main response fields:
 
@@ -128,14 +140,18 @@ record human context and evidence refs.
 | GET | `/api/v1/ops/rules/{rule_id}/promotion-gates` | Evaluate rule promotion readiness. | Yes | None |
 | POST | `/api/v1/ops/rules/{rule_id}/promotion-reviews` | Submit human promotion review. | Yes | Records review evidence. |
 | POST | `/api/v1/ops/rules/candidates` | Save a candidate rule. | Yes | Creates or updates candidate rule evidence. |
-| POST | `/api/v1/ops/rules/discover` | Discover candidate rules from observed signals. | Yes | Records discovery provenance. |
+| POST | `/api/v1/ops/rules/discover` | Discover candidate rules from labeled sample claims. | Yes | Records discovery provenance and candidate metrics. |
 | POST | `/api/v1/ops/rules/{rule_id}/submit` | Submit rule for governance. | Yes | Updates lifecycle status and audit trail. |
-| POST | `/api/v1/ops/rules/{rule_id}/approve` | Approve submitted rule. | Yes | Updates lifecycle status and audit trail. |
+| POST | `/api/v1/ops/rules/{rule_id}/approve` | Mark rule approved with reviewer evidence. | Yes | Updates lifecycle status and audit trail. |
 | POST | `/api/v1/ops/rules/{rule_id}/publish` | Publish approved rule. | Yes | Updates lifecycle status and audit trail. |
-| POST | `/api/v1/ops/rules/{rule_id}/rollback` | Roll back active rule version. | Yes | Restores governed version and records audit trail. |
+| POST | `/api/v1/ops/rules/{rule_id}/rollback` | Move active rule back to approved status. | Yes | Records rollback audit evidence. |
 
 Rule APIs support deterministic controls. They should not silently change active
 customer behavior without lifecycle and audit evidence.
+
+Rule lifecycle caveat: `approve` currently writes approved status with evidence
+refs. `rollback` moves an active rule back to approved status; it does not select
+an arbitrary older version.
 
 ## Routing Policies
 
@@ -170,6 +186,9 @@ claim adjudication.
 Dataset APIs store metadata and URIs. They do not store full Parquet rows in
 PostgreSQL.
 
+Model evaluation registration should include the FWA `scheme_family` dimension
+so performance, drift, and promotion gates can be interpreted by FWA pattern.
+
 ## Models
 
 | Method | Path | Purpose | Auth | Side effects |
@@ -182,13 +201,21 @@ PostgreSQL.
 | POST | `/api/v1/ops/models/{model_key}/retraining-jobs` | Create retraining job. | Yes | Creates job and audit evidence. |
 | POST | `/api/v1/ops/model-retraining-jobs/{job_id}/status` | Update retraining job status. | Yes | Updates job status and audit evidence. |
 | POST | `/api/v1/ops/model-retraining-jobs/claim-next` | Claim next queued retraining job. | Yes | Assigns job to worker actor. |
-| POST | `/api/v1/ops/model-retraining-jobs/{job_id}/output` | Complete retraining job with output artifacts. | Yes | Persists candidate model and artifact evidence. |
+| POST | `/api/v1/ops/model-retraining-jobs/{job_id}/output` | Register validation output for a retraining job. | Yes | Requires validation state, creates candidate model and evaluation evidence. |
 | POST | `/api/v1/ops/models/{model_key}/promotion-reviews` | Submit model promotion review. | Yes | Records human review evidence. |
-| POST | `/api/v1/ops/models/{model_key}/activate` | Activate approved model version. | Yes | Changes active model and records audit trail. |
-| POST | `/api/v1/ops/models/{model_key}/rollback` | Roll back active model to governed target. | Yes | Restores active model version and records audit trail. |
+| POST | `/api/v1/ops/models/{model_key}/activate` | Activate the latest governed candidate that passes gates. | Yes | Demotes previous active model, activates target, and records audit trail. |
+| POST | `/api/v1/ops/models/{model_key}/rollback` | Roll back active model to recorded previous active version. | Yes | Restores approved previous active model and records audit trail. |
 
 Model APIs govern the demo and pilot model lifecycle. They are not a complete
 production model training system.
+
+Governed retraining boundary: retraining jobs model the offline worker contract,
+artifact evidence, validation metrics, and candidate registration. They do not
+represent automatic production training or automatic production deployment.
+
+Promotion gates should be read as the policy checklist for activation. They
+cover data quality, label provenance, drift, promotion review evidence, feature
+reproducibility, explanation artifacts, and validation quality.
 
 ## Provider, Member, And Scheme Intelligence
 

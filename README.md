@@ -5,7 +5,7 @@ Agentic FWA Risk & Operations Platform.
 `nwfwa` is a health-insurance fraud, waste, and abuse risk operations workspace.
 It combines deterministic scoring, rule governance, model operations, case
 workflow, knowledge search, agent-assisted investigation, QA feedback, and audit
-tracing into one pilot-ready platform.
+tracing into one pilot-oriented platform.
 
 The platform is assistive only. It can surface suspicious patterns, explain risk
 signals, route cases, and prepare evidence packages. It must not automatically
@@ -63,6 +63,18 @@ includes customer environment deployment, secrets and key rotation, observabilit
 stack selection, object storage strategy, real training pipelines, real model
 artifact loading, customer holdout validation, drift monitoring, and operational
 runbooks.
+
+### Readiness Legend
+
+- `demo`: implemented for deterministic local demonstration with seeded data,
+  local credentials, and local services.
+- `pilot contract`: API and workflow surface exists for customer-pilot
+  validation, but customer environment controls are still required.
+- `pilot foundation pending`: object storage, backup and restore, retention,
+  legal hold, customer scoping, key rotation, allowlists, and observability need
+  environment-specific setup before customer data is used.
+- `future`: production training, production deployment, SSO/RBAC, analytics
+  scale, vector/document registries, and long-running drift operations.
 
 ## Architecture
 
@@ -142,6 +154,16 @@ The workspace crates separate domain behavior:
 
 ## Core Workflows
 
+### Review Mode Boundary
+
+The platform distinguishes pre-payment and post-payment review. `review_mode`
+is part of the scoring, routing, rule, model, and threshold governance boundary.
+Pre-payment flows optimize review precision and payment control. Post-payment
+flows can favor recovery, audit sampling, model evaluation, and ROI analysis.
+
+Recommended actions are review guidance. They do not approve, deny, or adjudicate
+claims.
+
 ### Claim Scoring
 
 `POST /api/v1/claims/score` accepts either a stored demo `claim_id` or claim
@@ -185,7 +207,10 @@ assistive-only investigation packages and records audit evidence.
 
 QA Review captures human review results. Feedback becomes governed labels for
 rules, models, features, provider profiles, and workflow improvement. Medical
-review results also create feedback labels.
+review results also create feedback labels. Clinical evidence and medical
+necessity decisions should preserve minimum evidence sufficiency by scheme
+family and use structured outcomes such as `insufficient_evidence`,
+`medical_necessity_issue`, and `documentation_issue`.
 
 ### Governance And Audit
 
@@ -262,6 +287,7 @@ The API server listens on `127.0.0.1:8080` by default.
 
 ```bash
 cd apps/web-console
+npm ci
 npm run dev
 ```
 
@@ -282,6 +308,7 @@ curl -s http://127.0.0.1:8080/api/v1/claims/score \
 ### Run Demo Smoke Checks
 
 ```bash
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa
 scripts/demo/smoke_demo.py
 ```
 
@@ -352,11 +379,14 @@ workflow checks:
 - Rust fetch, format, clippy, and tests with `--locked`
 - PostgreSQL migration idempotency
 - demo seed and smoke behavior
+- retraining worker smoke path
+- demo persistence SQL assertion
 - Python ML service tests
 - web console lint, tests, and production build
 
 Release workflow publishes GitHub Releases for semantic tags matching `v*.*.*`.
-External deployment is intentionally not configured yet.
+Manual release dispatch requires an existing tag input. Releases are GitHub
+release records only; external deployment is intentionally not configured yet.
 
 See [docs/engineering/ci-cd.md](docs/engineering/ci-cd.md) and
 [docs/engineering/git-flow.md](docs/engineering/git-flow.md).

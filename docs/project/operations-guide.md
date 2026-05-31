@@ -5,6 +5,14 @@ pilot environment.
 
 ## Local Demo Startup
 
+Install frontend dependencies before first UI use:
+
+```bash
+cd apps/web-console
+npm ci
+cd ../..
+```
+
 Start PostgreSQL and the ML service:
 
 ```bash
@@ -46,6 +54,15 @@ dev-secret
 ```
 
 ## Demo Verification
+
+Export local variables for commands that run after the API server starts:
+
+```bash
+export DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa
+export FWA_API_BASE_URL=http://127.0.0.1:8080
+export FWA_API_KEY=dev-secret
+export FWA_SOURCE_SYSTEM=tpa-demo
+```
 
 Run the API smoke:
 
@@ -101,7 +118,7 @@ npm run smoke:build
 Worker health:
 
 ```bash
-cargo run --locked -p worker -- health
+cargo run --locked -p worker -- health | python3 scripts/ci/assert_worker_health.py
 ```
 
 ## CI Gates
@@ -139,21 +156,51 @@ The demo should prove these workflows:
 9. Inspect API call records and claim audit history.
 10. Verify dashboard rollups and persistence checks.
 
+The full smoke path also exercises member profile, provider risk, audit
+sampling, rule discovery and lifecycle, routing policy governance, webhook
+delivery attempts, knowledge publication, and governed retraining candidate
+checks.
+
 ## Pilot Readiness Checklist
 
-Before a customer pilot:
+### Pilot Contract Minimum
+
+Before a customer pilot contract test:
 
 - Configure customer-specific API keys.
 - Define key rotation policy.
 - Define network allowlists.
 - Confirm masked identifier policy.
 - Confirm allowed payload fields.
-- Confirm object storage or data-lake location for Parquet files.
-- Register customer dataset metadata before model training or evaluation.
 - Validate scoring on representative pilot claims.
-- Validate investigation and QA writebacks.
+- Validate investigation, QA, and medical review writebacks.
 - Verify audit history for every demo flow.
 - Confirm high-risk outputs remain assistive-only.
+
+Writeback contract fields:
+
+- investigation: `claim_id`, `investigation_id`, `outcome`, `confirmed_fwa`,
+  `saving_amount`, `currency`, `notes`, and `evidence_refs`
+- QA: `qa_case_id`, `claim_id`, `qa_conclusion`, `issue_type`,
+  `feedback_target`, `notes`, and `evidence_refs`
+- medical review: `claim_id`, `scoring_audit_id`, `reviewer`, `decision`,
+  `notes`, and `evidence_refs`
+
+### Pilot Foundation Required Before Customer Data
+
+- Confirm object storage or data-lake location for Parquet files.
+- Register customer dataset metadata before model training or evaluation.
+- Configure backup and restore.
+- Define retention and legal hold.
+- Confirm customer or tenant scoping.
+- Confirm object storage health checks.
+- Mask PII before prompts, logs, vectors, and agent free text.
+- Set up API, worker, and ML service health checks.
+- Set up CI health monitoring.
+- Set up runtime logs with path, status, run id, audit id, event type, and
+  source system.
+- Verify API call records in Governance.
+- Verify database migration success and audit append rate.
 - Set up runtime logs and alert routing for the chosen environment.
 
 ## Security And Privacy Rules
@@ -177,6 +224,9 @@ Not complete yet:
 - production object storage wiring
 - production observability stack
 - production alert routing
+- pilot backup and restore automation
+- pilot retention and legal hold automation
+- customer scoping enforcement
 - real training pipeline
 - real model artifact loader
 - customer holdout and out-of-time validation process
