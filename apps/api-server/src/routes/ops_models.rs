@@ -781,14 +781,14 @@ fn validate_unit_interval_metric(
 }
 
 fn validate_parquet_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
-    if value.to_ascii_lowercase().contains(".csv") {
+    if has_supported_uri_suffix(value, &[".parquet"]) || has_supported_uri_suffix(value, &["/"]) {
+        Ok(())
+    } else {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             code,
             "model evaluation artifact URIs must point to parquet files or parquet partition directories",
         ))
-    } else {
-        Ok(())
     }
 }
 

@@ -399,6 +399,14 @@ async fn openapi_includes_operations_paths() {
             "missing ModelEvaluationRegistrationRequest minLength for {field}"
         );
     }
+    assert!(
+        schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+            ["feature_importance_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Parquet"),
+        "missing ModelEvaluationRegistrationRequest.feature_importance_uri parquet contract"
+    );
     for field in [
         "auc",
         "ks",
@@ -645,6 +653,14 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("JSON"),
         "missing CompleteModelRetrainingJobRequest.validation_report_uri format contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["feature_importance_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Parquet"),
+        "missing CompleteModelRetrainingJobRequest.feature_importance_uri parquet contract"
     );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]

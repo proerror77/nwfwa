@@ -1178,14 +1178,20 @@ fn require_suffix(value: &str, suffix: &str, code: &'static str) -> Result<(), A
 }
 
 fn validate_parquet_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
-    if value.to_ascii_lowercase().contains(".csv") {
+    let normalized = value
+        .trim()
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .to_ascii_lowercase();
+    if normalized.ends_with(".parquet") || normalized.ends_with('/') {
+        Ok(())
+    } else {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             code,
             "dataset artifact URIs must point to parquet files or parquet partition directories",
         ))
-    } else {
-        Ok(())
     }
 }
 

@@ -3918,7 +3918,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "accuracy": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "threshold": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "confusion_matrix_json": { "type": "object", "minProperties": 1 },
-                        "feature_importance_uri": { "type": ["string", "null"], "minLength": 1 },
+                        "feature_importance_uri": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
+                        },
                         "metrics_json": { "type": "object", "minProperties": 1 }
                     }
                 },
@@ -4261,7 +4265,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "accuracy": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "threshold": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "confusion_matrix_json": { "type": "object", "minProperties": 1 },
-                        "feature_importance_uri": { "type": ["string", "null"], "minLength": 1 },
+                        "feature_importance_uri": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
+                        },
                         "metrics_json": { "type": "object", "minProperties": 1 }
                     }
                 },

@@ -1497,6 +1497,20 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
 
+    let mut txt_feature_importance = valid_request.clone();
+    txt_feature_importance["feature_importance_uri"] =
+        serde_json::json!("data/eval/feature_importance.txt");
+    let payload = txt_feature_importance.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
+
     let mut missing_evidence_refs = valid_request.clone();
     missing_evidence_refs["evidence_refs"] = serde_json::json!([]);
     let payload = missing_evidence_refs.to_string();

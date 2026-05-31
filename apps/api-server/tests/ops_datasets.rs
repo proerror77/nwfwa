@@ -1034,6 +1034,23 @@ async fn rejects_invalid_model_evaluation_registration() {
     csv_feature_importance_uri["feature_importance_uri"] =
         serde_json::json!("data/predictions/feature_importance.csv");
     let payload = csv_feature_importance_uri.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID"
+    );
+
+    let mut txt_feature_importance_uri = valid_request.clone();
+    txt_feature_importance_uri["feature_importance_uri"] =
+        serde_json::json!("data/predictions/feature_importance.txt");
+    let payload = txt_feature_importance_uri.to_string();
     let (status, body) = json_request(app, "POST", "/api/v1/ops/model-evaluations", &payload).await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(
