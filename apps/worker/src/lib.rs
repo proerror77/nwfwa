@@ -87,6 +87,7 @@ struct CompleteRetrainingJobPayload {
     confusion_matrix_json: serde_json::Value,
     feature_importance_uri: Option<String>,
     metrics_json: serde_json::Value,
+    evidence_refs: Vec<String>,
 }
 
 pub async fn claim_next_retraining_job(
@@ -652,6 +653,12 @@ fn build_mock_retraining_output(
         safe_id_segment(&job.model_key),
         safe_id_segment(&candidate_model_version)
     );
+    let evidence_refs = vec![
+        format!("model_retraining_jobs:{}", job.job_id),
+        format!("model_artifacts:{artifact_uri}"),
+        format!("model_validation_reports:{validation_report_uri}"),
+        format!("model_evaluations:{evaluation_run_id}"),
+    ];
 
     Ok(CompleteRetrainingJobPayload {
         actor: actor.to_string(),
@@ -685,6 +692,7 @@ fn build_mock_retraining_output(
             "shadow_comparison_status": "passed",
             "review_capacity_threshold_status": "passed"
         }),
+        evidence_refs,
     })
 }
 
@@ -980,6 +988,15 @@ mod tests {
         assert_eq!(output.metrics_json["shadow_comparison_status"], "passed");
         assert_eq!(output.metrics_json["leakage_check_status"], "passed");
         assert_eq!(output.metrics_json["label_provenance_status"], "passed");
+        assert_eq!(
+            output.evidence_refs,
+            vec![
+                "model_retraining_jobs:model retraining/job#1",
+                "model_artifacts:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/model.onnx",
+                "model_validation_reports:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/validation.json",
+                "model_evaluations:eval_baseline_fwa_0_1_0_candidate_model_retraining_job_1"
+            ]
+        );
     }
 
     #[test]
