@@ -7339,6 +7339,13 @@ fn scheme_family_from_alert_code(alert_code: &str) -> String {
         "upcoding".into()
     } else if code.contains("UNBUND") {
         "unbundling".into()
+    } else if code.contains("UNNECESSARY") {
+        "medically_unnecessary_service".into()
+    } else if code.contains("REPEATED")
+        || code.contains("EXCESSIVE")
+        || code.contains("UTILIZATION")
+    {
+        "excessive_utilization".into()
     } else if code.contains("DIAGNOSIS") || code.contains("MEDICAL") || code.contains("LOW_MEDICAL")
     {
         "diagnosis_procedure_mismatch".into()
@@ -9770,6 +9777,115 @@ pub fn default_runtime_rules() -> Vec<Rule> {
                 alert_code: "LOW_MEDICAL_MATCH".into(),
                 recommended_action: RecommendedAction::ManualReview,
                 reason: "诊断与项目匹配度偏低".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_duplicate_claim".into(),
+            version: 1,
+            name: "Duplicate claim".into(),
+            review_mode: "both".into(),
+            conditions: vec![Condition {
+                field: "duplicate_claim_similarity_score".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(0.95),
+            }],
+            action: RuleAction {
+                score: 35,
+                alert_code: "DUPLICATE_CLAIM".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "同一投保人、Provider、服务日期、项目和金额疑似重复理赔".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_upcoding_complexity".into(),
+            version: 1,
+            name: "Upcoding complexity".into(),
+            review_mode: "both".into(),
+            conditions: vec![
+                Condition {
+                    field: "diagnosis_procedure_match_score".into(),
+                    operator: "<=".into(),
+                    value: serde_json::json!(0.45),
+                },
+                Condition {
+                    field: "high_cost_item_ratio".into(),
+                    operator: ">=".into(),
+                    value: serde_json::json!(0.5),
+                },
+            ],
+            action: RuleAction {
+                score: 35,
+                alert_code: "UPCODING_COMPLEXITY".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "高复杂度或高价项目与诊断支持度偏低，疑似 upcoding".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_unbundling_component_pattern".into(),
+            version: 1,
+            name: "Unbundling component pattern".into(),
+            review_mode: "both".into(),
+            conditions: vec![Condition {
+                field: "claim_item_count".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(6),
+            }],
+            action: RuleAction {
+                score: 25,
+                alert_code: "UNBUNDLING_COMPONENT_PATTERN".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "同一案件明细项目数量异常偏多，需核查是否存在拆分计费".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_medically_unnecessary_service".into(),
+            version: 1,
+            name: "Medically unnecessary service".into(),
+            review_mode: "both".into(),
+            conditions: vec![Condition {
+                field: "clinical_review_required".into(),
+                operator: "==".into(),
+                value: serde_json::json!(1),
+            }],
+            action: RuleAction {
+                score: 30,
+                alert_code: "MEDICALLY_UNNECESSARY_SERVICE".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "临床证据不足或存在缺失，需复核医疗必要性".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_same_member_repeated_service".into(),
+            version: 1,
+            name: "Same member repeated service".into(),
+            review_mode: "both".into(),
+            conditions: vec![Condition {
+                field: "same_member_service_count_30d".into(),
+                operator: ">=".into(),
+                value: serde_json::json!(3),
+            }],
+            action: RuleAction {
+                score: 25,
+                alert_code: "SAME_MEMBER_REPEATED_SERVICE".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                reason: "同一投保人短期内同类服务重复出现，需核查过度使用".into(),
+            },
+        },
+        Rule {
+            rule_id: "rule_relationship_concentration".into(),
+            version: 1,
+            name: "Relationship concentration".into(),
+            review_mode: "both".into(),
+            conditions: vec![Condition {
+                field: "provider_high_risk_neighbor_signal".into(),
+                operator: "==".into(),
+                value: serde_json::json!(true),
+            }],
+            action: RuleAction {
+                score: 35,
+                alert_code: "RELATIONSHIP_CONCENTRATION".into(),
+                recommended_action: RecommendedAction::EscalateInvestigation,
+                reason: "Provider 关系网络存在高风险邻居或集中关联信号".into(),
             },
         },
         Rule {

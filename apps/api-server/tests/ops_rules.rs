@@ -162,11 +162,16 @@ async fn lists_rule_library() {
 
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["rules"][0]["rule_id"], "rule_early_claim");
-    assert_eq!(body["rules"][0]["status"], "active");
-    assert_eq!(body["rules"][0]["active_version"], 1);
-    assert_eq!(body["rules"][0]["review_mode"], "both");
-    assert_eq!(body["rules"][0]["scheme_family"], "early_high_value_claim");
+    let early_claim = body["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|rule| rule["rule_id"] == "rule_early_claim")
+        .expect("rule_early_claim should be listed");
+    assert_eq!(early_claim["status"], "active");
+    assert_eq!(early_claim["active_version"], 1);
+    assert_eq!(early_claim["review_mode"], "both");
+    assert_eq!(early_claim["scheme_family"], "early_high_value_claim");
 }
 
 #[tokio::test]
@@ -179,8 +184,8 @@ async fn ships_minimum_mvp_default_rule_set() {
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     let rules = body["rules"].as_array().unwrap();
     assert!(
-        rules.len() >= 10,
-        "MVP should ship at least 10 executable default rules"
+        rules.len() >= 16,
+        "default rule pack should cover PRD-required FWA rule families"
     );
     let alert_codes = rules
         .iter()
@@ -201,13 +206,25 @@ async fn ships_minimum_mvp_default_rule_set() {
         "HIGH_COST_SINGLE_ITEM",
         "PROVIDER_HIGH_RISK_TIER",
         "PROVIDER_PROFILE_HIGH",
+        "DUPLICATE_CLAIM",
+        "UPCODING_COMPLEXITY",
+        "UNBUNDLING_COMPONENT_PATTERN",
+        "MEDICALLY_UNNECESSARY_SERVICE",
+        "SAME_MEMBER_REPEATED_SERVICE",
+        "RELATIONSHIP_CONCENTRATION",
     ] {
         assert!(alert_codes.contains(expected), "missing {expected}");
     }
     for expected in [
         "early_high_value_claim",
+        "duplicate_billing",
+        "upcoding",
+        "unbundling",
+        "medically_unnecessary_service",
+        "excessive_utilization",
         "diagnosis_procedure_mismatch",
         "provider_peer_outlier",
+        "relationship_concentration",
     ] {
         assert!(scheme_families.contains(expected), "missing {expected}");
     }
