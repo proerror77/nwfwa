@@ -649,6 +649,11 @@ fn validate_retraining_output_request(
             ));
         }
     }
+    validate_non_csv_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
+    validate_non_csv_artifact_uri(
+        &request.validation_report_uri,
+        "INVALID_VALIDATION_REPORT_URI",
+    )?;
     validate_retraining_notes_without_pii(&request.notes)?;
     for (metric_name, metric) in [
         ("auc", &request.auc),
@@ -728,6 +733,18 @@ fn validate_parquet_artifact_uri(value: &str, code: &'static str) -> Result<(), 
             StatusCode::BAD_REQUEST,
             code,
             "model evaluation artifact URIs must point to parquet files or parquet partition directories",
+        ))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_non_csv_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    if value.to_ascii_lowercase().contains(".csv") {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "model retraining artifacts must not point to csv files",
         ))
     } else {
         Ok(())

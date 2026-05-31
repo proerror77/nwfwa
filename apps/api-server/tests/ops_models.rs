@@ -1414,7 +1414,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         serde_json::json!("data/eval/feature_importance.csv");
     let payload = csv_feature_importance.to_string();
     let (status, body) = json_request(
-        app,
+        app.clone(),
         "POST",
         "/api/v1/ops/model-retraining-jobs/job_1/output",
         &payload,
@@ -1422,6 +1422,34 @@ async fn rejects_invalid_model_retraining_output_contract() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
+
+    let mut csv_model_artifact = valid_request.clone();
+    csv_model_artifact["artifact_uri"] =
+        serde_json::json!("s3://fwa-models/baseline_fwa/report.csv");
+    let payload = csv_model_artifact.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
+
+    let mut csv_validation_report = valid_request.clone();
+    csv_validation_report["validation_report_uri"] =
+        serde_json::json!("s3://fwa-models/baseline_fwa/validation.csv");
+    let payload = csv_validation_report.to_string();
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_VALIDATION_REPORT_URI");
 }
 
 #[tokio::test]
