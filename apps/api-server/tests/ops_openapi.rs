@@ -10,7 +10,7 @@ fn test_config() -> AppConfig {
         api_key: "dev-secret".into(),
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
-        model_service_url: "http://unused".into(),
+        model_service_url: "heuristic://local".into(),
     }
 }
 

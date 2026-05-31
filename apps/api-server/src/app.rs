@@ -11,7 +11,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use fwa_ml_runtime::{HeuristicModelScorer, ModelScorer};
+use fwa_ml_runtime::{HeuristicModelScorer, HttpModelScorer, ModelScorer};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -22,11 +22,18 @@ pub struct AppState {
 }
 
 pub fn build_app(config: AppConfig) -> Router {
-    build_app_with_parts(
-        config,
-        Arc::new(HeuristicModelScorer),
-        InMemoryScoringRepository::shared(),
-    )
+    let scorer = configured_model_scorer(&config);
+    build_app_with_parts(config, scorer, InMemoryScoringRepository::shared())
+}
+
+pub fn configured_model_scorer(config: &AppConfig) -> Arc<dyn ModelScorer> {
+    if config.model_service_url == "heuristic"
+        || config.model_service_url.starts_with("heuristic://")
+    {
+        Arc::new(HeuristicModelScorer)
+    } else {
+        Arc::new(HttpModelScorer::new(config.model_service_url.clone()))
+    }
 }
 
 pub fn build_app_with_parts(
@@ -275,4 +282,82 @@ pub fn build_app_with_parts(
             post(ops_rules::rollback_rule),
         )
         .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use fwa_core::{ClaimId, ScoringRunId};
+    use fwa_ml_runtime::ModelScoreRequest;
+    use std::{
+        collections::BTreeMap,
+        io::{Read, Write},
+        net::TcpListener,
+        thread,
+    };
+
+    fn config(model_service_url: String) -> AppConfig {
+        AppConfig {
+            api_key: "dev-secret".into(),
+            source_system: "tpa-demo".into(),
+            database_url: "postgres://unused".into(),
+            model_service_url,
+        }
+    }
+
+    #[tokio::test]
+    async fn configured_model_scorer_uses_http_for_service_url() {
+        let listener = TcpListener::bind("127.0.0.1:0").unwrap();
+        let address = listener.local_addr().unwrap();
+        let server = thread::spawn(move || {
+            let (mut stream, _) = listener.accept().unwrap();
+            let mut buffer = [0_u8; 2048];
+            let _ = stream.read(&mut buffer);
+            let body = r#"{"model_key":"baseline_fwa","model_version":"0.2.0-active","score":73,"label":"HIGH_RISK","explanations":[],"metadata":{"fraud_probability":0.73}}"#;
+            let response = format!(
+                "HTTP/1.1 200 OK\r\ncontent-type: application/json\r\ncontent-length: {}\r\nconnection: close\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            stream.write_all(response.as_bytes()).unwrap();
+        });
+        let scorer = configured_model_scorer(&config(format!("http://{address}")));
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_configured_http"),
+                claim_id: ClaimId::from_external("CLM-CONFIGURED-HTTP"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.2.0-active".into(),
+                endpoint_url: None,
+                features: BTreeMap::new(),
+            })
+            .await
+            .unwrap();
+
+        server.join().unwrap();
+        assert_eq!(result.runtime_kind, "python_http");
+        assert_eq!(result.model_version, "0.2.0-active");
+        assert_eq!(result.score, 73);
+    }
+
+    #[tokio::test]
+    async fn configured_model_scorer_allows_explicit_heuristic_fallback() {
+        let scorer = configured_model_scorer(&config("heuristic://local".into()));
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_configured_heuristic"),
+                claim_id: ClaimId::from_external("CLM-CONFIGURED-HEURISTIC"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.1.0".into(),
+                endpoint_url: None,
+                features: BTreeMap::new(),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.runtime_kind, "heuristic");
+        assert_eq!(result.score, 0);
+    }
 }

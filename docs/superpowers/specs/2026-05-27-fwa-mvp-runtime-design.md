@@ -390,7 +390,8 @@ api-server -> fwa-scoring::aggregate(ModelScore, RuleScore, FeatureMap)
 MVP implements:
 
 - `PythonHttpModelScorer` for real service-boundary scoring.
-- `HeuristicModelScorer` for tests and dev only.
+- `HeuristicModelScorer` for tests and dev only, selected explicitly with
+  `FWA_MODEL_SERVICE_URL=heuristic://local`.
 
 Pilot adds:
 
