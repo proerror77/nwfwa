@@ -115,6 +115,8 @@ async fn returns_provider_risk_summary_from_scoring_profiles() {
     assert_eq!(summary["providers"][0]["claim_count"], 1);
     assert_eq!(summary["providers"][0]["specialty"], "imaging");
     assert_eq!(summary["providers"][0]["network_status"], "in_network");
+    assert_eq!(summary["providers"][0]["confirmed_fwa_count"], 4);
+    assert_eq!(summary["providers"][0]["false_positive_count"], 1);
     assert_eq!(summary["providers"][0]["review_required"], true);
     assert_eq!(summary["providers"][0]["review_route"], "provider_review");
     assert!(summary["providers"][0]["risk_score"].as_u64().unwrap() >= 80);

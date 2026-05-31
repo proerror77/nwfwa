@@ -40,6 +40,8 @@ pub struct ProviderProfileAssessment {
     pub review_route: String,
     pub specialty: Option<String>,
     pub network_status: Option<String>,
+    pub confirmed_fwa_count: u32,
+    pub false_positive_count: u32,
     pub outlier_flags: Vec<String>,
     pub window_findings: Vec<ProviderProfileWindowFinding>,
     pub evidence_refs: Vec<String>,
@@ -93,6 +95,8 @@ pub fn assess_provider_profile(
             },
             specialty: None,
             network_status: None,
+            confirmed_fwa_count: 0,
+            false_positive_count: 0,
             outlier_flags: Vec::new(),
             window_findings: Vec::new(),
             evidence_refs: vec![format!("providers:{}", provider.external_provider_id)],
@@ -119,6 +123,18 @@ pub fn assess_provider_profile(
         .iter()
         .map(|finding| finding.evidence_ref.clone())
         .collect::<Vec<_>>();
+    let confirmed_fwa_count = profile
+        .windows
+        .iter()
+        .map(|window| window.confirmed_fwa_count)
+        .max()
+        .unwrap_or(0);
+    let false_positive_count = profile
+        .windows
+        .iter()
+        .map(|window| window.false_positive_count)
+        .max()
+        .unwrap_or(0);
 
     ProviderProfileAssessment {
         provider_id: provider.external_provider_id.clone(),
@@ -132,6 +148,8 @@ pub fn assess_provider_profile(
         },
         specialty: profile.specialty.clone(),
         network_status: profile.network_status.clone(),
+        confirmed_fwa_count,
+        false_positive_count,
         outlier_flags,
         window_findings,
         evidence_refs,
@@ -366,6 +384,8 @@ mod tests {
         assert!(assessment
             .outlier_flags
             .contains(&"peer_amount_p97".to_string()));
+        assert_eq!(assessment.confirmed_fwa_count, 4);
+        assert_eq!(assessment.false_positive_count, 1);
         assert_eq!(assessment.evidence_refs[0], "provider_profile:PRV-1:90d");
     }
 

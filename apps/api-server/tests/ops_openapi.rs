@@ -1464,6 +1464,20 @@ async fn openapi_includes_operations_paths() {
             serde_json::json!(["string", "null"])
         );
     }
+    for field in ["confirmed_fwa_count", "false_positive_count"] {
+        assert!(
+            schema["components"]["schemas"]["ProviderRiskSummaryItem"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing ProviderRiskSummaryItem required field {field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["ProviderRiskSummaryItem"]["properties"][field]["type"],
+            "integer"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["ProviderRiskSummaryItem"]["properties"]
             ["network_risk_score"]["type"],

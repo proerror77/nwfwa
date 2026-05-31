@@ -2676,6 +2676,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "risk_tier",
                         "review_required",
                         "review_route",
+                        "confirmed_fwa_count",
+                        "false_positive_count",
                         "outlier_flags",
                         "window_findings",
                         "evidence_refs"
@@ -2688,6 +2690,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "review_route": { "type": "string", "enum": ["none", "provider_review"] },
                         "specialty": { "type": ["string", "null"] },
                         "network_status": { "type": ["string", "null"] },
+                        "confirmed_fwa_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_count": { "type": "integer", "minimum": 0 },
                         "outlier_flags": {
                             "type": "array",
                             "items": { "type": "string" }
@@ -2766,7 +2770,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ProviderRiskSummaryItem": {
                     "type": "object",
-                    "required": ["provider_id", "risk_score", "risk_tier", "review_required", "review_route", "claim_count", "specialty", "network_status", "network_risk_score", "outlier_flags", "graph_reasons", "evidence_refs"],
+                    "required": ["provider_id", "risk_score", "risk_tier", "review_required", "review_route", "claim_count", "specialty", "network_status", "confirmed_fwa_count", "false_positive_count", "network_risk_score", "outlier_flags", "graph_reasons", "evidence_refs"],
                     "properties": {
                         "provider_id": { "type": "string" },
                         "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
@@ -2776,6 +2780,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_count": { "type": "integer" },
                         "specialty": { "type": ["string", "null"] },
                         "network_status": { "type": ["string", "null"] },
+                        "confirmed_fwa_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_count": { "type": "integer", "minimum": 0 },
                         "network_risk_score": { "type": ["integer", "null"], "minimum": 0, "maximum": 100 },
                         "latest_claim_id": { "type": ["string", "null"] },
                         "outlier_flags": { "type": "array", "items": { "type": "string" } },

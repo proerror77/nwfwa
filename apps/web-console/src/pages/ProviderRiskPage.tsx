@@ -11,6 +11,8 @@ type ProviderRiskSummaryItem = {
   claim_count: number;
   network_risk_score?: number | null;
   latest_claim_id?: string | null;
+  confirmed_fwa_count: number;
+  false_positive_count: number;
   outlier_flags: string[];
   graph_reasons: string[];
   evidence_refs: string[];
@@ -41,6 +43,14 @@ export function buildProviderRiskOpsSummary(summary?: ProviderRiskSummary) {
     (provider) => provider.network_risk_score != null,
   ).length;
   const graphReasonCount = providers.filter((provider) => provider.graph_reasons.length > 0).length;
+  const confirmedFwaHistoryCount = providers.reduce(
+    (total, provider) => total + provider.confirmed_fwa_count,
+    0,
+  );
+  const falsePositiveHistoryCount = providers.reduce(
+    (total, provider) => total + provider.false_positive_count,
+    0,
+  );
   return {
     providerCount,
     reviewRequiredCount,
@@ -49,6 +59,8 @@ export function buildProviderRiskOpsSummary(summary?: ProviderRiskSummary) {
     evidenceBackedCount,
     networkScoreCount,
     graphReasonCount,
+    confirmedFwaHistoryCount,
+    falsePositiveHistoryCount,
     graphEvidenceGapCount: Math.max(graphRiskCount - evidenceBackedCount, 0),
     graphEvidenceStatus:
       graphRiskCount === 0
@@ -133,6 +145,14 @@ export function ProviderRiskPage() {
             <strong>{summary.graphReasonCount}</strong>
           </div>
           <div>
+            <span>Confirmed FWA History</span>
+            <strong>{summary.confirmedFwaHistoryCount}</strong>
+          </div>
+          <div>
+            <span>False Positive History</span>
+            <strong>{summary.falsePositiveHistoryCount}</strong>
+          </div>
+          <div>
             <span>Evidence</span>
             <strong>
               {summary.evidenceBackedCount}/{summary.providerCount}
@@ -178,6 +198,8 @@ export function ProviderRiskPage() {
               <small>
                 network {provider.network_risk_score == null ? "n/a" : provider.network_risk_score}
               </small>
+              <small>confirmed FWA {provider.confirmed_fwa_count}</small>
+              <small>false positive {provider.false_positive_count}</small>
               <small>{provider.claim_count} claims</small>
               <small>{provider.latest_claim_id ?? "no latest claim"}</small>
               <small>{provider.outlier_flags.join(", ") || "no outliers"}</small>
