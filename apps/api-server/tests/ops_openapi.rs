@@ -407,6 +407,14 @@ async fn openapi_includes_operations_paths() {
             .contains("Parquet"),
         "missing ModelEvaluationRegistrationRequest.feature_importance_uri parquet contract"
     );
+    assert!(
+        schema["components"]["schemas"]["ModelEvaluation"]["properties"]["feature_importance_uri"]
+            ["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Parquet"),
+        "missing ModelEvaluation.feature_importance_uri parquet contract"
+    );
     for field in [
         "auc",
         "ks",

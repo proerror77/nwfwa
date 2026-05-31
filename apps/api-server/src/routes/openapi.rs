@@ -3898,7 +3898,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "accuracy": { "type": ["string", "null"] },
                         "threshold": { "type": ["string", "null"] },
                         "confusion_matrix_json": { "type": "object" },
-                        "feature_importance_uri": { "type": ["string", "null"] },
+                        "feature_importance_uri": {
+                            "type": ["string", "null"],
+                            "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
+                        },
                         "metrics_json": { "type": "object" }
                     }
                 },
