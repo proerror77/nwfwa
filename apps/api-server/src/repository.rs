@@ -155,6 +155,40 @@ pub struct RuleSummaryRecord {
     pub score: u8,
     pub alert_code: String,
     pub recommended_action: RecommendedAction,
+    pub applicability_scope: RuleApplicabilityScopeRecord,
+    pub backtest_result: RuleBacktestSummaryRecord,
+    pub estimated_saving: String,
+    pub false_positive_history: RuleFalsePositiveHistoryRecord,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleApplicabilityScopeRecord {
+    pub review_mode: String,
+    pub scheme_family: String,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleBacktestSummaryRecord {
+    pub status: String,
+    pub sample_count: u32,
+    pub matched_count: u32,
+    pub precision: f64,
+    pub recall: f64,
+    pub lift: f64,
+    pub false_positive_rate: f64,
+    pub estimated_saving: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleFalsePositiveHistoryRecord {
+    pub status: String,
+    pub false_positive_count: u32,
+    pub false_positive_rate: f64,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1800,12 +1834,20 @@ impl ScoringRepository for InMemoryScoringRepository {
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
         let statuses = self.rule_statuses.lock().await;
+        let backtests = self.rule_backtests.lock().await.clone();
         let mut details = default_rule_details();
         details.extend(self.candidate_rules.lock().await.values().cloned());
         let mut rules = details
             .into_iter()
             .map(|mut detail| {
                 apply_rule_status(&mut detail, &statuses);
+                if let Some(backtest) = latest_rule_backtest_for(
+                    &backtests,
+                    &detail.summary.rule_id,
+                    detail.summary.latest_version,
+                ) {
+                    apply_rule_backtest_metadata(&mut detail.summary, Some(backtest));
+                }
                 detail.summary
             })
             .collect::<Vec<_>>();
@@ -1829,6 +1871,7 @@ impl ScoringRepository for InMemoryScoringRepository {
 
     async fn get_rule(&self, rule_id: &str) -> anyhow::Result<Option<RuleDetailRecord>> {
         let statuses = self.rule_statuses.lock().await;
+        let backtests = self.rule_backtests.lock().await.clone();
         let mut details = default_rule_details();
         details.extend(self.candidate_rules.lock().await.values().cloned());
         let audit_events = self.rule_audit_history(rule_id).await?;
@@ -1837,6 +1880,13 @@ impl ScoringRepository for InMemoryScoringRepository {
             .find(|detail| detail.summary.rule_id == rule_id)
             .map(|mut detail| {
                 apply_rule_status(&mut detail, &statuses);
+                if let Some(backtest) = latest_rule_backtest_for(
+                    &backtests,
+                    &detail.summary.rule_id,
+                    detail.summary.latest_version,
+                ) {
+                    apply_rule_backtest_metadata(&mut detail.summary, Some(backtest));
+                }
                 detail.audit_events = audit_events;
                 detail
             }))
@@ -4024,13 +4074,15 @@ impl ScoringRepository for PostgresScoringRepository {
         .fetch_all(&self.pool)
         .await?;
 
-        Ok(rows
+        let mut summaries = rows
             .into_iter()
             .map(
                 |(rule_id, name, status, owner, version, dsl, score, recommended_action)| {
                     let action = dsl.get("action").cloned().unwrap_or(Value::Null);
+                    let review_mode = review_mode_from_dsl(&dsl);
+                    let scheme_family = scheme_family_from_dsl(&dsl);
                     RuleSummaryRecord {
-                        rule_id,
+                        rule_id: rule_id.clone(),
                         name,
                         active_version: if status == "active" {
                             Some(version as u32)
@@ -4038,8 +4090,8 @@ impl ScoringRepository for PostgresScoringRepository {
                             None
                         },
                         latest_version: version as u32,
-                        review_mode: review_mode_from_dsl(&dsl),
-                        scheme_family: scheme_family_from_dsl(&dsl),
+                        review_mode: review_mode.clone(),
+                        scheme_family: scheme_family.clone(),
                         status,
                         owner,
                         score: score as u8,
@@ -4048,10 +4100,24 @@ impl ScoringRepository for PostgresScoringRepository {
                             .unwrap_or("UNKNOWN")
                             .to_string(),
                         recommended_action: parse_recommended_action(&recommended_action),
+                        applicability_scope: rule_applicability_scope(&review_mode, &scheme_family),
+                        backtest_result: default_rule_backtest_summary(),
+                        estimated_saving: "0.00".into(),
+                        false_positive_history: default_rule_false_positive_history(),
+                        evidence_refs: rule_governance_evidence_refs(&rule_id, version as u32),
                     }
                 },
             )
-            .collect())
+            .collect::<Vec<_>>();
+
+        for summary in &mut summaries {
+            let latest_backtest = self
+                .latest_rule_backtest(&summary.rule_id, summary.latest_version)
+                .await?;
+            apply_rule_backtest_metadata(summary, latest_backtest.as_ref());
+        }
+
+        Ok(summaries)
     }
 
     async fn list_active_rules(&self) -> anyhow::Result<Vec<Rule>> {
@@ -10005,6 +10071,11 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
         score: rule.action.score,
         alert_code: rule.action.alert_code.clone(),
         recommended_action: rule.action.recommended_action,
+        applicability_scope: rule_applicability_scope(&review_mode, &scheme_family),
+        backtest_result: default_rule_backtest_summary(),
+        estimated_saving: "0.00".into(),
+        false_positive_history: default_rule_false_positive_history(),
+        evidence_refs: rule_governance_evidence_refs(&rule.rule_id, rule.version),
     };
     let version = RuleVersionRecord {
         version: rule.version,
@@ -10022,6 +10093,101 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
         versions: vec![version],
         audit_events: vec![],
     }
+}
+
+fn rule_applicability_scope(
+    review_mode: &str,
+    scheme_family: &str,
+) -> RuleApplicabilityScopeRecord {
+    RuleApplicabilityScopeRecord {
+        review_mode: review_mode.into(),
+        scheme_family: scheme_family.into(),
+        source: "rule_dsl".into(),
+    }
+}
+
+fn rule_governance_evidence_refs(rule_id: &str, version: u32) -> Vec<String> {
+    vec![format!("rules:{rule_id}:v{version}")]
+}
+
+fn default_rule_backtest_summary() -> RuleBacktestSummaryRecord {
+    RuleBacktestSummaryRecord {
+        status: "not_run".into(),
+        sample_count: 0,
+        matched_count: 0,
+        precision: 0.0,
+        recall: 0.0,
+        lift: 0.0,
+        false_positive_rate: 0.0,
+        estimated_saving: "0.00".into(),
+        evidence_refs: vec![],
+        created_at: None,
+    }
+}
+
+fn default_rule_false_positive_history() -> RuleFalsePositiveHistoryRecord {
+    RuleFalsePositiveHistoryRecord {
+        status: "not_observed".into(),
+        false_positive_count: 0,
+        false_positive_rate: 0.0,
+        evidence_refs: vec![],
+    }
+}
+
+fn rule_backtest_summary(backtest: &RuleBacktestRecord) -> RuleBacktestSummaryRecord {
+    RuleBacktestSummaryRecord {
+        status: "completed".into(),
+        sample_count: backtest.sample_count,
+        matched_count: backtest.matched_count,
+        precision: backtest.precision,
+        recall: backtest.recall,
+        lift: backtest.lift,
+        false_positive_rate: backtest.false_positive_rate,
+        estimated_saving: backtest.estimated_saving.clone(),
+        evidence_refs: backtest.evidence_refs.clone(),
+        created_at: backtest.created_at.clone(),
+    }
+}
+
+fn rule_false_positive_history(backtest: &RuleBacktestRecord) -> RuleFalsePositiveHistoryRecord {
+    RuleFalsePositiveHistoryRecord {
+        status: if backtest.reviewed_count == 0 {
+            "not_observed"
+        } else {
+            "observed"
+        }
+        .into(),
+        false_positive_count: backtest.false_positive_count,
+        false_positive_rate: backtest.false_positive_rate,
+        evidence_refs: backtest.evidence_refs.clone(),
+    }
+}
+
+fn apply_rule_backtest_metadata(
+    summary: &mut RuleSummaryRecord,
+    backtest: Option<&RuleBacktestRecord>,
+) {
+    if let Some(backtest) = backtest {
+        summary.estimated_saving = backtest.estimated_saving.clone();
+        summary.backtest_result = rule_backtest_summary(backtest);
+        summary.false_positive_history = rule_false_positive_history(backtest);
+        for reference in &backtest.evidence_refs {
+            if !summary.evidence_refs.contains(reference) {
+                summary.evidence_refs.push(reference.clone());
+            }
+        }
+    }
+}
+
+fn latest_rule_backtest_for<'a>(
+    backtests: &'a [RuleBacktestRecord],
+    rule_id: &str,
+    rule_version: u32,
+) -> Option<&'a RuleBacktestRecord> {
+    backtests
+        .iter()
+        .rev()
+        .find(|record| record.rule_id == rule_id && record.rule_version == rule_version)
 }
 
 fn apply_rule_status(detail: &mut RuleDetailRecord, statuses: &HashMap<String, String>) {

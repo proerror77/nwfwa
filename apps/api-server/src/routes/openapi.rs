@@ -3066,7 +3066,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RuleSummary": {
                     "type": "object",
-                    "required": ["rule_id", "name", "status", "owner", "latest_version", "review_mode", "scheme_family", "score", "alert_code", "recommended_action"],
+                    "required": ["rule_id", "name", "status", "owner", "latest_version", "review_mode", "scheme_family", "score", "alert_code", "recommended_action", "applicability_scope", "backtest_result", "estimated_saving", "false_positive_history", "evidence_refs"],
                     "properties": {
                         "rule_id": { "type": "string" },
                         "name": { "type": "string" },
@@ -3078,7 +3078,56 @@ pub async fn openapi_schema() -> Json<Value> {
                         "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "score": { "type": "integer", "minimum": 0, "maximum": 100 },
                         "alert_code": { "type": "string" },
-                        "recommended_action": { "type": "string" }
+                        "recommended_action": { "type": "string" },
+                        "applicability_scope": { "$ref": "#/components/schemas/RuleApplicabilityScope" },
+                        "backtest_result": { "$ref": "#/components/schemas/RuleBacktestSummary" },
+                        "estimated_saving": { "type": "string", "format": "decimal" },
+                        "false_positive_history": { "$ref": "#/components/schemas/RuleFalsePositiveHistory" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
+                    }
+                },
+                "RuleApplicabilityScope": {
+                    "type": "object",
+                    "required": ["review_mode", "scheme_family", "source"],
+                    "properties": {
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
+                        "source": { "type": "string" }
+                    }
+                },
+                "RuleBacktestSummary": {
+                    "type": "object",
+                    "required": ["status", "sample_count", "matched_count", "precision", "recall", "lift", "false_positive_rate", "estimated_saving", "evidence_refs", "created_at"],
+                    "properties": {
+                        "status": { "type": "string", "enum": ["not_run", "completed"] },
+                        "sample_count": { "type": "integer", "minimum": 0 },
+                        "matched_count": { "type": "integer", "minimum": 0 },
+                        "precision": { "type": "number", "minimum": 0 },
+                        "recall": { "type": "number", "minimum": 0 },
+                        "lift": { "type": "number", "minimum": 0 },
+                        "false_positive_rate": { "type": "number", "minimum": 0 },
+                        "estimated_saving": { "type": "string", "format": "decimal" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1 }
+                        },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "RuleFalsePositiveHistory": {
+                    "type": "object",
+                    "required": ["status", "false_positive_count", "false_positive_rate", "evidence_refs"],
+                    "properties": {
+                        "status": { "type": "string", "enum": ["not_observed", "observed"] },
+                        "false_positive_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_rate": { "type": "number", "minimum": 0 },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
                     }
                 },
                 "FwaSchemeFamily": {

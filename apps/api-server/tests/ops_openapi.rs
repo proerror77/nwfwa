@@ -200,6 +200,39 @@ async fn openapi_includes_operations_paths() {
             "missing {field}"
         );
     }
+    for field in [
+        "applicability_scope",
+        "backtest_result",
+        "estimated_saving",
+        "false_positive_history",
+        "evidence_refs",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["RuleSummary"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing RuleSummary governance field {field}"
+        );
+        assert!(
+            schema["components"]["schemas"]["RuleSummary"]["properties"][field].is_object(),
+            "missing RuleSummary governance schema for {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["RuleSummary"]["properties"]["applicability_scope"]["$ref"],
+        "#/components/schemas/RuleApplicabilityScope"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleSummary"]["properties"]["backtest_result"]["$ref"],
+        "#/components/schemas/RuleBacktestSummary"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleSummary"]["properties"]["false_positive_history"]
+            ["$ref"],
+        "#/components/schemas/RuleFalsePositiveHistory"
+    );
     assert_eq!(
         schema["components"]["schemas"]["QaQueueItem"]["properties"]["feedback_target"]["enum"],
         serde_json::json!([

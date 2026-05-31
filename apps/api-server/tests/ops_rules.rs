@@ -172,6 +172,26 @@ async fn lists_rule_library() {
     assert_eq!(early_claim["active_version"], 1);
     assert_eq!(early_claim["review_mode"], "both");
     assert_eq!(early_claim["scheme_family"], "early_high_value_claim");
+    assert_eq!(early_claim["applicability_scope"]["review_mode"], "both");
+    assert_eq!(
+        early_claim["applicability_scope"]["scheme_family"],
+        "early_high_value_claim"
+    );
+    assert_eq!(early_claim["applicability_scope"]["source"], "rule_dsl");
+    assert_eq!(early_claim["backtest_result"]["status"], "not_run");
+    assert_eq!(early_claim["estimated_saving"], "0.00");
+    assert_eq!(
+        early_claim["false_positive_history"]["status"],
+        "not_observed"
+    );
+    assert_eq!(
+        early_claim["false_positive_history"]["false_positive_count"],
+        0
+    );
+    assert!(early_claim["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rules:rule_early_claim:v1")));
 }
 
 #[tokio::test]
@@ -692,6 +712,25 @@ async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
         .unwrap()
         .iter()
         .any(|event| event["event_type"] == "rule.backtest.completed"));
+    assert_eq!(body["summary"]["backtest_result"]["status"], "completed");
+    assert_eq!(body["summary"]["backtest_result"]["sample_count"], 3);
+    assert_eq!(
+        body["summary"]["backtest_result"]["estimated_saving"],
+        "1500.00"
+    );
+    assert_eq!(body["summary"]["estimated_saving"], "1500.00");
+    assert_eq!(
+        body["summary"]["false_positive_history"]["status"],
+        "observed"
+    );
+    assert_eq!(
+        body["summary"]["false_positive_history"]["false_positive_count"],
+        0
+    );
+    assert!(body["summary"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rules:rule_early_claim:v1")));
 }
 
 #[tokio::test]
