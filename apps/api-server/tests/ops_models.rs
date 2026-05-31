@@ -764,7 +764,7 @@ async fn model_promotion_gates_include_label_governance_evidence() {
           "claim_id": "CLM-MODEL-LABEL-2",
           "qa_conclusion": "issue_found_escalate",
           "issue_type": "model_under_scored_confirmed_issue",
-          "feedback_target": "models",
+          "feedback_target": "model",
           "notes": "Needs model-governance review before training use.",
           "evidence_refs": ["qa_reviews:QA-MODEL-LABEL-1"]
         }"#,
@@ -881,7 +881,7 @@ async fn model_promotion_gates_ignore_feedback_and_labels_for_other_model_versio
           "claim_id": "CLM-MODEL-OTHER-VERSION-1",
           "qa_conclusion": "issue_found_escalate",
           "issue_type": "model_under_scored_confirmed_issue",
-          "feedback_target": "models",
+          "feedback_target": "model",
           "notes": "Feedback applies to the currently active baseline, not the candidate.",
           "evidence_refs": [
             "qa_reviews:QA-MODEL-OTHER-VERSION-1",

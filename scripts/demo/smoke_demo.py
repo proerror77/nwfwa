@@ -1927,7 +1927,7 @@ def main():
             label_name="confirmed_fwa",
             label_value="true",
             governance_status="approved_for_training",
-            feedback_target="models",
+            feedback_target="model",
         ),
         "outcome labels missing investigation confirmed_fwa label",
     )

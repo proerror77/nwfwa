@@ -128,9 +128,18 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "data_quality_score")
     );
+    let qa_feedback_write_targets = serde_json::json!([
+        "rules",
+        "model",
+        "models",
+        "features",
+        "provider_profile",
+        "workflow",
+        "tpa"
+    ]);
     let qa_feedback_targets = serde_json::json!([
         "rules",
-        "models",
+        "model",
         "features",
         "provider_profile",
         "workflow",
@@ -138,7 +147,7 @@ async fn openapi_includes_operations_paths() {
     ]);
     assert_eq!(
         schema["components"]["schemas"]["QaResultRequest"]["properties"]["feedback_target"]["enum"],
-        qa_feedback_targets
+        qa_feedback_write_targets
     );
     assert_eq!(
         schema["components"]["schemas"]["QaFeedbackItem"]["properties"]["feedback_target"]["enum"],
@@ -195,7 +204,7 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["QaQueueItem"]["properties"]["feedback_target"]["enum"],
         serde_json::json!([
             "rules",
-            "models",
+            "model",
             "features",
             "provider_profile",
             "workflow",

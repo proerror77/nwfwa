@@ -23,7 +23,7 @@ const items = [
     feedback_id: "qa_feedback_QA-MODEL-1",
     qa_case_id: "QA-MODEL-1",
     claim_id: "CLM-2",
-    feedback_target: "models",
+    feedback_target: "model",
     issue_type: "model_under_scored_confirmed_issue",
     priority: "medium",
     status: "open",
@@ -36,6 +36,7 @@ const items = [
 describe("QA feedback item helpers", () => {
   it("filters feedback by operations target", () => {
     expect(filterQaFeedbackItems(items, "rules")).toEqual([items[0]]);
+    expect(filterQaFeedbackItems(items, "model")).toEqual([items[1]]);
     expect(filterQaFeedbackItems(items, "models")).toEqual([items[1]]);
   });
 

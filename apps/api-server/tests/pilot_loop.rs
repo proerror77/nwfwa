@@ -798,7 +798,7 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
         ("QA-RULE-1001", "rules", "alert_handling_incomplete"),
         (
             "QA-MODEL-1001",
-            "models",
+            "model",
             "model_under_scored_confirmed_issue",
         ),
     ] {
@@ -844,7 +844,7 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
         .unwrap()
         .contains("QA-RULE-1001"));
     assert!(items[0].get("notes").is_none());
-    assert_eq!(items[1]["feedback_target"], "models");
+    assert_eq!(items[1]["feedback_target"], "model");
     assert!(items
         .iter()
         .all(|item| !item["evidence_refs"].as_array().unwrap().is_empty()));
@@ -881,6 +881,71 @@ async fn lists_qa_feedback_items_for_rule_and_model_operators() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "UNSUPPORTED_FEEDBACK_TARGET");
+}
+
+#[tokio::test]
+async fn accepts_prd_model_feedback_target_and_canonicalizes_legacy_alias() {
+    let app = build_app(test_config());
+
+    for (qa_case_id, feedback_target) in [
+        ("QA-MODEL-PRD-1001", "model"),
+        ("QA-MODEL-LEGACY-1001", "models"),
+    ] {
+        let (status, body) = json_request(
+            app.clone(),
+            "POST",
+            "/api/v1/qa/results",
+            &format!(
+                r#"{{
+                  "qa_case_id": "{qa_case_id}",
+                  "claim_id": "CLM-MODEL-FEEDBACK",
+                  "qa_conclusion": "issue_found_escalate",
+                  "issue_type": "model_under_scored_confirmed_issue",
+                  "feedback_target": "{feedback_target}",
+                  "notes": "QA feedback is directed to model operations.",
+                  "evidence_refs": ["qa_reviews:{qa_case_id}", "model_versions:baseline_fwa:0.1.0"]
+                }}"#
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    let (status, feedback) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items?feedback_target=model",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let items = feedback["items"].as_array().unwrap();
+    assert_eq!(items.len(), 2);
+    assert!(items.iter().all(|item| item["feedback_target"] == "model"));
+
+    let (status, feedback) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items?feedback_target=models",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(feedback["items"].as_array().unwrap().len(), 2);
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let labels = labels["labels"].as_array().unwrap();
+    assert!(labels.iter().any(|label| {
+        label["source_id"] == "QA-MODEL-PRD-1001"
+            && label["label_name"] == "model_under_scored_confirmed_issue"
+            && label["feedback_target"] == "model"
+    }));
+    assert!(labels.iter().any(|label| {
+        label["source_id"] == "QA-MODEL-LEGACY-1001"
+            && label["label_name"] == "model_under_scored_confirmed_issue"
+            && label["feedback_target"] == "model"
+    }));
 }
 
 #[tokio::test]
@@ -1060,7 +1125,7 @@ async fn summarizes_qa_feedback_queue_for_review_operations() {
         ),
         (
             "QA-QUEUE-MODEL-1001",
-            "models",
+            "model",
             "model_under_scored_confirmed_issue",
             "issue_found_return",
         ),
@@ -1293,7 +1358,7 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
           "claim_id": "CLM-LABEL-1001",
           "qa_conclusion": "issue_found_escalate",
           "issue_type": "medical_necessity_issue",
-          "feedback_target": "models",
+          "feedback_target": "model",
           "notes": "QA found missing clinical support and model under-scored the claim.",
           "evidence_refs": ["qa_reviews:QA-LABEL-1001", "model_scores:baseline_fwa"]
         }"#,
@@ -1364,7 +1429,7 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
             && label["label_name"] == "medical_necessity_issue"
             && label["label_value"] == "true"
             && label["source_type"] == "qa_review"
-            && label["feedback_target"] == "models"
+            && label["feedback_target"] == "model"
             && label["governance_status"] == "needs_review"
     }));
     assert!(labels.iter().any(|label| {
@@ -1372,7 +1437,7 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
             && label["label_name"] == "medical_necessity_issue"
             && label["label_value"] == "true"
             && label["source_type"] == "medical_review"
-            && label["feedback_target"] == "models"
+            && label["feedback_target"] == "model"
             && label["governance_status"] == "approved_for_training"
             && label["source_id"].as_str().unwrap().starts_with("aud_")
     }));
@@ -1400,7 +1465,7 @@ async fn lists_governed_outcome_labels_from_investigation_and_qa() {
         label["claim_id"] == "CLM-LABEL-1001"
             && label["label_name"] == "medical_necessity_issue"
             && label["source_type"] == "qa_review"
-            && label["feedback_target"] == "models"
+            && label["feedback_target"] == "model"
             && label["governance_status"] == "approved_for_training"
     }));
 }
@@ -1508,7 +1573,7 @@ async fn lists_governed_outcome_labels_from_terminal_case_status() {
             && label["source_type"] == "case_status"
             && label["source_id"] == case_id
             && label["governance_status"] == "approved_for_training"
-            && label["feedback_target"] == "models"
+            && label["feedback_target"] == "model"
             && label["evidence_refs"]
                 .as_array()
                 .unwrap()
@@ -1542,7 +1607,7 @@ async fn lists_governed_outcome_labels_from_terminal_case_status() {
             && label["source_type"] == "case_status"
             && label["source_id"] == case_id
             && label["governance_status"] == "needs_review"
-            && label["feedback_target"] == "models"
+            && label["feedback_target"] == "model"
     }));
     assert!(labels.iter().any(|label| {
         label["claim_id"] == "CLM-CASE-LABEL-1"

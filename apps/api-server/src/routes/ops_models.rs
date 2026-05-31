@@ -2,8 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AuditEventListFilter, CompleteModelRetrainingJobInput, DatasetRecord,
-        ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
+        canonical_feedback_target, AuditEventListFilter, CompleteModelRetrainingJobInput,
+        DatasetRecord, ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
         ModelRetrainingJobRecord, ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
         RegisterModelEvaluationInput,
     },
@@ -1336,7 +1336,7 @@ fn build_model_promotion_gates(
     let open_model_feedback_count = feedback_items
         .iter()
         .filter(|item| {
-            item.feedback_target == "models"
+            canonical_feedback_target(&item.feedback_target) == "model"
                 && item.status == "open"
                 && evidence_refs_apply_to_model_version(&item.evidence_refs, model)
         })
@@ -1344,7 +1344,7 @@ fn build_model_promotion_gates(
     let unresolved_model_feedback_count = feedback_items
         .iter()
         .filter(|item| {
-            item.feedback_target == "models"
+            canonical_feedback_target(&item.feedback_target) == "model"
                 && is_unresolved_feedback_status(&item.status)
                 && evidence_refs_apply_to_model_version(&item.evidence_refs, model)
         })
@@ -1352,7 +1352,7 @@ fn build_model_promotion_gates(
     let model_labels = outcome_labels
         .iter()
         .filter(|label| {
-            label.feedback_target == "models"
+            canonical_feedback_target(&label.feedback_target) == "model"
                 && evidence_refs_apply_to_model_version(&label.evidence_refs, model)
         })
         .collect::<Vec<_>>();
@@ -1510,11 +1510,13 @@ fn build_model_retraining_readiness(
     let source_data_quality = source_data_quality_gate(metrics, source_dataset);
     let open_model_feedback_count = feedback_items
         .iter()
-        .filter(|item| item.feedback_target == "models" && item.status == "open")
+        .filter(|item| {
+            canonical_feedback_target(&item.feedback_target) == "model" && item.status == "open"
+        })
         .count();
     let model_labels = outcome_labels
         .iter()
-        .filter(|label| label.feedback_target == "models")
+        .filter(|label| canonical_feedback_target(&label.feedback_target) == "model")
         .collect::<Vec<_>>();
     let approved_label_count = model_labels
         .iter()

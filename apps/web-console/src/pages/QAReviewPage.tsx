@@ -117,7 +117,7 @@ export const QA_ISSUE_TYPE_OPTIONS = [
 
 export const QA_FEEDBACK_TARGET_OPTIONS = [
   { value: "rules", label: "Rules" },
-  { value: "models", label: "Models" },
+  { value: "model", label: "Model" },
   { value: "features", label: "Features" },
   { value: "provider_profile", label: "Provider Profile" },
   { value: "workflow", label: "Workflow" },

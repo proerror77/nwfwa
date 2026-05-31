@@ -21,6 +21,7 @@ import {
   type AuditEventListFilters,
 } from "../api";
 import { buildFwaSchemeLabelMap, formatFwaSchemeLabel } from "./fwaSchemeOptions";
+import { canonicalFeedbackTarget } from "./qaFeedbackItems";
 import { formatReviewModeLabel } from "./reviewMode";
 
 type AuditEvent = {
@@ -894,7 +895,9 @@ export function buildOutcomeLabelSummary(labels: OutcomeLabel[] = []) {
       (label) => label.governance_status === "approved_for_training",
     ).length,
     needsReviewCount: labels.filter((label) => label.governance_status === "needs_review").length,
-    modelFeedbackCount: labels.filter((label) => label.feedback_target === "models").length,
+    modelFeedbackCount: labels.filter(
+      (label) => canonicalFeedbackTarget(label.feedback_target) === "model",
+    ).length,
     ruleFeedbackCount: labels.filter((label) => label.feedback_target === "rules").length,
     falsePositiveCount: labels.filter((label) => label.label_name === "false_positive").length,
     caseStatusLabelCount: labels.filter((label) => label.source_type === "case_status").length,
@@ -915,11 +918,12 @@ export function filterOutcomeLabels(
 ) {
   const sourceType = filters.sourceType?.trim();
   const feedbackTarget = filters.feedbackTarget?.trim();
+  const canonicalTarget = feedbackTarget ? canonicalFeedbackTarget(feedbackTarget) : "";
   const governanceStatus = filters.governanceStatus?.trim();
   return labels.filter(
     (label) =>
       (!sourceType || label.source_type === sourceType) &&
-      (!feedbackTarget || label.feedback_target === feedbackTarget) &&
+      (!canonicalTarget || canonicalFeedbackTarget(label.feedback_target) === canonicalTarget) &&
       (!governanceStatus || label.governance_status === governanceStatus),
   );
 }

@@ -2,11 +2,12 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        AgentRunLogRecord, AuditEventListFilter, AuditHistoryEventRecord, AuditSampleLeadRecord,
-        AuditSampleRecord, CaseRecord, InvestigationResultRecord, LeadRecord,
-        MemberProfileSummaryRecord, OutcomeLabelRecord, QaFeedbackItemRecord, QaReviewRecord,
-        UpdateQaFeedbackStatusInput, UpdateQaFeedbackStatusRecord, WebhookDeliveryAttemptInput,
-        WebhookDeliveryAttemptRecord, WebhookEventRecord,
+        canonical_feedback_target, AgentRunLogRecord, AuditEventListFilter,
+        AuditHistoryEventRecord, AuditSampleLeadRecord, AuditSampleRecord, CaseRecord,
+        InvestigationResultRecord, LeadRecord, MemberProfileSummaryRecord, OutcomeLabelRecord,
+        QaFeedbackItemRecord, QaReviewRecord, UpdateQaFeedbackStatusInput,
+        UpdateQaFeedbackStatusRecord, WebhookDeliveryAttemptInput, WebhookDeliveryAttemptRecord,
+        WebhookEventRecord,
     },
     routes::pii,
 };
@@ -174,10 +175,11 @@ pub async fn write_investigation_result(
 pub async fn write_qa_result(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<QaReviewRecord>,
+    Json(mut request): Json<QaReviewRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
     authorize(&state, &headers)?;
     validate_qa_review_request(&request)?;
+    request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -331,7 +333,7 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "UNSUPPORTED_FEEDBACK_TARGET",
-            "feedback_target must be rules, models, features, provider_profile, workflow, or tpa",
+            "feedback_target must be rules, model, features, provider_profile, workflow, or tpa",
         ));
     }
     if request.notes.trim().is_empty()
@@ -378,7 +380,8 @@ pub async fn list_qa_feedback_items(
         items.retain(|item| item.status == *status);
     }
     if let Some(feedback_target) = &query.feedback_target {
-        items.retain(|item| item.feedback_target == *feedback_target);
+        let canonical_target = canonical_feedback_target(feedback_target);
+        items.retain(|item| canonical_feedback_target(&item.feedback_target) == canonical_target);
     }
     Ok(Json(QaFeedbackItemListResponse { items }))
 }
@@ -475,7 +478,7 @@ fn validate_qa_feedback_item_list_query(query: &QaFeedbackItemListQuery) -> Resu
             return Err(ApiError::new(
                 StatusCode::BAD_REQUEST,
                 "UNSUPPORTED_FEEDBACK_TARGET",
-                "feedback_target must be rules, models, features, provider_profile, workflow, or tpa",
+                "feedback_target must be rules, model, features, provider_profile, workflow, or tpa",
             ));
         }
     }
@@ -488,8 +491,8 @@ fn is_supported_qa_feedback_status(status: &str) -> bool {
 
 fn is_supported_qa_feedback_target(feedback_target: &str) -> bool {
     matches!(
-        feedback_target,
-        "rules" | "models" | "features" | "provider_profile" | "workflow" | "tpa"
+        canonical_feedback_target(feedback_target),
+        "rules" | "model" | "features" | "provider_profile" | "workflow" | "tpa"
     )
 }
 
@@ -714,7 +717,8 @@ fn qa_queue_item_from_sample(
         status: if review.is_some() { "reviewed" } else { "open" }.into(),
         qa_conclusion: review.map(|review| review.qa_conclusion.clone()),
         issue_type: review.map(|review| review.issue_type.clone()),
-        feedback_target: review.map(|review| review.feedback_target.clone()),
+        feedback_target: review
+            .map(|review| canonical_feedback_target(&review.feedback_target).into()),
         evidence_refs: lead.evidence_refs.clone(),
     }
 }
@@ -750,7 +754,7 @@ fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryRespo
             .count() as u32,
         models_feedback_count: open_items
             .iter()
-            .filter(|item| item.feedback_target == "models")
+            .filter(|item| canonical_feedback_target(&item.feedback_target) == "model")
             .count() as u32,
         features_feedback_count: open_items
             .iter()

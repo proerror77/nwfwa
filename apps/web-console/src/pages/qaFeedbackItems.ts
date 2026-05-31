@@ -15,8 +15,13 @@ export type QaFeedbackItem = {
   status_evidence_refs?: string[];
 };
 
+export function canonicalFeedbackTarget(target: string) {
+  return target === "models" ? "model" : target;
+}
+
 export function filterQaFeedbackItems(items: QaFeedbackItem[], target: string) {
-  return items.filter((item) => item.feedback_target === target);
+  const canonicalTarget = canonicalFeedbackTarget(target);
+  return items.filter((item) => canonicalFeedbackTarget(item.feedback_target) === canonicalTarget);
 }
 
 export function summarizeQaFeedbackItems(items: QaFeedbackItem[]) {

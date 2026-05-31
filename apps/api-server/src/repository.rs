@@ -927,6 +927,13 @@ pub struct OutcomeLabelRecord {
     pub evidence_refs: Vec<String>,
 }
 
+pub fn canonical_feedback_target(feedback_target: &str) -> &str {
+    match feedback_target {
+        "models" => "model",
+        value => value,
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditHistoryEventRecord {
     pub audit_id: String,
@@ -2803,8 +2810,9 @@ impl ScoringRepository for InMemoryScoringRepository {
 
     async fn save_qa_review(
         &self,
-        record: QaReviewRecord,
+        mut record: QaReviewRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord> {
+        record.feedback_target = canonical_feedback_target(&record.feedback_target).into();
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_qa_{}", record.qa_case_id),
             run_id: format!("pilot_qa_{}", record.qa_case_id),
@@ -2902,6 +2910,10 @@ impl ScoringRepository for InMemoryScoringRepository {
                 (event.event_type == "qa.result.received")
                     .then(|| serde_json::from_value::<QaReviewRecord>(event.payload.clone()).ok())
                     .flatten()
+            })
+            .map(|mut review| {
+                review.feedback_target = canonical_feedback_target(&review.feedback_target).into();
+                review
             })
             .collect::<Vec<_>>();
         reviews.sort_by(|left, right| left.qa_case_id.cmp(&right.qa_case_id));
@@ -6131,8 +6143,9 @@ impl ScoringRepository for PostgresScoringRepository {
 
     async fn save_qa_review(
         &self,
-        record: QaReviewRecord,
+        mut record: QaReviewRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord> {
+        record.feedback_target = canonical_feedback_target(&record.feedback_target).into();
         let mut tx = self.pool.begin().await?;
         sqlx::query(
             "INSERT INTO qa_reviews
@@ -6381,14 +6394,17 @@ impl ScoringRepository for PostgresScoringRepository {
                     feedback_target,
                     notes,
                     evidence_refs,
-                )| QaReviewRecord {
-                    qa_case_id,
-                    claim_id,
-                    qa_conclusion,
-                    issue_type,
-                    feedback_target,
-                    notes,
-                    evidence_refs: json_array_to_strings(evidence_refs),
+                )| {
+                    let feedback_target = canonical_feedback_target(&feedback_target).into();
+                    QaReviewRecord {
+                        qa_case_id,
+                        claim_id,
+                        qa_conclusion,
+                        issue_type,
+                        feedback_target,
+                        notes,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                    }
                 },
             )
             .collect())
@@ -7901,7 +7917,7 @@ fn audit_sample_outcome_distribution(
             .or_insert(0) += 1;
         *issue_types.entry(review.issue_type.clone()).or_insert(0) += 1;
         *feedback_targets
-            .entry(review.feedback_target.clone())
+            .entry(canonical_feedback_target(&review.feedback_target).into())
             .or_insert(0) += 1;
     }
 
@@ -7955,7 +7971,7 @@ fn qa_review_to_feedback_item(
         feedback_id: qa_feedback_id(&review.qa_case_id),
         qa_case_id: review.qa_case_id.clone(),
         claim_id: review.claim_id.clone(),
-        feedback_target: review.feedback_target.clone(),
+        feedback_target: canonical_feedback_target(&review.feedback_target).into(),
         issue_type: review.issue_type.clone(),
         qa_conclusion: review.qa_conclusion.clone(),
         source: "qa_review".into(),
@@ -8467,9 +8483,9 @@ fn sort_qa_feedback_items(items: &mut [QaFeedbackItemRecord]) {
 }
 
 fn feedback_target_rank(target: &str) -> u8 {
-    match target {
+    match canonical_feedback_target(target) {
         "rules" => 0,
-        "models" => 1,
+        "model" => 1,
         _ => 2,
     }
 }
@@ -8538,7 +8554,7 @@ fn labels_from_investigation_result(record: InvestigationResultRecord) -> Vec<Ou
         } else {
             "needs_review".into()
         },
-        feedback_target: "models".into(),
+        feedback_target: "model".into(),
         currency: None,
         evidence_refs: record.evidence_refs.clone(),
     }];
@@ -8599,7 +8615,7 @@ fn label_from_qa_review(record: QaReviewRecord, feedback_status: &str) -> Outcom
         source_type: "qa_review".into(),
         source_id: record.qa_case_id,
         governance_status: qa_label_governance_status(feedback_status).into(),
-        feedback_target: record.feedback_target,
+        feedback_target: canonical_feedback_target(&record.feedback_target).into(),
         currency: None,
         evidence_refs: record.evidence_refs,
     }
@@ -8641,9 +8657,9 @@ fn medical_review_label_fields(
             "medical_necessity_issue",
             "true",
             "approved_for_training",
-            "models",
+            "model",
         ),
-        "no_medical_issue" => ("false_positive", "true", "approved_for_training", "models"),
+        "no_medical_issue" => ("false_positive", "true", "approved_for_training", "model"),
         _ => (
             "clinical_evidence_sufficient",
             "true",
@@ -8721,7 +8737,7 @@ fn labels_from_case_status(record: CaseRecord) -> Vec<OutcomeLabelRecord> {
         } else {
             "needs_review".into()
         },
-        feedback_target: "models".into(),
+        feedback_target: "model".into(),
         currency: None,
         evidence_refs: evidence_refs.clone(),
     }];
@@ -8834,7 +8850,7 @@ fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLab
             .count() as u32,
         model_feedback: labels
             .iter()
-            .filter(|label| label.feedback_target == "models")
+            .filter(|label| canonical_feedback_target(&label.feedback_target) == "model")
             .count() as u32,
         features_feedback: labels
             .iter()
@@ -8927,7 +8943,7 @@ fn summarize_dashboard_qa_queue(
         rules_unresolved_feedback_count: count_feedback_target(&unresolved_feedback_items, "rules"),
         models_unresolved_feedback_count: count_feedback_target(
             &unresolved_feedback_items,
-            "models",
+            "model",
         ),
         features_unresolved_feedback_count: count_feedback_target(
             &unresolved_feedback_items,
@@ -8952,7 +8968,10 @@ fn count_feedback_status(items: &[QaFeedbackItemRecord], status: &str) -> u32 {
 fn count_feedback_target(items: &[&QaFeedbackItemRecord], feedback_target: &str) -> u32 {
     items
         .iter()
-        .filter(|item| item.feedback_target == feedback_target)
+        .filter(|item| {
+            canonical_feedback_target(&item.feedback_target)
+                == canonical_feedback_target(feedback_target)
+        })
         .count() as u32
 }
 

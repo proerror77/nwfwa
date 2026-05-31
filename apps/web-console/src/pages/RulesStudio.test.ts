@@ -43,7 +43,7 @@ describe("buildRuleLabelReadinessSummary", () => {
         source_type: "investigation_result",
         source_id: "INV-2",
         governance_status: "needs_review",
-        feedback_target: "models",
+        feedback_target: "model",
         currency: null,
         evidence_refs: ["investigation_results:INV-2"],
       },

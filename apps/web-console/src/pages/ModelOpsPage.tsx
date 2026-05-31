@@ -20,6 +20,7 @@ import {
 import {
   buildQaFeedbackStatusAuditLabel,
   buildQaFeedbackStatusEvidenceLabel,
+  canonicalFeedbackTarget,
   filterQaFeedbackItems,
   QaFeedbackItem,
   summarizeQaFeedbackItems,
@@ -138,7 +139,9 @@ export type ModelCandidateGovernanceRow = {
 };
 
 export function buildModelLabelReadinessSummary(labels: OutcomeLabel[] = []) {
-  const modelLabels = labels.filter((label) => label.feedback_target === "models");
+  const modelLabels = labels.filter(
+    (label) => canonicalFeedbackTarget(label.feedback_target) === "model",
+  );
   return {
     modelLabelCount: modelLabels.length,
     approvedForTrainingCount: modelLabels.filter(
@@ -347,9 +350,9 @@ export function ModelOpsPage() {
     enabled: Boolean(selectedModel?.model_key),
   });
   const qaFeedbackQuery = useQuery({
-    queryKey: ["qa-feedback-items", "models", apiKey],
+    queryKey: ["qa-feedback-items", "model", apiKey],
     queryFn: () =>
-      listQaFeedbackItems(apiKey, { feedbackTarget: "models" }) as Promise<{
+      listQaFeedbackItems(apiKey, { feedbackTarget: "model" }) as Promise<{
         items: QaFeedbackItem[];
       }>,
   });
@@ -358,7 +361,7 @@ export function ModelOpsPage() {
     queryFn: () => listOutcomeLabels(apiKey) as Promise<{ labels: OutcomeLabel[] }>,
   });
   const modelFeedbackItems = useMemo(
-    () => filterQaFeedbackItems(qaFeedbackQuery.data?.items ?? [], "models"),
+    () => filterQaFeedbackItems(qaFeedbackQuery.data?.items ?? [], "model"),
     [qaFeedbackQuery.data?.items],
   );
   const modelFeedbackSummary = useMemo(
@@ -1049,7 +1052,7 @@ export function ModelOpsPage() {
         </div>
         <div className="table-list">
           {(outcomeLabelsQuery.data?.labels ?? [])
-            .filter((label) => label.feedback_target === "models")
+            .filter((label) => canonicalFeedbackTarget(label.feedback_target) === "model")
             .map((label) => (
               <div className="metric-row compact-metric-row" key={label.label_id}>
                 <span>{label.label_name}</span>

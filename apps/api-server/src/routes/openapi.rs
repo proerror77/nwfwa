@@ -1919,7 +1919,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "required": false,
                             "schema": {
                                 "type": "string",
-                                "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                                "enum": ["rules", "model", "models", "features", "provider_profile", "workflow", "tpa"]
                             }
                         }
                     ],
@@ -5151,7 +5151,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "feedback_target": {
                             "type": "string",
-                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                            "enum": ["rules", "model", "models", "features", "provider_profile", "workflow", "tpa"]
                         },
                         "notes": {
                             "type": "string",
@@ -5207,7 +5207,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "claim_id": { "type": "string" },
                         "feedback_target": {
                             "type": "string",
-                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                            "enum": ["rules", "model", "features", "provider_profile", "workflow", "tpa"]
                         },
                         "issue_type": {
                             "type": "string",
@@ -5295,7 +5295,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "feedback_target": {
                             "type": ["string", "null"],
-                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa", null]
+                            "enum": ["rules", "model", "features", "provider_profile", "workflow", "tpa", null]
                         },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
@@ -5343,7 +5343,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "governance_status": { "type": "string", "enum": ["approved_for_training", "needs_review"] },
                         "feedback_target": {
                             "type": "string",
-                            "enum": ["rules", "models", "features", "provider_profile", "workflow", "tpa"]
+                            "enum": ["rules", "model", "features", "provider_profile", "workflow", "tpa"]
                         },
                         "currency": { "type": ["string", "null"] },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }

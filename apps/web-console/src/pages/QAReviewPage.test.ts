@@ -213,7 +213,7 @@ describe("QAReviewPage helpers", () => {
     ]);
     expect(QA_FEEDBACK_TARGET_OPTIONS.map((option) => option.value)).toEqual([
       "rules",
-      "models",
+      "model",
       "features",
       "provider_profile",
       "workflow",
