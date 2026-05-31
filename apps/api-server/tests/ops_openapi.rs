@@ -961,6 +961,13 @@ async fn openapi_includes_operations_paths() {
             ["content"]["application/json"]["schema"]["$ref"],
         "#/components/schemas/ModelLifecycleResponse"
     );
+    assert!(
+        schema["paths"]["/api/v1/ops/models/{model_key}/rollback"]["post"]["summary"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("previous active"),
+        "model rollback summary must describe previous active rollback semantics"
+    );
     for action in ["activate", "rollback"] {
         let operation =
             &schema["paths"][format!("/api/v1/ops/models/{{model_key}}/{action}")]["post"];
@@ -996,7 +1003,7 @@ async fn openapi_includes_operations_paths() {
             ["description"]
             .as_str()
             .unwrap_or_default()
-            .contains("model_versions:{model_key}:{model_version}")
+            .contains("activation target or rollback active version")
     );
     assert!(
         schema["components"]["schemas"]["ModelLifecycleResponse"]["required"]

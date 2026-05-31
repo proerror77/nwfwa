@@ -1935,22 +1935,7 @@ async fn rolls_back_active_model_version() {
         app.clone(),
         "POST",
         "/api/v1/ops/models/baseline_fwa/rollback",
-        &model_lifecycle_payload("baseline_fwa", "0.2.0"),
-    )
-    .await;
-
-    assert_eq!(status, StatusCode::BAD_REQUEST);
-    assert_eq!(body["code"], "MISSING_TARGET_MODEL_VERSION_EVIDENCE");
-    assert!(body["message"]
-        .as_str()
-        .unwrap()
-        .contains("model_versions:baseline_fwa:0.1.0"));
-
-    let (status, body) = json_request(
-        app.clone(),
-        "POST",
-        "/api/v1/ops/models/baseline_fwa/rollback",
-        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
     )
     .await;
 
@@ -1980,12 +1965,132 @@ async fn rolls_back_active_model_version() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         audit["events"][0]["evidence_refs"][0],
-        "model_versions:baseline_fwa:0.1.0"
+        format!("model_versions:baseline_fwa:{candidate_version}")
     );
     assert_eq!(
         audit["events"][0]["payload"]["replaced_active_version"],
         candidate_version
     );
+    assert_eq!(
+        audit["events"][0]["payload"]["previous_active_version"],
+        candidate_version
+    );
+}
+
+#[tokio::test]
+async fn rollback_requires_active_model_evidence_ref() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+    activate_candidate_for_test(app.clone(), &candidate_version).await;
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_TARGET_MODEL_VERSION_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains(&format!("model_versions:baseline_fwa:{candidate_version}")));
+}
+
+#[tokio::test]
+async fn rollback_can_restore_replaced_active_version_from_rollback_history() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+    activate_candidate_for_test(app.clone(), &candidate_version).await;
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["version"], "0.1.0");
+    assert_eq!(body["status"], "active");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        &model_lifecycle_payload("baseline_fwa", "0.1.0"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["version"], candidate_version);
+    assert_eq!(body["status"], "active");
+
+    let (status, audit) = get_json(
+        app,
+        "/api/v1/ops/audit-events?event_type=model.rollback.completed&limit=1",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        audit["events"][0]["payload"]["previous_active_version"],
+        "0.1.0"
+    );
+    assert_eq!(
+        audit["events"][0]["payload"]["replaced_active_version"],
+        "0.1.0"
+    );
+}
+
+#[tokio::test]
+async fn rollback_uses_lifecycle_history_when_non_lifecycle_governance_events_exceed_window() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+    activate_candidate_for_test(app.clone(), &candidate_version).await;
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "rollback_window").await;
+
+    for index in 0..105 {
+        let (status, body) = json_request(
+            app.clone(),
+            "POST",
+            "/api/v1/ops/model-evaluations",
+            &format!(
+                r#"{{
+                  "evaluation_run_id": "eval_rollback_window_{index}",
+                  "model_key": "baseline_fwa",
+                  "model_version": "{candidate_version}",
+                  "model_dataset_id": "{model_dataset_id}",
+                  "auc": "0.86",
+                  "ks": "0.48",
+                  "precision": "0.78",
+                  "recall": "0.71",
+                  "f1": "0.74",
+                  "accuracy": "0.79",
+                  "threshold": "0.52",
+                  "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
+                  "feature_importance_uri": "data/eval/rollback_window/{index}/feature_importance.parquet",
+                  "metrics_json": {{"score_psi": 0.04}}
+                }}"#
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/rollback",
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["version"], "0.1.0");
+    assert_eq!(body["status"], "active");
 }
 
 #[tokio::test]

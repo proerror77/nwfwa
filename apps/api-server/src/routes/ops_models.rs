@@ -2,9 +2,9 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        CompleteModelRetrainingJobInput, DatasetRecord, ModelEvaluationRecord,
-        ModelPerformanceRecord, ModelPromotionReviewRecord, ModelRetrainingJobRecord,
-        ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
+        AuditEventListFilter, CompleteModelRetrainingJobInput, DatasetRecord,
+        ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
+        ModelRetrainingJobRecord, ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
         RegisterModelEvaluationInput,
     },
     routes::{ops_datasets::build_dataset_health_record, pii},
@@ -953,6 +953,15 @@ pub async fn activate_model(
         .list_models()
         .await
         .map_err(internal_error("MODEL_LIST_FAILED"))?;
+    let previous_active_versions = models
+        .iter()
+        .filter(|model| {
+            model.model_key == candidate.model_key
+                && model.version != candidate.version
+                && model.status == "active"
+        })
+        .map(|model| model.version.clone())
+        .collect::<Vec<_>>();
     for model in models {
         if model.model_key == candidate.model_key
             && model.version != candidate.version
@@ -974,13 +983,12 @@ pub async fn activate_model(
         .ok_or_else(|| {
             ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
         })?;
-    record_model_lifecycle_audit(
+    record_model_activation_audit(
         &state,
         &actor,
         &activated,
-        "model.activation.completed",
         Some(&candidate.status),
-        "Model activation completed",
+        previous_active_versions.first().map(String::as_str),
         request.evidence_refs,
     )
     .await
@@ -1023,36 +1031,13 @@ pub async fn rollback_model(
                 "only active models can be rolled back",
             )
         })?;
-    let approved_targets = models
-        .iter()
-        .filter(|model| model.model_key == model_key && model.status == "approved")
-        .collect::<Vec<_>>();
-    let target = approved_targets
-        .iter()
-        .find(|model| {
-            request.evidence_refs.iter().any(|reference| {
-                reference.trim() == model_version_evidence_ref(&model_key, &model.version)
-            })
-        })
-        .copied()
-        .ok_or_else(|| {
-            if let Some(target) = approved_targets.first() {
-                ApiError::new(
-                    StatusCode::BAD_REQUEST,
-                    "MISSING_TARGET_MODEL_VERSION_EVIDENCE",
-                    format!(
-                        "model rollback evidence_refs must include {}",
-                        model_version_evidence_ref(&model_key, &target.version)
-                    ),
-                )
-            } else {
-                ApiError::new(
-                    StatusCode::CONFLICT,
-                    "MODEL_ROLLBACK_TARGET_NOT_FOUND",
-                    "model rollback requires an approved non-active target version",
-                )
-            }
-        })?;
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &active.model_key,
+        &active.version,
+        "model rollback",
+    )?;
+    let target = previous_active_model_target(&state, &model_key, &active, &models).await?;
 
     state
         .repository
@@ -1085,6 +1070,65 @@ pub async fn rollback_model(
         version: restored.version,
         status: restored.status,
     }))
+}
+
+async fn previous_active_model_target(
+    state: &AppState,
+    model_key: &str,
+    active: &ModelVersionRecord,
+    models: &[ModelVersionRecord],
+) -> Result<ModelVersionRecord, ApiError> {
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: u32::MAX,
+            event_group: Some("governance".into()),
+            model_key: Some(model_key.to_string()),
+            model_version: Some(active.version.clone()),
+            ..AuditEventListFilter::default()
+        })
+        .await
+        .map_err(internal_error("MODEL_AUDIT_LIST_FAILED"))?;
+    let previous_active_version = events.into_iter().find_map(|event| {
+        if event.payload["model_key"].as_str() != Some(model_key)
+            || event.payload["model_version"].as_str() != Some(active.version.as_str())
+        {
+            return None;
+        }
+        match event.event_type.as_str() {
+            "model.activation.completed" => event.payload["previous_active_version"]
+                .as_str()
+                .map(str::to_string),
+            "model.rollback.completed" => event.payload["previous_active_version"]
+                .as_str()
+                .filter(|version| *version != active.version.as_str())
+                .or_else(|| event.payload["replaced_active_version"].as_str())
+                .map(str::to_string),
+            _ => None,
+        }
+    });
+    let Some(previous_active_version) = previous_active_version else {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            "MODEL_ROLLBACK_TARGET_NOT_FOUND",
+            "model rollback requires a recorded previous active version",
+        ));
+    };
+    models
+        .iter()
+        .find(|model| {
+            model.model_key == model_key
+                && model.version == previous_active_version
+                && model.status == "approved"
+        })
+        .cloned()
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::CONFLICT,
+                "MODEL_ROLLBACK_TARGET_NOT_FOUND",
+                "previous active model version is not available for rollback",
+            )
+        })
 }
 
 fn validate_model_lifecycle_request(request: &ModelLifecycleRequest) -> Result<(), ApiError> {
@@ -1750,13 +1794,12 @@ async fn record_model_retraining_audit(
         .await
 }
 
-async fn record_model_lifecycle_audit(
+async fn record_model_activation_audit(
     state: &AppState,
     actor: &ActorContext,
     model: &ModelVersionRecord,
-    event_type: &'static str,
     from_status: Option<&str>,
-    summary: &'static str,
+    previous_active_version: Option<&str>,
     evidence_refs: Vec<String>,
 ) -> anyhow::Result<()> {
     state
@@ -1768,14 +1811,15 @@ async fn record_model_lifecycle_audit(
             source_system: actor.source_system.clone(),
             actor_id: actor.actor_id.clone(),
             actor_role: actor.actor_role.clone(),
-            event_type: event_type.into(),
+            event_type: "model.activation.completed".into(),
             event_status: "succeeded".into(),
-            summary: summary.into(),
+            summary: "Model activation completed".into(),
             payload: serde_json::json!({
                 "model_key": model.model_key,
                 "model_version": model.version,
                 "from_status": from_status,
                 "to_status": model.status,
+                "previous_active_version": previous_active_version,
                 "runtime_kind": model.runtime_kind,
                 "execution_provider": model.execution_provider,
             }),
@@ -1812,6 +1856,7 @@ async fn record_model_rollback_audit(
                 "model_version": restored.version,
                 "from_status": restored_from_status,
                 "to_status": restored.status,
+                "previous_active_version": replaced_active.version,
                 "replaced_active_version": replaced_active.version,
                 "replaced_active_to_status": "approved",
                 "runtime_kind": restored.runtime_kind,
