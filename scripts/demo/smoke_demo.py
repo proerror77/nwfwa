@@ -1893,10 +1893,10 @@ def main():
             source_type="qa_review",
             label_name="alert_handling_incomplete",
             label_value="true",
-            governance_status="needs_review",
+            governance_status="approved_for_training",
             feedback_target="rules",
         ),
-        "outcome labels missing QA feedback label",
+        "outcome labels missing resolved QA feedback label",
     )
 
     dashboard = request("GET", "/api/v1/ops/dashboard/summary")
@@ -1936,6 +1936,10 @@ def main():
     assert_true(
         label_pool.get("medical_review_labels", 0) >= 1,
         "dashboard missing medical review labels",
+    )
+    assert_true(
+        label_pool.get("approved_for_training", 0) >= 2,
+        "dashboard missing approved training labels",
     )
     assert_true(
         label_pool.get("evidence_backed_labels", 0) >= 1,
