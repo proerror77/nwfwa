@@ -7,6 +7,7 @@ import {
   buildModelOperationalReadinessSummary,
   buildModelRetrainingJobSummary,
   buildModelRetrainingSummary,
+  buildModelRetrainingWorkerSummary,
   formatSourceDataQuality,
 } from "./ModelOpsPage";
 
@@ -300,6 +301,89 @@ describe("buildModelRetrainingJobSummary", () => {
       evaluationCount: 1,
       latestStatus: "running",
       latestArtifactStatus: "available",
+    });
+  });
+});
+
+describe("buildModelRetrainingWorkerSummary", () => {
+  it("summarizes claimable retraining jobs for worker handoff", () => {
+    expect(
+      buildModelRetrainingWorkerSummary([
+        {
+          job_id: "job_queued",
+          model_key: "baseline_fwa",
+          model_version: "0.1.0",
+          status: "queued",
+          requested_by: "model-ops",
+          request_notes: "drift",
+          status_note: "queued",
+          updated_by: "model-ops",
+          readiness_recommendation: "prepare_retraining",
+          trigger_summary: ["score drift status: drift"],
+          blocker_summary: [],
+          candidate_model_version: null,
+          candidate_artifact_uri: null,
+          candidate_endpoint_url: null,
+          validation_report_uri: null,
+          output_evaluation_id: null,
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          job_id: "job_running",
+          model_key: "baseline_fwa",
+          model_version: "0.1.0",
+          status: "running",
+          requested_by: "model-ops",
+          request_notes: "drift",
+          status_note: "claimed",
+          updated_by: "trainer-worker",
+          readiness_recommendation: "prepare_retraining",
+          trigger_summary: [],
+          blocker_summary: [],
+          candidate_model_version: null,
+          candidate_artifact_uri: null,
+          candidate_endpoint_url: null,
+          validation_report_uri: null,
+          output_evaluation_id: null,
+          created_at: null,
+          updated_at: null,
+        },
+        {
+          job_id: "job_validation",
+          model_key: "baseline_fwa",
+          model_version: "0.1.0",
+          status: "validation",
+          requested_by: "model-ops",
+          request_notes: "drift",
+          status_note: "validating",
+          updated_by: "trainer-worker",
+          readiness_recommendation: "prepare_retraining",
+          trigger_summary: [],
+          blocker_summary: [],
+          candidate_model_version: "0.2.0-candidate",
+          candidate_artifact_uri: "s3://models/model.onnx",
+          candidate_endpoint_url: null,
+          validation_report_uri: null,
+          output_evaluation_id: null,
+          created_at: null,
+          updated_at: null,
+        },
+      ]),
+    ).toEqual({
+      claimableCount: 1,
+      workerOwnedCount: 2,
+      latestClaimableJobId: "job_queued",
+      nextAction: "claim_next_job",
+    });
+  });
+
+  it("shows no worker handoff action when no queued retraining job exists", () => {
+    expect(buildModelRetrainingWorkerSummary()).toEqual({
+      claimableCount: 0,
+      workerOwnedCount: 0,
+      latestClaimableJobId: "none",
+      nextAction: "no_claimable_jobs",
     });
   });
 });

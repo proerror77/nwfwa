@@ -2,6 +2,7 @@ import { useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   activateModel,
+  claimNextModelRetrainingJob,
   completeModelRetrainingJob,
   createModelRetrainingJob,
   getModelPerformance,
@@ -206,6 +207,17 @@ export function buildModelRetrainingJobSummary(jobs: ModelRetrainingJob[] = []) 
   };
 }
 
+export function buildModelRetrainingWorkerSummary(jobs: ModelRetrainingJob[] = []) {
+  const queuedJobs = jobs.filter((job) => job.status === "queued");
+  const workerOwnedJobs = jobs.filter((job) => ["running", "validation"].includes(job.status));
+  return {
+    claimableCount: queuedJobs.length,
+    workerOwnedCount: workerOwnedJobs.length,
+    latestClaimableJobId: queuedJobs[0]?.job_id ?? "none",
+    nextAction: queuedJobs.length > 0 ? "claim_next_job" : "no_claimable_jobs",
+  };
+}
+
 export function buildModelCandidateGovernanceRows(
   jobs: ModelRetrainingJob[] = [],
 ): ModelCandidateGovernanceRow[] {
@@ -259,6 +271,10 @@ export function ModelOpsPage() {
   const [notes, setNotes] = useState("Approved for continued shadow evaluation only.");
   const [retrainingRequester, setRetrainingRequester] = useState("model-ops");
   const [retrainingNotes, setRetrainingNotes] = useState("Queue retraining from readiness.");
+  const [workerActor, setWorkerActor] = useState("trainer-worker");
+  const [workerClaimNotes, setWorkerClaimNotes] = useState(
+    "Training worker accepted the next retraining job.",
+  );
   const [candidateVersion, setCandidateVersion] = useState("0.2.0-candidate");
   const [candidateArtifactUri, setCandidateArtifactUri] = useState(
     "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
@@ -422,6 +438,23 @@ export function ModelOpsPage() {
       queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
     },
   });
+  const retrainingClaimMutation = useMutation({
+    mutationFn: () => {
+      if (!selectedModel) throw new Error("No model selected");
+      return claimNextModelRetrainingJob(
+        {
+          actor: workerActor,
+          model_key: selectedModel.model_key,
+          notes: workerClaimNotes,
+        },
+        apiKey,
+      );
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["model-retraining-jobs"] });
+      queryClient.invalidateQueries({ queryKey: ["model-audit-events"] });
+    },
+  });
   const retrainingCompleteMutation = useMutation({
     mutationFn: ({ jobId }: { jobId: string }) =>
       completeModelRetrainingJob(
@@ -463,6 +496,7 @@ export function ModelOpsPage() {
     : [];
   const retrainingSummary = buildModelRetrainingSummary(retrainingQuery.data);
   const retrainingJobSummary = buildModelRetrainingJobSummary(retrainingJobsQuery.data?.jobs);
+  const retrainingWorkerSummary = buildModelRetrainingWorkerSummary(retrainingJobsQuery.data?.jobs);
   const candidateGovernanceRows = buildModelCandidateGovernanceRows(
     retrainingJobsQuery.data?.jobs,
   );
@@ -768,6 +802,22 @@ export function ModelOpsPage() {
             <span>Latest Artifact</span>
             <strong>{retrainingJobSummary.latestArtifactStatus}</strong>
           </div>
+          <div>
+            <span>Claimable</span>
+            <strong>{retrainingWorkerSummary.claimableCount}</strong>
+          </div>
+          <div>
+            <span>Worker Owned</span>
+            <strong>{retrainingWorkerSummary.workerOwnedCount}</strong>
+          </div>
+          <div>
+            <span>Next Job</span>
+            <strong>{retrainingWorkerSummary.latestClaimableJobId}</strong>
+          </div>
+          <div>
+            <span>Worker Action</span>
+            <strong>{retrainingWorkerSummary.nextAction}</strong>
+          </div>
         </div>
         <div className="result-stack">
           <label>
@@ -792,6 +842,33 @@ export function ModelOpsPage() {
           </button>
           {retrainingCreateMutation.error ? (
             <pre className="error">{String(retrainingCreateMutation.error.message)}</pre>
+          ) : null}
+        </div>
+        <div className="result-stack">
+          <label>
+            Worker Actor
+            <input
+              value={workerActor}
+              onChange={(event) => setWorkerActor(event.target.value)}
+            />
+          </label>
+          <label>
+            Claim Note
+            <textarea
+              value={workerClaimNotes}
+              onChange={(event) => setWorkerClaimNotes(event.target.value)}
+            />
+          </label>
+          <button
+            onClick={() => retrainingClaimMutation.mutate()}
+            disabled={
+              retrainingClaimMutation.isPending || retrainingWorkerSummary.claimableCount === 0
+            }
+          >
+            Claim Next Job
+          </button>
+          {retrainingClaimMutation.error ? (
+            <pre className="error">{String(retrainingClaimMutation.error.message)}</pre>
           ) : null}
         </div>
         <div className="result-stack">
