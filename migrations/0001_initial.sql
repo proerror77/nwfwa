@@ -353,9 +353,17 @@ CREATE TABLE IF NOT EXISTS investigation_cases (
   priority TEXT NOT NULL,
   routing_reason TEXT NOT NULL,
   evidence_package_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  final_outcome TEXT,
+  reviewer_notes TEXT,
+  investigation_result_id TEXT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE investigation_cases
+  ADD COLUMN IF NOT EXISTS final_outcome TEXT,
+  ADD COLUMN IF NOT EXISTS reviewer_notes TEXT,
+  ADD COLUMN IF NOT EXISTS investigation_result_id TEXT;
 
 CREATE TABLE IF NOT EXISTS audit_samples (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -585,6 +593,7 @@ CREATE TABLE IF NOT EXISTS rule_backtest_runs (
 CREATE TABLE IF NOT EXISTS investigation_results (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   investigation_id TEXT NOT NULL UNIQUE,
+  case_id TEXT,
   claim_id TEXT NOT NULL,
   outcome TEXT NOT NULL,
   confirmed_fwa BOOLEAN NOT NULL,
@@ -597,7 +606,8 @@ CREATE TABLE IF NOT EXISTS investigation_results (
 );
 
 ALTER TABLE investigation_results
-  ADD COLUMN IF NOT EXISTS financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment';
+  ADD COLUMN IF NOT EXISTS financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment',
+  ADD COLUMN IF NOT EXISTS case_id TEXT;
 
 CREATE TABLE IF NOT EXISTS saving_attributions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -147,6 +147,7 @@ Request:
 
 ```json
 {
+  "case_id": "case_CLM-0287",
   "claim_id": "CLM-0287",
   "investigation_id": "INV-DEMO-SMOKE",
   "outcome": "confirmed_fwa_review_needed",
@@ -156,12 +157,18 @@ Request:
   "currency": "CNY",
   "notes": "Evidence-backed manual review outcome.",
   "evidence_refs": [
+    "investigation_cases:case_CLM-0287",
     "audit:audit_...",
     "rule_runs:EARLY_CLAIM",
     "knowledge_cases:KC-1001"
   ]
 }
 ```
+
+`case_id` is optional for claim-level TPA writebacks. When provided, it must
+match an existing FWA case for the same claim and the platform projects the
+final outcome, reviewer notes, and `investigation_id` onto that case for the
+Operations Studio case list.
 
 Response:
 
@@ -181,6 +188,7 @@ Documented errors:
 
 - `400` invalid writeback, unsupported financial impact type, negative saving amount, missing evidence, or PII in notes/evidence refs.
 - `401` missing or invalid API key.
+- `404` `case_id` was provided but no matching case exists for the claim.
 
 ### QA Result Writeback
 

@@ -290,6 +290,7 @@ describe("buildInvestigationResultPayload", () => {
         },
       ),
     ).toEqual({
+      case_id: "case_CLM-1",
       claim_id: "CLM-1",
       investigation_id: "INV-CLM-1",
       outcome: "confirmed_fwa",

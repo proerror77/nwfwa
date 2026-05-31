@@ -1873,6 +1873,16 @@ async fn openapi_includes_operations_paths() {
         );
     }
     assert_eq!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]["case_id"]
+            ["type"],
+        serde_json::json!(["string", "null"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]["case_id"]
+            ["minLength"],
+        1
+    );
+    assert_eq!(
         schema["components"]["schemas"]["InvestigationResultRequest"]["properties"]
             ["evidence_refs"]["minItems"],
         1
@@ -2009,6 +2019,21 @@ async fn openapi_includes_operations_paths() {
         .unwrap()
         .iter()
         .any(|field| field == "sla_target_hours"));
+    for field in ["final_outcome", "reviewer_notes", "investigation_result_id"] {
+        assert!(
+            schema["components"]["schemas"]["Case"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing Case required field {field}"
+        );
+        assert_eq!(
+            schema["components"]["schemas"]["Case"]["properties"][field]["type"],
+            serde_json::json!(["string", "null"]),
+            "Case field {field} must be nullable"
+        );
+    }
     assert!(schema["components"]["schemas"]["DashboardAgentGovernance"].is_object());
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
@@ -2243,7 +2268,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             Some("#/components/schemas/InvestigationResultRequest"),
             "#/components/schemas/PilotWritebackResponse",
             None,
-            &["400", "401"][..],
+            &["400", "401", "404"][..],
         ),
         (
             "/api/v1/qa/results",

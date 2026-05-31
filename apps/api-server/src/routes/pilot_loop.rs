@@ -153,6 +153,7 @@ pub async fn write_investigation_result(
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
     authorize(&state, &headers)?;
     validate_investigation_result_request(&request)?;
+    validate_investigation_case_link(&state, &request).await?;
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -204,11 +205,15 @@ fn validate_investigation_result_request(
     if request.claim_id.trim().is_empty()
         || request.investigation_id.trim().is_empty()
         || request.outcome.trim().is_empty()
+        || request
+            .case_id
+            .as_ref()
+            .is_some_and(|case_id| case_id.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_INVESTIGATION_RESULT_IDENTITY",
-            "claim_id, investigation_id, and outcome are required",
+            "claim_id, investigation_id, outcome, and nonblank case_id when provided are required",
         ));
     }
     if let Some(financial_impact_type) = &request.financial_impact_type {
@@ -252,6 +257,32 @@ fn validate_investigation_result_request(
     }
     validate_writeback_pii(&request.notes, &request.evidence_refs)?;
     Ok(())
+}
+
+async fn validate_investigation_case_link(
+    state: &AppState,
+    request: &InvestigationResultRecord,
+) -> Result<(), ApiError> {
+    let Some(case_id) = request.case_id.as_deref() else {
+        return Ok(());
+    };
+    let cases = state
+        .repository
+        .list_cases()
+        .await
+        .map_err(internal_error("CASE_LOOKUP_FAILED"))?;
+    if cases
+        .iter()
+        .any(|case| case.case_id == case_id && case.claim_id == request.claim_id)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::NOT_FOUND,
+            "CASE_NOT_FOUND",
+            "case not found for investigation result claim",
+        ))
+    }
 }
 
 fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> {
@@ -1034,6 +1065,9 @@ mod tests {
             sla_status: "breached".into(),
             time_to_triage_hours: 0.0,
             time_to_closure_hours: None,
+            final_outcome: None,
+            reviewer_notes: None,
+            investigation_result_id: None,
         };
 
         let alerts = build_ops_alerts(&[], &[case], &[], &[], &[]);

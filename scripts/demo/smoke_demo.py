@@ -1778,6 +1778,7 @@ def main():
         "POST",
         "/api/v1/investigations/results",
         {
+            "case_id": case_id,
             "claim_id": CLAIM_ID,
             "investigation_id": "INV-DEMO-SMOKE",
             "outcome": "confirmed_fwa_review_needed",
@@ -1787,6 +1788,7 @@ def main():
             "currency": "CNY",
             "notes": "Demo smoke investigation records evidence-backed manual review outcome.",
             "evidence_refs": [
+                f"investigation_cases:{case_id}",
                 f"agent_run:{agent['agent_run_id']}",
                 f"audit:{score['audit_id']}",
                 "rule_runs:EARLY_CLAIM",
@@ -1803,6 +1805,19 @@ def main():
     assert_true(
         investigation.get("idempotency_key", "").startswith("tpa-writeback:investigation.result.received:"),
         "investigation writeback missing idempotency key",
+    )
+    cases_after_investigation = request("GET", "/api/v1/ops/cases").get("cases", [])
+    projected_case = next(
+        (item for item in cases_after_investigation if item.get("case_id") == case_id),
+        {},
+    )
+    assert_true(
+        projected_case.get("final_outcome") == "confirmed_fwa_review_needed",
+        "case list missing investigation final outcome",
+    )
+    assert_true(
+        projected_case.get("investigation_result_id") == "INV-DEMO-SMOKE",
+        "case list missing investigation result id",
     )
 
     discovered_rule = run_rule_discovery_candidate_lifecycle()

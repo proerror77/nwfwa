@@ -50,6 +50,9 @@ type CaseRecord = {
   sla_status?: string;
   time_to_triage_hours?: number;
   time_to_closure_hours?: number | null;
+  final_outcome?: string | null;
+  reviewer_notes?: string | null;
+  investigation_result_id?: string | null;
 };
 
 type EvidenceSufficiency = {
@@ -294,6 +297,7 @@ export function buildInvestigationResultPayload(
       .filter(Boolean),
   ].filter((value, index, refs) => refs.indexOf(value) === index);
   return {
+    case_id: item.case_id,
     claim_id: item.claim_id,
     investigation_id: draft.investigationId.trim(),
     outcome: draft.outcome,
@@ -909,6 +913,14 @@ export function LeadsCasesPage() {
                     <dd>{item.status}</dd>
                   </div>
                   <div>
+                    <dt>Final Outcome</dt>
+                    <dd>{item.final_outcome ?? "not_available"}</dd>
+                  </div>
+                  <div>
+                    <dt>Investigation Result</dt>
+                    <dd>{item.investigation_result_id ?? "not_available"}</dd>
+                  </div>
+                  <div>
                     <dt>Priority</dt>
                     <dd>{item.priority}</dd>
                   </div>
@@ -962,6 +974,7 @@ export function LeadsCasesPage() {
                   </div>
                 </dl>
                 {routingReason ? <p>{routingReason}</p> : null}
+                {item.reviewer_notes ? <p>{item.reviewer_notes}</p> : null}
                 {evidenceRows.length ? (
                   <ul className="result-list compact-list">
                     {evidenceRows.map((row) => (

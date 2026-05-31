@@ -263,6 +263,9 @@ pub struct CaseRecord {
     pub sla_status: String,
     pub time_to_triage_hours: f64,
     pub time_to_closure_hours: Option<f64>,
+    pub final_outcome: Option<String>,
+    pub reviewer_notes: Option<String>,
+    pub investigation_result_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -824,6 +827,7 @@ pub struct CreateFieldMappingInput {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InvestigationResultRecord {
     pub investigation_id: String,
+    pub case_id: Option<String>,
     pub claim_id: String,
     pub outcome: String,
     pub confirmed_fwa: bool,
@@ -1127,6 +1131,9 @@ struct CaseRow {
     priority: String,
     routing_reason: String,
     evidence_package_json: Value,
+    final_outcome: Option<String>,
+    reviewer_notes: Option<String>,
+    investigation_result_id: Option<String>,
     lead_created_at: chrono::DateTime<chrono::Utc>,
     case_created_at: chrono::DateTime<chrono::Utc>,
     case_updated_at: chrono::DateTime<chrono::Utc>,
@@ -2738,8 +2745,41 @@ impl ScoringRepository for InMemoryScoringRepository {
         record: InvestigationResultRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord> {
         let saving_attributions = derive_saving_attributions(&record);
+        let audit_id = format!("audit_investigation_{}", record.investigation_id);
+        let previous_case_id = {
+            let events = self.pilot_audit_events.lock().await;
+            events
+                .iter()
+                .find(|(_, event)| event.audit_id == audit_id)
+                .and_then(|(_, event)| event.payload["case_id"].as_str())
+                .map(str::to_string)
+        };
+        let mut cases = self.cases.lock().await;
+        if previous_case_id.as_deref() != record.case_id.as_deref() {
+            if let Some(case_id) = previous_case_id.as_deref() {
+                if let Some(case) = cases.get_mut(case_id) {
+                    if case.investigation_result_id.as_deref()
+                        == Some(record.investigation_id.as_str())
+                    {
+                        case.final_outcome = None;
+                        case.reviewer_notes = None;
+                        case.investigation_result_id = None;
+                    }
+                }
+            }
+        }
+        if let Some(case_id) = record.case_id.as_deref() {
+            if let Some(case) = cases.get_mut(case_id) {
+                case.final_outcome = Some(record.outcome.clone());
+                case.reviewer_notes = Some(record.notes.clone());
+                case.investigation_result_id = Some(record.investigation_id.clone());
+            } else {
+                anyhow::bail!("case not found for investigation result: {case_id}");
+            }
+        }
+        drop(cases);
         let event = AuditHistoryEventRecord {
-            audit_id: format!("audit_investigation_{}", record.investigation_id),
+            audit_id,
             run_id: format!("pilot_investigation_{}", record.investigation_id),
             event_type: "investigation.result.received".into(),
             event_status: "succeeded".into(),
@@ -5966,12 +6006,20 @@ impl ScoringRepository for PostgresScoringRepository {
     ) -> anyhow::Result<AuditHistoryEventRecord> {
         let saving_attributions = derive_saving_attributions(&record);
         let mut tx = self.pool.begin().await?;
+        let previous_case_id: Option<String> = sqlx::query_scalar(
+            "SELECT case_id FROM investigation_results WHERE investigation_id = $1",
+        )
+        .bind(&record.investigation_id)
+        .fetch_optional(&mut *tx)
+        .await?;
         sqlx::query(
             "INSERT INTO investigation_results
-             (investigation_id, claim_id, outcome, confirmed_fwa, financial_impact_type, saving_amount, currency, notes, evidence_refs)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             (investigation_id, case_id, claim_id, outcome, confirmed_fwa, financial_impact_type, saving_amount, currency, notes, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
              ON CONFLICT (investigation_id) DO UPDATE
-             SET outcome = EXCLUDED.outcome,
+             SET case_id = EXCLUDED.case_id,
+                 claim_id = EXCLUDED.claim_id,
+                 outcome = EXCLUDED.outcome,
                  confirmed_fwa = EXCLUDED.confirmed_fwa,
                  financial_impact_type = EXCLUDED.financial_impact_type,
                  saving_amount = EXCLUDED.saving_amount,
@@ -5980,6 +6028,7 @@ impl ScoringRepository for PostgresScoringRepository {
                  evidence_refs = EXCLUDED.evidence_refs",
         )
         .bind(&record.investigation_id)
+        .bind(&record.case_id)
         .bind(&record.claim_id)
         .bind(&record.outcome)
         .bind(record.confirmed_fwa)
@@ -5992,6 +6041,46 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(serde_json::json!(record.evidence_refs))
         .execute(&mut *tx)
         .await?;
+
+        if previous_case_id.as_deref() != record.case_id.as_deref() {
+            if let Some(case_id) = previous_case_id.as_deref() {
+                sqlx::query(
+                    "UPDATE investigation_cases
+                     SET final_outcome = NULL,
+                         reviewer_notes = NULL,
+                         investigation_result_id = NULL,
+                         updated_at = now()
+                     WHERE case_id = $1
+                       AND investigation_result_id = $2",
+                )
+                .bind(case_id)
+                .bind(&record.investigation_id)
+                .execute(&mut *tx)
+                .await?;
+            }
+        }
+
+        if let Some(case_id) = record.case_id.as_deref() {
+            let update = sqlx::query(
+                "UPDATE investigation_cases
+                 SET final_outcome = $1,
+                     reviewer_notes = $2,
+                     investigation_result_id = $3,
+                     updated_at = now()
+                 WHERE case_id = $4
+                   AND claim_id = $5",
+            )
+            .bind(&record.outcome)
+            .bind(&record.notes)
+            .bind(&record.investigation_id)
+            .bind(case_id)
+            .bind(&record.claim_id)
+            .execute(&mut *tx)
+            .await?;
+            if update.rows_affected() == 0 {
+                anyhow::bail!("case not found for investigation result: {case_id}");
+            }
+        }
 
         sqlx::query("DELETE FROM saving_attributions WHERE investigation_id = $1")
             .bind(&record.investigation_id)
@@ -6348,6 +6437,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )| {
                     labels_from_investigation_result(InvestigationResultRecord {
                         investigation_id,
+                        case_id: None,
                         claim_id,
                         outcome,
                         confirmed_fwa,
@@ -7297,6 +7387,9 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
         sla_status: case_sla_status("triage", sla_target_hours, 0.0),
         time_to_triage_hours: 0.0,
         time_to_closure_hours: None,
+        final_outcome: None,
+        reviewer_notes: None,
+        investigation_result_id: None,
     }
 }
 
@@ -9411,7 +9504,7 @@ fn lead_from_row(row: LeadRow) -> LeadRecord {
 
 async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
     let rows: Vec<CaseRow> = sqlx::query_as(
-        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
+        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
          ORDER BY c.created_at, c.case_id",
@@ -9426,7 +9519,7 @@ async fn load_case_in_tx(
     case_id: &str,
 ) -> anyhow::Result<Option<CaseRecord>> {
     let row: Option<CaseRow> = sqlx::query_as(
-        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
+        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
          WHERE c.case_id = $1",
@@ -9464,6 +9557,9 @@ fn case_from_row(row: CaseRow) -> CaseRecord {
         sla_status,
         time_to_triage_hours,
         time_to_closure_hours,
+        final_outcome: row.final_outcome,
+        reviewer_notes: row.reviewer_notes,
+        investigation_result_id: row.investigation_result_id,
     }
 }
 

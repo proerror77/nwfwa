@@ -1847,6 +1847,14 @@ pub async fn openapi_schema() -> Json<Value> {
                                     "schema": { "$ref": "#/components/schemas/ErrorResponse" }
                                 }
                             }
+                        },
+                        "404": {
+                            "description": "Linked investigation case was not found",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
                         }
                     }
                 }
@@ -4559,7 +4567,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "Case": {
                     "type": "object",
-                    "required": ["case_id", "lead_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "assignee", "reviewer", "priority", "routing_reason", "evidence_package", "sla_target_hours", "sla_status", "time_to_triage_hours", "time_to_closure_hours"],
+                    "required": ["case_id", "lead_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "assignee", "reviewer", "priority", "routing_reason", "evidence_package", "sla_target_hours", "sla_status", "time_to_triage_hours", "time_to_closure_hours", "final_outcome", "reviewer_notes", "investigation_result_id"],
                     "properties": {
                         "case_id": { "type": "string" },
                         "lead_id": { "type": "string" },
@@ -4578,7 +4586,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "sla_target_hours": { "type": "integer" },
                         "sla_status": { "type": "string" },
                         "time_to_triage_hours": { "type": "number" },
-                        "time_to_closure_hours": { "type": ["number", "null"] }
+                        "time_to_closure_hours": { "type": ["number", "null"] },
+                        "final_outcome": { "type": ["string", "null"] },
+                        "reviewer_notes": { "type": ["string", "null"] },
+                        "investigation_result_id": { "type": ["string", "null"] }
                     }
                 },
                 "CaseEvidencePackage": {
@@ -5097,6 +5108,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["investigation_id", "claim_id", "outcome", "confirmed_fwa", "notes", "evidence_refs"],
                     "properties": {
                         "investigation_id": { "type": "string", "minLength": 1 },
+                        "case_id": { "type": ["string", "null"], "minLength": 1 },
                         "claim_id": { "type": "string", "minLength": 1 },
                         "outcome": { "type": "string", "minLength": 1 },
                         "confirmed_fwa": { "type": "boolean" },
