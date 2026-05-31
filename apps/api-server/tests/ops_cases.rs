@@ -85,6 +85,18 @@ async fn score_high_risk_claim(app: axum::Router, claim_id: &str) {
     assert_eq!(status, StatusCode::OK);
 }
 
+fn lead_id_for_claim(leads: &serde_json::Value, claim_id: &str) -> String {
+    leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == claim_id)
+        .unwrap_or_else(|| panic!("lead generated for {claim_id}"))["lead_id"]
+        .as_str()
+        .unwrap()
+        .to_string()
+}
+
 #[tokio::test]
 async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     let app = build_app(test_config());
@@ -397,6 +409,140 @@ async fn triages_lead_without_opening_case_for_non_case_dispositions() {
     assert_eq!(triage_event["payload"]["decision"], "reject_lead");
     assert_eq!(triage_event["payload"]["disposition"], "rejected");
     assert!(triage_event["payload"]["case_id"].is_null());
+}
+
+#[tokio::test]
+async fn triage_decisions_create_lead_disposition_labels() {
+    let app = build_app(test_config());
+    for claim_id in [
+        "CLM-LEAD-LABEL-OPEN",
+        "CLM-LEAD-LABEL-REJECT",
+        "CLM-LEAD-LABEL-EVIDENCE",
+        "CLM-LEAD-LABEL-MERGE-SOURCE",
+        "CLM-LEAD-LABEL-MERGE-TARGET",
+    ] {
+        score_high_risk_claim(app.clone(), claim_id).await;
+    }
+
+    let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let open_lead_id = lead_id_for_claim(&leads, "CLM-LEAD-LABEL-OPEN");
+    let rejected_lead_id = lead_id_for_claim(&leads, "CLM-LEAD-LABEL-REJECT");
+    let evidence_lead_id = lead_id_for_claim(&leads, "CLM-LEAD-LABEL-EVIDENCE");
+    let merge_source_lead_id = lead_id_for_claim(&leads, "CLM-LEAD-LABEL-MERGE-SOURCE");
+    let merge_target_lead_id = lead_id_for_claim(&leads, "CLM-LEAD-LABEL-MERGE-TARGET");
+
+    for (lead_id, decision, evidence_ref) in [
+        (
+            open_lead_id.as_str(),
+            "open_case",
+            "triage_decisions:lead_label_open_case",
+        ),
+        (
+            rejected_lead_id.as_str(),
+            "reject_lead",
+            "triage_decisions:lead_label_reject",
+        ),
+        (
+            evidence_lead_id.as_str(),
+            "request_evidence",
+            "triage_decisions:lead_label_request_evidence",
+        ),
+    ] {
+        let (status, body) = json_request(
+            app.clone(),
+            "POST",
+            &format!("/api/v1/ops/leads/{lead_id}/triage"),
+            &format!(
+                r#"{{
+                  "decision": "{decision}",
+                  "assignee": "siu-lead-label",
+                  "reviewer": "qa-lead-label",
+                  "priority": "medium",
+                  "notes": "Create structured lead disposition label.",
+                  "evidence_refs": ["{evidence_ref}"]
+                }}"#
+            ),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "{body}");
+    }
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{merge_source_lead_id}/triage"),
+        &format!(
+            r#"{{
+              "decision": "merge_lead",
+              "merge_target_lead_id": "{merge_target_lead_id}",
+              "assignee": "siu-lead-label",
+              "reviewer": "qa-lead-label",
+              "priority": "medium",
+              "notes": "Merge duplicate lead and preserve disposition label.",
+              "evidence_refs": ["triage_decisions:lead_label_merge"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let labels = labels["labels"].as_array().unwrap();
+    for (claim_id, lead_id, disposition, evidence_ref) in [
+        (
+            "CLM-LEAD-LABEL-OPEN",
+            open_lead_id.as_str(),
+            "promoted",
+            "triage_decisions:lead_label_open_case",
+        ),
+        (
+            "CLM-LEAD-LABEL-REJECT",
+            rejected_lead_id.as_str(),
+            "rejected",
+            "triage_decisions:lead_label_reject",
+        ),
+        (
+            "CLM-LEAD-LABEL-EVIDENCE",
+            evidence_lead_id.as_str(),
+            "requested_more_evidence",
+            "triage_decisions:lead_label_request_evidence",
+        ),
+        (
+            "CLM-LEAD-LABEL-MERGE-SOURCE",
+            merge_source_lead_id.as_str(),
+            "merged",
+            "triage_decisions:lead_label_merge",
+        ),
+    ] {
+        assert!(
+            labels.iter().any(|label| {
+                label["claim_id"] == claim_id
+                    && label["label_name"] == "lead_disposition"
+                    && label["label_value"] == disposition
+                    && label["source_type"] == "lead_triage"
+                    && label["source_id"] == lead_id
+                    && label["governance_status"] == "needs_review"
+                    && label["feedback_target"] == "workflow"
+                    && label["evidence_refs"]
+                        .as_array()
+                        .unwrap()
+                        .contains(&serde_json::json!(evidence_ref))
+            }),
+            "missing lead_disposition label for {claim_id}"
+        );
+        assert_eq!(
+            labels
+                .iter()
+                .filter(|label| {
+                    label["label_name"] == "lead_disposition" && label["source_id"] == lead_id
+                })
+                .count(),
+            1,
+            "expected one lead_disposition label for {lead_id}"
+        );
+    }
 }
 
 #[tokio::test]

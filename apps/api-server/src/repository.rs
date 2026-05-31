@@ -2957,6 +2957,15 @@ impl ScoringRepository for InMemoryScoringRepository {
                     })
                 }),
         );
+        let lead_triage_events = self
+            .audit_events
+            .lock()
+            .await
+            .iter()
+            .filter(|event| event.event_type == "lead.triaged" && event.event_status == "succeeded")
+            .map(audit_history_from_persisted)
+            .collect::<Vec<_>>();
+        labels.extend(labels_from_lead_triage_events(lead_triage_events));
         labels.extend(
             self.list_cases()
                 .await?
@@ -6420,6 +6429,15 @@ impl ScoringRepository for PostgresScoringRepository {
         )
         .fetch_all(&self.pool)
         .await?;
+        let lead_triage_rows: Vec<(String, String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, run_id, payload, evidence_refs
+             FROM audit_events
+             WHERE event_type = 'lead.triaged'
+               AND event_status = 'succeeded'
+             ORDER BY created_at, audit_id",
+        )
+        .fetch_all(&self.pool)
+        .await?;
 
         let mut labels = investigation_rows
             .into_iter()
@@ -6489,6 +6507,22 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             ))
             .collect::<Vec<_>>();
+        labels.extend(labels_from_lead_triage_events(
+            lead_triage_rows
+                .into_iter()
+                .map(
+                    |(audit_id, run_id, payload, evidence_refs)| AuditHistoryEventRecord {
+                        audit_id,
+                        run_id,
+                        event_type: "lead.triaged".into(),
+                        event_status: "succeeded".into(),
+                        summary: String::new(),
+                        payload,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                        created_at: None,
+                    },
+                ),
+        ));
         labels.extend(
             self.list_cases()
                 .await?
@@ -8619,6 +8653,55 @@ fn medical_review_label_fields(
     }
 }
 
+fn labels_from_lead_triage_events(
+    events: impl IntoIterator<Item = AuditHistoryEventRecord>,
+) -> Vec<OutcomeLabelRecord> {
+    let mut labels_by_lead = BTreeMap::new();
+    for event in events {
+        if let Some(label) = label_from_lead_triage_event(&event) {
+            labels_by_lead.insert(label.source_id.clone(), label);
+        }
+    }
+    labels_by_lead.into_values().collect()
+}
+
+fn label_from_lead_triage_event(event: &AuditHistoryEventRecord) -> Option<OutcomeLabelRecord> {
+    let claim_id = event.payload["claim_id"].as_str()?.to_string();
+    let lead_id = event.payload["lead_id"].as_str()?.to_string();
+    let disposition = lead_disposition_label_value(
+        event.payload["decision"].as_str(),
+        event.payload["disposition"].as_str(),
+    )?;
+    if event.evidence_refs.is_empty() {
+        return None;
+    }
+    Some(OutcomeLabelRecord {
+        label_id: format!("label_lead_{}_lead_disposition", lead_id),
+        claim_id,
+        label_name: "lead_disposition".into(),
+        label_value: disposition.into(),
+        source_type: "lead_triage".into(),
+        source_id: lead_id,
+        governance_status: "needs_review".into(),
+        feedback_target: "workflow".into(),
+        currency: None,
+        evidence_refs: event.evidence_refs.clone(),
+    })
+}
+
+fn lead_disposition_label_value(
+    decision: Option<&str>,
+    disposition: Option<&str>,
+) -> Option<&'static str> {
+    match decision.or(disposition)? {
+        "open_case" => Some("promoted"),
+        "reject_lead" | "rejected" => Some("rejected"),
+        "request_evidence" | "pending_evidence" => Some("requested_more_evidence"),
+        "merge_lead" | "merged" => Some("merged"),
+        _ => None,
+    }
+}
+
 fn labels_from_case_status(record: CaseRecord) -> Vec<OutcomeLabelRecord> {
     let confirmed_fwa = match record.status.as_str() {
         "confirmed" => true,
@@ -8659,6 +8742,19 @@ fn labels_from_case_status(record: CaseRecord) -> Vec<OutcomeLabelRecord> {
     }
 
     labels
+}
+
+fn audit_history_from_persisted(event: &PersistedAuditEvent) -> AuditHistoryEventRecord {
+    AuditHistoryEventRecord {
+        audit_id: event.audit_id.clone(),
+        run_id: event.run_id.clone(),
+        event_type: event.event_type.clone(),
+        event_status: event.event_status.clone(),
+        summary: event.summary.clone(),
+        payload: event.payload.clone(),
+        evidence_refs: evidence_values_to_strings(&event.evidence_refs),
+        created_at: None,
+    }
 }
 
 fn case_label_evidence_refs(record: &CaseRecord) -> Vec<String> {

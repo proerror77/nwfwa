@@ -172,7 +172,8 @@ async fn openapi_includes_operations_paths() {
             "investigation_result",
             "qa_review",
             "case_status",
-            "medical_review"
+            "medical_review",
+            "lead_triage"
         ])
     );
     for field in [

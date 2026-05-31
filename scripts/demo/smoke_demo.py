@@ -1898,6 +1898,19 @@ def main():
         has_label(
             labels,
             claim_id=CLAIM_ID,
+            source_type="lead_triage",
+            source_id=lead_id,
+            label_name="lead_disposition",
+            label_value="promoted",
+            governance_status="needs_review",
+            feedback_target="workflow",
+        ),
+        "outcome labels missing lead disposition label",
+    )
+    assert_true(
+        has_label(
+            labels,
+            claim_id=CLAIM_ID,
             source_type="medical_review",
             label_name="insufficient_evidence",
             label_value="true",
