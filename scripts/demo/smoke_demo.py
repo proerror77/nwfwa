@@ -1596,6 +1596,22 @@ def main():
     assert_true(len(score.get("layers", [])) == 7, "score response must include 7 layers")
     assert_true(score.get("top_reasons"), "score response missing top_reasons")
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
+    model_score = score.get("model_score", {})
+    assert_true(
+        model_score.get("runtime_kind") == "python_http",
+        "score response did not use Python HTTP ML runtime",
+    )
+    assert_true(
+        model_score.get("execution_provider") == "cpu",
+        "model score execution provider mismatch",
+    )
+    metadata = model_score.get("metadata", {})
+    assert_true(
+        metadata.get("runtime_kind") == "python_fastapi",
+        "model score metadata missing Python service runtime",
+    )
+    for probability in ["fraud_probability", "abuse_probability", "waste_probability"]:
+        assert_true(isinstance(metadata.get(probability), (int, float)), f"model metadata missing {probability}")
     member_profile = assert_member_profile_summary()
     provider_risk = assert_provider_risk_summary()
 
