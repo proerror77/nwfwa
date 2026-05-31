@@ -327,12 +327,17 @@ Initial high-value field mappings:
    - `GET /api/v1/ops/datasets`
    - `GET /api/v1/ops/datasets/{dataset_id}`
    - `POST /api/v1/ops/datasets/{dataset_id}/mappings`
+4. Expose the same catalog write path in Operations Studio Data Sources so data
+   operators can register dataset metadata and add field mappings without
+   bypassing the audited API.
 
 Verification:
 
 - migration applies cleanly
 - repository tests cover dataset registration and mapping creation
 - OpenAPI includes dataset catalog paths
+- Data Sources can submit dataset registration and field mapping payloads, then
+  refresh the selected dataset detail and mapping coverage.
 
 ### Phase B: Parquet Profile Boundary
 
@@ -354,23 +359,32 @@ Verification:
 1. Compile mapped fields into feature-set Parquet.
 2. Register the feature set in `feature_set_versions`.
 3. Register model dataset versions that point to train and validation Parquet URIs.
+4. Let Operations Studio register feature-set and model-dataset metadata through
+   the Data Sources lineage panel, while keeping the actual Parquet artifacts in
+   object storage.
 
 Verification:
 
 - feature list is immutable by feature-set version
 - train/validation row counts and label distributions are recorded
 - feature matrix does not overwrite original landing data
+- Data Sources can submit feature-set and model-dataset registrations through
+  the same API contracts used by integration tests.
 
 ### Phase D: Model Evaluation
 
 1. Store evaluation metrics in `model_evaluation_runs`.
 2. Link metrics back to `model_dataset_versions`.
 3. Show dataset and evaluation summaries in Operations Studio.
+4. Let Operations Studio register evaluation-run metadata and immediately
+   refresh model-lineage summaries for the selected source dataset.
 
 Verification:
 
 - model metrics cannot be reported without a registered model dataset
 - feature importance is stored as an artifact URI, not a large JSON blob when it is large
+- Data Sources can submit evaluation-run metadata and show the last registered
+  lineage artifact identifier for audit handoff.
 
 ## Non-Goals
 
