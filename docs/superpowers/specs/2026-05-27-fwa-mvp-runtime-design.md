@@ -269,12 +269,13 @@ Every failure that occurs after request admission must write a failed audit even
       "type": "claim",
       "id": "CLM-0287",
       "field": "claim_amount"
-    }
+    },
+    "model_versions:baseline_fwa:0.1.0"
   ]
 }
 ```
 
-All successful responses include `run_id`, `audit_id`, score fields, model score details, top reasons, and evidence references.
+All successful responses include `run_id`, `audit_id`, score fields, model score details, top reasons, and evidence references. Model evidence includes the exact `model_versions:{model_key}:{model_version}` reference used for scoring.
 
 ## Database Design
 
@@ -540,7 +541,7 @@ Migration checks should validate SQLx migrations against PostgreSQL once the dat
 - Failed admitted scoring requests write failed audit events.
 - Python ML service is called over HTTP in the MVP path.
 - Rust `ModelScorer` contract exists and the API depends on the trait, not a hard-coded Python service.
-- Response includes `run_id`, `audit_id`, `risk_score`, `rag`, `recommended_action`, `top_reasons`, and `evidence_refs`.
+- Response includes `run_id`, `audit_id`, `risk_score`, `rag`, `recommended_action`, `top_reasons`, and `evidence_refs` with exact model version evidence.
 - Operations Studio Runtime Scoring can submit requests and display results.
 - CI passes.
 

@@ -409,6 +409,10 @@ pub async fn score_claim(
         "model_scores:{}",
         model_score.model_key
     )));
+    evidence_refs.push(serde_json::Value::String(format!(
+        "model_versions:{}:{}",
+        model_score.model_key, model_score.model_version
+    )));
     let routing_policy = active_routing_policy(&state, &review_mode).await?;
     let decision = fwa_scoring::aggregate_with_routing_policy(
         &features,

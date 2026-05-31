@@ -66,11 +66,14 @@ The response is audit-backed and must be treated as assistive risk routing, not 
     "latency_ms": 12
   },
   "top_reasons": ["..."],
-  "evidence_refs": ["..."]
+  "evidence_refs": [
+    "model_scores:baseline_fwa",
+    "model_versions:baseline_fwa:0.1.0"
+  ]
 }
 ```
 
-`model_score` exposes the L4 supervised model boundary for TPA panels and audit review: model key/version, runtime backend, score, explanations, and baseline FWA sub-probabilities. These fields remain assistive signals and do not make an automatic claim decision.
+`model_score` exposes the L4 supervised model boundary for TPA panels and audit review: model key/version, runtime backend, score, explanations, and baseline FWA sub-probabilities. `evidence_refs` also carries the exact `model_versions:{model_key}:{model_version}` reference used for scoring so audit replay can bind the score to a governed model version. These fields remain assistive signals and do not make an automatic claim decision.
 
 Documented errors:
 

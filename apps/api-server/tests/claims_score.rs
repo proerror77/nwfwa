@@ -294,6 +294,9 @@ async fn scores_spec_style_top_level_full_payload() {
         .expect("response should include evidence refs");
     assert!(evidence_refs.contains(&serde_json::json!("rule_runs:EARLY_HIGH_AMOUNT")));
     assert!(evidence_refs.contains(&serde_json::json!("model_scores:baseline_fwa")));
+    assert!(evidence_refs.contains(&serde_json::json!(
+        "model_versions:baseline_fwa:0.1.0"
+    )));
     let feature_values = body["feature_values"]
         .as_array()
         .expect("response should include feature values");
@@ -358,6 +361,12 @@ async fn scores_spec_style_top_level_full_payload() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("model_scores:baseline_fwa")));
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_versions:baseline_fwa:0.1.0"
+        )));
 }
 
 #[tokio::test]
@@ -1995,6 +2004,12 @@ async fn scoring_uses_active_model_version_from_model_registry() {
     assert_eq!(body["model_score"]["score"], 72);
     assert_eq!(body["model_score"]["model_version"], "0.2.0-active");
     assert_eq!(body["model_score"]["runtime_kind"], "test_echo");
+    assert!(body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_versions:baseline_fwa:0.2.0-active"
+        )));
 
     let audit_request = Request::builder()
         .method("GET")
@@ -2022,6 +2037,12 @@ async fn scoring_uses_active_model_version_from_model_registry() {
         scoring_event["payload"]["model_score"]["metadata"]["endpoint_url"],
         "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-active"
     );
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_versions:baseline_fwa:0.2.0-active"
+        )));
 }
 
 #[tokio::test]
