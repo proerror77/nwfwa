@@ -472,6 +472,7 @@ pub struct ProviderRiskSummaryItemRecord {
     pub claim_count: u32,
     pub specialty: Option<String>,
     pub network_status: Option<String>,
+    pub review_failure_count: u32,
     pub confirmed_fwa_count: u32,
     pub false_positive_count: u32,
     pub network_risk_score: Option<u8>,
@@ -9016,6 +9017,7 @@ struct ProviderRiskAccumulator {
     claim_count: u32,
     specialty: Option<String>,
     network_status: Option<String>,
+    review_failure_count: u32,
     confirmed_fwa_count: u32,
     false_positive_count: u32,
     network_risk_score: Option<u8>,
@@ -9070,6 +9072,13 @@ fn summarize_provider_risk_profiles<'a>(
                         .and_then(Value::as_str)
                         .map(str::to_string);
                 }
+                entry.review_failure_count = entry.review_failure_count.max(
+                    profile
+                        .get("review_failure_count")
+                        .and_then(Value::as_u64)
+                        .unwrap_or(0)
+                        .min(u32::MAX as u64) as u32,
+                );
                 entry.confirmed_fwa_count = entry.confirmed_fwa_count.max(
                     profile
                         .get("confirmed_fwa_count")
@@ -9140,6 +9149,7 @@ fn summarize_provider_risk_profiles<'a>(
             claim_count: provider.claim_count,
             specialty: provider.specialty,
             network_status: provider.network_status,
+            review_failure_count: provider.review_failure_count,
             confirmed_fwa_count: provider.confirmed_fwa_count,
             false_positive_count: provider.false_positive_count,
             network_risk_score: provider.network_risk_score,

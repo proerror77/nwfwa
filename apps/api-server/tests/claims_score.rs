@@ -637,6 +637,7 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
                     "diagnosis_procedure_mismatch_rate": 0.38,
                     "peer_amount_percentile": 97,
                     "peer_frequency_percentile": 96,
+                    "review_failure_count": 3,
                     "confirmed_fwa_count": 4,
                     "false_positive_count": 1
                   }
@@ -665,6 +666,7 @@ async fn returns_provider_profile_outlier_evidence_for_network_risk() {
         .unwrap()
         .iter()
         .any(|item| item == "peer_amount_p97"));
+    assert_eq!(profile["review_failure_count"], 3);
     assert_eq!(profile["confirmed_fwa_count"], 4);
     assert_eq!(profile["false_positive_count"], 1);
     assert!(profile["evidence_refs"]
@@ -1322,6 +1324,7 @@ async fn rejects_invalid_provider_risk_signal_ranges() {
                     "diagnosis_procedure_mismatch_rate": 0.2,
                     "peer_amount_percentile": 80,
                     "peer_frequency_percentile": 75,
+                    "review_failure_count": 0,
                     "confirmed_fwa_count": 0,
                     "false_positive_count": 0
                   }
@@ -1360,6 +1363,7 @@ async fn rejects_invalid_provider_risk_signal_ranges() {
                     "diagnosis_procedure_mismatch_rate": 0.2,
                     "peer_amount_percentile": 80,
                     "peer_frequency_percentile": 75,
+                    "review_failure_count": 0,
                     "confirmed_fwa_count": 0,
                     "false_positive_count": 0
                   }
@@ -1566,6 +1570,7 @@ async fn rejects_invalid_scoring_business_fields() {
                     "diagnosis_procedure_mismatch_rate": 0.2,
                     "peer_amount_percentile": 80,
                     "peer_frequency_percentile": 75,
+                    "review_failure_count": 0,
                     "confirmed_fwa_count": 0,
                     "false_positive_count": 0
                   }

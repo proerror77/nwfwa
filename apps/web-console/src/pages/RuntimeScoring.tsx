@@ -272,6 +272,7 @@ const defaultPayload = JSON.stringify(
             diagnosis_procedure_mismatch_rate: 0.38,
             peer_amount_percentile: 97,
             peer_frequency_percentile: 96,
+            review_failure_count: 3,
             confirmed_fwa_count: 4,
             false_positive_count: 1,
           },

@@ -120,6 +120,7 @@ pub struct ProviderProfileWindowPayload {
     pub diagnosis_procedure_mismatch_rate: f64,
     pub peer_amount_percentile: u8,
     pub peer_frequency_percentile: u8,
+    pub review_failure_count: u32,
     pub confirmed_fwa_count: u32,
     pub false_positive_count: u32,
 }
@@ -977,6 +978,7 @@ impl From<ProviderProfileWindowPayload> for ProviderProfileWindow {
             diagnosis_procedure_mismatch_rate: value.diagnosis_procedure_mismatch_rate,
             peer_amount_percentile: value.peer_amount_percentile,
             peer_frequency_percentile: value.peer_frequency_percentile,
+            review_failure_count: value.review_failure_count,
             confirmed_fwa_count: value.confirmed_fwa_count,
             false_positive_count: value.false_positive_count,
         }

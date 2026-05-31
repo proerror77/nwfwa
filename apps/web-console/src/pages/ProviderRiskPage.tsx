@@ -11,6 +11,7 @@ type ProviderRiskSummaryItem = {
   claim_count: number;
   network_risk_score?: number | null;
   latest_claim_id?: string | null;
+  review_failure_count: number;
   confirmed_fwa_count: number;
   false_positive_count: number;
   outlier_flags: string[];
@@ -43,6 +44,10 @@ export function buildProviderRiskOpsSummary(summary?: ProviderRiskSummary) {
     (provider) => provider.network_risk_score != null,
   ).length;
   const graphReasonCount = providers.filter((provider) => provider.graph_reasons.length > 0).length;
+  const reviewFailureHistoryCount = providers.reduce(
+    (total, provider) => total + provider.review_failure_count,
+    0,
+  );
   const confirmedFwaHistoryCount = providers.reduce(
     (total, provider) => total + provider.confirmed_fwa_count,
     0,
@@ -59,6 +64,7 @@ export function buildProviderRiskOpsSummary(summary?: ProviderRiskSummary) {
     evidenceBackedCount,
     networkScoreCount,
     graphReasonCount,
+    reviewFailureHistoryCount,
     confirmedFwaHistoryCount,
     falsePositiveHistoryCount,
     graphEvidenceGapCount: Math.max(graphRiskCount - evidenceBackedCount, 0),
@@ -145,6 +151,10 @@ export function ProviderRiskPage() {
             <strong>{summary.graphReasonCount}</strong>
           </div>
           <div>
+            <span>Review Failure History</span>
+            <strong>{summary.reviewFailureHistoryCount}</strong>
+          </div>
+          <div>
             <span>Confirmed FWA History</span>
             <strong>{summary.confirmedFwaHistoryCount}</strong>
           </div>
@@ -198,6 +208,7 @@ export function ProviderRiskPage() {
               <small>
                 network {provider.network_risk_score == null ? "n/a" : provider.network_risk_score}
               </small>
+              <small>review failures {provider.review_failure_count}</small>
               <small>confirmed FWA {provider.confirmed_fwa_count}</small>
               <small>false positive {provider.false_positive_count}</small>
               <small>{provider.claim_count} claims</small>

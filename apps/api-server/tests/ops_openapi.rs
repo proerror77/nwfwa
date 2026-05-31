@@ -1464,7 +1464,11 @@ async fn openapi_includes_operations_paths() {
             serde_json::json!(["string", "null"])
         );
     }
-    for field in ["confirmed_fwa_count", "false_positive_count"] {
+    for field in [
+        "review_failure_count",
+        "confirmed_fwa_count",
+        "false_positive_count",
+    ] {
         assert!(
             schema["components"]["schemas"]["ProviderRiskSummaryItem"]["required"]
                 .as_array()
@@ -1475,6 +1479,21 @@ async fn openapi_includes_operations_paths() {
         );
         assert_eq!(
             schema["components"]["schemas"]["ProviderRiskSummaryItem"]["properties"][field]["type"],
+            "integer"
+        );
+    }
+    for schema_name in ["ProviderProfileWindowPayload", "ProviderProfileAssessment"] {
+        assert!(
+            schema["components"]["schemas"][schema_name]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == "review_failure_count"),
+            "missing {schema_name}.review_failure_count"
+        );
+        assert_eq!(
+            schema["components"]["schemas"][schema_name]["properties"]["review_failure_count"]
+                ["type"],
             "integer"
         );
     }

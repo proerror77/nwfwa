@@ -11,6 +11,7 @@ pub struct ProviderProfileWindow {
     pub diagnosis_procedure_mismatch_rate: f64,
     pub peer_amount_percentile: u8,
     pub peer_frequency_percentile: u8,
+    pub review_failure_count: u32,
     pub confirmed_fwa_count: u32,
     pub false_positive_count: u32,
 }
@@ -40,6 +41,7 @@ pub struct ProviderProfileAssessment {
     pub review_route: String,
     pub specialty: Option<String>,
     pub network_status: Option<String>,
+    pub review_failure_count: u32,
     pub confirmed_fwa_count: u32,
     pub false_positive_count: u32,
     pub outlier_flags: Vec<String>,
@@ -95,6 +97,7 @@ pub fn assess_provider_profile(
             },
             specialty: None,
             network_status: None,
+            review_failure_count: 0,
             confirmed_fwa_count: 0,
             false_positive_count: 0,
             outlier_flags: Vec::new(),
@@ -123,6 +126,12 @@ pub fn assess_provider_profile(
         .iter()
         .map(|finding| finding.evidence_ref.clone())
         .collect::<Vec<_>>();
+    let review_failure_count = profile
+        .windows
+        .iter()
+        .map(|window| window.review_failure_count)
+        .max()
+        .unwrap_or(0);
     let confirmed_fwa_count = profile
         .windows
         .iter()
@@ -148,6 +157,7 @@ pub fn assess_provider_profile(
         },
         specialty: profile.specialty.clone(),
         network_status: profile.network_status.clone(),
+        review_failure_count,
         confirmed_fwa_count,
         false_positive_count,
         outlier_flags,
@@ -371,6 +381,7 @@ mod tests {
                 diagnosis_procedure_mismatch_rate: 0.38,
                 peer_amount_percentile: 97,
                 peer_frequency_percentile: 96,
+                review_failure_count: 3,
                 confirmed_fwa_count: 4,
                 false_positive_count: 1,
             }],
@@ -384,6 +395,7 @@ mod tests {
         assert!(assessment
             .outlier_flags
             .contains(&"peer_amount_p97".to_string()));
+        assert_eq!(assessment.review_failure_count, 3);
         assert_eq!(assessment.confirmed_fwa_count, 4);
         assert_eq!(assessment.false_positive_count, 1);
         assert_eq!(assessment.evidence_refs[0], "provider_profile:PRV-1:90d");

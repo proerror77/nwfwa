@@ -91,6 +91,7 @@ async fn returns_provider_risk_summary_from_scoring_profiles() {
                 "diagnosis_procedure_mismatch_rate": 0.38,
                 "peer_amount_percentile": 97,
                 "peer_frequency_percentile": 96,
+                "review_failure_count": 3,
                 "confirmed_fwa_count": 4,
                 "false_positive_count": 1
               }
@@ -115,6 +116,7 @@ async fn returns_provider_risk_summary_from_scoring_profiles() {
     assert_eq!(summary["providers"][0]["claim_count"], 1);
     assert_eq!(summary["providers"][0]["specialty"], "imaging");
     assert_eq!(summary["providers"][0]["network_status"], "in_network");
+    assert_eq!(summary["providers"][0]["review_failure_count"], 3);
     assert_eq!(summary["providers"][0]["confirmed_fwa_count"], 4);
     assert_eq!(summary["providers"][0]["false_positive_count"], 1);
     assert_eq!(summary["providers"][0]["review_required"], true);
