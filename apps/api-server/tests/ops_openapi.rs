@@ -1640,6 +1640,23 @@ async fn openapi_includes_operations_paths() {
             "missing TriageLeadRequest minLength for {field}"
         );
     }
+    assert!(
+        schema["components"]["schemas"]["TriageLeadRequest"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evidence_refs")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["TriageLeadRequest"]["properties"]["evidence_refs"]
+            ["minItems"],
+        1
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["TriageLeadRequest"]["properties"]["evidence_refs"]
+            ["items"]["minLength"],
+        1
+    );
     assert_eq!(
         schema["components"]["schemas"]["UpdateCaseStatusRequest"]["properties"]["actor_id"]
             ["minLength"],

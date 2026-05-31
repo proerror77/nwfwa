@@ -4571,7 +4571,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "TriageLeadRequest": {
                     "type": "object",
-                    "required": ["decision", "assignee", "reviewer", "priority", "notes"],
+                    "required": ["decision", "assignee", "reviewer", "priority", "notes", "evidence_refs"],
                     "properties": {
                         "decision": {
                             "type": "string",
@@ -4585,6 +4585,12 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "minLength": 1,
                             "description": "Triage notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Structured triage decision evidence references must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 }
                         }
                     }
                 },

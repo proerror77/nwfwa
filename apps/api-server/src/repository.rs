@@ -273,6 +273,8 @@ pub struct TriageLeadInput {
     pub reviewer: String,
     pub priority: String,
     pub notes: String,
+    #[serde(default)]
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2016,7 +2018,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             event_status: "succeeded".into(),
             summary: format!("Lead triaged: {}", input.decision),
             payload: triage_audit_payload(&lead, &input, case.as_ref()),
-            evidence_refs: lead
+            evidence_refs: input
                 .evidence_refs
                 .iter()
                 .map(|value| Value::String(value.clone()))
@@ -4494,7 +4496,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 event_status: "succeeded".into(),
                 summary: format!("Lead triaged: {}", input.decision),
                 payload: triage_audit_payload(&lead, &input, case.as_ref()),
-                evidence_refs: lead
+                evidence_refs: input
                     .evidence_refs
                     .iter()
                     .map(|value| Value::String(value.clone()))
@@ -7285,7 +7287,7 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
             "reason": lead.reason.clone(),
             "triage_notes": input.notes.clone(),
             "evidence_sufficiency": evidence_sufficiency,
-            "evidence_refs": lead.evidence_refs.clone()
+            "evidence_refs": triage_case_evidence_refs(lead, input)
         }),
         sla_target_hours,
         sla_status: case_sla_status("triage", sla_target_hours, 0.0),
@@ -7304,7 +7306,16 @@ fn case_evidence_text(lead: &LeadRecord, input: &TriageLeadInput) -> String {
         input.notes.clone(),
     ];
     parts.extend(lead.evidence_refs.clone());
+    parts.extend(input.evidence_refs.clone());
     parts.join(" ")
+}
+
+fn triage_case_evidence_refs(lead: &LeadRecord, input: &TriageLeadInput) -> Vec<String> {
+    let mut refs = lead.evidence_refs.clone();
+    refs.extend(input.evidence_refs.clone());
+    refs.sort();
+    refs.dedup();
+    refs
 }
 
 fn triage_audit_payload(
@@ -7323,7 +7334,8 @@ fn triage_audit_payload(
         "disposition": lead.disposition.clone(),
         "merge_target_lead_id": input.merge_target_lead_id.clone(),
         "notes": input.notes.clone(),
-        "evidence_sufficiency": evidence_sufficiency
+        "evidence_sufficiency": evidence_sufficiency,
+        "evidence_refs": input.evidence_refs.clone()
     })
 }
 

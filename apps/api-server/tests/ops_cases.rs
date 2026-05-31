@@ -161,7 +161,8 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
           "assignee": " ",
           "reviewer": "medical-reviewer-1",
           "priority": "high",
-          "notes": "Open investigation from high-risk FWA lead."
+          "notes": "Open investigation from high-risk FWA lead.",
+          "evidence_refs": ["triage_decisions:invalid_assignee"]
         }"#,
     )
     .await;
@@ -177,7 +178,8 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
           "assignee": "siu-reviewer-1",
           "reviewer": "medical-reviewer-1",
           "priority": "high",
-          "notes": " "
+          "notes": " ",
+          "evidence_refs": ["triage_decisions:blank_notes"]
         }"#,
     )
     .await;
@@ -193,7 +195,8 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
           "assignee": "siu-reviewer-1",
           "reviewer": "medical-reviewer-1",
           "priority": "high",
-          "notes": "Contact alice@example.com for records."
+          "notes": "Contact alice@example.com for records.",
+          "evidence_refs": ["triage_decisions:pii_notes"]
         }"#,
     )
     .await;
@@ -209,7 +212,8 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
           "assignee": "siu-reviewer-1",
           "reviewer": "medical-reviewer-1",
           "priority": "high",
-          "notes": "Open investigation from high-risk FWA lead."
+          "notes": "Open investigation from high-risk FWA lead.",
+          "evidence_refs": ["triage_decisions:open_case"]
         }"#,
     )
     .await;
@@ -245,6 +249,11 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
             .unwrap(),
         "sufficient" | "needs_more_evidence"
     ));
+    assert!(triage["case"]["evidence_package"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference == "triage_decisions:open_case"));
     assert!(triage["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, cases) = json_request(app.clone(), "GET", "/api/v1/ops/cases", "{}").await;
@@ -268,6 +277,14 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
     assert_eq!(
         triage_event["payload"]["evidence_sufficiency"],
         triage["case"]["evidence_package"]["evidence_sufficiency"]
+    );
+    assert_eq!(
+        triage_event["payload"]["evidence_refs"],
+        serde_json::json!(["triage_decisions:open_case"])
+    );
+    assert_eq!(
+        triage_event["evidence_refs"],
+        serde_json::json!(["triage_decisions:open_case"])
     );
 }
 
@@ -307,7 +324,8 @@ async fn triages_lead_without_opening_case_for_non_case_dispositions() {
           "assignee": "siu-reviewer-3",
           "reviewer": "medical-reviewer-3",
           "priority": "medium",
-          "notes": "Known false positive after triage."
+          "notes": "Known false positive after triage.",
+          "evidence_refs": ["triage_decisions:reject_lead"]
         }"#,
     )
     .await;
@@ -325,7 +343,8 @@ async fn triages_lead_without_opening_case_for_non_case_dispositions() {
           "assignee": "siu-reviewer-4",
           "reviewer": "medical-reviewer-4",
           "priority": "high",
-          "notes": "Need invoice and discharge summary before opening a case."
+          "notes": "Need invoice and discharge summary before opening a case.",
+          "evidence_refs": ["triage_decisions:request_evidence"]
         }"#,
     )
     .await;
@@ -406,7 +425,8 @@ async fn merges_lead_into_target_without_opening_case() {
               "assignee": "siu-reviewer-5",
               "reviewer": "medical-reviewer-5",
               "priority": "medium",
-              "notes": "Merge duplicate lead into the target lead for one investigation path."
+              "notes": "Merge duplicate lead into the target lead for one investigation path.",
+              "evidence_refs": ["triage_decisions:merge_lead"]
             }}"#
         ),
     )
@@ -515,7 +535,8 @@ async fn updates_case_status_with_audit_trail() {
           "assignee": "siu-reviewer-2",
           "reviewer": "medical-reviewer-2",
           "priority": "high",
-          "notes": "Open investigation from high-risk FWA lead."
+          "notes": "Open investigation from high-risk FWA lead.",
+          "evidence_refs": ["triage_decisions:open_case_status"]
         }"#,
     )
     .await;

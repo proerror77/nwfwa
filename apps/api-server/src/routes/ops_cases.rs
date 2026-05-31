@@ -91,14 +91,22 @@ fn validate_triage_request(lead_id: &str, request: &TriageLeadInput) -> Result<(
         || request.reviewer.trim().is_empty()
         || request.priority.trim().is_empty()
         || request.notes.trim().is_empty()
+        || request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_TRIAGE_REVIEW_CONTEXT",
-            "assignee, reviewer, priority, and notes are required",
+            "assignee, reviewer, priority, notes, and evidence_refs are required",
         ));
     }
-    if pii::contains_pii([request.notes.as_str()]) {
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "PII_NOT_ALLOWED_IN_CASE_WORKFLOW",
