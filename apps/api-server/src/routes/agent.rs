@@ -49,6 +49,7 @@ pub struct AgentInvestigationResponse {
     pub qa_opinion_draft: String,
     pub evidence_sufficiency: EvidenceSufficiency,
     pub evidence_refs: Vec<String>,
+    pub evidence_refs_by_type: fwa_agent::EvidenceReferenceBuckets,
 }
 
 pub async fn investigate_case(
@@ -260,6 +261,7 @@ pub async fn investigate_case(
         qa_opinion_draft: package.qa_opinion_draft,
         evidence_sufficiency: package.evidence_sufficiency,
         evidence_refs: package.evidence_refs,
+        evidence_refs_by_type: package.evidence_refs_by_type,
     }))
 }
 

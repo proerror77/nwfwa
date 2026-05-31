@@ -7287,7 +7287,8 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
             "reason": lead.reason.clone(),
             "triage_notes": input.notes.clone(),
             "evidence_sufficiency": evidence_sufficiency,
-            "evidence_refs": triage_case_evidence_refs(lead, input)
+            "evidence_refs": triage_case_evidence_refs(lead, input),
+            "evidence_refs_by_type": triage_case_evidence_refs_by_type(lead, input)
         }),
         sla_target_hours,
         sla_status: case_sla_status("triage", sla_target_hours, 0.0),
@@ -7313,9 +7314,98 @@ fn case_evidence_text(lead: &LeadRecord, input: &TriageLeadInput) -> String {
 fn triage_case_evidence_refs(lead: &LeadRecord, input: &TriageLeadInput) -> Vec<String> {
     let mut refs = lead.evidence_refs.clone();
     refs.extend(input.evidence_refs.clone());
+    refs.push(format!("claims:{}", lead.claim_id));
+    refs.push(format!("scoring_runs:{}:anomaly_score", lead.run_id));
     refs.sort();
     refs.dedup();
     refs
+}
+
+fn triage_case_evidence_refs_by_type(lead: &LeadRecord, input: &TriageLeadInput) -> Value {
+    let mut claim = BTreeSet::from([format!("claims:{}", lead.claim_id)]);
+    let mut rule = BTreeSet::new();
+    let mut model = BTreeSet::new();
+    let mut anomaly = BTreeSet::from([format!("scoring_runs:{}:anomaly_score", lead.run_id)]);
+    let mut document = BTreeSet::new();
+    let mut similar_case = BTreeSet::new();
+
+    for reference in triage_case_evidence_refs(lead, input) {
+        match evidence_ref_bucket(&reference) {
+            Some("claim") => {
+                claim.insert(reference);
+            }
+            Some("rule") => {
+                rule.insert(reference);
+            }
+            Some("model") => {
+                model.insert(reference);
+            }
+            Some("anomaly") => {
+                anomaly.insert(reference);
+            }
+            Some("document") => {
+                document.insert(reference);
+            }
+            Some("similar_case") => {
+                similar_case.insert(reference);
+            }
+            _ => {}
+        }
+    }
+
+    serde_json::json!({
+        "claim": claim.into_iter().collect::<Vec<_>>(),
+        "rule": rule.into_iter().collect::<Vec<_>>(),
+        "model": model.into_iter().collect::<Vec<_>>(),
+        "anomaly": anomaly.into_iter().collect::<Vec<_>>(),
+        "document": document.into_iter().collect::<Vec<_>>(),
+        "similar_case": similar_case.into_iter().collect::<Vec<_>>(),
+    })
+}
+
+fn evidence_ref_bucket(reference: &str) -> Option<&'static str> {
+    if let Ok(value) = serde_json::from_str::<Value>(reference) {
+        if let Some(entity_type) = value.get("entity_type").and_then(Value::as_str) {
+            return match entity_type {
+                "claim" | "member" | "policy" | "provider" | "claim_item" => Some("claim"),
+                "rule" | "rule_run" => Some("rule"),
+                "model" | "model_score" | "model_version" => Some("model"),
+                "document" | "document_chunk" | "ocr" => Some("document"),
+                _ => None,
+            };
+        }
+    }
+
+    if reference.starts_with("knowledge_cases:")
+        || reference.starts_with("retrieval:")
+        || reference.starts_with("matched_signal:")
+        || reference.starts_with("query_claim:")
+    {
+        Some("similar_case")
+    } else if reference.starts_with("rule_runs:") || reference.starts_with("rules:") {
+        Some("rule")
+    } else if reference.starts_with("model_scores:") || reference.starts_with("model_versions:") {
+        Some("model")
+    } else if reference.starts_with("documents:")
+        || reference.starts_with("document_chunks:")
+        || reference.starts_with("ocr:")
+    {
+        Some("document")
+    } else if reference.starts_with("claims:")
+        || reference.starts_with("claim:")
+        || reference.starts_with("members:")
+        || reference.starts_with("policies:")
+        || reference.starts_with("providers:")
+        || reference.starts_with("claim_items:")
+    {
+        Some("claim")
+    } else if reference.starts_with("anomaly:")
+        || (reference.starts_with("scoring_runs:") && reference.contains("anomaly"))
+    {
+        Some("anomaly")
+    } else {
+        None
+    }
 }
 
 fn triage_audit_payload(
@@ -7335,6 +7425,7 @@ fn triage_audit_payload(
         "merge_target_lead_id": input.merge_target_lead_id.clone(),
         "notes": input.notes.clone(),
         "evidence_sufficiency": evidence_sufficiency,
+        "evidence_refs_by_type": case.and_then(|case| case.evidence_package.get("evidence_refs_by_type")).cloned(),
         "evidence_refs": input.evidence_refs.clone()
     })
 }

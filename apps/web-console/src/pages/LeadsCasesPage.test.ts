@@ -2,10 +2,12 @@ import { describe, expect, it } from "vitest";
 import {
   buildCaseStatusUpdateSummary,
   buildCaseEvidenceSufficiencyRows,
+  buildLeadTriagePayload,
   buildInvestigationResultPayload,
   buildInvestigationWritebackSummary,
   buildLeadTriageSummary,
   buildLeadSummary,
+  caseEvidenceBucketsFromPackage,
   caseEvidenceRefsFromPackage,
   caseEvidenceSufficiencyFromPackage,
   caseRoutingReason,
@@ -116,9 +118,66 @@ describe("caseEvidenceRefsFromPackage", () => {
   it("ignores malformed evidence refs", () => {
     expect(caseEvidenceRefsFromPackage({ evidence_refs: "audit:scoring.completed" })).toEqual([]);
   });
+
+  it("extracts PRD evidence buckets from the evidence package", () => {
+    expect(
+      caseEvidenceBucketsFromPackage({
+        evidence_refs_by_type: {
+          claim: ["claims:CLM-1"],
+          rule: ["rule_runs:EARLY_CLAIM"],
+          model: ["model_scores:fwa_baseline"],
+          anomaly: ["scoring_runs:run_1:anomaly_score"],
+          document: ["documents:DOC-1"],
+          similar_case: ["knowledge_cases:KC-1001"],
+        },
+      }),
+    ).toEqual({
+      claimRefs: ["claims:CLM-1"],
+      ruleRefs: ["rule_runs:EARLY_CLAIM"],
+      modelRefs: ["model_scores:fwa_baseline"],
+      anomalyRefs: ["scoring_runs:run_1:anomaly_score"],
+      documentRefs: ["documents:DOC-1"],
+      similarCaseRefs: ["knowledge_cases:KC-1001"],
+    });
+  });
 });
 
 describe("buildLeadTriageSummary", () => {
+  it("builds lead triage payloads with evidence refs for the API contract", () => {
+    expect(
+      buildLeadTriagePayload(
+        {
+          lead_id: "lead_CLM-1",
+          claim_id: "CLM-1",
+          scheme_family: "early_high_value_claim",
+          status: "new",
+          disposition: "pending_triage",
+          risk_score: 91,
+          rag: "RED",
+          evidence_refs: ["rule_runs:EARLY_CLAIM", "rule_runs:EARLY_CLAIM"],
+        },
+        "open_case",
+        "",
+        "siu-reviewer-1",
+        "medical-reviewer-1",
+        "high",
+        "Open investigation.",
+      ),
+    ).toEqual({
+      decision: "open_case",
+      merge_target_lead_id: undefined,
+      assignee: "siu-reviewer-1",
+      reviewer: "medical-reviewer-1",
+      priority: "high",
+      notes: "Open investigation.",
+      evidence_refs: [
+        "triage_decisions:open_case",
+        "leads:lead_CLM-1",
+        "rule_runs:EARLY_CLAIM",
+      ],
+    });
+  });
+
   it("summarizes lead triage workflow results", () => {
     expect(
       buildLeadTriageSummary({

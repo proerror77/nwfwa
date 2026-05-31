@@ -18,6 +18,7 @@ type InvestigationResponse = {
   qa_opinion_draft: string;
   evidence_sufficiency: EvidenceSufficiency;
   evidence_refs: string[];
+  evidence_refs_by_type?: EvidenceReferenceBuckets;
 };
 
 type AgentApprovalResponse = {
@@ -45,6 +46,15 @@ type EvidenceSufficiency = {
   missing_evidence: string[];
 };
 
+type EvidenceReferenceBuckets = {
+  claim: string[];
+  rule: string[];
+  model: string[];
+  anomaly: string[];
+  document: string[];
+  similar_case: string[];
+};
+
 export function buildEvidenceSufficiencyRows(sufficiency?: EvidenceSufficiency) {
   const present = new Set(sufficiency?.present_evidence ?? []);
   return (sufficiency?.minimum_evidence ?? []).map((item) => ({
@@ -62,6 +72,7 @@ export function buildAgentSimilarCaseRows(cases: SimilarCase[] = []) {
 }
 
 export function buildAgentEvidencePackageSummary(result?: InvestigationResponse | null) {
+  const evidenceBucketRows = buildAgentEvidenceBucketRows(result?.evidence_refs_by_type);
   return {
     agentRunId: result?.agent_run_id ?? "-",
     decisionBoundary: result?.decision_boundary ?? "assistive_only",
@@ -69,9 +80,25 @@ export function buildAgentEvidencePackageSummary(result?: InvestigationResponse 
     checklistCount: result?.investigation_checklist.length ?? 0,
     similarCaseCount: result?.similar_cases.length ?? 0,
     evidenceRefCount: result?.evidence_refs.length ?? 0,
+    bucketedEvidenceCount: evidenceBucketRows.reduce((total, row) => total + row.count, 0),
     missingEvidenceCount: result?.evidence_sufficiency.missing_evidence.length ?? 0,
     evidenceStatus: result?.evidence_sufficiency.status ?? "not_started",
   };
+}
+
+export function buildAgentEvidenceBucketRows(buckets?: EvidenceReferenceBuckets) {
+  return [
+    { label: "Claim", count: buckets?.claim.length ?? 0, refs: buckets?.claim ?? [] },
+    { label: "Rule", count: buckets?.rule.length ?? 0, refs: buckets?.rule ?? [] },
+    { label: "Model", count: buckets?.model.length ?? 0, refs: buckets?.model ?? [] },
+    { label: "Anomaly", count: buckets?.anomaly.length ?? 0, refs: buckets?.anomaly ?? [] },
+    { label: "Document", count: buckets?.document.length ?? 0, refs: buckets?.document ?? [] },
+    {
+      label: "Similar Case",
+      count: buckets?.similar_case.length ?? 0,
+      refs: buckets?.similar_case ?? [],
+    },
+  ];
 }
 
 export function buildInvestigationApprovalPayload(
@@ -141,6 +168,7 @@ export function AgentInvestigatorPage() {
   const evidenceRows = buildEvidenceSufficiencyRows(result?.evidence_sufficiency);
   const similarCaseRows = buildAgentSimilarCaseRows(result?.similar_cases);
   const evidencePackageSummary = buildAgentEvidencePackageSummary(result);
+  const evidenceBucketRows = buildAgentEvidenceBucketRows(result?.evidence_refs_by_type);
   const approvalSummary = buildAgentApprovalSummary(approvalResult);
 
   async function runInvestigation() {
@@ -284,6 +312,10 @@ export function AgentInvestigatorPage() {
                 <strong>{evidencePackageSummary.evidenceRefCount}</strong>
               </div>
               <div>
+                <span>Bucketed Evidence</span>
+                <strong>{evidencePackageSummary.bucketedEvidenceCount}</strong>
+              </div>
+              <div>
                 <span>Missing Evidence</span>
                 <strong>{evidencePackageSummary.missingEvidenceCount}</strong>
               </div>
@@ -348,6 +380,14 @@ export function AgentInvestigatorPage() {
                 ))}
               </ul>
             ) : null}
+            <ul className="result-list compact-list">
+              {evidenceBucketRows.map((row) => (
+                <li key={row.label}>
+                  <strong>{row.label}</strong>
+                  <span>{row.count}</span>
+                </li>
+              ))}
+            </ul>
             <p>{result.qa_opinion_draft}</p>
             <div className="result-stack">
               <h3>Human Approval Gate</h3>

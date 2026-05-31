@@ -4572,7 +4572,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "CaseEvidencePackage": {
                     "type": "object",
-                    "required": ["lead_id", "claim_id", "risk_score", "rag", "reason", "triage_notes", "evidence_sufficiency", "evidence_refs"],
+                    "required": ["lead_id", "claim_id", "risk_score", "rag", "reason", "triage_notes", "evidence_sufficiency", "evidence_refs", "evidence_refs_by_type"],
                     "properties": {
                         "lead_id": { "type": "string" },
                         "claim_id": { "type": "string" },
@@ -4581,7 +4581,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "reason": { "type": "string" },
                         "triage_notes": { "type": "string" },
                         "evidence_sufficiency": { "$ref": "#/components/schemas/EvidenceSufficiency" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "evidence_refs_by_type": { "$ref": "#/components/schemas/EvidenceReferenceBuckets" }
                     }
                 },
                 "CaseListResponse": {
@@ -5043,7 +5044,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AgentInvestigationResponse": {
                     "type": "object",
-                    "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_sufficiency", "evidence_refs"],
+                    "required": ["agent_run_id", "decision_boundary", "risk_summary", "findings", "investigation_checklist", "similar_cases", "qa_opinion_draft", "evidence_sufficiency", "evidence_refs", "evidence_refs_by_type"],
                     "properties": {
                         "agent_run_id": { "type": "string" },
                         "decision_boundary": { "type": "string", "const": "assistive_only" },
@@ -5053,7 +5054,20 @@ pub async fn openapi_schema() -> Json<Value> {
                         "similar_cases": { "type": "array", "items": { "$ref": "#/components/schemas/AgentSimilarCase" } },
                         "qa_opinion_draft": { "type": "string" },
                         "evidence_sufficiency": { "$ref": "#/components/schemas/EvidenceSufficiency" },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "evidence_refs_by_type": { "$ref": "#/components/schemas/EvidenceReferenceBuckets" }
+                    }
+                },
+                "EvidenceReferenceBuckets": {
+                    "type": "object",
+                    "required": ["claim", "rule", "model", "anomaly", "document", "similar_case"],
+                    "properties": {
+                        "claim": { "type": "array", "items": { "type": "string" } },
+                        "rule": { "type": "array", "items": { "type": "string" } },
+                        "model": { "type": "array", "items": { "type": "string" } },
+                        "anomaly": { "type": "array", "items": { "type": "string" } },
+                        "document": { "type": "array", "items": { "type": "string" } },
+                        "similar_case": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "EvidenceSufficiency": {

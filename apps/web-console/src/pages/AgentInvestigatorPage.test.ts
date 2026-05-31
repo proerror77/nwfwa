@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildAgentApprovalSummary,
+  buildAgentEvidenceBucketRows,
   buildAgentEvidencePackageSummary,
   buildAgentSimilarCaseRows,
   buildEvidenceSufficiencyRows,
@@ -86,6 +87,14 @@ describe("buildAgentEvidencePackageSummary", () => {
           missing_evidence: ["specialty"],
         },
         evidence_refs: ["features:peer_amount", "knowledge_cases:KC-1"],
+        evidence_refs_by_type: {
+          claim: ["claim:CLM-1:top_reason:1"],
+          rule: ["rule_runs:EARLY_CLAIM"],
+          model: ["model_scores:fwa_baseline"],
+          anomaly: [],
+          document: [],
+          similar_case: ["knowledge_cases:KC-1"],
+        },
       }),
     ).toEqual({
       agentRunId: "agent_CLM-1",
@@ -94,9 +103,30 @@ describe("buildAgentEvidencePackageSummary", () => {
       checklistCount: 2,
       similarCaseCount: 1,
       evidenceRefCount: 2,
+      bucketedEvidenceCount: 4,
       missingEvidenceCount: 1,
       evidenceStatus: "needs_more_evidence",
     });
+  });
+
+  it("builds bucket rows for PRD evidence references", () => {
+    expect(
+      buildAgentEvidenceBucketRows({
+        claim: ["claim:CLM-1:top_reason:1"],
+        rule: ["rule_runs:EARLY_CLAIM"],
+        model: ["model_scores:fwa_baseline"],
+        anomaly: ["scoring_runs:run_1:anomaly_score"],
+        document: [],
+        similar_case: ["knowledge_cases:KC-1"],
+      }),
+    ).toEqual([
+      { label: "Claim", count: 1, refs: ["claim:CLM-1:top_reason:1"] },
+      { label: "Rule", count: 1, refs: ["rule_runs:EARLY_CLAIM"] },
+      { label: "Model", count: 1, refs: ["model_scores:fwa_baseline"] },
+      { label: "Anomaly", count: 1, refs: ["scoring_runs:run_1:anomaly_score"] },
+      { label: "Document", count: 0, refs: [] },
+      { label: "Similar Case", count: 1, refs: ["knowledge_cases:KC-1"] },
+    ]);
   });
 });
 

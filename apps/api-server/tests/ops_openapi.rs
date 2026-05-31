@@ -1330,6 +1330,52 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/EvidenceSufficiency"
     );
     assert_eq!(
+        schema["components"]["schemas"]["CaseEvidencePackage"]["properties"]
+            ["evidence_refs_by_type"]["$ref"],
+        "#/components/schemas/EvidenceReferenceBuckets"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationResponse"]["properties"]
+            ["evidence_refs_by_type"]["$ref"],
+        "#/components/schemas/EvidenceReferenceBuckets"
+    );
+    for schema_name in ["CaseEvidencePackage", "AgentInvestigationResponse"] {
+        assert!(
+            schema["components"]["schemas"][schema_name]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == "evidence_refs_by_type"),
+            "missing required {schema_name}.evidence_refs_by_type"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["EvidenceReferenceBuckets"]["required"],
+        serde_json::json!([
+            "claim",
+            "rule",
+            "model",
+            "anomaly",
+            "document",
+            "similar_case"
+        ])
+    );
+    for field in [
+        "claim",
+        "rule",
+        "model",
+        "anomaly",
+        "document",
+        "similar_case",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["EvidenceReferenceBuckets"]["properties"][field]
+                ["items"]["type"],
+            "string",
+            "missing string array schema for EvidenceReferenceBuckets.{field}"
+        );
+    }
+    assert_eq!(
         schema["components"]["schemas"]["AuditSampleLeadRecord"]["properties"]["risk_score"]
             ["maximum"],
         100

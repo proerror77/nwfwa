@@ -254,6 +254,34 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
         .unwrap()
         .iter()
         .any(|reference| reference == "triage_decisions:open_case"));
+    let evidence_refs_by_type = &triage["case"]["evidence_package"]["evidence_refs_by_type"];
+    assert!(evidence_refs_by_type["claim"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("claims:CLM-LEAD-1001")));
+    assert!(evidence_refs_by_type["rule"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference.as_str().unwrap().starts_with("rule_runs:")));
+    assert!(evidence_refs_by_type["model"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference.as_str().unwrap().starts_with("model_scores:")));
+    assert!(evidence_refs_by_type["anomaly"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!(
+            "scoring_runs:{}:anomaly_score",
+            score["run_id"].as_str().unwrap()
+        ))));
+    assert!(evidence_refs_by_type["document"].is_array());
+    assert!(evidence_refs_by_type["similar_case"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference.as_str().unwrap().starts_with("knowledge_cases:")));
     assert!(triage["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, cases) = json_request(app.clone(), "GET", "/api/v1/ops/cases", "{}").await;

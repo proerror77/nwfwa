@@ -658,6 +658,18 @@ async fn investigates_case_as_assistive_agent_with_evidence_refs() {
         .iter()
         .any(|reference| reference.as_str().unwrap().starts_with("matched_signal:")));
     assert!(!body["evidence_refs"].as_array().unwrap().is_empty());
+    assert!(body["evidence_refs_by_type"]["claim"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference
+            .as_str()
+            .unwrap()
+            .starts_with("claim:masked:claim:")));
+    assert!(body["evidence_refs_by_type"]["similar_case"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
 }
 
 #[tokio::test]

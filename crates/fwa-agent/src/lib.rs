@@ -1,5 +1,6 @@
 use fwa_core::assess_evidence_sufficiency;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeSet;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct SimilarCaseInput {
@@ -28,6 +29,16 @@ pub struct InvestigationFinding {
 
 pub use fwa_core::EvidenceSufficiency;
 
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceReferenceBuckets {
+    pub claim: Vec<String>,
+    pub rule: Vec<String>,
+    pub model: Vec<String>,
+    pub anomaly: Vec<String>,
+    pub document: Vec<String>,
+    pub similar_case: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InvestigationPackage {
     pub agent_run_id: String,
@@ -39,6 +50,7 @@ pub struct InvestigationPackage {
     pub qa_opinion_draft: String,
     pub evidence_sufficiency: EvidenceSufficiency,
     pub evidence_refs: Vec<String>,
+    pub evidence_refs_by_type: EvidenceReferenceBuckets,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -58,6 +70,7 @@ impl DeterministicInvestigator {
         }
         evidence_refs.sort();
         evidence_refs.dedup();
+        let evidence_refs_by_type = bucket_evidence_refs(&evidence_refs);
 
         let evidence_sufficiency = build_evidence_sufficiency(&request);
 
@@ -80,6 +93,7 @@ impl DeterministicInvestigator {
                     .into(),
             evidence_sufficiency,
             evidence_refs,
+            evidence_refs_by_type,
         }
     }
 }
@@ -124,6 +138,78 @@ fn evidence_text(request: &InvestigationRequest) -> String {
         parts.extend(similar_case.evidence_refs.clone());
     }
     parts.join(" ").to_ascii_lowercase()
+}
+
+fn bucket_evidence_refs(evidence_refs: &[String]) -> EvidenceReferenceBuckets {
+    let mut claim = BTreeSet::new();
+    let mut rule = BTreeSet::new();
+    let mut model = BTreeSet::new();
+    let mut anomaly = BTreeSet::new();
+    let mut document = BTreeSet::new();
+    let mut similar_case = BTreeSet::new();
+
+    for reference in evidence_refs {
+        match evidence_ref_bucket(reference) {
+            Some("claim") => {
+                claim.insert(reference.clone());
+            }
+            Some("rule") => {
+                rule.insert(reference.clone());
+            }
+            Some("model") => {
+                model.insert(reference.clone());
+            }
+            Some("anomaly") => {
+                anomaly.insert(reference.clone());
+            }
+            Some("document") => {
+                document.insert(reference.clone());
+            }
+            Some("similar_case") => {
+                similar_case.insert(reference.clone());
+            }
+            _ => {}
+        }
+    }
+
+    EvidenceReferenceBuckets {
+        claim: claim.into_iter().collect(),
+        rule: rule.into_iter().collect(),
+        model: model.into_iter().collect(),
+        anomaly: anomaly.into_iter().collect(),
+        document: document.into_iter().collect(),
+        similar_case: similar_case.into_iter().collect(),
+    }
+}
+
+fn evidence_ref_bucket(reference: &str) -> Option<&'static str> {
+    if reference.starts_with("knowledge_cases:")
+        || reference.starts_with("retrieval:")
+        || reference.starts_with("matched_signal:")
+        || reference.starts_with("query_claim:")
+    {
+        Some("similar_case")
+    } else if reference.starts_with("rule_runs:") || reference.starts_with("rules:") {
+        Some("rule")
+    } else if reference.starts_with("model_scores:") || reference.starts_with("model_versions:") {
+        Some("model")
+    } else if reference.starts_with("documents:")
+        || reference.starts_with("document_chunks:")
+        || reference.starts_with("ocr:")
+    {
+        Some("document")
+    } else if reference.starts_with("claim:")
+        || reference.starts_with("claims:")
+        || reference.starts_with("claim_items:")
+    {
+        Some("claim")
+    } else if reference.starts_with("anomaly:")
+        || (reference.starts_with("scoring_runs:") && reference.contains("anomaly"))
+    {
+        Some("anomaly")
+    } else {
+        None
+    }
 }
 
 #[cfg(test)]

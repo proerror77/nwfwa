@@ -176,9 +176,62 @@ export function caseEvidenceRefsFromPackage(
   return isStringArray(evidencePackage?.evidence_refs) ? evidencePackage.evidence_refs : [];
 }
 
+export function caseEvidenceBucketsFromPackage(evidencePackage?: Record<string, unknown>) {
+  const buckets = evidencePackage?.evidence_refs_by_type;
+  const typedBuckets = isRecord(buckets) ? buckets : {};
+  return {
+    claimRefs: stringArrayOrEmpty(typedBuckets.claim),
+    ruleRefs: stringArrayOrEmpty(typedBuckets.rule),
+    modelRefs: stringArrayOrEmpty(typedBuckets.model),
+    anomalyRefs: stringArrayOrEmpty(typedBuckets.anomaly),
+    documentRefs: stringArrayOrEmpty(typedBuckets.document),
+    similarCaseRefs: stringArrayOrEmpty(typedBuckets.similar_case),
+  };
+}
+
+export function buildCaseEvidenceBucketRows(buckets: ReturnType<typeof caseEvidenceBucketsFromPackage>) {
+  return [
+    { label: "Claim", count: buckets.claimRefs.length, refs: buckets.claimRefs },
+    { label: "Rule", count: buckets.ruleRefs.length, refs: buckets.ruleRefs },
+    { label: "Model", count: buckets.modelRefs.length, refs: buckets.modelRefs },
+    { label: "Anomaly", count: buckets.anomalyRefs.length, refs: buckets.anomalyRefs },
+    { label: "Document", count: buckets.documentRefs.length, refs: buckets.documentRefs },
+    {
+      label: "Similar Case",
+      count: buckets.similarCaseRefs.length,
+      refs: buckets.similarCaseRefs,
+    },
+  ];
+}
+
 export function caseRoutingReason(item: CaseRecord) {
   const packageReason = item.evidence_package?.reason;
   return item.routing_reason || (typeof packageReason === "string" ? packageReason : "");
+}
+
+export function buildLeadTriagePayload(
+  lead: LeadRecord,
+  decision: string,
+  mergeTargetLeadId: string,
+  assignee: string,
+  reviewer: string,
+  priority: string,
+  notes: string,
+) {
+  const evidence_refs = [
+    `triage_decisions:${decision}`,
+    `leads:${lead.lead_id}`,
+    ...lead.evidence_refs,
+  ].filter((value, index, refs) => refs.indexOf(value) === index);
+  return {
+    decision,
+    merge_target_lead_id: mergeTargetLeadId || undefined,
+    assignee,
+    reviewer,
+    priority,
+    notes,
+    evidence_refs,
+  };
 }
 
 export function buildLeadTriageSummary(response?: TriageLeadResponse | null) {
@@ -276,6 +329,10 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
 }
 
+function stringArrayOrEmpty(value: unknown) {
+  return isStringArray(value) ? value : [];
+}
+
 export function LeadsCasesPage() {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [selectedLeadId, setSelectedLeadId] = useState("");
@@ -333,14 +390,15 @@ export function LeadsCasesPage() {
       if (!selectedLead) throw new Error("No lead selected");
       return triageLead(
         selectedLead.lead_id,
-        {
-          decision: triageDecision,
-          merge_target_lead_id: mergeTargetLeadId || undefined,
+        buildLeadTriagePayload(
+          selectedLead,
+          triageDecision,
+          mergeTargetLeadId,
           assignee,
           reviewer,
           priority,
           notes,
-        },
+        ),
         apiKey,
       ) as Promise<TriageLeadResponse>;
     },
@@ -835,6 +893,9 @@ export function LeadsCasesPage() {
             const evidenceSufficiency = caseEvidenceSufficiencyFromPackage(item.evidence_package);
             const evidenceRows = buildCaseEvidenceSufficiencyRows(evidenceSufficiency);
             const evidenceRefs = caseEvidenceRefsFromPackage(item.evidence_package);
+            const evidenceBucketRows = buildCaseEvidenceBucketRows(
+              caseEvidenceBucketsFromPackage(item.evidence_package),
+            );
             const routingReason = caseRoutingReason(item);
             return (
               <div className="factor-card" key={item.case_id}>
@@ -918,6 +979,14 @@ export function LeadsCasesPage() {
                     ))}
                   </ul>
                 ) : null}
+                <ul className="result-list compact-list">
+                  {evidenceBucketRows.map((row) => (
+                    <li key={row.label}>
+                      <strong>{row.label}</strong>
+                      <span>{row.count}</span>
+                    </li>
+                  ))}
+                </ul>
               </div>
             );
           })}
