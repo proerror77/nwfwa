@@ -1173,6 +1173,37 @@ async fn rejects_invalid_review_mode() {
 }
 
 #[tokio::test]
+async fn rejects_both_review_mode_for_scoring_contract() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "review_mode": "both",
+              "claim": {
+                "external_claim_id": "CLM-BOTH-REVIEW-MODE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("INVALID_REVIEW_MODE"));
+    assert!(body.contains("pre_payment, post_payment"));
+}
+
+#[tokio::test]
 async fn rejects_source_system_mismatch_for_authenticated_scoring() {
     let app = build_app(test_config());
 
@@ -1602,7 +1633,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     let claim_id_mode = &schema["components"]["schemas"]["ClaimIdScoreClaimRequest"];
     assert_eq!(
         claim_id_mode["properties"]["review_mode"]["enum"],
-        serde_json::json!(["pre_payment", "post_payment", "both"])
+        serde_json::json!(["pre_payment", "post_payment"])
     );
     assert_eq!(claim_id_mode["properties"]["source_system"]["minLength"], 1);
     assert!(claim_id_mode["properties"]["source_system"]["description"]
@@ -1630,6 +1661,10 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         );
     }
     let full_payload_mode = &schema["components"]["schemas"]["FullPayloadScoreClaimRequest"];
+    assert_eq!(
+        full_payload_mode["properties"]["review_mode"]["enum"],
+        serde_json::json!(["pre_payment", "post_payment"])
+    );
     assert_eq!(
         full_payload_mode["properties"]["source_system"]["minLength"],
         1
@@ -1785,7 +1820,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     }
     assert_eq!(
         response_properties["review_mode"]["enum"],
-        serde_json::json!(["pre_payment", "post_payment", "both"])
+        serde_json::json!(["pre_payment", "post_payment"])
     );
     assert_eq!(
         response_properties["recommended_action"]["enum"],

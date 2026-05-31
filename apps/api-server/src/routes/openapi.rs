@@ -2084,9 +2084,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "review_mode": {
                             "type": "string",
-                            "enum": ["pre_payment", "post_payment", "both"],
+                            "enum": ["pre_payment", "post_payment"],
                             "default": "pre_payment",
-                            "description": "Routing policy context for pre-payment, post-payment, or shared review."
+                            "description": "Runtime scoring context for pre-payment or post-payment review."
                         }
                     },
                     "not": {
@@ -2117,9 +2117,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "review_mode": {
                             "type": "string",
-                            "enum": ["pre_payment", "post_payment", "both"],
+                            "enum": ["pre_payment", "post_payment"],
                             "default": "pre_payment",
-                            "description": "Routing policy context for pre-payment, post-payment, or shared review."
+                            "description": "Runtime scoring context for pre-payment or post-payment review."
                         },
                         "items": {
                             "type": "array",
@@ -2438,7 +2438,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "review_mode": {
                             "type": "string",
-                            "enum": ["pre_payment", "post_payment", "both"]
+                            "enum": ["pre_payment", "post_payment"]
                         },
                         "risk_score": {
                             "type": "integer",

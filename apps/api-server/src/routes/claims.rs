@@ -849,11 +849,11 @@ fn review_mode_applies(configured_review_mode: &str, requested_review_mode: &str
 fn normalize_review_mode(value: Option<&str>) -> Result<String, ApiError> {
     let review_mode = value.unwrap_or("pre_payment");
     match review_mode {
-        "pre_payment" | "post_payment" | "both" => Ok(review_mode.to_string()),
+        "pre_payment" | "post_payment" => Ok(review_mode.to_string()),
         _ => Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "INVALID_REVIEW_MODE",
-            "review_mode must be one of: pre_payment, post_payment, both",
+            "review_mode must be one of: pre_payment, post_payment",
         )),
     }
 }
