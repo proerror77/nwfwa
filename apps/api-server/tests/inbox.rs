@@ -1744,7 +1744,7 @@ async fn flags_non_primary_invoice_after_claim_receive_date() {
             "calculateRisk": "Y",
             "policyList": [
               {
-                "policyNo": "POL-SECONDARY-INVOICE-DATE",
+                "policyNo": "POL-PRIMARY-INVOICE-DATE",
                 "policyType": "2",
                 "insuredName": "LEE, Peter",
                 "coverageLimit": 20000,
@@ -1757,7 +1757,17 @@ async fn flags_non_primary_invoice_after_claim_receive_date() {
                     "startDate": 1766620800000,
                     "hospitalName": "南京同仁医院",
                     "feeList": []
-                  },
+                  }
+                ]
+              },
+              {
+                "policyNo": "POL-SECONDARY-INVOICE-DATE",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
                   {
                     "invoiceNo": "INV-DATE-MISMATCH",
                     "feeAmount": 250.00,
@@ -1784,7 +1794,7 @@ async fn flags_non_primary_invoice_after_claim_receive_date() {
         .unwrap()
         .iter()
         .any(|error| {
-            error["field_path"] == "reportCase.policyList[0].invoiceList[1].startDate"
+            error["field_path"] == "reportCase.policyList[1].invoiceList[0].startDate"
                 && error["severity"] == "warning"
                 && error["remediation"]
                     .as_str()

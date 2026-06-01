@@ -34,6 +34,22 @@ pub struct InboxValidationError {
     pub remediation: String,
 }
 
+#[derive(Clone, Copy)]
+struct SourceInvoice<'a> {
+    policy_index: usize,
+    invoice_index: usize,
+    value: &'a Value,
+}
+
+impl SourceInvoice<'_> {
+    fn field_path(&self, field_name: &str) -> String {
+        format!(
+            "reportCase.policyList[{}].invoiceList[{}].{field_name}",
+            self.policy_index, self.invoice_index
+        )
+    }
+}
+
 pub async fn normalize_claim_inbox(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -296,9 +312,19 @@ fn build_canonical_claim_context(
     let policy = policies.first().copied();
     let invoices = policies
         .iter()
-        .flat_map(|policy| array_items(policy, &["invoiceList"]))
+        .enumerate()
+        .flat_map(|(policy_index, policy)| {
+            array_items(policy, &["invoiceList"])
+                .into_iter()
+                .enumerate()
+                .map(move |(invoice_index, value)| SourceInvoice {
+                    policy_index,
+                    invoice_index,
+                    value,
+                })
+        })
         .collect::<Vec<_>>();
-    let invoice = invoices.first().copied();
+    let invoice = invoices.first().map(|invoice| invoice.value);
     let medical_records = array_items(payload, &["reportCase", "medicalRecordInfoList"]);
     let medical_record = medical_records.first().copied();
     let product = policy.and_then(|policy| first_array_item(policy, &["productList"]));
@@ -341,7 +367,7 @@ fn build_canonical_claim_context(
     identity_names.extend(medical_record_patient_names.iter().map(Option::as_deref));
     let invoice_person_names = invoices
         .iter()
-        .map(|invoice| string_at(invoice, &["accidentPersonName"]))
+        .map(|invoice| string_at(invoice.value, &["accidentPersonName"]))
         .collect::<Vec<_>>();
     identity_names.extend(invoice_person_names.iter().map(Option::as_deref));
     if names_mismatch(identity_names) {
@@ -488,7 +514,7 @@ fn build_canonical_claim_context(
         },
         "itemized_bill_lines": invoices
             .iter()
-            .flat_map(|invoice| itemized_bill_lines(invoice))
+            .flat_map(|invoice| itemized_bill_lines(invoice.value))
             .collect::<Vec<_>>(),
         "document_evidence": medical_records
             .iter()
@@ -613,12 +639,12 @@ fn validate_diagnosis_consistency(
     validation_errors: &mut Vec<InboxValidationError>,
     data_quality_signals: &mut Vec<String>,
     medical_record: Option<&Value>,
-    invoices: &[&Value],
+    invoices: &[SourceInvoice<'_>],
 ) {
     let medical_diagnosis = medical_record.and_then(|record| string_at(record, &["diagnosisName"]));
     if let Some(medical_diagnosis) = medical_diagnosis {
-        for (invoice_index, invoice) in invoices.iter().enumerate() {
-            let invoice_diagnoses = invoice_diagnosis_names(invoice);
+        for invoice in invoices {
+            let invoice_diagnoses = invoice_diagnosis_names(invoice.value);
             if invoice_diagnoses.is_empty()
                 || invoice_diagnoses
                     .iter()
@@ -628,9 +654,7 @@ fn validate_diagnosis_consistency(
             }
 
             validation_errors.push(InboxValidationError {
-                field_path: format!(
-                    "reportCase.policyList[0].invoiceList[{invoice_index}].diagnosisList"
-                ),
+                field_path: invoice.field_path("diagnosisList"),
                 severity: "warning",
                 remediation: "invoice diagnosis should align with medical record diagnosis".into(),
             });
@@ -642,15 +666,17 @@ fn validate_diagnosis_consistency(
 fn validate_diagnosis_item_support(
     validation_errors: &mut Vec<InboxValidationError>,
     data_quality_signals: &mut Vec<String>,
-    invoices: &[&Value],
+    invoices: &[SourceInvoice<'_>],
 ) {
-    for (invoice_index, invoice) in invoices.iter().enumerate() {
-        if !invoice_diagnosis_names(invoice).is_empty() || !invoice_has_bill_lines(invoice) {
+    for invoice in invoices {
+        if !invoice_diagnosis_names(invoice.value).is_empty()
+            || !invoice_has_bill_lines(invoice.value)
+        {
             continue;
         }
 
         validation_errors.push(InboxValidationError {
-            field_path: format!("reportCase.policyList[0].invoiceList[{invoice_index}].feeList"),
+            field_path: invoice.field_path("feeList"),
             severity: "warning",
             remediation:
                 "bill lines should include diagnosis context before medical reasonableness scoring"
@@ -660,10 +686,10 @@ fn validate_diagnosis_item_support(
     }
 }
 
-fn total_invoice_amount(invoices: &[&Value]) -> Option<f64> {
+fn total_invoice_amount(invoices: &[SourceInvoice<'_>]) -> Option<f64> {
     let amounts = invoices
         .iter()
-        .filter_map(|invoice| number_at(invoice, &["feeAmount"]));
+        .filter_map(|invoice| number_at(invoice.value, &["feeAmount"]));
     let (count, total) = amounts.fold((0, 0.0), |(count, total), amount| {
         (count + 1, total + amount)
     });
@@ -674,18 +700,16 @@ fn validate_invoice_dates(
     validation_errors: &mut Vec<InboxValidationError>,
     data_quality_signals: &mut Vec<String>,
     receive_date: Option<NaiveDate>,
-    invoices: &[&Value],
+    invoices: &[SourceInvoice<'_>],
 ) {
-    for (invoice_index, invoice) in invoices.iter().enumerate() {
-        let start_date = epoch_date_at(invoice, &["startDate"]);
-        let end_date = epoch_date_at(invoice, &["endDate"]);
+    for invoice in invoices {
+        let start_date = epoch_date_at(invoice.value, &["startDate"]);
+        let end_date = epoch_date_at(invoice.value, &["endDate"]);
 
         if let (Some(start_date), Some(end_date)) = (start_date, end_date) {
             if end_date < start_date {
                 validation_errors.push(InboxValidationError {
-                    field_path: format!(
-                        "reportCase.policyList[0].invoiceList[{invoice_index}].endDate"
-                    ),
+                    field_path: invoice.field_path("endDate"),
                     severity: "warning",
                     remediation: "invoice end date must not be earlier than invoice start date"
                         .into(),
@@ -697,9 +721,7 @@ fn validate_invoice_dates(
         if let Some(receive_date) = receive_date {
             if start_date.is_some_and(|start_date| receive_date < start_date) {
                 validation_errors.push(InboxValidationError {
-                    field_path: format!(
-                        "reportCase.policyList[0].invoiceList[{invoice_index}].startDate"
-                    ),
+                    field_path: invoice.field_path("startDate"),
                     severity: "warning",
                     remediation: "claim receive date should not be earlier than invoice start date"
                         .into(),

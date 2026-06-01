@@ -74,7 +74,7 @@ invoice payment totals, fee-group amount, fee-group other amount, Medicare
 prorated percentage, and invoice-level provider context when those fields exist
 in the raw payload.
 Invoice-level diagnosis gaps are reported as warnings on the matching
-`reportCase.policyList[0].invoiceList[n].feeList` path.
+`reportCase.policyList[n].invoiceList[m].feeList` path.
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves
 every source product and claim-liability window across all source policies,
 including source policy id, waiting-period candidate dates, serious-disease
