@@ -55,7 +55,10 @@ evidence paths.
 dates for timing and waiting-period features. Epoch-millisecond source dates are
 normalized with the source business timezone for the adapter. The current
 `AiClaim Core` mapping uses `Asia/Shanghai`, so China-business midnight values
-do not shift to the previous UTC date.
+do not shift to the previous UTC date. Claim header, bill-line invoice dates,
+and medical-record evidence dates retain the original raw epoch-millisecond
+values beside the normalized date plus `source_timezone` so QA, Agent summaries,
+and audit review can reconstruct the source-system interpretation.
 Claim-level date checks report `date_inconsistency` on
 `reportCase.accidentDate` when the accident date is later than
 `claimReceiveDate`.
@@ -72,9 +75,9 @@ calculation.
 `canonical_claim_context.document_evidence` contains one normalized document
 entry per source `medicalRecordInfoList` record, including claim nature,
 medical-record type, chief complaint, current medical history, past history,
-visit dates, `source_path` such as `reportCase.medicalRecordInfoList[n]`, and
-its own source refs. Structured free-text fields are redacted before they leave
-the inbox boundary.
+visit dates, source timezone, raw epoch-millisecond date fields, `source_path`
+such as `reportCase.medicalRecordInfoList[n]`, and its own source refs.
+Structured free-text fields are redacted before they leave the inbox boundary.
 Before redaction, medical-record text normalization converts literal `/n`
 separators to line breaks, removes BOM/replacement-character OCR artifacts,
 normalizes full-width or non-breaking spaces, collapses repeated line-internal
@@ -84,8 +87,9 @@ every source invoice across all source policies, not only the primary policy or
 primary invoice. Each line also carries invoice-level bill type, document type,
 social-insurance type, department, medical type, claim nature, start/end dates,
 invoice payment totals, fee-group amount, fee-group other amount, Medicare
-prorated percentage, invoice-level provider context when those fields exist in
-the raw payload, and `source_path` such as
+prorated percentage, invoice-level provider context, source timezone, raw
+epoch-millisecond invoice date fields when those fields exist in the raw
+payload, and `source_path` such as
 `reportCase.policyList[p].invoiceList[i].feeList[f].feeDetailList[d]`.
 Invoice-level diagnosis gaps are reported as warnings on the matching
 `reportCase.policyList[n].invoiceList[m].feeList` path.

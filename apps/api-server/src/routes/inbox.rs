@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 const MAPPING_VERSION: &str = "aiclaim-core-v1";
+const SOURCE_BUSINESS_TIMEZONE: &str = "Asia/Shanghai";
 const SOURCE_BUSINESS_UTC_OFFSET_SECONDS: i32 = 8 * 60 * 60;
 
 #[derive(Debug, Serialize)]
@@ -412,6 +413,9 @@ fn build_canonical_claim_context(
     let service_date = invoice
         .and_then(|invoice| epoch_date_at(invoice, &["startDate"]))
         .or_else(|| epoch_date_at(payload, &["reportCase", "accidentDate"]));
+    let service_date_raw_epoch_ms = invoice
+        .and_then(|invoice| epoch_millis_at(invoice, &["startDate"]))
+        .or_else(|| epoch_millis_at(payload, &["reportCase", "accidentDate"]));
     let receive_date = epoch_date_at(payload, &["reportCase", "claimReceiveDate"]);
     let accident_date = epoch_date_at(payload, &["reportCase", "accidentDate"]);
     let policy_start_date = policy.and_then(|policy| epoch_date_at(policy, &["validateDate"]));
@@ -504,6 +508,10 @@ fn build_canonical_claim_context(
             "service_date": service_date.map(|date| date.to_string()),
             "receive_date": receive_date.map(|date| date.to_string()),
             "accident_date": accident_date.map(|date| date.to_string()),
+            "source_timezone": SOURCE_BUSINESS_TIMEZONE,
+            "service_date_raw_epoch_ms": service_date_raw_epoch_ms,
+            "receive_date_raw_epoch_ms": epoch_millis_at(payload, &["reportCase", "claimReceiveDate"]),
+            "accident_date_raw_epoch_ms": epoch_millis_at(payload, &["reportCase", "accidentDate"]),
             "accident_reason": string_at(payload, &["reportCase", "accidentReason"]),
             "medical_type": invoice
                 .and_then(|invoice| string_at(invoice, &["medicalType"]))
@@ -1075,6 +1083,9 @@ fn itemized_bill_lines(invoice: &SourceInvoice<'_>) -> Vec<Value> {
                         "invoice_claim_nature": invoice_claim_nature,
                         "invoice_start_date": invoice_start_date.map(|date| date.to_string()),
                         "invoice_end_date": invoice_end_date.map(|date| date.to_string()),
+                        "source_timezone": SOURCE_BUSINESS_TIMEZONE,
+                        "invoice_start_date_raw_epoch_ms": epoch_millis_at(invoice_value, &["startDate"]),
+                        "invoice_end_date_raw_epoch_ms": epoch_millis_at(invoice_value, &["endDate"]),
                         "invoice_social_insurance_amount": invoice_social_insurance_amount,
                         "invoice_self_pay_amount": invoice_self_pay_amount,
                         "invoice_own_expense_amount": invoice_own_expense_amount,
@@ -1134,6 +1145,10 @@ fn document_evidence(record: &Value, record_index: usize) -> Value {
         "visit_date": epoch_date_at(record, &["visitDate"]).map(|date| date.to_string()),
         "first_happen_date": epoch_date_at(record, &["firstHappenDate"]).map(|date| date.to_string()),
         "operation_start_date": epoch_date_at(record, &["operationStartDate"]).map(|date| date.to_string()),
+        "source_timezone": SOURCE_BUSINESS_TIMEZONE,
+        "visit_date_raw_epoch_ms": epoch_millis_at(record, &["visitDate"]),
+        "first_happen_date_raw_epoch_ms": epoch_millis_at(record, &["firstHappenDate"]),
+        "operation_start_date_raw_epoch_ms": epoch_millis_at(record, &["operationStartDate"]),
         "medical_record_text": text,
         "source_refs": [
             format!(
@@ -1204,14 +1219,17 @@ fn bool_at(value: &Value, path: &[&str]) -> Option<bool> {
 }
 
 fn epoch_date_at(value: &Value, path: &[&str]) -> Option<NaiveDate> {
+    epoch_millis_at(value, path).and_then(|millis| {
+        let source_timezone = FixedOffset::east_opt(SOURCE_BUSINESS_UTC_OFFSET_SECONDS)?;
+        DateTime::from_timestamp_millis(millis)
+            .map(|date| date.with_timezone(&source_timezone).date_naive())
+    })
+}
+
+fn epoch_millis_at(value: &Value, path: &[&str]) -> Option<i64> {
     path.iter()
         .try_fold(value, |current, key| current.get(*key))
         .and_then(Value::as_i64)
-        .and_then(|millis| {
-            let source_timezone = FixedOffset::east_opt(SOURCE_BUSINESS_UTC_OFFSET_SECONDS)?;
-            DateTime::from_timestamp_millis(millis)
-                .map(|date| date.with_timezone(&source_timezone).date_naive())
-        })
 }
 
 fn first_array_item<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {

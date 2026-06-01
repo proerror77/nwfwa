@@ -186,6 +186,18 @@ async fn openapi_includes_operations_paths() {
             ["format"],
         "date"
     );
+    let claim_header = &schema["components"]["schemas"]["InboxClaimHeader"]["properties"];
+    for field in [
+        "source_timezone",
+        "service_date_raw_epoch_ms",
+        "receive_date_raw_epoch_ms",
+        "accident_date_raw_epoch_ms",
+    ] {
+        assert!(
+            claim_header[field].is_object(),
+            "missing inbox claim-header field {field}"
+        );
+    }
     assert_eq!(
         inbox_context["properties"]["member_policy_snapshot"]["$ref"],
         "#/components/schemas/InboxMemberPolicySnapshot"
@@ -237,6 +249,9 @@ async fn openapi_includes_operations_paths() {
         "invoice_claim_nature",
         "invoice_start_date",
         "invoice_end_date",
+        "source_timezone",
+        "invoice_start_date_raw_epoch_ms",
+        "invoice_end_date_raw_epoch_ms",
         "invoice_social_insurance_amount",
         "invoice_self_pay_amount",
         "invoice_own_expense_amount",
@@ -272,6 +287,10 @@ async fn openapi_includes_operations_paths() {
         "past_history",
         "first_happen_date",
         "operation_start_date",
+        "source_timezone",
+        "visit_date_raw_epoch_ms",
+        "first_happen_date_raw_epoch_ms",
+        "operation_start_date_raw_epoch_ms",
     ] {
         assert!(
             document_evidence[field].is_object(),

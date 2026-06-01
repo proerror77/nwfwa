@@ -214,6 +214,22 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
         "2025-12-26"
     );
     assert_eq!(
+        body["canonical_claim_context"]["claim_header"]["source_timezone"],
+        "Asia/Shanghai"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["claim_header"]["service_date_raw_epoch_ms"],
+        1766678400000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["claim_header"]["receive_date_raw_epoch_ms"],
+        1779811200000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["claim_header"]["accident_date_raw_epoch_ms"],
+        1766678400000_i64
+    );
+    assert_eq!(
         body["canonical_claim_context"]["member_policy_snapshot"]["masked_certificate_id"],
         "***5(0)"
     );
@@ -287,6 +303,19 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
         "2025-12-26"
     );
     assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["source_timezone"],
+        "Asia/Shanghai"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]
+            ["invoice_start_date_raw_epoch_ms"],
+        1766678400000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_end_date_raw_epoch_ms"],
+        1766678400000_i64
+    );
+    assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]
             ["invoice_social_insurance_amount"],
         133.99
@@ -318,6 +347,23 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["total_amount"],
         397.06
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["source_timezone"],
+        "Asia/Shanghai"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["visit_date_raw_epoch_ms"],
+        1766678400000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["first_happen_date_raw_epoch_ms"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]
+            ["operation_start_date_raw_epoch_ms"],
+        serde_json::Value::Null
     );
     assert!(body["data_quality_signals"]
         .as_array()
