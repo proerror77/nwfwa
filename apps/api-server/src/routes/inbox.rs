@@ -393,7 +393,7 @@ fn build_canonical_claim_context(
         medical_record,
         invoice,
     );
-    validate_diagnosis_item_support(validation_errors, data_quality_signals, invoice);
+    validate_diagnosis_item_support(validation_errors, data_quality_signals, &invoices);
 
     json!({
         "claim_header": {
@@ -586,23 +586,22 @@ fn validate_diagnosis_consistency(
 fn validate_diagnosis_item_support(
     validation_errors: &mut Vec<InboxValidationError>,
     data_quality_signals: &mut Vec<String>,
-    invoice: Option<&Value>,
+    invoices: &[&Value],
 ) {
-    let Some(invoice) = invoice else {
-        return;
-    };
-    if !invoice_diagnosis_names(invoice).is_empty() || !invoice_has_bill_lines(invoice) {
-        return;
-    }
+    for (invoice_index, invoice) in invoices.iter().enumerate() {
+        if !invoice_diagnosis_names(invoice).is_empty() || !invoice_has_bill_lines(invoice) {
+            continue;
+        }
 
-    validation_errors.push(InboxValidationError {
-        field_path: "reportCase.policyList[0].invoiceList[0].feeList".into(),
-        severity: "warning",
-        remediation:
-            "bill lines should include diagnosis context before medical reasonableness scoring"
-                .into(),
-    });
-    push_signal(data_quality_signals, "diagnosis_item_mismatch");
+        validation_errors.push(InboxValidationError {
+            field_path: format!("reportCase.policyList[0].invoiceList[{invoice_index}].feeList"),
+            severity: "warning",
+            remediation:
+                "bill lines should include diagnosis context before medical reasonableness scoring"
+                    .into(),
+        });
+        push_signal(data_quality_signals, "diagnosis_item_mismatch");
+    }
 }
 
 fn invoice_diagnosis_names(invoice: &Value) -> Vec<String> {

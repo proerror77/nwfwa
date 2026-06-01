@@ -56,6 +56,8 @@ reported through `data_quality_signals` as `identity_mismatch`.
 entry per source `medicalRecordInfoList` record, each with its own source refs.
 `canonical_claim_context.itemized_bill_lines` preserves fee-detail lines from
 every source invoice, not only the primary invoice.
+Invoice-level diagnosis gaps are reported as warnings on the matching
+`reportCase.policyList[0].invoiceList[n].feeList` path.
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves
 every source product and claim-liability window, including waiting-period
 candidate dates and evidence refs. The top-level `product_code` and

@@ -44,6 +44,9 @@ refs.
 Canonical bill lines preserve fee details from every source invoice. Each line
 keeps its source invoice id, diagnosis list, social-insurance amount, and
 `invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
+Diagnosis-item support checks run per invoice. If any invoice contains fee
+details without structured diagnosis context, the endpoint returns a
+field-level `diagnosis_item_mismatch` warning for that invoice.
 Canonical policy snapshots preserve all source product/liability windows in
 `member_policy_snapshot.product_liabilities`; primary `product_code` and
 `liability_code` remain convenience fields for first-pass routing only.

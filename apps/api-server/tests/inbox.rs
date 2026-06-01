@@ -733,6 +733,86 @@ async fn preserves_bill_lines_from_all_invoices() {
 }
 
 #[tokio::test]
+async fn flags_bill_lines_without_diagnosis_on_non_primary_invoice() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "secondary-invoice-diagnosis-item-001",
+          "reportCase": {
+            "reportNo": "SAAS-SECONDARY-DIAGNOSIS-ITEM-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "policyList": [
+              {
+                "policyNo": "POL-SECONDARY-DIAGNOSIS-ITEM",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-DIAGNOSIS-OK",
+                    "feeAmount": 100.00,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": []
+                  },
+                  {
+                    "invoiceNo": "INV-DIAGNOSIS-MISSING",
+                    "feeAmount": 250.00,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [],
+                    "feeList": [
+                      {
+                        "feeCategory": "treatmentFee",
+                        "feeDetailList": [
+                          {
+                            "id": 2002,
+                            "name": "龋齿充填术",
+                            "amount": 250.00
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["validation_result"], "accepted_with_warnings");
+    assert!(body["scoring_ready"].as_bool().unwrap());
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("diagnosis_item_mismatch")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[0].invoiceList[1].feeList"
+                && error["severity"] == "warning"
+                && error["remediation"].as_str().unwrap().contains("diagnosis")
+        }));
+}
+
+#[tokio::test]
 async fn preserves_all_product_liability_windows_in_canonical_context() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(
