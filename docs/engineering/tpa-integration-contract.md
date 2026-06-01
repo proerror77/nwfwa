@@ -88,11 +88,14 @@ Canonical policy snapshots preserve all source product/liability windows across
 source policies in `member_policy_snapshot.product_liabilities`; primary
 `product_code` and `liability_code` remain convenience fields for first-pass
 routing only. Each product-liability entry preserves source `policy_id`,
-`main_liability` from source `mainLiab`, and parses `isSeriousDiseaseLiability`
-`Y`/`N` values into booleans.
+`source_path` for `reportCase.policyList[n].productList[m]`, `main_liability`
+from source `mainLiab`, and parses `isSeriousDiseaseLiability` `Y`/`N` values
+into booleans. Liability-level rows also preserve `liability_source_path` for
+`reportCase.policyList[n].productList[m].claimLiabilityList[k]`.
 Products without a source `claimLiabilityList` are emitted as product-only
 entries in the same array with `liability_*` fields set to `null`, so downstream
-reviewers can distinguish absent liability data from a dropped product.
+reviewers can distinguish absent liability data from a dropped product; their
+`liability_source_path` is `null`.
 They also expose `policy_first_apply_date` and
 `insured_with_social_insurance` for policy-tenure, waiting-period, and coverage
 constraint features.

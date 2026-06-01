@@ -1426,6 +1426,9 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
         liability["product_code"] == "YBYL"
             && liability["liability_code"] == "YBYL02"
             && liability["policy_id"] == "POL-PRODUCTS"
+            && liability["source_path"] == "reportCase.policyList[0].productList[0]"
+            && liability["liability_source_path"]
+                == "reportCase.policyList[0].productList[0].claimLiabilityList[1]"
             && liability["liability_claim_start_date"] == "2025-01-01"
             && liability["waiting_period_end_date"] == "2025-01-01"
             && liability["is_serious_disease_liability"] == false
@@ -1449,6 +1452,8 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
         liability["policy_id"] == "POL-PRODUCTS"
             && liability["product_code"] == "ZFXM"
             && liability["product_name"] == "自费项目补充保险金"
+            && liability["source_path"] == "reportCase.policyList[0].productList[2]"
+            && liability["liability_source_path"].is_null()
             && liability["liability_code"].is_null()
             && liability["liability_name"].is_null()
     }));

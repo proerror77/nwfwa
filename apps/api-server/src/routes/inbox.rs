@@ -493,7 +493,8 @@ fn build_canonical_claim_context(
             "liability_end_date": liability_end_date.map(|date| date.to_string()),
             "product_liabilities": policies
                 .iter()
-                .flat_map(|policy| product_liabilities(policy))
+                .enumerate()
+                .flat_map(|(policy_index, policy)| product_liabilities(policy, policy_index))
                 .collect::<Vec<_>>()
         },
         "provider_snapshot": {
@@ -522,14 +523,17 @@ fn build_canonical_claim_context(
     })
 }
 
-fn product_liabilities(policy: &Value) -> Vec<Value> {
+fn product_liabilities(policy: &Value, policy_index: usize) -> Vec<Value> {
     let policy_id = string_at(policy, &["policyNo"]);
     policy
         .get("productList")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .flat_map(|product| {
+        .enumerate()
+        .flat_map(|(product_index, product)| {
+            let source_path =
+                format!("reportCase.policyList[{policy_index}].productList[{product_index}]");
             let product_id = string_at(product, &["id"]);
             let product_code = string_at(product, &["productCode"]);
             let product_name = string_at(product, &["productName"]);
@@ -546,6 +550,8 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
             if liabilities.is_empty() {
                 return vec![json!({
                     "policy_id": policy_id,
+                    "source_path": source_path,
+                    "liability_source_path": null,
                     "product_id": product_id,
                     "product_code": product_code,
                     "product_name": product_name,
@@ -572,7 +578,10 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
             }
             liabilities
                 .iter()
-                .map(|liability| {
+                .enumerate()
+                .map(|(liability_index, liability)| {
+                    let liability_source_path =
+                        format!("{source_path}.claimLiabilityList[{liability_index}]");
                     let liability_id = string_at(liability, &["id"]);
                     let liability_start_date = epoch_date_at(liability, &["validateDate"]);
                     let liability_claim_start_date =
@@ -580,6 +589,8 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
                     let liability_end_date = epoch_date_at(liability, &["expireDate"]);
                     json!({
                         "policy_id": policy_id,
+                        "source_path": source_path,
+                        "liability_source_path": liability_source_path,
                         "product_id": product_id,
                         "product_code": product_code,
                         "product_name": product_name,

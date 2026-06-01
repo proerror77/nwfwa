@@ -322,6 +322,13 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   `isSeriousDiseaseLiability` values such as `Y`/`N` into booleans and keep
   `mainLiab` as `main_liability` so routing can distinguish primary liability
   candidates from secondary coverage evidence.
+- preserve raw source paths on every product/liability canonical evidence row:
+  product rows must carry `source_path` such as
+  `reportCase.policyList[n].productList[m]`, and liability rows must carry
+  `liability_source_path` such as
+  `reportCase.policyList[n].productList[m].claimLiabilityList[k]`; product-only
+  entries without a source `claimLiabilityList` keep `liability_source_path =
+  null`.
 
 Required inbox corrections before scoring:
 
@@ -330,7 +337,7 @@ Required inbox corrections before scoring:
   audit ids, run ids, raw payload refs, and idempotency keys must use a stable
   checksum or fingerprint rather than raw external identifiers;
 - source trace: persist raw payload URI or checksum/fingerprint, normalized claim
-  id, mapping version, validation result, and evidence refs;
+  id, mapping version, validation result, source paths, and evidence refs;
 - date normalization: convert all epoch-millisecond dates and detect impossible
   or inconsistent accident, visit, invoice, policy, product, liability, and
   receive windows across the full source list, not only the primary product or
@@ -343,7 +350,8 @@ Required inbox corrections before scoring:
   L5 medical-reasonableness inputs;
 - policy coverage: map policy, product, and liability lists into coverage,
   waiting-period, limit, main-liability, serious-disease-liability, and
-  liability eligibility features;
+  liability eligibility features with raw
+  `policyList/productList/claimLiabilityList` source-path traceability;
 - text hygiene: normalize literal `/n` separators, OCR artifacts, missing
   spaces, empty fields, and mixed-language medical text before evidence
   extraction;
@@ -362,8 +370,8 @@ The inbox should output a canonical payload with:
 - member and policy snapshot: masked member id, masked certificate id,
   certificate type, gender, birth date, policy id, product code, primary
   product/liability codes, all product-liability windows, policy type,
-  first-apply date, social-insurance participation flag, and coverage
-  constraints;
+  first-apply date, social-insurance participation flag, coverage constraints,
+  and raw product/liability source paths for audit;
 - provider snapshot: hospital/provider code, name, class, type, city, province,
   and network flags;
 - itemized bill lines: every source invoice fee detail with invoice id,

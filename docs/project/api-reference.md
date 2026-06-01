@@ -78,11 +78,16 @@ Invoice-level diagnosis gaps are reported as warnings on the matching
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves
 every source product and claim-liability window across all source policies,
 including source policy id, waiting-period candidate dates, serious-disease
-liability markers, main-liability markers, and evidence refs. The top-level
-`product_code` and `liability_code` fields are primary values for
-compatibility, not the complete coverage list.
+liability markers, main-liability markers, raw source paths, and evidence refs.
+Each entry carries `source_path` for the source
+`reportCase.policyList[n].productList[m]`; liability rows also carry
+`liability_source_path` for
+`reportCase.policyList[n].productList[m].claimLiabilityList[k]`. The top-level
+`product_code` and `liability_code` fields are primary values for compatibility,
+not the complete coverage list.
 Products without a source `claimLiabilityList` are still preserved in the same
-array as product-only entries with `liability_*` fields set to `null`.
+array as product-only entries with `liability_*` fields and
+`liability_source_path` set to `null`.
 Coverage readiness validation scans every source policy and the same product
 list. Missing policy limits, non-primary product or liability mismatches, and
 policy-level window mismatches are returned as field-level warnings such as
