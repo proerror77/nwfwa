@@ -226,6 +226,31 @@ Reference payload observed on 2026-06-01:
   product/liability coverage window instead of using only the first product and
   first liability.
 
+Correction record for `/Users/proerror/Downloads/req.json`:
+
+- keep the original file as raw intake evidence; do not rewrite customer
+  payloads in place before scoring;
+- route it through `POST /api/v1/inbox/claims/normalize`, then score only the
+  normalized canonical context when `scoring_ready` is true or a reviewer has
+  resolved blocking validation findings;
+- derive `external_message_id` from `systemCode + transNo + reportNo`, and use
+  hashed internal run, audit, raw-payload, and idempotency identifiers so raw
+  claim identifiers are not leaked downstream;
+- preserve every source medical record, invoice fee detail, product, and
+  product-liability window as first-class canonical evidence;
+- treat `calculateRisk = N` as a warning-level source hint unless customer
+  configuration explicitly allows scoring bypass;
+- flag identity mismatches between accident person, insured person, invoice
+  person, and medical-record patient rather than silently overwriting names;
+- compare each invoice's structured diagnosis list against the medical-record
+  diagnosis, including non-primary invoices, and emit
+  `document_invoice_mismatch` on the exact `invoiceList[n].diagnosisList` path;
+- allow normalized containment matches such as `牙周炎` versus `慢性牙周炎`,
+  but do not use loose matching to hide unrelated diagnoses;
+- if an invoice has bill lines but no structured diagnosis context, emit
+  `diagnosis_item_mismatch` on that invoice's `feeList` path before L5 medical
+  reasonableness scoring.
+
 Required inbox corrections before scoring:
 
 - idempotency: use `systemCode + transNo + reportNo` as the external message

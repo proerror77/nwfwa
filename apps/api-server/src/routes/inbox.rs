@@ -391,7 +391,7 @@ fn build_canonical_claim_context(
         validation_errors,
         data_quality_signals,
         medical_record,
-        invoice,
+        &invoices,
     );
     validate_diagnosis_item_support(validation_errors, data_quality_signals, &invoices);
 
@@ -563,18 +563,24 @@ fn validate_diagnosis_consistency(
     validation_errors: &mut Vec<InboxValidationError>,
     data_quality_signals: &mut Vec<String>,
     medical_record: Option<&Value>,
-    invoice: Option<&Value>,
+    invoices: &[&Value],
 ) {
     let medical_diagnosis = medical_record.and_then(|record| string_at(record, &["diagnosisName"]));
-    let invoice_diagnoses = invoice.map(invoice_diagnosis_names).unwrap_or_default();
     if let Some(medical_diagnosis) = medical_diagnosis {
-        if !invoice_diagnoses.is_empty()
-            && !invoice_diagnoses
-                .iter()
-                .any(|invoice_diagnosis| diagnoses_match(&medical_diagnosis, invoice_diagnosis))
-        {
+        for (invoice_index, invoice) in invoices.iter().enumerate() {
+            let invoice_diagnoses = invoice_diagnosis_names(invoice);
+            if invoice_diagnoses.is_empty()
+                || invoice_diagnoses
+                    .iter()
+                    .any(|invoice_diagnosis| diagnoses_match(&medical_diagnosis, invoice_diagnosis))
+            {
+                continue;
+            }
+
             validation_errors.push(InboxValidationError {
-                field_path: "reportCase.policyList[0].invoiceList[0].diagnosisList".into(),
+                field_path: format!(
+                    "reportCase.policyList[0].invoiceList[{invoice_index}].diagnosisList"
+                ),
                 severity: "warning",
                 remediation: "invoice diagnosis should align with medical record diagnosis".into(),
             });

@@ -34,8 +34,9 @@ epoch-millisecond dates, masks PII-bearing values, maps medical record,
 invoice, provider, product, and liability fields into a canonical claim
 context, and returns data-quality signals such as identity mismatch,
 date inconsistency, missing coverage limit, coverage-window mismatch, and
-policy-liability mismatch. It also raises `document_invoice_mismatch` when
-structured invoice diagnoses do not align with medical-record diagnoses.
+policy-liability mismatch. It also raises `document_invoice_mismatch` for the
+matching invoice path when any structured invoice diagnosis list does not align
+with medical-record diagnoses, including non-primary invoices.
 Identity mismatch compares accident person, policy insured person, invoice
 person, and medical-record patient name when those fields are present.
 Canonical document evidence preserves every `medicalRecordInfoList` entry as a
