@@ -1500,6 +1500,31 @@ async fn flags_non_primary_product_liability_window_mismatches() {
                     "feeList": []
                   }
                 ]
+              },
+              {
+                "policyNo": "POL-SECONDARY-WINDOW-EXTRA",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 5000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "productList": [
+                  {
+                    "productCode": "EJYL",
+                    "validateDate": 1767225600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": [
+                      {
+                        "liabCode": "EJYL01",
+                        "liabName": "二级医疗门诊费用",
+                        "validateDate": 1767225600000,
+                        "claimValidateDate": 1767225600000,
+                        "expireDate": 1798675200000
+                      }
+                    ]
+                  }
+                ],
+                "invoiceList": []
               }
             ]
           }
@@ -1537,6 +1562,31 @@ async fn flags_non_primary_product_liability_window_mismatches() {
         .any(|error| {
             error["field_path"]
                 == "reportCase.policyList[0].productList[1].claimLiabilityList[0].claimValidateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("claim eligibility date")
+        }));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[1].productList[0].validateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("product window")
+        }));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"]
+                == "reportCase.policyList[1].productList[0].claimLiabilityList[0].claimValidateDate"
                 && error["severity"] == "warning"
                 && error["remediation"]
                     .as_str()

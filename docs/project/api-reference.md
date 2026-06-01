@@ -83,7 +83,7 @@ liability markers, main-liability markers, and evidence refs. The top-level
 compatibility, not the complete coverage list.
 Coverage-window validation scans the same list. Non-primary product or
 liability mismatches are returned as field-level warnings such as
-`reportCase.policyList[0].productList[1].validateDate` and block direct scoring
+`reportCase.policyList[n].productList[m].validateDate` and block direct scoring
 through `scoring_ready = false`.
 
 ## Runtime Scoring

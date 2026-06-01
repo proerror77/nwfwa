@@ -244,7 +244,8 @@ fn blocks_direct_scoring(error: &InboxValidationError) -> bool {
         "reportCase.policyList[0].coverageLimit"
             | "reportCase.policyList[0].validateDate"
             | "reportCase.policyList[0].expireDate"
-    ) || (path.starts_with("reportCase.policyList[0].productList[")
+    ) || (path.starts_with("reportCase.policyList[")
+        && path.contains(".productList[")
         && matches!(
             path.rsplit('.').next(),
             Some("validateDate" | "claimValidateDate" | "expireDate")
@@ -395,12 +396,13 @@ fn build_canonical_claim_context(
         "reportCase.policyList[0]",
         "policy",
     );
-    if let Some(policy) = policy {
+    for (policy_index, policy) in policies.iter().enumerate() {
         validate_product_liability_windows(
             validation_errors,
             data_quality_signals,
             service_date,
             policy,
+            policy_index,
         );
     }
     validate_diagnosis_consistency(
@@ -558,6 +560,7 @@ fn validate_product_liability_windows(
     data_quality_signals: &mut Vec<String>,
     service_date: Option<NaiveDate>,
     policy: &Value,
+    policy_index: usize,
 ) {
     for (product_index, product) in policy
         .get("productList")
@@ -566,7 +569,8 @@ fn validate_product_liability_windows(
         .flatten()
         .enumerate()
     {
-        let product_prefix = format!("reportCase.policyList[0].productList[{product_index}]");
+        let product_prefix =
+            format!("reportCase.policyList[{policy_index}].productList[{product_index}]");
         validate_service_window(
             validation_errors,
             data_quality_signals,
