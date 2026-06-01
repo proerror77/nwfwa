@@ -2173,14 +2173,133 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": { "$ref": "#/components/schemas/InboxValidationError" }
                         },
                         "canonical_claim_context": {
-                            "type": "object",
-                            "description": "Normalized claim header, member/policy snapshot, provider snapshot, bill lines, and document evidence."
+                            "$ref": "#/components/schemas/InboxCanonicalClaimContext"
                         },
                         "data_quality_signals": {
                             "type": "array",
                             "items": { "type": "string" }
                         },
                         "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "InboxCanonicalClaimContext": {
+                    "type": "object",
+                    "required": [
+                        "claim_header",
+                        "member_policy_snapshot",
+                        "provider_snapshot",
+                        "itemized_bill_lines",
+                        "document_evidence"
+                    ],
+                    "properties": {
+                        "claim_header": { "$ref": "#/components/schemas/InboxClaimHeader" },
+                        "member_policy_snapshot": { "$ref": "#/components/schemas/InboxMemberPolicySnapshot" },
+                        "provider_snapshot": { "$ref": "#/components/schemas/InboxProviderSnapshot" },
+                        "itemized_bill_lines": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/InboxBillLine" }
+                        },
+                        "document_evidence": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/InboxDocumentEvidence" }
+                        }
+                    }
+                },
+                "InboxClaimHeader": {
+                    "type": "object",
+                    "properties": {
+                        "external_claim_id": { "type": "string" },
+                        "source_system": { "type": "string" },
+                        "service_date": { "type": ["string", "null"], "format": "date" },
+                        "receive_date": { "type": ["string", "null"], "format": "date" },
+                        "accident_reason": { "type": ["string", "null"] },
+                        "medical_type": { "type": ["string", "null"] },
+                        "currency": { "type": "string" },
+                        "total_amount": { "type": ["number", "null"] }
+                    }
+                },
+                "InboxMemberPolicySnapshot": {
+                    "type": "object",
+                    "properties": {
+                        "masked_member_id": { "type": ["string", "null"] },
+                        "policy_id": { "type": ["string", "null"] },
+                        "product_code": { "type": ["string", "null"] },
+                        "liability_code": { "type": ["string", "null"] },
+                        "liability_name": { "type": ["string", "null"] },
+                        "policy_type": { "type": ["string", "null"] },
+                        "coverage_limit": { "type": ["number", "null"] },
+                        "coverage_start_date": { "type": ["string", "null"], "format": "date" },
+                        "coverage_end_date": { "type": ["string", "null"], "format": "date" },
+                        "liability_start_date": { "type": ["string", "null"], "format": "date" },
+                        "liability_claim_start_date": { "type": ["string", "null"], "format": "date" },
+                        "waiting_period_end_date": { "type": ["string", "null"], "format": "date" },
+                        "liability_end_date": { "type": ["string", "null"], "format": "date" }
+                    }
+                },
+                "InboxProviderSnapshot": {
+                    "type": "object",
+                    "properties": {
+                        "provider_code": { "type": ["string", "null"] },
+                        "name": { "type": ["string", "null"] },
+                        "class": { "type": ["string", "null"] },
+                        "type": { "type": ["string", "null"] },
+                        "city": { "type": ["string", "null"] },
+                        "province": { "type": ["string", "null"] },
+                        "network_flags": { "$ref": "#/components/schemas/InboxProviderNetworkFlags" }
+                    }
+                },
+                "InboxProviderNetworkFlags": {
+                    "type": "object",
+                    "properties": {
+                        "is_hospital_institution": { "type": ["boolean", "null"] },
+                        "primary_care": { "type": ["boolean", "null"] },
+                        "red_flag": { "type": ["string", "null"] }
+                    }
+                },
+                "InboxBillLine": {
+                    "type": "object",
+                    "properties": {
+                        "invoice_id": { "type": ["string", "null"] },
+                        "diagnosis_list": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/InboxDiagnosis" }
+                        },
+                        "fee_category": { "type": ["string", "null"] },
+                        "item_name": { "type": ["string", "null"] },
+                        "amount": { "type": ["number", "null"] },
+                        "self_pay": { "type": ["number", "null"] },
+                        "own_expense": { "type": ["number", "null"] },
+                        "social_insurance_amount": { "type": ["number", "null"] },
+                        "medical_category": { "type": ["string", "null"] },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "InboxDiagnosis": {
+                    "type": "object",
+                    "properties": {
+                        "code": { "type": ["string", "null"] },
+                        "name": { "type": ["string", "null"] }
+                    }
+                },
+                "InboxDocumentEvidence": {
+                    "type": "object",
+                    "properties": {
+                        "document_id": { "type": ["string", "null"] },
+                        "department": { "type": ["string", "null"] },
+                        "diagnosis": { "type": ["string", "null"] },
+                        "extracted_diagnosis": { "type": ["string", "null"] },
+                        "extracted_procedure": { "type": ["string", "null"] },
+                        "extracted_prescription": { "type": ["string", "null"] },
+                        "medical_type": { "type": ["string", "null"] },
+                        "visit_date": { "type": ["string", "null"], "format": "date" },
+                        "medical_record_text": { "type": ["string", "null"] },
+                        "source_refs": {
                             "type": "array",
                             "items": { "type": "string" }
                         }

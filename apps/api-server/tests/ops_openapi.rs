@@ -163,6 +163,41 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/InboxValidationError"
     );
     assert_eq!(
+        inbox_response["properties"]["canonical_claim_context"]["$ref"],
+        "#/components/schemas/InboxCanonicalClaimContext"
+    );
+    let inbox_context = &schema["components"]["schemas"]["InboxCanonicalClaimContext"];
+    assert_eq!(
+        inbox_context["required"],
+        serde_json::json!([
+            "claim_header",
+            "member_policy_snapshot",
+            "provider_snapshot",
+            "itemized_bill_lines",
+            "document_evidence"
+        ])
+    );
+    assert_eq!(
+        inbox_context["properties"]["claim_header"]["$ref"],
+        "#/components/schemas/InboxClaimHeader"
+    );
+    assert_eq!(
+        inbox_context["properties"]["member_policy_snapshot"]["$ref"],
+        "#/components/schemas/InboxMemberPolicySnapshot"
+    );
+    assert_eq!(
+        inbox_context["properties"]["provider_snapshot"]["$ref"],
+        "#/components/schemas/InboxProviderSnapshot"
+    );
+    assert_eq!(
+        inbox_context["properties"]["itemized_bill_lines"]["items"]["$ref"],
+        "#/components/schemas/InboxBillLine"
+    );
+    assert_eq!(
+        inbox_context["properties"]["document_evidence"]["items"]["$ref"],
+        "#/components/schemas/InboxDocumentEvidence"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["InboxValidationError"]["required"],
         serde_json::json!(["field_path", "severity", "remediation"])
     );
