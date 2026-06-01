@@ -74,6 +74,14 @@ function topDistributionKey(distribution: unknown) {
   );
 }
 
+function distributionCount(distribution: unknown, key: string) {
+  if (!distribution || typeof distribution !== "object" || Array.isArray(distribution)) {
+    return 0;
+  }
+  const value = (distribution as Record<string, unknown>)[key];
+  return typeof value === "number" ? value : 0;
+}
+
 function baselineMeasurement(sample: AuditSampleRecord) {
   const measurement = sample.outcome_distribution.baseline_measurement;
   if (!measurement || typeof measurement !== "object" || Array.isArray(measurement)) {
@@ -206,6 +214,14 @@ export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
   const latestSample = [...samples].sort((left, right) =>
     String(right.created_at ?? "").localeCompare(String(left.created_at ?? "")),
   )[0];
+  const reviewModeDistribution = samples.reduce<Record<string, number>>((counts, sample) => {
+    const distribution = sample.outcome_distribution.review_mode_distribution;
+    for (const reviewMode of ["pre_payment", "post_payment", "both"]) {
+      counts[reviewMode] =
+        (counts[reviewMode] ?? 0) + distributionCount(distribution, reviewMode);
+    }
+    return counts;
+  }, {});
 
   return {
     totalSamples: samples.length,
@@ -248,6 +264,10 @@ export function buildAuditSamplingSummary(data?: AuditSampleListResponse) {
         return counts;
       }, {}),
     ),
+    topReviewMode: topDistributionKey(reviewModeDistribution),
+    prePaymentSelectedLeadCount: reviewModeDistribution.pre_payment ?? 0,
+    postPaymentSelectedLeadCount: reviewModeDistribution.post_payment ?? 0,
+    bothModeSelectedLeadCount: reviewModeDistribution.both ?? 0,
     latestAssignmentQueue: latestSample?.assignment_queue ?? "none",
   };
 }
@@ -364,6 +384,18 @@ export function AuditSamplingPage() {
           <div>
             <span>Top QA Conclusion</span>
             <strong>{summary.topQaConclusion}</strong>
+          </div>
+          <div>
+            <span>Top Review Mode</span>
+            <strong>{summary.topReviewMode}</strong>
+          </div>
+          <div>
+            <span>Pre-payment Leads</span>
+            <strong>{summary.prePaymentSelectedLeadCount}</strong>
+          </div>
+          <div>
+            <span>Post-payment Leads</span>
+            <strong>{summary.postPaymentSelectedLeadCount}</strong>
           </div>
         </div>
       </div>
