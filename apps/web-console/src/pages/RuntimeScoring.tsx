@@ -21,6 +21,10 @@ import {
 } from "./runtimeEvidence";
 import { buildScoringLayerSummary, type ScoringLayer } from "./scoringLayers";
 import { buildAuditTimelineContext, type AuditTimelineContext } from "./auditTimelineContext";
+import {
+  buildAgentInvestigationContextFromScoring,
+  type AgentInvestigationContext,
+} from "./agentInvestigationContext";
 
 type ScoringResponse = {
   run_id: string;
@@ -307,9 +311,13 @@ function scoringReviewMode(reviewMode: string) {
 
 type RuntimeScoringProps = {
   onAuditTimelineRequest?: (context: AuditTimelineContext) => void;
+  onAgentInvestigationRequest?: (context: AgentInvestigationContext) => void;
 };
 
-export function RuntimeScoring({ onAuditTimelineRequest }: RuntimeScoringProps = {}) {
+export function RuntimeScoring({
+  onAuditTimelineRequest,
+  onAgentInvestigationRequest,
+}: RuntimeScoringProps = {}) {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [requestMode, setRequestMode] = useState("full_payload");
   const [sourceSystem, setSourceSystem] = useState("tpa-demo");
@@ -488,6 +496,19 @@ export function RuntimeScoring({ onAuditTimelineRequest }: RuntimeScoringProps =
               disabled={!onAuditTimelineRequest}
             >
               View Audit Timeline
+            </button>
+            <button
+              onClick={() =>
+                onAgentInvestigationRequest?.(
+                  buildAgentInvestigationContextFromScoring(
+                    result,
+                    requestMode === "full_payload" ? payload : undefined,
+                  ),
+                )
+              }
+              disabled={!onAgentInvestigationRequest}
+            >
+              Open Agent Investigator
             </button>
             <section>
               <h3>ML Classification</h3>

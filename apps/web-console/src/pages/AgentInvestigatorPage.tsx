@@ -7,6 +7,7 @@ import {
   formatFwaSchemeLabel,
   type FwaSchemeDefinition,
 } from "./fwaSchemeOptions";
+import type { AgentInvestigationContext } from "./agentInvestigationContext";
 
 type InvestigationResponse = {
   agent_run_id: string;
@@ -142,18 +143,36 @@ export function buildAgentApprovalSummary(response?: AgentApprovalResponse | nul
   };
 }
 
-export function AgentInvestigatorPage() {
+export function buildAgentInvestigatorDefaults(context?: AgentInvestigationContext) {
+  return {
+    claimId: context?.claimId ?? "CLM-0287",
+    riskScore: context?.riskScore ?? 87,
+    rag: context?.rag ?? "RED",
+    schemeFamily: context?.schemeFamily ?? "diagnosis_procedure_mismatch",
+    topReasons: context?.topReasons.length
+      ? context.topReasons.join("\n")
+      : "金额高于同病种同地区 P99\n诊断-项目匹配度偏低",
+    diagnosisCode: context?.diagnosisCode ?? "J10",
+    providerRegion: context?.providerRegion ?? "Shanghai",
+    tags: context?.tags.length ? context.tags.join(", ") : "early_claim, high_amount",
+  };
+}
+
+type AgentInvestigatorPageProps = {
+  initialContext?: AgentInvestigationContext;
+};
+
+export function AgentInvestigatorPage({ initialContext }: AgentInvestigatorPageProps = {}) {
+  const defaults = buildAgentInvestigatorDefaults(initialContext);
   const [apiKey, setApiKey] = useState("dev-secret");
-  const [claimId, setClaimId] = useState("CLM-0287");
-  const [riskScore, setRiskScore] = useState(87);
-  const [rag, setRag] = useState("RED");
-  const [schemeFamily, setSchemeFamily] = useState("diagnosis_procedure_mismatch");
-  const [topReasons, setTopReasons] = useState(
-    "金额高于同病种同地区 P99\n诊断-项目匹配度偏低",
-  );
-  const [diagnosisCode, setDiagnosisCode] = useState("J10");
-  const [providerRegion, setProviderRegion] = useState("Shanghai");
-  const [tags, setTags] = useState("early_claim, high_amount");
+  const [claimId, setClaimId] = useState(defaults.claimId);
+  const [riskScore, setRiskScore] = useState(defaults.riskScore);
+  const [rag, setRag] = useState(defaults.rag);
+  const [schemeFamily, setSchemeFamily] = useState(defaults.schemeFamily);
+  const [topReasons, setTopReasons] = useState(defaults.topReasons);
+  const [diagnosisCode, setDiagnosisCode] = useState(defaults.diagnosisCode);
+  const [providerRegion, setProviderRegion] = useState(defaults.providerRegion);
+  const [tags, setTags] = useState(defaults.tags);
   const [approvalApprover, setApprovalApprover] = useState("qa-lead");
   const [result, setResult] = useState<InvestigationResponse | null>(null);
   const [approvalResult, setApprovalResult] = useState<AgentApprovalResponse | null>(null);

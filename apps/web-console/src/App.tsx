@@ -17,6 +17,7 @@ import { ProviderRiskPage } from "./pages/ProviderRiskPage";
 import { MemberProfilePage } from "./pages/MemberProfilePage";
 import { MedicalReviewPage } from "./pages/MedicalReviewPage";
 import type { AuditTimelineContext } from "./pages/auditTimelineContext";
+import type { AgentInvestigationContext } from "./pages/agentInvestigationContext";
 
 const modules = [
   "Dashboard",
@@ -42,6 +43,9 @@ export function App() {
   const [auditTimelineContext, setAuditTimelineContext] = useState<
     AuditTimelineContext | undefined
   >();
+  const [agentInvestigationContext, setAgentInvestigationContext] = useState<
+    AgentInvestigationContext | undefined
+  >();
   return (
     <div className="app">
       <aside>
@@ -64,6 +68,10 @@ export function App() {
               setAuditTimelineContext(context);
               setActive("Governance");
             }}
+            onAgentInvestigationRequest={(context) => {
+              setAgentInvestigationContext(context);
+              setActive("Agent Investigator");
+            }}
           />
         ) : null}
         {active === "Rules" ? <RulesStudio /> : null}
@@ -77,7 +85,9 @@ export function App() {
         {active === "Medical Review" ? <MedicalReviewPage /> : null}
         {active === "Audit Sampling" ? <AuditSamplingPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
-        {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
+        {active === "Agent Investigator" ? (
+          <AgentInvestigatorPage initialContext={agentInvestigationContext} />
+        ) : null}
         {active === "QA Review" ? <QAReviewPage /> : null}
         {active === "Governance" ? (
           <GovernancePage auditTimelineContext={auditTimelineContext} />

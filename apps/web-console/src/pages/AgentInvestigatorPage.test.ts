@@ -5,6 +5,7 @@ import {
   buildAgentEvidencePackageSummary,
   buildAgentSimilarCaseRows,
   buildEvidenceSufficiencyRows,
+  buildAgentInvestigatorDefaults,
   buildInvestigationApprovalPayload,
 } from "./AgentInvestigatorPage";
 
@@ -190,5 +191,33 @@ describe("buildAgentSimilarCaseRows", () => {
         matchedSignalLabel: "none",
       },
     ]);
+  });
+});
+
+describe("buildAgentInvestigatorDefaults", () => {
+  it("uses runtime scoring context to prefill the investigation form", () => {
+    expect(
+      buildAgentInvestigatorDefaults({
+        source: "runtime_scoring",
+        sourceRunId: "run_CLM-0287",
+        claimId: "CLM-0287",
+        riskScore: 87,
+        rag: "RED",
+        schemeFamily: "early_high_value_claim",
+        topReasons: ["金额高于同病种 P99", "诊断-项目匹配度偏低"],
+        diagnosisCode: "J10",
+        providerRegion: "Shanghai",
+        tags: ["provider_region", "early_high_claim"],
+      }),
+    ).toEqual({
+      claimId: "CLM-0287",
+      riskScore: 87,
+      rag: "RED",
+      schemeFamily: "early_high_value_claim",
+      topReasons: "金额高于同病种 P99\n诊断-项目匹配度偏低",
+      diagnosisCode: "J10",
+      providerRegion: "Shanghai",
+      tags: "provider_region, early_high_claim",
+    });
   });
 });
