@@ -591,6 +591,7 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
         .flatten()
         .flat_map(|fee| {
             let fee_category = string_at(fee, &["feeCategory"]);
+            let social_insurance_amount = number_at(fee, &["medicareAmount"]);
             let invoice_id = invoice_id.clone();
             let diagnoses = diagnoses.clone();
             fee.get("feeDetailList")
@@ -606,6 +607,7 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
                         "amount": number_at(detail, &["amount"]),
                         "self_pay": number_at(detail, &["selfPayAmount"]),
                         "own_expense": number_at(detail, &["ownExpenseAmount"]),
+                        "social_insurance_amount": social_insurance_amount,
                         "medical_category": string_at(detail, &["medicalCategory"]),
                         "evidence_refs": [
                             format!(

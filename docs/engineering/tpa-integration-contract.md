@@ -36,6 +36,8 @@ context, and returns data-quality signals such as identity mismatch,
 date inconsistency, missing coverage limit, coverage-window mismatch, and
 policy-liability mismatch. It also raises `document_invoice_mismatch` when
 structured invoice diagnoses do not align with medical-record diagnoses.
+Canonical bill lines include fee amount, self-pay, own-expense, and
+social-insurance amount mapped from source fee groups.
 Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
 validation results, and data-quality signals, not the full raw medical or

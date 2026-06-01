@@ -124,6 +124,7 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
                     "feeList": [
                       {
                         "feeCategory": "westernMedicineFee",
+                        "medicareAmount": 21.55,
                         "feeDetailList": [
                           {
                             "name": "双氯芬酸二乙胺乳胶剂",
@@ -193,6 +194,10 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]["item_name"],
         "双氯芬酸二乙胺乳胶剂"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["social_insurance_amount"],
+        21.55
     );
     assert!(
         body["canonical_claim_context"]["document_evidence"][0]["medical_record_text"]
