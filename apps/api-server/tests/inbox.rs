@@ -1205,6 +1205,8 @@ async fn preserves_bill_lines_from_all_invoices() {
             && line["invoice_is_hospital_institution"] == true
             && line["invoice_primary_care"] == false
             && line["invoice_red_flag"] == "Y"
+            && line["source_path"]
+                == "reportCase.policyList[0].invoiceList[1].feeList[0].feeDetailList[0]"
     }));
     assert!(bill_lines.iter().any(|line| {
         line["evidence_refs"]
@@ -1218,6 +1220,8 @@ async fn preserves_bill_lines_from_all_invoices() {
             && line["diagnosis_list"][0]["name"] == "急性上呼吸道感染"
             && line["invoice_provider_code"] == "HSP-SECOND-POLICY"
             && line["invoice_provider_name"] == "南京第二医院"
+            && line["source_path"]
+                == "reportCase.policyList[1].invoiceList[0].feeList[0].feeDetailList[0]"
             && line["evidence_refs"]
                 .as_array()
                 .unwrap()

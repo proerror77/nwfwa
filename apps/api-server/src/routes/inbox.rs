@@ -514,7 +514,7 @@ fn build_canonical_claim_context(
         },
         "itemized_bill_lines": invoices
             .iter()
-            .flat_map(|invoice| itemized_bill_lines(invoice.value))
+            .flat_map(itemized_bill_lines)
             .collect::<Vec<_>>(),
         "document_evidence": medical_records
             .iter()
@@ -930,30 +930,35 @@ fn validate_liability_claim_eligibility(
     }
 }
 
-fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
-    let invoice_id = string_at(invoice, &["invoiceNo"]);
-    let invoice_bill_type = string_at(invoice, &["billType"]);
-    let invoice_document_type = string_at(invoice, &["documentType"]);
-    let social_insurance_type = string_at(invoice, &["socialInsuranceType"]);
-    let department = string_at(invoice, &["departmentName"]);
-    let medical_type = string_at(invoice, &["medicalType"]);
-    let invoice_claim_nature = string_at(invoice, &["claimNature"]);
-    let invoice_start_date = epoch_date_at(invoice, &["startDate"]);
-    let invoice_end_date = epoch_date_at(invoice, &["endDate"]);
-    let invoice_social_insurance_amount = number_at(invoice, &["medicareAmount"]);
-    let invoice_self_pay_amount = number_at(invoice, &["selfPayAmount"]);
-    let invoice_own_expense_amount = number_at(invoice, &["ownExpenseAmount"]);
-    let invoice_other_amount = number_at(invoice, &["otherAmount"]);
-    let invoice_provider_code = string_at(invoice, &["hospitalCode"]);
-    let invoice_provider_name = string_at(invoice, &["hospitalName"]);
-    let invoice_provider_class = string_at(invoice, &["hospitalClass"]);
-    let invoice_provider_type = string_at(invoice, &["hospitalProperty"]);
-    let invoice_provider_city = string_at(invoice, &["hospitalCityName"]);
-    let invoice_provider_province = string_at(invoice, &["hospitalProvinceName"]);
-    let invoice_is_hospital_institution = bool_at(invoice, &["isHospitalInstitution"]);
-    let invoice_primary_care = bool_at(invoice, &["primaryCare"]);
-    let invoice_red_flag = string_at(invoice, &["redFlag"]);
-    let diagnoses = invoice
+fn itemized_bill_lines(invoice: &SourceInvoice<'_>) -> Vec<Value> {
+    let invoice_value = invoice.value;
+    let invoice_path = format!(
+        "reportCase.policyList[{}].invoiceList[{}]",
+        invoice.policy_index, invoice.invoice_index
+    );
+    let invoice_id = string_at(invoice_value, &["invoiceNo"]);
+    let invoice_bill_type = string_at(invoice_value, &["billType"]);
+    let invoice_document_type = string_at(invoice_value, &["documentType"]);
+    let social_insurance_type = string_at(invoice_value, &["socialInsuranceType"]);
+    let department = string_at(invoice_value, &["departmentName"]);
+    let medical_type = string_at(invoice_value, &["medicalType"]);
+    let invoice_claim_nature = string_at(invoice_value, &["claimNature"]);
+    let invoice_start_date = epoch_date_at(invoice_value, &["startDate"]);
+    let invoice_end_date = epoch_date_at(invoice_value, &["endDate"]);
+    let invoice_social_insurance_amount = number_at(invoice_value, &["medicareAmount"]);
+    let invoice_self_pay_amount = number_at(invoice_value, &["selfPayAmount"]);
+    let invoice_own_expense_amount = number_at(invoice_value, &["ownExpenseAmount"]);
+    let invoice_other_amount = number_at(invoice_value, &["otherAmount"]);
+    let invoice_provider_code = string_at(invoice_value, &["hospitalCode"]);
+    let invoice_provider_name = string_at(invoice_value, &["hospitalName"]);
+    let invoice_provider_class = string_at(invoice_value, &["hospitalClass"]);
+    let invoice_provider_type = string_at(invoice_value, &["hospitalProperty"]);
+    let invoice_provider_city = string_at(invoice_value, &["hospitalCityName"]);
+    let invoice_provider_province = string_at(invoice_value, &["hospitalProvinceName"]);
+    let invoice_is_hospital_institution = bool_at(invoice_value, &["isHospitalInstitution"]);
+    let invoice_primary_care = bool_at(invoice_value, &["primaryCare"]);
+    let invoice_red_flag = string_at(invoice_value, &["redFlag"]);
+    let diagnoses = invoice_value
         .get("diagnosisList")
         .and_then(Value::as_array)
         .map(|diagnoses| {
@@ -971,12 +976,14 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
         })
         .unwrap_or_default();
 
-    invoice
+    invoice_value
         .get("feeList")
         .and_then(Value::as_array)
         .into_iter()
         .flatten()
-        .flat_map(|fee| {
+        .enumerate()
+        .flat_map(|(fee_index, fee)| {
+            let fee_path = format!("{invoice_path}.feeList[{fee_index}]");
             let fee_category = string_at(fee, &["feeCategory"]);
             let social_insurance_amount = number_at(fee, &["medicareAmount"]);
             let fee_group_amount = number_at(fee, &["feeAmount"]);
@@ -1000,9 +1007,12 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
                 .and_then(Value::as_array)
                 .into_iter()
                 .flatten()
-                .map(move |detail| {
+                .enumerate()
+                .map(move |(detail_index, detail)| {
+                    let source_path = format!("{fee_path}.feeDetailList[{detail_index}]");
                     json!({
                         "invoice_id": invoice_id,
+                        "source_path": source_path,
                         "diagnosis_list": diagnoses,
                         "fee_category": fee_category,
                         "item_name": string_at(detail, &["name"]),

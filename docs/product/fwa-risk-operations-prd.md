@@ -267,7 +267,8 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   is empty or not present;
 - read bill lines from the nested fee-detail path
   `policyList[].invoiceList[].feeList[].feeDetailList[]`; do not infer a single
-  bill line from invoice totals;
+  bill line from invoice totals, and preserve each fee detail's exact source
+  path;
 - when claim-level amounts are missing, derive canonical totals from invoice
   totals and keep the missing claim header amount as a data-quality condition
   instead of overwriting the raw payload;
@@ -323,6 +324,11 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   `feeDetailList[n].medicareProrated` must not be collapsed into the detail
   `amount`. These fields feed L1 cost deviation, L5 medical reasonableness, and
   L7 routing explanations.
+- preserve raw source paths on every bill-line evidence row:
+  `itemized_bill_lines[n].source_path` must point to
+  `reportCase.policyList[p].invoiceList[i].feeList[f].feeDetailList[d]` so L1,
+  L5, QA, Agent summaries, and audit review can trace normalized fee details
+  back to the exact source row.
 - preserve product-liability routing markers from `claimLiabilityList`: parse
   `isSeriousDiseaseLiability` values such as `Y`/`N` into booleans and keep
   `mainLiab` as `main_liability` so routing can distinguish primary liability
@@ -385,7 +391,7 @@ The inbox should output a canonical payload with:
   category, item name, amount, self-pay, own-expense, invoice-level payment
   totals, invoice-level provider context, fee-group amount, fee-group other
   amount, medical category, Medicare prorated percentage, social-insurance
-  amount, and evidence refs;
+  amount, source path, and evidence refs;
 - document evidence: every source medical record with medical record text,
   claim nature, medical record type, chief complaint, current medical history,
   past history, extracted diagnosis, procedure, prescription, department, visit

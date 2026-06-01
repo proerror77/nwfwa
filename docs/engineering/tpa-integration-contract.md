@@ -59,7 +59,8 @@ social-insurance type, department, medical type, invoice claim nature, invoice
 start/end dates, diagnosis list, invoice-level payment totals, fee-group
 amount, fee-group other amount, social-insurance amount, Medicare prorated
 percentage, invoice-level provider code/name/class/type/city/province/network
-flags, and
+flags, `source_path` for
+`reportCase.policyList[p].invoiceList[i].feeList[f].feeDetailList[d]`, and
 `invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
 Canonical claim header `total_amount` is the sum of all source invoice
 `feeAmount` values across all policies; it is not limited to the primary
