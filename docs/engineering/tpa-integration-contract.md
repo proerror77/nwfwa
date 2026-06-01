@@ -41,6 +41,9 @@ person, and medical-record patient name when those fields are present.
 Canonical document evidence preserves every `medicalRecordInfoList` entry as a
 separate document with extracted diagnosis, procedure, prescription, and source
 refs.
+Canonical bill lines preserve fee details from every source invoice. Each line
+keeps its source invoice id, diagnosis list, social-insurance amount, and
+`invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
 Canonical policy snapshots preserve all source product/liability windows in
 `member_policy_snapshot.product_liabilities`; primary `product_code` and
 `liability_code` remain convenience fields for first-pass routing only.

@@ -292,6 +292,9 @@ fn build_canonical_claim_context(
     report_no: &str,
 ) -> Value {
     let policy = first_array_item(payload, &["reportCase", "policyList"]);
+    let invoices = policy
+        .map(|policy| array_items(policy, &["invoiceList"]))
+        .unwrap_or_default();
     let invoice = policy.and_then(|policy| first_array_item(policy, &["invoiceList"]));
     let medical_records = array_items(payload, &["reportCase", "medicalRecordInfoList"]);
     let medical_record = medical_records.first().copied();
@@ -439,9 +442,10 @@ fn build_canonical_claim_context(
                 "red_flag": invoice.and_then(|invoice| string_at(invoice, &["redFlag"]))
             }
         },
-        "itemized_bill_lines": invoice
-            .map(itemized_bill_lines)
-            .unwrap_or_default(),
+        "itemized_bill_lines": invoices
+            .iter()
+            .flat_map(|invoice| itemized_bill_lines(invoice))
+            .collect::<Vec<_>>(),
         "document_evidence": medical_records
             .iter()
             .map(|record| document_evidence(record))

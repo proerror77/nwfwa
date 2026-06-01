@@ -634,6 +634,105 @@ async fn preserves_all_medical_records_as_document_evidence() {
 }
 
 #[tokio::test]
+async fn preserves_bill_lines_from_all_invoices() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "multiple-invoices-001",
+          "reportCase": {
+            "reportNo": "SAAS-MULTI-INVOICE-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "policyList": [
+              {
+                "policyNo": "POL-MULTI-INVOICE",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-MULTI-001",
+                    "feeAmount": 100.00,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": [
+                      {
+                        "feeCategory": "westernMedicineFee",
+                        "medicareAmount": 10.0,
+                        "feeDetailList": [
+                          {
+                            "id": 1001,
+                            "name": "复方氯己定含漱液",
+                            "amount": 100.00
+                          }
+                        ]
+                      }
+                    ]
+                  },
+                  {
+                    "invoiceNo": "INV-MULTI-002",
+                    "feeAmount": 250.00,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K02.900",
+                        "detailName": "龋齿"
+                      }
+                    ],
+                    "feeList": [
+                      {
+                        "feeCategory": "treatmentFee",
+                        "medicareAmount": 25.0,
+                        "feeDetailList": [
+                          {
+                            "id": 2002,
+                            "name": "龋齿充填术",
+                            "amount": 250.00
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let bill_lines = body["canonical_claim_context"]["itemized_bill_lines"]
+        .as_array()
+        .expect("itemized_bill_lines should be an array");
+    assert_eq!(bill_lines.len(), 2);
+    assert!(bill_lines.iter().any(|line| {
+        line["invoice_id"] == "INV-MULTI-002"
+            && line["item_name"] == "龋齿充填术"
+            && line["diagnosis_list"][0]["name"] == "龋齿"
+            && line["social_insurance_amount"] == 25.0
+    }));
+    assert!(bill_lines.iter().any(|line| {
+        line["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("invoice:INV-MULTI-002:fee_detail:2002"))
+    }));
+}
+
+#[tokio::test]
 async fn preserves_all_product_liability_windows_in_canonical_context() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

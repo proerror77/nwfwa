@@ -265,8 +265,9 @@ The inbox should output a canonical payload with:
   and coverage constraints;
 - provider snapshot: hospital/provider code, name, class, type, city, province,
   and network flags;
-- itemized bill lines: invoice id, diagnosis list, fee category, item name,
-  amount, self-pay, social-insurance amount, and evidence refs;
+- itemized bill lines: every source invoice fee detail with invoice id,
+  diagnosis list, fee category, item name, amount, self-pay, social-insurance
+  amount, and evidence refs;
 - document evidence: every source medical record with medical record text,
   extracted diagnosis, procedure, prescription, department, visit date, and
   source refs;
