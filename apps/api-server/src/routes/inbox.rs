@@ -833,6 +833,9 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
     let social_insurance_type = string_at(invoice, &["socialInsuranceType"]);
     let department = string_at(invoice, &["departmentName"]);
     let medical_type = string_at(invoice, &["medicalType"]);
+    let invoice_claim_nature = string_at(invoice, &["claimNature"]);
+    let invoice_start_date = epoch_date_at(invoice, &["startDate"]);
+    let invoice_end_date = epoch_date_at(invoice, &["endDate"]);
     let invoice_social_insurance_amount = number_at(invoice, &["medicareAmount"]);
     let invoice_self_pay_amount = number_at(invoice, &["selfPayAmount"]);
     let invoice_own_expense_amount = number_at(invoice, &["ownExpenseAmount"]);
@@ -871,6 +874,7 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
             let social_insurance_type = social_insurance_type.clone();
             let department = department.clone();
             let medical_type = medical_type.clone();
+            let invoice_claim_nature = invoice_claim_nature.clone();
             let diagnoses = diagnoses.clone();
             fee.get("feeDetailList")
                 .and_then(Value::as_array)
@@ -892,6 +896,9 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
                         "social_insurance_type": social_insurance_type,
                         "department": department,
                         "medical_type": medical_type,
+                        "invoice_claim_nature": invoice_claim_nature,
+                        "invoice_start_date": invoice_start_date.map(|date| date.to_string()),
+                        "invoice_end_date": invoice_end_date.map(|date| date.to_string()),
                         "invoice_social_insurance_amount": invoice_social_insurance_amount,
                         "invoice_self_pay_amount": invoice_self_pay_amount,
                         "invoice_own_expense_amount": invoice_own_expense_amount,

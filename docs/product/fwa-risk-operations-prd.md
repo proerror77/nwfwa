@@ -273,8 +273,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   must be normalized and redacted before API-visible output.
 - preserve invoice-level payment context from this payload on every canonical
   bill line: `billType`, `documentType`, `socialInsuranceType`,
-  `departmentName`, `medicalType`, and invoice totals for Medicare, self-pay,
-  own-expense, and other-payment amounts.
+  `departmentName`, `medicalType`, `claimNature`, invoice start/end dates, and
+  invoice totals for Medicare, self-pay, own-expense, and other-payment
+  amounts.
 - preserve fee-group and fee-detail payment context separately:
   `feeList[n].feeAmount`, `feeList[n].otherAmount`, and
   `feeDetailList[n].medicareProrated` must not be collapsed into the detail
@@ -330,10 +331,10 @@ The inbox should output a canonical payload with:
   and network flags;
 - itemized bill lines: every source invoice fee detail with invoice id,
   invoice bill type, document type, social-insurance type, department, medical
-  type, diagnosis list, fee category, item name, amount, self-pay, own-expense,
-  invoice-level payment totals, fee-group amount, fee-group other amount,
-  medical category, Medicare prorated percentage, social-insurance amount, and
-  evidence refs;
+  type, invoice claim nature, invoice start/end dates, diagnosis list, fee
+  category, item name, amount, self-pay, own-expense, invoice-level payment
+  totals, fee-group amount, fee-group other amount, medical category, Medicare
+  prorated percentage, social-insurance amount, and evidence refs;
 - document evidence: every source medical record with medical record text,
   claim nature, medical record type, chief complaint, current medical history,
   past history, extracted diagnosis, procedure, prescription, department, visit

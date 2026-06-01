@@ -53,9 +53,10 @@ and source refs. Structured free-text fields are normalized and redacted before
 they appear in API-visible canonical output.
 Canonical bill lines preserve fee details from every source invoice. Each line
 keeps its source invoice id, invoice bill type, invoice document type,
-social-insurance type, department, medical type, diagnosis list, invoice-level
-payment totals, fee-group amount, fee-group other amount, social-insurance
-amount, Medicare prorated percentage, and
+social-insurance type, department, medical type, invoice claim nature, invoice
+start/end dates, diagnosis list, invoice-level payment totals, fee-group
+amount, fee-group other amount, social-insurance amount, Medicare prorated
+percentage, and
 `invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
 Canonical claim header `total_amount` is the sum of all source invoice
 `feeAmount` values; it is not limited to the primary invoice.

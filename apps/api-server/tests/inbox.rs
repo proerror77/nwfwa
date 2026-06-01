@@ -122,6 +122,7 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
                     "redFlag": "N",
                     "medicalType": "门诊",
                     "departmentName": "口腔科",
+                    "claimNature": "1",
                     "billType": "socialSecurityBill",
                     "documentType": "original",
                     "socialInsuranceType": "2",
@@ -272,6 +273,18 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]["medical_type"],
         "门诊"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_claim_nature"],
+        "1"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_start_date"],
+        "2025-12-25"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_end_date"],
+        "2025-12-25"
     );
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]
