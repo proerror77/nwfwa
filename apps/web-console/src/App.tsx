@@ -16,7 +16,7 @@ import { RoutingPoliciesPage } from "./pages/RoutingPoliciesPage";
 import { ProviderRiskPage } from "./pages/ProviderRiskPage";
 import { MemberProfilePage } from "./pages/MemberProfilePage";
 import { MedicalReviewPage } from "./pages/MedicalReviewPage";
-import type { AuditTimelineContext } from "./pages/auditTimelineContext";
+import type { GovernanceAuditContext } from "./pages/auditTimelineContext";
 import type { AgentInvestigationContext } from "./pages/agentInvestigationContext";
 
 const modules = [
@@ -41,7 +41,7 @@ const modules = [
 export function App() {
   const [active, setActive] = useState("Dashboard");
   const [auditTimelineContext, setAuditTimelineContext] = useState<
-    AuditTimelineContext | undefined
+    GovernanceAuditContext | undefined
   >();
   const [agentInvestigationContext, setAgentInvestigationContext] = useState<
     AgentInvestigationContext | undefined
@@ -86,7 +86,13 @@ export function App() {
         {active === "Audit Sampling" ? <AuditSamplingPage /> : null}
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? (
-          <AgentInvestigatorPage initialContext={agentInvestigationContext} />
+          <AgentInvestigatorPage
+            initialContext={agentInvestigationContext}
+            onGovernanceTrailRequest={(context) => {
+              setAuditTimelineContext(context);
+              setActive("Governance");
+            }}
+          />
         ) : null}
         {active === "QA Review" ? <QAReviewPage /> : null}
         {active === "Governance" ? (

@@ -35,6 +35,24 @@ describe("audit timeline context", () => {
       eventType: "scoring.completed",
       runId: "run_CLM-0287",
       claimId: "CLM-0287",
+      agentRunId: "",
+      limit: "50",
+    });
+  });
+
+  it("derives Governance claim and global audit filters from agent context", () => {
+    const context = {
+      claimId: "CLM-0287",
+      agentRunId: "agent_CLM-0287",
+      source: "agent_investigation" as const,
+    };
+
+    expect(buildGovernanceClaimIdFromContext(context, "CLM-DEFAULT")).toBe("CLM-0287");
+    expect(buildGovernanceAuditFiltersFromContext(context)).toMatchObject({
+      eventType: "",
+      runId: "",
+      claimId: "",
+      agentRunId: "agent_CLM-0287",
       limit: "50",
     });
   });

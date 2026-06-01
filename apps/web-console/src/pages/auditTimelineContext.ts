@@ -5,6 +5,14 @@ export type AuditTimelineContext = {
   source: "runtime_scoring";
 };
 
+export type AgentRunAuditContext = {
+  claimId: string;
+  agentRunId: string;
+  source: "agent_investigation";
+};
+
+export type GovernanceAuditContext = AuditTimelineContext | AgentRunAuditContext;
+
 export type ScoringAuditSource = {
   claim_id: string;
   audit_id: string;
@@ -21,22 +29,22 @@ export function buildAuditTimelineContext(source: ScoringAuditSource): AuditTime
 }
 
 export function buildGovernanceClaimIdFromContext(
-  context: AuditTimelineContext | undefined,
+  context: GovernanceAuditContext | undefined,
   fallbackClaimId: string,
 ) {
   return context?.claimId ?? fallbackClaimId;
 }
 
-export function buildGovernanceAuditFiltersFromContext(context?: AuditTimelineContext) {
+export function buildGovernanceAuditFiltersFromContext(context?: GovernanceAuditContext) {
   return {
-    eventType: context ? "scoring.completed" : "",
+    eventType: context?.source === "runtime_scoring" ? "scoring.completed" : "",
     actorId: "",
-    runId: context?.runId ?? "",
-    claimId: context?.claimId ?? "",
+    runId: context?.source === "runtime_scoring" ? context.runId : "",
+    claimId: context?.source === "runtime_scoring" ? context.claimId : "",
     feedbackId: "",
     qaCaseId: "",
     sampleId: "",
-    agentRunId: "",
+    agentRunId: context?.source === "agent_investigation" ? context.agentRunId : "",
     ruleId: "",
     ruleVersion: "",
     modelKey: "",

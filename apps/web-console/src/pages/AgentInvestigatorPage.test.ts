@@ -6,6 +6,7 @@ import {
   buildAgentSimilarCaseRows,
   buildEvidenceSufficiencyRows,
   buildAgentInvestigatorDefaults,
+  buildAgentGovernanceContext,
   buildInvestigationApprovalPayload,
 } from "./AgentInvestigatorPage";
 
@@ -218,6 +219,34 @@ describe("buildAgentInvestigatorDefaults", () => {
       diagnosisCode: "J10",
       providerRegion: "Shanghai",
       tags: "provider_region, early_high_claim",
+    });
+  });
+});
+
+describe("buildAgentGovernanceContext", () => {
+  it("builds governance focus context for an agent run", () => {
+    expect(
+      buildAgentGovernanceContext("CLM-1", {
+        agent_run_id: "agent_CLM-1",
+        decision_boundary: "assistive_only",
+        risk_summary: "High risk evidence package.",
+        findings: [],
+        investigation_checklist: [],
+        similar_cases: [],
+        qa_opinion_draft: "Review manually.",
+        evidence_sufficiency: {
+          scheme_family: "provider_peer_outlier",
+          status: "sufficient",
+          minimum_evidence: [],
+          present_evidence: [],
+          missing_evidence: [],
+        },
+        evidence_refs: ["agent_run:agent_CLM-1"],
+      }),
+    ).toEqual({
+      source: "agent_investigation",
+      claimId: "CLM-1",
+      agentRunId: "agent_CLM-1",
     });
   });
 });

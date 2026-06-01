@@ -8,6 +8,7 @@ import {
   type FwaSchemeDefinition,
 } from "./fwaSchemeOptions";
 import type { AgentInvestigationContext } from "./agentInvestigationContext";
+import type { AgentRunAuditContext } from "./auditTimelineContext";
 
 type InvestigationResponse = {
   agent_run_id: string;
@@ -158,11 +159,26 @@ export function buildAgentInvestigatorDefaults(context?: AgentInvestigationConte
   };
 }
 
+export function buildAgentGovernanceContext(
+  claimId: string,
+  result: InvestigationResponse,
+): AgentRunAuditContext {
+  return {
+    source: "agent_investigation",
+    claimId,
+    agentRunId: result.agent_run_id,
+  };
+}
+
 type AgentInvestigatorPageProps = {
   initialContext?: AgentInvestigationContext;
+  onGovernanceTrailRequest?: (context: AgentRunAuditContext) => void;
 };
 
-export function AgentInvestigatorPage({ initialContext }: AgentInvestigatorPageProps = {}) {
+export function AgentInvestigatorPage({
+  initialContext,
+  onGovernanceTrailRequest,
+}: AgentInvestigatorPageProps = {}) {
   const defaults = buildAgentInvestigatorDefaults(initialContext);
   const [apiKey, setApiKey] = useState("dev-secret");
   const [claimId, setClaimId] = useState(defaults.claimId);
@@ -313,6 +329,14 @@ export function AgentInvestigatorPage({ initialContext }: AgentInvestigatorPageP
                 <dd>{evidencePackageSummary.decisionBoundary}</dd>
               </div>
             </dl>
+            <button
+              onClick={() =>
+                onGovernanceTrailRequest?.(buildAgentGovernanceContext(claimId, result))
+              }
+              disabled={!onGovernanceTrailRequest}
+            >
+              View Governance Trail
+            </button>
             <div className="summary-grid">
               <div>
                 <span>Findings</span>

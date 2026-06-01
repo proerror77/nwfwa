@@ -26,7 +26,7 @@ import { formatReviewModeLabel } from "./reviewMode";
 import {
   buildGovernanceAuditFiltersFromContext,
   buildGovernanceClaimIdFromContext,
-  type AuditTimelineContext,
+  type GovernanceAuditContext,
 } from "./auditTimelineContext";
 
 type AuditEvent = {
@@ -938,7 +938,7 @@ function sortedUniqueLabels(labels: OutcomeLabel[], field: keyof OutcomeLabel) {
 }
 
 type GovernancePageProps = {
-  auditTimelineContext?: AuditTimelineContext;
+  auditTimelineContext?: GovernanceAuditContext;
 };
 
 export function GovernancePage({ auditTimelineContext }: GovernancePageProps = {}) {
