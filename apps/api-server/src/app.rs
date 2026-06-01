@@ -27,9 +27,7 @@ pub fn build_app(config: AppConfig) -> Router {
 }
 
 pub fn configured_model_scorer(config: &AppConfig) -> Arc<dyn ModelScorer> {
-    if config.model_service_url == "heuristic"
-        || config.model_service_url.starts_with("heuristic://")
-    {
+    if config.model_runtime_kind() == "heuristic" {
         Arc::new(HeuristicModelScorer)
     } else {
         Arc::new(HttpModelScorer::new(config.model_service_url.clone()))

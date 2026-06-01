@@ -17,6 +17,16 @@ impl AppConfig {
                 .unwrap_or_else(|_| "http://127.0.0.1:8001".into()),
         }
     }
+
+    pub fn model_runtime_kind(&self) -> &'static str {
+        if self.model_service_url == "heuristic"
+            || self.model_service_url.starts_with("heuristic://")
+        {
+            "heuristic"
+        } else {
+            "python_http"
+        }
+    }
 }
 
 impl Default for AppConfig {

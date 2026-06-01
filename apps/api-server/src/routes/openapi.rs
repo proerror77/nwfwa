@@ -3052,7 +3052,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["name", "status"],
                     "properties": {
                         "name": { "type": "string" },
-                        "status": { "type": "string", "enum": ["ok"] }
+                        "status": { "type": "string", "enum": ["ok"] },
+                        "runtime_kind": {
+                            "type": "string",
+                            "enum": ["python_http", "heuristic"],
+                            "description": "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
+                        }
                     }
                 },
                 "HealthResponse": {

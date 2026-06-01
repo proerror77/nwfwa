@@ -1,3 +1,5 @@
+use crate::app::AppState;
+use axum::extract::State;
 use axum::Json;
 use serde::Serialize;
 
@@ -13,9 +15,11 @@ pub struct HealthResponse {
 pub struct HealthCheck {
     pub name: &'static str,
     pub status: &'static str,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_kind: Option<&'static str>,
 }
 
-pub async fn health() -> Json<HealthResponse> {
+pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
     Json(HealthResponse {
         status: "ok",
         service: "api-server",
@@ -24,10 +28,17 @@ pub async fn health() -> Json<HealthResponse> {
             HealthCheck {
                 name: "http_router",
                 status: "ok",
+                runtime_kind: None,
             },
             HealthCheck {
                 name: "openapi_contract",
                 status: "ok",
+                runtime_kind: None,
+            },
+            HealthCheck {
+                name: "model_scorer",
+                status: "ok",
+                runtime_kind: Some(state.config.model_runtime_kind()),
             },
         ],
     })
