@@ -235,8 +235,9 @@ Required inbox corrections before scoring:
 - source trace: persist raw payload URI or checksum/fingerprint, normalized claim
   id, mapping version, validation result, and evidence refs;
 - date normalization: convert all epoch-millisecond dates and detect impossible
-  or inconsistent accident, visit, invoice, policy, liability, and receive
-  windows;
+  or inconsistent accident, visit, invoice, policy, product, liability, and
+  receive windows across the full source list, not only the primary product or
+  liability;
 - identity consistency: compare accident person, insured person, patient name,
   and invoice person after masking, and raise a review signal when they do not
   align;

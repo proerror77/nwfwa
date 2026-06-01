@@ -39,6 +39,10 @@ structured invoice diagnoses do not align with medical-record diagnoses.
 Canonical policy snapshots preserve all source product/liability windows in
 `member_policy_snapshot.product_liabilities`; primary `product_code` and
 `liability_code` remain convenience fields for first-pass routing only.
+Window validation also scans every product/liability entry. A non-primary
+product or liability that does not cover the service date produces a structured
+warning and keeps `scoring_ready = false` until the customer adapter or reviewer
+resolves the coverage context.
 Canonical bill lines include fee amount, self-pay, own-expense, and
 social-insurance amount mapped from source fee groups.
 Each request writes a PII-safe audit event and API call record with source

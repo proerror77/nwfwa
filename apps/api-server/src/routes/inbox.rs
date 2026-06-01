@@ -235,18 +235,20 @@ fn internal_error(
 }
 
 fn blocks_direct_scoring(error: &InboxValidationError) -> bool {
-    error.severity == "warning"
+    if error.severity != "warning" {
+        return false;
+    }
+    let path = error.field_path.as_str();
+    matches!(
+        path,
+        "reportCase.policyList[0].coverageLimit"
+            | "reportCase.policyList[0].validateDate"
+            | "reportCase.policyList[0].expireDate"
+    ) || (path.starts_with("reportCase.policyList[0].productList[")
         && matches!(
-            error.field_path.as_str(),
-            "reportCase.policyList[0].coverageLimit"
-                | "reportCase.policyList[0].validateDate"
-                | "reportCase.policyList[0].expireDate"
-                | "reportCase.policyList[0].productList[0].validateDate"
-                | "reportCase.policyList[0].productList[0].expireDate"
-                | "reportCase.policyList[0].productList[0].claimLiabilityList[0].validateDate"
-                | "reportCase.policyList[0].productList[0].claimLiabilityList[0].claimValidateDate"
-                | "reportCase.policyList[0].productList[0].claimLiabilityList[0].expireDate"
-        )
+            path.rsplit('.').next(),
+            Some("validateDate" | "claimValidateDate" | "expireDate")
+        ))
 }
 
 fn inbox_audit_id(external_message_fingerprint: Option<&str>) -> String {
@@ -370,30 +372,14 @@ fn build_canonical_claim_context(
         "reportCase.policyList[0]",
         "policy",
     );
-    validate_service_window(
-        validation_errors,
-        data_quality_signals,
-        service_date,
-        product_start_date,
-        product_end_date,
-        "reportCase.policyList[0].productList[0]",
-        "product",
-    );
-    validate_service_window(
-        validation_errors,
-        data_quality_signals,
-        service_date,
-        liability_start_date,
-        liability_end_date,
-        "reportCase.policyList[0].productList[0].claimLiabilityList[0]",
-        "liability",
-    );
-    validate_liability_claim_eligibility(
-        validation_errors,
-        data_quality_signals,
-        service_date,
-        liability_claim_start_date,
-    );
+    if let Some(policy) = policy {
+        validate_product_liability_windows(
+            validation_errors,
+            data_quality_signals,
+            service_date,
+            policy,
+        );
+    }
     validate_diagnosis_consistency(
         validation_errors,
         data_quality_signals,
@@ -511,6 +497,58 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
                 })
         })
         .collect()
+}
+
+fn validate_product_liability_windows(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    service_date: Option<NaiveDate>,
+    policy: &Value,
+) {
+    for (product_index, product) in policy
+        .get("productList")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .enumerate()
+    {
+        let product_prefix = format!("reportCase.policyList[0].productList[{product_index}]");
+        validate_service_window(
+            validation_errors,
+            data_quality_signals,
+            service_date,
+            epoch_date_at(product, &["validateDate"]),
+            epoch_date_at(product, &["expireDate"]),
+            &product_prefix,
+            "product",
+        );
+        for (liability_index, liability) in product
+            .get("claimLiabilityList")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let liability_prefix =
+                format!("{product_prefix}.claimLiabilityList[{liability_index}]");
+            validate_service_window(
+                validation_errors,
+                data_quality_signals,
+                service_date,
+                epoch_date_at(liability, &["validateDate"]),
+                epoch_date_at(liability, &["expireDate"]),
+                &liability_prefix,
+                "liability",
+            );
+            validate_liability_claim_eligibility(
+                validation_errors,
+                data_quality_signals,
+                service_date,
+                epoch_date_at(liability, &["claimValidateDate"]),
+                &liability_prefix,
+            );
+        }
+    }
 }
 
 fn validate_diagnosis_consistency(
@@ -646,15 +684,14 @@ fn validate_liability_claim_eligibility(
     data_quality_signals: &mut Vec<String>,
     service_date: Option<NaiveDate>,
     liability_claim_start_date: Option<NaiveDate>,
+    field_prefix: &str,
 ) {
     if let (Some(service_date), Some(liability_claim_start_date)) =
         (service_date, liability_claim_start_date)
     {
         if service_date < liability_claim_start_date {
             validation_errors.push(InboxValidationError {
-                field_path:
-                    "reportCase.policyList[0].productList[0].claimLiabilityList[0].claimValidateDate"
-                        .into(),
+                field_path: format!("{field_prefix}.claimValidateDate"),
                 severity: "warning",
                 remediation:
                     "service date must not be earlier than liability claim eligibility date".into(),

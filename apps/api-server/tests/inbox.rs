@@ -591,6 +591,111 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
 }
 
 #[tokio::test]
+async fn flags_non_primary_product_liability_window_mismatches() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "secondary-window-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-SECONDARY-WINDOW-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "policyList": [
+              {
+                "policyNo": "POL-SECONDARY-WINDOW",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "productList": [
+                  {
+                    "productCode": "YBYL",
+                    "validateDate": 1735689600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": [
+                      {
+                        "liabCode": "YBYL02",
+                        "liabName": "特定门诊医疗费用",
+                        "validateDate": 1735689600000,
+                        "claimValidateDate": 1735689600000,
+                        "expireDate": 1798675200000
+                      }
+                    ]
+                  },
+                  {
+                    "productCode": "TDJB",
+                    "validateDate": 1767225600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": [
+                      {
+                        "liabCode": "TDJB01",
+                        "liabName": "特定疾病住院医疗费用",
+                        "validateDate": 1767225600000,
+                        "claimValidateDate": 1767225600000,
+                        "expireDate": 1798675200000
+                      }
+                    ]
+                  }
+                ],
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-SECONDARY-WINDOW",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["validation_result"], "accepted_with_warnings");
+    assert_eq!(body["scoring_ready"], false);
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("coverage_window_mismatch")));
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy_liability_mismatch")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[0].productList[1].validateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("product window")
+        }));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"]
+                == "reportCase.policyList[0].productList[1].claimLiabilityList[0].claimValidateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("claim eligibility date")
+        }));
+}
+
+#[tokio::test]
 async fn flags_service_date_outside_product_and_liability_windows() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

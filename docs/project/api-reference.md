@@ -54,6 +54,10 @@ every source product and claim-liability window, including waiting-period
 candidate dates and evidence refs. The top-level `product_code` and
 `liability_code` fields are primary values for compatibility, not the complete
 coverage list.
+Coverage-window validation scans the same list. Non-primary product or
+liability mismatches are returned as field-level warnings such as
+`reportCase.policyList[0].productList[1].validateDate` and block direct scoring
+through `scoring_ready = false`.
 
 ## Runtime Scoring
 
