@@ -3837,12 +3837,19 @@ impl ScoringRepository for PostgresScoringRepository {
                  (lead_id, run_id, claim_id, member_id, provider_id, source_system, review_mode, scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs)
                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                  ON CONFLICT (lead_id) DO UPDATE
-                 SET status = EXCLUDED.status,
+                 SET run_id = EXCLUDED.run_id,
+                     claim_id = EXCLUDED.claim_id,
+                     member_id = EXCLUDED.member_id,
+                     provider_id = EXCLUDED.provider_id,
+                     source_system = EXCLUDED.source_system,
+                     review_mode = EXCLUDED.review_mode,
+                     scheme_family = EXCLUDED.scheme_family,
+                     lead_source = EXCLUDED.lead_source,
+                     status = EXCLUDED.status,
                      disposition = EXCLUDED.disposition,
                      risk_score = EXCLUDED.risk_score,
                      rag = EXCLUDED.rag,
                      reason = EXCLUDED.reason,
-                     review_mode = EXCLUDED.review_mode,
                      evidence_refs = EXCLUDED.evidence_refs,
                      updated_at = now()",
             )
