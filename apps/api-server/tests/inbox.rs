@@ -116,6 +116,14 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
                     "primaryCare": true,
                     "redFlag": "N",
                     "medicalType": "门诊",
+                    "departmentName": "口腔科",
+                    "billType": "socialSecurityBill",
+                    "documentType": "original",
+                    "socialInsuranceType": "2",
+                    "medicareAmount": 133.99,
+                    "selfPayAmount": 108.82,
+                    "ownExpenseAmount": 0,
+                    "otherAmount": 0,
                     "accidentPersonName": "王向龙",
                     "diagnosisList": [
                       {
@@ -130,13 +138,16 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
                       {
                         "feeCategory": "westernMedicineFee",
                         "medicareAmount": 21.55,
+                        "feeAmount": 51.51,
+                        "otherAmount": 0,
                         "feeDetailList": [
                           {
                             "name": "双氯芬酸二乙胺乳胶剂",
                             "amount": 51.51,
                             "selfPayAmount": 5.15,
                             "ownExpenseAmount": 0,
-                            "medicalCategory": "1"
+                            "medicalCategory": "1",
+                            "medicareProrated": "10.00"
                           }
                         ]
                       }
@@ -236,6 +247,55 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]["social_insurance_amount"],
         21.55
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_bill_type"],
+        "socialSecurityBill"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_document_type"],
+        "original"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["social_insurance_type"],
+        "2"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["department"],
+        "口腔科"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["medical_type"],
+        "门诊"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]
+            ["invoice_social_insurance_amount"],
+        133.99
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_self_pay_amount"],
+        108.82
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_own_expense_amount"],
+        0.0
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_other_amount"],
+        0.0
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["fee_group_amount"],
+        51.51
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["fee_group_other_amount"],
+        0.0
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["medicare_prorated"],
+        "10.00"
     );
     assert!(
         body["canonical_claim_context"]["document_evidence"][0]["medical_record_text"]

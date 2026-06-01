@@ -267,6 +267,15 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - compare `claimReceiveDate` with every medical-record `operationStartDate`;
   operation dates after receive date must emit `date_inconsistency` on the
   exact `medicalRecordInfoList[n].operationStartDate` path.
+- preserve invoice-level payment context from this payload on every canonical
+  bill line: `billType`, `documentType`, `socialInsuranceType`,
+  `departmentName`, `medicalType`, and invoice totals for Medicare, self-pay,
+  own-expense, and other-payment amounts.
+- preserve fee-group and fee-detail payment context separately:
+  `feeList[n].feeAmount`, `feeList[n].otherAmount`, and
+  `feeDetailList[n].medicareProrated` must not be collapsed into the detail
+  `amount`. These fields feed L1 cost deviation, L5 medical reasonableness, and
+  L7 routing explanations.
 
 Required inbox corrections before scoring:
 
@@ -311,8 +320,11 @@ The inbox should output a canonical payload with:
 - provider snapshot: hospital/provider code, name, class, type, city, province,
   and network flags;
 - itemized bill lines: every source invoice fee detail with invoice id,
-  diagnosis list, fee category, item name, amount, self-pay, social-insurance
-  amount, and evidence refs;
+  invoice bill type, document type, social-insurance type, department, medical
+  type, diagnosis list, fee category, item name, amount, self-pay, own-expense,
+  invoice-level payment totals, fee-group amount, fee-group other amount,
+  medical category, Medicare prorated percentage, social-insurance amount, and
+  evidence refs;
 - document evidence: every source medical record with medical record text,
   extracted diagnosis, procedure, prescription, department, visit date,
   first-happen date, operation-start date, and source refs;

@@ -198,6 +198,26 @@ async fn openapi_includes_operations_paths() {
         inbox_context["properties"]["itemized_bill_lines"]["items"]["$ref"],
         "#/components/schemas/InboxBillLine"
     );
+    let inbox_bill_line = &schema["components"]["schemas"]["InboxBillLine"]["properties"];
+    for field in [
+        "invoice_bill_type",
+        "invoice_document_type",
+        "social_insurance_type",
+        "department",
+        "medical_type",
+        "invoice_social_insurance_amount",
+        "invoice_self_pay_amount",
+        "invoice_own_expense_amount",
+        "invoice_other_amount",
+        "fee_group_amount",
+        "fee_group_other_amount",
+        "medicare_prorated",
+    ] {
+        assert!(
+            inbox_bill_line[field].is_object(),
+            "missing inbox bill-line field {field}"
+        );
+    }
     assert_eq!(
         inbox_context["properties"]["document_evidence"]["items"]["$ref"],
         "#/components/schemas/InboxDocumentEvidence"

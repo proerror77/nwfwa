@@ -2303,6 +2303,18 @@ pub async fn openapi_schema() -> Json<Value> {
                         "own_expense": { "type": ["number", "null"] },
                         "social_insurance_amount": { "type": ["number", "null"] },
                         "medical_category": { "type": ["string", "null"] },
+                        "invoice_bill_type": { "type": ["string", "null"] },
+                        "invoice_document_type": { "type": ["string", "null"] },
+                        "social_insurance_type": { "type": ["string", "null"] },
+                        "department": { "type": ["string", "null"] },
+                        "medical_type": { "type": ["string", "null"] },
+                        "invoice_social_insurance_amount": { "type": ["number", "null"] },
+                        "invoice_self_pay_amount": { "type": ["number", "null"] },
+                        "invoice_own_expense_amount": { "type": ["number", "null"] },
+                        "invoice_other_amount": { "type": ["number", "null"] },
+                        "fee_group_amount": { "type": ["number", "null"] },
+                        "fee_group_other_amount": { "type": ["number", "null"] },
+                        "medicare_prorated": { "type": ["string", "null"] },
                         "evidence_refs": {
                             "type": "array",
                             "items": { "type": "string" }

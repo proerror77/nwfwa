@@ -50,7 +50,10 @@ separate document with extracted diagnosis, procedure, prescription,
 normalized visit date, first-happen date, operation-start date, and source
 refs.
 Canonical bill lines preserve fee details from every source invoice. Each line
-keeps its source invoice id, diagnosis list, social-insurance amount, and
+keeps its source invoice id, invoice bill type, invoice document type,
+social-insurance type, department, medical type, diagnosis list, invoice-level
+payment totals, fee-group amount, fee-group other amount, social-insurance
+amount, Medicare prorated percentage, and
 `invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
 Canonical claim header `total_amount` is the sum of all source invoice
 `feeAmount` values; it is not limited to the primary invoice.
@@ -82,8 +85,9 @@ Window validation also scans every product/liability entry. A non-primary
 product or liability that does not cover the service date produces a structured
 warning and keeps `scoring_ready = false` until the customer adapter or reviewer
 resolves the coverage context.
-Canonical bill lines include fee amount, self-pay, own-expense, and
-social-insurance amount mapped from source fee groups.
+Canonical bill lines include fee amount, self-pay, own-expense, other-payment,
+and social-insurance amount mapped from the source invoice, fee group, and fee
+detail levels without collapsing those levels into one amount.
 Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
 validation results, and data-quality signals, not the full raw medical or

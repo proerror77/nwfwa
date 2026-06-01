@@ -55,7 +55,10 @@ reported through `data_quality_signals` as `identity_mismatch`.
 `canonical_claim_context.document_evidence` contains one normalized document
 entry per source `medicalRecordInfoList` record, each with its own source refs.
 `canonical_claim_context.itemized_bill_lines` preserves fee-detail lines from
-every source invoice, not only the primary invoice.
+every source invoice, not only the primary invoice. Each line also carries
+invoice-level bill type, document type, social-insurance type, department,
+medical type, invoice payment totals, fee-group amount, fee-group other amount,
+and Medicare prorated percentage when those fields exist in the raw payload.
 Invoice-level diagnosis gaps are reported as warnings on the matching
 `reportCase.policyList[0].invoiceList[n].feeList` path.
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves

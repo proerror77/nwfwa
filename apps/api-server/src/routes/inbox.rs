@@ -827,6 +827,15 @@ fn validate_liability_claim_eligibility(
 
 fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
     let invoice_id = string_at(invoice, &["invoiceNo"]);
+    let invoice_bill_type = string_at(invoice, &["billType"]);
+    let invoice_document_type = string_at(invoice, &["documentType"]);
+    let social_insurance_type = string_at(invoice, &["socialInsuranceType"]);
+    let department = string_at(invoice, &["departmentName"]);
+    let medical_type = string_at(invoice, &["medicalType"]);
+    let invoice_social_insurance_amount = number_at(invoice, &["medicareAmount"]);
+    let invoice_self_pay_amount = number_at(invoice, &["selfPayAmount"]);
+    let invoice_own_expense_amount = number_at(invoice, &["ownExpenseAmount"]);
+    let invoice_other_amount = number_at(invoice, &["otherAmount"]);
     let diagnoses = invoice
         .get("diagnosisList")
         .and_then(Value::as_array)
@@ -853,7 +862,14 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
         .flat_map(|fee| {
             let fee_category = string_at(fee, &["feeCategory"]);
             let social_insurance_amount = number_at(fee, &["medicareAmount"]);
+            let fee_group_amount = number_at(fee, &["feeAmount"]);
+            let fee_group_other_amount = number_at(fee, &["otherAmount"]);
             let invoice_id = invoice_id.clone();
+            let invoice_bill_type = invoice_bill_type.clone();
+            let invoice_document_type = invoice_document_type.clone();
+            let social_insurance_type = social_insurance_type.clone();
+            let department = department.clone();
+            let medical_type = medical_type.clone();
             let diagnoses = diagnoses.clone();
             fee.get("feeDetailList")
                 .and_then(Value::as_array)
@@ -870,6 +886,18 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
                         "own_expense": number_at(detail, &["ownExpenseAmount"]),
                         "social_insurance_amount": social_insurance_amount,
                         "medical_category": string_at(detail, &["medicalCategory"]),
+                        "invoice_bill_type": invoice_bill_type,
+                        "invoice_document_type": invoice_document_type,
+                        "social_insurance_type": social_insurance_type,
+                        "department": department,
+                        "medical_type": medical_type,
+                        "invoice_social_insurance_amount": invoice_social_insurance_amount,
+                        "invoice_self_pay_amount": invoice_self_pay_amount,
+                        "invoice_own_expense_amount": invoice_own_expense_amount,
+                        "invoice_other_amount": invoice_other_amount,
+                        "fee_group_amount": fee_group_amount,
+                        "fee_group_other_amount": fee_group_other_amount,
+                        "medicare_prorated": string_at(detail, &["medicareProrated"]),
                         "evidence_refs": [
                             format!(
                                 "invoice:{}:fee_detail:{}",
