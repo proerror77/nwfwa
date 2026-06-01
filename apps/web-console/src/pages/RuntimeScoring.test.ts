@@ -22,6 +22,14 @@ describe("buildClaimIdScorePayload", () => {
       review_mode: "post_payment",
     });
   });
+
+  it("does not send unsupported both review mode to the scoring API", () => {
+    expect(buildClaimIdScorePayload("tpa-demo", "CLM-0287", "both")).toEqual({
+      source_system: "tpa-demo",
+      claim_id: "CLM-0287",
+      review_mode: "pre_payment",
+    });
+  });
 });
 
 describe("buildRoutingPolicySummary", () => {

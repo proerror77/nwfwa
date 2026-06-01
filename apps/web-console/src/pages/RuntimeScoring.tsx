@@ -296,8 +296,12 @@ export function buildClaimIdScorePayload(sourceSystem: string, claimId: string, 
   return {
     source_system: sourceSystem,
     claim_id: claimId.trim(),
-    review_mode: reviewMode,
+    review_mode: scoringReviewMode(reviewMode),
   };
+}
+
+function scoringReviewMode(reviewMode: string) {
+  return reviewMode === "post_payment" ? "post_payment" : "pre_payment";
 }
 
 export function RuntimeScoring() {
@@ -369,7 +373,6 @@ export function RuntimeScoring() {
             <select value={reviewMode} onChange={(event) => setReviewMode(event.target.value)}>
               <option value="pre_payment">Pre Payment</option>
               <option value="post_payment">Post Payment</option>
-              <option value="both">Both</option>
             </select>
           </label>
           <label>
