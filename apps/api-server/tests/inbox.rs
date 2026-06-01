@@ -426,6 +426,72 @@ async fn flags_document_invoice_diagnosis_mismatch() {
 }
 
 #[tokio::test]
+async fn flags_bill_lines_without_invoice_diagnosis() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "diagnosis-item-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-DIAGNOSIS-ITEM-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "policyList": [
+              {
+                "policyNo": "POL-DIAGNOSIS-ITEM",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-DIAGNOSIS-ITEM",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [],
+                    "feeList": [
+                      {
+                        "feeCategory": "westernMedicineFee",
+                        "feeDetailList": [
+                          {
+                            "name": "双氯芬酸二乙胺乳胶剂",
+                            "amount": 51.51
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["validation_result"], "accepted_with_warnings");
+    assert!(body["scoring_ready"].as_bool().unwrap());
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("diagnosis_item_mismatch")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[0].invoiceList[0].feeList"
+                && error["severity"] == "warning"
+                && error["remediation"].as_str().unwrap().contains("diagnosis")
+        }));
+}
+
+#[tokio::test]
 async fn flags_service_date_outside_product_and_liability_windows() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

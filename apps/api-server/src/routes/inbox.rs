@@ -400,6 +400,7 @@ fn build_canonical_claim_context(
         medical_record,
         invoice,
     );
+    validate_diagnosis_item_support(validation_errors, data_quality_signals, invoice);
 
     json!({
         "claim_header": {
@@ -479,6 +480,28 @@ fn validate_diagnosis_consistency(
     }
 }
 
+fn validate_diagnosis_item_support(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    invoice: Option<&Value>,
+) {
+    let Some(invoice) = invoice else {
+        return;
+    };
+    if !invoice_diagnosis_names(invoice).is_empty() || !invoice_has_bill_lines(invoice) {
+        return;
+    }
+
+    validation_errors.push(InboxValidationError {
+        field_path: "reportCase.policyList[0].invoiceList[0].feeList".into(),
+        severity: "warning",
+        remediation:
+            "bill lines should include diagnosis context before medical reasonableness scoring"
+                .into(),
+    });
+    push_signal(data_quality_signals, "diagnosis_item_mismatch");
+}
+
 fn invoice_diagnosis_names(invoice: &Value) -> Vec<String> {
     invoice
         .get("diagnosisList")
@@ -489,6 +512,21 @@ fn invoice_diagnosis_names(invoice: &Value) -> Vec<String> {
             string_at(diagnosis, &["detailName"]).or_else(|| string_at(diagnosis, &["name"]))
         })
         .collect()
+}
+
+fn invoice_has_bill_lines(invoice: &Value) -> bool {
+    invoice
+        .get("feeList")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .any(|fee| {
+            fee.get("feeDetailList")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .any(|detail| string_at(detail, &["name"]).is_some())
+        })
 }
 
 fn diagnoses_match(left: &str, right: &str) -> bool {
