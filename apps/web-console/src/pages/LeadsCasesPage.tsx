@@ -41,6 +41,7 @@ type CaseRecord = {
   member_id?: string;
   provider_id?: string;
   source_system?: string;
+  review_mode?: string;
   scheme_family?: string;
   lead_source?: string;
   status: string;
@@ -143,6 +144,9 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
     prePaymentLeads: leads.filter((lead) => lead.review_mode === "pre_payment").length,
     postPaymentLeads: leads.filter((lead) => lead.review_mode === "post_payment").length,
     bothModeLeads: leads.filter((lead) => lead.review_mode === "both").length,
+    prePaymentCases: cases.filter((item) => item.review_mode === "pre_payment").length,
+    postPaymentCases: cases.filter((item) => item.review_mode === "post_payment").length,
+    bothModeCases: cases.filter((item) => item.review_mode === "both").length,
   };
 }
 
@@ -534,6 +538,14 @@ export function LeadsCasesPage() {
           <div>
             <span>Post-payment Leads</span>
             <strong>{summary.postPaymentLeads}</strong>
+          </div>
+          <div>
+            <span>Pre-payment Cases</span>
+            <strong>{summary.prePaymentCases}</strong>
+          </div>
+          <div>
+            <span>Post-payment Cases</span>
+            <strong>{summary.postPaymentCases}</strong>
           </div>
         </div>
       </div>
@@ -942,6 +954,10 @@ export function LeadsCasesPage() {
                   <div>
                     <dt>Scheme</dt>
                     <dd>{formatFwaSchemeLabel(item.scheme_family ?? "-", schemeLabelMap)}</dd>
+                  </div>
+                  <div>
+                    <dt>Review Mode</dt>
+                    <dd>{formatReviewModeLabel(item.review_mode)}</dd>
                   </div>
                   <div>
                     <dt>Evidence Status</dt>

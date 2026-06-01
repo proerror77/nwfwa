@@ -345,6 +345,7 @@ CREATE TABLE IF NOT EXISTS investigation_cases (
   member_id TEXT NOT NULL,
   provider_id TEXT NOT NULL,
   source_system TEXT NOT NULL,
+  review_mode TEXT NOT NULL DEFAULT 'pre_payment',
   scheme_family TEXT NOT NULL,
   lead_source TEXT NOT NULL,
   status TEXT NOT NULL,
@@ -361,6 +362,7 @@ CREATE TABLE IF NOT EXISTS investigation_cases (
 );
 
 ALTER TABLE investigation_cases
+  ADD COLUMN IF NOT EXISTS review_mode TEXT NOT NULL DEFAULT 'pre_payment',
   ADD COLUMN IF NOT EXISTS final_outcome TEXT,
   ADD COLUMN IF NOT EXISTS reviewer_notes TEXT,
   ADD COLUMN IF NOT EXISTS investigation_result_id TEXT;

@@ -285,6 +285,8 @@ pub struct CaseRecord {
     pub member_id: String,
     pub provider_id: String,
     pub source_system: String,
+    #[serde(default = "default_review_mode")]
+    pub review_mode: String,
     pub scheme_family: String,
     pub lead_source: String,
     pub status: String,
@@ -1171,6 +1173,7 @@ struct CaseRow {
     member_id: String,
     provider_id: String,
     source_system: String,
+    review_mode: String,
     scheme_family: String,
     lead_source: String,
     status: String,
@@ -4598,10 +4601,11 @@ impl ScoringRepository for PostgresScoringRepository {
         if let Some(case) = &case {
             sqlx::query(
                 "INSERT INTO investigation_cases
-                 (case_id, lead_id, claim_id, member_id, provider_id, source_system, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+                 (case_id, lead_id, claim_id, member_id, provider_id, source_system, review_mode, scheme_family, lead_source, status, assignee, reviewer, priority, routing_reason, evidence_package_json)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
                  ON CONFLICT (case_id) DO UPDATE
                  SET status = EXCLUDED.status,
+                     review_mode = EXCLUDED.review_mode,
                      assignee = EXCLUDED.assignee,
                      reviewer = EXCLUDED.reviewer,
                      priority = EXCLUDED.priority,
@@ -4615,6 +4619,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .bind(&case.member_id)
             .bind(&case.provider_id)
             .bind(&case.source_system)
+            .bind(&case.review_mode)
             .bind(&case.scheme_family)
             .bind(&case.lead_source)
             .bind(&case.status)
@@ -7511,6 +7516,7 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
         member_id: lead.member_id.clone(),
         provider_id: lead.provider_id.clone(),
         source_system: lead.source_system.clone(),
+        review_mode: lead.review_mode.clone(),
         scheme_family: lead.scheme_family.clone(),
         lead_source: lead.lead_source.clone(),
         status: "triage".into(),
@@ -7521,6 +7527,7 @@ fn case_from_lead(lead: &LeadRecord, input: &TriageLeadInput) -> CaseRecord {
         evidence_package: serde_json::json!({
             "lead_id": lead.lead_id.clone(),
             "claim_id": lead.claim_id.clone(),
+            "review_mode": lead.review_mode.clone(),
             "risk_score": lead.risk_score,
             "rag": lead.rag.clone(),
             "reason": lead.reason.clone(),
@@ -7662,6 +7669,7 @@ fn triage_audit_payload(
         "claim_id": lead.claim_id.clone(),
         "lead_id": lead.lead_id.clone(),
         "case_id": case.map(|case| case.case_id.clone()),
+        "review_mode": lead.review_mode.clone(),
         "decision": input.decision.clone(),
         "disposition": lead.disposition.clone(),
         "merge_target_lead_id": input.merge_target_lead_id.clone(),
@@ -9731,7 +9739,7 @@ fn lead_from_row(row: LeadRow) -> LeadRecord {
 
 async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
     let rows: Vec<CaseRow> = sqlx::query_as(
-        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
+        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, COALESCE(c.review_mode, l.review_mode, 'pre_payment') AS review_mode, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
          ORDER BY c.created_at, c.case_id",
@@ -9746,7 +9754,7 @@ async fn load_case_in_tx(
     case_id: &str,
 ) -> anyhow::Result<Option<CaseRecord>> {
     let row: Option<CaseRow> = sqlx::query_as(
-        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
+        "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, COALESCE(c.review_mode, l.review_mode, 'pre_payment') AS review_mode, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
          WHERE c.case_id = $1",
@@ -9772,6 +9780,7 @@ fn case_from_row(row: CaseRow) -> CaseRecord {
         member_id: row.member_id,
         provider_id: row.provider_id,
         source_system: row.source_system,
+        review_mode: row.review_mode,
         scheme_family: row.scheme_family,
         lead_source: row.lead_source,
         status: row.status,

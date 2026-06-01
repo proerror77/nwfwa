@@ -1205,6 +1205,18 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["Lead"]["properties"]["review_mode"]["enum"],
         serde_json::json!(["pre_payment", "post_payment", "both"])
     );
+    assert!(
+        schema["components"]["schemas"]["Case"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "review_mode"),
+        "Case schema must require review_mode so investigation queues preserve pre/post-payment routing"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["Case"]["properties"]["review_mode"]["enum"],
+        serde_json::json!(["pre_payment", "post_payment", "both"])
+    );
     assert!(schema["components"]["schemas"]["CaseListResponse"].is_object());
     assert!(schema["components"]["schemas"]["AuditSampleRecord"].is_object());
     assert_eq!(

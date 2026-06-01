@@ -412,6 +412,96 @@ async fn triages_lead_without_opening_case_for_non_case_dispositions() {
 }
 
 #[tokio::test]
+async fn triaged_case_preserves_review_mode_from_lead() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "review_mode": "post_payment",
+          "claim": {
+            "external_claim_id": "CLM-CASE-POST-PAY",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "PROC-001",
+              "item_type": "procedure",
+              "description": "Imaging",
+              "quantity": 1,
+              "unit_amount": "9000",
+              "total_amount": "9000"
+            }
+          ],
+          "member": {
+            "external_member_id": "MBR-CASE-POST-PAY"
+          },
+          "policy": {
+            "external_policy_id": "POL-CASE-POST-PAY",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-CASE-POST-PAY",
+            "name": "Northwind Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "High"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, leads) = json_request(app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let lead = leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|lead| lead["claim_id"] == "CLM-CASE-POST-PAY")
+        .expect("post-payment lead generated");
+    assert_eq!(lead["review_mode"], "post_payment");
+    let lead_id = lead["lead_id"].as_str().unwrap();
+
+    let (status, triage) = json_request(
+        app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "post-pay-siu",
+          "reviewer": "post-pay-qa",
+          "priority": "high",
+          "notes": "Open post-payment investigation from governed lead.",
+          "evidence_refs": ["triage_decisions:post_payment_open_case"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(triage["case"]["review_mode"], "post_payment");
+
+    let (status, cases) = json_request(app, "GET", "/api/v1/ops/cases", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let case = cases["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["claim_id"] == "CLM-CASE-POST-PAY")
+        .expect("post-payment case listed");
+    assert_eq!(case["review_mode"], "post_payment");
+}
+
+#[tokio::test]
 async fn triage_decisions_create_lead_disposition_labels() {
     let app = build_app(test_config());
     for claim_id in [

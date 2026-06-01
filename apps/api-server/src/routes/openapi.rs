@@ -4652,7 +4652,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "Case": {
                     "type": "object",
-                    "required": ["case_id", "lead_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "assignee", "reviewer", "priority", "routing_reason", "evidence_package", "sla_target_hours", "sla_status", "time_to_triage_hours", "time_to_closure_hours", "final_outcome", "reviewer_notes", "investigation_result_id"],
+                    "required": ["case_id", "lead_id", "claim_id", "member_id", "provider_id", "source_system", "review_mode", "scheme_family", "lead_source", "status", "assignee", "reviewer", "priority", "routing_reason", "evidence_package", "sla_target_hours", "sla_status", "time_to_triage_hours", "time_to_closure_hours", "final_outcome", "reviewer_notes", "investigation_result_id"],
                     "properties": {
                         "case_id": { "type": "string" },
                         "lead_id": { "type": "string" },
@@ -4660,6 +4660,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "member_id": { "type": "string" },
                         "provider_id": { "type": "string" },
                         "source_system": { "type": "string" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "scheme_family": { "type": "string" },
                         "lead_source": { "type": "string" },
                         "status": { "type": "string" },

@@ -70,6 +70,7 @@ describe("buildLeadSummary", () => {
             case_id: "case_CLM-2",
             lead_id: "lead_CLM-2",
             claim_id: "CLM-2",
+            review_mode: "post_payment",
             status: "triage",
             priority: "high",
             assignee: "siu-reviewer-1",
@@ -109,6 +110,9 @@ describe("buildLeadSummary", () => {
       prePaymentLeads: 1,
       postPaymentLeads: 2,
       bothModeLeads: 1,
+      prePaymentCases: 0,
+      postPaymentCases: 1,
+      bothModeCases: 0,
     });
   });
 });

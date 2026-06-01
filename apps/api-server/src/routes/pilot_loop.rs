@@ -1055,6 +1055,7 @@ mod tests {
             member_id: "MBR-SLA-1".into(),
             provider_id: "PRV-SLA-1".into(),
             source_system: "tpa-demo".into(),
+            review_mode: "pre_payment".into(),
             scheme_family: "provider_peer_outlier".into(),
             lead_source: "scoring_run".into(),
             status: "investigating".into(),
