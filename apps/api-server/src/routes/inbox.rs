@@ -330,16 +330,19 @@ fn build_canonical_claim_context(
 
     let insured_name = string_at(payload, &["reportCase", "accidentPerson", "insuredName"]);
     let policy_insured_name = policy.and_then(|policy| string_at(policy, &["insuredName"]));
-    let invoice_person_name =
-        invoice.and_then(|invoice| string_at(invoice, &["accidentPersonName"]));
     let medical_record_patient_name =
         medical_record.and_then(|record| string_at(record, &["patientName"]));
-    if names_mismatch([
+    let mut identity_names = vec![
         insured_name.as_deref(),
         policy_insured_name.as_deref(),
-        invoice_person_name.as_deref(),
         medical_record_patient_name.as_deref(),
-    ]) {
+    ];
+    let invoice_person_names = invoices
+        .iter()
+        .map(|invoice| string_at(invoice, &["accidentPersonName"]))
+        .collect::<Vec<_>>();
+    identity_names.extend(invoice_person_names.iter().map(Option::as_deref));
+    if names_mismatch(identity_names) {
         push_signal(data_quality_signals, "identity_mismatch");
     }
 
@@ -882,7 +885,7 @@ fn array_items<'a>(value: &'a Value, path: &[&str]) -> Vec<&'a Value> {
         .unwrap_or_default()
 }
 
-fn names_mismatch<const N: usize>(names: [Option<&str>; N]) -> bool {
+fn names_mismatch<'a>(names: impl IntoIterator<Item = Option<&'a str>>) -> bool {
     let names = names
         .into_iter()
         .flatten()

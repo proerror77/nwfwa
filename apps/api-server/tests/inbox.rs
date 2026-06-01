@@ -643,6 +643,83 @@ async fn flags_medical_record_patient_name_identity_mismatch() {
 }
 
 #[tokio::test]
+async fn flags_non_primary_invoice_person_identity_mismatch() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "secondary-invoice-person-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-SECONDARY-INVOICE-PERSON-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "accidentPerson": {
+              "insuredName": "LEE, Peter",
+              "insuredNo": "D209475(0)"
+            },
+            "medicalRecordInfoList": [
+              {
+                "id": 425840012,
+                "patientName": "LEE, Peter",
+                "diagnosisName": "牙周炎",
+                "medicalRecordInformation": "诊断：牙周炎"
+              }
+            ],
+            "policyList": [
+              {
+                "policyNo": "POL-SECONDARY-INVOICE-PERSON",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-PERSON-OK",
+                    "feeAmount": 100.00,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "accidentPersonName": "LEE, Peter",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": []
+                  },
+                  {
+                    "invoiceNo": "INV-PERSON-MISMATCH",
+                    "feeAmount": 250.00,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "accidentPersonName": "王向龙",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("identity_mismatch")));
+}
+
+#[tokio::test]
 async fn preserves_all_medical_records_as_document_evidence() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

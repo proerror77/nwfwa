@@ -240,8 +240,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   product-liability window as first-class canonical evidence;
 - treat `calculateRisk = N` as a warning-level source hint unless customer
   configuration explicitly allows scoring bypass;
-- flag identity mismatches between accident person, insured person, invoice
-  person, and medical-record patient rather than silently overwriting names;
+- flag identity mismatches between accident person, insured person, every
+  invoice person, and medical-record patient rather than silently overwriting
+  names;
 - compare each invoice's structured diagnosis list against the medical-record
   diagnosis, including non-primary invoices, and emit
   `document_invoice_mismatch` on the exact `invoiceList[n].diagnosisList` path;
@@ -266,8 +267,8 @@ Required inbox corrections before scoring:
   receive windows across the full source list, not only the primary product or
   liability;
 - identity consistency: compare accident person, insured person, patient name,
-  and invoice person after masking, and raise a review signal when they do not
-  align;
+  and every invoice person after masking, and raise a review signal when they
+  do not align;
 - medical consistency: map diagnosis codes, diagnosis names, department,
   medical type, fee categories, drugs, procedures, and medical record text into
   L5 medical-reasonableness inputs;
