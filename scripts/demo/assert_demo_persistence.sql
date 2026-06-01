@@ -505,6 +505,7 @@ BEGIN
     AND mer.model_key = 'baseline_fwa'
     AND mer.model_version = '0.1.0'
     AND mer.model_dataset_id = '75000000-0000-0000-0000-000000000001'
+    AND mer.scheme_family = 'diagnosis_procedure_mismatch'
     AND mer.auc >= 0.8
     AND mer.precision_value >= 0.7
     AND mer.recall_value >= 0.6

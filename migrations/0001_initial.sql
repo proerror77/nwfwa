@@ -500,6 +500,7 @@ CREATE TABLE IF NOT EXISTS model_evaluation_runs (
   model_key TEXT NOT NULL,
   model_version TEXT NOT NULL,
   model_dataset_id UUID NOT NULL REFERENCES model_dataset_versions(id),
+  scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim',
   auc NUMERIC,
   ks NUMERIC,
   precision_value NUMERIC,
@@ -512,6 +513,9 @@ CREATE TABLE IF NOT EXISTS model_evaluation_runs (
   metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE model_evaluation_runs
+  ADD COLUMN IF NOT EXISTS scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim';
 
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

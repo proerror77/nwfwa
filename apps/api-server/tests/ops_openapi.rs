@@ -442,6 +442,29 @@ async fn openapi_includes_operations_paths() {
             ["application/json"]["schema"]["$ref"],
         "#/components/schemas/ModelEvaluationResponse"
     );
+    assert!(
+        schema["components"]["schemas"]["ModelEvaluation"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "scheme_family")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelEvaluation"]["properties"]["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "scheme_family")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+            ["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
     for field in [
         "evaluation_run_id",
         "model_key",

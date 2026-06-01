@@ -558,6 +558,7 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
               "model_key": "renewal_baseline",
               "model_version": "0.1.0",
               "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
               "auc": "0.81",
               "ks": "0.42",
               "precision": "0.73",
@@ -582,6 +583,10 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
         evaluation["evaluation"]["model_dataset_id"],
         model_dataset_id
     );
+    assert_eq!(
+        evaluation["evaluation"]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
 
     let (status, loaded) = json_request(
         app.clone(),
@@ -594,6 +599,10 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(loaded["evaluation"]["model_key"], "renewal_baseline");
     assert_eq!(loaded["evaluation"]["model_dataset_id"], model_dataset_id);
+    assert_eq!(
+        loaded["evaluation"]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
 
     let (status, listed) =
         json_request(app.clone(), "GET", "/api/v1/ops/model-evaluations", "{}").await;
@@ -606,6 +615,10 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     assert_eq!(
         listed["evaluations"][0]["model_dataset_id"],
         model_dataset_id
+    );
+    assert_eq!(
+        listed["evaluations"][0]["scheme_family"],
+        "diagnosis_procedure_mismatch"
     );
     assert_eq!(listed["lineage"][0]["evaluation_run_id"], "eval_renewal_v1");
     assert_eq!(listed["lineage"][0]["model_key"], "renewal_baseline");
@@ -651,6 +664,10 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     assert_eq!(
         model_evaluation_event["payload"]["evaluation_run_id"],
         "eval_renewal_v1"
+    );
+    assert_eq!(
+        model_evaluation_event["payload"]["scheme_family"],
+        "diagnosis_procedure_mismatch"
     );
     assert_eq!(
         model_evaluation_event["evidence_refs"][0],
@@ -953,6 +970,7 @@ async fn rejects_invalid_model_evaluation_registration() {
         "model_key": "renewal_baseline",
         "model_version": "0.1.0",
         "model_dataset_id": "model_dataset_1",
+        "scheme_family": "diagnosis_procedure_mismatch",
         "auc": "0.81",
         "ks": "0.42",
         "precision": "0.73",
@@ -968,6 +986,19 @@ async fn rejects_invalid_model_evaluation_registration() {
     let mut blank_evaluation_run_id = valid_request.clone();
     blank_evaluation_run_id["evaluation_run_id"] = serde_json::json!(" ");
     let payload = blank_evaluation_run_id.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_MODEL_EVALUATION");
+
+    let mut invalid_scheme_family = valid_request.clone();
+    invalid_scheme_family["scheme_family"] = serde_json::json!("not_a_scheme");
+    let payload = invalid_scheme_family.to_string();
     let (status, body) = json_request(
         app.clone(),
         "POST",

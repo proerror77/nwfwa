@@ -3952,12 +3952,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelEvaluation": {
                     "type": "object",
-                    "required": ["evaluation_run_id", "model_key", "model_version", "model_dataset_id", "confusion_matrix_json", "metrics_json"],
+                    "required": ["evaluation_run_id", "model_key", "model_version", "model_dataset_id", "scheme_family", "confusion_matrix_json", "metrics_json"],
                     "properties": {
                         "evaluation_run_id": { "type": "string" },
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
                         "model_dataset_id": { "type": "string" },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "auc": { "type": ["string", "null"] },
                         "ks": { "type": ["string", "null"] },
                         "precision": { "type": ["string", "null"] },
@@ -3975,12 +3976,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelEvaluationRegistrationRequest": {
                     "type": "object",
-                    "required": ["evaluation_run_id", "model_key", "model_version", "model_dataset_id", "confusion_matrix_json", "metrics_json"],
+                    "required": ["evaluation_run_id", "model_key", "model_version", "model_dataset_id", "scheme_family", "confusion_matrix_json", "metrics_json"],
                     "properties": {
                         "evaluation_run_id": { "type": "string", "minLength": 1 },
                         "model_key": { "type": "string", "minLength": 1 },
                         "model_version": { "type": "string", "minLength": 1 },
                         "model_dataset_id": { "type": "string", "minLength": 1 },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "precision": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },

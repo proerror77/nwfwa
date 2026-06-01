@@ -16,7 +16,7 @@ use axum::{
 };
 use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
-use fwa_core::{AuditEventId, ScoringRunId};
+use fwa_core::{canonical_scheme_family, AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::Serialize;
 use serde_json::{json, Map, Value};
@@ -491,10 +491,11 @@ fn validate_model_dataset_registration(
 pub async fn register_model_evaluation(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<RegisterModelEvaluationInput>,
+    Json(mut request): Json<RegisterModelEvaluationInput>,
 ) -> Result<Json<ModelEvaluationResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
     validate_model_evaluation_registration(&request)?;
+    request.scheme_family = canonical_scheme_family(&request.scheme_family).unwrap();
     let evaluation = state
         .repository
         .register_model_evaluation(request)
@@ -518,6 +519,7 @@ pub async fn register_model_evaluation(
                 "model_key": evaluation.model_key,
                 "model_version": evaluation.model_version,
                 "model_dataset_id": evaluation.model_dataset_id,
+                "scheme_family": evaluation.scheme_family,
                 "to_status": "registered",
                 "owner": actor.actor_id.clone(),
             }),
@@ -539,11 +541,19 @@ fn validate_model_evaluation_registration(
         || request.model_key.trim().is_empty()
         || request.model_version.trim().is_empty()
         || request.model_dataset_id.trim().is_empty()
+        || request.scheme_family.trim().is_empty()
     {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_MODEL_EVALUATION",
-            "evaluation_run_id, model_key, model_version, and model_dataset_id are required",
+            "evaluation_run_id, model_key, model_version, model_dataset_id, and scheme_family are required",
+        ));
+    }
+    if canonical_scheme_family(&request.scheme_family).is_none() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MODEL_EVALUATION",
+            "scheme_family must map to a known FWA scheme family",
         ));
     }
     for (metric_name, metric) in [

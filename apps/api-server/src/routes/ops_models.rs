@@ -459,6 +459,7 @@ pub async fn complete_model_retraining_job(
             model_key: candidate_model.model_key.clone(),
             model_version: candidate_model.version.clone(),
             model_dataset_id: base_evaluation.model_dataset_id,
+            scheme_family: base_evaluation.scheme_family,
             auc: request.auc,
             ks: request.ks,
             precision: request.precision,

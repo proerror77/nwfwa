@@ -1085,6 +1085,7 @@ pub struct ModelEvaluationRecord {
     pub model_key: String,
     pub model_version: String,
     pub model_dataset_id: String,
+    pub scheme_family: String,
     pub auc: Option<Decimal>,
     pub ks: Option<Decimal>,
     pub precision: Option<Decimal>,
@@ -1103,6 +1104,7 @@ pub struct RegisterModelEvaluationInput {
     pub model_key: String,
     pub model_version: String,
     pub model_dataset_id: String,
+    pub scheme_family: String,
     pub auc: Option<Decimal>,
     pub ks: Option<Decimal>,
     pub precision: Option<Decimal>,
@@ -3279,6 +3281,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             model_key: input.model_key,
             model_version: input.model_version,
             model_dataset_id: input.model_dataset_id,
+            scheme_family: input.scheme_family,
             auc: input.auc,
             ks: input.ks,
             precision: input.precision,
@@ -7013,12 +7016,13 @@ impl ScoringRepository for PostgresScoringRepository {
 
         sqlx::query(
             "INSERT INTO model_evaluation_runs
-             (evaluation_run_id, model_key, model_version, model_dataset_id, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json)
-             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             (evaluation_run_id, model_key, model_version, model_dataset_id, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
              ON CONFLICT (evaluation_run_id) DO UPDATE
              SET model_key = EXCLUDED.model_key,
                  model_version = EXCLUDED.model_version,
                  model_dataset_id = EXCLUDED.model_dataset_id,
+                 scheme_family = EXCLUDED.scheme_family,
                  auc = EXCLUDED.auc,
                  ks = EXCLUDED.ks,
                  precision_value = EXCLUDED.precision_value,
@@ -7034,6 +7038,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&input.model_key)
         .bind(&input.model_version)
         .bind(&input.model_dataset_id)
+        .bind(&input.scheme_family)
         .bind(input.auc)
         .bind(input.ks)
         .bind(input.precision)
@@ -7059,6 +7064,7 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Option<Decimal>,
             Option<Decimal>,
             Option<Decimal>,
@@ -7070,7 +7076,7 @@ impl ScoringRepository for PostgresScoringRepository {
             Option<String>,
             Value,
         )> = sqlx::query_as(
-            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
+            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
              FROM model_evaluation_runs
              WHERE evaluation_run_id = $1",
         )
@@ -7084,6 +7090,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 model_key,
                 model_version,
                 model_dataset_id,
+                scheme_family,
                 auc,
                 ks,
                 precision,
@@ -7099,6 +7106,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 model_key,
                 model_version,
                 model_dataset_id,
+                scheme_family,
                 auc,
                 ks,
                 precision,
@@ -7119,6 +7127,7 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Option<Decimal>,
             Option<Decimal>,
             Option<Decimal>,
@@ -7130,7 +7139,7 @@ impl ScoringRepository for PostgresScoringRepository {
             Option<String>,
             Value,
         )> = sqlx::query_as(
-            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
+            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
              FROM model_evaluation_runs
              ORDER BY evaluation_run_id",
         )
@@ -7145,6 +7154,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     model_key,
                     model_version,
                     model_dataset_id,
+                    scheme_family,
                     auc,
                     ks,
                     precision,
@@ -7160,6 +7170,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     model_key,
                     model_version,
                     model_dataset_id,
+                    scheme_family,
                     auc,
                     ks,
                     precision,

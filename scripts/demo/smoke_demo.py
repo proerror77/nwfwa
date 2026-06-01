@@ -857,6 +857,10 @@ def assert_dataset_model_lineage():
     assert_true(evaluation is not None, "baseline model evaluation is missing")
     assert_true(evaluation.get("model_key") == MODEL_KEY, "baseline evaluation model key mismatch")
     assert_true(evaluation.get("model_version") == "0.1.0", "baseline evaluation version mismatch")
+    assert_true(
+        evaluation.get("scheme_family") == "diagnosis_procedure_mismatch",
+        "baseline evaluation scheme family mismatch",
+    )
     assert_true(decimal_value(evaluation.get("auc")) >= Decimal("0.8"), "baseline evaluation AUC too low")
     assert_true(
         decimal_value(evaluation.get("precision")) >= Decimal("0.7"),
@@ -898,6 +902,10 @@ def assert_dataset_model_lineage():
     assert_true(
         detail.get("evaluation", {}).get("confusion_matrix_json"),
         "baseline evaluation detail missing confusion matrix",
+    )
+    assert_true(
+        detail.get("evaluation", {}).get("scheme_family") == "diagnosis_procedure_mismatch",
+        "baseline evaluation detail scheme family mismatch",
     )
 
     return {

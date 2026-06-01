@@ -372,6 +372,7 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
               "model_key": "baseline_fwa",
               "model_version": "0.1.0",
               "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
               "auc": "0.81",
               "ks": "0.42",
               "precision": "0.70",
