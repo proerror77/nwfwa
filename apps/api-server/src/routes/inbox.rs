@@ -354,17 +354,7 @@ fn build_canonical_claim_context(
         });
     }
 
-    if policy
-        .and_then(|policy| number_at(policy, &["coverageLimit"]))
-        .is_none()
-    {
-        validation_errors.push(InboxValidationError {
-            field_path: "reportCase.policyList[0].coverageLimit".into(),
-            severity: "warning",
-            remediation: "map policy or liability coverage limit before direct scoring".into(),
-        });
-        push_signal(data_quality_signals, "missing_coverage_limit");
-    }
+    validate_policy_coverage_limits(validation_errors, data_quality_signals, &policies);
 
     let insured_name = string_at(payload, &["reportCase", "accidentPerson", "insuredName"]);
     let policy_insured_name = policy.and_then(|policy| string_at(policy, &["insuredName"]));
@@ -588,6 +578,25 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
                 })
         })
         .collect()
+}
+
+fn validate_policy_coverage_limits(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    policies: &[&Value],
+) {
+    for (policy_index, policy) in policies.iter().enumerate() {
+        if number_at(policy, &["coverageLimit"]).is_some() {
+            continue;
+        }
+
+        validation_errors.push(InboxValidationError {
+            field_path: format!("reportCase.policyList[{policy_index}].coverageLimit"),
+            severity: "warning",
+            remediation: "map policy or liability coverage limit before direct scoring".into(),
+        });
+        push_signal(data_quality_signals, "missing_coverage_limit");
+    }
 }
 
 fn validate_product_liability_windows(

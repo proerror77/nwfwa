@@ -1505,7 +1505,6 @@ async fn flags_non_primary_product_liability_window_mismatches() {
                 "policyNo": "POL-SECONDARY-WINDOW-EXTRA",
                 "policyType": "2",
                 "insuredName": "LEE, Peter",
-                "coverageLimit": 5000,
                 "validateDate": 1767225600000,
                 "expireDate": 1798675200000,
                 "productList": [
@@ -1542,6 +1541,10 @@ async fn flags_non_primary_product_liability_window_mismatches() {
     assert!(body["data_quality_signals"]
         .as_array()
         .unwrap()
+        .contains(&serde_json::json!("missing_coverage_limit")));
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
         .contains(&serde_json::json!("policy_liability_mismatch")));
     assert!(body["validation_errors"]
         .as_array()
@@ -1567,6 +1570,18 @@ async fn flags_non_primary_product_liability_window_mismatches() {
                     .as_str()
                     .unwrap()
                     .contains("claim eligibility date")
+        }));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[1].coverageLimit"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("coverage limit")
         }));
     assert!(body["validation_errors"]
         .as_array()

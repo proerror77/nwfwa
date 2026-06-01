@@ -93,9 +93,11 @@ routing only. Each product-liability entry preserves source `policy_id`,
 They also expose `policy_first_apply_date` and
 `insured_with_social_insurance` for policy-tenure, waiting-period, and coverage
 constraint features.
-Window validation scans every policy and every product/liability entry. A
-non-primary policy, product, or liability that does not cover the service date
-produces a structured warning on the matching source path, for example
+Coverage readiness validation scans every policy and every product/liability
+entry. A missing policy coverage limit, or a non-primary policy, product, or
+liability that does not cover the service date, produces a structured warning
+on the matching source path, for example
+`reportCase.policyList[n].coverageLimit` or
 `reportCase.policyList[n].validateDate`, and keeps `scoring_ready = false`
 until the customer adapter or reviewer resolves the coverage context.
 Canonical bill lines include fee amount, self-pay, own-expense, other-payment,
