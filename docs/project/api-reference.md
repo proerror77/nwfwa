@@ -52,6 +52,8 @@ full raw PII-bearing payload.
 Identity consistency checks compare accident person, policy insured person,
 invoice person, and medical-record patient name when present. Mismatches are
 reported through `data_quality_signals` as `identity_mismatch`.
+`canonical_claim_context.document_evidence` contains one normalized document
+entry per source `medicalRecordInfoList` record, each with its own source refs.
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves
 every source product and claim-liability window, including waiting-period
 candidate dates and evidence refs. The top-level `product_code` and

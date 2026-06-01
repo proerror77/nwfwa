@@ -555,6 +555,85 @@ async fn flags_medical_record_patient_name_identity_mismatch() {
 }
 
 #[tokio::test]
+async fn preserves_all_medical_records_as_document_evidence() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "multiple-medical-records-001",
+          "reportCase": {
+            "reportNo": "SAAS-MULTI-DOC-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "medicalRecordInfoList": [
+              {
+                "id": 425840012,
+                "hospitalName": "南京同仁医院",
+                "departmentName": "口腔科",
+                "diagnosisName": "牙周炎",
+                "medicalType": "门诊",
+                "visitDate": 1766620800000,
+                "medicalRecordInformation": "诊断：牙周炎"
+              },
+              {
+                "id": 425840013,
+                "hospitalName": "南京同仁医院",
+                "departmentName": "口腔科",
+                "diagnosisName": "龋齿",
+                "medicalType": "门诊",
+                "visitDate": 1766620800000,
+                "medicalRecordInformation": "诊断：龋齿"
+              }
+            ],
+            "policyList": [
+              {
+                "policyNo": "POL-MULTI-DOC",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-MULTI-DOC",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let documents = body["canonical_claim_context"]["document_evidence"]
+        .as_array()
+        .expect("document_evidence should be an array");
+    assert_eq!(documents.len(), 2);
+    assert!(documents.iter().any(|document| {
+        document["document_id"] == "425840013" && document["extracted_diagnosis"] == "龋齿"
+    }));
+    assert!(documents.iter().any(|document| {
+        document["source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("medical_record:425840013"))
+    }));
+}
+
+#[tokio::test]
 async fn preserves_all_product_liability_windows_in_canonical_context() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

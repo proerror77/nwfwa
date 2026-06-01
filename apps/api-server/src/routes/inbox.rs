@@ -293,7 +293,8 @@ fn build_canonical_claim_context(
 ) -> Value {
     let policy = first_array_item(payload, &["reportCase", "policyList"]);
     let invoice = policy.and_then(|policy| first_array_item(policy, &["invoiceList"]));
-    let medical_record = first_array_item(payload, &["reportCase", "medicalRecordInfoList"]);
+    let medical_records = array_items(payload, &["reportCase", "medicalRecordInfoList"]);
+    let medical_record = medical_records.first().copied();
     let product = policy.and_then(|policy| first_array_item(policy, &["productList"]));
     let liability = product.and_then(|product| first_array_item(product, &["claimLiabilityList"]));
 
@@ -441,9 +442,9 @@ fn build_canonical_claim_context(
         "itemized_bill_lines": invoice
             .map(itemized_bill_lines)
             .unwrap_or_default(),
-        "document_evidence": medical_record
-            .map(document_evidence)
-            .into_iter()
+        "document_evidence": medical_records
+            .iter()
+            .map(|record| document_evidence(record))
             .collect::<Vec<_>>()
     })
 }
@@ -852,6 +853,14 @@ fn first_array_item<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
         .try_fold(value, |current, key| current.get(*key))
         .and_then(Value::as_array)
         .and_then(|items| items.first())
+}
+
+fn array_items<'a>(value: &'a Value, path: &[&str]) -> Vec<&'a Value> {
+    path.iter()
+        .try_fold(value, |current, key| current.get(*key))
+        .and_then(Value::as_array)
+        .map(|items| items.iter().collect())
+        .unwrap_or_default()
 }
 
 fn names_mismatch<const N: usize>(names: [Option<&str>; N]) -> bool {

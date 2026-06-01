@@ -267,8 +267,9 @@ The inbox should output a canonical payload with:
   and network flags;
 - itemized bill lines: invoice id, diagnosis list, fee category, item name,
   amount, self-pay, social-insurance amount, and evidence refs;
-- document evidence: medical record text, extracted diagnosis, procedure,
-  prescription, department, visit date, and source refs;
+- document evidence: every source medical record with medical record text,
+  extracted diagnosis, procedure, prescription, department, visit date, and
+  source refs;
 - data-quality signals: identity mismatch, missing fields, date inconsistency,
   document-invoice mismatch, diagnosis-item mismatch, and policy-liability
   mismatch.
