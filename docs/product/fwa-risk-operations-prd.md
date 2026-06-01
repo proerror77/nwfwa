@@ -198,6 +198,73 @@ MVP supports a generic TPA scoring integration:
 - audit-backed API call records for scoring, investigation, and QA writeback
   observability in Governance.
 
+### Inbound Claim Inbox
+
+Pilot integrations also need an inbound claim inbox before a customer-specific
+payload is converted into the canonical scoring request. The inbox is the
+boundary for raw TPA or claim-system messages. It should store the raw payload,
+validate it, mask PII for downstream tools, and produce a normalized claim
+context for `/api/v1/claims/score`.
+
+Reference payload observed on 2026-06-01:
+
+- source envelope resembles an `AiClaim Core` transaction with `systemCode`,
+  `transDate`, `transNo`, and a nested `reportCase`;
+- `reportCase` carries accident date, claim receive date, accident reason,
+  calculate-risk flag, accident person identity, medical records, policies,
+  invoices, products, and liability lists;
+- dates are epoch milliseconds and must be normalized to UTC dates before
+  feature calculation;
+- member identity, certificate number, patient name, invoice person name, card
+  number, and free-text medical record content are PII-bearing and must not be
+  sent to LLM or Agent contexts without masking;
+- medical records, invoice diagnoses, fee details, provider identity, policy
+  liability windows, and product liability codes must be mapped explicitly
+  instead of inferred from one free-text field.
+
+Required inbox corrections before scoring:
+
+- idempotency: use `systemCode + transNo + reportNo` as the external message
+  identity and reject or upsert duplicate submissions deterministically;
+- source trace: persist raw payload URI or checksum, normalized claim id,
+  mapping version, validation result, and evidence refs;
+- date normalization: convert all epoch-millisecond dates and detect impossible
+  or inconsistent accident, visit, invoice, policy, liability, and receive
+  windows;
+- identity consistency: compare accident person, insured person, patient name,
+  and invoice person after masking, and raise a review signal when they do not
+  align;
+- medical consistency: map diagnosis codes, diagnosis names, department,
+  medical type, fee categories, drugs, procedures, and medical record text into
+  L5 medical-reasonableness inputs;
+- policy coverage: map policy, product, and liability lists into coverage,
+  waiting-period, limit, and liability eligibility features;
+- text hygiene: normalize literal `/n` separators, OCR artifacts, missing
+  spaces, empty fields, and mixed-language medical text before evidence
+  extraction;
+- risk intent: treat `calculateRisk = N` as a source-system hint, not as an
+  instruction to bypass FWA scoring unless the customer config explicitly
+  allows bypass;
+- error handling: return structured inbox validation errors with field paths,
+  severity, and remediation hints instead of failing silently or dropping
+  fields.
+
+The inbox should output a canonical payload with:
+
+- claim header: external claim id, source system, service date, receive date,
+  accident reason, medical type, currency, and total amount;
+- member and policy snapshot: masked member id, policy id, product code,
+  liability windows, policy type, and coverage constraints;
+- provider snapshot: hospital/provider code, name, class, type, city, province,
+  and network flags;
+- itemized bill lines: invoice id, diagnosis list, fee category, item name,
+  amount, self-pay, social-insurance amount, and evidence refs;
+- document evidence: medical record text, extracted diagnosis, procedure,
+  prescription, department, visit date, and source refs;
+- data-quality signals: identity mismatch, missing fields, date inconsistency,
+  document-invoice mismatch, diagnosis-item mismatch, and policy-liability
+  mismatch.
+
 ### Pilot Integration Targets
 
 Pilot customers may connect some or all of the following systems:
