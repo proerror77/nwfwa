@@ -16,6 +16,7 @@ import { RoutingPoliciesPage } from "./pages/RoutingPoliciesPage";
 import { ProviderRiskPage } from "./pages/ProviderRiskPage";
 import { MemberProfilePage } from "./pages/MemberProfilePage";
 import { MedicalReviewPage } from "./pages/MedicalReviewPage";
+import type { AuditTimelineContext } from "./pages/auditTimelineContext";
 
 const modules = [
   "Dashboard",
@@ -38,6 +39,9 @@ const modules = [
 
 export function App() {
   const [active, setActive] = useState("Dashboard");
+  const [auditTimelineContext, setAuditTimelineContext] = useState<
+    AuditTimelineContext | undefined
+  >();
   return (
     <div className="app">
       <aside>
@@ -54,7 +58,14 @@ export function App() {
       </aside>
       <main>
         {active === "Dashboard" ? <DashboardPage /> : null}
-        {active === "Runtime Scoring" ? <RuntimeScoring /> : null}
+        {active === "Runtime Scoring" ? (
+          <RuntimeScoring
+            onAuditTimelineRequest={(context) => {
+              setAuditTimelineContext(context);
+              setActive("Governance");
+            }}
+          />
+        ) : null}
         {active === "Rules" ? <RulesStudio /> : null}
         {active === "Models" ? <ModelOpsPage /> : null}
         {active === "Routing Policies" ? <RoutingPoliciesPage /> : null}
@@ -68,7 +79,9 @@ export function App() {
         {active === "Knowledge Base" ? <KnowledgeBasePage /> : null}
         {active === "Agent Investigator" ? <AgentInvestigatorPage /> : null}
         {active === "QA Review" ? <QAReviewPage /> : null}
-        {active === "Governance" ? <GovernancePage /> : null}
+        {active === "Governance" ? (
+          <GovernancePage auditTimelineContext={auditTimelineContext} />
+        ) : null}
         {![
           "Runtime Scoring",
           "Dashboard",

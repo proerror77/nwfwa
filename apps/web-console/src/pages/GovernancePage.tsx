@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   getModelPromotionGates,
@@ -23,6 +23,11 @@ import {
 import { buildFwaSchemeLabelMap, formatFwaSchemeLabel } from "./fwaSchemeOptions";
 import { canonicalFeedbackTarget } from "./qaFeedbackItems";
 import { formatReviewModeLabel } from "./reviewMode";
+import {
+  buildGovernanceAuditFiltersFromContext,
+  buildGovernanceClaimIdFromContext,
+  type AuditTimelineContext,
+} from "./auditTimelineContext";
 
 type AuditEvent = {
   audit_id: string;
@@ -932,37 +937,31 @@ function sortedUniqueLabels(labels: OutcomeLabel[], field: keyof OutcomeLabel) {
   return Array.from(new Set(labels.map((label) => String(label[field])).filter(Boolean))).sort();
 }
 
-export function GovernancePage() {
+type GovernancePageProps = {
+  auditTimelineContext?: AuditTimelineContext;
+};
+
+export function GovernancePage({ auditTimelineContext }: GovernancePageProps = {}) {
   const [apiKey, setApiKey] = useState("dev-secret");
-  const [claimId, setClaimId] = useState("CLM-0287");
+  const [claimId, setClaimId] = useState(
+    buildGovernanceClaimIdFromContext(auditTimelineContext, "CLM-0287"),
+  );
   const [agentApprover, setAgentApprover] = useState("qa-lead");
   const [outcomeLabelFilters, setOutcomeLabelFilters] = useState<OutcomeLabelFilters>({
     sourceType: "",
     feedbackTarget: "",
     governanceStatus: "",
   });
-  const [auditEventFilters, setAuditEventFilters] = useState<GlobalAuditEventFilterState>({
-    eventType: "",
-    actorId: "",
-    runId: "",
-    claimId: "",
-    feedbackId: "",
-    qaCaseId: "",
-    sampleId: "",
-    agentRunId: "",
-    ruleId: "",
-    ruleVersion: "",
-    modelKey: "",
-    modelVersion: "",
-    routingPolicyId: "",
-    routingPolicyVersion: "",
-    reviewMode: "",
-    datasetId: "",
-    featureSetId: "",
-    modelDatasetId: "",
-    evaluationRunId: "",
-    limit: "50",
-  });
+  const [auditEventFilters, setAuditEventFilters] = useState<GlobalAuditEventFilterState>(
+    buildGovernanceAuditFiltersFromContext(auditTimelineContext),
+  );
+  useEffect(() => {
+    if (!auditTimelineContext) {
+      return;
+    }
+    setClaimId(buildGovernanceClaimIdFromContext(auditTimelineContext, "CLM-0287"));
+    setAuditEventFilters(buildGovernanceAuditFiltersFromContext(auditTimelineContext));
+  }, [auditTimelineContext]);
   const parsedAuditEventLimit = Number.parseInt(auditEventFilters.limit, 10);
   const auditEventLimit = Number.isFinite(parsedAuditEventLimit)
     ? Math.min(Math.max(parsedAuditEventLimit, 1), 200)

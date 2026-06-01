@@ -20,6 +20,7 @@ import {
   type SimilarCase,
 } from "./runtimeEvidence";
 import { buildScoringLayerSummary, type ScoringLayer } from "./scoringLayers";
+import { buildAuditTimelineContext, type AuditTimelineContext } from "./auditTimelineContext";
 
 type ScoringResponse = {
   run_id: string;
@@ -304,7 +305,11 @@ function scoringReviewMode(reviewMode: string) {
   return reviewMode === "post_payment" ? "post_payment" : "pre_payment";
 }
 
-export function RuntimeScoring() {
+type RuntimeScoringProps = {
+  onAuditTimelineRequest?: (context: AuditTimelineContext) => void;
+};
+
+export function RuntimeScoring({ onAuditTimelineRequest }: RuntimeScoringProps = {}) {
   const [apiKey, setApiKey] = useState("dev-secret");
   const [requestMode, setRequestMode] = useState("full_payload");
   const [sourceSystem, setSourceSystem] = useState("tpa-demo");
@@ -478,6 +483,12 @@ export function RuntimeScoring() {
                 <dd>{result.scores.final_score}</dd>
               </div>
             </dl>
+            <button
+              onClick={() => onAuditTimelineRequest?.(buildAuditTimelineContext(result))}
+              disabled={!onAuditTimelineRequest}
+            >
+              View Audit Timeline
+            </button>
             <section>
               <h3>ML Classification</h3>
               {modelScoreSummary ? (
