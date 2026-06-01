@@ -2246,7 +2246,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "liability_end_date": { "type": ["string", "null"], "format": "date" },
                         "product_liabilities": {
                             "type": "array",
-                            "description": "All product and claim-liability windows from the source policy, preserving coverage and waiting-period candidates before scoring.",
+                            "description": "All product and claim-liability windows from the source policies, preserving coverage and waiting-period candidates before scoring.",
                             "items": { "$ref": "#/components/schemas/InboxProductLiability" }
                         }
                     }
@@ -2254,6 +2254,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 "InboxProductLiability": {
                     "type": "object",
                     "properties": {
+                        "policy_id": { "type": ["string", "null"] },
                         "product_id": { "type": ["string", "null"] },
                         "product_code": { "type": ["string", "null"] },
                         "product_name": { "type": ["string", "null"] },

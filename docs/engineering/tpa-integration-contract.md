@@ -84,11 +84,12 @@ They also compare every `medicalRecordInfoList[n].operationStartDate` with
 Diagnosis-item support checks run per invoice. If any invoice contains fee
 details without structured diagnosis context, the endpoint returns a
 field-level `diagnosis_item_mismatch` warning for that invoice.
-Canonical policy snapshots preserve all source product/liability windows in
-`member_policy_snapshot.product_liabilities`; primary `product_code` and
-`liability_code` remain convenience fields for first-pass routing only.
-Each product-liability entry preserves `main_liability` from source `mainLiab`
-and parses `isSeriousDiseaseLiability` `Y`/`N` values into booleans.
+Canonical policy snapshots preserve all source product/liability windows across
+source policies in `member_policy_snapshot.product_liabilities`; primary
+`product_code` and `liability_code` remain convenience fields for first-pass
+routing only. Each product-liability entry preserves source `policy_id`,
+`main_liability` from source `mainLiab`, and parses `isSeriousDiseaseLiability`
+`Y`/`N` values into booleans.
 They also expose `policy_first_apply_date` and
 `insured_with_social_insurance` for policy-tenure, waiting-period, and coverage
 constraint features.

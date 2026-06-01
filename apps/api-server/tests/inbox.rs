@@ -1374,6 +1374,34 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
                     "feeList": []
                   }
                 ]
+              },
+              {
+                "policyNo": "POL-EXTRA-PRODUCTS",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 5000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "productList": [
+                  {
+                    "productCode": "EJYL",
+                    "productName": "二级医疗保险金",
+                    "validateDate": 1735689600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": [
+                      {
+                        "liabCode": "EJYL01",
+                        "liabName": "二级医疗门诊费用",
+                        "validateDate": 1735689600000,
+                        "claimValidateDate": 1735689600000,
+                        "expireDate": 1798675200000,
+                        "isSeriousDiseaseLiability": "N",
+                        "mainLiab": false
+                      }
+                    ]
+                  }
+                ],
+                "invoiceList": []
               }
             ]
           }
@@ -1386,10 +1414,11 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
         ["product_liabilities"]
         .as_array()
         .expect("canonical policy snapshot should preserve product/liability windows");
-    assert_eq!(product_liabilities.len(), 3);
+    assert_eq!(product_liabilities.len(), 4);
     assert!(product_liabilities.iter().any(|liability| {
         liability["product_code"] == "YBYL"
             && liability["liability_code"] == "YBYL02"
+            && liability["policy_id"] == "POL-PRODUCTS"
             && liability["liability_claim_start_date"] == "2025-01-01"
             && liability["waiting_period_end_date"] == "2025-01-01"
             && liability["is_serious_disease_liability"] == false
@@ -1401,6 +1430,13 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
             && liability["liability_code"] == "TDJB01"
             && liability["is_serious_disease_liability"] == true
             && liability["main_liability"] == false
+    }));
+    assert!(product_liabilities.iter().any(|liability| {
+        liability["policy_id"] == "POL-EXTRA-PRODUCTS"
+            && liability["product_code"] == "EJYL"
+            && liability["product_name"] == "二级医疗保险金"
+            && liability["liability_code"] == "EJYL01"
+            && liability["liability_name"] == "二级医疗门诊费用"
     }));
 }
 

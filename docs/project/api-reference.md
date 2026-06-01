@@ -76,10 +76,11 @@ in the raw payload.
 Invoice-level diagnosis gaps are reported as warnings on the matching
 `reportCase.policyList[0].invoiceList[n].feeList` path.
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves
-every source product and claim-liability window, including waiting-period
-candidate dates, serious-disease liability markers, main-liability markers, and
-evidence refs. The top-level `product_code` and `liability_code` fields are
-primary values for compatibility, not the complete coverage list.
+every source product and claim-liability window across all source policies,
+including source policy id, waiting-period candidate dates, serious-disease
+liability markers, main-liability markers, and evidence refs. The top-level
+`product_code` and `liability_code` fields are primary values for
+compatibility, not the complete coverage list.
 Coverage-window validation scans the same list. Non-primary product or
 liability mismatches are returned as field-level warnings such as
 `reportCase.policyList[0].productList[1].validateDate` and block direct scoring

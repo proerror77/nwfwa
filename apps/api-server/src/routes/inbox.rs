@@ -464,9 +464,10 @@ fn build_canonical_claim_context(
             "liability_claim_start_date": liability_claim_start_date.map(|date| date.to_string()),
             "waiting_period_end_date": liability_claim_start_date.map(|date| date.to_string()),
             "liability_end_date": liability_end_date.map(|date| date.to_string()),
-            "product_liabilities": policy
-                .map(product_liabilities)
-                .unwrap_or_default()
+            "product_liabilities": policies
+                .iter()
+                .flat_map(|policy| product_liabilities(policy))
+                .collect::<Vec<_>>()
         },
         "provider_snapshot": {
             "provider_code": invoice.and_then(|invoice| string_at(invoice, &["hospitalCode"])),
@@ -495,6 +496,7 @@ fn build_canonical_claim_context(
 }
 
 fn product_liabilities(policy: &Value) -> Vec<Value> {
+    let policy_id = string_at(policy, &["policyNo"]);
     policy
         .get("productList")
         .and_then(Value::as_array)
@@ -508,6 +510,7 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
             let plan_version = string_at(product, &["planVersion"]);
             let product_start_date = epoch_date_at(product, &["validateDate"]);
             let product_end_date = epoch_date_at(product, &["expireDate"]);
+            let policy_id = policy_id.clone();
             product
                 .get("claimLiabilityList")
                 .and_then(Value::as_array)
@@ -520,6 +523,7 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
                         epoch_date_at(liability, &["claimValidateDate"]);
                     let liability_end_date = epoch_date_at(liability, &["expireDate"]);
                     json!({
+                        "policy_id": policy_id,
                         "product_id": product_id,
                         "product_code": product_code,
                         "product_name": product_name,
