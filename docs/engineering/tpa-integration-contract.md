@@ -116,8 +116,8 @@ and social-insurance amount mapped from the source invoice, fee group, and fee
 detail levels without collapsing those levels into one amount.
 Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
-validation results, and data-quality signals, not the full raw medical or
-identity payload.
+validation results, data-quality signals, and a PII-safe `source_paths` summary
+for normalized evidence rows, not the full raw medical or identity payload.
 
 `calculateRisk = N` is treated only as a source-system hint. It does not bypass
 FWA scoring unless a customer-specific config explicitly permits that behavior.
@@ -132,6 +132,9 @@ The response includes:
 - `idempotency_key`: stable inbox normalization key derived from a SHA-256
   fingerprint of the external message id.
 - `mapping_version`: adapter mapping version used for audit replay.
+- audit `source_paths`: PII-safe source-path summary available in the persisted
+  inbox audit payload for normalized document, bill-line, product, and liability
+  evidence rows.
 - `validation_result`: `accepted`, `accepted_with_warnings`, or `rejected`.
 - `scoring_ready`: whether the normalized context can proceed directly to
   scoring.

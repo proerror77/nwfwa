@@ -451,6 +451,16 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
         .as_str()
         .unwrap()
         .starts_with("sha256:"));
+    let audit_source_paths = event["payload"]["source_paths"]
+        .as_array()
+        .expect("audit payload should summarize canonical source paths");
+    assert!(audit_source_paths.contains(&serde_json::json!("reportCase.medicalRecordInfoList[0]")));
+    assert!(audit_source_paths.contains(&serde_json::json!(
+        "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]"
+    )));
+    assert!(audit_source_paths.contains(&serde_json::json!(
+        "reportCase.policyList[0].productList[0].claimLiabilityList[0]"
+    )));
     assert_eq!(event["payload"]["status_code"], 200);
     assert!(
         !event["payload"]

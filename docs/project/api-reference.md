@@ -48,7 +48,9 @@ directly score the claim. Callers should resolve blocking
 validation errors and required scoring fields before submitting the canonical
 context to `/api/v1/claims/score`.
 The audit event stores source trace metadata and validation outcomes, not the
-full raw PII-bearing payload.
+full raw PII-bearing payload. Its payload includes a PII-safe `source_paths`
+summary gathered from normalized document, bill-line, product, and liability
+evidence paths.
 `canonical_claim_context.claim_header` preserves service, receive, and accident
 dates for timing and waiting-period features.
 When `reportCase.claimAmount` is missing but source invoice totals are

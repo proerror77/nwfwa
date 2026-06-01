@@ -348,7 +348,8 @@ Required inbox corrections before scoring:
   audit ids, run ids, raw payload refs, and idempotency keys must use a stable
   checksum or fingerprint rather than raw external identifiers;
 - source trace: persist raw payload URI or checksum/fingerprint, normalized claim
-  id, mapping version, validation result, source paths, and evidence refs;
+  id, mapping version, validation result, PII-safe source-path summary, and
+  evidence refs;
 - date normalization: convert all epoch-millisecond dates and detect impossible
   or inconsistent accident, visit, invoice, policy, product, liability, and
   receive windows across the full source list, not only the primary product or

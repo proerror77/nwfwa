@@ -184,6 +184,7 @@ pub async fn normalize_claim_inbox(
     .into_iter()
     .flatten()
     .collect::<Vec<_>>();
+    let source_paths = canonical_source_paths(&canonical_claim_context);
 
     state
         .repository
@@ -206,6 +207,7 @@ pub async fn normalize_claim_inbox(
                 "validation_result": validation_result,
                 "scoring_ready": scoring_ready,
                 "raw_payload_ref": raw_payload_ref,
+                "source_paths": source_paths,
                 "validation_errors": validation_errors,
                 "data_quality_signals": data_quality_signals,
                 "status_code": status.as_u16()
@@ -286,6 +288,39 @@ fn inbox_audit_id(external_message_fingerprint: Option<&str>) -> String {
 fn external_message_fingerprint(value: &str) -> String {
     let digest = Sha256::digest(value.as_bytes());
     format!("sha256:{digest:x}")
+}
+
+fn canonical_source_paths(canonical_claim_context: &Value) -> Vec<String> {
+    let mut source_paths = Vec::new();
+    collect_source_paths_from_array(
+        canonical_claim_context,
+        &["document_evidence"],
+        &mut source_paths,
+    );
+    collect_source_paths_from_array(
+        canonical_claim_context,
+        &["itemized_bill_lines"],
+        &mut source_paths,
+    );
+    collect_source_paths_from_array(
+        canonical_claim_context,
+        &["member_policy_snapshot", "product_liabilities"],
+        &mut source_paths,
+    );
+    source_paths.sort();
+    source_paths.dedup();
+    source_paths
+}
+
+fn collect_source_paths_from_array(value: &Value, path: &[&str], source_paths: &mut Vec<String>) {
+    for item in array_items(value, path) {
+        if let Some(source_path) = string_at(item, &["source_path"]) {
+            source_paths.push(source_path);
+        }
+        if let Some(source_path) = string_at(item, &["liability_source_path"]) {
+            source_paths.push(source_path);
+        }
+    }
 }
 
 fn stable_id_fragment(value: &str) -> String {
