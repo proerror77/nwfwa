@@ -213,8 +213,9 @@ Reference payload observed on 2026-06-01:
 - `reportCase` carries accident date, claim receive date, accident reason,
   calculate-risk flag, accident person identity, medical records, policies,
   invoices, products, and liability lists;
-- dates are epoch milliseconds and must be normalized to UTC dates before
-  feature calculation;
+- dates are epoch milliseconds and must be normalized with the source business
+  timezone before feature calculation, while preserving the raw epoch value for
+  audit trace;
 - member identity, certificate number, patient name, invoice person name, card
   number, and free-text medical record content are PII-bearing and must not be
   sent to LLM or Agent contexts without masking;
@@ -249,6 +250,17 @@ Reference payload refreshed on 2026-06-02 from
   city, province, institution flag, primary-care flag, and red-flag marker.
   These values must remain attached to provider snapshot and invoice-derived
   bill lines for L6 Provider/Graph Risk attribution.
+- date fields in this sample are China-business dates encoded as epoch
+  milliseconds. For example, `1766678400000` is `2025-12-25 16:00:00 UTC` but
+  `2025-12-26 00:00:00 Asia/Shanghai`, matching the medical-record text
+  service date. Inbox normalization must therefore use the source business
+  timezone, not a raw UTC date cut, or service, accident, invoice, and visit
+  dates will shift one day earlier.
+- the current sample also has an identity inconsistency:
+  `reportCase.accidentPerson.insuredName` and policy `insuredName` are
+  `LEE, Peter`, while `invoiceList[0].accidentPersonName` is `王向龙` and
+  `medicalRecordInfoList[0].patientName` is empty. The adapter should flag this
+  for review instead of overwriting invoice or patient names.
 
 Correction record for `/Users/proerror/Downloads/req.json`:
 
@@ -272,11 +284,22 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - when claim-level amounts are missing, derive canonical totals from invoice
   totals and keep the missing claim header amount as a data-quality condition
   instead of overwriting the raw payload;
+- normalize all epoch-millisecond business dates with the configured source
+  timezone, defaulting this `AiClaim Core` sample to `Asia/Shanghai`; retain the
+  original epoch milliseconds and timezone metadata on canonical evidence for
+  audit and dispute review.
+- fix the normalizer contract before relying on date features: this sample's
+  `accidentDate`, invoice `startDate`/`endDate`, and medical-record `visitDate`
+  should normalize to `2025-12-26`, not `2025-12-25`;
 - treat `calculateRisk = N` as a warning-level source hint unless customer
   configuration explicitly allows scoring bypass;
 - flag identity mismatches between accident person, insured person, every
   invoice person, and every medical-record patient rather than silently
   overwriting names;
+- for this sample, emit an identity-review signal because the invoice person
+  name differs from the accident/policy insured name and the medical-record
+  patient name is blank. Do not fill the blank patient name from the insured
+  name unless a customer-approved mapping rule says so;
 - compare each invoice's structured diagnosis list against the medical-record
   diagnosis, including non-primary invoices, and emit
   `document_invoice_mismatch` on the exact `invoiceList[n].diagnosisList` path;
@@ -357,10 +380,11 @@ Required inbox corrections before scoring:
 - source trace: persist raw payload URI or checksum/fingerprint, normalized claim
   id, mapping version, validation result, PII-safe source-path summary, and
   evidence refs;
-- date normalization: convert all epoch-millisecond dates and detect impossible
-  or inconsistent accident, visit, invoice, policy, product, liability, and
-  receive windows across the full source list, not only the primary product or
-  liability or primary invoice;
+- date normalization: convert all epoch-millisecond dates using the configured
+  source business timezone, preserve the raw epoch milliseconds and timezone
+  metadata for audit, and detect impossible or inconsistent accident, visit,
+  invoice, policy, product, liability, and receive windows across the full
+  source list, not only the primary product or liability or primary invoice;
 - identity consistency: compare accident person, insured person, patient name,
   every medical-record patient, and every invoice person after masking, and
   raise a review signal when they do not align;
