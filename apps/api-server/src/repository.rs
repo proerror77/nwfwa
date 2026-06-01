@@ -9769,6 +9769,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Early claim".into(),
             review_mode: "both".into(),
+            scheme_family: Some("early_high_value_claim".into()),
             conditions: vec![Condition {
                 field: "days_since_policy_start".into(),
                 operator: "<=".into(),
@@ -9786,6 +9787,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Early high amount".into(),
             review_mode: "both".into(),
+            scheme_family: Some("early_high_value_claim".into()),
             conditions: vec![
                 Condition {
                     field: "days_since_policy_start".into(),
@@ -9810,6 +9812,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "High cost single item".into(),
             review_mode: "both".into(),
+            scheme_family: Some("high_risk_claim".into()),
             conditions: vec![Condition {
                 field: "high_cost_item_ratio".into(),
                 operator: ">=".into(),
@@ -9827,6 +9830,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Large limit usage".into(),
             review_mode: "both".into(),
+            scheme_family: Some("early_high_value_claim".into()),
             conditions: vec![Condition {
                 field: "claim_amount_to_limit_ratio".into(),
                 operator: ">=".into(),
@@ -9844,6 +9848,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Low medical match".into(),
             review_mode: "both".into(),
+            scheme_family: Some("diagnosis_procedure_mismatch".into()),
             conditions: vec![Condition {
                 field: "diagnosis_procedure_match_score".into(),
                 operator: "<=".into(),
@@ -9861,6 +9866,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Duplicate claim".into(),
             review_mode: "both".into(),
+            scheme_family: Some("duplicate_billing".into()),
             conditions: vec![Condition {
                 field: "duplicate_claim_similarity_score".into(),
                 operator: ">=".into(),
@@ -9878,6 +9884,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Upcoding complexity".into(),
             review_mode: "both".into(),
+            scheme_family: Some("upcoding".into()),
             conditions: vec![
                 Condition {
                     field: "diagnosis_procedure_match_score".into(),
@@ -9902,6 +9909,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Unbundling component pattern".into(),
             review_mode: "both".into(),
+            scheme_family: Some("unbundling".into()),
             conditions: vec![Condition {
                 field: "claim_item_count".into(),
                 operator: ">=".into(),
@@ -9919,6 +9927,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Medically unnecessary service".into(),
             review_mode: "both".into(),
+            scheme_family: Some("medically_unnecessary_service".into()),
             conditions: vec![Condition {
                 field: "clinical_review_required".into(),
                 operator: "==".into(),
@@ -9936,6 +9945,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Same member repeated service".into(),
             review_mode: "both".into(),
+            scheme_family: Some("excessive_utilization".into()),
             conditions: vec![Condition {
                 field: "same_member_service_count_30d".into(),
                 operator: ">=".into(),
@@ -9953,6 +9963,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Relationship concentration".into(),
             review_mode: "both".into(),
+            scheme_family: Some("relationship_concentration".into()),
             conditions: vec![Condition {
                 field: "provider_high_risk_neighbor_signal".into(),
                 operator: "==".into(),
@@ -9970,6 +9981,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Many claim items".into(),
             review_mode: "both".into(),
+            scheme_family: Some("excessive_utilization".into()),
             conditions: vec![Condition {
                 field: "claim_item_count".into(),
                 operator: ">=".into(),
@@ -9987,6 +9999,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Peer P95 amount".into(),
             review_mode: "both".into(),
+            scheme_family: Some("provider_peer_outlier".into()),
             conditions: vec![Condition {
                 field: "claim_amount_peer_percentile".into(),
                 operator: ">=".into(),
@@ -10004,6 +10017,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Peer P99 amount".into(),
             review_mode: "both".into(),
+            scheme_family: Some("provider_peer_outlier".into()),
             conditions: vec![Condition {
                 field: "claim_amount_peer_percentile".into(),
                 operator: ">=".into(),
@@ -10021,6 +10035,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Provider high risk tier".into(),
             review_mode: "both".into(),
+            scheme_family: Some("provider_peer_outlier".into()),
             conditions: vec![Condition {
                 field: "provider_risk_tier".into(),
                 operator: "==".into(),
@@ -10038,6 +10053,7 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             version: 1,
             name: "Provider profile high".into(),
             review_mode: "both".into(),
+            scheme_family: Some("provider_peer_outlier".into()),
             conditions: vec![Condition {
                 field: "provider_profile_score".into(),
                 operator: ">=".into(),
@@ -10063,7 +10079,11 @@ fn default_rule_details() -> Vec<RuleDetailRecord> {
 fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailRecord {
     let active_version = (status == "active").then_some(rule.version);
     let review_mode = normalize_review_mode(&rule.review_mode);
-    let scheme_family = scheme_family_from_alert_code(&rule.action.alert_code);
+    let scheme_family = rule
+        .scheme_family
+        .as_deref()
+        .map(normalize_scheme_family)
+        .unwrap_or_else(|| scheme_family_from_alert_code(&rule.action.alert_code));
     let dsl = serde_json::json!({
         "review_mode": review_mode,
         "scheme_family": scheme_family,
@@ -10336,6 +10356,7 @@ fn runtime_rule_from_parts(
         version,
         name,
         review_mode: review_mode_from_dsl(&dsl),
+        scheme_family: dsl["scheme_family"].as_str().map(normalize_scheme_family),
         conditions: serde_json::from_value(dsl["conditions"].clone())?,
         action: serde_json::from_value(dsl["action"].clone())?,
     })

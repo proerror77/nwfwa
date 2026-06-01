@@ -581,6 +581,7 @@ async fn filters_rule_and_model_audit_events_for_lifecycle_history() {
             "rule_id": "candidate_audit_filter_rule",
             "version": 1,
             "name": "Audit filter candidate rule",
+            "scheme_family": "high_risk_claim",
             "conditions": [
               {
                 "field": "days_since_policy_start",

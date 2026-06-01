@@ -990,6 +990,7 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
             "rule_id": "candidate_early_high_amount",
             "version": 1,
             "name": "Early high amount candidate",
+            "scheme_family": "early_high_value_claim",
             "conditions": [
               {
                 "field": "days_since_policy_start",
@@ -1047,6 +1048,127 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
 }
 
 #[tokio::test]
+async fn saves_candidate_rule_with_explicit_scheme_family() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        r#"{
+          "owner": "rule-discovery",
+          "rule": {
+            "rule_id": "candidate_explicit_scheme",
+            "version": 1,
+            "name": "Explicit scheme candidate",
+            "review_mode": "pre_payment",
+            "scheme_family": "diagnosis_procedure_mismatch",
+            "conditions": [
+              {
+                "field": "diagnosis_procedure_match_score",
+                "operator": "<=",
+                "value": 0.35
+              }
+            ],
+            "action": {
+              "score": 25,
+              "alert_code": "BESPOKE_PATTERN",
+              "recommended_action": "ManualReview",
+              "reason": "候选规则必须显式映射 FWA scheme"
+            }
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(
+        body["summary"]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
+    assert_eq!(
+        body["summary"]["applicability_scope"]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
+    assert_eq!(
+        body["versions"][0]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
+    assert_eq!(
+        body["versions"][0]["dsl"]["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
+}
+
+#[tokio::test]
+async fn rejects_candidate_rule_without_valid_scheme_family() {
+    let app = build_app(test_config());
+
+    let missing_scheme = r#"{
+      "owner": "rule-discovery",
+      "rule": {
+        "rule_id": "candidate_missing_scheme",
+        "version": 1,
+        "name": "Missing scheme candidate",
+        "review_mode": "pre_payment",
+        "conditions": [
+          {
+            "field": "diagnosis_procedure_match_score",
+            "operator": "<=",
+            "value": 0.35
+          }
+        ],
+        "action": {
+          "score": 25,
+          "alert_code": "BESPOKE_PATTERN",
+          "recommended_action": "ManualReview",
+          "reason": "候选规则缺少显式 FWA scheme"
+        }
+      }
+    }"#;
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        missing_scheme,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_RULE_CANDIDATE");
+
+    let invalid_scheme = r#"{
+      "owner": "rule-discovery",
+      "rule": {
+        "rule_id": "candidate_invalid_scheme",
+        "version": 1,
+        "name": "Invalid scheme candidate",
+        "review_mode": "pre_payment",
+        "scheme_family": "not_a_scheme",
+        "conditions": [
+          {
+            "field": "diagnosis_procedure_match_score",
+            "operator": "<=",
+            "value": 0.35
+          }
+        ],
+        "action": {
+          "score": 25,
+          "alert_code": "BESPOKE_PATTERN",
+          "recommended_action": "ManualReview",
+          "reason": "候选规则 scheme 必须属于治理 taxonomy"
+        }
+      }
+    }"#;
+    let (status, body) =
+        json_request(app, "POST", "/api/v1/ops/rules/candidates", invalid_scheme).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "INVALID_RULE_CANDIDATE");
+}
+
+#[tokio::test]
 async fn records_rule_candidate_and_lifecycle_audit_events() {
     let app = build_app(test_config());
 
@@ -1060,6 +1182,7 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
             "rule_id": "candidate_audit_rule",
             "version": 1,
             "name": "Audited candidate rule",
+            "scheme_family": "high_risk_claim",
             "conditions": [
               {
                 "field": "days_since_policy_start",

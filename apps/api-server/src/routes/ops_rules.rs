@@ -16,8 +16,8 @@ use chrono::NaiveDate;
 use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::{
-    AuditEventId, Claim, ClaimContext, ClaimId, Member, MemberId, Money, Policy, PolicyId,
-    Provider, ProviderId, ProviderRiskTier, RecommendedAction, ScoringRunId,
+    canonical_scheme_family, AuditEventId, Claim, ClaimContext, ClaimId, Member, MemberId, Money,
+    Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction, ScoringRunId,
 };
 use fwa_features::calculate_features;
 use fwa_rules::{evaluate_rules, Condition, Rule, RuleAction};
@@ -867,9 +867,10 @@ pub async fn discover_rules(
 pub async fn save_rule_candidate(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<SaveRuleCandidateRequest>,
+    Json(mut request): Json<SaveRuleCandidateRequest>,
 ) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
     let actor = authorize(&state, &headers)?;
+    request.rule.scheme_family = Some(validate_rule_candidate(&request.rule)?);
     let owner = request.owner.unwrap_or_else(|| "rule-discovery".into());
     let detail = state
         .repository
@@ -1087,6 +1088,24 @@ async fn update_status_with_required_previous(
     }))
 }
 
+fn validate_rule_candidate(rule: &Rule) -> Result<String, ApiError> {
+    let Some(scheme_family) = rule.scheme_family.as_deref() else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_CANDIDATE",
+            "scheme_family is required for rule candidates",
+        ));
+    };
+    let Some(canonical) = canonical_scheme_family(scheme_family) else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_CANDIDATE",
+            "scheme_family must map to a known FWA scheme family",
+        ));
+    };
+    Ok(canonical)
+}
+
 fn validate_rule_lifecycle_request(request: &RuleLifecycleRequest) -> Result<(), ApiError> {
     if request.evidence_refs.is_empty()
         || request
@@ -1248,6 +1267,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
             version: 1,
             name: "Early high amount candidate".into(),
             review_mode: "both".into(),
+            scheme_family: Some("early_high_value_claim".into()),
             conditions: vec![
                 Condition {
                     field: "days_since_policy_start".into(),
@@ -1272,6 +1292,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
             version: 1,
             name: "High amount ratio candidate".into(),
             review_mode: "both".into(),
+            scheme_family: Some("high_risk_claim".into()),
             conditions: vec![Condition {
                 field: "claim_amount_to_limit_ratio".into(),
                 operator: ">=".into(),

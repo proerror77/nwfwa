@@ -17,6 +17,8 @@ pub struct Rule {
     pub name: String,
     #[serde(default = "default_review_mode")]
     pub review_mode: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub scheme_family: Option<String>,
     pub conditions: Vec<Condition>,
     pub action: RuleAction,
 }
@@ -148,6 +150,7 @@ mod tests {
             version: 1,
             name: "Early claim".into(),
             review_mode: "both".into(),
+            scheme_family: None,
             conditions: vec![Condition {
                 field: "days_since_policy_start".into(),
                 operator: "<=".into(),
@@ -184,6 +187,7 @@ mod tests {
             version: 1,
             name: "Missing".into(),
             review_mode: "both".into(),
+            scheme_family: None,
             conditions: vec![Condition {
                 field: "unknown_feature".into(),
                 operator: "==".into(),

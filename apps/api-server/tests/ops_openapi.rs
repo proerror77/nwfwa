@@ -837,6 +837,17 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "review_mode")
     );
+    assert!(
+        schema["components"]["schemas"]["RuleDefinition"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "scheme_family")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleDefinition"]["properties"]["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
     assert_eq!(
         schema["components"]["schemas"]["RuleDefinition"]["properties"]["review_mode"]["enum"][1],
         "post_payment"

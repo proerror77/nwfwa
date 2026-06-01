@@ -3584,12 +3584,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RuleDefinition": {
                     "type": "object",
-                    "required": ["rule_id", "version", "name", "review_mode", "conditions", "action"],
+                    "required": ["rule_id", "version", "name", "review_mode", "scheme_family", "conditions", "action"],
                     "properties": {
                         "rule_id": { "type": "string" },
                         "version": { "type": "integer", "minimum": 1 },
                         "name": { "type": "string" },
                         "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "conditions": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/RuleCondition" }

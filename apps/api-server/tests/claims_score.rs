@@ -77,6 +77,7 @@ async fn activate_post_payment_rule(repository: SharedRepository) {
                 version: 1,
                 name: "Post-payment limit usage".into(),
                 review_mode: "post_payment".into(),
+                scheme_family: Some("early_high_value_claim".into()),
                 conditions: vec![Condition {
                     field: "claim_amount_to_limit_ratio".into(),
                     operator: ">=".into(),
