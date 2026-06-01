@@ -67,11 +67,12 @@ medical-record type, chief complaint, current medical history, past history,
 visit dates, and its own source refs. Structured free-text fields are redacted
 before they leave the inbox boundary.
 `canonical_claim_context.itemized_bill_lines` preserves fee-detail lines from
-every source invoice, not only the primary invoice. Each line also carries
-invoice-level bill type, document type, social-insurance type, department,
-medical type, claim nature, start/end dates, invoice payment totals, fee-group
-amount, fee-group other amount, Medicare prorated percentage, and invoice-level
-provider context when those fields exist in the raw payload.
+every source invoice across all source policies, not only the primary policy or
+primary invoice. Each line also carries invoice-level bill type, document type,
+social-insurance type, department, medical type, claim nature, start/end dates,
+invoice payment totals, fee-group amount, fee-group other amount, Medicare
+prorated percentage, and invoice-level provider context when those fields exist
+in the raw payload.
 Invoice-level diagnosis gaps are reported as warnings on the matching
 `reportCase.policyList[0].invoiceList[n].feeList` path.
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves

@@ -1133,6 +1133,42 @@ async fn preserves_bill_lines_from_all_invoices() {
                     ]
                   }
                 ]
+              },
+              {
+                "policyNo": "POL-MULTI-INVOICE-SECONDARY",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 5000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-MULTI-003",
+                    "feeAmount": 300.00,
+                    "startDate": 1766620800000,
+                    "hospitalCode": "HSP-SECOND-POLICY",
+                    "hospitalName": "南京第二医院",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "J06.900",
+                        "detailName": "急性上呼吸道感染"
+                      }
+                    ],
+                    "feeList": [
+                      {
+                        "feeCategory": "inspectionFee",
+                        "medicareAmount": 30.0,
+                        "feeDetailList": [
+                          {
+                            "id": 3003,
+                            "name": "血常规",
+                            "amount": 300.00
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
               }
             ]
           }
@@ -1143,12 +1179,12 @@ async fn preserves_bill_lines_from_all_invoices() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["total_amount"],
-        350.0
+        650.0
     );
     let bill_lines = body["canonical_claim_context"]["itemized_bill_lines"]
         .as_array()
         .expect("itemized_bill_lines should be an array");
-    assert_eq!(bill_lines.len(), 2);
+    assert_eq!(bill_lines.len(), 3);
     assert!(bill_lines.iter().any(|line| {
         line["invoice_id"] == "INV-MULTI-002"
             && line["item_name"] == "龋齿充填术"
@@ -1169,6 +1205,17 @@ async fn preserves_bill_lines_from_all_invoices() {
             .as_array()
             .unwrap()
             .contains(&serde_json::json!("invoice:INV-MULTI-002:fee_detail:2002"))
+    }));
+    assert!(bill_lines.iter().any(|line| {
+        line["invoice_id"] == "INV-MULTI-003"
+            && line["item_name"] == "血常规"
+            && line["diagnosis_list"][0]["name"] == "急性上呼吸道感染"
+            && line["invoice_provider_code"] == "HSP-SECOND-POLICY"
+            && line["invoice_provider_name"] == "南京第二医院"
+            && line["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("invoice:INV-MULTI-003:fee_detail:3003"))
     }));
 }
 

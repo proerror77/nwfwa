@@ -291,11 +291,13 @@ fn build_canonical_claim_context(
     source_system: &str,
     report_no: &str,
 ) -> Value {
-    let policy = first_array_item(payload, &["reportCase", "policyList"]);
-    let invoices = policy
-        .map(|policy| array_items(policy, &["invoiceList"]))
-        .unwrap_or_default();
-    let invoice = policy.and_then(|policy| first_array_item(policy, &["invoiceList"]));
+    let policies = array_items(payload, &["reportCase", "policyList"]);
+    let policy = policies.first().copied();
+    let invoices = policies
+        .iter()
+        .flat_map(|policy| array_items(policy, &["invoiceList"]))
+        .collect::<Vec<_>>();
+    let invoice = invoices.first().copied();
     let medical_records = array_items(payload, &["reportCase", "medicalRecordInfoList"]);
     let medical_record = medical_records.first().copied();
     let product = policy.and_then(|policy| first_array_item(policy, &["productList"]));
