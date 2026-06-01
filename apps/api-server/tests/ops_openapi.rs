@@ -182,9 +182,29 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/InboxClaimHeader"
     );
     assert_eq!(
+        schema["components"]["schemas"]["InboxClaimHeader"]["properties"]["accident_date"]
+            ["format"],
+        "date"
+    );
+    assert_eq!(
         inbox_context["properties"]["member_policy_snapshot"]["$ref"],
         "#/components/schemas/InboxMemberPolicySnapshot"
     );
+    let member_policy_snapshot =
+        &schema["components"]["schemas"]["InboxMemberPolicySnapshot"]["properties"];
+    for field in [
+        "masked_certificate_id",
+        "certificate_type",
+        "member_gender",
+        "member_birth_date",
+        "policy_first_apply_date",
+        "insured_with_social_insurance",
+    ] {
+        assert!(
+            member_policy_snapshot[field].is_object(),
+            "missing inbox member-policy field {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["InboxMemberPolicySnapshot"]["properties"]
             ["product_liabilities"]["items"]["$ref"],

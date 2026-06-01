@@ -49,9 +49,15 @@ validation errors and required scoring fields before submitting the canonical
 context to `/api/v1/claims/score`.
 The audit event stores source trace metadata and validation outcomes, not the
 full raw PII-bearing payload.
+`canonical_claim_context.claim_header` preserves service, receive, and accident
+dates for timing and waiting-period features.
 Identity consistency checks compare accident person, policy insured person,
 invoice person, and medical-record patient name when present. Mismatches are
 reported through `data_quality_signals` as `identity_mismatch`.
+`canonical_claim_context.member_policy_snapshot` exposes only masked member and
+certificate identifiers, certificate type, gender, birth date, first-apply date,
+and social-insurance participation fields needed for routing and feature
+calculation.
 `canonical_claim_context.document_evidence` contains one normalized document
 entry per source `medicalRecordInfoList` record, each with its own source refs.
 `canonical_claim_context.itemized_bill_lines` preserves fee-detail lines from
