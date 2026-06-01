@@ -492,6 +492,69 @@ async fn flags_bill_lines_without_invoice_diagnosis() {
 }
 
 #[tokio::test]
+async fn flags_medical_record_patient_name_identity_mismatch() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "patient-name-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-PATIENT-MISMATCH-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "accidentPerson": {
+              "insuredName": "LEE, Peter",
+              "insuredNo": "D209475(0)"
+            },
+            "medicalRecordInfoList": [
+              {
+                "id": 425840011,
+                "patientName": "王向龙",
+                "diagnosisName": "牙周炎",
+                "medicalRecordInformation": "诊断：牙周炎"
+              }
+            ],
+            "policyList": [
+              {
+                "policyNo": "POL-PATIENT",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-PATIENT",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "accidentPersonName": "LEE, Peter",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("identity_mismatch")));
+}
+
+#[tokio::test]
 async fn preserves_all_product_liability_windows_in_canonical_context() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

@@ -36,6 +36,8 @@ context, and returns data-quality signals such as identity mismatch,
 date inconsistency, missing coverage limit, coverage-window mismatch, and
 policy-liability mismatch. It also raises `document_invoice_mismatch` when
 structured invoice diagnoses do not align with medical-record diagnoses.
+Identity mismatch compares accident person, policy insured person, invoice
+person, and medical-record patient name when those fields are present.
 Canonical policy snapshots preserve all source product/liability windows in
 `member_policy_snapshot.product_liabilities`; primary `product_code` and
 `liability_code` remain convenience fields for first-pass routing only.

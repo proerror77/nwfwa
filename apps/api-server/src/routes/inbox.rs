@@ -328,10 +328,13 @@ fn build_canonical_claim_context(
     let policy_insured_name = policy.and_then(|policy| string_at(policy, &["insuredName"]));
     let invoice_person_name =
         invoice.and_then(|invoice| string_at(invoice, &["accidentPersonName"]));
+    let medical_record_patient_name =
+        medical_record.and_then(|record| string_at(record, &["patientName"]));
     if names_mismatch([
         insured_name.as_deref(),
         policy_insured_name.as_deref(),
         invoice_person_name.as_deref(),
+        medical_record_patient_name.as_deref(),
     ]) {
         push_signal(data_quality_signals, "identity_mismatch");
     }
@@ -851,7 +854,7 @@ fn first_array_item<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
         .and_then(|items| items.first())
 }
 
-fn names_mismatch(names: [Option<&str>; 3]) -> bool {
+fn names_mismatch<const N: usize>(names: [Option<&str>; N]) -> bool {
     let names = names
         .into_iter()
         .flatten()
