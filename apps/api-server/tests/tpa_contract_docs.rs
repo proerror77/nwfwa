@@ -58,6 +58,29 @@ async fn tpa_contract_docs_and_mock_client_match_openapi() {
         assert!(mock_client.contains(term), "TPA mock client missing {term}");
     }
 
+    let inbox_section = docs
+        .split("### Normalize Raw Claim Inbox Payload")
+        .nth(1)
+        .expect("missing Normalize Raw Claim Inbox Payload contract section")
+        .split("\n### ")
+        .next()
+        .unwrap();
+    for field in [
+        "source_timezone",
+        "member_birth_date_raw_epoch_ms",
+        "policy_first_apply_date_raw_epoch_ms",
+        "coverage_start_date_raw_epoch_ms",
+        "coverage_end_date_raw_epoch_ms",
+        "liability_start_date_raw_epoch_ms",
+        "liability_claim_start_date_raw_epoch_ms",
+        "liability_end_date_raw_epoch_ms",
+    ] {
+        assert!(
+            inbox_section.contains(field),
+            "TPA inbox contract missing member_policy_snapshot field {field}"
+        );
+    }
+
     let score_claim_section = docs
         .split("### Score Claim")
         .nth(1)
