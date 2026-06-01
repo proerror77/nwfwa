@@ -4621,7 +4621,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "Lead": {
                     "type": "object",
-                    "required": ["lead_id", "run_id", "claim_id", "member_id", "provider_id", "source_system", "scheme_family", "lead_source", "status", "disposition", "risk_score", "rag", "reason", "evidence_refs"],
+                    "required": ["lead_id", "run_id", "claim_id", "member_id", "provider_id", "source_system", "review_mode", "scheme_family", "lead_source", "status", "disposition", "risk_score", "rag", "reason", "evidence_refs"],
                     "properties": {
                         "lead_id": { "type": "string" },
                         "run_id": { "type": "string" },
@@ -4629,6 +4629,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "member_id": { "type": "string" },
                         "provider_id": { "type": "string" },
                         "source_system": { "type": "string" },
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "scheme_family": { "type": "string" },
                         "lead_source": { "type": "string" },
                         "status": { "type": "string" },

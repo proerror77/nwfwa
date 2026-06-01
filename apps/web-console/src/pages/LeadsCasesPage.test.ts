@@ -21,6 +21,7 @@ describe("buildLeadSummary", () => {
           {
             lead_id: "lead_CLM-1",
             claim_id: "CLM-1",
+            review_mode: "pre_payment",
             scheme_family: "early_high_value_claim",
             status: "new",
             disposition: "pending_triage",
@@ -31,6 +32,7 @@ describe("buildLeadSummary", () => {
           {
             lead_id: "lead_CLM-2",
             claim_id: "CLM-2",
+            review_mode: "post_payment",
             scheme_family: "provider_peer_outlier",
             status: "triaged",
             disposition: "open_case",
@@ -41,6 +43,7 @@ describe("buildLeadSummary", () => {
           {
             lead_id: "lead_CLM-3",
             claim_id: "CLM-3",
+            review_mode: "post_payment",
             scheme_family: "medical_necessity",
             status: "pending_evidence",
             disposition: "request_evidence",
@@ -51,6 +54,7 @@ describe("buildLeadSummary", () => {
           {
             lead_id: "lead_CLM-4",
             claim_id: "CLM-4",
+            review_mode: "both",
             scheme_family: "duplicate_billing",
             status: "closed",
             disposition: "rejected",
@@ -102,6 +106,9 @@ describe("buildLeadSummary", () => {
       closedCases: 0,
       highPriorityCases: 1,
       topScheme: "early_high_value_claim",
+      prePaymentLeads: 1,
+      postPaymentLeads: 2,
+      bothModeLeads: 1,
     });
   });
 });

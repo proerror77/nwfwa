@@ -14,6 +14,7 @@ import {
   type FwaSchemeDefinition,
 } from "./fwaSchemeOptions";
 import { invalidateWritebackQueries } from "./writebackInvalidation";
+import { formatReviewModeLabel } from "./reviewMode";
 
 type LeadRecord = {
   lead_id: string;
@@ -22,6 +23,7 @@ type LeadRecord = {
   member_id?: string;
   provider_id?: string;
   source_system?: string;
+  review_mode?: string;
   scheme_family: string;
   lead_source?: string;
   status: string;
@@ -138,6 +140,9 @@ export function buildLeadSummary(leadsData?: LeadListResponse, casesData?: CaseL
     closedCases,
     highPriorityCases: cases.filter((item) => item.priority === "high").length,
     topScheme,
+    prePaymentLeads: leads.filter((lead) => lead.review_mode === "pre_payment").length,
+    postPaymentLeads: leads.filter((lead) => lead.review_mode === "post_payment").length,
+    bothModeLeads: leads.filter((lead) => lead.review_mode === "both").length,
   };
 }
 
@@ -522,6 +527,14 @@ export function LeadsCasesPage() {
             <span>Top Scheme</span>
             <strong>{formatFwaSchemeLabel(summary.topScheme, schemeLabelMap)}</strong>
           </div>
+          <div>
+            <span>Pre-payment Leads</span>
+            <strong>{summary.prePaymentLeads}</strong>
+          </div>
+          <div>
+            <span>Post-payment Leads</span>
+            <strong>{summary.postPaymentLeads}</strong>
+          </div>
         </div>
       </div>
 
@@ -541,6 +554,7 @@ export function LeadsCasesPage() {
               <span>{lead.claim_id}</span>
               <strong>{lead.risk_score}</strong>
               <small>{formatFwaSchemeLabel(lead.scheme_family, schemeLabelMap)}</small>
+              <small>{formatReviewModeLabel(lead.review_mode)}</small>
             </button>
           ))}
         </div>
@@ -570,6 +584,10 @@ export function LeadsCasesPage() {
               <div>
                 <dt>Source</dt>
                 <dd>{selectedLead.lead_source || selectedLead.source_system || "-"}</dd>
+              </div>
+              <div>
+                <dt>Review Mode</dt>
+                <dd>{formatReviewModeLabel(selectedLead.review_mode)}</dd>
               </div>
               <div>
                 <dt>Evidence</dt>

@@ -1193,6 +1193,18 @@ async fn openapi_includes_operations_paths() {
             .any(|field| field == "promotion_recommendation")
     );
     assert!(schema["components"]["schemas"]["LeadListResponse"].is_object());
+    assert!(
+        schema["components"]["schemas"]["Lead"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "review_mode"),
+        "Lead schema must require review_mode so pre/post-payment routing stays explicit"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["Lead"]["properties"]["review_mode"]["enum"],
+        serde_json::json!(["pre_payment", "post_payment", "both"])
+    );
     assert!(schema["components"]["schemas"]["CaseListResponse"].is_object());
     assert!(schema["components"]["schemas"]["AuditSampleRecord"].is_object());
     assert_eq!(
