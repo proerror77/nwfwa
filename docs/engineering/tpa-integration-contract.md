@@ -41,7 +41,8 @@ Identity mismatch compares accident person, policy insured person, every
 invoice person, and every medical-record patient name when those fields are
 present.
 Canonical document evidence preserves every `medicalRecordInfoList` entry as a
-separate document with extracted diagnosis, procedure, prescription, and source
+separate document with extracted diagnosis, procedure, prescription,
+normalized visit date, first-happen date, operation-start date, and source
 refs.
 Canonical bill lines preserve fee details from every source invoice. Each line
 keeps its source invoice id, diagnosis list, social-insurance amount, and

@@ -892,6 +892,8 @@ fn document_evidence(record: &Value) -> Value {
             .map(|value| redact_text(&value)),
         "medical_type": string_at(record, &["medicalType"]),
         "visit_date": epoch_date_at(record, &["visitDate"]).map(|date| date.to_string()),
+        "first_happen_date": epoch_date_at(record, &["firstHappenDate"]).map(|date| date.to_string()),
+        "operation_start_date": epoch_date_at(record, &["operationStartDate"]).map(|date| date.to_string()),
         "medical_record_text": text,
         "source_refs": [
             format!(

@@ -809,6 +809,8 @@ async fn preserves_all_medical_records_as_document_evidence() {
                 "diagnosisName": "牙周炎",
                 "medicalType": "门诊",
                 "visitDate": 1766620800000,
+                "firstHappenDate": 1703520000000,
+                "operationStartDate": 1766678400000,
                 "medicalRecordInformation": "诊断：牙周炎"
               },
               {
@@ -856,6 +858,13 @@ async fn preserves_all_medical_records_as_document_evidence() {
         .as_array()
         .expect("document_evidence should be an array");
     assert_eq!(documents.len(), 2);
+    let periodontal_document = documents
+        .iter()
+        .find(|document| document["document_id"] == "425840012")
+        .expect("periodontal medical record should be preserved");
+    assert_eq!(periodontal_document["visit_date"], "2025-12-25");
+    assert_eq!(periodontal_document["first_happen_date"], "2023-12-25");
+    assert_eq!(periodontal_document["operation_start_date"], "2025-12-25");
     assert!(documents.iter().any(|document| {
         document["document_id"] == "425840013" && document["extracted_diagnosis"] == "龋齿"
     }));
