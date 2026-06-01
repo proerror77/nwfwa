@@ -518,7 +518,8 @@ fn build_canonical_claim_context(
             .collect::<Vec<_>>(),
         "document_evidence": medical_records
             .iter()
-            .map(|record| document_evidence(record))
+            .enumerate()
+            .map(|(record_index, record)| document_evidence(record, record_index))
             .collect::<Vec<_>>()
     })
 }
@@ -1047,12 +1048,13 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
         .collect()
 }
 
-fn document_evidence(record: &Value) -> Value {
+fn document_evidence(record: &Value, record_index: usize) -> Value {
     let normalized_text = string_at(record, &["medicalRecordInformation"])
         .map(|value| normalize_medical_text(&value));
     let text = normalized_text.as_deref().map(redact_text);
     json!({
         "document_id": string_at(record, &["id"]),
+        "source_path": format!("reportCase.medicalRecordInfoList[{record_index}]"),
         "department": string_at(record, &["departmentName"]),
         "diagnosis": string_at(record, &["diagnosisName"]),
         "claim_nature": string_at(record, &["claimNature"]),

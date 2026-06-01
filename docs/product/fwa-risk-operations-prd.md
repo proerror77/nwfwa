@@ -263,8 +263,8 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - preserve every source medical record, invoice fee detail, product, and
   product-liability window as first-class canonical evidence;
 - read medical records from `reportCase.medicalRecordInfoList` and preserve
-  their source refs even when `policyList[].medicalRecordList` is empty or not
-  present;
+  their source paths and source refs even when `policyList[].medicalRecordList`
+  is empty or not present;
 - read bill lines from the nested fee-detail path
   `policyList[].invoiceList[].feeList[].feeDetailList[]`; do not infer a single
   bill line from invoice totals;
@@ -304,6 +304,11 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   medical reasonableness and QA evidence: `claimNature`, `medicalRecordType`,
   `chiefComplaint`, `currentMedicalHistory`, and `pastHistory`. Text fields
   must be normalized and redacted before API-visible output.
+- preserve raw source paths on every medical-record evidence row:
+  `document_evidence[n].source_path` must point to
+  `reportCase.medicalRecordInfoList[n]` so QA, Agent summaries, and audit review
+  can trace normalized text and extracted diagnoses back to the exact source
+  record.
 - preserve invoice-level payment context from this payload on every canonical
   bill line: `billType`, `documentType`, `socialInsuranceType`,
   `departmentName`, `medicalType`, `claimNature`, invoice start/end dates, and
@@ -384,7 +389,7 @@ The inbox should output a canonical payload with:
 - document evidence: every source medical record with medical record text,
   claim nature, medical record type, chief complaint, current medical history,
   past history, extracted diagnosis, procedure, prescription, department, visit
-  date, first-happen date, operation-start date, and source refs;
+  date, first-happen date, operation-start date, source path, and source refs;
 - data-quality signals: identity mismatch, missing fields, date inconsistency,
   document-invoice mismatch, diagnosis-item mismatch, and policy-liability
   mismatch.

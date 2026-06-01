@@ -1041,8 +1041,14 @@ async fn preserves_all_medical_records_as_document_evidence() {
     assert_eq!(periodontal_document["visit_date"], "2025-12-25");
     assert_eq!(periodontal_document["first_happen_date"], "2023-12-25");
     assert_eq!(periodontal_document["operation_start_date"], "2025-12-25");
+    assert_eq!(
+        periodontal_document["source_path"],
+        "reportCase.medicalRecordInfoList[0]"
+    );
     assert!(documents.iter().any(|document| {
-        document["document_id"] == "425840013" && document["extracted_diagnosis"] == "龋齿"
+        document["document_id"] == "425840013"
+            && document["extracted_diagnosis"] == "龋齿"
+            && document["source_path"] == "reportCase.medicalRecordInfoList[1]"
     }));
     assert!(documents.iter().any(|document| {
         document["source_refs"]

@@ -81,6 +81,10 @@ They also compare every `medicalRecordInfoList[n].firstHappenDate` with
 They also compare every `medicalRecordInfoList[n].operationStartDate` with
 `claimReceiveDate`; operation dates after receive date return
 `date_inconsistency` on the matching operation-date path.
+Canonical document evidence preserves `source_path` for each
+`reportCase.medicalRecordInfoList[n]` record so QA, Agent investigation, and
+audit review can trace normalized and redacted text back to the exact source
+record without exposing raw PII.
 Diagnosis-item support checks run per invoice. If any invoice contains fee
 details without structured diagnosis context, the endpoint returns a
 field-level `diagnosis_item_mismatch` warning for that invoice.
