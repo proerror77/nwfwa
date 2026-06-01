@@ -308,6 +308,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   medical reasonableness and QA evidence: `claimNature`, `medicalRecordType`,
   `chiefComplaint`, `currentMedicalHistory`, and `pastHistory`. Text fields
   must be normalized and redacted before API-visible output.
+- normalize medical-record text before evidence extraction and API output:
+  convert literal `/n` separators to line breaks, drop BOM/replacement-character
+  OCR artifacts, normalize full-width or non-breaking spaces, collapse repeated
+  line-internal whitespace, and remove empty lines before PII redaction.
 - preserve raw source paths on every medical-record evidence row:
   `document_evidence[n].source_path` must point to
   `reportCase.medicalRecordInfoList[n]` so QA, Agent summaries, and audit review

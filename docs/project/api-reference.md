@@ -72,6 +72,10 @@ medical-record type, chief complaint, current medical history, past history,
 visit dates, `source_path` such as `reportCase.medicalRecordInfoList[n]`, and
 its own source refs. Structured free-text fields are redacted before they leave
 the inbox boundary.
+Before redaction, medical-record text normalization converts literal `/n`
+separators to line breaks, removes BOM/replacement-character OCR artifacts,
+normalizes full-width or non-breaking spaces, collapses repeated line-internal
+whitespace, and drops empty lines.
 `canonical_claim_context.itemized_bill_lines` preserves fee-detail lines from
 every source invoice across all source policies, not only the primary policy or
 primary invoice. Each line also carries invoice-level bill type, document type,

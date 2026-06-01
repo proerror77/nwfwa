@@ -52,6 +52,10 @@ current medical history, past history, extracted diagnosis, procedure,
 prescription, normalized visit date, first-happen date, operation-start date,
 and source refs. Structured free-text fields are normalized and redacted before
 they appear in API-visible canonical output.
+Medical-record text normalization converts literal `/n` separators to line
+breaks, drops BOM/replacement-character OCR artifacts, normalizes full-width or
+non-breaking spaces, collapses repeated line-internal whitespace, and removes
+empty lines before PII redaction and extraction.
 Canonical bill lines preserve fee details from every source invoice across all
 source policies. Each line keeps its source invoice id, invoice bill type,
 invoice document type,

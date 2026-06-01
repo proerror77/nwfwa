@@ -534,6 +534,71 @@ async fn rejects_inbox_payload_with_structured_field_errors() {
 }
 
 #[tokio::test]
+async fn normalizes_medical_record_ocr_artifacts_before_evidence_output() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "medical-text-hygiene-001",
+          "reportCase": {
+            "reportNo": "SAAS-TEXT-HYGIENE-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "medicalRecordInfoList": [
+              {
+                "id": 425840019,
+                "hospitalName": "南京同仁医院",
+                "departmentName": "口腔科",
+                "diagnosisName": "牙周炎",
+                "medicalType": "门诊",
+                "chiefComplaint": "  \uFEFF要求　洁牙  ",
+                "medicalRecordInformation": "\uFEFF诊断：牙周炎\r\n\r\n处理措施\r\n全口　显微镜�下行龈下刮治术\r\n西药：\r\n复方氯己定含漱液"
+              }
+            ],
+            "policyList": [
+              {
+                "policyNo": "POL-TEXT-HYGIENE",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-TEXT-HYGIENE",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let document = &body["canonical_claim_context"]["document_evidence"][0];
+    assert_eq!(document["chief_complaint"], "要求 洁牙");
+    assert_eq!(document["extracted_diagnosis"], "牙周炎");
+    assert_eq!(document["extracted_procedure"], "全口 显微镜下行龈下刮治术");
+    let medical_record_text = document["medical_record_text"].as_str().unwrap();
+    assert!(!medical_record_text.contains('\u{feff}'));
+    assert!(!medical_record_text.contains('\u{fffd}'));
+    assert!(!medical_record_text.contains('\u{3000}'));
+}
+
+#[tokio::test]
 async fn flags_document_invoice_diagnosis_mismatch() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

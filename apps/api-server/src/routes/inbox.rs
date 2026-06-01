@@ -1239,11 +1239,22 @@ fn names_mismatch<'a>(names: impl IntoIterator<Item = Option<&'a str>>) -> bool 
 fn normalize_medical_text(value: &str) -> String {
     value
         .replace("/n", "\n")
+        .chars()
+        .filter_map(normalized_medical_text_character)
+        .collect::<String>()
         .lines()
-        .map(str::trim)
+        .map(|line| line.split_whitespace().collect::<Vec<_>>().join(" "))
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn normalized_medical_text_character(character: char) -> Option<char> {
+    match character {
+        '\u{feff}' | '\u{fffd}' => None,
+        '\u{00a0}' | '\u{3000}' => Some(' '),
+        _ => Some(character),
+    }
 }
 
 fn extract_diagnosis(text: &str) -> Option<String> {
