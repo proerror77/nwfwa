@@ -132,11 +132,7 @@ pub async fn normalize_claim_inbox(
     let has_warnings = validation_errors
         .iter()
         .any(|error| error.severity == "warning");
-    let scoring_ready = !has_errors
-        && !validation_errors.iter().any(|error| {
-            error.field_path == "reportCase.policyList[0].coverageLimit"
-                && error.severity == "warning"
-        });
+    let scoring_ready = !has_errors && !validation_errors.iter().any(blocks_direct_scoring);
     let validation_result = if has_errors {
         "rejected"
     } else if has_warnings {
@@ -238,6 +234,20 @@ fn internal_error(
     }
 }
 
+fn blocks_direct_scoring(error: &InboxValidationError) -> bool {
+    error.severity == "warning"
+        && matches!(
+            error.field_path.as_str(),
+            "reportCase.policyList[0].coverageLimit"
+                | "reportCase.policyList[0].validateDate"
+                | "reportCase.policyList[0].expireDate"
+                | "reportCase.policyList[0].productList[0].validateDate"
+                | "reportCase.policyList[0].productList[0].expireDate"
+                | "reportCase.policyList[0].productList[0].claimLiabilityList[0].validateDate"
+                | "reportCase.policyList[0].productList[0].claimLiabilityList[0].expireDate"
+        )
+}
+
 fn inbox_audit_id(external_message_fingerprint: Option<&str>) -> String {
     external_message_fingerprint
         .map(|fingerprint| format!("aud_inbox_{}", stable_id_fragment(fingerprint)))
@@ -327,6 +337,16 @@ fn build_canonical_claim_context(
         .and_then(|invoice| epoch_date_at(invoice, &["startDate"]))
         .or_else(|| epoch_date_at(payload, &["reportCase", "accidentDate"]));
     let receive_date = epoch_date_at(payload, &["reportCase", "claimReceiveDate"]);
+    let policy_start_date = policy.and_then(|policy| epoch_date_at(policy, &["validateDate"]));
+    let policy_end_date = policy.and_then(|policy| epoch_date_at(policy, &["expireDate"]));
+    let product_start_date = product.and_then(|product| epoch_date_at(product, &["validateDate"]));
+    let product_end_date = product.and_then(|product| epoch_date_at(product, &["expireDate"]));
+    let liability_start_date =
+        liability.and_then(|liability| epoch_date_at(liability, &["validateDate"]));
+    let liability_end_date =
+        liability.and_then(|liability| epoch_date_at(liability, &["expireDate"]));
+    let coverage_start_date = product_start_date.or(policy_start_date);
+    let coverage_end_date = product_end_date.or(policy_end_date);
     if let (Some(service_date), Some(receive_date)) = (service_date, receive_date) {
         if receive_date < service_date {
             validation_errors.push(InboxValidationError {
@@ -337,6 +357,33 @@ fn build_canonical_claim_context(
             push_signal(data_quality_signals, "date_inconsistency");
         }
     }
+    validate_service_window(
+        validation_errors,
+        data_quality_signals,
+        service_date,
+        policy_start_date,
+        policy_end_date,
+        "reportCase.policyList[0]",
+        "policy",
+    );
+    validate_service_window(
+        validation_errors,
+        data_quality_signals,
+        service_date,
+        product_start_date,
+        product_end_date,
+        "reportCase.policyList[0].productList[0]",
+        "product",
+    );
+    validate_service_window(
+        validation_errors,
+        data_quality_signals,
+        service_date,
+        liability_start_date,
+        liability_end_date,
+        "reportCase.policyList[0].productList[0].claimLiabilityList[0]",
+        "liability",
+    );
 
     json!({
         "claim_header": {
@@ -359,14 +406,10 @@ fn build_canonical_claim_context(
             "liability_code": liability.and_then(|liability| string_at(liability, &["liabCode"])),
             "liability_name": liability.and_then(|liability| string_at(liability, &["liabName"])),
             "policy_type": policy.and_then(|policy| string_at(policy, &["policyType"])),
-            "coverage_start_date": product
-                .and_then(|product| epoch_date_at(product, &["validateDate"]))
-                .or_else(|| policy.and_then(|policy| epoch_date_at(policy, &["validateDate"])))
-                .map(|date| date.to_string()),
-            "coverage_end_date": product
-                .and_then(|product| epoch_date_at(product, &["expireDate"]))
-                .or_else(|| policy.and_then(|policy| epoch_date_at(policy, &["expireDate"])))
-                .map(|date| date.to_string())
+            "coverage_start_date": coverage_start_date.map(|date| date.to_string()),
+            "coverage_end_date": coverage_end_date.map(|date| date.to_string()),
+            "liability_start_date": liability_start_date.map(|date| date.to_string()),
+            "liability_end_date": liability_end_date.map(|date| date.to_string())
         },
         "provider_snapshot": {
             "provider_code": invoice.and_then(|invoice| string_at(invoice, &["hospitalCode"])),
@@ -386,6 +429,47 @@ fn build_canonical_claim_context(
             .into_iter()
             .collect::<Vec<_>>()
     })
+}
+
+fn validate_service_window(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    service_date: Option<NaiveDate>,
+    start_date: Option<NaiveDate>,
+    end_date: Option<NaiveDate>,
+    field_prefix: &str,
+    window_label: &str,
+) {
+    if let (Some(start_date), Some(end_date)) = (start_date, end_date) {
+        if end_date < start_date {
+            validation_errors.push(InboxValidationError {
+                field_path: format!("{field_prefix}.expireDate"),
+                severity: "warning",
+                remediation: format!("{window_label} end date must not be earlier than start date"),
+            });
+            push_signal(data_quality_signals, "date_inconsistency");
+            return;
+        }
+    }
+
+    let Some(service_date) = service_date else {
+        return;
+    };
+    if start_date.is_some_and(|start_date| service_date < start_date) {
+        validation_errors.push(InboxValidationError {
+            field_path: format!("{field_prefix}.validateDate"),
+            severity: "warning",
+            remediation: format!("service date must fall within the {window_label} window"),
+        });
+        push_signal(data_quality_signals, "coverage_window_mismatch");
+    } else if end_date.is_some_and(|end_date| service_date > end_date) {
+        validation_errors.push(InboxValidationError {
+            field_path: format!("{field_prefix}.expireDate"),
+            severity: "warning",
+            remediation: format!("service date must fall within the {window_label} window"),
+        });
+        push_signal(data_quality_signals, "coverage_window_mismatch");
+    }
 }
 
 fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {

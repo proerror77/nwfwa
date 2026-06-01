@@ -314,6 +314,100 @@ async fn rejects_inbox_payload_with_structured_field_errors() {
 }
 
 #[tokio::test]
+async fn flags_service_date_outside_product_and_liability_windows() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "window-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-WINDOW-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "policyList": [
+              {
+                "policyNo": "POL-WINDOW",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "productList": [
+                  {
+                    "productCode": "YBYL",
+                    "validateDate": 1767225600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": [
+                      {
+                        "liabCode": "YBYL02",
+                        "liabName": "特定门诊医疗费用",
+                        "validateDate": 1767225600000,
+                        "expireDate": 1798675200000
+                      }
+                    ]
+                  }
+                ],
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-WINDOW",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["validation_result"], "accepted_with_warnings");
+    assert_eq!(body["scoring_ready"], false);
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["coverage_start_date"],
+        "2026-01-01"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["liability_start_date"],
+        "2026-01-01"
+    );
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("coverage_window_mismatch")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[0].productList[0].validateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("product window")
+        }));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"]
+                == "reportCase.policyList[0].productList[0].claimLiabilityList[0].validateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("liability window")
+        }));
+}
+
+#[tokio::test]
 async fn repeated_inbox_payload_upserts_same_audit_trace() {
     let app = build_app(test_config());
     let payload = r#"{
