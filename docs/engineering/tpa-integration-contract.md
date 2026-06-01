@@ -45,6 +45,8 @@ refs.
 Canonical bill lines preserve fee details from every source invoice. Each line
 keeps its source invoice id, diagnosis list, social-insurance amount, and
 `invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
+Canonical claim header `total_amount` is the sum of all source invoice
+`feeAmount` values; it is not limited to the primary invoice.
 Diagnosis-item support checks run per invoice. If any invoice contains fee
 details without structured diagnosis context, the endpoint returns a
 field-level `diagnosis_item_mismatch` warning for that invoice.

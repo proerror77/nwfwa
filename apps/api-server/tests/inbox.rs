@@ -802,6 +802,10 @@ async fn preserves_bill_lines_from_all_invoices() {
     .await;
 
     assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        body["canonical_claim_context"]["claim_header"]["total_amount"],
+        350.0
+    );
     let bill_lines = body["canonical_claim_context"]["itemized_bill_lines"]
         .as_array()
         .expect("itemized_bill_lines should be an array");

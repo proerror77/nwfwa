@@ -406,7 +406,7 @@ fn build_canonical_claim_context(
                 .and_then(|invoice| string_at(invoice, &["medicalType"]))
                 .or_else(|| medical_record.and_then(|record| string_at(record, &["medicalType"]))),
             "currency": "CNY",
-            "total_amount": invoice.and_then(|invoice| number_at(invoice, &["feeAmount"]))
+            "total_amount": total_invoice_amount(&invoices)
         },
         "member_policy_snapshot": {
             "masked_member_id": string_at(payload, &["reportCase", "accidentPerson", "insuredNo"])
@@ -608,6 +608,16 @@ fn validate_diagnosis_item_support(
         });
         push_signal(data_quality_signals, "diagnosis_item_mismatch");
     }
+}
+
+fn total_invoice_amount(invoices: &[&Value]) -> Option<f64> {
+    let amounts = invoices
+        .iter()
+        .filter_map(|invoice| number_at(invoice, &["feeAmount"]));
+    let (count, total) = amounts.fold((0, 0.0), |(count, total), amount| {
+        (count + 1, total + amount)
+    });
+    (count > 0).then_some(total)
 }
 
 fn invoice_diagnosis_names(invoice: &Value) -> Vec<String> {

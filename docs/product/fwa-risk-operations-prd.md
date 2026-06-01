@@ -250,6 +250,8 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - if an invoice has bill lines but no structured diagnosis context, emit
   `diagnosis_item_mismatch` on that invoice's `feeList` path before L5 medical
   reasonableness scoring.
+- compute canonical `claim_header.total_amount` as the sum of all source
+  invoice `feeAmount` values, not only the primary invoice amount.
 
 Required inbox corrections before scoring:
 
@@ -284,7 +286,8 @@ Required inbox corrections before scoring:
 The inbox should output a canonical payload with:
 
 - claim header: external claim id, source system, service date, receive date,
-  accident reason, medical type, currency, and total amount;
+  accident reason, medical type, currency, and claim-level total amount summed
+  from all source invoices;
 - member and policy snapshot: masked member id, policy id, product code,
   primary product/liability codes, all product-liability windows, policy type,
   and coverage constraints;
