@@ -210,6 +210,14 @@ async fn openapi_includes_operations_paths() {
         "member_gender",
         "member_birth_date",
         "policy_first_apply_date",
+        "source_timezone",
+        "member_birth_date_raw_epoch_ms",
+        "policy_first_apply_date_raw_epoch_ms",
+        "coverage_start_date_raw_epoch_ms",
+        "coverage_end_date_raw_epoch_ms",
+        "liability_start_date_raw_epoch_ms",
+        "liability_claim_start_date_raw_epoch_ms",
+        "liability_end_date_raw_epoch_ms",
         "insured_with_social_insurance",
     ] {
         assert!(

@@ -70,8 +70,9 @@ invoice person, and medical-record patient name when present. Mismatches are
 reported through `data_quality_signals` as `identity_mismatch`.
 `canonical_claim_context.member_policy_snapshot` exposes only masked member and
 certificate identifiers, certificate type, gender, birth date, first-apply date,
-and social-insurance participation fields needed for routing and feature
-calculation.
+source timezone, raw epoch-millisecond member/policy/coverage/liability date
+fields, and social-insurance participation fields needed for routing and
+feature calculation.
 `canonical_claim_context.document_evidence` contains one normalized document
 entry per source `medicalRecordInfoList` record, including claim nature,
 medical-record type, chief complaint, current medical history, past history,

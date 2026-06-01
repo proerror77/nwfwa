@@ -246,6 +246,43 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
         "2004-09-05"
     );
     assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["source_timezone"],
+        "Asia/Shanghai"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["member_birth_date_raw_epoch_ms"],
+        1094313600000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]
+            ["policy_first_apply_date_raw_epoch_ms"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]
+            ["coverage_start_date_raw_epoch_ms"],
+        1735747200000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["coverage_end_date_raw_epoch_ms"],
+        1767283200000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]
+            ["liability_start_date_raw_epoch_ms"],
+        1735747200000_i64
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]
+            ["liability_claim_start_date_raw_epoch_ms"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]
+            ["liability_end_date_raw_epoch_ms"],
+        1767283200000_i64
+    );
+    assert_eq!(
         body["canonical_claim_context"]["provider_snapshot"]["name"],
         "南京同仁医院"
     );

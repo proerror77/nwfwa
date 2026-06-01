@@ -528,6 +528,8 @@ fn build_canonical_claim_context(
             "member_gender": string_at(payload, &["reportCase", "accidentPerson", "gender"]),
             "member_birth_date": epoch_date_at(payload, &["reportCase", "accidentPerson", "birthday"])
                 .map(|date| date.to_string()),
+            "source_timezone": SOURCE_BUSINESS_TIMEZONE,
+            "member_birth_date_raw_epoch_ms": epoch_millis_at(payload, &["reportCase", "accidentPerson", "birthday"]),
             "policy_id": policy.and_then(|policy| string_at(policy, &["policyNo"])),
             "product_code": product.and_then(|product| string_at(product, &["productCode"])),
             "liability_code": liability.and_then(|liability| string_at(liability, &["liabCode"])),
@@ -536,15 +538,29 @@ fn build_canonical_claim_context(
             "policy_first_apply_date": policy
                 .and_then(|policy| epoch_date_at(policy, &["firstApplyTime"]))
                 .map(|date| date.to_string()),
+            "policy_first_apply_date_raw_epoch_ms": policy
+                .and_then(|policy| epoch_millis_at(policy, &["firstApplyTime"])),
             "insured_with_social_insurance": policy
                 .and_then(|policy| bool_at(policy, &["insuredWithSI"])),
             "coverage_limit": coverage_limit,
             "coverage_start_date": coverage_start_date.map(|date| date.to_string()),
             "coverage_end_date": coverage_end_date.map(|date| date.to_string()),
+            "coverage_start_date_raw_epoch_ms": product
+                .and_then(|product| epoch_millis_at(product, &["validateDate"]))
+                .or_else(|| policy.and_then(|policy| epoch_millis_at(policy, &["validateDate"]))),
+            "coverage_end_date_raw_epoch_ms": product
+                .and_then(|product| epoch_millis_at(product, &["expireDate"]))
+                .or_else(|| policy.and_then(|policy| epoch_millis_at(policy, &["expireDate"]))),
             "liability_start_date": liability_start_date.map(|date| date.to_string()),
             "liability_claim_start_date": liability_claim_start_date.map(|date| date.to_string()),
             "waiting_period_end_date": liability_claim_start_date.map(|date| date.to_string()),
             "liability_end_date": liability_end_date.map(|date| date.to_string()),
+            "liability_start_date_raw_epoch_ms": liability
+                .and_then(|liability| epoch_millis_at(liability, &["validateDate"])),
+            "liability_claim_start_date_raw_epoch_ms": liability
+                .and_then(|liability| epoch_millis_at(liability, &["claimValidateDate"])),
+            "liability_end_date_raw_epoch_ms": liability
+                .and_then(|liability| epoch_millis_at(liability, &["expireDate"])),
             "product_liabilities": policies
                 .iter()
                 .enumerate()
