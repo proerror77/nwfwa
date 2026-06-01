@@ -185,6 +185,29 @@ SET dsl = EXCLUDED.dsl,
     approved_by = EXCLUDED.approved_by,
     published_at = EXCLUDED.published_at;
 
+DELETE FROM model_scores
+WHERE model_version_id IN (
+  SELECT id
+  FROM model_versions
+  WHERE model_key = 'baseline_fwa'
+    AND version <> '0.1.0'
+);
+
+DELETE FROM model_promotion_reviews
+WHERE model_key = 'baseline_fwa'
+  AND model_version <> '0.1.0';
+
+DELETE FROM model_evaluation_runs
+WHERE model_key = 'baseline_fwa'
+  AND model_version <> '0.1.0';
+
+DELETE FROM model_retraining_jobs
+WHERE model_key = 'baseline_fwa';
+
+DELETE FROM model_versions
+WHERE model_key = 'baseline_fwa'
+  AND version <> '0.1.0';
+
 INSERT INTO model_versions (
   id,
   model_key,
