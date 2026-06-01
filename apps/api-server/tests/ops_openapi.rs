@@ -133,6 +133,39 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "data_quality_score")
     );
+    assert_eq!(
+        schema["paths"]["/api/v1/inbox/claims/normalize"]["post"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/InboxNormalizeResponse"
+    );
+    let inbox_response = &schema["components"]["schemas"]["InboxNormalizeResponse"];
+    for field in [
+        "run_id",
+        "audit_id",
+        "mapping_version",
+        "validation_result",
+        "scoring_ready",
+        "canonical_claim_context",
+        "data_quality_signals",
+        "evidence_refs",
+    ] {
+        assert!(
+            inbox_response["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing inbox response field {field}"
+        );
+    }
+    assert_eq!(
+        inbox_response["properties"]["validation_errors"]["items"]["$ref"],
+        "#/components/schemas/InboxValidationError"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["InboxValidationError"]["required"],
+        serde_json::json!(["field_path", "severity", "remediation"])
+    );
     let qa_feedback_write_targets = serde_json::json!([
         "rules",
         "model",

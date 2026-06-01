@@ -44,6 +44,56 @@ def main():
 
     suffix = str(int(time.time()))
 
+    inbox = request(
+        args.base_url,
+        args.api_key,
+        "POST",
+        "/api/v1/inbox/claims/normalize",
+        {
+            "systemCode": args.source_system,
+            "transNo": f"MOCK-INBOX-{suffix}",
+            "reportCase": {
+                "reportNo": args.claim_id,
+                "claimReceiveDate": 1779811200000,
+                "calculateRisk": "Y",
+                "policyList": [
+                    {
+                        "policyNo": "POL-MOCK",
+                        "insuredName": "Mock Member",
+                        "coverageLimit": 20000,
+                        "invoiceList": [
+                            {
+                                "invoiceNo": f"INV-MOCK-{suffix}",
+                                "feeAmount": 397.06,
+                                "startDate": 1766678400000,
+                                "hospitalName": "Mock Hospital",
+                                "diagnosisList": [
+                                    {
+                                        "detailCode": "K05.300",
+                                        "detailName": "慢性牙周炎",
+                                    }
+                                ],
+                                "feeList": [
+                                    {
+                                        "feeCategory": "westernMedicineFee",
+                                        "medicareAmount": 21.55,
+                                        "feeDetailList": [
+                                            {
+                                                "name": "双氯芬酸二乙胺乳胶剂",
+                                                "amount": 51.51,
+                                            }
+                                        ],
+                                    }
+                                ],
+                            }
+                        ],
+                    }
+                ],
+            },
+        },
+    )
+    require(inbox.get("idempotency_key"), "inbox normalize missing idempotency_key")
+
     score = request(
         args.base_url,
         args.api_key,
@@ -133,6 +183,7 @@ def main():
         json.dumps(
             {
                 "claim_id": args.claim_id,
+                "inbox_idempotency_key": inbox.get("idempotency_key"),
                 "score": {
                     "run_id": score.get("run_id"),
                     "audit_id": audit_id,

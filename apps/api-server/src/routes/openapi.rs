@@ -110,8 +110,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "content": {
                             "application/json": {
                                 "schema": {
-                                    "type": "object",
-                                    "description": "Customer-specific raw claim intake payload. MVP supports the AiClaim Core reportCase envelope."
+                                    "$ref": "#/components/schemas/InboxNormalizeRequest"
                                 }
                             }
                         }
@@ -122,7 +121,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "content": {
                                 "application/json": {
                                     "schema": {
-                                        "type": "object"
+                                        "$ref": "#/components/schemas/InboxNormalizeResponse"
                                     }
                                 }
                             }
@@ -132,7 +131,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "content": {
                                 "application/json": {
                                     "schema": {
-                                        "type": "object"
+                                        "$ref": "#/components/schemas/InboxNormalizeResponse"
                                     }
                                 }
                             }
@@ -2118,6 +2117,84 @@ pub async fn openapi_schema() -> Json<Value> {
                 }
             },
             "schemas": {
+                "InboxNormalizeRequest": {
+                    "type": "object",
+                    "description": "Customer-specific raw claim intake payload. MVP supports the AiClaim Core reportCase envelope.",
+                    "required": ["systemCode", "transNo", "reportCase"],
+                    "properties": {
+                        "systemCode": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Source system code bound to the authenticated API key."
+                        },
+                        "transNo": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Source transaction id used with reportNo for idempotency."
+                        },
+                        "transDate": {
+                            "type": ["string", "null"],
+                            "description": "Source transaction timestamp when present."
+                        },
+                        "reportCase": {
+                            "type": "object",
+                            "description": "Raw source claim case payload. It may contain medical records, policy, invoice, product, and liability lists."
+                        }
+                    },
+                    "additionalProperties": true
+                },
+                "InboxNormalizeResponse": {
+                    "type": "object",
+                    "required": [
+                        "run_id",
+                        "audit_id",
+                        "mapping_version",
+                        "validation_result",
+                        "scoring_ready",
+                        "validation_errors",
+                        "canonical_claim_context",
+                        "data_quality_signals",
+                        "evidence_refs"
+                    ],
+                    "properties": {
+                        "run_id": { "type": "string" },
+                        "audit_id": { "type": "string" },
+                        "external_message_id": { "type": ["string", "null"] },
+                        "idempotency_key": { "type": ["string", "null"] },
+                        "mapping_version": { "type": "string" },
+                        "validation_result": {
+                            "type": "string",
+                            "enum": ["accepted", "accepted_with_warnings", "rejected"]
+                        },
+                        "scoring_ready": { "type": "boolean" },
+                        "raw_payload_ref": { "type": ["string", "null"] },
+                        "validation_errors": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/InboxValidationError" }
+                        },
+                        "canonical_claim_context": {
+                            "type": "object",
+                            "description": "Normalized claim header, member/policy snapshot, provider snapshot, bill lines, and document evidence."
+                        },
+                        "data_quality_signals": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
+                    }
+                },
+                "InboxValidationError": {
+                    "type": "object",
+                    "required": ["field_path", "severity", "remediation"],
+                    "properties": {
+                        "field_path": { "type": "string" },
+                        "severity": { "type": "string", "enum": ["error", "warning"] },
+                        "remediation": { "type": "string" }
+                    }
+                },
                 "ScoreClaimRequest": {
                     "oneOf": [
                         {

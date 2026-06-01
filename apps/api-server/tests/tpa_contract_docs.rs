@@ -138,6 +138,16 @@ fn core_tpa_endpoint_contracts() -> Vec<TpaEndpointContract<'static>> {
     vec![
         TpaEndpointContract {
             method: "post",
+            path: "/api/v1/inbox/claims/normalize",
+            doc_heading: "### Normalize Raw Claim Inbox Payload",
+            doc_line: "`POST /api/v1/inbox/claims/normalize`",
+            mock_fragment: "\"/api/v1/inbox/claims/normalize\"",
+            request_ref: Some("#/components/schemas/InboxNormalizeRequest"),
+            response_ref: "#/components/schemas/InboxNormalizeResponse",
+            error_statuses: &["401"],
+        },
+        TpaEndpointContract {
+            method: "post",
             path: "/api/v1/claims/score",
             doc_heading: "### Score Claim",
             doc_line: "`POST /api/v1/claims/score`",
