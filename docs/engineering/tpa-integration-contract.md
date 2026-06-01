@@ -33,7 +33,8 @@ The endpoint validates the envelope, checks source-system identity, normalizes
 epoch-millisecond dates, masks PII-bearing values, maps medical record,
 invoice, provider, product, and liability fields into a canonical claim
 context, and returns data-quality signals such as identity mismatch,
-date inconsistency, missing coverage limit, and coverage-window mismatch.
+date inconsistency, missing coverage limit, coverage-window mismatch, and
+policy-liability mismatch.
 Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
 validation results, and data-quality signals, not the full raw medical or

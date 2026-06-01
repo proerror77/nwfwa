@@ -244,6 +244,7 @@ fn blocks_direct_scoring(error: &InboxValidationError) -> bool {
                 | "reportCase.policyList[0].productList[0].validateDate"
                 | "reportCase.policyList[0].productList[0].expireDate"
                 | "reportCase.policyList[0].productList[0].claimLiabilityList[0].validateDate"
+                | "reportCase.policyList[0].productList[0].claimLiabilityList[0].claimValidateDate"
                 | "reportCase.policyList[0].productList[0].claimLiabilityList[0].expireDate"
         )
 }
@@ -343,10 +344,13 @@ fn build_canonical_claim_context(
     let product_end_date = product.and_then(|product| epoch_date_at(product, &["expireDate"]));
     let liability_start_date =
         liability.and_then(|liability| epoch_date_at(liability, &["validateDate"]));
+    let liability_claim_start_date =
+        liability.and_then(|liability| epoch_date_at(liability, &["claimValidateDate"]));
     let liability_end_date =
         liability.and_then(|liability| epoch_date_at(liability, &["expireDate"]));
     let coverage_start_date = product_start_date.or(policy_start_date);
     let coverage_end_date = product_end_date.or(policy_end_date);
+    let coverage_limit = policy.and_then(|policy| number_at(policy, &["coverageLimit"]));
     if let (Some(service_date), Some(receive_date)) = (service_date, receive_date) {
         if receive_date < service_date {
             validation_errors.push(InboxValidationError {
@@ -384,6 +388,12 @@ fn build_canonical_claim_context(
         "reportCase.policyList[0].productList[0].claimLiabilityList[0]",
         "liability",
     );
+    validate_liability_claim_eligibility(
+        validation_errors,
+        data_quality_signals,
+        service_date,
+        liability_claim_start_date,
+    );
 
     json!({
         "claim_header": {
@@ -406,9 +416,12 @@ fn build_canonical_claim_context(
             "liability_code": liability.and_then(|liability| string_at(liability, &["liabCode"])),
             "liability_name": liability.and_then(|liability| string_at(liability, &["liabName"])),
             "policy_type": policy.and_then(|policy| string_at(policy, &["policyType"])),
+            "coverage_limit": coverage_limit,
             "coverage_start_date": coverage_start_date.map(|date| date.to_string()),
             "coverage_end_date": coverage_end_date.map(|date| date.to_string()),
             "liability_start_date": liability_start_date.map(|date| date.to_string()),
+            "liability_claim_start_date": liability_claim_start_date.map(|date| date.to_string()),
+            "waiting_period_end_date": liability_claim_start_date.map(|date| date.to_string()),
             "liability_end_date": liability_end_date.map(|date| date.to_string())
         },
         "provider_snapshot": {
@@ -469,6 +482,29 @@ fn validate_service_window(
             remediation: format!("service date must fall within the {window_label} window"),
         });
         push_signal(data_quality_signals, "coverage_window_mismatch");
+    }
+}
+
+fn validate_liability_claim_eligibility(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    service_date: Option<NaiveDate>,
+    liability_claim_start_date: Option<NaiveDate>,
+) {
+    if let (Some(service_date), Some(liability_claim_start_date)) =
+        (service_date, liability_claim_start_date)
+    {
+        if service_date < liability_claim_start_date {
+            validation_errors.push(InboxValidationError {
+                field_path:
+                    "reportCase.policyList[0].productList[0].claimLiabilityList[0].claimValidateDate"
+                        .into(),
+                severity: "warning",
+                remediation:
+                    "service date must not be earlier than liability claim eligibility date".into(),
+            });
+            push_signal(data_quality_signals, "policy_liability_mismatch");
+        }
     }
 }
 

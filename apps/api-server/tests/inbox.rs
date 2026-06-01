@@ -344,6 +344,7 @@ async fn flags_service_date_outside_product_and_liability_windows() {
                         "liabCode": "YBYL02",
                         "liabName": "特定门诊医疗费用",
                         "validateDate": 1767225600000,
+                        "claimValidateDate": 1767225600000,
                         "expireDate": 1798675200000
                       }
                     ]
@@ -376,10 +377,26 @@ async fn flags_service_date_outside_product_and_liability_windows() {
         body["canonical_claim_context"]["member_policy_snapshot"]["liability_start_date"],
         "2026-01-01"
     );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["liability_claim_start_date"],
+        "2026-01-01"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["waiting_period_end_date"],
+        "2026-01-01"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["coverage_limit"],
+        20000.0
+    );
     assert!(body["data_quality_signals"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("coverage_window_mismatch")));
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy_liability_mismatch")));
     assert!(body["validation_errors"]
         .as_array()
         .unwrap()
@@ -404,6 +421,19 @@ async fn flags_service_date_outside_product_and_liability_windows() {
                     .as_str()
                     .unwrap()
                     .contains("liability window")
+        }));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"]
+                == "reportCase.policyList[0].productList[0].claimLiabilityList[0].claimValidateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("claim eligibility date")
         }));
 }
 
