@@ -492,6 +492,105 @@ async fn flags_bill_lines_without_invoice_diagnosis() {
 }
 
 #[tokio::test]
+async fn preserves_all_product_liability_windows_in_canonical_context() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "product-liability-list-001",
+          "reportCase": {
+            "reportNo": "SAAS-PRODUCT-LIABILITY-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "policyList": [
+              {
+                "policyNo": "POL-PRODUCTS",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "productList": [
+                  {
+                    "productCode": "YBYL",
+                    "productName": "一般医疗保险金",
+                    "validateDate": 1735689600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": [
+                      {
+                        "liabCode": "YBYL01",
+                        "liabName": "住院医疗费用",
+                        "validateDate": 1735689600000,
+                        "claimValidateDate": 1740787200000,
+                        "expireDate": 1798675200000,
+                        "isSeriousDiseaseLiability": false
+                      },
+                      {
+                        "liabCode": "YBYL02",
+                        "liabName": "特定门诊医疗费用",
+                        "validateDate": 1735689600000,
+                        "claimValidateDate": 1735689600000,
+                        "expireDate": 1798675200000,
+                        "isSeriousDiseaseLiability": false
+                      }
+                    ]
+                  },
+                  {
+                    "productCode": "TDJB",
+                    "productName": "特定疾病医疗保险金",
+                    "validateDate": 1735689600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": [
+                      {
+                        "liabCode": "TDJB01",
+                        "liabName": "特定疾病住院医疗费用",
+                        "validateDate": 1735689600000,
+                        "claimValidateDate": 1740787200000,
+                        "expireDate": 1798675200000,
+                        "isSeriousDiseaseLiability": true
+                      }
+                    ]
+                  }
+                ],
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-PRODUCTS",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let product_liabilities = body["canonical_claim_context"]["member_policy_snapshot"]
+        ["product_liabilities"]
+        .as_array()
+        .expect("canonical policy snapshot should preserve product/liability windows");
+    assert_eq!(product_liabilities.len(), 3);
+    assert!(product_liabilities.iter().any(|liability| {
+        liability["product_code"] == "YBYL"
+            && liability["liability_code"] == "YBYL02"
+            && liability["liability_claim_start_date"] == "2025-01-01"
+            && liability["waiting_period_end_date"] == "2025-01-01"
+    }));
+    assert!(product_liabilities.iter().any(|liability| {
+        liability["product_code"] == "TDJB"
+            && liability["product_name"] == "特定疾病医疗保险金"
+            && liability["liability_code"] == "TDJB01"
+            && liability["is_serious_disease_liability"] == true
+    }));
+}
+
+#[tokio::test]
 async fn flags_service_date_outside_product_and_liability_windows() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(

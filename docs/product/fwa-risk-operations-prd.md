@@ -221,6 +221,10 @@ Reference payload observed on 2026-06-01:
 - medical records, invoice diagnoses, fee details, provider identity, policy
   liability windows, and product liability codes must be mapped explicitly
   instead of inferred from one free-text field.
+- the reference payload includes one policy with 8 `productList` entries and 12
+  `claimLiabilityList` entries; inbox normalization must preserve every
+  product/liability coverage window instead of using only the first product and
+  first liability.
 
 Required inbox corrections before scoring:
 
@@ -256,7 +260,8 @@ The inbox should output a canonical payload with:
 - claim header: external claim id, source system, service date, receive date,
   accident reason, medical type, currency, and total amount;
 - member and policy snapshot: masked member id, policy id, product code,
-  liability windows, policy type, and coverage constraints;
+  primary product/liability codes, all product-liability windows, policy type,
+  and coverage constraints;
 - provider snapshot: hospital/provider code, name, class, type, city, province,
   and network flags;
 - itemized bill lines: invoice id, diagnosis list, fee category, item name,

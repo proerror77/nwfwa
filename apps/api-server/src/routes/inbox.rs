@@ -429,7 +429,10 @@ fn build_canonical_claim_context(
             "liability_start_date": liability_start_date.map(|date| date.to_string()),
             "liability_claim_start_date": liability_claim_start_date.map(|date| date.to_string()),
             "waiting_period_end_date": liability_claim_start_date.map(|date| date.to_string()),
-            "liability_end_date": liability_end_date.map(|date| date.to_string())
+            "liability_end_date": liability_end_date.map(|date| date.to_string()),
+            "product_liabilities": policy
+                .map(product_liabilities)
+                .unwrap_or_default()
         },
         "provider_snapshot": {
             "provider_code": invoice.and_then(|invoice| string_at(invoice, &["hospitalCode"])),
@@ -454,6 +457,60 @@ fn build_canonical_claim_context(
             .into_iter()
             .collect::<Vec<_>>()
     })
+}
+
+fn product_liabilities(policy: &Value) -> Vec<Value> {
+    policy
+        .get("productList")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .flat_map(|product| {
+            let product_id = string_at(product, &["id"]);
+            let product_code = string_at(product, &["productCode"]);
+            let product_name = string_at(product, &["productName"]);
+            let plan_code = string_at(product, &["planCode"]);
+            let plan_version = string_at(product, &["planVersion"]);
+            let product_start_date = epoch_date_at(product, &["validateDate"]);
+            let product_end_date = epoch_date_at(product, &["expireDate"]);
+            product
+                .get("claimLiabilityList")
+                .and_then(Value::as_array)
+                .into_iter()
+                .flatten()
+                .map(move |liability| {
+                    let liability_id = string_at(liability, &["id"]);
+                    let liability_start_date = epoch_date_at(liability, &["validateDate"]);
+                    let liability_claim_start_date =
+                        epoch_date_at(liability, &["claimValidateDate"]);
+                    let liability_end_date = epoch_date_at(liability, &["expireDate"]);
+                    json!({
+                        "product_id": product_id,
+                        "product_code": product_code,
+                        "product_name": product_name,
+                        "plan_code": plan_code,
+                        "plan_version": plan_version,
+                        "product_start_date": product_start_date.map(|date| date.to_string()),
+                        "product_end_date": product_end_date.map(|date| date.to_string()),
+                        "liability_id": liability_id,
+                        "liability_code": string_at(liability, &["liabCode"]),
+                        "liability_name": string_at(liability, &["liabName"]),
+                        "liability_start_date": liability_start_date.map(|date| date.to_string()),
+                        "liability_claim_start_date": liability_claim_start_date.map(|date| date.to_string()),
+                        "waiting_period_end_date": liability_claim_start_date.map(|date| date.to_string()),
+                        "liability_end_date": liability_end_date.map(|date| date.to_string()),
+                        "is_serious_disease_liability": bool_at(liability, &["isSeriousDiseaseLiability"]),
+                        "evidence_refs": [
+                            format!(
+                                "product:{}:liability:{}",
+                                product_code.as_deref().unwrap_or("unknown"),
+                                string_at(liability, &["liabCode"]).unwrap_or_else(|| "unknown".into())
+                            )
+                        ]
+                    })
+                })
+        })
+        .collect()
 }
 
 fn validate_diagnosis_consistency(

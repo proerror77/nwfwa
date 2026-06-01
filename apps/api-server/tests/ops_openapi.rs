@@ -186,6 +186,11 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/InboxMemberPolicySnapshot"
     );
     assert_eq!(
+        schema["components"]["schemas"]["InboxMemberPolicySnapshot"]["properties"]
+            ["product_liabilities"]["items"]["$ref"],
+        "#/components/schemas/InboxProductLiability"
+    );
+    assert_eq!(
         inbox_context["properties"]["provider_snapshot"]["$ref"],
         "#/components/schemas/InboxProviderSnapshot"
     );

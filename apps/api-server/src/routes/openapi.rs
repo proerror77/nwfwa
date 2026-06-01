@@ -2236,7 +2236,36 @@ pub async fn openapi_schema() -> Json<Value> {
                         "liability_start_date": { "type": ["string", "null"], "format": "date" },
                         "liability_claim_start_date": { "type": ["string", "null"], "format": "date" },
                         "waiting_period_end_date": { "type": ["string", "null"], "format": "date" },
-                        "liability_end_date": { "type": ["string", "null"], "format": "date" }
+                        "liability_end_date": { "type": ["string", "null"], "format": "date" },
+                        "product_liabilities": {
+                            "type": "array",
+                            "description": "All product and claim-liability windows from the source policy, preserving coverage and waiting-period candidates before scoring.",
+                            "items": { "$ref": "#/components/schemas/InboxProductLiability" }
+                        }
+                    }
+                },
+                "InboxProductLiability": {
+                    "type": "object",
+                    "properties": {
+                        "product_id": { "type": ["string", "null"] },
+                        "product_code": { "type": ["string", "null"] },
+                        "product_name": { "type": ["string", "null"] },
+                        "plan_code": { "type": ["string", "null"] },
+                        "plan_version": { "type": ["string", "null"] },
+                        "product_start_date": { "type": ["string", "null"], "format": "date" },
+                        "product_end_date": { "type": ["string", "null"], "format": "date" },
+                        "liability_id": { "type": ["string", "null"] },
+                        "liability_code": { "type": ["string", "null"] },
+                        "liability_name": { "type": ["string", "null"] },
+                        "liability_start_date": { "type": ["string", "null"], "format": "date" },
+                        "liability_claim_start_date": { "type": ["string", "null"], "format": "date" },
+                        "waiting_period_end_date": { "type": ["string", "null"], "format": "date" },
+                        "liability_end_date": { "type": ["string", "null"], "format": "date" },
+                        "is_serious_disease_liability": { "type": ["boolean", "null"] },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
                     }
                 },
                 "InboxProviderSnapshot": {

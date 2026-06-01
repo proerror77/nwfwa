@@ -36,6 +36,9 @@ context, and returns data-quality signals such as identity mismatch,
 date inconsistency, missing coverage limit, coverage-window mismatch, and
 policy-liability mismatch. It also raises `document_invoice_mismatch` when
 structured invoice diagnoses do not align with medical-record diagnoses.
+Canonical policy snapshots preserve all source product/liability windows in
+`member_policy_snapshot.product_liabilities`; primary `product_code` and
+`liability_code` remain convenience fields for first-pass routing only.
 Canonical bill lines include fee amount, self-pay, own-expense, and
 social-insurance amount mapped from source fee groups.
 Each request writes a PII-safe audit event and API call record with source

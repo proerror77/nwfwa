@@ -49,6 +49,11 @@ validation errors and required scoring fields before submitting the canonical
 context to `/api/v1/claims/score`.
 The audit event stores source trace metadata and validation outcomes, not the
 full raw PII-bearing payload.
+For policy coverage, `member_policy_snapshot.product_liabilities` preserves
+every source product and claim-liability window, including waiting-period
+candidate dates and evidence refs. The top-level `product_code` and
+`liability_code` fields are primary values for compatibility, not the complete
+coverage list.
 
 ## Runtime Scoring
 
