@@ -394,6 +394,12 @@ fn build_canonical_claim_context(
         service_date,
         liability_claim_start_date,
     );
+    validate_diagnosis_consistency(
+        validation_errors,
+        data_quality_signals,
+        medical_record,
+        invoice,
+    );
 
     json!({
         "claim_header": {
@@ -442,6 +448,56 @@ fn build_canonical_claim_context(
             .into_iter()
             .collect::<Vec<_>>()
     })
+}
+
+fn validate_diagnosis_consistency(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    medical_record: Option<&Value>,
+    invoice: Option<&Value>,
+) {
+    let medical_diagnosis = medical_record.and_then(|record| string_at(record, &["diagnosisName"]));
+    let invoice_diagnoses = invoice.map(invoice_diagnosis_names).unwrap_or_default();
+    if let Some(medical_diagnosis) = medical_diagnosis {
+        if !invoice_diagnoses.is_empty()
+            && !invoice_diagnoses
+                .iter()
+                .any(|invoice_diagnosis| diagnoses_match(&medical_diagnosis, invoice_diagnosis))
+        {
+            validation_errors.push(InboxValidationError {
+                field_path: "reportCase.policyList[0].invoiceList[0].diagnosisList".into(),
+                severity: "warning",
+                remediation: "invoice diagnosis should align with medical record diagnosis".into(),
+            });
+            push_signal(data_quality_signals, "document_invoice_mismatch");
+        }
+    }
+}
+
+fn invoice_diagnosis_names(invoice: &Value) -> Vec<String> {
+    invoice
+        .get("diagnosisList")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+        .filter_map(|diagnosis| {
+            string_at(diagnosis, &["detailName"]).or_else(|| string_at(diagnosis, &["name"]))
+        })
+        .collect()
+}
+
+fn diagnoses_match(left: &str, right: &str) -> bool {
+    let left = normalize_match_text(left);
+    let right = normalize_match_text(right);
+    !left.is_empty() && !right.is_empty() && (left.contains(&right) || right.contains(&left))
+}
+
+fn normalize_match_text(value: &str) -> String {
+    value
+        .chars()
+        .filter(|character| !character.is_whitespace() && !character.is_ascii_punctuation())
+        .flat_map(char::to_lowercase)
+        .collect()
 }
 
 fn validate_service_window(

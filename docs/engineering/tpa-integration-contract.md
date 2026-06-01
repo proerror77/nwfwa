@@ -34,7 +34,8 @@ epoch-millisecond dates, masks PII-bearing values, maps medical record,
 invoice, provider, product, and liability fields into a canonical claim
 context, and returns data-quality signals such as identity mismatch,
 date inconsistency, missing coverage limit, coverage-window mismatch, and
-policy-liability mismatch.
+policy-liability mismatch. It also raises `document_invoice_mismatch` when
+structured invoice diagnoses do not align with medical-record diagnoses.
 Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
 validation results, and data-quality signals, not the full raw medical or

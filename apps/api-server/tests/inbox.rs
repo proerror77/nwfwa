@@ -314,6 +314,84 @@ async fn rejects_inbox_payload_with_structured_field_errors() {
 }
 
 #[tokio::test]
+async fn flags_document_invoice_diagnosis_mismatch() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "diagnosis-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-DIAGNOSIS-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "medicalRecordInfoList": [
+              {
+                "id": 425840009,
+                "hospitalName": "南京同仁医院",
+                "departmentName": "口腔科",
+                "diagnosisName": "牙周炎",
+                "medicalType": "门诊",
+                "visitDate": 1766620800000,
+                "medicalRecordInformation": "诊断：牙周炎"
+              }
+            ],
+            "policyList": [
+              {
+                "policyNo": "POL-DIAGNOSIS",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-DIAGNOSIS",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "S82.900",
+                        "detailName": "下肢骨折",
+                        "icd": "S82.9",
+                        "name": "下肢骨折",
+                        "primary": true
+                      }
+                    ],
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["validation_result"], "accepted_with_warnings");
+    assert!(body["scoring_ready"].as_bool().unwrap());
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("document_invoice_mismatch")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[0].invoiceList[0].diagnosisList"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("medical record diagnosis")
+        }));
+}
+
+#[tokio::test]
 async fn flags_service_date_outside_product_and_liability_windows() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(
