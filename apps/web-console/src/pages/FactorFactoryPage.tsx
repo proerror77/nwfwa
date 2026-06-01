@@ -59,7 +59,18 @@ type FactorReadiness = {
   ready_factor_count?: number;
   review_factor_count?: number;
   readiness_issue_counts?: Record<string, number>;
+  scheme_readiness?: FactorSchemeReadiness[];
   factor_cards?: ApiFactorCard[];
+};
+
+type FactorSchemeReadiness = {
+  scheme_family: string;
+  factor_count: number;
+  ready_factor_count: number;
+  review_factor_count: number;
+  online_ready_count: number;
+  rule_convertible_count: number;
+  readiness_issue_counts?: Record<string, number>;
 };
 
 type ApiFactorCard = {
@@ -198,13 +209,35 @@ export function buildFactorReadinessSummary(readiness?: FactorReadiness) {
     mappedFactorCount: readiness?.mapped_factor_count ?? 0,
     readyFactorCount: readiness?.ready_factor_count ?? 0,
     reviewFactorCount: readiness?.review_factor_count ?? reviewQueueCount,
-    topReadinessIssues: Object.entries(readiness?.readiness_issue_counts ?? {})
-      .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
-      .map(([issue, count]) => `${issue}: ${count}`),
+    topReadinessIssues: formatReadinessIssues(readiness?.readiness_issue_counts),
     reviewQueueCount,
     onlineReadyRateLabel:
       factorCount === 0 ? "0.0%" : `${((onlineReadyCount / factorCount) * 100).toFixed(1)}%`,
+    schemeReadiness: (readiness?.scheme_readiness ?? [])
+      .map((scheme) => ({
+        schemeFamily: scheme.scheme_family,
+        factorCount: scheme.factor_count,
+        readyFactorCount: scheme.ready_factor_count,
+        reviewFactorCount: scheme.review_factor_count,
+        onlineReadyCount: scheme.online_ready_count,
+        ruleConvertibleCount: scheme.rule_convertible_count,
+        onlineReadyRateLabel:
+          scheme.factor_count === 0
+            ? "0.0%"
+            : `${((scheme.online_ready_count / scheme.factor_count) * 100).toFixed(1)}%`,
+        topReadinessIssues: formatReadinessIssues(scheme.readiness_issue_counts),
+      }))
+      .sort(
+        (left, right) =>
+          right.factorCount - left.factorCount || left.schemeFamily.localeCompare(right.schemeFamily),
+      ),
   };
+}
+
+function formatReadinessIssues(issueCounts?: Record<string, number>) {
+  return Object.entries(issueCounts ?? {})
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
+    .map(([issue, count]) => `${issue}: ${count}`);
 }
 
 export function buildFactorOwnerOptions(cards: FactorCard[]) {
@@ -569,6 +602,25 @@ export function FactorFactoryPage() {
           <ul className="result-list compact-list">
             {readinessSummary.topReadinessIssues.slice(0, 4).map((issue) => (
               <li key={issue}>{issue}</li>
+            ))}
+          </ul>
+        ) : null}
+        {readinessSummary.schemeReadiness.length > 0 ? (
+          <ul className="result-list compact-list">
+            {readinessSummary.schemeReadiness.slice(0, 6).map((scheme) => (
+              <li key={scheme.schemeFamily}>
+                <strong>{scheme.schemeFamily}</strong>
+                <span>
+                  {scheme.readyFactorCount} ready / {scheme.reviewFactorCount} review /{" "}
+                  {scheme.onlineReadyRateLabel} online
+                </span>
+                <small>
+                  {scheme.factorCount} factors / {scheme.ruleConvertibleCount} rule-ready
+                  {scheme.topReadinessIssues.length > 0
+                    ? ` / ${scheme.topReadinessIssues.slice(0, 2).join(" / ")}`
+                    : ""}
+                </small>
+              </li>
             ))}
           </ul>
         ) : null}

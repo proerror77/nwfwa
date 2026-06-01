@@ -235,6 +235,31 @@ describe("buildFactorReadinessSummary", () => {
         unstable_distribution: 2,
         high_missing_rate: 1,
       },
+      scheme_readiness: [
+        {
+          scheme_family: "provider_peer_outlier",
+          factor_count: 4,
+          ready_factor_count: 1,
+          review_factor_count: 3,
+          online_ready_count: 2,
+          rule_convertible_count: 2,
+          readiness_issue_counts: {
+            missing_owner: 3,
+            unstable_distribution: 1,
+          },
+        },
+        {
+          scheme_family: "early_high_value_claim",
+          factor_count: 8,
+          ready_factor_count: 4,
+          review_factor_count: 4,
+          online_ready_count: 5,
+          rule_convertible_count: 3,
+          readiness_issue_counts: {
+            high_missing_rate: 1,
+          },
+        },
+      ],
     });
 
     expect(summary).toEqual({
@@ -254,6 +279,28 @@ describe("buildFactorReadinessSummary", () => {
       ],
       reviewQueueCount: 7,
       onlineReadyRateLabel: "58.3%",
+      schemeReadiness: [
+        {
+          schemeFamily: "early_high_value_claim",
+          factorCount: 8,
+          readyFactorCount: 4,
+          reviewFactorCount: 4,
+          onlineReadyCount: 5,
+          ruleConvertibleCount: 3,
+          onlineReadyRateLabel: "62.5%",
+          topReadinessIssues: ["high_missing_rate: 1"],
+        },
+        {
+          schemeFamily: "provider_peer_outlier",
+          factorCount: 4,
+          readyFactorCount: 1,
+          reviewFactorCount: 3,
+          onlineReadyCount: 2,
+          ruleConvertibleCount: 2,
+          onlineReadyRateLabel: "50.0%",
+          topReadinessIssues: ["missing_owner: 3", "unstable_distribution: 1"],
+        },
+      ],
     });
   });
 });
