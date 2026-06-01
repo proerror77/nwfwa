@@ -685,14 +685,24 @@ fn validate_medical_record_receive_dates(
     };
 
     for (record_index, record) in medical_records.iter().enumerate() {
-        if epoch_date_at(record, &["visitDate"]).is_some_and(|visit_date| receive_date < visit_date)
-        {
-            validation_errors.push(InboxValidationError {
-                field_path: format!("reportCase.medicalRecordInfoList[{record_index}].visitDate"),
-                severity: "warning",
-                remediation: "claim receive date should not be earlier than medical record visit date".into(),
-            });
-            push_signal(data_quality_signals, "date_inconsistency");
+        for (field_name, field_label) in [
+            ("visitDate", "medical record visit date"),
+            ("operationStartDate", "medical record operation start date"),
+        ] {
+            if epoch_date_at(record, &[field_name])
+                .is_some_and(|field_date| receive_date < field_date)
+            {
+                validation_errors.push(InboxValidationError {
+                    field_path: format!(
+                        "reportCase.medicalRecordInfoList[{record_index}].{field_name}"
+                    ),
+                    severity: "warning",
+                    remediation: format!(
+                        "claim receive date should not be earlier than {field_label}"
+                    ),
+                });
+                push_signal(data_quality_signals, "date_inconsistency");
+            }
         }
     }
 }

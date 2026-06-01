@@ -57,6 +57,9 @@ than `startDate` returns `date_inconsistency` on the matching
 Medical-record date checks compare `claimReceiveDate` with every
 `medicalRecordInfoList[n].visitDate`; visits after receive date return
 `date_inconsistency` on the matching medical-record path.
+They also compare every `medicalRecordInfoList[n].operationStartDate` with
+`claimReceiveDate`; operation dates after receive date return
+`date_inconsistency` on the matching operation-date path.
 Diagnosis-item support checks run per invoice. If any invoice contains fee
 details without structured diagnosis context, the endpoint returns a
 field-level `diagnosis_item_mismatch` warning for that invoice.
