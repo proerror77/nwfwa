@@ -438,7 +438,12 @@ fn build_canonical_claim_context(
             "class": invoice.and_then(|invoice| string_at(invoice, &["hospitalClass"])),
             "type": invoice.and_then(|invoice| string_at(invoice, &["hospitalProperty"])),
             "city": invoice.and_then(|invoice| string_at(invoice, &["hospitalCityName"])),
-            "province": invoice.and_then(|invoice| string_at(invoice, &["hospitalProvinceName"]))
+            "province": invoice.and_then(|invoice| string_at(invoice, &["hospitalProvinceName"])),
+            "network_flags": {
+                "is_hospital_institution": invoice.and_then(|invoice| bool_at(invoice, &["isHospitalInstitution"])),
+                "primary_care": invoice.and_then(|invoice| bool_at(invoice, &["primaryCare"])),
+                "red_flag": invoice.and_then(|invoice| string_at(invoice, &["redFlag"]))
+            }
         },
         "itemized_bill_lines": invoice
             .map(itemized_bill_lines)
@@ -679,6 +684,12 @@ fn number_at(value: &Value, path: &[&str]) -> Option<f64> {
     path.iter()
         .try_fold(value, |current, key| current.get(*key))
         .and_then(Value::as_f64)
+}
+
+fn bool_at(value: &Value, path: &[&str]) -> Option<bool> {
+    path.iter()
+        .try_fold(value, |current, key| current.get(*key))
+        .and_then(Value::as_bool)
 }
 
 fn epoch_date_at(value: &Value, path: &[&str]) -> Option<NaiveDate> {

@@ -108,8 +108,12 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
                     "hospitalCode": "HSP-001",
                     "hospitalName": "南京同仁医院",
                     "hospitalClass": "三级",
+                    "hospitalProperty": "02",
                     "hospitalCityName": "南京",
                     "hospitalProvinceName": "江苏",
+                    "isHospitalInstitution": true,
+                    "primaryCare": true,
+                    "redFlag": "N",
                     "medicalType": "门诊",
                     "accidentPersonName": "王向龙",
                     "diagnosisList": [
@@ -190,6 +194,19 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(
         body["canonical_claim_context"]["provider_snapshot"]["name"],
         "南京同仁医院"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["provider_snapshot"]["network_flags"]
+            ["is_hospital_institution"],
+        true
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["provider_snapshot"]["network_flags"]["primary_care"],
+        true
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["provider_snapshot"]["network_flags"]["red_flag"],
+        "N"
     );
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]["item_name"],
