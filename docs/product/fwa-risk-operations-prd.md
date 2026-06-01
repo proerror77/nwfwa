@@ -609,6 +609,9 @@ Rule promotion requires:
 
 - named owner and applicability scope;
 - deterministic backtest against representative samples;
+- no unresolved backtest blockers such as underpowered reviewed sample count,
+  insufficient precision/recall, false-positive burden, or review-capacity
+  overflow;
 - estimated saving and expected false-positive burden;
 - evidence refs for the pattern the rule claims to detect;
 - approval before publish;

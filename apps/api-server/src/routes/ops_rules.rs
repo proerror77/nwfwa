@@ -397,6 +397,9 @@ fn build_rule_promotion_gates(
         backtest_saving
     };
     let has_review_evidence = effective_reviewed_count > 0;
+    let backtest_blockers_clear = latest_backtest
+        .map(|backtest| backtest.blockers.is_empty())
+        .unwrap_or(true);
     let has_saving_evidence = effective_saving > Decimal::ZERO;
     let review_evidence_source = review_evidence_source(performance, latest_backtest);
     let saving_evidence_source = saving_evidence_source(performance, latest_backtest);
@@ -449,8 +452,8 @@ fn build_rule_promotion_gates(
         ),
         rule_gate(
             "Deterministic backtest evidence",
-            has_review_evidence,
-            "backtest evidence missing",
+            has_review_evidence && backtest_blockers_clear,
+            backtest_evidence_blocker(has_review_evidence, backtest_blockers_clear),
             review_evidence_source,
         ),
         rule_gate(
@@ -576,6 +579,19 @@ fn saving_evidence_source(
         "backtest"
     } else {
         "missing"
+    }
+}
+
+fn backtest_evidence_blocker(
+    has_review_evidence: bool,
+    backtest_blockers_clear: bool,
+) -> &'static str {
+    if !has_review_evidence {
+        "backtest evidence missing"
+    } else if !backtest_blockers_clear {
+        "backtest blockers unresolved"
+    } else {
+        "none"
     }
 }
 

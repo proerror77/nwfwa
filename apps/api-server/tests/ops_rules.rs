@@ -734,6 +734,86 @@ async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
 }
 
 #[tokio::test]
+async fn rule_promotion_gates_block_unresolved_backtest_blockers() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/backtest",
+        r#"{
+          "rule": {
+            "rule_id": "rule_early_claim",
+            "version": 1,
+            "name": "Early claim after policy start",
+            "conditions": [
+              {
+                "field": "days_since_policy_start",
+                "operator": "<=",
+                "value": 7
+              }
+            ],
+            "action": {
+              "score": 25,
+              "alert_code": "EARLY_CLAIM",
+              "recommended_action": "ManualReview",
+              "reason": "保单生效后 7 天内发生理赔"
+            }
+          },
+          "samples": [
+            {
+              "external_claim_id": "CLM-BT-UNDERPOWERED",
+              "claim_amount": "8000",
+              "currency": "CNY",
+              "service_date": "2026-01-06",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-BT-UNDERPOWERED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            }
+          ],
+          "expected_review_capacity": 5
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["promotion_recommendation"], "needs_more_evidence");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("reviewed sample count below 2")));
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["decision"], "routing_blocked");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("backtest blockers unresolved")));
+    let backtest_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Deterministic backtest evidence")
+        .unwrap();
+    assert_eq!(backtest_gate["passed"], false);
+    assert_eq!(backtest_gate["blocker"], "backtest blockers unresolved");
+    assert_eq!(backtest_gate["evidence_source"], "backtest");
+}
+
+#[tokio::test]
 async fn rule_promotion_gates_include_rule_feedback_labels() {
     let app = build_app(test_config());
 

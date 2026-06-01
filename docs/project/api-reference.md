@@ -223,6 +223,10 @@ record human context and evidence refs.
 
 Rule APIs support deterministic controls. They should not silently change active
 customer behavior without lifecycle and audit evidence.
+Rule promotion gates treat a stored backtest as usable routing evidence only
+when its own blockers are cleared; underpowered samples, weak precision/recall,
+excess false positives, or review-capacity overflow keep the deterministic
+backtest gate blocked.
 
 Rule lifecycle caveat: `approve` currently writes approved status with evidence
 refs. `rollback` moves an active rule back to approved status; it does not select
