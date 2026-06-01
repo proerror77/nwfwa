@@ -424,6 +424,8 @@ async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     assert_eq!(dashboard["agent_governance"]["total_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["successful_runs"], 1);
     assert_eq!(dashboard["agent_governance"]["evidence_backed_runs"], 1);
+    assert_eq!(dashboard["agent_governance"]["tool_call_count"], 1);
+    assert_eq!(dashboard["agent_governance"]["policy_check_count"], 1);
     assert_eq!(dashboard["agent_governance"]["pending_approvals"], 0);
     assert_eq!(dashboard["agent_governance"]["approved_approvals"], 1);
     assert_eq!(dashboard["agent_governance"]["rejected_approvals"], 0);

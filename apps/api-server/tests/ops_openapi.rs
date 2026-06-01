@@ -2153,13 +2153,20 @@ async fn openapi_includes_operations_paths() {
         );
     }
     assert!(schema["components"]["schemas"]["DashboardAgentGovernance"].is_object());
-    assert!(
-        schema["components"]["schemas"]["DashboardAgentGovernance"]["required"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|field| field == "evidence_backed_runs")
-    );
+    for field in [
+        "evidence_backed_runs",
+        "tool_call_count",
+        "policy_check_count",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["DashboardAgentGovernance"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing DashboardAgentGovernance field {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
             ["agent_governance"]["$ref"],

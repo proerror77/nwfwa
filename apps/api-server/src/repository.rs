@@ -579,6 +579,8 @@ pub struct DashboardAgentGovernanceRecord {
     pub total_runs: u32,
     pub successful_runs: u32,
     pub evidence_backed_runs: u32,
+    pub tool_call_count: u32,
+    pub policy_check_count: u32,
     pub pending_approvals: u32,
     pub approved_approvals: u32,
     pub rejected_approvals: u32,
@@ -9128,6 +9130,8 @@ fn summarize_dashboard_agent_governance(
             .iter()
             .filter(|run| !run.evidence_refs.is_empty())
             .count() as u32,
+        tool_call_count: runs.iter().map(|run| run.tool_calls.len() as u32).sum(),
+        policy_check_count: runs.iter().map(|run| run.policy_checks.len() as u32).sum(),
         pending_approvals,
         approved_approvals,
         rejected_approvals,

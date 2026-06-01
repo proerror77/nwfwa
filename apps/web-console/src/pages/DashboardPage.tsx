@@ -70,6 +70,8 @@ type DashboardAgentGovernance = {
   total_runs: number;
   successful_runs: number;
   evidence_backed_runs: number;
+  tool_call_count: number;
+  policy_check_count: number;
   pending_approvals: number;
   approved_approvals: number;
   rejected_approvals: number;
@@ -252,6 +254,8 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
   const totalRuns = governance?.total_runs ?? 0;
   const successfulRuns = governance?.successful_runs ?? 0;
   const evidenceBackedRuns = governance?.evidence_backed_runs ?? 0;
+  const toolCallCount = governance?.tool_call_count ?? 0;
+  const policyCheckCount = governance?.policy_check_count ?? 0;
   const approvedApprovals = governance?.approved_approvals ?? 0;
   const rejectedApprovals = governance?.rejected_approvals ?? 0;
   const decidedApprovals = approvedApprovals + rejectedApprovals;
@@ -259,6 +263,8 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
     totalRuns,
     successfulRuns,
     evidenceBackedRuns,
+    toolCallCount,
+    policyCheckCount,
     pendingApprovals: governance?.pending_approvals ?? 0,
     approvedApprovals,
     rejectedApprovals,
@@ -269,6 +275,8 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
       totalRuns === 0 ? "0.0%" : formatPercent(successfulRuns / totalRuns),
     evidenceBackedRateLabel:
       totalRuns === 0 ? "0.0%" : formatPercent(evidenceBackedRuns / totalRuns),
+    policyCoverageRateLabel:
+      toolCallCount === 0 ? "0.0%" : formatPercent(policyCheckCount / toolCallCount),
     approvalRateLabel:
       decidedApprovals === 0 ? "0.0%" : formatPercent(approvedApprovals / decidedApprovals),
     adoptionRateLabel:
@@ -774,6 +782,18 @@ export function DashboardPage() {
             </div>
           </div>
           <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Policy Coverage</span>
+              <strong>{agentGovernanceSummary.policyCoverageRateLabel}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Tool Calls</span>
+              <strong>{agentGovernanceSummary.toolCallCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Policy Checks</span>
+              <strong>{agentGovernanceSummary.policyCheckCount}</strong>
+            </div>
             <div className="metric-row compact-metric-row">
               <span>Adopted Outputs</span>
               <strong>{agentGovernanceSummary.adoptedAgentOutputs}</strong>

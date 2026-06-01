@@ -4571,11 +4571,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardAgentGovernance": {
                     "type": "object",
-                    "required": ["total_runs", "successful_runs", "evidence_backed_runs", "pending_approvals", "approved_approvals", "rejected_approvals"],
+                    "required": ["total_runs", "successful_runs", "evidence_backed_runs", "tool_call_count", "policy_check_count", "pending_approvals", "approved_approvals", "rejected_approvals"],
                     "properties": {
                         "total_runs": { "type": "integer" },
                         "successful_runs": { "type": "integer" },
                         "evidence_backed_runs": { "type": "integer" },
+                        "tool_call_count": { "type": "integer" },
+                        "policy_check_count": { "type": "integer" },
                         "pending_approvals": { "type": "integer" },
                         "approved_approvals": { "type": "integer" },
                         "rejected_approvals": { "type": "integer" }
