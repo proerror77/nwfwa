@@ -256,6 +256,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - compare `claimReceiveDate` with every invoice `startDate`; non-primary
   invoice dates after receive date must emit `date_inconsistency` on the exact
   `invoiceList[n].startDate` path.
+- compare `claimReceiveDate` with every medical-record `visitDate`; non-primary
+  medical-record visits after receive date must emit `date_inconsistency` on
+  the exact `medicalRecordInfoList[n].visitDate` path.
 
 Required inbox corrections before scoring:
 

@@ -378,6 +378,12 @@ fn build_canonical_claim_context(
         receive_date,
         &invoices,
     );
+    validate_medical_record_receive_dates(
+        validation_errors,
+        data_quality_signals,
+        receive_date,
+        &medical_records,
+    );
     validate_service_window(
         validation_errors,
         data_quality_signals,
@@ -649,6 +655,29 @@ fn validate_invoice_receive_dates(
                 severity: "warning",
                 remediation: "claim receive date should not be earlier than invoice start date"
                     .into(),
+            });
+            push_signal(data_quality_signals, "date_inconsistency");
+        }
+    }
+}
+
+fn validate_medical_record_receive_dates(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    receive_date: Option<NaiveDate>,
+    medical_records: &[&Value],
+) {
+    let Some(receive_date) = receive_date else {
+        return;
+    };
+
+    for (record_index, record) in medical_records.iter().enumerate() {
+        if epoch_date_at(record, &["visitDate"]).is_some_and(|visit_date| receive_date < visit_date)
+        {
+            validation_errors.push(InboxValidationError {
+                field_path: format!("reportCase.medicalRecordInfoList[{record_index}].visitDate"),
+                severity: "warning",
+                remediation: "claim receive date should not be earlier than medical record visit date".into(),
             });
             push_signal(data_quality_signals, "date_inconsistency");
         }

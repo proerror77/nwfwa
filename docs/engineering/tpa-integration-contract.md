@@ -51,6 +51,9 @@ Canonical claim header `total_amount` is the sum of all source invoice
 Invoice date checks compare `claimReceiveDate` with every invoice `startDate`;
 non-primary invoice dates after receive date return `date_inconsistency` on the
 matching `reportCase.policyList[0].invoiceList[n].startDate` path.
+Medical-record date checks compare `claimReceiveDate` with every
+`medicalRecordInfoList[n].visitDate`; visits after receive date return
+`date_inconsistency` on the matching medical-record path.
 Diagnosis-item support checks run per invoice. If any invoice contains fee
 details without structured diagnosis context, the endpoint returns a
 field-level `diagnosis_item_mismatch` warning for that invoice.
