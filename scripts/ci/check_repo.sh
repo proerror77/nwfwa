@@ -134,6 +134,8 @@ grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml
 grep -q "Rust Compile Rules" AGENTS.md
+grep -q "UPDATE investigation_cases" migrations/0001_initial.sql
+grep -q "SET review_mode = l.review_mode" migrations/0001_initial.sql
 
 if git ls-files | grep -E '(^|/)(target|node_modules|dist|build)/' >/dev/null; then
   echo "generated dependency/build output is tracked" >&2

@@ -367,6 +367,12 @@ ALTER TABLE investigation_cases
   ADD COLUMN IF NOT EXISTS reviewer_notes TEXT,
   ADD COLUMN IF NOT EXISTS investigation_result_id TEXT;
 
+UPDATE investigation_cases AS c
+SET review_mode = l.review_mode
+FROM fwa_leads AS l
+WHERE c.lead_id = l.lead_id
+  AND c.review_mode IS DISTINCT FROM l.review_mode;
+
 CREATE TABLE IF NOT EXISTS audit_samples (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sample_id TEXT NOT NULL UNIQUE,
