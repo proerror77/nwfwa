@@ -287,6 +287,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   reasonableness scoring.
 - compute canonical `claim_header.total_amount` as the sum of all source
   invoice `feeAmount` values, not only the primary invoice amount.
+- compare `claimReceiveDate` with `accidentDate`; an accident date after
+  receive date must emit `date_inconsistency` on the exact
+  `reportCase.accidentDate` path.
 - compare `claimReceiveDate` with every invoice `startDate`; non-primary
   invoice dates after receive date must emit `date_inconsistency` on the exact
   `invoiceList[n].startDate` path.

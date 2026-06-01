@@ -412,6 +412,7 @@ fn build_canonical_claim_context(
         .and_then(|invoice| epoch_date_at(invoice, &["startDate"]))
         .or_else(|| epoch_date_at(payload, &["reportCase", "accidentDate"]));
     let receive_date = epoch_date_at(payload, &["reportCase", "claimReceiveDate"]);
+    let accident_date = epoch_date_at(payload, &["reportCase", "accidentDate"]);
     let policy_start_date = policy.and_then(|policy| epoch_date_at(policy, &["validateDate"]));
     let policy_end_date = policy.and_then(|policy| epoch_date_at(policy, &["expireDate"]));
     let product_start_date = product.and_then(|product| epoch_date_at(product, &["validateDate"]));
@@ -431,6 +432,16 @@ fn build_canonical_claim_context(
                 field_path: "reportCase.claimReceiveDate".into(),
                 severity: "warning",
                 remediation: "claim receive date should not be earlier than service date".into(),
+            });
+            push_signal(data_quality_signals, "date_inconsistency");
+        }
+    }
+    if let (Some(accident_date), Some(receive_date)) = (accident_date, receive_date) {
+        if receive_date < accident_date {
+            validation_errors.push(InboxValidationError {
+                field_path: "reportCase.accidentDate".into(),
+                severity: "warning",
+                remediation: "accident date should not be later than claim receive date".into(),
             });
             push_signal(data_quality_signals, "date_inconsistency");
         }
@@ -491,8 +502,7 @@ fn build_canonical_claim_context(
             "source_system": source_system,
             "service_date": service_date.map(|date| date.to_string()),
             "receive_date": receive_date.map(|date| date.to_string()),
-            "accident_date": epoch_date_at(payload, &["reportCase", "accidentDate"])
-                .map(|date| date.to_string()),
+            "accident_date": accident_date.map(|date| date.to_string()),
             "accident_reason": string_at(payload, &["reportCase", "accidentReason"]),
             "medical_type": invoice
                 .and_then(|invoice| string_at(invoice, &["medicalType"]))

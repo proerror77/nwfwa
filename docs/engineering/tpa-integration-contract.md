@@ -67,6 +67,9 @@ Canonical claim header `total_amount` is the sum of all source invoice
 policy or primary invoice. When
 `reportCase.claimAmount` is missing but invoice totals are available, the inbox
 returns a `missing_claim_amount` warning instead of overwriting the raw payload.
+Claim-level date checks compare `claimReceiveDate` with `accidentDate`; an
+accident date after receive date returns `date_inconsistency` on
+`reportCase.accidentDate`.
 Invoice date checks compare `claimReceiveDate` with every invoice `startDate`;
 non-primary invoice dates after receive date return `date_inconsistency` on the
 matching `reportCase.policyList[n].invoiceList[m].startDate` path.

@@ -53,6 +53,9 @@ summary gathered from normalized document, bill-line, product, and liability
 evidence paths.
 `canonical_claim_context.claim_header` preserves service, receive, and accident
 dates for timing and waiting-period features.
+Claim-level date checks report `date_inconsistency` on
+`reportCase.accidentDate` when the accident date is later than
+`claimReceiveDate`.
 When `reportCase.claimAmount` is missing but source invoice totals are
 available, `claim_header.total_amount` is derived from those invoices and
 `data_quality_signals` includes `missing_claim_amount`.
