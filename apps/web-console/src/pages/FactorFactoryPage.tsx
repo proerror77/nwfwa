@@ -213,16 +213,26 @@ export function buildFactorOwnerOptions(cards: FactorCard[]) {
   );
 }
 
+export function buildFactorSchemeOptions(cards: FactorCard[]) {
+  return [...new Set(cards.map((card) => card.scheme_family))].sort((left, right) =>
+    left.localeCompare(right),
+  );
+}
+
 export function filterFactorCards(
   cards: FactorCard[],
   readinessFilter: FactorReadinessFilter,
   ownerFilter: string,
+  schemeFilter: string,
 ) {
   return cards.filter((card) => {
     if (readinessFilter !== "all" && card.online_status !== readinessFilter) {
       return false;
     }
     if (ownerFilter !== "all" && card.owner !== ownerFilter) {
+      return false;
+    }
+    if (schemeFilter !== "all" && card.scheme_family !== schemeFilter) {
       return false;
     }
     return true;
@@ -441,6 +451,7 @@ export function FactorFactoryPage() {
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(null);
   const [readinessFilter, setReadinessFilter] = useState<FactorReadinessFilter>("all");
   const [ownerFilter, setOwnerFilter] = useState("all");
+  const [schemeFilter, setSchemeFilter] = useState("all");
   const queryClient = useQueryClient();
   const datasetsQuery = useQuery({
     queryKey: ["factor-datasets", apiKey],
@@ -468,9 +479,10 @@ export function FactorFactoryPage() {
         : [];
   }, [readinessQuery.data?.factor_cards, selectedDataset]);
   const factorOwnerOptions = useMemo(() => buildFactorOwnerOptions(factorCards), [factorCards]);
+  const factorSchemeOptions = useMemo(() => buildFactorSchemeOptions(factorCards), [factorCards]);
   const filteredFactorCards = useMemo(
-    () => filterFactorCards(factorCards, readinessFilter, ownerFilter),
-    [factorCards, ownerFilter, readinessFilter],
+    () => filterFactorCards(factorCards, readinessFilter, ownerFilter, schemeFilter),
+    [factorCards, ownerFilter, readinessFilter, schemeFilter],
   );
   const factorRuleCandidate = useMemo(
     () =>
@@ -592,6 +604,17 @@ export function FactorFactoryPage() {
               <option value="all">All readiness</option>
               <option value="ready">Ready</option>
               <option value="review">Review</option>
+            </select>
+          </label>
+          <label>
+            Scheme
+            <select value={schemeFilter} onChange={(event) => setSchemeFilter(event.target.value)}>
+              <option value="all">All schemes</option>
+              {factorSchemeOptions.map((scheme) => (
+                <option key={scheme} value={scheme}>
+                  {scheme}
+                </option>
+              ))}
             </select>
           </label>
           <label>

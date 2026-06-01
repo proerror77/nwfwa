@@ -305,26 +305,44 @@ describe("filterFactorCards", () => {
     expect(buildFactorOwnerOptions(cards)).toEqual(["feature-ops", "model-ops"]);
   });
 
-  it("filters factor cards by readiness and owner", () => {
+  it("filters factor cards by readiness owner and scheme family", () => {
     const cards = [
-      factorCard({ factor_name: "ready_feature", owner: "feature-ops", online_status: "ready" }),
+      factorCard({
+        factor_name: "ready_feature",
+        scheme_family: "early_high_value_claim",
+        owner: "feature-ops",
+        online_status: "ready",
+      }),
       factorCard({
         factor_name: "review_feature",
+        scheme_family: "provider_peer_outlier",
         owner: "feature-ops",
         online_status: "review",
       }),
-      factorCard({ factor_name: "model_feature", owner: "model-ops", online_status: "ready" }),
+      factorCard({
+        factor_name: "model_feature",
+        scheme_family: "provider_peer_outlier",
+        owner: "model-ops",
+        online_status: "ready",
+      }),
     ];
 
-    expect(filterFactorCards(cards, "ready", "feature-ops").map((card) => card.factor_name)).toEqual([
-      "ready_feature",
-    ]);
-    expect(filterFactorCards(cards, "all", "model-ops").map((card) => card.factor_name)).toEqual([
+    expect(
+      filterFactorCards(cards, "ready", "feature-ops", "early_high_value_claim").map(
+        (card) => card.factor_name,
+      ),
+    ).toEqual(["ready_feature"]);
+    expect(filterFactorCards(cards, "all", "model-ops", "all").map((card) => card.factor_name)).toEqual([
       "model_feature",
     ]);
-    expect(filterFactorCards(cards, "review", "all").map((card) => card.factor_name)).toEqual([
-      "review_feature",
-    ]);
+    expect(
+      filterFactorCards(cards, "all", "all", "provider_peer_outlier").map((card) => card.factor_name),
+    ).toEqual(["review_feature", "model_feature"]);
+    expect(
+      filterFactorCards(cards, "review", "all", "provider_peer_outlier").map(
+        (card) => card.factor_name,
+      ),
+    ).toEqual(["review_feature"]);
   });
 });
 
