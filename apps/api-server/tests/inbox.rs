@@ -203,15 +203,15 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     );
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["service_date"],
-        "2025-12-25"
+        "2025-12-26"
     );
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["receive_date"],
-        "2026-05-26"
+        "2026-05-27"
     );
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["accident_date"],
-        "2025-12-25"
+        "2025-12-26"
     );
     assert_eq!(
         body["canonical_claim_context"]["member_policy_snapshot"]["masked_certificate_id"],
@@ -227,7 +227,7 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     );
     assert_eq!(
         body["canonical_claim_context"]["member_policy_snapshot"]["member_birth_date"],
-        "2004-09-04"
+        "2004-09-05"
     );
     assert_eq!(
         body["canonical_claim_context"]["provider_snapshot"]["name"],
@@ -280,11 +280,11 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     );
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_start_date"],
-        "2025-12-25"
+        "2025-12-26"
     );
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_end_date"],
-        "2025-12-25"
+        "2025-12-26"
     );
     assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]
@@ -1114,8 +1114,8 @@ async fn preserves_all_medical_records_as_document_evidence() {
         .find(|document| document["document_id"] == "425840012")
         .expect("periodontal medical record should be preserved");
     assert_eq!(periodontal_document["visit_date"], "2025-12-25");
-    assert_eq!(periodontal_document["first_happen_date"], "2023-12-25");
-    assert_eq!(periodontal_document["operation_start_date"], "2025-12-25");
+    assert_eq!(periodontal_document["first_happen_date"], "2023-12-26");
+    assert_eq!(periodontal_document["operation_start_date"], "2025-12-26");
     assert_eq!(
         periodontal_document["source_path"],
         "reportCase.medicalRecordInfoList[0]"

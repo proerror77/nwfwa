@@ -52,7 +52,10 @@ full raw PII-bearing payload. Its payload includes a PII-safe `source_paths`
 summary gathered from normalized document, bill-line, product, and liability
 evidence paths.
 `canonical_claim_context.claim_header` preserves service, receive, and accident
-dates for timing and waiting-period features.
+dates for timing and waiting-period features. Epoch-millisecond source dates are
+normalized with the source business timezone for the adapter. The current
+`AiClaim Core` mapping uses `Asia/Shanghai`, so China-business midnight values
+do not shift to the previous UTC date.
 Claim-level date checks report `date_inconsistency` on
 `reportCase.accidentDate` when the accident date is later than
 `claimReceiveDate`.

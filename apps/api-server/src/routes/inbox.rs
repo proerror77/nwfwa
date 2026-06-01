@@ -2,7 +2,7 @@ use crate::{
     app::AppState, error::ApiError, repository::PersistedAuditEvent, routes::pii::redact_text,
 };
 use axum::{extract::State, http::HeaderMap, http::StatusCode, Json};
-use chrono::{DateTime, NaiveDate};
+use chrono::{DateTime, FixedOffset, NaiveDate};
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::AuditEventId;
 use serde::Serialize;
@@ -10,6 +10,7 @@ use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
 const MAPPING_VERSION: &str = "aiclaim-core-v1";
+const SOURCE_BUSINESS_UTC_OFFSET_SECONDS: i32 = 8 * 60 * 60;
 
 #[derive(Debug, Serialize)]
 pub struct InboxNormalizeResponse {
@@ -1206,7 +1207,11 @@ fn epoch_date_at(value: &Value, path: &[&str]) -> Option<NaiveDate> {
     path.iter()
         .try_fold(value, |current, key| current.get(*key))
         .and_then(Value::as_i64)
-        .and_then(|millis| DateTime::from_timestamp_millis(millis).map(|date| date.date_naive()))
+        .and_then(|millis| {
+            let source_timezone = FixedOffset::east_opt(SOURCE_BUSINESS_UTC_OFFSET_SECONDS)?;
+            DateTime::from_timestamp_millis(millis)
+                .map(|date| date.with_timezone(&source_timezone).date_naive())
+        })
 }
 
 fn first_array_item<'a>(value: &'a Value, path: &[&str]) -> Option<&'a Value> {
