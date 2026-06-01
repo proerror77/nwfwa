@@ -578,6 +578,7 @@ pub struct DashboardCaseSlaRecord {
 pub struct DashboardAgentGovernanceRecord {
     pub total_runs: u32,
     pub successful_runs: u32,
+    pub evidence_backed_runs: u32,
     pub pending_approvals: u32,
     pub approved_approvals: u32,
     pub rejected_approvals: u32,
@@ -9123,6 +9124,10 @@ fn summarize_dashboard_agent_governance(
     DashboardAgentGovernanceRecord {
         total_runs: runs.len() as u32,
         successful_runs: runs.iter().filter(|run| run.status == "succeeded").count() as u32,
+        evidence_backed_runs: runs
+            .iter()
+            .filter(|run| !run.evidence_refs.is_empty())
+            .count() as u32,
         pending_approvals,
         approved_approvals,
         rejected_approvals,

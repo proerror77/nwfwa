@@ -69,6 +69,7 @@ type DashboardCaseSla = {
 type DashboardAgentGovernance = {
   total_runs: number;
   successful_runs: number;
+  evidence_backed_runs: number;
   pending_approvals: number;
   approved_approvals: number;
   rejected_approvals: number;
@@ -250,12 +251,14 @@ export function buildDashboardCaseSlaSummary(sla?: DashboardCaseSla) {
 export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgentGovernance) {
   const totalRuns = governance?.total_runs ?? 0;
   const successfulRuns = governance?.successful_runs ?? 0;
+  const evidenceBackedRuns = governance?.evidence_backed_runs ?? 0;
   const approvedApprovals = governance?.approved_approvals ?? 0;
   const rejectedApprovals = governance?.rejected_approvals ?? 0;
   const decidedApprovals = approvedApprovals + rejectedApprovals;
   return {
     totalRuns,
     successfulRuns,
+    evidenceBackedRuns,
     pendingApprovals: governance?.pending_approvals ?? 0,
     approvedApprovals,
     rejectedApprovals,
@@ -264,6 +267,8 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
     rejectedAgentOutputs: rejectedApprovals,
     successRateLabel:
       totalRuns === 0 ? "0.0%" : formatPercent(successfulRuns / totalRuns),
+    evidenceBackedRateLabel:
+      totalRuns === 0 ? "0.0%" : formatPercent(evidenceBackedRuns / totalRuns),
     approvalRateLabel:
       decidedApprovals === 0 ? "0.0%" : formatPercent(approvedApprovals / decidedApprovals),
     adoptionRateLabel:
@@ -760,15 +765,23 @@ export function DashboardPage() {
               <strong>{agentGovernanceSummary.successRateLabel}</strong>
             </div>
             <div>
-              <span>Adopted Outputs</span>
-              <strong>{agentGovernanceSummary.adoptedAgentOutputs}</strong>
+              <span>Evidence-backed</span>
+              <strong>{agentGovernanceSummary.evidenceBackedRuns}</strong>
             </div>
             <div>
-              <span>Adoption Rate</span>
-              <strong>{agentGovernanceSummary.adoptionRateLabel}</strong>
+              <span>Evidence Rate</span>
+              <strong>{agentGovernanceSummary.evidenceBackedRateLabel}</strong>
             </div>
           </div>
           <div className="table-list">
+            <div className="metric-row compact-metric-row">
+              <span>Adopted Outputs</span>
+              <strong>{agentGovernanceSummary.adoptedAgentOutputs}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Adoption Rate</span>
+              <strong>{agentGovernanceSummary.adoptionRateLabel}</strong>
+            </div>
             <div className="metric-row compact-metric-row">
               <span>Pending</span>
               <strong>{agentGovernanceSummary.pendingApprovals}</strong>

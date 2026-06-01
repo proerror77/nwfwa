@@ -158,6 +158,7 @@ describe("buildDashboardAgentGovernanceSummary", () => {
     const summary = buildDashboardAgentGovernanceSummary({
       total_runs: 5,
       successful_runs: 4,
+      evidence_backed_runs: 3,
       pending_approvals: 1,
       approved_approvals: 3,
       rejected_approvals: 1,
@@ -166,6 +167,7 @@ describe("buildDashboardAgentGovernanceSummary", () => {
     expect(summary).toEqual({
       totalRuns: 5,
       successfulRuns: 4,
+      evidenceBackedRuns: 3,
       pendingApprovals: 1,
       approvedApprovals: 3,
       rejectedApprovals: 1,
@@ -173,6 +175,7 @@ describe("buildDashboardAgentGovernanceSummary", () => {
       adoptedAgentOutputs: 3,
       rejectedAgentOutputs: 1,
       successRateLabel: "80.0%",
+      evidenceBackedRateLabel: "60.0%",
       approvalRateLabel: "75.0%",
       adoptionRateLabel: "75.0%",
       rejectionRateLabel: "25.0%",

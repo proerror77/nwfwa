@@ -2153,6 +2153,13 @@ async fn openapi_includes_operations_paths() {
         );
     }
     assert!(schema["components"]["schemas"]["DashboardAgentGovernance"].is_object());
+    assert!(
+        schema["components"]["schemas"]["DashboardAgentGovernance"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "evidence_backed_runs")
+    );
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
             ["agent_governance"]["$ref"],
