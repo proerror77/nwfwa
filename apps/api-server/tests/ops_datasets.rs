@@ -157,7 +157,7 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
         )
         .replace(
             r#""profile_json": {"source_type": "legacy_csv_identifier"}"#,
-            r#""profile_json": {"source_type": "legacy_csv_identifier", "evidence_refs": ["profiles:renewal_automl_20211105:v1:policy_no"]}"#,
+            r#""profile_json": {"source_type": "legacy_csv_identifier", "scheme_family": "provider_outlier", "evidence_refs": ["profiles:renewal_automl_20211105:v1:policy_no"]}"#,
         ),
     )
     .await;
@@ -198,7 +198,18 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
     assert_eq!(readiness["readiness_issue_counts"]["missing_owner"], 3);
     assert_eq!(readiness["readiness_issue_counts"]["label_field"], 1);
     assert_eq!(readiness["factor_cards"].as_array().unwrap().len(), 3);
+    assert!(readiness["factor_cards"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .all(|card| card["scheme_family"]
+            .as_str()
+            .is_some_and(|value| !value.is_empty())));
     assert_eq!(readiness["factor_cards"][0]["factor_name"], "policy_no");
+    assert_eq!(
+        readiness["factor_cards"][0]["scheme_family"],
+        "provider_peer_outlier"
+    );
     assert_eq!(readiness["factor_cards"][0]["chinese_name"], "Policy No");
     assert_eq!(readiness["factor_cards"][0]["entity_type"], "policy_order");
     assert_eq!(

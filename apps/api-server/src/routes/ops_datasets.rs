@@ -99,6 +99,7 @@ pub struct FactorCardRecord {
     pub dataset_key: String,
     pub dataset_version: String,
     pub factor_name: String,
+    pub scheme_family: String,
     pub chinese_name: String,
     pub entity_type: String,
     pub semantic_role: String,
@@ -820,6 +821,7 @@ fn build_factor_card(dataset: &DatasetRecord, field: &SchemaFieldRecord) -> Fact
         dataset_key: dataset.dataset_key.clone(),
         dataset_version: dataset.dataset_version.clone(),
         factor_name: field.field_name.clone(),
+        scheme_family: factor_scheme_family(field),
         chinese_name: string_profile_value(&field.profile_json, "chinese_name")
             .or_else(|| string_profile_value(&field.profile_json, "display_label"))
             .unwrap_or_else(|| titleize(&field.field_name)),
@@ -1031,6 +1033,44 @@ fn factor_readiness_issues(
         issues.push("missing_owner".into());
     }
     issues
+}
+
+fn factor_scheme_family(field: &SchemaFieldRecord) -> String {
+    if let Some(scheme_family) = string_profile_value(&field.profile_json, "scheme_family")
+        .and_then(|value| canonical_scheme_family(&value))
+    {
+        return scheme_family;
+    }
+
+    let factor_name = field.field_name.as_str();
+    let description = field.description.to_ascii_lowercase();
+    let text = format!("{}_{}", factor_name, description);
+    let inferred = if text.contains("duplicate") {
+        "duplicate_billing"
+    } else if text.contains("diagnosis_procedure") || text.contains("diagnosis procedure") {
+        "diagnosis_procedure_mismatch"
+    } else if text.contains("clinical_review")
+        || text.contains("medical_reasonableness")
+        || text.contains("medical necessity")
+    {
+        "medically_unnecessary_service"
+    } else if text.contains("provider") {
+        "provider_peer_outlier"
+    } else if text.contains("service_count")
+        || text.contains("utilization")
+        || text.contains("item_count")
+    {
+        "excessive_utilization"
+    } else if text.contains("days_since_policy_start")
+        || text.contains("amount_to_limit")
+        || text.contains("early")
+    {
+        "early_high_value_claim"
+    } else {
+        "high_risk_claim"
+    };
+
+    inferred.into()
 }
 
 fn titleize(value: &str) -> String {

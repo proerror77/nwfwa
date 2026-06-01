@@ -754,6 +754,8 @@ def publish_demo_knowledge_case(investigation, qa):
 
 def assert_factor_factory_readiness():
     readiness = request("GET", "/api/v1/ops/factors/readiness")
+    taxonomy = request("GET", "/api/v1/ops/fwa-schemes")
+    families = {scheme.get("scheme_family") for scheme in taxonomy.get("schemes", [])}
     assert_true(readiness.get("dataset_count", 0) >= 1, "factor readiness missing datasets")
     assert_true(readiness.get("factor_count", 0) >= 8, "factor readiness missing seeded factor cards")
     assert_true(
@@ -769,6 +771,10 @@ def assert_factor_factory_readiness():
         "factor readiness missing ready factor cards",
     )
     cards = readiness.get("factor_cards", [])
+    assert_true(
+        all(card.get("scheme_family") in families for card in cards),
+        "factor readiness includes card outside FWA scheme taxonomy",
+    )
     amount_ratio = next(
         (
             card
@@ -780,6 +786,10 @@ def assert_factor_factory_readiness():
     assert_true(amount_ratio is not None, "factor card missing claim_amount_to_limit_ratio")
     assert_true(amount_ratio.get("readiness_status") == "ready", "amount ratio factor not ready")
     assert_true(amount_ratio.get("owner") == "feature-ops", "amount ratio factor owner mismatch")
+    assert_true(
+        amount_ratio.get("scheme_family") == "early_high_value_claim",
+        "amount ratio factor scheme family mismatch",
+    )
     assert_true(amount_ratio.get("online_available") is True, "amount ratio factor is not online available")
     assert_true(amount_ratio.get("rule_convertible") is True, "amount ratio factor is not rule convertible")
     assert_true(amount_ratio.get("business_meaning"), "amount ratio factor missing business meaning")

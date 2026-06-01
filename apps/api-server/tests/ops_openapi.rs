@@ -776,6 +776,7 @@ async fn openapi_includes_operations_paths() {
     }
     for field in [
         "factor_name",
+        "scheme_family",
         "chinese_name",
         "entity_type",
         "calculation_logic",
@@ -803,6 +804,10 @@ async fn openapi_includes_operations_paths() {
             "missing factor card field {field}"
         );
     }
+    assert_eq!(
+        schema["components"]["schemas"]["FactorCard"]["properties"]["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
     assert_eq!(
         schema["components"]["schemas"]["FactorCard"]["properties"]["evidence_refs"]["minItems"],
         1

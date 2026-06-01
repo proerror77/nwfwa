@@ -3898,12 +3898,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "FactorCard": {
                     "type": "object",
-                    "required": ["dataset_id", "dataset_key", "dataset_version", "factor_name", "chinese_name", "entity_type", "semantic_role", "logical_type", "calculation_window", "calculation_logic", "source_table", "source_fields", "business_meaning", "risk_direction", "missing_rate", "iv", "auc_gain", "lift", "psi", "stability", "model_contribution", "rule_convertible", "online_available", "readiness_status", "readiness_issues", "version", "owner", "is_label", "is_entity_key", "evidence_refs"],
+                    "required": ["dataset_id", "dataset_key", "dataset_version", "factor_name", "scheme_family", "chinese_name", "entity_type", "semantic_role", "logical_type", "calculation_window", "calculation_logic", "source_table", "source_fields", "business_meaning", "risk_direction", "missing_rate", "iv", "auc_gain", "lift", "psi", "stability", "model_contribution", "rule_convertible", "online_available", "readiness_status", "readiness_issues", "version", "owner", "is_label", "is_entity_key", "evidence_refs"],
                     "properties": {
                         "dataset_id": { "type": "string" },
                         "dataset_key": { "type": "string" },
                         "dataset_version": { "type": "string" },
                         "factor_name": { "type": "string" },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
                         "chinese_name": { "type": "string" },
                         "entity_type": { "type": "string" },
                         "semantic_role": { "type": "string" },
