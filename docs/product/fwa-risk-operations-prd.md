@@ -225,9 +225,11 @@ Reference payload observed on 2026-06-01:
 Required inbox corrections before scoring:
 
 - idempotency: use `systemCode + transNo + reportNo` as the external message
-  identity and reject or upsert duplicate submissions deterministically;
-- source trace: persist raw payload URI or checksum, normalized claim id,
-  mapping version, validation result, and evidence refs;
+  identity and reject or upsert duplicate submissions deterministically; internal
+  audit ids, run ids, raw payload refs, and idempotency keys must use a stable
+  checksum or fingerprint rather than raw external identifiers;
+- source trace: persist raw payload URI or checksum/fingerprint, normalized claim
+  id, mapping version, validation result, and evidence refs;
 - date normalization: convert all epoch-millisecond dates and detect impossible
   or inconsistent accident, visit, invoice, policy, liability, and receive
   windows;

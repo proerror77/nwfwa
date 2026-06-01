@@ -7,6 +7,7 @@ use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::AuditEventId;
 use serde::Serialize;
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 const MAPPING_VERSION: &str = "aiclaim-core-v1";
 
@@ -149,18 +150,21 @@ pub async fn normalize_claim_inbox(
     } else {
         StatusCode::OK
     };
-    let audit_id = inbox_audit_id(external_message_id.as_deref());
-    let run_id = external_message_id
+    let external_message_fingerprint = external_message_id
+        .as_deref()
+        .map(external_message_fingerprint);
+    let audit_id = inbox_audit_id(external_message_fingerprint.as_deref());
+    let run_id = external_message_fingerprint
         .as_ref()
-        .map(|id| format!("inbox:{id}"))
+        .map(|fingerprint| format!("inbox:{fingerprint}"))
         .unwrap_or_else(|| format!("inbox:{audit_id}"));
     let claim_id = report_no.clone().unwrap_or_else(|| "unknown".into());
-    let raw_payload_ref = external_message_id
+    let raw_payload_ref = external_message_fingerprint
         .as_ref()
-        .map(|id| format!("inbox://raw-claims/{id}"));
-    let idempotency_key = external_message_id
+        .map(|fingerprint| format!("inbox://raw-claims/{fingerprint}"));
+    let idempotency_key = external_message_fingerprint
         .as_ref()
-        .map(|id| format!("inbox.claim.normalize:{id}"));
+        .map(|fingerprint| format!("inbox.claim.normalize:{fingerprint}"));
     let evidence_refs = [
         raw_payload_ref.clone(),
         Some(format!("inbox_mappings:{MAPPING_VERSION}")),
@@ -184,7 +188,7 @@ pub async fn normalize_claim_inbox(
             payload: json!({
                 "claim_id": claim_id,
                 "source_system": system_code.clone().unwrap_or_else(|| state.config.source_system.clone()),
-                "external_message_id": external_message_id,
+                "external_message_fingerprint": external_message_fingerprint,
                 "idempotency_key": idempotency_key,
                 "mapping_version": MAPPING_VERSION,
                 "validation_result": validation_result,
@@ -234,10 +238,15 @@ fn internal_error(
     }
 }
 
-fn inbox_audit_id(external_message_id: Option<&str>) -> String {
-    external_message_id
-        .map(|id| format!("aud_inbox_{}", stable_id_fragment(id)))
+fn inbox_audit_id(external_message_fingerprint: Option<&str>) -> String {
+    external_message_fingerprint
+        .map(|fingerprint| format!("aud_inbox_{}", stable_id_fragment(fingerprint)))
         .unwrap_or_else(|| AuditEventId::new().to_string())
+}
+
+fn external_message_fingerprint(value: &str) -> String {
+    let digest = Sha256::digest(value.as_bytes());
+    format!("sha256:{digest:x}")
 }
 
 fn stable_id_fragment(value: &str) -> String {

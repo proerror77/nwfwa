@@ -44,10 +44,13 @@ FWA scoring unless a customer-specific config explicitly permits that behavior.
 
 The response includes:
 
-- `external_message_id`: `systemCode + transNo + reportNo` for idempotency.
-- `audit_id` and `run_id`: trace handles for Governance audit search.
-- `idempotency_key`: stable inbox normalization key derived from the external
-  message id.
+- `external_message_id`: `systemCode + transNo + reportNo` source identity
+  returned to the caller for correlation.
+- `audit_id` and `run_id`: trace handles for Governance audit search. They use
+  a stable external-message fingerprint and do not expose raw source transaction
+  ids.
+- `idempotency_key`: stable inbox normalization key derived from a SHA-256
+  fingerprint of the external message id.
 - `mapping_version`: adapter mapping version used for audit replay.
 - `validation_result`: `accepted`, `accepted_with_warnings`, or `rejected`.
 - `scoring_ready`: whether the normalized context can proceed directly to

@@ -152,10 +152,31 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(body["validation_result"], "accepted_with_warnings");
     assert_eq!(body["scoring_ready"], false);
     assert!(body["run_id"].as_str().unwrap().starts_with("inbox:"));
-    assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
-    assert_eq!(
-        body["idempotency_key"],
-        "inbox.claim.normalize:AiClaim Core:f8d0e88391ac4685929d0ca1cb411e7a:SAAS0300040388200349"
+    assert!(body["audit_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("aud_inbox_sha256_"));
+    assert!(body["idempotency_key"]
+        .as_str()
+        .unwrap()
+        .starts_with("inbox.claim.normalize:sha256:"));
+    assert!(body["raw_payload_ref"]
+        .as_str()
+        .unwrap()
+        .starts_with("inbox://raw-claims/sha256:"));
+    assert!(
+        !body["run_id"]
+            .as_str()
+            .unwrap()
+            .contains("f8d0e88391ac4685929d0ca1cb411e7a"),
+        "run_id must not expose raw source transaction ids"
+    );
+    assert!(
+        !body["idempotency_key"]
+            .as_str()
+            .unwrap()
+            .contains("SAAS0300040388200349"),
+        "idempotency key must not expose raw claim report ids"
     );
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["service_date"],
@@ -215,11 +236,18 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(event["run_id"], body["run_id"]);
     assert_eq!(event["event_status"], "accepted_with_warnings");
     assert_eq!(event["payload"]["mapping_version"], "aiclaim-core-v1");
-    assert_eq!(
-        event["payload"]["external_message_id"],
-        body["external_message_id"]
-    );
+    assert!(event["payload"]["external_message_id"].is_null());
+    assert!(event["payload"]["external_message_fingerprint"]
+        .as_str()
+        .unwrap()
+        .starts_with("sha256:"));
     assert_eq!(event["payload"]["status_code"], 200);
+    assert!(
+        !event["payload"]
+            .to_string()
+            .contains("f8d0e88391ac4685929d0ca1cb411e7a"),
+        "audit payload must not persist raw source transaction ids"
+    );
     assert!(
         !event["payload"].to_string().contains("D209475"),
         "audit payload must not persist raw member identifiers"

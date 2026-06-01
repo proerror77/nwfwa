@@ -41,7 +41,10 @@ dev-secret
 
 The inbox endpoint is the boundary for customer-specific payloads such as an
 `AiClaim Core` envelope with `systemCode`, `transNo`, and nested `reportCase`.
-It does not directly score the claim. Callers should resolve blocking
+It uses a stable SHA-256 fingerprint of `systemCode + transNo + reportNo` for
+internal `audit_id`, `run_id`, `raw_payload_ref`, and `idempotency_key` handles
+so governance logs do not expose raw source transaction ids. It does not
+directly score the claim. Callers should resolve blocking
 validation errors and required scoring fields before submitting the canonical
 context to `/api/v1/claims/score`.
 The audit event stores source trace metadata and validation outcomes, not the
