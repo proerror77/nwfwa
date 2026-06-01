@@ -27,8 +27,10 @@ describe("buildSavingAttributionRows", () => {
     expect(rows).toEqual([
       {
         key: "agent:agent_CLM-0287:investigation_confirmed",
-        sourceLabel: "agent / agent_CLM-0287",
-        lineageLabel: "agent:agent_CLM-0287 -> investigation_confirmed -> CNY 4100.00",
+        sourceKeyLabel: "agent_run_id",
+        sourceLabel: "agent_run_id / agent_CLM-0287",
+        lineageLabel:
+          "agent_run_id=agent_CLM-0287 -> action=investigation_confirmed -> saving=CNY 4100.00",
         lineageStatus: "lineage_evidence_present",
         action: "investigation_confirmed",
         savingAmount: "4100.00",
@@ -39,8 +41,9 @@ describe("buildSavingAttributionRows", () => {
       },
       {
         key: "rule:EARLY_CLAIM:investigation_confirmed",
-        sourceLabel: "rule / EARLY_CLAIM",
-        lineageLabel: "rule:EARLY_CLAIM -> investigation_confirmed -> CNY 4100.00",
+        sourceKeyLabel: "rule_id",
+        sourceLabel: "rule_id / EARLY_CLAIM",
+        lineageLabel: "rule_id=EARLY_CLAIM -> action=investigation_confirmed -> saving=CNY 4100.00",
         lineageStatus: "lineage_evidence_present",
         action: "investigation_confirmed",
         savingAmount: "4100.00",
@@ -53,19 +56,20 @@ describe("buildSavingAttributionRows", () => {
   });
 
   it("computes average saving per confirmed claim", () => {
-    expect(
-      buildSavingAttributionRows([
-        {
-          source_type: "model",
-          source_id: "baseline_fwa",
-          action: "investigation_confirmed",
-          saving_amount: "9000.00",
-          currency: "CNY",
-          claim_count: 3,
-          evidence_refs: ["model_scores:baseline_fwa"],
-        },
-      ])[0].averageSavingPerClaim,
-    ).toBe("3000.00");
+    const row = buildSavingAttributionRows([
+      {
+        source_type: "model",
+        source_id: "baseline_fwa",
+        action: "investigation_confirmed",
+        saving_amount: "9000.00",
+        currency: "CNY",
+        claim_count: 3,
+        evidence_refs: ["model_scores:baseline_fwa"],
+      },
+    ])[0];
+
+    expect(row.sourceKeyLabel).toBe("model_id");
+    expect(row.averageSavingPerClaim).toBe("3000.00");
   });
 
   it("sorts evidence references for stable dashboard rendering", () => {

@@ -10,6 +10,7 @@ export type SavingAttributionSummary = {
 
 export type SavingAttributionRow = {
   key: string;
+  sourceKeyLabel: string;
   sourceLabel: string;
   lineageLabel: string;
   lineageStatus: string;
@@ -33,6 +34,16 @@ const lineageEvidencePrefixes: Record<string, string[]> = {
   model: ["model_scores:", "model_versions:"],
 };
 
+const sourceKeyLabels: Record<string, string> = {
+  agent: "agent_run_id",
+  rule: "rule_id",
+  model: "model_id",
+};
+
+function sourceKeyLabel(sourceType: string) {
+  return sourceKeyLabels[sourceType] ?? `${sourceType}_id`;
+}
+
 function attributionHasLineageEvidence(attribution: SavingAttributionSummary) {
   const prefixes = lineageEvidencePrefixes[attribution.source_type] ?? [];
   return prefixes.some((prefix) =>
@@ -53,21 +64,25 @@ export function buildSavingAttributionRows(
         left.action.localeCompare(right.action)
       );
     })
-    .map((attribution) => ({
-      key: `${attribution.source_type}:${attribution.source_id}:${attribution.action}`,
-      sourceLabel: `${attribution.source_type} / ${attribution.source_id}`,
-      lineageLabel: `${attribution.source_type}:${attribution.source_id} -> ${attribution.action} -> ${attribution.currency} ${attribution.saving_amount}`,
-      lineageStatus: attributionHasLineageEvidence(attribution)
-        ? "lineage_evidence_present"
-        : "lineage_evidence_missing",
-      action: attribution.action,
-      savingAmount: attribution.saving_amount,
-      currency: attribution.currency,
-      claimCount: attribution.claim_count,
-      averageSavingPerClaim:
-        attribution.claim_count === 0
-          ? "0.00"
-          : (Number(attribution.saving_amount) / attribution.claim_count).toFixed(2),
-      evidenceRefs: [...attribution.evidence_refs].sort(),
-    }));
+    .map((attribution) => {
+      const keyLabel = sourceKeyLabel(attribution.source_type);
+      return {
+        key: `${attribution.source_type}:${attribution.source_id}:${attribution.action}`,
+        sourceKeyLabel: keyLabel,
+        sourceLabel: `${keyLabel} / ${attribution.source_id}`,
+        lineageLabel: `${keyLabel}=${attribution.source_id} -> action=${attribution.action} -> saving=${attribution.currency} ${attribution.saving_amount}`,
+        lineageStatus: attributionHasLineageEvidence(attribution)
+          ? "lineage_evidence_present"
+          : "lineage_evidence_missing",
+        action: attribution.action,
+        savingAmount: attribution.saving_amount,
+        currency: attribution.currency,
+        claimCount: attribution.claim_count,
+        averageSavingPerClaim:
+          attribution.claim_count === 0
+            ? "0.00"
+            : (Number(attribution.saving_amount) / attribution.claim_count).toFixed(2),
+        evidenceRefs: [...attribution.evidence_refs].sort(),
+      };
+    });
 }
