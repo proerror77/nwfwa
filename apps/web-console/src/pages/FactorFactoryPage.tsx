@@ -21,6 +21,7 @@ type SchemaField = {
     calculation_logic?: string;
     source_table?: string;
     source_fields?: string[];
+    scheme_family?: string;
     owner?: string;
     version?: string | number;
     iv?: number;
@@ -66,6 +67,7 @@ type ApiFactorCard = {
   dataset_key: string;
   dataset_version: string;
   factor_name: string;
+  scheme_family: string;
   chinese_name: string;
   entity_type: string;
   semantic_role: string;
@@ -96,6 +98,7 @@ type ApiFactorCard = {
 
 export type FactorCard = {
   factor_name: string;
+  scheme_family: string;
   display_label: string;
   entity_type: string;
   semantic_role: string;
@@ -135,6 +138,7 @@ export type FactorRuleCandidate = {
     version: number;
     name: string;
     review_mode: string;
+    scheme_family: string;
     conditions: Array<{
       field: string;
       operator: string;
@@ -237,6 +241,7 @@ export function buildFactorRuleCandidate(card: FactorCard): FactorRuleCandidate 
       version: 1,
       name: `${card.display_label} candidate`,
       review_mode: "both",
+      scheme_family: card.scheme_family,
       conditions: [
         {
           field: card.factor_name,
@@ -310,6 +315,7 @@ export function buildFactorCards(dataset: DatasetForFactors): FactorCard[] {
       field.profile_json.convertible_to_rule ?? (!isLabel && isRuleConvertibleType(field.logical_type));
     return {
       factor_name: field.field_name,
+      scheme_family: field.profile_json.scheme_family ?? "high_risk_claim",
       display_label: titleize(field.field_name),
       entity_type: dataset.sample_grain,
       semantic_role: field.semantic_role,
@@ -352,6 +358,7 @@ export function buildApiFactorCards(cards: ApiFactorCard[], datasetId?: string):
     .filter((card) => !datasetId || card.dataset_id === datasetId)
     .map((card) => ({
       factor_name: card.factor_name,
+      scheme_family: card.scheme_family,
       display_label: card.chinese_name,
       entity_type: card.entity_type,
       semantic_role: card.semantic_role,
@@ -696,6 +703,10 @@ export function FactorFactoryPage() {
                 <span>{factor.factor_name}</span>
               </div>
               <dl className="result-grid">
+                <div>
+                  <dt>Scheme</dt>
+                  <dd>{factor.scheme_family}</dd>
+                </div>
                 <div>
                   <dt>Role</dt>
                   <dd>{factor.semantic_role}</dd>

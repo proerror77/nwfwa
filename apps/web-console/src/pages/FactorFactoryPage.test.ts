@@ -109,6 +109,7 @@ describe("buildApiFactorCards", () => {
           dataset_key: "demo_claims_fwa",
           dataset_version: "v1",
           factor_name: "claim_amount_to_limit_ratio",
+          scheme_family: "early_high_value_claim",
           chinese_name: "理赔金额占保额比例",
           entity_type: "claim",
           semantic_role: "feature",
@@ -142,6 +143,7 @@ describe("buildApiFactorCards", () => {
 
     expect(cards[0]).toMatchObject({
       factor_name: "claim_amount_to_limit_ratio",
+      scheme_family: "early_high_value_claim",
       display_label: "理赔金额占保额比例",
       entity_type: "claim",
       online_status: "ready",
@@ -169,6 +171,7 @@ describe("buildApiFactorCards", () => {
           dataset_key: "demo_claims_fwa",
           dataset_version: "v1",
           factor_name: "provider_high_cost_ratio_30d",
+          scheme_family: "provider_peer_outlier",
           chinese_name: "Provider 30 日高价项目比例",
           entity_type: "provider",
           semantic_role: "feature",
@@ -259,6 +262,7 @@ describe("filterFactorCards", () => {
   function factorCard(overrides: Partial<FactorCard>): FactorCard {
     return {
       factor_name: "claim_amount_to_limit_ratio",
+      scheme_family: "early_high_value_claim",
       display_label: "Claim amount ratio",
       entity_type: "claim",
       semantic_role: "feature",
@@ -328,6 +332,7 @@ describe("buildFactorRuleCandidate", () => {
   function factorCard(overrides: Partial<FactorCard>): FactorCard {
     return {
       factor_name: "claim_amount_percentile_peer",
+      scheme_family: "provider_peer_outlier",
       display_label: "Claim Amount Percentile Peer",
       entity_type: "claim",
       semantic_role: "feature",
@@ -370,6 +375,7 @@ describe("buildFactorRuleCandidate", () => {
         version: 1,
         name: "Claim Amount Percentile Peer candidate",
         review_mode: "both",
+        scheme_family: "provider_peer_outlier",
         conditions: [
           {
             field: "claim_amount_percentile_peer",
@@ -422,7 +428,7 @@ describe("buildSavedFactorCandidateSummary", () => {
           active_version: null,
           latest_version: 1,
           review_mode: "both",
-          scheme_family: "factor_factory",
+          scheme_family: "provider_peer_outlier",
           score: 20,
           alert_code: "FACTOR_CLAIM_AMOUNT_PERCENTILE_PEER",
           recommended_action: "ManualReview",
@@ -451,7 +457,7 @@ describe("buildSavedFactorCandidateSummary", () => {
       owner: "feature-ops",
       versionLabel: "v1",
       reviewMode: "both",
-      schemeFamily: "factor_factory",
+      schemeFamily: "provider_peer_outlier",
       score: 20,
       alertCode: "FACTOR_CLAIM_AMOUNT_PERCENTILE_PEER",
       recommendedAction: "ManualReview",
