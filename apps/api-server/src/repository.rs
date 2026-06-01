@@ -1730,7 +1730,15 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()> {
-        self.audit_events.lock().await.push(event);
+        let mut audit_events = self.audit_events.lock().await;
+        if let Some(existing) = audit_events
+            .iter_mut()
+            .find(|existing| existing.audit_id == event.audit_id)
+        {
+            *existing = event;
+        } else {
+            audit_events.push(event);
+        }
         Ok(())
     }
 

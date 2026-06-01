@@ -149,7 +149,7 @@ pub async fn normalize_claim_inbox(
     } else {
         StatusCode::OK
     };
-    let audit_id = AuditEventId::new().to_string();
+    let audit_id = inbox_audit_id(external_message_id.as_deref());
     let run_id = external_message_id
         .as_ref()
         .map(|id| format!("inbox:{id}"))
@@ -231,6 +231,34 @@ fn internal_error(
             code,
             format!("{code}: {error}"),
         )
+    }
+}
+
+fn inbox_audit_id(external_message_id: Option<&str>) -> String {
+    external_message_id
+        .map(|id| format!("aud_inbox_{}", stable_id_fragment(id)))
+        .unwrap_or_else(|| AuditEventId::new().to_string())
+}
+
+fn stable_id_fragment(value: &str) -> String {
+    let fragment = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .chars()
+        .take(96)
+        .collect::<String>();
+    if fragment.is_empty() {
+        "unknown".into()
+    } else {
+        fragment
     }
 }
 
