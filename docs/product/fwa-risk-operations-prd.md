@@ -226,6 +226,30 @@ Reference payload observed on 2026-06-01:
   product/liability coverage window instead of using only the first product and
   first liability.
 
+Reference payload refreshed on 2026-06-02 from
+`/Users/proerror/Downloads/req.json`:
+
+- source envelope has top-level `systemCode`, `transNo`, `transDate`, and
+  `reportCase`; `reportCase.reportNo` remains the claim-level external
+  reference;
+- `calculateRisk` is `N`; this should be kept as a validation warning and
+  routing hint, not treated as permission to drop the claim from the FWA
+  normalization/audit path;
+- the sample has one policy, one invoice, 8 products, and 12 liability windows;
+  the invoice has 2 fee groups and 2 fee-detail rows, so bill-line evidence
+  must be read from `invoiceList[].feeList[].feeDetailList[]`;
+- medical records are carried under root-level
+  `reportCase.medicalRecordInfoList`, not under each policy. The inbox adapter
+  must not assume `policyList[].medicalRecordList` is the only medical-record
+  path;
+- claim-level amount fields may be absent or null. Canonical claim amount must
+  fall back to source invoice totals and retain fee-detail evidence instead of
+  inventing a claim header amount;
+- invoice-level provider context includes hospital code, name, class, property,
+  city, province, institution flag, primary-care flag, and red-flag marker.
+  These values must remain attached to provider snapshot and invoice-derived
+  bill lines for L6 Provider/Graph Risk attribution.
+
 Correction record for `/Users/proerror/Downloads/req.json`:
 
 - keep the original file as raw intake evidence; do not rewrite customer
@@ -238,6 +262,15 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   claim identifiers are not leaked downstream;
 - preserve every source medical record, invoice fee detail, product, and
   product-liability window as first-class canonical evidence;
+- read medical records from `reportCase.medicalRecordInfoList` and preserve
+  their source refs even when `policyList[].medicalRecordList` is empty or not
+  present;
+- read bill lines from the nested fee-detail path
+  `policyList[].invoiceList[].feeList[].feeDetailList[]`; do not infer a single
+  bill line from invoice totals;
+- when claim-level amounts are missing, derive canonical totals from invoice
+  totals and keep the missing claim header amount as a data-quality condition
+  instead of overwriting the raw payload;
 - treat `calculateRisk = N` as a warning-level source hint unless customer
   configuration explicitly allows scoring bypass;
 - flag identity mismatches between accident person, insured person, every
@@ -276,6 +309,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   `departmentName`, `medicalType`, `claimNature`, invoice start/end dates, and
   invoice totals for Medicare, self-pay, own-expense, and other-payment
   amounts.
+- preserve invoice-level provider context from this payload on every canonical
+  bill line: `hospitalCode`, `hospitalName`, `hospitalClass`,
+  `hospitalProperty`, `hospitalCityName`, `hospitalProvinceName`,
+  `isHospitalInstitution`, `primaryCare`, and `redFlag`.
 - preserve fee-group and fee-detail payment context separately:
   `feeList[n].feeAmount`, `feeList[n].otherAmount`, and
   `feeDetailList[n].medicareProrated` must not be collapsed into the detail
@@ -333,8 +370,9 @@ The inbox should output a canonical payload with:
   invoice bill type, document type, social-insurance type, department, medical
   type, invoice claim nature, invoice start/end dates, diagnosis list, fee
   category, item name, amount, self-pay, own-expense, invoice-level payment
-  totals, fee-group amount, fee-group other amount, medical category, Medicare
-  prorated percentage, social-insurance amount, and evidence refs;
+  totals, invoice-level provider context, fee-group amount, fee-group other
+  amount, medical category, Medicare prorated percentage, social-insurance
+  amount, and evidence refs;
 - document evidence: every source medical record with medical record text,
   claim nature, medical record type, chief complaint, current medical history,
   past history, extracted diagnosis, procedure, prescription, department, visit
