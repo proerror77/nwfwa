@@ -2,6 +2,44 @@ import { describe, expect, it } from "vitest";
 import { buildAgentInvestigationContextFromScoring } from "./agentInvestigationContext";
 
 describe("buildAgentInvestigationContextFromScoring", () => {
+  it("prefers the API-provided agent investigation prefill contract", () => {
+    expect(
+      buildAgentInvestigationContextFromScoring({
+        run_id: "run_CLM-0287",
+        claim_id: "CLM-FALLBACK",
+        risk_score: 1,
+        rag: "Green",
+        top_reasons: [],
+        alerts: [],
+        similar_cases: [],
+        agent_investigation_prefill: {
+          claim_id: "CLM-0287",
+          risk_score: 87,
+          rag: "RED",
+          scheme_family: "diagnosis_procedure_mismatch",
+          top_reasons: ["金额高于同病种 P99"],
+          similar_case_query: {
+            diagnosis_code: "J10",
+            provider_region: "Shanghai",
+            tags: ["early_claim", "high_amount"],
+          },
+          evidence_refs: ["audit_events:aud_1"],
+        },
+      }),
+    ).toEqual({
+      source: "runtime_scoring",
+      sourceRunId: "run_CLM-0287",
+      claimId: "CLM-0287",
+      riskScore: 87,
+      rag: "RED",
+      schemeFamily: "diagnosis_procedure_mismatch",
+      topReasons: ["金额高于同病种 P99"],
+      diagnosisCode: "J10",
+      providerRegion: "Shanghai",
+      tags: ["early_claim", "high_amount"],
+    });
+  });
+
   it("prefills agent investigation inputs from runtime scoring and payload hints", () => {
     expect(
       buildAgentInvestigationContextFromScoring(
@@ -9,7 +47,7 @@ describe("buildAgentInvestigationContextFromScoring", () => {
           run_id: "run_CLM-0287",
           claim_id: "CLM-0287",
           risk_score: 87,
-          rag: "RED",
+          rag: "Red",
           top_reasons: ["金额高于同病种 P99", "诊断-项目匹配度偏低"],
           alerts: [{ alert_code: "EARLY_HIGH_CLAIM" }],
           similar_cases: [

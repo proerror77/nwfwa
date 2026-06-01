@@ -160,6 +160,26 @@ pub struct ScoreClaimResponse {
     pub similar_cases: Vec<SimilarCaseRecord>,
     pub feature_values: Vec<FeatureValue>,
     pub evidence_refs: Vec<serde_json::Value>,
+    pub agent_investigation_prefill: AgentInvestigationPrefill,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentInvestigationPrefill {
+    pub claim_id: String,
+    pub risk_score: u8,
+    pub rag: String,
+    pub scheme_family: Option<String>,
+    pub top_reasons: Vec<String>,
+    pub similar_case_query: AgentInvestigationSimilarCaseQuery,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct AgentInvestigationSimilarCaseQuery {
+    pub claim_id: String,
+    pub diagnosis_code: String,
+    pub provider_region: String,
+    pub tags: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -353,13 +373,14 @@ pub async fn score_claim(
     let rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
     let anomaly_score = detect_anomaly(&features);
+    let similar_case_tags = similar_case_tags(&features, &rule_matches);
     let similar_cases = state
         .repository
         .search_similar_cases(SimilarCaseQuery {
             claim_id: Some(context.claim.external_claim_id.clone()),
             diagnosis_code: context.claim.diagnosis_code.clone(),
             provider_region: context.provider.region.clone(),
-            tags: similar_case_tags(&features, &rule_matches),
+            tags: similar_case_tags.clone(),
         })
         .await
         .map_err(internal_error("SIMILAR_CASE_SEARCH_FAILED"))?;
@@ -445,6 +466,20 @@ pub async fn score_claim(
         final_score: decision.risk_score.value(),
     };
     let feature_values = features.values().cloned().collect::<Vec<_>>();
+    let agent_prefill_evidence_refs = build_agent_prefill_evidence_refs(
+        &similar_cases,
+        &model_score,
+        &alerts,
+        &run_id,
+        &audit_id,
+    );
+    let agent_investigation_prefill = build_agent_investigation_prefill(
+        &context,
+        &decision,
+        &similar_case_tags,
+        &similar_cases,
+        agent_prefill_evidence_refs,
+    );
     let audit_payload = serde_json::json!({
         "claim_id": context.claim.external_claim_id,
         "source_system": &request.source_system,
@@ -466,6 +501,7 @@ pub async fn score_claim(
         "similar_cases": &similar_cases,
         "feature_values": &feature_values,
         "model_score": &model_score,
+        "agent_investigation_prefill": &agent_investigation_prefill,
         "triggered_rules": &alerts,
         "event_type": "scoring.completed",
         "event_status": "succeeded"
@@ -533,7 +569,87 @@ pub async fn score_claim(
         similar_cases,
         feature_values,
         evidence_refs,
+        agent_investigation_prefill,
     }))
+}
+
+fn build_agent_investigation_prefill(
+    context: &ClaimContext,
+    decision: &fwa_scoring::ScoringDecision,
+    similar_case_tags: &[String],
+    similar_cases: &[SimilarCaseRecord],
+    evidence_refs: Vec<String>,
+) -> AgentInvestigationPrefill {
+    AgentInvestigationPrefill {
+        claim_id: context.claim.external_claim_id.clone(),
+        risk_score: decision.risk_score.value(),
+        rag: agent_rag_label(decision.rag),
+        scheme_family: similar_cases.first().map(|case| case.scheme_family.clone()),
+        top_reasons: agent_top_reasons(decision),
+        similar_case_query: AgentInvestigationSimilarCaseQuery {
+            claim_id: context.claim.external_claim_id.clone(),
+            diagnosis_code: context.claim.diagnosis_code.clone(),
+            provider_region: context.provider.region.clone(),
+            tags: agent_similar_case_tags(similar_case_tags),
+        },
+        evidence_refs,
+    }
+}
+
+fn build_agent_prefill_evidence_refs(
+    similar_cases: &[SimilarCaseRecord],
+    model_score: &ModelScore,
+    alerts: &[AlertResponse],
+    run_id: &ScoringRunId,
+    audit_id: &AuditEventId,
+) -> Vec<String> {
+    let mut evidence_refs = vec![
+        format!("scoring_runs:{run_id}"),
+        format!("audit_events:{audit_id}"),
+        format!(
+            "model_versions:{}:{}",
+            model_score.model_key, model_score.model_version
+        ),
+    ];
+    evidence_refs.extend(
+        alerts
+            .iter()
+            .map(|alert| format!("rule_runs:{}", alert.alert_code)),
+    );
+    evidence_refs.extend(
+        similar_cases
+            .iter()
+            .flat_map(|case| case.provenance_refs.iter().chain(case.evidence_refs.iter()))
+            .cloned(),
+    );
+    evidence_refs.sort();
+    evidence_refs.dedup();
+    evidence_refs
+}
+
+fn agent_rag_label(rag: RiskLevel) -> String {
+    match rag {
+        RiskLevel::Green => "GREEN",
+        RiskLevel::Amber => "AMBER",
+        RiskLevel::Red => "RED",
+    }
+    .into()
+}
+
+fn agent_top_reasons(decision: &fwa_scoring::ScoringDecision) -> Vec<String> {
+    if decision.top_reasons.is_empty() {
+        vec![decision.routing_reason.clone()]
+    } else {
+        decision.top_reasons.clone()
+    }
+}
+
+fn agent_similar_case_tags(tags: &[String]) -> Vec<String> {
+    if tags.is_empty() {
+        vec!["runtime_scoring".into()]
+    } else {
+        tags.to_vec()
+    }
 }
 
 fn validate_score_request_contract(request: &ScoreClaimRequest) -> Result<(), ApiError> {

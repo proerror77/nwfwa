@@ -23,6 +23,7 @@ import { buildScoringLayerSummary, type ScoringLayer } from "./scoringLayers";
 import { buildAuditTimelineContext, type AuditTimelineContext } from "./auditTimelineContext";
 import {
   buildAgentInvestigationContextFromScoring,
+  type AgentInvestigationPrefillResponse,
   type AgentInvestigationContext,
 } from "./agentInvestigationContext";
 
@@ -80,6 +81,7 @@ type ScoringResponse = {
   similar_cases: SimilarCase[];
   feature_values: FeatureTraceValue[];
   evidence_refs: unknown[];
+  agent_investigation_prefill?: AgentInvestigationPrefillResponse;
 };
 
 type FeatureEvidenceRef = {

@@ -2434,7 +2434,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "provider_relationships",
                         "similar_cases",
                         "feature_values",
-                        "evidence_refs"
+                        "evidence_refs",
+                        "agent_investigation_prefill"
                     ],
                     "properties": {
                         "run_id": {
@@ -2548,6 +2549,9 @@ pub async fn openapi_schema() -> Json<Value> {
                                     { "type": "string" }
                                 ]
                             }
+                        },
+                        "agent_investigation_prefill": {
+                            "$ref": "#/components/schemas/AgentInvestigationPrefill"
                         }
                     }
                 },
@@ -5083,6 +5087,24 @@ pub async fn openapi_schema() -> Json<Value> {
                         "diagnosis_code": { "type": "string", "minLength": 1 },
                         "provider_region": { "type": "string", "minLength": 1 },
                         "tags": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
+                    }
+                },
+                "AgentInvestigationPrefill": {
+                    "type": "object",
+                    "required": ["claim_id", "risk_score", "rag", "scheme_family", "top_reasons", "similar_case_query", "evidence_refs"],
+                    "properties": {
+                        "claim_id": { "type": "string", "minLength": 1 },
+                        "risk_score": { "type": "integer", "minimum": 0, "maximum": 100 },
+                        "rag": { "type": "string", "enum": ["GREEN", "AMBER", "RED"] },
+                        "scheme_family": {
+                            "oneOf": [
+                                { "$ref": "#/components/schemas/FwaSchemeFamily" },
+                                { "type": "null" }
+                            ]
+                        },
+                        "top_reasons": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } },
+                        "similar_case_query": { "$ref": "#/components/schemas/SimilarCaseSearchRequest" },
+                        "evidence_refs": { "type": "array", "minItems": 1, "items": { "type": "string", "minLength": 1 } }
                     }
                 },
                 "SimilarCase": {

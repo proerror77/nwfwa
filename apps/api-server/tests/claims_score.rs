@@ -876,6 +876,28 @@ async fn scoring_includes_similar_case_signal_from_knowledge_base() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+    let agent_prefill = &body["agent_investigation_prefill"];
+    assert_eq!(agent_prefill["claim_id"], "CLM-SIMILAR-CASE");
+    assert_eq!(agent_prefill["risk_score"], body["risk_score"]);
+    assert_eq!(agent_prefill["rag"], "RED");
+    assert_eq!(agent_prefill["top_reasons"], body["top_reasons"]);
+    assert_eq!(agent_prefill["similar_case_query"]["diagnosis_code"], "J10");
+    assert_eq!(
+        agent_prefill["similar_case_query"]["provider_region"],
+        "Shanghai"
+    );
+    assert!(agent_prefill["similar_case_query"]["tags"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("early_claim")));
+    assert_eq!(
+        agent_prefill["scheme_family"],
+        "diagnosis_procedure_mismatch"
+    );
+    assert!(agent_prefill["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("knowledge_cases:KC-1001")));
 
     let audit_request = Request::builder()
         .method("GET")
@@ -903,6 +925,10 @@ async fn scoring_includes_similar_case_signal_from_knowledge_base() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("knowledge_cases:KC-1001")));
+    assert_eq!(
+        scoring_event["payload"]["agent_investigation_prefill"]["claim_id"],
+        "CLM-SIMILAR-CASE"
+    );
 }
 
 #[tokio::test]
@@ -1823,6 +1849,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "similar_cases",
         "feature_values",
         "layers",
+        "agent_investigation_prefill",
     ] {
         assert!(response_properties[field].is_object(), "missing {field}");
     }
@@ -1887,6 +1914,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "top_reasons",
         "layers",
         "evidence_refs",
+        "agent_investigation_prefill",
     ] {
         assert!(
             response_required.iter().any(|required| required == field),
@@ -1907,6 +1935,15 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     assert_eq!(
         response_properties["feature_values"]["items"]["$ref"],
         "#/components/schemas/FeatureValue"
+    );
+    assert_eq!(
+        response_properties["agent_investigation_prefill"]["$ref"],
+        "#/components/schemas/AgentInvestigationPrefill"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AgentInvestigationPrefill"]["properties"]
+            ["similar_case_query"]["$ref"],
+        "#/components/schemas/SimilarCaseSearchRequest"
     );
     assert_eq!(
         schema["components"]["schemas"]["FeatureValue"]["properties"]["evidence_refs"]["items"]
