@@ -628,12 +628,25 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
 }
 
 fn document_evidence(record: &Value) -> Value {
-    let text = string_at(record, &["medicalRecordInformation"])
-        .map(|value| redact_text(&normalize_medical_text(&value)));
+    let normalized_text = string_at(record, &["medicalRecordInformation"])
+        .map(|value| normalize_medical_text(&value));
+    let text = normalized_text.as_deref().map(redact_text);
     json!({
         "document_id": string_at(record, &["id"]),
         "department": string_at(record, &["departmentName"]),
         "diagnosis": string_at(record, &["diagnosisName"]),
+        "extracted_diagnosis": normalized_text
+            .as_deref()
+            .and_then(extract_diagnosis)
+            .map(|value| redact_text(&value)),
+        "extracted_procedure": normalized_text
+            .as_deref()
+            .and_then(|text| extract_next_line_after_label(text, "处理措施"))
+            .map(|value| redact_text(&value)),
+        "extracted_prescription": normalized_text
+            .as_deref()
+            .and_then(|text| extract_next_line_after_label(text, "西药："))
+            .map(|value| redact_text(&value)),
         "medical_type": string_at(record, &["medicalType"]),
         "visit_date": epoch_date_at(record, &["visitDate"]).map(|date| date.to_string()),
         "medical_record_text": text,
@@ -726,6 +739,33 @@ fn normalize_medical_text(value: &str) -> String {
         .filter(|line| !line.is_empty())
         .collect::<Vec<_>>()
         .join("\n")
+}
+
+fn extract_diagnosis(text: &str) -> Option<String> {
+    text.lines().find_map(|line| {
+        strip_label_value(line, "诊断：").or_else(|| strip_label_value(line, "诊断:"))
+    })
+}
+
+fn extract_next_line_after_label(text: &str, label: &str) -> Option<String> {
+    let mut lines = text.lines();
+    while let Some(line) = lines.next() {
+        if line == label {
+            return lines
+                .find(|candidate| !candidate.trim().is_empty())
+                .map(str::trim)
+                .map(str::to_string);
+        }
+    }
+    None
+}
+
+fn strip_label_value(line: &str, label: &str) -> Option<String> {
+    line.trim()
+        .strip_prefix(label)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
 }
 
 fn mask_identifier(value: &str) -> String {
