@@ -330,13 +330,12 @@ fn build_canonical_claim_context(
 
     let insured_name = string_at(payload, &["reportCase", "accidentPerson", "insuredName"]);
     let policy_insured_name = policy.and_then(|policy| string_at(policy, &["insuredName"]));
-    let medical_record_patient_name =
-        medical_record.and_then(|record| string_at(record, &["patientName"]));
-    let mut identity_names = vec![
-        insured_name.as_deref(),
-        policy_insured_name.as_deref(),
-        medical_record_patient_name.as_deref(),
-    ];
+    let mut identity_names = vec![insured_name.as_deref(), policy_insured_name.as_deref()];
+    let medical_record_patient_names = medical_records
+        .iter()
+        .map(|record| string_at(record, &["patientName"]))
+        .collect::<Vec<_>>();
+    identity_names.extend(medical_record_patient_names.iter().map(Option::as_deref));
     let invoice_person_names = invoices
         .iter()
         .map(|invoice| string_at(invoice, &["accidentPersonName"]))

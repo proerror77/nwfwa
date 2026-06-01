@@ -643,6 +643,75 @@ async fn flags_medical_record_patient_name_identity_mismatch() {
 }
 
 #[tokio::test]
+async fn flags_non_primary_medical_record_patient_identity_mismatch() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "secondary-medical-record-patient-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-SECONDARY-MEDICAL-PATIENT-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "accidentPerson": {
+              "insuredName": "LEE, Peter",
+              "insuredNo": "D209475(0)"
+            },
+            "medicalRecordInfoList": [
+              {
+                "id": 425840012,
+                "patientName": "LEE, Peter",
+                "diagnosisName": "牙周炎",
+                "medicalRecordInformation": "诊断：牙周炎"
+              },
+              {
+                "id": 425840013,
+                "patientName": "王向龙",
+                "diagnosisName": "牙周炎",
+                "medicalRecordInformation": "诊断：牙周炎"
+              }
+            ],
+            "policyList": [
+              {
+                "policyNo": "POL-SECONDARY-MEDICAL-PATIENT",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-SECONDARY-MEDICAL-PATIENT",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "accidentPersonName": "LEE, Peter",
+                    "diagnosisList": [
+                      {
+                        "detailCode": "K05.300",
+                        "detailName": "牙周炎"
+                      }
+                    ],
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("identity_mismatch")));
+}
+
+#[tokio::test]
 async fn flags_non_primary_invoice_person_identity_mismatch() {
     let app = build_app(test_config());
     let (status, body) = post_inbox(
