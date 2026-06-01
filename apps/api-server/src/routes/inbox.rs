@@ -373,6 +373,12 @@ fn build_canonical_claim_context(
             push_signal(data_quality_signals, "date_inconsistency");
         }
     }
+    validate_invoice_receive_dates(
+        validation_errors,
+        data_quality_signals,
+        receive_date,
+        &invoices,
+    );
     validate_service_window(
         validation_errors,
         data_quality_signals,
@@ -621,6 +627,33 @@ fn total_invoice_amount(invoices: &[&Value]) -> Option<f64> {
         (count + 1, total + amount)
     });
     (count > 0).then_some(total)
+}
+
+fn validate_invoice_receive_dates(
+    validation_errors: &mut Vec<InboxValidationError>,
+    data_quality_signals: &mut Vec<String>,
+    receive_date: Option<NaiveDate>,
+    invoices: &[&Value],
+) {
+    let Some(receive_date) = receive_date else {
+        return;
+    };
+
+    for (invoice_index, invoice) in invoices.iter().enumerate() {
+        if epoch_date_at(invoice, &["startDate"])
+            .is_some_and(|start_date| receive_date < start_date)
+        {
+            validation_errors.push(InboxValidationError {
+                field_path: format!(
+                    "reportCase.policyList[0].invoiceList[{invoice_index}].startDate"
+                ),
+                severity: "warning",
+                remediation: "claim receive date should not be earlier than invoice start date"
+                    .into(),
+            });
+            push_signal(data_quality_signals, "date_inconsistency");
+        }
+    }
 }
 
 fn invoice_diagnosis_names(invoice: &Value) -> Vec<String> {

@@ -253,6 +253,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   reasonableness scoring.
 - compute canonical `claim_header.total_amount` as the sum of all source
   invoice `feeAmount` values, not only the primary invoice amount.
+- compare `claimReceiveDate` with every invoice `startDate`; non-primary
+  invoice dates after receive date must emit `date_inconsistency` on the exact
+  `invoiceList[n].startDate` path.
 
 Required inbox corrections before scoring:
 
@@ -265,7 +268,7 @@ Required inbox corrections before scoring:
 - date normalization: convert all epoch-millisecond dates and detect impossible
   or inconsistent accident, visit, invoice, policy, product, liability, and
   receive windows across the full source list, not only the primary product or
-  liability;
+  liability or primary invoice;
 - identity consistency: compare accident person, insured person, patient name,
   and every invoice person after masking, and raise a review signal when they
   do not align;

@@ -1310,6 +1310,70 @@ async fn flags_service_date_outside_product_and_liability_windows() {
 }
 
 #[tokio::test]
+async fn flags_non_primary_invoice_after_claim_receive_date() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "secondary-invoice-date-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-SECONDARY-INVOICE-DATE-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "policyList": [
+              {
+                "policyNo": "POL-SECONDARY-INVOICE-DATE",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-DATE-OK",
+                    "feeAmount": 100.00,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "feeList": []
+                  },
+                  {
+                    "invoiceNo": "INV-DATE-MISMATCH",
+                    "feeAmount": 250.00,
+                    "startDate": 1767312000000,
+                    "hospitalName": "南京同仁医院",
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["validation_result"], "accepted_with_warnings");
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("date_inconsistency")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[0].invoiceList[1].startDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("claim receive date")
+        }));
+}
+
+#[tokio::test]
 async fn repeated_inbox_payload_upserts_same_audit_trace() {
     let app = build_app(test_config());
     let payload = r#"{
