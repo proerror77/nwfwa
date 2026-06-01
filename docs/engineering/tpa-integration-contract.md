@@ -57,6 +57,9 @@ than `startDate` returns `date_inconsistency` on the matching
 Medical-record date checks compare `claimReceiveDate` with every
 `medicalRecordInfoList[n].visitDate`; visits after receive date return
 `date_inconsistency` on the matching medical-record path.
+They also compare every `medicalRecordInfoList[n].firstHappenDate` with
+`claimReceiveDate`; first-happen dates after receive date return
+`date_inconsistency` on the matching first-happen-date path.
 They also compare every `medicalRecordInfoList[n].operationStartDate` with
 `claimReceiveDate`; operation dates after receive date return
 `date_inconsistency` on the matching operation-date path.

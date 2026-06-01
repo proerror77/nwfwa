@@ -1657,6 +1657,81 @@ async fn flags_non_primary_medical_record_operation_after_claim_receive_date() {
 }
 
 #[tokio::test]
+async fn flags_non_primary_medical_record_first_happen_after_claim_receive_date() {
+    let app = build_app(test_config());
+    let (status, body) = post_inbox(
+        app,
+        r#"{
+          "systemCode": "AiClaim Core",
+          "transNo": "secondary-medical-record-first-happen-date-mismatch-001",
+          "reportCase": {
+            "reportNo": "SAAS-SECONDARY-MEDICAL-FIRST-HAPPEN-DATE-001",
+            "accidentDate": 1766620800000,
+            "claimReceiveDate": 1767225600000,
+            "calculateRisk": "Y",
+            "medicalRecordInfoList": [
+              {
+                "id": 425840012,
+                "patientName": "LEE, Peter",
+                "diagnosisName": "牙周炎",
+                "visitDate": 1766620800000,
+                "firstHappenDate": 1766620800000,
+                "medicalRecordInformation": "诊断：牙周炎"
+              },
+              {
+                "id": 425840013,
+                "patientName": "LEE, Peter",
+                "diagnosisName": "牙周炎",
+                "visitDate": 1766620800000,
+                "firstHappenDate": 1767312000000,
+                "medicalRecordInformation": "诊断：牙周炎"
+              }
+            ],
+            "policyList": [
+              {
+                "policyNo": "POL-SECONDARY-MEDICAL-FIRST-HAPPEN-DATE",
+                "policyType": "2",
+                "insuredName": "LEE, Peter",
+                "coverageLimit": 20000,
+                "validateDate": 1735689600000,
+                "expireDate": 1798675200000,
+                "invoiceList": [
+                  {
+                    "invoiceNo": "INV-SECONDARY-MEDICAL-FIRST-HAPPEN-DATE",
+                    "feeAmount": 397.06,
+                    "startDate": 1766620800000,
+                    "hospitalName": "南京同仁医院",
+                    "feeList": []
+                  }
+                ]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["validation_result"], "accepted_with_warnings");
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("date_inconsistency")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.medicalRecordInfoList[1].firstHappenDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("claim receive date")
+        }));
+}
+
+#[tokio::test]
 async fn repeated_inbox_payload_upserts_same_audit_trace() {
     let app = build_app(test_config());
     let payload = r#"{

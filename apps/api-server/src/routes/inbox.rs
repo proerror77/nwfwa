@@ -687,6 +687,7 @@ fn validate_medical_record_receive_dates(
     for (record_index, record) in medical_records.iter().enumerate() {
         for (field_name, field_label) in [
             ("visitDate", "medical record visit date"),
+            ("firstHappenDate", "medical record first happen date"),
             ("operationStartDate", "medical record operation start date"),
         ] {
             if epoch_date_at(record, &[field_name])

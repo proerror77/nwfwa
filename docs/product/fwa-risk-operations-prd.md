@@ -261,6 +261,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - compare `claimReceiveDate` with every medical-record `visitDate`; non-primary
   medical-record visits after receive date must emit `date_inconsistency` on
   the exact `medicalRecordInfoList[n].visitDate` path.
+- compare `claimReceiveDate` with every medical-record `firstHappenDate`;
+  first-happen dates after receive date must emit `date_inconsistency` on the
+  exact `medicalRecordInfoList[n].firstHappenDate` path.
 - compare `claimReceiveDate` with every medical-record `operationStartDate`;
   operation dates after receive date must emit `date_inconsistency` on the
   exact `medicalRecordInfoList[n].operationStartDate` path.
