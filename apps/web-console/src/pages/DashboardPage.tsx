@@ -72,6 +72,8 @@ type DashboardAgentGovernance = {
   evidence_backed_runs: number;
   tool_call_count: number;
   policy_check_count: number;
+  denied_policy_check_count: number;
+  failed_tool_call_count: number;
   pending_approvals: number;
   approved_approvals: number;
   rejected_approvals: number;
@@ -256,6 +258,8 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
   const evidenceBackedRuns = governance?.evidence_backed_runs ?? 0;
   const toolCallCount = governance?.tool_call_count ?? 0;
   const policyCheckCount = governance?.policy_check_count ?? 0;
+  const deniedPolicyCheckCount = governance?.denied_policy_check_count ?? 0;
+  const failedToolCallCount = governance?.failed_tool_call_count ?? 0;
   const approvedApprovals = governance?.approved_approvals ?? 0;
   const rejectedApprovals = governance?.rejected_approvals ?? 0;
   const decidedApprovals = approvedApprovals + rejectedApprovals;
@@ -265,6 +269,8 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
     evidenceBackedRuns,
     toolCallCount,
     policyCheckCount,
+    deniedPolicyCheckCount,
+    failedToolCallCount,
     pendingApprovals: governance?.pending_approvals ?? 0,
     approvedApprovals,
     rejectedApprovals,
@@ -793,6 +799,14 @@ export function DashboardPage() {
             <div className="metric-row compact-metric-row">
               <span>Policy Checks</span>
               <strong>{agentGovernanceSummary.policyCheckCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Denied Policies</span>
+              <strong>{agentGovernanceSummary.deniedPolicyCheckCount}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Failed Tools</span>
+              <strong>{agentGovernanceSummary.failedToolCallCount}</strong>
             </div>
             <div className="metric-row compact-metric-row">
               <span>Adopted Outputs</span>

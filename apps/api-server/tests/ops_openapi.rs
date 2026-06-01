@@ -2157,6 +2157,8 @@ async fn openapi_includes_operations_paths() {
         "evidence_backed_runs",
         "tool_call_count",
         "policy_check_count",
+        "denied_policy_check_count",
+        "failed_tool_call_count",
     ] {
         assert!(
             schema["components"]["schemas"]["DashboardAgentGovernance"]["required"]
