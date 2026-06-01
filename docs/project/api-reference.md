@@ -59,7 +59,10 @@ certificate identifiers, certificate type, gender, birth date, first-apply date,
 and social-insurance participation fields needed for routing and feature
 calculation.
 `canonical_claim_context.document_evidence` contains one normalized document
-entry per source `medicalRecordInfoList` record, each with its own source refs.
+entry per source `medicalRecordInfoList` record, including claim nature,
+medical-record type, chief complaint, current medical history, past history,
+visit dates, and its own source refs. Structured free-text fields are redacted
+before they leave the inbox boundary.
 `canonical_claim_context.itemized_bill_lines` preserves fee-detail lines from
 every source invoice, not only the primary invoice. Each line also carries
 invoice-level bill type, document type, social-insurance type, department,

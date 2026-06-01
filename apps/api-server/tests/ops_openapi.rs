@@ -247,6 +247,21 @@ async fn openapi_includes_operations_paths() {
         inbox_context["properties"]["document_evidence"]["items"]["$ref"],
         "#/components/schemas/InboxDocumentEvidence"
     );
+    let document_evidence = &schema["components"]["schemas"]["InboxDocumentEvidence"]["properties"];
+    for field in [
+        "claim_nature",
+        "medical_record_type",
+        "chief_complaint",
+        "current_medical_history",
+        "past_history",
+        "first_happen_date",
+        "operation_start_date",
+    ] {
+        assert!(
+            document_evidence[field].is_object(),
+            "missing inbox document evidence field {field}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["InboxValidationError"]["required"],
         serde_json::json!(["field_path", "severity", "remediation"])

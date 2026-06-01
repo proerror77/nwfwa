@@ -72,6 +72,11 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
                 "departmentName": "口腔科",
                 "diagnosisName": "牙周炎",
                 "medicalType": "门诊",
+                "claimNature": "疾病",
+                "medicalRecordType": "13",
+                "chiefComplaint": "要求洁牙",
+                "currentMedicalHistory": "患者定期口腔卫生保健/n现要求洁牙",
+                "pastHistory": "否认系统病史，否认药敏史。",
                 "visitDate": 1766678400000,
                 "patientName": "",
                 "medicalRecordInformation": "南京同仁医院/n门急诊病历/n卡号：00002602523/n诊断：牙周炎/n处理措施/n全口显微镜下行龈下刮治术，抛光，双氧水冲洗牙周袋。/n医嘱：/n西药：/n复方氯己定含漱液(300ml)1瓶/n用药天数：1"
@@ -320,6 +325,26 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(
         body["canonical_claim_context"]["document_evidence"][0]["extracted_prescription"],
         "复方氯己定含漱液(300ml)1瓶"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["claim_nature"],
+        "疾病"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["medical_record_type"],
+        "13"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["chief_complaint"],
+        "要求洁牙"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["current_medical_history"],
+        "患者定期口腔卫生保健 现要求洁牙"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["document_evidence"][0]["past_history"],
+        "否认系统病史，否认药敏史。"
     );
     assert!(body["data_quality_signals"]
         .as_array()

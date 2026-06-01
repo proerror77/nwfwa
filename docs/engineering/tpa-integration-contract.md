@@ -46,9 +46,11 @@ Canonical member snapshots expose masked member and certificate identifiers,
 certificate type, gender, and birth date. Raw `insuredNo` and `certNo` must not
 be persisted in API-visible canonical outputs.
 Canonical document evidence preserves every `medicalRecordInfoList` entry as a
-separate document with extracted diagnosis, procedure, prescription,
-normalized visit date, first-happen date, operation-start date, and source
-refs.
+separate document with claim nature, medical-record type, chief complaint,
+current medical history, past history, extracted diagnosis, procedure,
+prescription, normalized visit date, first-happen date, operation-start date,
+and source refs. Structured free-text fields are normalized and redacted before
+they appear in API-visible canonical output.
 Canonical bill lines preserve fee details from every source invoice. Each line
 keeps its source invoice id, invoice bill type, invoice document type,
 social-insurance type, department, medical type, diagnosis list, invoice-level

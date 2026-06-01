@@ -920,6 +920,11 @@ fn document_evidence(record: &Value) -> Value {
         "document_id": string_at(record, &["id"]),
         "department": string_at(record, &["departmentName"]),
         "diagnosis": string_at(record, &["diagnosisName"]),
+        "claim_nature": string_at(record, &["claimNature"]),
+        "medical_record_type": string_at(record, &["medicalRecordType"]),
+        "chief_complaint": normalized_redacted_text_at(record, &["chiefComplaint"]),
+        "current_medical_history": normalized_redacted_text_at(record, &["currentMedicalHistory"]),
+        "past_history": normalized_redacted_text_at(record, &["pastHistory"]),
         "extracted_diagnosis": normalized_text
             .as_deref()
             .and_then(extract_diagnosis)
@@ -944,6 +949,12 @@ fn document_evidence(record: &Value) -> Value {
             )
         ]
     })
+}
+
+fn normalized_redacted_text_at(value: &Value, path: &[&str]) -> Option<String> {
+    string_at(value, path)
+        .map(|value| normalize_medical_text(&value))
+        .map(|value| redact_text(&value))
 }
 
 fn required_string(

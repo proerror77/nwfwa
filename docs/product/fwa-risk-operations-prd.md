@@ -267,6 +267,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - compare `claimReceiveDate` with every medical-record `operationStartDate`;
   operation dates after receive date must emit `date_inconsistency` on the
   exact `medicalRecordInfoList[n].operationStartDate` path.
+- preserve structured medical-record fields from `medicalRecordInfoList` for L5
+  medical reasonableness and QA evidence: `claimNature`, `medicalRecordType`,
+  `chiefComplaint`, `currentMedicalHistory`, and `pastHistory`. Text fields
+  must be normalized and redacted before API-visible output.
 - preserve invoice-level payment context from this payload on every canonical
   bill line: `billType`, `documentType`, `socialInsuranceType`,
   `departmentName`, `medicalType`, and invoice totals for Medicare, self-pay,
@@ -331,8 +335,9 @@ The inbox should output a canonical payload with:
   medical category, Medicare prorated percentage, social-insurance amount, and
   evidence refs;
 - document evidence: every source medical record with medical record text,
-  extracted diagnosis, procedure, prescription, department, visit date,
-  first-happen date, operation-start date, and source refs;
+  claim nature, medical record type, chief complaint, current medical history,
+  past history, extracted diagnosis, procedure, prescription, department, visit
+  date, first-happen date, operation-start date, and source refs;
 - data-quality signals: identity mismatch, missing fields, date inconsistency,
   document-invoice mismatch, diagnosis-item mismatch, and policy-liability
   mismatch.
