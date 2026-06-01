@@ -231,6 +231,19 @@ async fn openapi_includes_operations_paths() {
         product_liability["main_liability"].is_object(),
         "missing inbox product-liability main liability marker"
     );
+    for field in [
+        "source_timezone",
+        "product_start_date_raw_epoch_ms",
+        "product_end_date_raw_epoch_ms",
+        "liability_start_date_raw_epoch_ms",
+        "liability_claim_start_date_raw_epoch_ms",
+        "liability_end_date_raw_epoch_ms",
+    ] {
+        assert!(
+            product_liability[field].is_object(),
+            "missing inbox product-liability field {field}"
+        );
+    }
     assert_eq!(
         inbox_context["properties"]["provider_snapshot"]["$ref"],
         "#/components/schemas/InboxProviderSnapshot"

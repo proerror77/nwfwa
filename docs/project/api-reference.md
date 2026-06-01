@@ -96,7 +96,9 @@ Invoice-level diagnosis gaps are reported as warnings on the matching
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves
 every source product and claim-liability window across all source policies,
 including source policy id, waiting-period candidate dates, serious-disease
-liability markers, main-liability markers, raw source paths, and evidence refs.
+liability markers, main-liability markers, source timezone, raw
+epoch-millisecond product/liability window dates, raw source paths, and evidence
+refs.
 Each entry carries `source_path` for the source
 `reportCase.policyList[n].productList[m]`; liability rows also carry
 `liability_source_path` for

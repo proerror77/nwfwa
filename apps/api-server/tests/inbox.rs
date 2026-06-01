@@ -1560,6 +1560,12 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
             && liability["source_path"] == "reportCase.policyList[0].productList[0]"
             && liability["liability_source_path"]
                 == "reportCase.policyList[0].productList[0].claimLiabilityList[1]"
+            && liability["source_timezone"] == "Asia/Shanghai"
+            && liability["product_start_date_raw_epoch_ms"] == 1735689600000_i64
+            && liability["product_end_date_raw_epoch_ms"] == 1798675200000_i64
+            && liability["liability_start_date_raw_epoch_ms"] == 1735689600000_i64
+            && liability["liability_claim_start_date_raw_epoch_ms"] == 1735689600000_i64
+            && liability["liability_end_date_raw_epoch_ms"] == 1798675200000_i64
             && liability["liability_claim_start_date"] == "2025-01-01"
             && liability["waiting_period_end_date"] == "2025-01-01"
             && liability["is_serious_disease_liability"] == false
@@ -1585,6 +1591,12 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
             && liability["product_name"] == "自费项目补充保险金"
             && liability["source_path"] == "reportCase.policyList[0].productList[2]"
             && liability["liability_source_path"].is_null()
+            && liability["source_timezone"] == "Asia/Shanghai"
+            && liability["product_start_date_raw_epoch_ms"] == 1735689600000_i64
+            && liability["product_end_date_raw_epoch_ms"] == 1798675200000_i64
+            && liability["liability_start_date_raw_epoch_ms"].is_null()
+            && liability["liability_claim_start_date_raw_epoch_ms"].is_null()
+            && liability["liability_end_date_raw_epoch_ms"].is_null()
             && liability["liability_code"].is_null()
             && liability["liability_name"].is_null()
     }));
