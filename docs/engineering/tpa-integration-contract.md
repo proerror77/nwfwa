@@ -34,9 +34,10 @@ epoch-millisecond dates, masks PII-bearing values, maps claim-header,
 medical-record, invoice, provider, product, and liability fields into a
 canonical claim context, and returns data-quality signals such as identity
 mismatch, date inconsistency, missing coverage limit, coverage-window mismatch,
-and policy-liability mismatch. It also raises `document_invoice_mismatch` for the
-matching invoice path when any structured invoice diagnosis list does not align
-with medical-record diagnoses, including non-primary invoices.
+missing claim amount, and policy-liability mismatch. It also raises
+`document_invoice_mismatch` for the matching invoice path when any structured
+invoice diagnosis list does not align with medical-record diagnoses, including
+non-primary invoices.
 Canonical claim headers preserve normalized service, receive, and accident
 dates for claim-timing features.
 Identity mismatch compares accident person, policy insured person, every
@@ -60,7 +61,9 @@ percentage, invoice-level provider code/name/class/type/city/province/network
 flags, and
 `invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
 Canonical claim header `total_amount` is the sum of all source invoice
-`feeAmount` values; it is not limited to the primary invoice.
+`feeAmount` values; it is not limited to the primary invoice. When
+`reportCase.claimAmount` is missing but invoice totals are available, the inbox
+returns a `missing_claim_amount` warning instead of overwriting the raw payload.
 Invoice date checks compare `claimReceiveDate` with every invoice `startDate`;
 non-primary invoice dates after receive date return `date_inconsistency` on the
 matching `reportCase.policyList[0].invoiceList[n].startDate` path.

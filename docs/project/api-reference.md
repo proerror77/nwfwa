@@ -51,6 +51,9 @@ The audit event stores source trace metadata and validation outcomes, not the
 full raw PII-bearing payload.
 `canonical_claim_context.claim_header` preserves service, receive, and accident
 dates for timing and waiting-period features.
+When `reportCase.claimAmount` is missing but source invoice totals are
+available, `claim_header.total_amount` is derived from those invoices and
+`data_quality_signals` includes `missing_claim_amount`.
 Identity consistency checks compare accident person, policy insured person,
 invoice person, and medical-record patient name when present. Mismatches are
 reported through `data_quality_signals` as `identity_mismatch`.

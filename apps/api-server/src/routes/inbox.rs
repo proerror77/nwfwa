@@ -408,6 +408,18 @@ fn build_canonical_claim_context(
         &invoices,
     );
     validate_diagnosis_item_support(validation_errors, data_quality_signals, &invoices);
+    let invoice_total_amount = total_invoice_amount(&invoices);
+    if number_at(payload, &["reportCase", "claimAmount"]).is_none()
+        && invoice_total_amount.is_some()
+    {
+        validation_errors.push(InboxValidationError {
+            field_path: "reportCase.claimAmount".into(),
+            severity: "warning",
+            remediation: "claim amount missing; derive canonical total from source invoice totals"
+                .into(),
+        });
+        push_signal(data_quality_signals, "missing_claim_amount");
+    }
 
     json!({
         "claim_header": {
@@ -422,7 +434,7 @@ fn build_canonical_claim_context(
                 .and_then(|invoice| string_at(invoice, &["medicalType"]))
                 .or_else(|| medical_record.and_then(|record| string_at(record, &["medicalType"]))),
             "currency": "CNY",
-            "total_amount": total_invoice_amount(&invoices)
+            "total_amount": invoice_total_amount
         },
         "member_policy_snapshot": {
             "masked_member_id": string_at(payload, &["reportCase", "accidentPerson", "insuredNo"])

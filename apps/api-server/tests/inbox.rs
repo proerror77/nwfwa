@@ -316,6 +316,26 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
         "10.00"
     );
     assert_eq!(
+        body["canonical_claim_context"]["claim_header"]["total_amount"],
+        397.06
+    );
+    assert!(body["data_quality_signals"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("missing_claim_amount")));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.claimAmount"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("invoice totals")
+        }));
+    assert_eq!(
         body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_provider_code"],
         "HSP-001"
     );
