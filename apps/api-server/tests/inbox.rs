@@ -61,6 +61,7 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
               "insuredName": "LEE, Peter",
               "insuredNo": "D209475(0)",
               "certNo": "D209475(0)",
+              "certType": "I",
               "gender": "M",
               "birthday": 1094313600000
             },
@@ -194,6 +195,22 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(
         body["canonical_claim_context"]["claim_header"]["accident_date"],
         "2025-12-25"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["masked_certificate_id"],
+        "***5(0)"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["certificate_type"],
+        "I"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["member_gender"],
+        "M"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["member_birth_date"],
+        "2004-09-04"
     );
     assert_eq!(
         body["canonical_claim_context"]["provider_snapshot"]["name"],

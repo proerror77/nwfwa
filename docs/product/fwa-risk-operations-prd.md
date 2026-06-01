@@ -303,8 +303,9 @@ The inbox should output a canonical payload with:
 - claim header: external claim id, source system, service date, receive date,
   accident date, accident reason, medical type, currency, and claim-level total
   amount summed from all source invoices;
-- member and policy snapshot: masked member id, policy id, product code,
-  primary product/liability codes, all product-liability windows, policy type,
+- member and policy snapshot: masked member id, masked certificate id,
+  certificate type, gender, birth date, policy id, product code, primary
+  product/liability codes, all product-liability windows, policy type,
   first-apply date, social-insurance participation flag, and coverage
   constraints;
 - provider snapshot: hospital/provider code, name, class, type, city, province,

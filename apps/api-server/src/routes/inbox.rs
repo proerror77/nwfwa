@@ -427,6 +427,12 @@ fn build_canonical_claim_context(
         "member_policy_snapshot": {
             "masked_member_id": string_at(payload, &["reportCase", "accidentPerson", "insuredNo"])
                 .map(|value| mask_identifier(&value)),
+            "masked_certificate_id": string_at(payload, &["reportCase", "accidentPerson", "certNo"])
+                .map(|value| mask_identifier(&value)),
+            "certificate_type": string_at(payload, &["reportCase", "accidentPerson", "certType"]),
+            "member_gender": string_at(payload, &["reportCase", "accidentPerson", "gender"]),
+            "member_birth_date": epoch_date_at(payload, &["reportCase", "accidentPerson", "birthday"])
+                .map(|date| date.to_string()),
             "policy_id": policy.and_then(|policy| string_at(policy, &["policyNo"])),
             "product_code": product.and_then(|product| string_at(product, &["productCode"])),
             "liability_code": liability.and_then(|liability| string_at(liability, &["liabCode"])),

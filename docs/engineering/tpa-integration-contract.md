@@ -42,6 +42,9 @@ dates for claim-timing features.
 Identity mismatch compares accident person, policy insured person, every
 invoice person, and every medical-record patient name when those fields are
 present.
+Canonical member snapshots expose masked member and certificate identifiers,
+certificate type, gender, and birth date. Raw `insuredNo` and `certNo` must not
+be persisted in API-visible canonical outputs.
 Canonical document evidence preserves every `medicalRecordInfoList` entry as a
 separate document with extracted diagnosis, procedure, prescription,
 normalized visit date, first-happen date, operation-start date, and source
