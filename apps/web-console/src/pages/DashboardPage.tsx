@@ -259,10 +259,17 @@ export function buildDashboardAgentGovernanceSummary(governance?: DashboardAgent
     pendingApprovals: governance?.pending_approvals ?? 0,
     approvedApprovals,
     rejectedApprovals,
+    decidedApprovals,
+    adoptedAgentOutputs: approvedApprovals,
+    rejectedAgentOutputs: rejectedApprovals,
     successRateLabel:
       totalRuns === 0 ? "0.0%" : formatPercent(successfulRuns / totalRuns),
     approvalRateLabel:
       decidedApprovals === 0 ? "0.0%" : formatPercent(approvedApprovals / decidedApprovals),
+    adoptionRateLabel:
+      decidedApprovals === 0 ? "0.0%" : formatPercent(approvedApprovals / decidedApprovals),
+    rejectionRateLabel:
+      decidedApprovals === 0 ? "0.0%" : formatPercent(rejectedApprovals / decidedApprovals),
   };
 }
 
@@ -753,22 +760,30 @@ export function DashboardPage() {
               <strong>{agentGovernanceSummary.successRateLabel}</strong>
             </div>
             <div>
-              <span>Pending</span>
-              <strong>{agentGovernanceSummary.pendingApprovals}</strong>
+              <span>Adopted Outputs</span>
+              <strong>{agentGovernanceSummary.adoptedAgentOutputs}</strong>
             </div>
             <div>
-              <span>Approval Rate</span>
-              <strong>{agentGovernanceSummary.approvalRateLabel}</strong>
+              <span>Adoption Rate</span>
+              <strong>{agentGovernanceSummary.adoptionRateLabel}</strong>
             </div>
           </div>
           <div className="table-list">
             <div className="metric-row compact-metric-row">
-              <span>Approved</span>
-              <strong>{agentGovernanceSummary.approvedApprovals}</strong>
+              <span>Pending</span>
+              <strong>{agentGovernanceSummary.pendingApprovals}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Decided</span>
+              <strong>{agentGovernanceSummary.decidedApprovals}</strong>
             </div>
             <div className="metric-row compact-metric-row">
               <span>Rejected</span>
-              <strong>{agentGovernanceSummary.rejectedApprovals}</strong>
+              <strong>{agentGovernanceSummary.rejectedAgentOutputs}</strong>
+            </div>
+            <div className="metric-row compact-metric-row">
+              <span>Rejection Rate</span>
+              <strong>{agentGovernanceSummary.rejectionRateLabel}</strong>
             </div>
           </div>
         </div>

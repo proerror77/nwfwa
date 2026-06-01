@@ -169,8 +169,13 @@ describe("buildDashboardAgentGovernanceSummary", () => {
       pendingApprovals: 1,
       approvedApprovals: 3,
       rejectedApprovals: 1,
+      decidedApprovals: 4,
+      adoptedAgentOutputs: 3,
+      rejectedAgentOutputs: 1,
       successRateLabel: "80.0%",
       approvalRateLabel: "75.0%",
+      adoptionRateLabel: "75.0%",
+      rejectionRateLabel: "25.0%",
     });
   });
 });
