@@ -13,6 +13,7 @@ import {
   formatFwaSchemeLabel,
   type FwaSchemeDefinition,
 } from "./fwaSchemeOptions";
+import { invalidateWritebackQueries } from "./writebackInvalidation";
 
 type LeadRecord = {
   lead_id: string;
@@ -426,9 +427,7 @@ export function LeadsCasesPage() {
       ) as Promise<UpdateCaseStatusResponse>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
-      queryClient.invalidateQueries({ queryKey: ["outcome-labels"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
+      invalidateWritebackQueries(queryClient, "case_status");
     },
   });
   const investigationMutation = useMutation({
@@ -449,9 +448,7 @@ export function LeadsCasesPage() {
       ) as Promise<PilotWritebackResponse>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["cases"] });
-      queryClient.invalidateQueries({ queryKey: ["dashboard-summary"] });
-      queryClient.invalidateQueries({ queryKey: ["outcome-labels"] });
+      invalidateWritebackQueries(queryClient, "investigation_result");
       queryClient.invalidateQueries({ queryKey: ["rule-audit-events"] });
     },
   });

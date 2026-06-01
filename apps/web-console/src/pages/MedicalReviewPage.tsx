@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { listMedicalReviewQueue, submitMedicalReviewResult } from "../api";
+import { invalidateWritebackQueries } from "./writebackInvalidation";
 
 type MedicalReviewQueueItem = {
   claim_id: string;
@@ -175,7 +176,7 @@ export function MedicalReviewPage() {
       ) as Promise<MedicalReviewResultResponse>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["medical-review-queue"] });
+      invalidateWritebackQueries(queryClient, "medical_review");
     },
   });
   const submitSummary = buildMedicalReviewSubmitSummary(submitMutation.data);

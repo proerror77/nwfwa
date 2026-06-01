@@ -17,6 +17,7 @@ import {
   buildQaFeedbackStatusAuditLabel,
   buildQaFeedbackStatusEvidenceLabel,
 } from "./qaFeedbackItems";
+import { invalidateWritebackQueries } from "./writebackInvalidation";
 
 type QaQueueItem = {
   qa_case_id: string;
@@ -250,9 +251,7 @@ export function QAReviewPage() {
       ) as Promise<PilotWritebackResponse>;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["qa-queue"] });
-      queryClient.invalidateQueries({ queryKey: ["qa-feedback-items"] });
-      queryClient.invalidateQueries({ queryKey: ["qa-queue-summary"] });
+      invalidateWritebackQueries(queryClient, "qa_result");
     },
   });
   const qaSubmitSummary = buildQaSubmitSummary(submitMutation.data);
@@ -267,10 +266,9 @@ export function QAReviewPage() {
           evidence_refs: [`qa_feedback:${item.feedback_id}`, ...item.evidence_refs],
         },
         apiKey,
-      ),
+    ),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["qa-feedback-items"] });
-      queryClient.invalidateQueries({ queryKey: ["qa-queue-summary"] });
+      invalidateWritebackQueries(queryClient, "qa_feedback_status");
     },
   });
 
