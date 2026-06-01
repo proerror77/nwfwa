@@ -840,6 +840,15 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
     let invoice_self_pay_amount = number_at(invoice, &["selfPayAmount"]);
     let invoice_own_expense_amount = number_at(invoice, &["ownExpenseAmount"]);
     let invoice_other_amount = number_at(invoice, &["otherAmount"]);
+    let invoice_provider_code = string_at(invoice, &["hospitalCode"]);
+    let invoice_provider_name = string_at(invoice, &["hospitalName"]);
+    let invoice_provider_class = string_at(invoice, &["hospitalClass"]);
+    let invoice_provider_type = string_at(invoice, &["hospitalProperty"]);
+    let invoice_provider_city = string_at(invoice, &["hospitalCityName"]);
+    let invoice_provider_province = string_at(invoice, &["hospitalProvinceName"]);
+    let invoice_is_hospital_institution = bool_at(invoice, &["isHospitalInstitution"]);
+    let invoice_primary_care = bool_at(invoice, &["primaryCare"]);
+    let invoice_red_flag = string_at(invoice, &["redFlag"]);
     let diagnoses = invoice
         .get("diagnosisList")
         .and_then(Value::as_array)
@@ -876,6 +885,13 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
             let medical_type = medical_type.clone();
             let invoice_claim_nature = invoice_claim_nature.clone();
             let diagnoses = diagnoses.clone();
+            let invoice_provider_code = invoice_provider_code.clone();
+            let invoice_provider_name = invoice_provider_name.clone();
+            let invoice_provider_class = invoice_provider_class.clone();
+            let invoice_provider_type = invoice_provider_type.clone();
+            let invoice_provider_city = invoice_provider_city.clone();
+            let invoice_provider_province = invoice_provider_province.clone();
+            let invoice_red_flag = invoice_red_flag.clone();
             fee.get("feeDetailList")
                 .and_then(Value::as_array)
                 .into_iter()
@@ -903,6 +919,15 @@ fn itemized_bill_lines(invoice: &Value) -> Vec<Value> {
                         "invoice_self_pay_amount": invoice_self_pay_amount,
                         "invoice_own_expense_amount": invoice_own_expense_amount,
                         "invoice_other_amount": invoice_other_amount,
+                        "invoice_provider_code": invoice_provider_code,
+                        "invoice_provider_name": invoice_provider_name,
+                        "invoice_provider_class": invoice_provider_class,
+                        "invoice_provider_type": invoice_provider_type,
+                        "invoice_provider_city": invoice_provider_city,
+                        "invoice_provider_province": invoice_provider_province,
+                        "invoice_is_hospital_institution": invoice_is_hospital_institution,
+                        "invoice_primary_care": invoice_primary_care,
+                        "invoice_red_flag": invoice_red_flag,
                         "fee_group_amount": fee_group_amount,
                         "fee_group_other_amount": fee_group_other_amount,
                         "medicare_prorated": string_at(detail, &["medicareProrated"]),

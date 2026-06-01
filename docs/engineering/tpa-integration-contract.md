@@ -56,7 +56,8 @@ keeps its source invoice id, invoice bill type, invoice document type,
 social-insurance type, department, medical type, invoice claim nature, invoice
 start/end dates, diagnosis list, invoice-level payment totals, fee-group
 amount, fee-group other amount, social-insurance amount, Medicare prorated
-percentage, and
+percentage, invoice-level provider code/name/class/type/city/province/network
+flags, and
 `invoice:{invoiceNo}:fee_detail:{detailId}` evidence ref.
 Canonical claim header `total_amount` is the sum of all source invoice
 `feeAmount` values; it is not limited to the primary invoice.

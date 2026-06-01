@@ -315,6 +315,43 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
         body["canonical_claim_context"]["itemized_bill_lines"][0]["medicare_prorated"],
         "10.00"
     );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_provider_code"],
+        "HSP-001"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_provider_name"],
+        "南京同仁医院"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_provider_class"],
+        "三级"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_provider_type"],
+        "02"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_provider_city"],
+        "南京"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_provider_province"],
+        "江苏"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]
+            ["invoice_is_hospital_institution"],
+        true
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_primary_care"],
+        true
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["itemized_bill_lines"][0]["invoice_red_flag"],
+        "N"
+    );
     assert!(
         body["canonical_claim_context"]["document_evidence"][0]["medical_record_text"]
             .as_str()
@@ -1046,7 +1083,15 @@ async fn preserves_bill_lines_from_all_invoices() {
                     "invoiceNo": "INV-MULTI-002",
                     "feeAmount": 250.00,
                     "startDate": 1766620800000,
-                    "hospitalName": "南京同仁医院",
+                    "hospitalCode": "HSP-SECONDARY",
+                    "hospitalName": "南京口腔医院",
+                    "hospitalClass": "二级",
+                    "hospitalProperty": "01",
+                    "hospitalCityName": "南京",
+                    "hospitalProvinceName": "江苏",
+                    "isHospitalInstitution": true,
+                    "primaryCare": false,
+                    "redFlag": "Y",
                     "diagnosisList": [
                       {
                         "detailCode": "K02.900",
@@ -1089,6 +1134,15 @@ async fn preserves_bill_lines_from_all_invoices() {
             && line["item_name"] == "龋齿充填术"
             && line["diagnosis_list"][0]["name"] == "龋齿"
             && line["social_insurance_amount"] == 25.0
+            && line["invoice_provider_code"] == "HSP-SECONDARY"
+            && line["invoice_provider_name"] == "南京口腔医院"
+            && line["invoice_provider_class"] == "二级"
+            && line["invoice_provider_type"] == "01"
+            && line["invoice_provider_city"] == "南京"
+            && line["invoice_provider_province"] == "江苏"
+            && line["invoice_is_hospital_institution"] == true
+            && line["invoice_primary_care"] == false
+            && line["invoice_red_flag"] == "Y"
     }));
     assert!(bill_lines.iter().any(|line| {
         line["evidence_refs"]

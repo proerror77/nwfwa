@@ -67,8 +67,8 @@ before they leave the inbox boundary.
 every source invoice, not only the primary invoice. Each line also carries
 invoice-level bill type, document type, social-insurance type, department,
 medical type, claim nature, start/end dates, invoice payment totals, fee-group
-amount, fee-group other amount, and Medicare prorated percentage when those
-fields exist in the raw payload.
+amount, fee-group other amount, Medicare prorated percentage, and invoice-level
+provider context when those fields exist in the raw payload.
 Invoice-level diagnosis gaps are reported as warnings on the matching
 `reportCase.policyList[0].invoiceList[n].feeList` path.
 For policy coverage, `member_policy_snapshot.product_liabilities` preserves
