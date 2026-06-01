@@ -1506,7 +1506,7 @@ async fn flags_non_primary_product_liability_window_mismatches() {
                 "policyType": "2",
                 "insuredName": "LEE, Peter",
                 "coverageLimit": 5000,
-                "validateDate": 1735689600000,
+                "validateDate": 1767225600000,
                 "expireDate": 1798675200000,
                 "productList": [
                   {
@@ -1567,6 +1567,18 @@ async fn flags_non_primary_product_liability_window_mismatches() {
                     .as_str()
                     .unwrap()
                     .contains("claim eligibility date")
+        }));
+    assert!(body["validation_errors"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|error| {
+            error["field_path"] == "reportCase.policyList[1].validateDate"
+                && error["severity"] == "warning"
+                && error["remediation"]
+                    .as_str()
+                    .unwrap()
+                    .contains("policy window")
         }));
     assert!(body["validation_errors"]
         .as_array()

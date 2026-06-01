@@ -82,7 +82,8 @@ liability markers, main-liability markers, and evidence refs. The top-level
 `product_code` and `liability_code` fields are primary values for
 compatibility, not the complete coverage list.
 Coverage-window validation scans the same list. Non-primary product or
-liability mismatches are returned as field-level warnings such as
+liability mismatches, plus policy-level window mismatches, are returned as
+field-level warnings such as `reportCase.policyList[n].validateDate` or
 `reportCase.policyList[n].productList[m].validateDate` and block direct scoring
 through `scoring_ready = false`.
 

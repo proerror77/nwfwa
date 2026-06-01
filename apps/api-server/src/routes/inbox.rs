@@ -255,17 +255,26 @@ fn blocks_direct_scoring(error: &InboxValidationError) -> bool {
         return false;
     }
     let path = error.field_path.as_str();
+    is_policy_level_blocking_path(path)
+        || (path.starts_with("reportCase.policyList[")
+            && path.contains(".productList[")
+            && matches!(
+                path.rsplit('.').next(),
+                Some("validateDate" | "claimValidateDate" | "expireDate")
+            ))
+}
+
+fn is_policy_level_blocking_path(path: &str) -> bool {
+    if !path.starts_with("reportCase.policyList[")
+        || path.contains(".productList[")
+        || path.contains(".invoiceList[")
+    {
+        return false;
+    }
     matches!(
-        path,
-        "reportCase.policyList[0].coverageLimit"
-            | "reportCase.policyList[0].validateDate"
-            | "reportCase.policyList[0].expireDate"
-    ) || (path.starts_with("reportCase.policyList[")
-        && path.contains(".productList[")
-        && matches!(
-            path.rsplit('.').next(),
-            Some("validateDate" | "claimValidateDate" | "expireDate")
-        ))
+        path.rsplit('.').next(),
+        Some("coverageLimit" | "validateDate" | "expireDate")
+    )
 }
 
 fn inbox_audit_id(external_message_fingerprint: Option<&str>) -> String {
@@ -413,16 +422,16 @@ fn build_canonical_claim_context(
         receive_date,
         &medical_records,
     );
-    validate_service_window(
-        validation_errors,
-        data_quality_signals,
-        service_date,
-        policy_start_date,
-        policy_end_date,
-        "reportCase.policyList[0]",
-        "policy",
-    );
     for (policy_index, policy) in policies.iter().enumerate() {
+        validate_service_window(
+            validation_errors,
+            data_quality_signals,
+            service_date,
+            epoch_date_at(policy, &["validateDate"]),
+            epoch_date_at(policy, &["expireDate"]),
+            &format!("reportCase.policyList[{policy_index}]"),
+            "policy",
+        );
         validate_product_liability_windows(
             validation_errors,
             data_quality_signals,
