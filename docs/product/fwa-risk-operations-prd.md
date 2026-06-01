@@ -301,8 +301,8 @@ Required inbox corrections before scoring:
 The inbox should output a canonical payload with:
 
 - claim header: external claim id, source system, service date, receive date,
-  accident reason, medical type, currency, and claim-level total amount summed
-  from all source invoices;
+  accident date, accident reason, medical type, currency, and claim-level total
+  amount summed from all source invoices;
 - member and policy snapshot: masked member id, policy id, product code,
   primary product/liability codes, all product-liability windows, policy type,
   first-apply date, social-insurance participation flag, and coverage

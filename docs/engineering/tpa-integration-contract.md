@@ -30,13 +30,15 @@ The current pilot-shaped adapter supports an `AiClaim Core` envelope with
 `systemCode`, `transNo`, and a nested `reportCase`.
 
 The endpoint validates the envelope, checks source-system identity, normalizes
-epoch-millisecond dates, masks PII-bearing values, maps medical record,
-invoice, provider, product, and liability fields into a canonical claim
-context, and returns data-quality signals such as identity mismatch,
-date inconsistency, missing coverage limit, coverage-window mismatch, and
-policy-liability mismatch. It also raises `document_invoice_mismatch` for the
+epoch-millisecond dates, masks PII-bearing values, maps claim-header,
+medical-record, invoice, provider, product, and liability fields into a
+canonical claim context, and returns data-quality signals such as identity
+mismatch, date inconsistency, missing coverage limit, coverage-window mismatch,
+and policy-liability mismatch. It also raises `document_invoice_mismatch` for the
 matching invoice path when any structured invoice diagnosis list does not align
 with medical-record diagnoses, including non-primary invoices.
+Canonical claim headers preserve normalized service, receive, and accident
+dates for claim-timing features.
 Identity mismatch compares accident person, policy insured person, every
 invoice person, and every medical-record patient name when those fields are
 present.

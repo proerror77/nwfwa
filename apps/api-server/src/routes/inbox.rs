@@ -415,6 +415,8 @@ fn build_canonical_claim_context(
             "source_system": source_system,
             "service_date": service_date.map(|date| date.to_string()),
             "receive_date": receive_date.map(|date| date.to_string()),
+            "accident_date": epoch_date_at(payload, &["reportCase", "accidentDate"])
+                .map(|date| date.to_string()),
             "accident_reason": string_at(payload, &["reportCase", "accidentReason"]),
             "medical_type": invoice
                 .and_then(|invoice| string_at(invoice, &["medicalType"]))

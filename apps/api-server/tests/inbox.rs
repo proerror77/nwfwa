@@ -192,6 +192,10 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
         "2026-05-26"
     );
     assert_eq!(
+        body["canonical_claim_context"]["claim_header"]["accident_date"],
+        "2025-12-25"
+    );
+    assert_eq!(
         body["canonical_claim_context"]["provider_snapshot"]["name"],
         "南京同仁医院"
     );
