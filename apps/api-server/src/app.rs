@@ -2,9 +2,9 @@ use crate::{
     config::AppConfig,
     repository::{InMemoryScoringRepository, SharedRepository},
     routes::{
-        agent, claims, dashboard, health, knowledge, openapi, ops_agents, ops_audit, ops_cases,
-        ops_datasets, ops_medical, ops_models, ops_providers, ops_routing_policies, ops_rules,
-        ops_sampling, ops_schemes, pilot_loop,
+        agent, claims, dashboard, health, inbox, knowledge, openapi, ops_agents, ops_audit,
+        ops_cases, ops_datasets, ops_medical, ops_models, ops_providers, ops_routing_policies,
+        ops_rules, ops_sampling, ops_schemes, pilot_loop,
     },
 };
 use axum::{
@@ -49,6 +49,10 @@ pub fn build_app_with_parts(
         .route("/api/openapi.json", get(openapi::openapi_schema))
         .route("/api/v1/health", get(health::health))
         .route("/api/v1/claims/score", post(claims::score_claim))
+        .route(
+            "/api/v1/inbox/claims/normalize",
+            post(inbox::normalize_claim_inbox),
+        )
         .route(
             "/api/v1/ops/dashboard/summary",
             get(dashboard::dashboard_summary),

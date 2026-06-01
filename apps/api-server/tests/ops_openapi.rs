@@ -30,6 +30,7 @@ async fn openapi_includes_operations_paths() {
     let schema: serde_json::Value = serde_json::from_slice(&body).unwrap();
     for path in [
         "/api/v1/claims/score",
+        "/api/v1/inbox/claims/normalize",
         "/api/v1/ops/rules",
         "/api/v1/ops/rules/{rule_id}",
         "/api/v1/ops/rules/backtest",

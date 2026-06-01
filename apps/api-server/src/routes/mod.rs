@@ -2,6 +2,7 @@ pub mod agent;
 pub mod claims;
 pub mod dashboard;
 pub mod health;
+pub mod inbox;
 pub mod knowledge;
 pub mod openapi;
 pub mod ops_agents;

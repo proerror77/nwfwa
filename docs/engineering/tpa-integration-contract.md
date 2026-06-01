@@ -20,6 +20,42 @@ The Operations Studio and internal ops APIs are separate surfaces.
 
 ## Core Endpoints
 
+### Normalize Raw Claim Inbox Payload
+
+`POST /api/v1/inbox/claims/normalize`
+
+Use this endpoint when the TPA or claim administration system sends a
+customer-specific raw intake payload rather than the canonical scoring request.
+The current pilot-shaped adapter supports an `AiClaim Core` envelope with
+`systemCode`, `transNo`, and a nested `reportCase`.
+
+The endpoint validates the envelope, checks source-system identity, normalizes
+epoch-millisecond dates, masks PII-bearing values, maps medical record,
+invoice, provider, product, and liability fields into a canonical claim
+context, and returns data-quality signals such as identity mismatch,
+date inconsistency, and missing coverage limit.
+
+`calculateRisk = N` is treated only as a source-system hint. It does not bypass
+FWA scoring unless a customer-specific config explicitly permits that behavior.
+
+The response includes:
+
+- `external_message_id`: `systemCode + transNo + reportNo` for idempotency.
+- `mapping_version`: adapter mapping version used for audit replay.
+- `validation_result`: `accepted`, `accepted_with_warnings`, or `rejected`.
+- `scoring_ready`: whether the normalized context can proceed directly to
+  scoring.
+- `validation_errors`: field-level findings with `field_path`, `severity`, and
+  `remediation`.
+- `canonical_claim_context`: normalized claim header, member/policy snapshot,
+  provider snapshot, itemized bill lines, and document evidence.
+- `data_quality_signals` and `evidence_refs`.
+
+Documented errors:
+
+- `400` rejected payload with structured `validation_errors`.
+- `401` missing or invalid API key.
+
 ### Score Claim
 
 `POST /api/v1/claims/score`

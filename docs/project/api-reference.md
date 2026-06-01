@@ -15,6 +15,7 @@ dev-secret
 ## API Groups
 
 - Health and contract
+- Inbound claim inbox
 - Runtime scoring
 - Operations dashboard and governance
 - Lead, case, investigation, QA, and medical review workflow
@@ -31,6 +32,18 @@ dev-secret
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/health` | Return API health status. | No | None |
 | GET | `/api/openapi.json` | Return OpenAPI contract. | No | None |
+
+## Inbound Claim Inbox
+
+| Method | Path | Purpose | Auth | Side effects |
+| --- | --- | --- | --- | --- |
+| POST | `/api/v1/inbox/claims/normalize` | Validate and normalize a raw TPA or claim-system payload before scoring. | Yes | None in MVP; returns raw payload ref, mapping version, canonical context, validation findings, data-quality signals, and evidence refs. |
+
+The inbox endpoint is the boundary for customer-specific payloads such as an
+`AiClaim Core` envelope with `systemCode`, `transNo`, and nested `reportCase`.
+It does not directly score the claim. Callers should resolve blocking
+validation errors and required scoring fields before submitting the canonical
+context to `/api/v1/claims/score`.
 
 ## Runtime Scoring
 

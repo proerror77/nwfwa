@@ -58,6 +58,7 @@ fn pii_placeholder(value: &str) -> Option<&'static str> {
     pii_value_placeholder(value).or_else(|| {
         value
             .rsplit_once(':')
+            .or_else(|| value.rsplit_once('：'))
             .and_then(|(_, suffix)| pii_value_placeholder(suffix))
     })
 }
@@ -116,8 +117,10 @@ mod tests {
     #[test]
     fn redacts_common_pii_tokens() {
         assert_eq!(
-            redact_text("email alice@example.com phone:13800138000 id 11010519491231002X"),
-            "email [REDACTED_EMAIL] [REDACTED_PHONE] id [REDACTED_ID]"
+            redact_text(
+                "email alice@example.com phone:13800138000 id 11010519491231002X 卡号：00002602523"
+            ),
+            "email [REDACTED_EMAIL] [REDACTED_PHONE] id [REDACTED_ID] [REDACTED_PHONE]"
         );
     }
 }
