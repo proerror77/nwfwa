@@ -197,6 +197,32 @@ async fn returns_factor_readiness_summary_from_profiled_fields() {
     assert_eq!(readiness["review_factor_count"], 3);
     assert_eq!(readiness["readiness_issue_counts"]["missing_owner"], 3);
     assert_eq!(readiness["readiness_issue_counts"]["label_field"], 1);
+    let scheme_readiness = readiness["scheme_readiness"].as_array().unwrap();
+    assert_eq!(scheme_readiness.len(), 2);
+    assert_eq!(scheme_readiness[0]["scheme_family"], "high_risk_claim");
+    assert_eq!(scheme_readiness[0]["factor_count"], 1);
+    assert_eq!(scheme_readiness[0]["ready_factor_count"], 0);
+    assert_eq!(scheme_readiness[0]["review_factor_count"], 1);
+    assert_eq!(scheme_readiness[0]["online_ready_count"], 0);
+    assert_eq!(
+        scheme_readiness[0]["readiness_issue_counts"]["missing_owner"],
+        1
+    );
+    assert_eq!(
+        scheme_readiness[0]["readiness_issue_counts"]["label_field"],
+        1
+    );
+    assert_eq!(
+        scheme_readiness[1]["scheme_family"],
+        "provider_peer_outlier"
+    );
+    assert_eq!(scheme_readiness[1]["factor_count"], 2);
+    assert_eq!(scheme_readiness[1]["review_factor_count"], 2);
+    assert_eq!(scheme_readiness[1]["online_ready_count"], 2);
+    assert_eq!(
+        scheme_readiness[1]["readiness_issue_counts"]["missing_owner"],
+        2
+    );
     assert_eq!(readiness["factor_cards"].as_array().unwrap().len(), 3);
     assert!(readiness["factor_cards"]
         .as_array()

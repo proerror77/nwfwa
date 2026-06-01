@@ -775,6 +775,29 @@ def assert_factor_factory_readiness():
         all(card.get("scheme_family") in families for card in cards),
         "factor readiness includes card outside FWA scheme taxonomy",
     )
+    scheme_readiness = readiness.get("scheme_readiness", [])
+    assert_true(scheme_readiness, "factor readiness missing scheme summary")
+    assert_true(
+        all(item.get("scheme_family") in families for item in scheme_readiness),
+        "factor readiness scheme summary includes unknown scheme family",
+    )
+    amount_scheme = next(
+        (
+            item
+            for item in scheme_readiness
+            if item.get("scheme_family") == "early_high_value_claim"
+        ),
+        None,
+    )
+    assert_true(amount_scheme is not None, "factor readiness missing early high-value scheme summary")
+    assert_true(
+        amount_scheme.get("factor_count", 0) >= 1,
+        "early high-value scheme summary missing factor count",
+    )
+    assert_true(
+        amount_scheme.get("readiness_issue_counts") is not None,
+        "scheme readiness missing issue counts",
+    )
     amount_ratio = next(
         (
             card
@@ -815,6 +838,7 @@ def assert_factor_factory_readiness():
         "factor_count": readiness["factor_count"],
         "ready_factor_count": readiness["ready_factor_count"],
         "rule_convertible_count": readiness["rule_convertible_count"],
+        "scheme_count": len(scheme_readiness),
     }
 
 

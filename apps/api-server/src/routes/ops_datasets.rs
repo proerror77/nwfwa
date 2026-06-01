@@ -9,6 +9,8 @@ use crate::{
     },
     routes::pii,
 };
+use std::collections::BTreeMap;
+
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -90,7 +92,19 @@ pub struct FactorReadinessResponse {
     pub ready_factor_count: u32,
     pub review_factor_count: u32,
     pub readiness_issue_counts: Map<String, Value>,
+    pub scheme_readiness: Vec<FactorSchemeReadinessRecord>,
     pub factor_cards: Vec<FactorCardRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct FactorSchemeReadinessRecord {
+    pub scheme_family: String,
+    pub factor_count: u32,
+    pub ready_factor_count: u32,
+    pub review_factor_count: u32,
+    pub online_ready_count: u32,
+    pub rule_convertible_count: u32,
+    pub readiness_issue_counts: Map<String, Value>,
 }
 
 #[derive(Debug, Serialize)]
@@ -720,8 +734,10 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
         ready_factor_count: 0,
         review_factor_count: 0,
         readiness_issue_counts: Map::new(),
+        scheme_readiness: Vec::new(),
         factor_cards: Vec::new(),
     };
+    let mut scheme_readiness = BTreeMap::<String, FactorSchemeReadinessRecord>::new();
 
     for dataset in datasets {
         for field in &dataset.fields {
@@ -768,6 +784,7 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
             } else {
                 response.review_factor_count += 1;
             }
+            update_scheme_readiness(&mut scheme_readiness, &factor_card);
             for issue in &factor_card.readiness_issues {
                 let count = response
                     .readiness_issue_counts
@@ -783,10 +800,52 @@ fn build_factor_readiness(datasets: &[DatasetRecord]) -> FactorReadinessResponse
         }
     }
 
+    response.scheme_readiness = scheme_readiness.into_values().collect();
     response.data_quality_score = factor_data_quality_score(&response);
     response.data_quality_status = factor_data_quality_status(response.data_quality_score).into();
 
     response
+}
+
+fn update_scheme_readiness(
+    scheme_readiness: &mut BTreeMap<String, FactorSchemeReadinessRecord>,
+    factor_card: &FactorCardRecord,
+) {
+    let summary = scheme_readiness
+        .entry(factor_card.scheme_family.clone())
+        .or_insert_with(|| FactorSchemeReadinessRecord {
+            scheme_family: factor_card.scheme_family.clone(),
+            factor_count: 0,
+            ready_factor_count: 0,
+            review_factor_count: 0,
+            online_ready_count: 0,
+            rule_convertible_count: 0,
+            readiness_issue_counts: Map::new(),
+        });
+
+    summary.factor_count += 1;
+    if factor_card.readiness_status == "ready" {
+        summary.ready_factor_count += 1;
+    } else {
+        summary.review_factor_count += 1;
+    }
+    if factor_card.online_available {
+        summary.online_ready_count += 1;
+    }
+    if factor_card.rule_convertible {
+        summary.rule_convertible_count += 1;
+    }
+    for issue in &factor_card.readiness_issues {
+        let count = summary
+            .readiness_issue_counts
+            .get(issue)
+            .and_then(Value::as_u64)
+            .unwrap_or(0)
+            + 1;
+        summary
+            .readiness_issue_counts
+            .insert(issue.clone(), Value::from(count));
+    }
 }
 
 fn build_factor_card(dataset: &DatasetRecord, field: &SchemaFieldRecord) -> FactorCardRecord {

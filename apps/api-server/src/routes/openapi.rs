@@ -3873,7 +3873,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "FactorReadinessResponse": {
                     "type": "object",
-                    "required": ["dataset_count", "factor_count", "label_count", "entity_key_count", "data_quality_score", "data_quality_status", "online_ready_count", "rule_convertible_count", "mapped_factor_count", "high_missing_count", "unstable_factor_count", "unowned_factor_count", "ready_factor_count", "review_factor_count", "readiness_issue_counts", "factor_cards"],
+                    "required": ["dataset_count", "factor_count", "label_count", "entity_key_count", "data_quality_score", "data_quality_status", "online_ready_count", "rule_convertible_count", "mapped_factor_count", "high_missing_count", "unstable_factor_count", "unowned_factor_count", "ready_factor_count", "review_factor_count", "readiness_issue_counts", "scheme_readiness", "factor_cards"],
                     "properties": {
                         "dataset_count": { "type": "integer" },
                         "factor_count": { "type": "integer" },
@@ -3893,7 +3893,24 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "object",
                             "additionalProperties": { "type": "integer" }
                         },
+                        "scheme_readiness": { "type": "array", "items": { "$ref": "#/components/schemas/FactorSchemeReadiness" } },
                         "factor_cards": { "type": "array", "items": { "$ref": "#/components/schemas/FactorCard" } }
+                    }
+                },
+                "FactorSchemeReadiness": {
+                    "type": "object",
+                    "required": ["scheme_family", "factor_count", "ready_factor_count", "review_factor_count", "online_ready_count", "rule_convertible_count", "readiness_issue_counts"],
+                    "properties": {
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
+                        "factor_count": { "type": "integer" },
+                        "ready_factor_count": { "type": "integer" },
+                        "review_factor_count": { "type": "integer" },
+                        "online_ready_count": { "type": "integer" },
+                        "rule_convertible_count": { "type": "integer" },
+                        "readiness_issue_counts": {
+                            "type": "object",
+                            "additionalProperties": { "type": "integer" }
+                        }
                     }
                 },
                 "FactorCard": {

@@ -760,10 +760,16 @@ async fn openapi_includes_operations_paths() {
             ["items"]["$ref"],
         "#/components/schemas/FactorCard"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]
+            ["scheme_readiness"]["items"]["$ref"],
+        "#/components/schemas/FactorSchemeReadiness"
+    );
     for field in [
         "ready_factor_count",
         "review_factor_count",
         "readiness_issue_counts",
+        "scheme_readiness",
     ] {
         assert!(
             schema["components"]["schemas"]["FactorReadinessResponse"]["required"]
@@ -774,6 +780,29 @@ async fn openapi_includes_operations_paths() {
             "missing factor readiness field {field}"
         );
     }
+    for field in [
+        "scheme_family",
+        "factor_count",
+        "ready_factor_count",
+        "review_factor_count",
+        "online_ready_count",
+        "rule_convertible_count",
+        "readiness_issue_counts",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["FactorSchemeReadiness"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required_field| required_field == field),
+            "missing factor scheme readiness field {field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["FactorSchemeReadiness"]["properties"]["scheme_family"]
+            ["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
     for field in [
         "factor_name",
         "scheme_family",
