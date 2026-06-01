@@ -1282,6 +1282,8 @@ async fn flags_service_date_outside_product_and_liability_windows() {
                 "policyType": "2",
                 "insuredName": "LEE, Peter",
                 "coverageLimit": 20000,
+                "insuredWithSI": true,
+                "firstApplyTime": 1514764800000,
                 "validateDate": 1735689600000,
                 "expireDate": 1798675200000,
                 "productList": [
@@ -1338,6 +1340,14 @@ async fn flags_service_date_outside_product_and_liability_windows() {
     assert_eq!(
         body["canonical_claim_context"]["member_policy_snapshot"]["coverage_limit"],
         20000.0
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["policy_first_apply_date"],
+        "2018-01-01"
+    );
+    assert_eq!(
+        body["canonical_claim_context"]["member_policy_snapshot"]["insured_with_social_insurance"],
+        true
     );
     assert!(body["data_quality_signals"]
         .as_array()

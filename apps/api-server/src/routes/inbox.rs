@@ -430,6 +430,11 @@ fn build_canonical_claim_context(
             "liability_code": liability.and_then(|liability| string_at(liability, &["liabCode"])),
             "liability_name": liability.and_then(|liability| string_at(liability, &["liabName"])),
             "policy_type": policy.and_then(|policy| string_at(policy, &["policyType"])),
+            "policy_first_apply_date": policy
+                .and_then(|policy| epoch_date_at(policy, &["firstApplyTime"]))
+                .map(|date| date.to_string()),
+            "insured_with_social_insurance": policy
+                .and_then(|policy| bool_at(policy, &["insuredWithSI"])),
             "coverage_limit": coverage_limit,
             "coverage_start_date": coverage_start_date.map(|date| date.to_string()),
             "coverage_end_date": coverage_end_date.map(|date| date.to_string()),

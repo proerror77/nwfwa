@@ -305,7 +305,8 @@ The inbox should output a canonical payload with:
   from all source invoices;
 - member and policy snapshot: masked member id, policy id, product code,
   primary product/liability codes, all product-liability windows, policy type,
-  and coverage constraints;
+  first-apply date, social-insurance participation flag, and coverage
+  constraints;
 - provider snapshot: hospital/provider code, name, class, type, city, province,
   and network flags;
 - itemized bill lines: every source invoice fee detail with invoice id,

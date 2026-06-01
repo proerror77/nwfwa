@@ -70,6 +70,9 @@ field-level `diagnosis_item_mismatch` warning for that invoice.
 Canonical policy snapshots preserve all source product/liability windows in
 `member_policy_snapshot.product_liabilities`; primary `product_code` and
 `liability_code` remain convenience fields for first-pass routing only.
+They also expose `policy_first_apply_date` and
+`insured_with_social_insurance` for policy-tenure, waiting-period, and coverage
+constraint features.
 Window validation also scans every product/liability entry. A non-primary
 product or liability that does not cover the service date produces a structured
 warning and keeps `scoring_ready = false` until the customer adapter or reviewer
