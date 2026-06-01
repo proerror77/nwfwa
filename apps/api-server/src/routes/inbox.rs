@@ -372,7 +372,7 @@ fn build_canonical_claim_context(
             push_signal(data_quality_signals, "date_inconsistency");
         }
     }
-    validate_invoice_receive_dates(
+    validate_invoice_dates(
         validation_errors,
         data_quality_signals,
         receive_date,
@@ -634,29 +634,42 @@ fn total_invoice_amount(invoices: &[&Value]) -> Option<f64> {
     (count > 0).then_some(total)
 }
 
-fn validate_invoice_receive_dates(
+fn validate_invoice_dates(
     validation_errors: &mut Vec<InboxValidationError>,
     data_quality_signals: &mut Vec<String>,
     receive_date: Option<NaiveDate>,
     invoices: &[&Value],
 ) {
-    let Some(receive_date) = receive_date else {
-        return;
-    };
-
     for (invoice_index, invoice) in invoices.iter().enumerate() {
-        if epoch_date_at(invoice, &["startDate"])
-            .is_some_and(|start_date| receive_date < start_date)
-        {
-            validation_errors.push(InboxValidationError {
-                field_path: format!(
-                    "reportCase.policyList[0].invoiceList[{invoice_index}].startDate"
-                ),
-                severity: "warning",
-                remediation: "claim receive date should not be earlier than invoice start date"
-                    .into(),
-            });
-            push_signal(data_quality_signals, "date_inconsistency");
+        let start_date = epoch_date_at(invoice, &["startDate"]);
+        let end_date = epoch_date_at(invoice, &["endDate"]);
+
+        if let (Some(start_date), Some(end_date)) = (start_date, end_date) {
+            if end_date < start_date {
+                validation_errors.push(InboxValidationError {
+                    field_path: format!(
+                        "reportCase.policyList[0].invoiceList[{invoice_index}].endDate"
+                    ),
+                    severity: "warning",
+                    remediation: "invoice end date must not be earlier than invoice start date"
+                        .into(),
+                });
+                push_signal(data_quality_signals, "date_inconsistency");
+            }
+        }
+
+        if let Some(receive_date) = receive_date {
+            if start_date.is_some_and(|start_date| receive_date < start_date) {
+                validation_errors.push(InboxValidationError {
+                    field_path: format!(
+                        "reportCase.policyList[0].invoiceList[{invoice_index}].startDate"
+                    ),
+                    severity: "warning",
+                    remediation: "claim receive date should not be earlier than invoice start date"
+                        .into(),
+                });
+                push_signal(data_quality_signals, "date_inconsistency");
+            }
         }
     }
 }
