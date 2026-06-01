@@ -90,6 +90,9 @@ source policies in `member_policy_snapshot.product_liabilities`; primary
 routing only. Each product-liability entry preserves source `policy_id`,
 `main_liability` from source `mainLiab`, and parses `isSeriousDiseaseLiability`
 `Y`/`N` values into booleans.
+Products without a source `claimLiabilityList` are emitted as product-only
+entries in the same array with `liability_*` fields set to `null`, so downstream
+reviewers can distinguish absent liability data from a dropped product.
 They also expose `policy_first_apply_date` and
 `insured_with_social_insurance` for policy-tenure, waiting-period, and coverage
 constraint features.

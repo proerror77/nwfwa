@@ -1363,6 +1363,13 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
                         "mainLiab": false
                       }
                     ]
+                  },
+                  {
+                    "productCode": "ZFXM",
+                    "productName": "自费项目补充保险金",
+                    "validateDate": 1735689600000,
+                    "expireDate": 1798675200000,
+                    "claimLiabilityList": []
                   }
                 ],
                 "invoiceList": [
@@ -1414,7 +1421,7 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
         ["product_liabilities"]
         .as_array()
         .expect("canonical policy snapshot should preserve product/liability windows");
-    assert_eq!(product_liabilities.len(), 4);
+    assert_eq!(product_liabilities.len(), 5);
     assert!(product_liabilities.iter().any(|liability| {
         liability["product_code"] == "YBYL"
             && liability["liability_code"] == "YBYL02"
@@ -1437,6 +1444,13 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
             && liability["product_name"] == "二级医疗保险金"
             && liability["liability_code"] == "EJYL01"
             && liability["liability_name"] == "二级医疗门诊费用"
+    }));
+    assert!(product_liabilities.iter().any(|liability| {
+        liability["policy_id"] == "POL-PRODUCTS"
+            && liability["product_code"] == "ZFXM"
+            && liability["product_name"] == "自费项目补充保险金"
+            && liability["liability_code"].is_null()
+            && liability["liability_name"].is_null()
     }));
 }
 

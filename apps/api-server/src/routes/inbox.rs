@@ -538,12 +538,41 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
             let product_start_date = epoch_date_at(product, &["validateDate"]);
             let product_end_date = epoch_date_at(product, &["expireDate"]);
             let policy_id = policy_id.clone();
-            product
+            let liabilities = product
                 .get("claimLiabilityList")
                 .and_then(Value::as_array)
-                .into_iter()
-                .flatten()
-                .map(move |liability| {
+                .cloned()
+                .unwrap_or_default();
+            if liabilities.is_empty() {
+                return vec![json!({
+                    "policy_id": policy_id,
+                    "product_id": product_id,
+                    "product_code": product_code,
+                    "product_name": product_name,
+                    "plan_code": plan_code,
+                    "plan_version": plan_version,
+                    "product_start_date": product_start_date.map(|date| date.to_string()),
+                    "product_end_date": product_end_date.map(|date| date.to_string()),
+                    "liability_id": null,
+                    "liability_code": null,
+                    "liability_name": null,
+                    "liability_start_date": null,
+                    "liability_claim_start_date": null,
+                    "waiting_period_end_date": null,
+                    "liability_end_date": null,
+                    "is_serious_disease_liability": null,
+                    "main_liability": null,
+                    "evidence_refs": [
+                        format!(
+                            "product:{}",
+                            product_code.as_deref().unwrap_or("unknown")
+                        )
+                    ]
+                })];
+            }
+            liabilities
+                .iter()
+                .map(|liability| {
                     let liability_id = string_at(liability, &["id"]);
                     let liability_start_date = epoch_date_at(liability, &["validateDate"]);
                     let liability_claim_start_date =
@@ -576,6 +605,7 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
                         ]
                     })
                 })
+                .collect::<Vec<_>>()
         })
         .collect()
 }

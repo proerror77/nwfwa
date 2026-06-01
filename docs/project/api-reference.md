@@ -81,6 +81,8 @@ including source policy id, waiting-period candidate dates, serious-disease
 liability markers, main-liability markers, and evidence refs. The top-level
 `product_code` and `liability_code` fields are primary values for
 compatibility, not the complete coverage list.
+Products without a source `claimLiabilityList` are still preserved in the same
+array as product-only entries with `liability_*` fields set to `null`.
 Coverage readiness validation scans every source policy and the same product
 list. Missing policy limits, non-primary product or liability mismatches, and
 policy-level window mismatches are returned as field-level warnings such as
