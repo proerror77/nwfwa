@@ -37,13 +37,15 @@ dev-secret
 
 | Method | Path | Purpose | Auth | Side effects |
 | --- | --- | --- | --- | --- |
-| POST | `/api/v1/inbox/claims/normalize` | Validate and normalize a raw TPA or claim-system payload before scoring. | Yes | None in MVP; returns raw payload ref, mapping version, canonical context, validation findings, data-quality signals, and evidence refs. |
+| POST | `/api/v1/inbox/claims/normalize` | Validate and normalize a raw TPA or claim-system payload before scoring. | Yes | Persists a PII-safe inbox audit event and API call record with raw payload ref, mapping version, canonical context summary, validation findings, data-quality signals, and evidence refs. |
 
 The inbox endpoint is the boundary for customer-specific payloads such as an
 `AiClaim Core` envelope with `systemCode`, `transNo`, and nested `reportCase`.
 It does not directly score the claim. Callers should resolve blocking
 validation errors and required scoring fields before submitting the canonical
 context to `/api/v1/claims/score`.
+The audit event stores source trace metadata and validation outcomes, not the
+full raw PII-bearing payload.
 
 ## Runtime Scoring
 

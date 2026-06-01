@@ -1,7 +1,10 @@
-use crate::{app::AppState, error::ApiError, routes::pii::redact_text};
+use crate::{
+    app::AppState, error::ApiError, repository::PersistedAuditEvent, routes::pii::redact_text,
+};
 use axum::{extract::State, http::HeaderMap, http::StatusCode, Json};
 use chrono::{DateTime, NaiveDate};
 use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_core::AuditEventId;
 use serde::Serialize;
 use serde_json::{json, Value};
 
@@ -9,7 +12,10 @@ const MAPPING_VERSION: &str = "aiclaim-core-v1";
 
 #[derive(Debug, Serialize)]
 pub struct InboxNormalizeResponse {
+    pub run_id: String,
+    pub audit_id: String,
     pub external_message_id: Option<String>,
+    pub idempotency_key: Option<String>,
     pub mapping_version: &'static str,
     pub validation_result: String,
     pub scoring_ready: bool,
@@ -143,13 +149,67 @@ pub async fn normalize_claim_inbox(
     } else {
         StatusCode::OK
     };
+    let audit_id = AuditEventId::new().to_string();
+    let run_id = external_message_id
+        .as_ref()
+        .map(|id| format!("inbox:{id}"))
+        .unwrap_or_else(|| format!("inbox:{audit_id}"));
+    let claim_id = report_no.clone().unwrap_or_else(|| "unknown".into());
+    let raw_payload_ref = external_message_id
+        .as_ref()
+        .map(|id| format!("inbox://raw-claims/{id}"));
+    let idempotency_key = external_message_id
+        .as_ref()
+        .map(|id| format!("inbox.claim.normalize:{id}"));
+    let evidence_refs = [
+        raw_payload_ref.clone(),
+        Some(format!("inbox_mappings:{MAPPING_VERSION}")),
+    ]
+    .into_iter()
+    .flatten()
+    .collect::<Vec<_>>();
+
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: audit_id.clone(),
+            run_id: run_id.clone(),
+            claim_id: claim_id.clone(),
+            source_system: system_code.clone().unwrap_or(actor.source_system.clone()),
+            actor_id: actor.actor_id,
+            actor_role: actor.actor_role,
+            event_type: "inbox.claim.normalized".into(),
+            event_status: validation_result.clone(),
+            summary: "raw claim inbox payload normalized".into(),
+            payload: json!({
+                "claim_id": claim_id,
+                "source_system": system_code.clone().unwrap_or_else(|| state.config.source_system.clone()),
+                "external_message_id": external_message_id,
+                "idempotency_key": idempotency_key,
+                "mapping_version": MAPPING_VERSION,
+                "validation_result": validation_result,
+                "scoring_ready": scoring_ready,
+                "raw_payload_ref": raw_payload_ref,
+                "validation_errors": validation_errors,
+                "data_quality_signals": data_quality_signals,
+                "status_code": status.as_u16()
+            }),
+            evidence_refs: evidence_refs
+                .iter()
+                .cloned()
+                .map(Value::String)
+                .collect(),
+        })
+        .await
+        .map_err(internal_error("INBOX_AUDIT_PERSISTENCE_FAILED"))?;
 
     Ok((
         status,
         Json(InboxNormalizeResponse {
-            raw_payload_ref: external_message_id
-                .as_ref()
-                .map(|id| format!("inbox://raw-claims/{id}")),
+            run_id,
+            audit_id,
+            raw_payload_ref,
+            idempotency_key,
             external_message_id,
             mapping_version: MAPPING_VERSION,
             validation_result,
@@ -157,9 +217,21 @@ pub async fn normalize_claim_inbox(
             validation_errors,
             canonical_claim_context,
             data_quality_signals,
-            evidence_refs: vec!["raw_payload:reportCase".into()],
+            evidence_refs,
         }),
     ))
+}
+
+fn internal_error(
+    code: &'static str,
+) -> impl FnOnce(anyhow::Error) -> ApiError + Send + Sync + 'static {
+    move |error| {
+        ApiError::new(
+            StatusCode::INTERNAL_SERVER_ERROR,
+            code,
+            format!("{code}: {error}"),
+        )
+    }
 }
 
 fn build_canonical_claim_context(

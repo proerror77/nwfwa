@@ -34,6 +34,10 @@ epoch-millisecond dates, masks PII-bearing values, maps medical record,
 invoice, provider, product, and liability fields into a canonical claim
 context, and returns data-quality signals such as identity mismatch,
 date inconsistency, and missing coverage limit.
+Each request writes a PII-safe audit event and API call record with source
+trace metadata. The audit payload stores raw payload refs, mapping version,
+validation results, and data-quality signals, not the full raw medical or
+identity payload.
 
 `calculateRisk = N` is treated only as a source-system hint. It does not bypass
 FWA scoring unless a customer-specific config explicitly permits that behavior.
@@ -41,6 +45,9 @@ FWA scoring unless a customer-specific config explicitly permits that behavior.
 The response includes:
 
 - `external_message_id`: `systemCode + transNo + reportNo` for idempotency.
+- `audit_id` and `run_id`: trace handles for Governance audit search.
+- `idempotency_key`: stable inbox normalization key derived from the external
+  message id.
 - `mapping_version`: adapter mapping version used for audit replay.
 - `validation_result`: `accepted`, `accepted_with_warnings`, or `rejected`.
 - `scoring_ready`: whether the normalized context can proceed directly to

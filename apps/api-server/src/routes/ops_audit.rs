@@ -145,7 +145,18 @@ fn api_call_from_audit_event(
         .and_then(serde_json::Value::as_str)
         .unwrap_or(default_source_system)
         .to_string();
+    let status_code = event
+        .payload
+        .get("status_code")
+        .and_then(serde_json::Value::as_u64)
+        .and_then(|value| u16::try_from(value).ok())
+        .unwrap_or(200);
     let idempotency_key = match event.event_type.as_str() {
+        "inbox.claim.normalized" => event
+            .payload
+            .get("idempotency_key")
+            .and_then(serde_json::Value::as_str)
+            .map(ToOwned::to_owned),
         "investigation.result.received" | "qa.result.received" => Some(format!(
             "tpa-writeback:{}:{}",
             event.event_type, event.audit_id
@@ -156,7 +167,7 @@ fn api_call_from_audit_event(
         call_id: event.audit_id.clone(),
         endpoint: endpoint.to_string(),
         method: method.to_string(),
-        status_code: 200,
+        status_code,
         result: event.event_status.clone(),
         source_system,
         claim_id,
@@ -171,6 +182,7 @@ fn api_call_from_audit_event(
 
 fn tpa_endpoint_for_event(event: &AuditHistoryEventRecord) -> Option<(&'static str, &'static str)> {
     match event.event_type.as_str() {
+        "inbox.claim.normalized" => Some(("POST", "/api/v1/inbox/claims/normalize")),
         "scoring.completed" => Some(("POST", "/api/v1/claims/score")),
         "investigation.result.received" => Some(("POST", "/api/v1/investigations/results")),
         "qa.result.received" => Some(("POST", "/api/v1/qa/results")),
