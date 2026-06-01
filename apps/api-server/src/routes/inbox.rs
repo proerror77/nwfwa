@@ -521,6 +521,7 @@ fn product_liabilities(policy: &Value) -> Vec<Value> {
                         "waiting_period_end_date": liability_claim_start_date.map(|date| date.to_string()),
                         "liability_end_date": liability_end_date.map(|date| date.to_string()),
                         "is_serious_disease_liability": bool_at(liability, &["isSeriousDiseaseLiability"]),
+                        "main_liability": bool_at(liability, &["mainLiab"]),
                         "evidence_refs": [
                             format!(
                                 "product:{}:liability:{}",
@@ -988,7 +989,14 @@ fn number_at(value: &Value, path: &[&str]) -> Option<f64> {
 fn bool_at(value: &Value, path: &[&str]) -> Option<bool> {
     path.iter()
         .try_fold(value, |current, key| current.get(*key))
-        .and_then(Value::as_bool)
+        .and_then(|value| match value {
+            Value::Bool(value) => Some(*value),
+            Value::String(value) if value.eq_ignore_ascii_case("Y") => Some(true),
+            Value::String(value) if value.eq_ignore_ascii_case("N") => Some(false),
+            Value::String(value) if value.eq_ignore_ascii_case("true") => Some(true),
+            Value::String(value) if value.eq_ignore_ascii_case("false") => Some(false),
+            _ => None,
+        })
 }
 
 fn epoch_date_at(value: &Value, path: &[&str]) -> Option<NaiveDate> {

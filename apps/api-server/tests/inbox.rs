@@ -1174,7 +1174,8 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
                         "validateDate": 1735689600000,
                         "claimValidateDate": 1740787200000,
                         "expireDate": 1798675200000,
-                        "isSeriousDiseaseLiability": false
+                        "isSeriousDiseaseLiability": "N",
+                        "mainLiab": false
                       },
                       {
                         "liabCode": "YBYL02",
@@ -1182,7 +1183,8 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
                         "validateDate": 1735689600000,
                         "claimValidateDate": 1735689600000,
                         "expireDate": 1798675200000,
-                        "isSeriousDiseaseLiability": false
+                        "isSeriousDiseaseLiability": "N",
+                        "mainLiab": true
                       }
                     ]
                   },
@@ -1198,7 +1200,8 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
                         "validateDate": 1735689600000,
                         "claimValidateDate": 1740787200000,
                         "expireDate": 1798675200000,
-                        "isSeriousDiseaseLiability": true
+                        "isSeriousDiseaseLiability": "Y",
+                        "mainLiab": false
                       }
                     ]
                   }
@@ -1230,12 +1233,15 @@ async fn preserves_all_product_liability_windows_in_canonical_context() {
             && liability["liability_code"] == "YBYL02"
             && liability["liability_claim_start_date"] == "2025-01-01"
             && liability["waiting_period_end_date"] == "2025-01-01"
+            && liability["is_serious_disease_liability"] == false
+            && liability["main_liability"] == true
     }));
     assert!(product_liabilities.iter().any(|liability| {
         liability["product_code"] == "TDJB"
             && liability["product_name"] == "特定疾病医疗保险金"
             && liability["liability_code"] == "TDJB01"
             && liability["is_serious_disease_liability"] == true
+            && liability["main_liability"] == false
     }));
 }
 

@@ -276,6 +276,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   `feeDetailList[n].medicareProrated` must not be collapsed into the detail
   `amount`. These fields feed L1 cost deviation, L5 medical reasonableness, and
   L7 routing explanations.
+- preserve product-liability routing markers from `claimLiabilityList`: parse
+  `isSeriousDiseaseLiability` values such as `Y`/`N` into booleans and keep
+  `mainLiab` as `main_liability` so routing can distinguish primary liability
+  candidates from secondary coverage evidence.
 
 Required inbox corrections before scoring:
 
@@ -296,7 +300,8 @@ Required inbox corrections before scoring:
   medical type, fee categories, drugs, procedures, and medical record text into
   L5 medical-reasonableness inputs;
 - policy coverage: map policy, product, and liability lists into coverage,
-  waiting-period, limit, and liability eligibility features;
+  waiting-period, limit, main-liability, serious-disease-liability, and
+  liability eligibility features;
 - text hygiene: normalize literal `/n` separators, OCR artifacts, missing
   spaces, empty fields, and mixed-language medical text before evidence
   extraction;

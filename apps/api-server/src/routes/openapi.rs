@@ -2269,6 +2269,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "waiting_period_end_date": { "type": ["string", "null"], "format": "date" },
                         "liability_end_date": { "type": ["string", "null"], "format": "date" },
                         "is_serious_disease_liability": { "type": ["boolean", "null"] },
+                        "main_liability": { "type": ["boolean", "null"] },
                         "evidence_refs": {
                             "type": "array",
                             "items": { "type": "string" }

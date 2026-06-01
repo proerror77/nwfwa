@@ -210,6 +210,11 @@ async fn openapi_includes_operations_paths() {
             ["product_liabilities"]["items"]["$ref"],
         "#/components/schemas/InboxProductLiability"
     );
+    let product_liability = &schema["components"]["schemas"]["InboxProductLiability"]["properties"];
+    assert!(
+        product_liability["main_liability"].is_object(),
+        "missing inbox product-liability main liability marker"
+    );
     assert_eq!(
         inbox_context["properties"]["provider_snapshot"]["$ref"],
         "#/components/schemas/InboxProviderSnapshot"
