@@ -21,6 +21,11 @@ Current checks:
 - Python ML service install and `pytest`
 - Web console Rust/WASM check, Trunk production build, and Node-based build smoke
 
+Every job has a timeout so a stuck service, dependency install, or demo smoke
+cannot hold the branch gate indefinitely. Python jobs use pip dependency caching
+keyed by `apps/ml-service/pyproject.toml`; Rust jobs keep the Cargo cache through
+`Swatinem/rust-cache@v2`.
+
 ## Rust Compilation
 
 Rust CI is optimized for fast, reproducible validation rather than release artifact generation.
@@ -49,6 +54,10 @@ Keep hosted runners on GitHub-managed `ubuntu-latest`. If self-hosted runners ar
 Workflow: `.github/workflows/release.yml`
 
 The current CD target is GitHub Releases. A release is published when a semantic version tag matching `v*.*.*` is pushed.
+The release workflow rejects manual dispatch tags that do not match
+`vMAJOR.MINOR.PATCH`, and it verifies that the tag commit is reachable from
+`origin/main` before publishing. This keeps releases tied to the protected
+production-ready branch.
 
 Example:
 

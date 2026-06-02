@@ -17,6 +17,33 @@ This repository uses a lightweight GitFlow policy.
 - Use semantic version tags on `main`, for example `v0.1.0`.
 - Keep CI green before merging.
 - Do not commit generated dependency or build output.
+- Do not push from a dirty worktree. Run `git status --short --branch` before
+  every push and commit only the intended files.
+- Push completed implementation to `develop` first, then wait for GitHub CI to
+  pass before promoting to `main`.
+- Promote `develop` to `main` only from a clean worktree. If the active worktree
+  is dirty, use a temporary worktree rooted at `origin/main` for the promotion.
+- Do not force-push `main`.
+
+## Local Pre-Push Check
+
+Run this minimum check before pushing backend or workflow changes:
+
+```bash
+bash scripts/ci/check_repo.sh
+cargo fmt --all -- --check
+cargo test --locked --workspace
+```
+
+For frontend changes, also run:
+
+```bash
+cd apps/web-console
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
+```
 
 ## Release Flow
 
@@ -65,4 +92,15 @@ Recommended GitHub branch protection for `main` and `develop`:
 - require branches to be up to date before merging
 - block force pushes
 
-This is not enforced yet. Enabling branch protection changes repository write policy and should be done deliberately.
+`main` must be protected. Required status checks should include:
+
+- `repository-health`
+- `rust`
+- `migrations`
+- `demo-smoke`
+- `python`
+- `frontend`
+
+`develop` should block force pushes and require CI when multiple contributors or
+agents are pushing concurrently. If direct pushes to `develop` are allowed for
+speed, only push after the local pre-push check above passes.

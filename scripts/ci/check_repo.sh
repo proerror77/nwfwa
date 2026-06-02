@@ -92,6 +92,11 @@ grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- run-retraining-job" .github/workflows/ci.yml
+grep -q "timeout-minutes" .github/workflows/ci.yml
+grep -q "cache-dependency-path: apps/ml-service/pyproject.toml" .github/workflows/ci.yml
+grep -q "Verify tag is on main" .github/workflows/release.yml
+grep -q "release tag must point to a commit reachable from origin/main" .github/workflows/release.yml
+grep -q "Do not push from a dirty worktree" docs/engineering/git-flow.md
 grep -q "scripts/ci/assert_worker_health.py" .github/workflows/ci.yml
 grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
 grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
