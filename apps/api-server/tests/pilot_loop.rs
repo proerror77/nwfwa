@@ -309,8 +309,14 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(events.len(), 2);
     assert_eq!(events[0]["event_type"], "investigation.result.received");
     assert_eq!(events[1]["event_type"], "qa.result.received");
+    assert_eq!(events[0]["actor_role"], "tpa_system");
+    assert_eq!(events[1]["actor_role"], "tpa_system");
     assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
     assert_eq!(events[1]["payload"]["customer_scope_id"], "demo-customer");
+    assert_eq!(events[0]["payload"]["actor_id"], "tpa-demo");
+    assert_eq!(events[1]["payload"]["actor_id"], "tpa-demo");
+    assert_eq!(events[0]["payload"]["actor_role"], "tpa_system");
+    assert_eq!(events[1]["payload"]["actor_role"], "tpa_system");
     assert!(events
         .iter()
         .all(|event| !event["evidence_refs"].as_array().unwrap().is_empty()));

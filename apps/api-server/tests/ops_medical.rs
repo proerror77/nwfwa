@@ -368,6 +368,9 @@ async fn medical_review_records_controlled_clinical_outcomes_for_labels() {
         medical_review_event["payload"]["customer_scope_id"],
         "demo-customer"
     );
+    assert_eq!(medical_review_event["actor_role"], "tpa_system");
+    assert_eq!(medical_review_event["payload"]["actor_id"], "tpa-demo");
+    assert_eq!(medical_review_event["payload"]["actor_role"], "tpa_system");
 
     let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
     assert_eq!(status, StatusCode::OK);
