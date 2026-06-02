@@ -816,6 +816,120 @@ struct RuleOpsSnapshot {
     gates: RulePromotionGates,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct LeadListResponse {
+    leads: Vec<LeadRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct LeadRecord {
+    lead_id: String,
+    run_id: String,
+    claim_id: String,
+    member_id: String,
+    provider_id: String,
+    source_system: String,
+    review_mode: String,
+    scheme_family: String,
+    lead_source: String,
+    status: String,
+    disposition: String,
+    risk_score: u8,
+    rag: String,
+    reason: String,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct CaseListResponse {
+    cases: Vec<CaseRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct CaseRecord {
+    case_id: String,
+    lead_id: String,
+    claim_id: String,
+    member_id: String,
+    provider_id: String,
+    source_system: String,
+    review_mode: String,
+    scheme_family: String,
+    lead_source: String,
+    status: String,
+    assignee: String,
+    reviewer: String,
+    priority: String,
+    routing_reason: String,
+    evidence_package: Value,
+    sla_target_hours: u32,
+    sla_status: String,
+    time_to_triage_hours: f64,
+    time_to_closure_hours: Option<f64>,
+    final_outcome: Option<String>,
+    reviewer_notes: Option<String>,
+    investigation_result_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct TriageLeadRecord {
+    lead: LeadRecord,
+    case: Option<CaseRecord>,
+    audit_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct UpdateCaseStatusRecord {
+    case: CaseRecord,
+    audit_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct LeadsCasesSnapshot {
+    leads: Vec<LeadRecord>,
+    cases: Vec<CaseRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct MedicalReviewQueueResponse {
+    items: Vec<MedicalReviewQueueItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct MedicalReviewQueueItem {
+    claim_id: String,
+    run_id: String,
+    audit_id: String,
+    medical_reasonableness_score: u8,
+    review_route: String,
+    evidence_status: String,
+    missing_evidence: Vec<String>,
+    item_finding_count: u32,
+    first_item_code: Option<String>,
+    first_issue_type: Option<String>,
+    evidence_refs: Vec<String>,
+    canonical_source_refs: Vec<String>,
+    canonical_evidence_refs: Vec<String>,
+    created_at: Option<String>,
+    review_status: String,
+    review_audit_id: Option<String>,
+    review_decision: Option<String>,
+    reviewer: Option<String>,
+    reviewed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct MedicalReviewResultResponse {
+    claim_id: String,
+    event_type: String,
+    event_status: String,
+    audit_id: String,
+    run_id: String,
+    review_status: String,
+    clinical_outcomes: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum ApiState<T> {
     Idle,
@@ -857,6 +971,10 @@ fn app() -> Html {
                     <ModelsPage />
                 } else if *active == "Factor Factory" {
                     <FactorFactoryPage />
+                } else if *active == "Leads & Cases" {
+                    <LeadsCasesPage />
+                } else if *active == "Medical Review" {
+                    <MedicalReviewPage />
                 } else if *active == "Knowledge Base" {
                     <KnowledgeBasePage />
                 } else if *active == "QA Review" {
@@ -1696,6 +1814,690 @@ fn factor_readiness_view(props: &FactorReadinessProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+#[function_component(LeadsCasesPage)]
+fn leads_cases_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let selected_lead_id = use_state(String::new);
+    let triage_decision = use_state(|| "open_case".to_string());
+    let triage_assignee = use_state(|| "investigator-1".to_string());
+    let triage_reviewer = use_state(|| "lead-reviewer-1".to_string());
+    let triage_priority = use_state(|| "high".to_string());
+    let triage_notes = use_state(|| "Opened from Operations Studio lead triage.".to_string());
+    let triage_evidence_refs = use_state(String::new);
+    let selected_case_id = use_state(String::new);
+    let case_status = use_state(|| "investigating".to_string());
+    let case_actor = use_state(|| "case-manager-1".to_string());
+    let case_notes =
+        use_state(|| "Status updated from Operations Studio case workflow.".to_string());
+    let case_evidence_refs = use_state(String::new);
+    let snapshot_state = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
+    let triage_state = use_state(|| ApiState::<TriageLeadRecord>::Idle);
+    let case_update_state = use_state(|| ApiState::<UpdateCaseStatusRecord>::Idle);
+
+    let load_cases = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
+                    Ok(snapshot) => ApiState::Ready(snapshot),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_cases = load_cases.clone();
+        Callback::from(move |_| load_cases.emit(()))
+    };
+
+    let triage_lead = {
+        let api_key = api_key.clone();
+        let selected_lead_id = selected_lead_id.clone();
+        let triage_decision = triage_decision.clone();
+        let triage_assignee = triage_assignee.clone();
+        let triage_reviewer = triage_reviewer.clone();
+        let triage_priority = triage_priority.clone();
+        let triage_notes = triage_notes.clone();
+        let triage_evidence_refs = triage_evidence_refs.clone();
+        let snapshot_state = snapshot_state.clone();
+        let triage_state = triage_state.clone();
+        Callback::from(move |_| {
+            let ApiState::Ready(snapshot) = &*snapshot_state else {
+                triage_state.set(ApiState::Failed("load leads before triage".into()));
+                return;
+            };
+            let lead = selected_lead(snapshot, &selected_lead_id);
+            let Some(lead) = lead else {
+                triage_state.set(ApiState::Failed("select a lead to triage".into()));
+                return;
+            };
+            let api_key = (*api_key).clone();
+            let lead_id = lead.lead_id.clone();
+            let fallback_refs = lead.evidence_refs.clone();
+            let payload = json!({
+                "decision": (*triage_decision).clone(),
+                "merge_target_lead_id": Value::Null,
+                "assignee": (*triage_assignee).clone(),
+                "reviewer": (*triage_reviewer).clone(),
+                "priority": (*triage_priority).clone(),
+                "notes": (*triage_notes).clone(),
+                "evidence_refs": refs_or_fallback(&triage_evidence_refs, fallback_refs),
+            });
+            let triage_state = triage_state.clone();
+            let snapshot_state = snapshot_state.clone();
+            triage_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match post_triage_lead(api_key.clone(), lead_id, payload).await {
+                    Ok(record) => {
+                        triage_state.set(ApiState::Ready(record));
+                        snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => triage_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let update_case = {
+        let api_key = api_key.clone();
+        let selected_case_id = selected_case_id.clone();
+        let case_status = case_status.clone();
+        let case_actor = case_actor.clone();
+        let case_notes = case_notes.clone();
+        let case_evidence_refs = case_evidence_refs.clone();
+        let snapshot_state = snapshot_state.clone();
+        let case_update_state = case_update_state.clone();
+        Callback::from(move |_| {
+            let ApiState::Ready(snapshot) = &*snapshot_state else {
+                case_update_state.set(ApiState::Failed("load cases before status update".into()));
+                return;
+            };
+            let case = selected_case(snapshot, &selected_case_id);
+            let Some(case) = case else {
+                case_update_state.set(ApiState::Failed("select a case to update".into()));
+                return;
+            };
+            let api_key = (*api_key).clone();
+            let case_id = case.case_id.clone();
+            let payload = json!({
+                "status": (*case_status).clone(),
+                "actor_id": (*case_actor).clone(),
+                "notes": (*case_notes).clone(),
+                "evidence_refs": refs_or_fallback(&case_evidence_refs, vec![format!("investigation_cases:{}", case.case_id)]),
+            });
+            let case_update_state = case_update_state.clone();
+            let snapshot_state = snapshot_state.clone();
+            case_update_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match post_case_status(api_key.clone(), case_id, payload).await {
+                    Ok(record) => {
+                        case_update_state.set(ApiState::Ready(record));
+                        snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => case_update_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    {
+        let load_cases = load_cases.clone();
+        use_effect_with((), move |_| {
+            load_cases.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Leads & Cases"}</h2>
+                    <p>{"Triage generated FWA leads into investigation cases and keep case status, SLA, reviewer, and evidence signals current."}</p>
+                </div>
+                <span class="status-pill">{"Case Workflow"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Workflow Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Lead ID"}
+                        <input
+                            value={(*selected_lead_id).clone()}
+                            placeholder={"blank uses first lead"}
+                            oninput={{
+                                let selected_lead_id = selected_lead_id.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    selected_lead_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Case ID"}
+                        <input
+                            value={(*selected_case_id).clone()}
+                            placeholder={"blank uses first case"}
+                            oninput={{
+                                let selected_case_id = selected_case_id.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    selected_case_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh leads and cases" }}
+                    </button>
+                </div>
+            </section>
+
+            <section class="panel result-stack">
+                <h3>{"Lead Triage"}</h3>
+                <div class="form-grid">
+                    {text_input("Decision", &triage_decision)}
+                    {text_input("Assignee", &triage_assignee)}
+                    {text_input("Reviewer", &triage_reviewer)}
+                    {text_input("Priority", &triage_priority)}
+                    {text_input("Evidence refs", &triage_evidence_refs)}
+                </div>
+                <label>
+                    {"Notes"}
+                    <textarea
+                        value={(*triage_notes).clone()}
+                        oninput={{
+                            let triage_notes = triage_notes.clone();
+                            Callback::from(move |event: InputEvent| {
+                                triage_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                            })
+                        }}
+                    />
+                </label>
+                <div class="button-row">
+                    <button onclick={triage_lead} disabled={matches!(&*triage_state, ApiState::Loading)}>
+                        {if matches!(&*triage_state, ApiState::Loading) { "Submitting..." } else { "Submit triage" }}
+                    </button>
+                </div>
+                <TriageResultView state={(*triage_state).clone()} />
+            </section>
+
+            <section class="panel result-stack">
+                <h3>{"Case Status Update"}</h3>
+                <div class="form-grid">
+                    {text_input("Status", &case_status)}
+                    {text_input("Actor", &case_actor)}
+                    {text_input("Evidence refs", &case_evidence_refs)}
+                </div>
+                <label>
+                    {"Notes"}
+                    <textarea
+                        value={(*case_notes).clone()}
+                        oninput={{
+                            let case_notes = case_notes.clone();
+                            Callback::from(move |event: InputEvent| {
+                                case_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                            })
+                        }}
+                    />
+                </label>
+                <div class="button-row">
+                    <button onclick={update_case} disabled={matches!(&*case_update_state, ApiState::Loading)}>
+                        {if matches!(&*case_update_state, ApiState::Loading) { "Updating..." } else { "Update case status" }}
+                    </button>
+                </div>
+                <CaseUpdateResultView state={(*case_update_state).clone()} />
+            </section>
+
+            <LeadsCasesView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct LeadsCasesProps {
+    state: ApiState<LeadsCasesSnapshot>,
+}
+
+#[function_component(LeadsCasesView)]
+fn leads_cases_view(props: &LeadsCasesProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load leads and cases to inspect the investigation queue."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading leads and cases..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"Queue Summary"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Leads"}</span><strong>{snapshot.leads.len()}</strong></div>
+                                <div><span>{"Cases"}</span><strong>{snapshot.cases.len()}</strong></div>
+                                <div><span>{"SLA Breached"}</span><strong>{snapshot.cases.iter().filter(|case| case.sla_status == "breached").count()}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Lead Status"}</span><strong>{lead_status_summary(&snapshot.leads)}</strong></div>
+                                <div><span>{"Case Status"}</span><strong>{case_status_summary(&snapshot.cases)}</strong></div>
+                                <div><span>{"Schemes"}</span><strong>{lead_scheme_summary(&snapshot.leads)}</strong></div>
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Generated Leads"}</h3>
+                            if snapshot.leads.is_empty() {
+                                <p class="empty">{"No leads returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.leads.iter().take(10).map(|lead| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} / {}", lead.lead_id, lead.claim_id)}</strong>
+                                                <span>{format!("{} / {} / {}", lead.rag, lead.status, lead.disposition)}</span>
+                                            </div>
+                                            <p>{&lead.reason}</p>
+                                            <div class="summary-grid">
+                                                <div><span>{"Risk"}</span><strong>{lead.risk_score}</strong></div>
+                                                <div><span>{"Scheme"}</span><strong>{&lead.scheme_family}</strong></div>
+                                                <div><span>{"Review Mode"}</span><strong>{&lead.review_mode}</strong></div>
+                                                <div><span>{"Provider"}</span><strong>{&lead.provider_id}</strong></div>
+                                                <div><span>{"Member"}</span><strong>{&lead.member_id}</strong></div>
+                                                <div><span>{"Source"}</span><strong>{&lead.lead_source}</strong></div>
+                                            </div>
+                                            <small>{format!("run: {} / source system: {}", lead.run_id, lead.source_system)}</small>
+                                            <small>{format!("evidence: {}", refs_label(&lead.evidence_refs))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Investigation Cases"}</h3>
+                            if snapshot.cases.is_empty() {
+                                <p class="empty">{"No investigation cases returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.cases.iter().take(10).map(|case| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} / {}", case.case_id, case.claim_id)}</strong>
+                                                <span>{format!("{} / {} / {}", case.status, case.priority, case.sla_status)}</span>
+                                            </div>
+                                            <p>{&case.routing_reason}</p>
+                                            <div class="summary-grid">
+                                                <div><span>{"Assignee"}</span><strong>{&case.assignee}</strong></div>
+                                                <div><span>{"Reviewer"}</span><strong>{&case.reviewer}</strong></div>
+                                                <div><span>{"SLA Target"}</span><strong>{format!("{}h", case.sla_target_hours)}</strong></div>
+                                                <div><span>{"Triage Hours"}</span><strong>{format!("{:.1}", case.time_to_triage_hours)}</strong></div>
+                                                <div><span>{"Closure Hours"}</span><strong>{optional_number(case.time_to_closure_hours)}</strong></div>
+                                                <div><span>{"Outcome"}</span><strong>{case.final_outcome.as_deref().unwrap_or("pending")}</strong></div>
+                                                <div><span>{"Investigation"}</span><strong>{case.investigation_result_id.as_deref().unwrap_or("pending")}</strong></div>
+                                                <div><span>{"Evidence Package"}</span><strong>{payload_keys_label(&case.evidence_package)}</strong></div>
+                                                <div><span>{"Lead"}</span><strong>{&case.lead_id}</strong></div>
+                                            </div>
+                                            <small>{format!("reviewer notes: {}", case.reviewer_notes.as_deref().unwrap_or("none"))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct TriageResultProps {
+    state: ApiState<TriageLeadRecord>,
+}
+
+#[function_component(TriageResultView)]
+fn triage_result_view(props: &TriageResultProps) -> Html {
+    match &props.state {
+        ApiState::Idle => {
+            html! { <p class="empty">{"Supported decisions: open_case, reject_lead, request_evidence, merge_lead."}</p> }
+        }
+        ApiState::Loading => html! { <p>{"Submitting lead triage..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(record) => html! {
+            <div class="summary-grid">
+                <div><span>{"Audit"}</span><strong>{&record.audit_id}</strong></div>
+                <div><span>{"Lead"}</span><strong>{format!("{} / {}", record.lead.lead_id, record.lead.status)}</strong></div>
+                <div><span>{"Case"}</span><strong>{record.case.as_ref().map(|case| case.case_id.as_str()).unwrap_or("none")}</strong></div>
+            </div>
+        },
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct CaseUpdateResultProps {
+    state: ApiState<UpdateCaseStatusRecord>,
+}
+
+#[function_component(CaseUpdateResultView)]
+fn case_update_result_view(props: &CaseUpdateResultProps) -> Html {
+    match &props.state {
+        ApiState::Idle => {
+            html! { <p class="empty">{"Supported statuses: triage, investigating, pending_evidence, confirmed, rejected, closed."}</p> }
+        }
+        ApiState::Loading => html! { <p>{"Updating case status..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(record) => html! {
+            <div class="summary-grid">
+                <div><span>{"Audit"}</span><strong>{&record.audit_id}</strong></div>
+                <div><span>{"Case"}</span><strong>{&record.case.case_id}</strong></div>
+                <div><span>{"Status"}</span><strong>{&record.case.status}</strong></div>
+            </div>
+        },
+    }
+}
+
+#[function_component(MedicalReviewPage)]
+fn medical_review_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let limit = use_state(|| "100".to_string());
+    let selected_audit_id = use_state(String::new);
+    let reviewer = use_state(|| "medical-reviewer-1".to_string());
+    let decision = use_state(|| "request_more_evidence".to_string());
+    let clinical_outcomes = use_state(String::new);
+    let notes = use_state(|| "Medical review recorded from Operations Studio.".to_string());
+    let evidence_refs = use_state(String::new);
+    let queue_state = use_state(|| ApiState::<Vec<MedicalReviewQueueItem>>::Idle);
+    let result_state = use_state(|| ApiState::<MedicalReviewResultResponse>::Idle);
+
+    let load_queue = {
+        let api_key = api_key.clone();
+        let limit = limit.clone();
+        let queue_state = queue_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let limit = (*limit).clone();
+            let queue_state = queue_state.clone();
+            queue_state.set(ApiState::Loading);
+            spawn_local(async move {
+                queue_state.set(match get_medical_review_queue(api_key, limit).await {
+                    Ok(items) => ApiState::Ready(items),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_queue = load_queue.clone();
+        Callback::from(move |_| load_queue.emit(()))
+    };
+
+    let submit_review = {
+        let api_key = api_key.clone();
+        let selected_audit_id = selected_audit_id.clone();
+        let reviewer = reviewer.clone();
+        let decision = decision.clone();
+        let clinical_outcomes = clinical_outcomes.clone();
+        let notes = notes.clone();
+        let evidence_refs = evidence_refs.clone();
+        let queue_state = queue_state.clone();
+        let result_state = result_state.clone();
+        let limit = limit.clone();
+        Callback::from(move |_| {
+            let ApiState::Ready(items) = &*queue_state else {
+                result_state.set(ApiState::Failed(
+                    "load the medical review queue before writeback".into(),
+                ));
+                return;
+            };
+            let item = selected_medical_item(items, &selected_audit_id);
+            let Some(item) = item else {
+                result_state.set(ApiState::Failed("select a medical review item".into()));
+                return;
+            };
+            let fallback_refs = medical_review_fallback_refs(item);
+            let payload = json!({
+                "claim_id": item.claim_id,
+                "scoring_audit_id": item.audit_id,
+                "reviewer": (*reviewer).clone(),
+                "decision": (*decision).clone(),
+                "clinical_outcomes": parse_tags(&clinical_outcomes),
+                "notes": (*notes).clone(),
+                "evidence_refs": refs_or_fallback(&evidence_refs, fallback_refs),
+            });
+            let api_key = (*api_key).clone();
+            let result_state = result_state.clone();
+            let queue_state = queue_state.clone();
+            let limit = (*limit).clone();
+            result_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match post_medical_review_result(api_key.clone(), payload).await {
+                    Ok(response) => {
+                        result_state.set(ApiState::Ready(response));
+                        queue_state.set(match get_medical_review_queue(api_key, limit).await {
+                            Ok(items) => ApiState::Ready(items),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => result_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    {
+        let load_queue = load_queue.clone();
+        use_effect_with((), move |_| {
+            load_queue.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Medical Review"}</h2>
+                    <p>{"Review clinical evidence gaps, medical necessity signals, source trace coverage, and reviewer writeback before case or model governance consumes labels."}</p>
+                </div>
+                <span class="status-pill">{"Clinical Signals"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Review Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Limit"}
+                        <input
+                            value={(*limit).clone()}
+                            oninput={{
+                                let limit = limit.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    limit.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Scoring audit ID"}
+                        <input
+                            value={(*selected_audit_id).clone()}
+                            placeholder={"blank uses first queue item"}
+                            oninput={{
+                                let selected_audit_id = selected_audit_id.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    selected_audit_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*queue_state, ApiState::Loading)}>
+                        {if matches!(&*queue_state, ApiState::Loading) { "Refreshing..." } else { "Refresh queue" }}
+                    </button>
+                </div>
+            </section>
+
+            <section class="panel result-stack">
+                <h3>{"Review Writeback"}</h3>
+                <div class="form-grid">
+                    {text_input("Reviewer", &reviewer)}
+                    {text_input("Decision", &decision)}
+                    {text_input("Clinical outcomes", &clinical_outcomes)}
+                    {text_input("Evidence refs", &evidence_refs)}
+                </div>
+                <label>
+                    {"Notes"}
+                    <textarea
+                        value={(*notes).clone()}
+                        oninput={{
+                            let notes = notes.clone();
+                            Callback::from(move |event: InputEvent| {
+                                notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                            })
+                        }}
+                    />
+                </label>
+                <div class="button-row">
+                    <button onclick={submit_review} disabled={matches!(&*result_state, ApiState::Loading)}>
+                        {if matches!(&*result_state, ApiState::Loading) { "Submitting..." } else { "Submit review result" }}
+                    </button>
+                </div>
+                <MedicalReviewResultView state={(*result_state).clone()} />
+            </section>
+
+            <MedicalReviewQueueView state={(*queue_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct MedicalReviewQueueProps {
+    state: ApiState<Vec<MedicalReviewQueueItem>>,
+}
+
+#[function_component(MedicalReviewQueueView)]
+fn medical_review_queue_view(props: &MedicalReviewQueueProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load the queue to inspect medical review candidates."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading medical review queue..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(items) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"Clinical Queue Summary"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Queue Items"}</span><strong>{items.len()}</strong></div>
+                                <div><span>{"Open"}</span><strong>{items.iter().filter(|item| item.review_status == "open").count()}</strong></div>
+                                <div><span>{"Evidence Missing"}</span><strong>{items.iter().filter(|item| !item.missing_evidence.is_empty()).count()}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Completed"}</span><strong>{items.iter().filter(|item| item.review_status.starts_with("completed")).count()}</strong></div>
+                                <div><span>{"Pending Evidence"}</span><strong>{items.iter().filter(|item| item.review_status == "pending_evidence").count()}</strong></div>
+                                <div><span>{"Avg Medical Score"}</span><strong>{format!("{:.1}", average_medical_score(items))}</strong></div>
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Medical Review Queue"}</h3>
+                            if items.is_empty() {
+                                <p class="empty">{"No medical review queue items returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for items.iter().take(10).map(|item| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} / {}", item.claim_id, item.audit_id)}</strong>
+                                                <span>{format!("{} / {} / {}", item.review_route, item.evidence_status, item.review_status)}</span>
+                                            </div>
+                                            <div class="summary-grid">
+                                                <div><span>{"Medical Score"}</span><strong>{item.medical_reasonableness_score}</strong></div>
+                                                <div><span>{"Findings"}</span><strong>{item.item_finding_count}</strong></div>
+                                                <div><span>{"First Item"}</span><strong>{item.first_item_code.as_deref().unwrap_or("none")}</strong></div>
+                                                <div><span>{"First Issue"}</span><strong>{item.first_issue_type.as_deref().unwrap_or("none")}</strong></div>
+                                                <div><span>{"Reviewer"}</span><strong>{item.reviewer.as_deref().unwrap_or("pending")}</strong></div>
+                                                <div><span>{"Decision"}</span><strong>{item.review_decision.as_deref().unwrap_or("pending")}</strong></div>
+                                            </div>
+                                            <small>{format!("missing evidence: {}", refs_label(&item.missing_evidence))}</small>
+                                            <small>{format!("canonical: {} / {}", refs_label(&item.canonical_source_refs), refs_label(&item.canonical_evidence_refs))}</small>
+                                            <small>{format!("review audit: {} / reviewed at: {}", item.review_audit_id.as_deref().unwrap_or("pending"), item.reviewed_at.as_deref().unwrap_or("pending"))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct MedicalReviewResultProps {
+    state: ApiState<MedicalReviewResultResponse>,
+}
+
+#[function_component(MedicalReviewResultView)]
+fn medical_review_result_view(props: &MedicalReviewResultProps) -> Html {
+    match &props.state {
+        ApiState::Idle => {
+            html! { <p class="empty">{"Supported decisions: evidence_sufficient, request_more_evidence, medical_necessity_issue, no_medical_issue."}</p> }
+        }
+        ApiState::Loading => html! { <p>{"Submitting medical review result..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(response) => html! {
+            <div class="summary-grid">
+                <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
+                <div><span>{"Status"}</span><strong>{&response.review_status}</strong></div>
+                <div><span>{"Audit"}</span><strong>{&response.audit_id}</strong></div>
+                <div><span>{"Run"}</span><strong>{&response.run_id}</strong></div>
+                <div><span>{"Clinical Outcomes"}</span><strong>{refs_label(&response.clinical_outcomes)}</strong></div>
+                <div><span>{"Evidence"}</span><strong>{refs_label(&response.evidence_refs)}</strong></div>
+            </div>
+        },
     }
 }
 
@@ -2663,6 +3465,67 @@ async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse
     request_get_json("/api/v1/ops/factors/readiness", api_key).await
 }
 
+async fn get_leads_cases_snapshot(api_key: String) -> Result<LeadsCasesSnapshot, String> {
+    let leads = request_get_json::<LeadListResponse>("/api/v1/ops/leads", api_key.clone())
+        .await?
+        .leads;
+    let cases = request_get_json::<CaseListResponse>("/api/v1/ops/cases", api_key)
+        .await?
+        .cases;
+    Ok(LeadsCasesSnapshot { leads, cases })
+}
+
+async fn post_triage_lead(
+    api_key: String,
+    lead_id: String,
+    payload: Value,
+) -> Result<TriageLeadRecord, String> {
+    request_json(
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        api_key,
+        payload,
+    )
+    .await
+}
+
+async fn post_case_status(
+    api_key: String,
+    case_id: String,
+    payload: Value,
+) -> Result<UpdateCaseStatusRecord, String> {
+    request_json(
+        &format!("/api/v1/ops/cases/{case_id}/status"),
+        api_key,
+        payload,
+    )
+    .await
+}
+
+async fn get_medical_review_queue(
+    api_key: String,
+    limit: String,
+) -> Result<Vec<MedicalReviewQueueItem>, String> {
+    let limit = limit
+        .trim()
+        .parse::<u32>()
+        .ok()
+        .map(|value| value.clamp(1, 200))
+        .unwrap_or(100);
+    Ok(request_get_json::<MedicalReviewQueueResponse>(
+        &format!("/api/v1/ops/medical-review/queue?limit={limit}"),
+        api_key,
+    )
+    .await?
+    .items)
+}
+
+async fn post_medical_review_result(
+    api_key: String,
+    payload: Value,
+) -> Result<MedicalReviewResultResponse, String> {
+    request_json("/api/v1/ops/medical-review/results", api_key, payload).await
+}
+
 async fn get_qa_review_snapshot(api_key: String) -> Result<QaReviewSnapshot, String> {
     let queue = request_get_json::<QaQueueListResponse>("/api/v1/ops/qa/queue", api_key.clone())
         .await?
@@ -3107,6 +3970,120 @@ fn rule_performance_for<'a>(
     rule_id: &str,
 ) -> Option<&'a RulePerformance> {
     performance.iter().find(|item| item.rule_id == rule_id)
+}
+
+fn selected_lead<'a>(
+    snapshot: &'a LeadsCasesSnapshot,
+    selected_lead_id: &str,
+) -> Option<&'a LeadRecord> {
+    let selected_lead_id = selected_lead_id.trim();
+    if selected_lead_id.is_empty() {
+        snapshot.leads.first()
+    } else {
+        snapshot
+            .leads
+            .iter()
+            .find(|lead| lead.lead_id == selected_lead_id)
+    }
+}
+
+fn selected_case<'a>(
+    snapshot: &'a LeadsCasesSnapshot,
+    selected_case_id: &str,
+) -> Option<&'a CaseRecord> {
+    let selected_case_id = selected_case_id.trim();
+    if selected_case_id.is_empty() {
+        snapshot.cases.first()
+    } else {
+        snapshot
+            .cases
+            .iter()
+            .find(|case| case.case_id == selected_case_id)
+    }
+}
+
+fn selected_medical_item<'a>(
+    items: &'a [MedicalReviewQueueItem],
+    selected_audit_id: &str,
+) -> Option<&'a MedicalReviewQueueItem> {
+    let selected_audit_id = selected_audit_id.trim();
+    if selected_audit_id.is_empty() {
+        items.first()
+    } else {
+        items.iter().find(|item| item.audit_id == selected_audit_id)
+    }
+}
+
+fn refs_or_fallback(refs_text: &str, fallback: Vec<String>) -> Vec<String> {
+    let refs = parse_tags(refs_text);
+    if refs.is_empty() {
+        fallback
+            .into_iter()
+            .filter(|reference| !reference.trim().is_empty())
+            .collect()
+    } else {
+        refs
+    }
+}
+
+fn medical_review_fallback_refs(item: &MedicalReviewQueueItem) -> Vec<String> {
+    let mut refs = item.evidence_refs.clone();
+    refs.extend(item.canonical_evidence_refs.clone());
+    refs.push(format!("audit:{}", item.audit_id));
+    refs.into_iter().fold(Vec::new(), |mut values, value| {
+        if !values.contains(&value) {
+            values.push(value);
+        }
+        values
+    })
+}
+
+fn lead_status_summary(leads: &[LeadRecord]) -> String {
+    count_by(leads.iter().map(|lead| lead.status.as_str()))
+}
+
+fn case_status_summary(cases: &[CaseRecord]) -> String {
+    count_by(cases.iter().map(|case| case.status.as_str()))
+}
+
+fn lead_scheme_summary(leads: &[LeadRecord]) -> String {
+    count_by(leads.iter().map(|lead| lead.scheme_family.as_str()))
+}
+
+fn count_by<'a>(values: impl Iterator<Item = &'a str>) -> String {
+    let mut counts = BTreeMap::new();
+    for value in values {
+        *counts.entry(value.to_string()).or_insert(0_u32) += 1;
+    }
+    map_counts_label(&counts)
+}
+
+fn average_medical_score(items: &[MedicalReviewQueueItem]) -> f64 {
+    if items.is_empty() {
+        return 0.0;
+    }
+    let total = items
+        .iter()
+        .map(|item| item.medical_reasonableness_score as u32)
+        .sum::<u32>();
+    total as f64 / items.len() as f64
+}
+
+fn text_input(label: &'static str, state: &UseStateHandle<String>) -> Html {
+    html! {
+        <label>
+            {label}
+            <input
+                value={(**state).clone()}
+                oninput={{
+                    let state = state.clone();
+                    Callback::from(move |event: InputEvent| {
+                        state.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                    })
+                }}
+            />
+        </label>
+    }
 }
 
 fn refs_label(refs: &[String]) -> String {
