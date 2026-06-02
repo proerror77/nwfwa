@@ -8,6 +8,7 @@ pub struct AppConfig {
     pub customer_scope_id: String,
     pub retention_policy_id: String,
     pub backup_restore_plan_id: String,
+    pub pii_masking_policy_id: String,
 }
 
 impl AppConfig {
@@ -27,6 +28,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "demo-retention-policy".into()),
             backup_restore_plan_id: std::env::var("FWA_BACKUP_RESTORE_PLAN_ID")
                 .unwrap_or_else(|_| "demo-backup-restore-plan".into()),
+            pii_masking_policy_id: std::env::var("FWA_PII_MASKING_POLICY_ID")
+                .unwrap_or_else(|_| "demo-pii-masking-policy".into()),
         }
     }
 
@@ -103,6 +106,14 @@ impl AppConfig {
     pub fn backup_restore_configuration_status(&self) -> &'static str {
         if self.backup_restore_plan_id == "demo-backup-restore-plan" {
             "local_demo_backup_restore"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn pii_masking_configuration_status(&self) -> &'static str {
+        if self.pii_masking_policy_id == "demo-pii-masking-policy" {
+            "local_demo_pii_masking"
         } else {
             "configured"
         }

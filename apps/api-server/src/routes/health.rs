@@ -80,6 +80,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.backup_restore_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "pii_masking_configuration",
+                status: state.config.pii_masking_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

@@ -37,20 +37,22 @@ dev-secret
 `source_system_configuration`, `database_configuration`,
 `model_service_configuration`, `object_storage_configuration`,
 `customer_scope_configuration`, `retention_policy_configuration`, and
-`backup_restore_configuration` checks. They report `local_dev_key` when the API
-is still using the local `dev-secret` key, `local_demo_source` when the API is
-still using the local `tpa-demo` source system, `local_dev_database` when the
-API is still using the local development database URL,
-`local_dev_model_service` when the API is still using the local development
-model service URL, `heuristic_model_scorer` when the API is using the heuristic
-fallback scorer, `local_demo_object_storage` when the API is still using local
-demo artifact storage, `local_demo_customer_scope` when the API is still using
-the local demo customer scope, `local_demo_retention_policy` when the API is
-still using the local demo retention policy id, `local_demo_backup_restore` when
-the API is still using the local demo backup and restore plan id, and
-`configured` after non-default values are configured. The response never exposes
-the configured key, source-system value, database URL, model service URL, object
-storage URI, customer scope id, retention policy id, or backup restore plan id.
+`backup_restore_configuration`, and `pii_masking_configuration` checks. They
+report `local_dev_key` when the API is still using the local `dev-secret` key,
+`local_demo_source` when the API is still using the local `tpa-demo` source
+system, `local_dev_database` when the API is still using the local development
+database URL, `local_dev_model_service` when the API is still using the local
+development model service URL, `heuristic_model_scorer` when the API is using
+the heuristic fallback scorer, `local_demo_object_storage` when the API is still
+using local demo artifact storage, `local_demo_customer_scope` when the API is
+still using the local demo customer scope, `local_demo_retention_policy` when
+the API is still using the local demo retention policy id,
+`local_demo_backup_restore` when the API is still using the local demo backup
+and restore plan id, `local_demo_pii_masking` when the API is still using the
+local demo PII masking policy id, and `configured` after non-default values are
+configured. The response never exposes the configured key, source-system value,
+database URL, model service URL, object storage URI, customer scope id,
+retention policy id, backup restore plan id, or PII masking policy id.
 
 ## Inbound Claim Inbox
 

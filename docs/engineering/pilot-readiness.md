@@ -81,6 +81,9 @@ Minimum pilot monitoring:
 - Backup and restore readiness: `/api/v1/health` check
   `backup_restore_configuration` must be `configured`, not
   `local_demo_backup_restore`, before customer pilot traffic.
+- PII masking readiness: `/api/v1/health` check
+  `pii_masking_configuration` must be `configured`, not
+  `local_demo_pii_masking`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

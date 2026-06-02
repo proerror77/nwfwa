@@ -15,6 +15,7 @@ fn test_config() -> AppConfig {
         customer_scope_id: "demo-customer".into(),
         retention_policy_id: "demo-retention-policy".into(),
         backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
     }
 }
 
@@ -141,7 +142,8 @@ async fn openapi_includes_operations_paths() {
             "local_demo_object_storage",
             "local_demo_customer_scope",
             "local_demo_retention_policy",
-            "local_demo_backup_restore"
+            "local_demo_backup_restore",
+            "local_demo_pii_masking"
         ])
     );
     assert!(
@@ -206,6 +208,13 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("local_demo_backup_restore"),
         "missing health status backup-restore-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_pii_masking"),
+        "missing health status pii-masking-readiness description"
     );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
