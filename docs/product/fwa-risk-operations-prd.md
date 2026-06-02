@@ -500,6 +500,9 @@ Required infrastructure principles:
 - Agent investigation context snapshots should reuse normalized scoring traces,
   including canonical evidence refs and source refs, when a prior scoring audit
   event is available for the claim.
+- QA review queue items should surface normalized scoring trace source refs and
+  canonical evidence refs so reviewers can ground feedback in original bill-line
+  and document evidence.
 - Optional infrastructure such as Redis, ClickHouse, Neo4j, OpenSearch, Qdrant,
   LanceDB, or Kubernetes is adopted only when a defined workload requires it.
 

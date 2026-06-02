@@ -5777,7 +5777,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "QaQueueItem": {
                     "type": "object",
-                    "required": ["qa_case_id", "sample_id", "lead_id", "claim_id", "scheme_family", "rag", "risk_score", "reviewer", "assignment_queue", "status", "evidence_refs"],
+                    "required": ["qa_case_id", "sample_id", "lead_id", "claim_id", "scheme_family", "rag", "risk_score", "reviewer", "assignment_queue", "status", "evidence_refs", "canonical_source_refs", "canonical_evidence_refs"],
                     "properties": {
                         "qa_case_id": { "type": "string" },
                         "sample_id": { "type": "string" },
@@ -5801,7 +5801,9 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": ["string", "null"],
                             "enum": ["rules", "model", "features", "provider_profile", "workflow", "tpa", null]
                         },
-                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "canonical_source_refs": { "type": "array", "items": { "type": "string" } },
+                        "canonical_evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "QaQueueListResponse": {

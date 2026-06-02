@@ -19,6 +19,8 @@ use axum::{
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::BTreeMap;
 
 #[derive(Debug, Serialize)]
 pub struct PilotWritebackResponse {
@@ -96,6 +98,8 @@ pub struct QaQueueItemResponse {
     pub issue_type: Option<String>,
     pub feedback_target: Option<String>,
     pub evidence_refs: Vec<String>,
+    pub canonical_source_refs: Vec<String>,
+    pub canonical_evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Serialize)]
@@ -511,8 +515,19 @@ pub async fn list_qa_queue(
         .list_qa_reviews()
         .await
         .map_err(internal_error("QA_REVIEW_LIST_FAILED"))?;
+    let scoring_events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 1_000,
+            event_type: Some("scoring.completed".into()),
+            has_canonical_trace: Some(true),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("QA_QUEUE_AUDIT_LIST_FAILED"))?;
+    let canonical_traces = canonical_traces_by_claim(&scoring_events);
     Ok(Json(QaQueueListResponse {
-        items: build_qa_queue_items(&samples, &reviews),
+        items: build_qa_queue_items(&samples, &reviews, &canonical_traces),
     }))
 }
 
@@ -673,6 +688,7 @@ pub async fn list_ops_alerts(
 fn build_qa_queue_items(
     samples: &[AuditSampleRecord],
     reviews: &[QaReviewRecord],
+    canonical_traces: &BTreeMap<String, CanonicalTraceRefs>,
 ) -> Vec<QaQueueItemResponse> {
     let reviews_by_case_id = reviews
         .iter()
@@ -685,7 +701,13 @@ fn build_qa_queue_items(
             sample.selected_leads.iter().map(move |lead| {
                 let qa_case_id = qa_case_id_for_sample_lead(sample, lead);
                 let review = reviews_by_case_id.get(qa_case_id.as_str()).copied();
-                qa_queue_item_from_sample(sample, lead, qa_case_id, review)
+                qa_queue_item_from_sample(
+                    sample,
+                    lead,
+                    qa_case_id,
+                    review,
+                    canonical_traces.get(&lead.claim_id),
+                )
             })
         })
         .collect::<Vec<_>>();
@@ -703,6 +725,7 @@ fn qa_queue_item_from_sample(
     lead: &AuditSampleLeadRecord,
     qa_case_id: String,
     review: Option<&QaReviewRecord>,
+    canonical_trace: Option<&CanonicalTraceRefs>,
 ) -> QaQueueItemResponse {
     QaQueueItemResponse {
         qa_case_id,
@@ -720,11 +743,65 @@ fn qa_queue_item_from_sample(
         feedback_target: review
             .map(|review| canonical_feedback_target(&review.feedback_target).into()),
         evidence_refs: lead.evidence_refs.clone(),
+        canonical_source_refs: canonical_trace
+            .map(|trace| trace.source_refs.clone())
+            .unwrap_or_default(),
+        canonical_evidence_refs: canonical_trace
+            .map(|trace| trace.evidence_refs.clone())
+            .unwrap_or_default(),
     }
 }
 
 fn qa_case_id_for_sample_lead(sample: &AuditSampleRecord, lead: &AuditSampleLeadRecord) -> String {
     format!("qa_{}_{}", sample.sample_id, lead.lead_id)
+}
+
+#[derive(Debug, Clone, Default)]
+struct CanonicalTraceRefs {
+    source_refs: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
+fn canonical_traces_by_claim(
+    scoring_events: &[AuditHistoryEventRecord],
+) -> BTreeMap<String, CanonicalTraceRefs> {
+    let mut traces = BTreeMap::new();
+    for event in scoring_events {
+        let Some(claim_id) = event.payload["claim_id"].as_str() else {
+            continue;
+        };
+        let trace = &event.payload["canonical_claim_context_trace"];
+        if !trace.is_object() {
+            continue;
+        }
+        traces.insert(
+            claim_id.to_string(),
+            CanonicalTraceRefs {
+                source_refs: unique_json_string_values(&trace["source_refs"]),
+                evidence_refs: unique_json_string_values(&trace["evidence_refs"]),
+            },
+        );
+    }
+    traces
+}
+
+fn unique_json_string_values(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .fold(Vec::new(), |mut values, value| {
+                    let value = value.to_string();
+                    if !values.contains(&value) {
+                        values.push(value);
+                    }
+                    values
+                })
+        })
+        .unwrap_or_default()
 }
 
 fn build_qa_queue_summary(items: &[QaFeedbackItemRecord]) -> QaQueueSummaryResponse {

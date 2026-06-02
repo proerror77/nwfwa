@@ -108,6 +108,7 @@ async function main() {
       "Leakage Candidates",
       "SLA Breached",
       "QA Queue",
+      "Canonical Evidence",
       "Calibration Signal",
       "Promotion Gate Governance",
       "API Call Records",

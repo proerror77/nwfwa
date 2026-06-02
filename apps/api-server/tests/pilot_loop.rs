@@ -1328,6 +1328,115 @@ async fn lists_qa_queue_items_from_audit_samples() {
 }
 
 #[tokio::test]
+async fn qa_queue_items_include_canonical_trace_from_prior_scoring_audit() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-QA-CANONICAL",
+              "total_amount": 9300,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-qa",
+              "masked_certificate_id": "masked-cert-qa",
+              "member_birth_date": "1988-03-12",
+              "member_gender": "F",
+              "policy_id": "POL-QA-CANONICAL",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-QA-CANONICAL",
+              "name": "QA Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "High cost imaging",
+                "fee_category": "procedure",
+                "amount": 9300,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-QA:fee_detail:LINE-1"]
+              }
+            ],
+            "document_evidence": [
+              {
+                "document_id": "MR-QA-1",
+                "medical_record_type": "outpatient_record",
+                "source_refs": ["medical_record:MR-QA-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "qa_calibration",
+          "population_definition": "Canonical high risk claims for QA queue",
+          "inclusion_criteria": { "min_risk_score": 70 },
+          "deterministic_seed": "qa-canonical-trace",
+          "sample_size": 1,
+          "reviewer": "qa-reviewer-1",
+          "assignment_queue": "QA Review"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, queue) = json_request(app, "GET", "/api/v1/ops/qa/queue", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    let item = queue["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["claim_id"] == "CLM-QA-CANONICAL")
+        .expect("canonical scored claim should enter QA queue");
+    assert!(
+        item["canonical_source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]"
+            )),
+        "QA queue should expose normalized bill-line source path"
+    );
+    assert!(
+        item["canonical_source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("medical_record:MR-QA-1")),
+        "QA queue should expose normalized document source ref"
+    );
+    assert!(
+        item["canonical_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("invoice:INV-QA:fee_detail:LINE-1")),
+        "QA queue should expose canonical evidence refs for QA writeback"
+    );
+}
+
+#[tokio::test]
 async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     let app = build_app(test_config());
 

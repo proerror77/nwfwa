@@ -434,6 +434,8 @@ to list normalized inbox scoring events that carry this trace.
 Agent investigation runs reuse the latest successful scoring trace for the
 same claim in their persisted context snapshot, including source refs from
 normalized bill lines and documents.
+QA queue items also expose canonical source refs and canonical evidence refs
+from the latest successful normalized scoring trace for reviewer grounding.
 
 Documented errors:
 

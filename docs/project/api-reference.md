@@ -203,7 +203,10 @@ preserve claim, rule, model, anomaly, document, and similar-case references.
 | GET | `/api/v1/ops/qa/queue-summary` | Return QA queue rollups. | Yes | None |
 | GET | `/api/v1/ops/labels` | List structured outcome labels. | Yes | None |
 
-Writebacks append evidence. They do not adjudicate claims.
+Writebacks append evidence. They do not adjudicate claims. QA queue items carry
+`canonical_source_refs` and `canonical_evidence_refs` when a prior normalized
+scoring audit event exists for the claim, allowing reviewers to trace sampled
+cases back to source bill lines and documents.
 
 ## Medical Review
 

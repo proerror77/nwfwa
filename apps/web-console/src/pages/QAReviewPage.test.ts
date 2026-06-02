@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  buildQaCanonicalTraceSummary,
   buildQaFeedbackLoopSummary,
   buildQaSubmitSummary,
   buildQaEvidenceRefs,
@@ -117,14 +118,46 @@ describe("QAReviewPage helpers", () => {
         assignment_queue: "QA Review",
         status: "open",
         evidence_refs: ["audit:scoring.completed", "lead:lead_1"],
+        canonical_evidence_refs: ["invoice:INV-QA:fee_detail:LINE-1"],
+        canonical_source_refs: ["medical_record:MR-QA-1"],
       }).split("\n"),
     ).toEqual([
       "qa_queue:qa_sample_1_lead_1",
       "audit_sample:sample_1",
       "lead:lead_1",
       "audit:scoring.completed",
+      "invoice:INV-QA:fee_detail:LINE-1",
     ]);
     expect(buildQaEvidenceRefs(null)).toBe("");
+  });
+
+  it("summarizes canonical trace refs for QA review detail", () => {
+    expect(
+      buildQaCanonicalTraceSummary({
+        qa_case_id: "qa_sample_1_lead_1",
+        sample_id: "sample_1",
+        lead_id: "lead_1",
+        claim_id: "CLM-1",
+        scheme_family: "provider_peer_outlier",
+        rag: "RED",
+        risk_score: 82,
+        reviewer: "qa-reviewer-1",
+        assignment_queue: "QA Review",
+        status: "open",
+        evidence_refs: ["audit:scoring.completed"],
+        canonical_evidence_refs: ["invoice:INV-QA:fee_detail:LINE-1"],
+        canonical_source_refs: ["medical_record:MR-QA-1"],
+      }),
+    ).toEqual({
+      sourceRefCount: 1,
+      evidenceRefCount: 1,
+      hasCanonicalTrace: true,
+    });
+    expect(buildQaCanonicalTraceSummary(null)).toEqual({
+      sourceRefCount: 0,
+      evidenceRefCount: 0,
+      hasCanonicalTrace: false,
+    });
   });
 
   it("summarizes QA writeback audit metadata for the operator surface", () => {

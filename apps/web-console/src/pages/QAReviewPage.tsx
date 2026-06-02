@@ -34,6 +34,8 @@ type QaQueueItem = {
   issue_type?: string | null;
   feedback_target?: string | null;
   evidence_refs: string[];
+  canonical_source_refs?: string[];
+  canonical_evidence_refs?: string[];
 };
 
 type QaFeedbackItem = {
@@ -146,9 +148,20 @@ export function buildQaEvidenceRefs(item: QaQueueItem | null) {
     `audit_sample:${item.sample_id}`,
     `lead:${item.lead_id}`,
     ...item.evidence_refs,
+    ...(item.canonical_evidence_refs ?? []),
   ]
     .filter((value, index, refs) => refs.indexOf(value) === index)
     .join("\n");
+}
+
+export function buildQaCanonicalTraceSummary(item: QaQueueItem | null) {
+  const sourceRefCount = item?.canonical_source_refs?.length ?? 0;
+  const evidenceRefCount = item?.canonical_evidence_refs?.length ?? 0;
+  return {
+    sourceRefCount,
+    evidenceRefCount,
+    hasCanonicalTrace: sourceRefCount > 0 || evidenceRefCount > 0,
+  };
 }
 
 export function buildQaSubmitSummary(response?: PilotWritebackResponse | null) {
@@ -224,6 +237,7 @@ export function QAReviewPage() {
   });
   const schemeLabelMap = buildFwaSchemeLabelMap(schemesQuery.data?.schemes);
   const feedbackLoopSummary = buildQaFeedbackLoopSummary(queueSummaryQuery.data);
+  const canonicalTraceSummary = buildQaCanonicalTraceSummary(selectedCase);
 
   useEffect(() => {
     setEvidenceRefs(buildQaEvidenceRefs(selectedCase));
@@ -413,6 +427,14 @@ export function QAReviewPage() {
               <dd>{selectedCase.evidence_refs.length}</dd>
             </div>
             <div>
+              <dt>Source Trace</dt>
+              <dd>{canonicalTraceSummary.sourceRefCount}</dd>
+            </div>
+            <div>
+              <dt>Canonical Evidence</dt>
+              <dd>{canonicalTraceSummary.evidenceRefCount}</dd>
+            </div>
+            <div>
               <dt>Status</dt>
               <dd>{selectedCase.status}</dd>
             </div>
@@ -424,6 +446,15 @@ export function QAReviewPage() {
         ) : (
           <p className="empty">No QA queue item selected</p>
         )}
+        {canonicalTraceSummary.hasCanonicalTrace ? (
+          <ol className="audit-timeline">
+            {(selectedCase?.canonical_source_refs ?? []).map((reference) => (
+              <li key={reference}>
+                <span>{reference}</span>
+              </li>
+            ))}
+          </ol>
+        ) : null}
 
         <div className="form-grid">
           <label>
