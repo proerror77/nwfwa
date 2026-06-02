@@ -201,6 +201,36 @@ Behavior:
 - the API creates a candidate model version and evaluation record if the output
   contract passes validation.
 
+## External Training Platform Boundary
+
+Training may run on a separate ML platform such as a customer notebook
+environment, managed training service, Kubeflow, Databricks, or a private
+batch platform. That platform should not own a separate dataset definition. It
+must consume the same Parquet dataset manifest used by profiling, model
+governance, and demo/local training.
+
+Required boundary:
+
+- the API and dataset catalog remain the source of truth for dataset key,
+  dataset version, manifest URI, schema/profile URI, label column, entity keys,
+  time split, group split, and split names;
+- the external platform reads the same Parquet dataset manifest and split files
+  from governed storage;
+- the training platform must not read application tables directly or create a
+  hidden feature definition outside the manifest contract;
+- the trainer writes model artifacts, serving manifest, feature materialization
+  manifest, validation/OOT metrics, shadow report, drift report, fairness
+  report, and feature-importance artifacts to governed artifact storage;
+- the platform posts or hands off the same retraining output payload accepted by
+  `/api/v1/ops/model-retraining-jobs/{job_id}/output`;
+- the API remains responsible for candidate registration, promotion gates,
+  activation, rollback, and audit events;
+- Rust serving remains independent of the training platform by loading the
+  activated artifact URI through `FWA_MODEL_ARTIFACT_URI`.
+
+This keeps training portable without forking the data source. The local Python
+trainer is only the compatibility implementation of the same contract.
+
 ## Stage 7: Promotion Gates
 
 Purpose: block candidate models until the required evidence exists.

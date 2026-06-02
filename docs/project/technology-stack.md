@@ -66,6 +66,7 @@ The API server uses:
 | Rust | `crates/fwa-ml-runtime` | Production-oriented JSON logistic artifact inference |
 | Python 3.12 | `apps/ml-service` | Training/export workflow and compatibility model service runtime |
 | FastAPI | `apps/ml-service` | HTTP model scoring API for demo compatibility |
+| External ML platform | outside repo | Optional production training execution environment; consumes the governed Parquet manifest and returns the standard retraining output payload |
 | pandas | `apps/ml-service` | Parquet training dataset loading |
 | pyarrow | `apps/ml-service` | Parquet training and feature-importance artifacts |
 | scikit-learn | `apps/ml-service` | Logistic-regression baseline training and inference |

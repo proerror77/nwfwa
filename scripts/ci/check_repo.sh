@@ -176,6 +176,9 @@ grep -q "artifact_signature_status" crates/fwa-ml-runtime/src/lib.rs
 grep -q "rust_artifact" apps/api-server/src/config.rs
 grep -q "FWA_MODEL_ARTIFACT_URI" docs/project/technology-stack.md
 grep -q "Rust runtime artifact scoring" docs/project/operations-guide.md
+grep -q "External Training Platform Boundary" docs/project/ml-pipeline-runbook.md
+grep -q "same Parquet dataset manifest" docs/project/ml-pipeline-runbook.md
+grep -q "external training platform" docs/project/architecture.md
 grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py

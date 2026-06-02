@@ -16,6 +16,9 @@ flowchart LR
     API --> RML[Rust artifact scorer]
     API --> ML[Python ML service compatibility path]
     API --> Worker[Rust worker]
+    Train[External training platform] --> Obj[(Dataset and artifact storage)]
+    Obj --> Train
+    Train --> API
     Web[Yew Operations Studio] --> API
     API --> Audit[Audit and API call records]
     API --> OpenAPI[OpenAPI contract]
@@ -29,6 +32,7 @@ flowchart LR
 | Web console | `apps/web-console` | Yew/Trunk operator UI for inbox correction, scoring, and operations |
 | ML runtime | `crates/fwa-ml-runtime` | Rust scorer trait, JSON logistic artifact scorer, HTTP scorer compatibility, heuristic fallback |
 | ML service | `apps/ml-service` | FastAPI compatibility scorer and Python training/export workflow |
+| External training platform | customer or ML platform boundary | Runs training jobs outside the API server while consuming the same governed dataset manifest and returning the standard retraining output payload |
 | Worker | `apps/worker` | Health-checkable worker and retraining job runner |
 | PostgreSQL schema | `migrations/0001_initial.sql` | Claims, scoring, audit, rules, models, cases, QA, datasets |
 | Demo scripts | `scripts/demo` | Seed data, smoke checks, persistence assertions, mock TPA client |
@@ -88,8 +92,10 @@ governance metadata before publication.
 
 Model operations tracks versions, evaluations, performance, drift, promotion
 gates, retraining readiness, retraining jobs, artifact contracts, activation,
-and rollback. The demo uses an HTTP ML service boundary rather than a production
-training platform.
+and rollback. Production training may run on an external training platform, but
+the platform must consume the same governed Parquet dataset manifest and return
+the same retraining output payload that the API validates. The demo keeps the
+Python HTTP ML service as a compatibility path.
 
 ### Dataset And Feature Lineage
 
