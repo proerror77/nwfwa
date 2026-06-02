@@ -12,6 +12,19 @@ Local demo API key:
 dev-secret
 ```
 
+Pilot deployments can keep the legacy single-key settings
+`FWA_API_KEY`, `FWA_SOURCE_SYSTEM`, and `FWA_CUSTOMER_SCOPE_ID`, or add
+multiple authenticated principals with:
+
+```text
+FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id;...
+```
+
+Each matched principal supplies the audit `actor_id`, `actor_role`,
+`source_system`, and `customer_scope_id`. The legacy single key remains valid
+as a fallback only when it is not the local default `dev-secret`, so existing
+customer configuration can migrate without keeping the local demo key active.
+
 ## API Groups
 
 - Health and contract
@@ -42,6 +55,8 @@ dev-secret
 `alert_routing_configuration`, and `observability_exporter_configuration`
 and `agent_policy_configuration` checks. They report `local_dev_key` when the
 API is still using the local `dev-secret` key,
+`invalid_api_key_principals` when `FWA_API_KEY_PRINCIPALS` is present but does
+not contain any valid principal entry,
 `local_demo_source` when the API is still using the local `tpa-demo` source
 system, `local_dev_database` when the API is still using the local development
 database URL, `local_dev_model_service` when the API is still using the local

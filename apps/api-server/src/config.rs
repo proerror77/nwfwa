@@ -1,4 +1,4 @@
-use fwa_auth::ApiKeyConfig;
+use fwa_auth::{ApiKeyConfig, ApiKeyPrincipal};
 
 #[derive(Debug, Clone)]
 pub struct AppConfig {
@@ -73,11 +73,8 @@ impl AppConfig {
     }
 
     pub fn api_key_configuration_status(&self) -> &'static str {
-        if self.api_key == "dev-secret" {
-            "local_dev_key"
-        } else {
-            "configured"
-        }
+        let principal_specs = api_key_principal_specs();
+        api_key_principal_configuration_status(&principal_specs, &self.api_key)
     }
 
     pub fn source_system_configuration_status(&self) -> &'static str {
@@ -177,16 +174,188 @@ impl AppConfig {
     }
 
     pub fn api_key_config(&self) -> ApiKeyConfig {
+        self.api_key_config_from_specs(api_key_principal_specs())
+    }
+
+    fn api_key_config_from_specs(&self, specs: Vec<String>) -> ApiKeyConfig {
+        let has_principal_specs = !specs.is_empty();
+        let legacy_key = if has_principal_specs && self.api_key == "dev-secret" {
+            String::new()
+        } else {
+            self.api_key.clone()
+        };
+
         ApiKeyConfig {
-            key: self.api_key.clone(),
+            key: legacy_key,
             source_system: self.source_system.clone(),
             customer_scope_id: self.customer_scope_id.clone(),
+            principals: specs
+                .into_iter()
+                .filter_map(|spec| api_key_principal_from_spec(&spec))
+                .collect(),
         }
     }
+}
+
+fn api_key_principal_specs() -> Vec<String> {
+    std::env::var("FWA_API_KEY_PRINCIPALS")
+        .unwrap_or_default()
+        .split(';')
+        .map(str::trim)
+        .filter(|spec| !spec.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn api_key_principal_configuration_status(specs: &[String], legacy_key: &str) -> &'static str {
+    if !specs.is_empty() {
+        if specs
+            .iter()
+            .all(|spec| api_key_principal_from_spec(spec).is_some())
+        {
+            "configured"
+        } else {
+            "invalid_api_key_principals"
+        }
+    } else if legacy_key == "dev-secret" {
+        "local_dev_key"
+    } else {
+        "configured"
+    }
+}
+
+fn api_key_principal_from_spec(spec: &str) -> Option<ApiKeyPrincipal> {
+    let mut parts = spec.split('|').map(str::trim);
+    let key = parts.next()?;
+    let actor_id = parts.next()?;
+    let actor_role = parts.next()?;
+    let source_system = parts.next()?;
+    let customer_scope_id = parts.next()?;
+    if parts.next().is_some()
+        || key.is_empty()
+        || actor_id.is_empty()
+        || actor_role.is_empty()
+        || source_system.is_empty()
+        || customer_scope_id.is_empty()
+    {
+        return None;
+    }
+    Some(ApiKeyPrincipal {
+        key: key.into(),
+        actor_id: actor_id.into(),
+        actor_role: actor_role.into(),
+        source_system: source_system.into(),
+        customer_scope_id: customer_scope_id.into(),
+    })
 }
 
 impl Default for AppConfig {
     fn default() -> Self {
         Self::from_env()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn parses_api_key_principal_spec() {
+        let principal = api_key_principal_from_spec(
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta",
+        )
+        .unwrap();
+
+        assert_eq!(principal.key, "ops-secret");
+        assert_eq!(principal.actor_id, "ops-console");
+        assert_eq!(principal.actor_role, "fwa_operator");
+        assert_eq!(principal.source_system, "ops-studio");
+        assert_eq!(principal.customer_scope_id, "customer-beta");
+    }
+
+    #[test]
+    fn rejects_malformed_api_key_principal_spec() {
+        assert!(api_key_principal_from_spec("ops-secret|ops-console").is_none());
+        assert!(api_key_principal_from_spec(
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta|extra",
+        )
+        .is_none());
+    }
+
+    #[test]
+    fn api_key_configuration_status_rejects_any_malformed_principal() {
+        let mut config = AppConfig::from_env();
+        config.api_key = "customer-pilot-secret".into();
+
+        assert_eq!(
+            api_key_principal_configuration_status(
+                &[
+                    "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta".into(),
+                    "broken|entry".into(),
+                ],
+                &config.api_key,
+            ),
+            "invalid_api_key_principals"
+        );
+    }
+
+    #[test]
+    fn api_key_config_disables_default_dev_key_when_principals_are_configured() {
+        let config = AppConfig {
+            api_key: "dev-secret".into(),
+            source_system: "tpa-demo".into(),
+            database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
+            model_service_url: "http://127.0.0.1:8001".into(),
+            object_storage_uri: "local://demo-artifacts".into(),
+            customer_scope_id: "demo-customer".into(),
+            retention_policy_id: "demo-retention-policy".into(),
+            backup_restore_plan_id: "demo-backup-restore-plan".into(),
+            pii_masking_policy_id: "demo-pii-masking-policy".into(),
+            key_rotation_policy_id: "demo-key-rotation-policy".into(),
+            network_allowlist_id: "demo-network-allowlist".into(),
+            alert_routing_policy_id: "demo-alert-routing-policy".into(),
+            observability_exporter_endpoint: "local://demo-observability".into(),
+            agent_policy_id: "demo-agent-policy".into(),
+        };
+
+        let api_key_config = config.api_key_config_from_specs(vec![
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta".into(),
+        ]);
+
+        assert_eq!(api_key_config.key, "");
+        assert_eq!(api_key_config.principals.len(), 1);
+    }
+
+    #[test]
+    fn api_key_config_keeps_custom_legacy_principal_and_adds_configured_principals() {
+        let config = AppConfig {
+            api_key: "legacy-secret".into(),
+            source_system: "tpa-demo".into(),
+            database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
+            model_service_url: "http://127.0.0.1:8001".into(),
+            object_storage_uri: "local://demo-artifacts".into(),
+            customer_scope_id: "demo-customer".into(),
+            retention_policy_id: "demo-retention-policy".into(),
+            backup_restore_plan_id: "demo-backup-restore-plan".into(),
+            pii_masking_policy_id: "demo-pii-masking-policy".into(),
+            key_rotation_policy_id: "demo-key-rotation-policy".into(),
+            network_allowlist_id: "demo-network-allowlist".into(),
+            alert_routing_policy_id: "demo-alert-routing-policy".into(),
+            observability_exporter_endpoint: "local://demo-observability".into(),
+            agent_policy_id: "demo-agent-policy".into(),
+        };
+
+        let api_key_config = config.api_key_config_from_specs(vec![
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta".into(),
+        ]);
+
+        assert_eq!(api_key_config.key, "legacy-secret");
+        assert_eq!(api_key_config.source_system, "tpa-demo");
+        assert_eq!(api_key_config.principals.len(), 1);
+        assert_eq!(api_key_config.principals[0].actor_role, "fwa_operator");
+        assert_eq!(
+            api_key_config.principals[0].customer_scope_id,
+            "customer-beta"
+        );
     }
 }

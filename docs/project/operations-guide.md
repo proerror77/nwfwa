@@ -213,6 +213,10 @@ checks.
 Before a customer pilot contract test:
 
 - Configure customer-specific API keys.
+  Use `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id;...`
+  when a pilot has multiple TPA, operations, or integration callers. Keep the
+  legacy `FWA_API_KEY` only for a single non-default fallback principal; the
+  local `dev-secret` key is disabled when principal entries are configured.
 - Define key rotation policy.
 - Define network allowlists.
 - Confirm masked identifier policy.

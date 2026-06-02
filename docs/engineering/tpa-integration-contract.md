@@ -7,6 +7,10 @@ The Operations Studio and internal ops APIs are separate surfaces.
 
 - Base URL: customer environment specific, for example `http://127.0.0.1:8080`.
 - Authentication: every endpoint requires `x-api-key`.
+- Principal mapping: pilot environments can configure multiple API key
+  principals with
+  `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id;...`.
+  The matched principal supplies audit actor context and customer scope.
 - Content type: JSON request bodies must use `content-type: application/json`.
 - OpenAPI: `GET /api/openapi.json`.
 - Error shape: all documented errors return:
