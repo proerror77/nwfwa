@@ -367,6 +367,105 @@ async fn scores_spec_style_top_level_full_payload() {
 }
 
 #[tokio::test]
+async fn scores_inbox_canonical_claim_context() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "canonical_claim_context": {
+                "claim_header": {
+                  "external_claim_id": "CLM-INBOX-CANONICAL",
+                  "total_amount": 8800,
+                  "currency": "CNY",
+                  "service_date": "2026-01-06"
+                },
+                "member_policy_snapshot": {
+                  "masked_member_id": "masked-member-1",
+                  "masked_certificate_id": "masked-cert-1",
+                  "member_birth_date": "1988-03-12",
+                  "member_gender": "F",
+                  "policy_id": "POL-INBOX-CANONICAL",
+                  "product_code": "MED",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": 10000
+                },
+                "provider_snapshot": {
+                  "provider_id": "PRV-INBOX-CANONICAL",
+                  "name": "Inbox Hospital",
+                  "provider_type": "hospital",
+                  "region": "SH",
+                  "risk_tier": "High"
+                },
+                "itemized_bill_lines": [
+                  {
+                    "item_name": "High cost imaging",
+                    "fee_category": "procedure",
+                    "amount": 8800,
+                    "diagnosis_list": [
+                      { "code": "J10", "name": "Influenza" }
+                    ],
+                    "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                    "evidence_refs": ["invoice:INV-1:fee_detail:LINE-1"]
+                  }
+                ],
+                "document_evidence": [
+                  {
+                    "document_id": "MR-INBOX-1",
+                    "medical_record_type": "outpatient_record",
+                    "source_refs": ["medical_record:MR-INBOX-1"]
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["claim_id"], "CLM-INBOX-CANONICAL");
+    assert_eq!(body["scores"]["final_score"], body["risk_score"]);
+    assert!(body["feature_values"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|feature| feature["name"] == "claim_amount_to_limit_ratio"
+            && feature["value"] == serde_json::json!(0.88)));
+    assert!(body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("invoice:INV-1:fee_detail:LINE-1")));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-INBOX-CANONICAL")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    assert!(audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["event_type"] == "scoring.completed"
+            && event["payload"]["claim_id"] == "CLM-INBOX-CANONICAL"));
+}
+
+#[tokio::test]
 async fn scores_claim_with_review_mode_and_audits_routing_policy() {
     let app = build_app(test_config());
 
@@ -1157,6 +1256,36 @@ async fn rejects_duplicate_nested_and_top_level_payload_fields() {
 }
 
 #[tokio::test]
+async fn rejects_canonical_context_with_full_payload_fields() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "canonical_claim_context": {},
+              "claim": {
+                "external_claim_id": "CLM-CANONICAL-AMBIGUOUS",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body = String::from_utf8(body.to_vec()).unwrap();
+    assert!(body.contains("AMBIGUOUS_SCORE_REQUEST"));
+}
+
+#[tokio::test]
 async fn rejects_missing_api_key() {
     let app = build_app(test_config());
 
@@ -1663,7 +1792,13 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     let one_of = schema["components"]["schemas"]["ScoreClaimRequest"]["oneOf"]
         .as_array()
         .expect("request schema oneOf");
-    assert_eq!(one_of.len(), 2);
+    assert_eq!(one_of.len(), 3);
+    assert!(
+        one_of
+            .iter()
+            .any(|variant| variant["$ref"]
+                == "#/components/schemas/CanonicalContextScoreClaimRequest")
+    );
     let claim_id_mode = &schema["components"]["schemas"]["ClaimIdScoreClaimRequest"];
     assert_eq!(
         claim_id_mode["properties"]["review_mode"]["enum"],
@@ -1684,6 +1819,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "documents",
         "provider_profile",
         "provider_relationships",
+        "canonical_claim_context",
     ] {
         assert!(
             claim_id_mode["not"]["anyOf"]
@@ -1709,6 +1845,21 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             .unwrap()
             .contains("authenticated API key")
     );
+    assert!(full_payload_mode["not"]["anyOf"]
+        .as_array()
+        .expect("full payload mode forbidden fields")
+        .iter()
+        .any(|schema| schema["required"][0] == "canonical_claim_context"));
+    let canonical_mode = &schema["components"]["schemas"]["CanonicalContextScoreClaimRequest"];
+    assert_eq!(
+        canonical_mode["properties"]["canonical_claim_context"]["$ref"],
+        "#/components/schemas/InboxCanonicalClaimContext"
+    );
+    assert!(canonical_mode["not"]["anyOf"]
+        .as_array()
+        .expect("canonical mode forbidden fields")
+        .iter()
+        .any(|schema| schema["required"][0] == "claim"));
     for (schema_name, fields) in [
         (
             "FullClaimPayload",

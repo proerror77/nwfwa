@@ -26,6 +26,7 @@ use fwa_rules::{evaluate_rules, RuleMatch};
 use fwa_scoring::DetectionLayerScore;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use std::str::FromStr;
 
 const SCORING_MODEL_KEY: &str = "baseline_fwa";
 
@@ -42,6 +43,7 @@ pub struct ScoreClaimRequest {
     pub documents: Option<Vec<DocumentPayload>>,
     pub provider_profile: Option<ProviderProfilePayload>,
     pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
+    pub canonical_claim_context: Option<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -236,92 +238,126 @@ pub async fn score_claim(
         || request.documents.is_some()
         || request.provider_profile.is_some()
         || request.provider_relationships.is_some();
-    if request.claim_id.is_some() && has_full_payload {
+    if request.claim_id.is_some() && (has_full_payload || request.canonical_claim_context.is_some())
+    {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "AMBIGUOUS_SCORE_REQUEST",
-            "claim_id and full claim payload are mutually exclusive",
+            "claim_id, full claim payload, and canonical_claim_context are mutually exclusive",
         ));
     }
-    if request.claim_id.is_none() && request.claim.is_none() {
+    if request.claim_id.is_none()
+        && request.claim.is_none()
+        && request.canonical_claim_context.is_none()
+    {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "INVALID_SCORE_REQUEST",
-            "claim_id or claim payload is required",
+            "claim_id, claim payload, or canonical_claim_context is required",
         ));
     }
     let review_mode = normalize_review_mode(request.review_mode.as_deref())?;
 
-    let (context, clinical_documents, provider_profile_input, provider_relationships_input) =
-        if let Some(claim_id) = request.claim_id.clone() {
-            let context = state
-                .repository
-                .load_claim_context(&claim_id)
-                .await
-                .map_err(internal_error("CLAIM_LOAD_FAILED"))?
-                .ok_or_else(|| {
-                    ApiError::new(
-                        axum::http::StatusCode::NOT_FOUND,
-                        "CLAIM_NOT_FOUND",
-                        "claim_id was not found",
-                    )
-                })?;
-            (context, Vec::new(), None, None)
-        } else {
-            let mut payload = request.claim.clone().expect("validated claim payload");
-            let duplicate_fields = duplicate_payload_fields(&request, &payload);
-            if !duplicate_fields.is_empty() {
-                return Err(ApiError::new(
-                    axum::http::StatusCode::BAD_REQUEST,
-                    "DUPLICATE_SCORE_PAYLOAD",
-                    format!(
-                        "duplicate nested and top-level payload fields: {}",
-                        duplicate_fields.join(", ")
-                    ),
-                ));
-            }
-            payload.items = payload.items.or_else(|| request.items.clone());
-            payload.member = payload.member.or_else(|| request.member.clone());
-            payload.policy = payload.policy.or_else(|| request.policy.clone());
-            payload.provider = payload.provider.or_else(|| request.provider.clone());
-            payload.documents = payload.documents.or_else(|| request.documents.clone());
-            payload.provider_profile = payload
-                .provider_profile
-                .or_else(|| request.provider_profile.clone());
-            payload.provider_relationships = payload
-                .provider_relationships
-                .or_else(|| request.provider_relationships.clone());
-            let clinical_documents = payload
-                .documents
-                .clone()
-                .unwrap_or_default()
-                .into_iter()
-                .map(ClinicalDocumentEvidence::from)
-                .collect::<Vec<_>>();
-            let provider_profile_input = payload
-                .provider_profile
-                .clone()
-                .map(ProviderProfileInput::from);
-            let provider_relationships_input = payload
-                .provider_relationships
-                .clone()
-                .map(ProviderRelationshipGraphInput::from);
-            let context = demo_context(payload);
-            state
-                .repository
-                .upsert_claim_context(
-                    context.clone(),
-                    serde_json::to_value(&context).unwrap_or_else(|_| serde_json::json!({})),
+    let (
+        context,
+        clinical_documents,
+        provider_profile_input,
+        provider_relationships_input,
+        request_evidence_refs,
+    ) = if let Some(claim_id) = request.claim_id.clone() {
+        let context = state
+            .repository
+            .load_claim_context(&claim_id)
+            .await
+            .map_err(internal_error("CLAIM_LOAD_FAILED"))?
+            .ok_or_else(|| {
+                ApiError::new(
+                    axum::http::StatusCode::NOT_FOUND,
+                    "CLAIM_NOT_FOUND",
+                    "claim_id was not found",
                 )
-                .await
-                .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
-            (
-                context,
-                clinical_documents,
-                provider_profile_input,
-                provider_relationships_input,
+            })?;
+        (context, Vec::new(), None, None, Vec::new())
+    } else if let Some(canonical_claim_context) = request.canonical_claim_context.clone() {
+        if has_full_payload {
+            return Err(ApiError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "AMBIGUOUS_SCORE_REQUEST",
+                "canonical_claim_context cannot be combined with full claim payload fields",
+            ));
+        }
+        let canonical = canonical_score_input(&canonical_claim_context)?;
+        state
+            .repository
+            .upsert_claim_context(
+                canonical.context.clone(),
+                serde_json::to_value(&canonical.context).unwrap_or_else(|_| serde_json::json!({})),
             )
-        };
+            .await
+            .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
+        (
+            canonical.context,
+            canonical.clinical_documents,
+            None,
+            None,
+            canonical.evidence_refs,
+        )
+    } else {
+        let mut payload = request.claim.clone().expect("validated claim payload");
+        let duplicate_fields = duplicate_payload_fields(&request, &payload);
+        if !duplicate_fields.is_empty() {
+            return Err(ApiError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "DUPLICATE_SCORE_PAYLOAD",
+                format!(
+                    "duplicate nested and top-level payload fields: {}",
+                    duplicate_fields.join(", ")
+                ),
+            ));
+        }
+        payload.items = payload.items.or_else(|| request.items.clone());
+        payload.member = payload.member.or_else(|| request.member.clone());
+        payload.policy = payload.policy.or_else(|| request.policy.clone());
+        payload.provider = payload.provider.or_else(|| request.provider.clone());
+        payload.documents = payload.documents.or_else(|| request.documents.clone());
+        payload.provider_profile = payload
+            .provider_profile
+            .or_else(|| request.provider_profile.clone());
+        payload.provider_relationships = payload
+            .provider_relationships
+            .or_else(|| request.provider_relationships.clone());
+        let clinical_documents = payload
+            .documents
+            .clone()
+            .unwrap_or_default()
+            .into_iter()
+            .map(ClinicalDocumentEvidence::from)
+            .collect::<Vec<_>>();
+        let provider_profile_input = payload
+            .provider_profile
+            .clone()
+            .map(ProviderProfileInput::from);
+        let provider_relationships_input = payload
+            .provider_relationships
+            .clone()
+            .map(ProviderRelationshipGraphInput::from);
+        let context = demo_context(payload);
+        state
+            .repository
+            .upsert_claim_context(
+                context.clone(),
+                serde_json::to_value(&context).unwrap_or_else(|_| serde_json::json!({})),
+            )
+            .await
+            .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
+        (
+            context,
+            clinical_documents,
+            provider_profile_input,
+            provider_relationships_input,
+            Vec::new(),
+        )
+    };
 
     let run_id = ScoringRunId::new();
     let mut features = calculate_features(&context);
@@ -343,6 +379,7 @@ pub async fn score_claim(
             })
         })
         .collect::<Vec<_>>();
+    evidence_refs.extend(request_evidence_refs);
     evidence_refs.extend(
         clinical_evidence
             .evidence_refs
@@ -1058,6 +1095,326 @@ fn duplicate_payload_fields(
         fields.push("provider_relationships");
     }
     fields
+}
+
+struct CanonicalScoreInput {
+    context: ClaimContext,
+    clinical_documents: Vec<ClinicalDocumentEvidence>,
+    evidence_refs: Vec<serde_json::Value>,
+}
+
+fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInput, ApiError> {
+    let claim_header = object_field(value, "claim_header")?;
+    let member_policy = object_field(value, "member_policy_snapshot")?;
+    let provider_snapshot = object_field(value, "provider_snapshot")?;
+    let bill_lines = value
+        .get("itemized_bill_lines")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    let documents = value
+        .get("document_evidence")
+        .and_then(serde_json::Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+
+    let external_claim_id = required_json_string(claim_header, "external_claim_id")?;
+    let claim_amount = required_json_decimal(claim_header, "total_amount")?;
+    let currency = optional_json_string(claim_header, "currency").unwrap_or_else(|| "CNY".into());
+    let service_date = optional_json_date(claim_header, "service_date")?;
+    let diagnosis_code = optional_json_string(claim_header, "diagnosis_code")
+        .or_else(|| first_bill_line_diagnosis_code(&bill_lines))
+        .or_else(|| first_document_diagnosis(&documents))
+        .unwrap_or_else(|| "UNKNOWN".into());
+
+    let member_payload = MemberPayload {
+        external_member_id: optional_json_string(member_policy, "masked_member_id")
+            .or_else(|| optional_json_string(member_policy, "masked_certificate_id"))
+            .unwrap_or_else(|| "MBR-INBOX".into()),
+        dob: optional_json_date(member_policy, "member_birth_date")?,
+        gender: optional_json_string(member_policy, "member_gender"),
+    };
+    let coverage_start_date = required_json_date(member_policy, "coverage_start_date")?;
+    let coverage_end_date = required_json_date(member_policy, "coverage_end_date")?;
+    let policy_payload = PolicyPayload {
+        external_policy_id: optional_json_string(member_policy, "policy_id")
+            .unwrap_or_else(|| "POL-INBOX".into()),
+        product_code: optional_json_string(member_policy, "product_code"),
+        coverage_start_date,
+        coverage_end_date,
+        coverage_limit: required_json_decimal(member_policy, "coverage_limit")?,
+        currency: Some(currency.clone()),
+    };
+    let provider_payload = ProviderPayload {
+        external_provider_id: optional_json_string(provider_snapshot, "provider_id")
+            .or_else(|| optional_json_string(provider_snapshot, "provider_code"))
+            .unwrap_or_else(|| "PRV-INBOX".into()),
+        name: optional_json_string(provider_snapshot, "name")
+            .unwrap_or_else(|| "Inbox Provider".into()),
+        provider_type: optional_json_string(provider_snapshot, "provider_type")
+            .or_else(|| optional_json_string(provider_snapshot, "type"))
+            .unwrap_or_else(|| "provider".into()),
+        region: optional_json_string(provider_snapshot, "region")
+            .or_else(|| optional_json_string(provider_snapshot, "city"))
+            .or_else(|| optional_json_string(provider_snapshot, "province"))
+            .unwrap_or_else(|| "UNKNOWN".into()),
+        risk_tier: optional_json_string(provider_snapshot, "risk_tier")
+            .and_then(|value| provider_risk_tier_from_str(&value)),
+    };
+
+    let items = bill_lines
+        .iter()
+        .enumerate()
+        .map(|(index, line)| canonical_bill_line_item(line, index, &currency))
+        .collect::<Result<Vec<_>, _>>()?;
+    let clinical_documents = documents
+        .iter()
+        .enumerate()
+        .map(canonical_document_evidence)
+        .collect::<Vec<_>>();
+    let mut evidence_refs = canonical_evidence_refs(&bill_lines);
+    evidence_refs.extend(canonical_document_refs(&documents));
+    evidence_refs.sort_by_key(|value| value.to_string());
+    evidence_refs.dedup();
+
+    Ok(CanonicalScoreInput {
+        context: demo_context(FullClaimPayload {
+            external_claim_id,
+            claim_amount,
+            currency,
+            service_date,
+            diagnosis_code: Some(diagnosis_code),
+            items: Some(items),
+            member: Some(member_payload),
+            policy: Some(policy_payload),
+            provider: Some(provider_payload),
+            documents: None,
+            provider_profile: None,
+            provider_relationships: None,
+        }),
+        clinical_documents,
+        evidence_refs,
+    })
+}
+
+fn object_field<'a>(
+    value: &'a serde_json::Value,
+    field: &'static str,
+) -> Result<&'a serde_json::Map<String, serde_json::Value>, ApiError> {
+    value
+        .get(field)
+        .and_then(serde_json::Value::as_object)
+        .ok_or_else(|| invalid_canonical_field(field))
+}
+
+fn required_json_string(
+    value: &serde_json::Map<String, serde_json::Value>,
+    field: &'static str,
+) -> Result<String, ApiError> {
+    optional_json_string(value, field).ok_or_else(|| invalid_canonical_field(field))
+}
+
+fn optional_json_string(
+    value: &serde_json::Map<String, serde_json::Value>,
+    field: &'static str,
+) -> Option<String> {
+    value
+        .get(field)
+        .and_then(serde_json::Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(ToOwned::to_owned)
+}
+
+fn required_json_decimal(
+    value: &serde_json::Map<String, serde_json::Value>,
+    field: &'static str,
+) -> Result<Decimal, ApiError> {
+    let decimal = value
+        .get(field)
+        .and_then(decimal_from_json)
+        .ok_or_else(|| invalid_canonical_field(field))?;
+    if decimal > Decimal::ZERO {
+        Ok(decimal)
+    } else {
+        Err(invalid_canonical_field(field))
+    }
+}
+
+fn optional_json_decimal(
+    value: &serde_json::Map<String, serde_json::Value>,
+    field: &'static str,
+) -> Option<Decimal> {
+    value.get(field).and_then(decimal_from_json)
+}
+
+fn decimal_from_json(value: &serde_json::Value) -> Option<Decimal> {
+    match value {
+        serde_json::Value::String(value) => Decimal::from_str(value).ok(),
+        serde_json::Value::Number(value) => Decimal::from_str(&value.to_string()).ok(),
+        _ => None,
+    }
+}
+
+fn required_json_date(
+    value: &serde_json::Map<String, serde_json::Value>,
+    field: &'static str,
+) -> Result<NaiveDate, ApiError> {
+    optional_json_date(value, field)?.ok_or_else(|| invalid_canonical_field(field))
+}
+
+fn optional_json_date(
+    value: &serde_json::Map<String, serde_json::Value>,
+    field: &'static str,
+) -> Result<Option<NaiveDate>, ApiError> {
+    optional_json_string(value, field)
+        .map(|value| {
+            NaiveDate::parse_from_str(&value, "%Y-%m-%d")
+                .map_err(|_| invalid_canonical_field(field))
+        })
+        .transpose()
+}
+
+fn canonical_bill_line_item(
+    line: &serde_json::Value,
+    index: usize,
+    currency: &str,
+) -> Result<ClaimItemPayload, ApiError> {
+    let object = line
+        .as_object()
+        .ok_or_else(|| invalid_canonical_field("itemized_bill_lines"))?;
+    let total_amount = optional_json_decimal(object, "amount").unwrap_or(Decimal::ZERO);
+    Ok(ClaimItemPayload {
+        item_code: optional_json_string(object, "item_code")
+            .or_else(|| optional_json_string(object, "source_path"))
+            .unwrap_or_else(|| format!("inbox-line-{index}")),
+        item_type: optional_json_string(object, "fee_category")
+            .or_else(|| optional_json_string(object, "medical_category"))
+            .unwrap_or_else(|| "claim_item".into()),
+        description: optional_json_string(object, "item_name")
+            .or_else(|| optional_json_string(object, "fee_category"))
+            .unwrap_or_else(|| "Inbox claim item".into()),
+        quantity: 1,
+        unit_amount: total_amount,
+        total_amount,
+        currency: Some(currency.to_string()),
+    })
+}
+
+fn canonical_document_evidence(
+    (index, document): (usize, &serde_json::Value),
+) -> ClinicalDocumentEvidence {
+    let object = document.as_object();
+    ClinicalDocumentEvidence {
+        document_id: object
+            .and_then(|object| optional_json_string(object, "document_id"))
+            .unwrap_or_else(|| format!("inbox-document-{index}")),
+        document_type: object
+            .and_then(|object| {
+                optional_json_string(object, "document_type")
+                    .or_else(|| optional_json_string(object, "medical_record_type"))
+            })
+            .unwrap_or_else(|| "medical_record".into()),
+        linked_item_codes: object
+            .and_then(|object| object.get("linked_item_codes"))
+            .and_then(serde_json::Value::as_array)
+            .map(|items| {
+                items
+                    .iter()
+                    .filter_map(serde_json::Value::as_str)
+                    .map(ToOwned::to_owned)
+                    .collect()
+            })
+            .unwrap_or_default(),
+    }
+}
+
+fn first_bill_line_diagnosis_code(bill_lines: &[serde_json::Value]) -> Option<String> {
+    bill_lines.iter().find_map(|line| {
+        line.get("diagnosis_list")
+            .and_then(serde_json::Value::as_array)
+            .and_then(|diagnoses| diagnoses.first())
+            .and_then(|diagnosis| {
+                diagnosis
+                    .get("code")
+                    .and_then(serde_json::Value::as_str)
+                    .or_else(|| diagnosis.get("name").and_then(serde_json::Value::as_str))
+            })
+            .map(ToOwned::to_owned)
+    })
+}
+
+fn first_document_diagnosis(documents: &[serde_json::Value]) -> Option<String> {
+    documents
+        .iter()
+        .find_map(|document| {
+            document
+                .get("diagnosis")
+                .and_then(serde_json::Value::as_str)
+        })
+        .map(ToOwned::to_owned)
+}
+
+fn canonical_evidence_refs(bill_lines: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    bill_lines
+        .iter()
+        .flat_map(|line| {
+            let source_path = line
+                .get("source_path")
+                .and_then(serde_json::Value::as_str)
+                .map(|value| serde_json::Value::String(value.to_string()));
+            let evidence_refs = line
+                .get("evidence_refs")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|value| {
+                    value
+                        .as_str()
+                        .map(|value| serde_json::Value::String(value.to_string()))
+                });
+            source_path
+                .into_iter()
+                .chain(evidence_refs)
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn canonical_document_refs(documents: &[serde_json::Value]) -> Vec<serde_json::Value> {
+    documents
+        .iter()
+        .flat_map(|document| {
+            document
+                .get("source_refs")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(|value| {
+                    value
+                        .as_str()
+                        .map(|value| serde_json::Value::String(value.to_string()))
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
+fn provider_risk_tier_from_str(value: &str) -> Option<ProviderRiskTier> {
+    match value {
+        "Low" | "low" => Some(ProviderRiskTier::Low),
+        "Medium" | "medium" => Some(ProviderRiskTier::Medium),
+        "High" | "high" => Some(ProviderRiskTier::High),
+        _ => None,
+    }
+}
+
+fn invalid_canonical_field(field: &'static str) -> ApiError {
+    ApiError::new(
+        axum::http::StatusCode::BAD_REQUEST,
+        "INVALID_SCORE_REQUEST",
+        format!("canonical_claim_context.{field} is invalid"),
+    )
 }
 
 impl From<DocumentPayload> for ClinicalDocumentEvidence {

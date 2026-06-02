@@ -128,12 +128,22 @@ Main request modes:
 - stored demo claim by `source_system` and `claim_id`
 - submitted claim payload with member, policy, provider, diagnosis, procedure,
   amount, dates, and context fields
+- normalized inbox context by `source_system` and `canonical_claim_context`,
+  using the `canonical_claim_context` returned from
+  `/api/v1/inbox/claims/normalize`
+
+These request modes are mutually exclusive. Callers should not combine
+`claim_id`, full payload fields, and `canonical_claim_context` in the same
+scoring request.
 
 Request fields that affect policy selection:
 
 - `review_mode`: separates `pre_payment` and `post_payment` behavior.
 - `source_system`: scopes stored-claim lookup and audit source.
 - `claim_id`: identifies stored demo or pilot claim records.
+- `canonical_claim_context`: carries normalized claim header, member/policy,
+  provider, bill-line, and document evidence from the inbox boundary into
+  runtime scoring.
 
 `review_mode` participates in routing policy, active model, and threshold
 selection. It does not change the assistive-only decision boundary.

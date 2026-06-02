@@ -138,6 +138,20 @@ async fn openapi_includes_operations_paths() {
             ["application/json"]["schema"]["$ref"],
         "#/components/schemas/InboxNormalizeResponse"
     );
+    assert!(
+        schema["components"]["schemas"]["ScoreClaimRequest"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|variant| variant["$ref"]
+                == "#/components/schemas/CanonicalContextScoreClaimRequest"),
+        "ScoreClaimRequest should accept normalized inbox canonical context"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["CanonicalContextScoreClaimRequest"]["properties"]
+            ["canonical_claim_context"]["$ref"],
+        "#/components/schemas/InboxCanonicalClaimContext"
+    );
     let inbox_response = &schema["components"]["schemas"]["InboxNormalizeResponse"];
     for field in [
         "run_id",

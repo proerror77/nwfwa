@@ -2415,6 +2415,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         {
                             "$ref": "#/components/schemas/FullPayloadScoreClaimRequest"
+                        },
+                        {
+                            "$ref": "#/components/schemas/CanonicalContextScoreClaimRequest"
                         }
                     ]
                 },
@@ -2442,6 +2445,41 @@ pub async fn openapi_schema() -> Json<Value> {
                     },
                     "not": {
                         "anyOf": [
+                            { "required": ["claim"] },
+                            { "required": ["items"] },
+                            { "required": ["member"] },
+                            { "required": ["policy"] },
+                            { "required": ["provider"] },
+                            { "required": ["documents"] },
+                            { "required": ["provider_profile"] },
+                            { "required": ["provider_relationships"] },
+                            { "required": ["canonical_claim_context"] }
+                        ]
+                    }
+                },
+                "CanonicalContextScoreClaimRequest": {
+                    "type": "object",
+                    "required": ["source_system", "canonical_claim_context"],
+                    "properties": {
+                        "source_system": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Must match the source system bound to the authenticated API key.",
+                            "examples": ["tpa-demo"]
+                        },
+                        "review_mode": {
+                            "type": "string",
+                            "enum": ["pre_payment", "post_payment"],
+                            "default": "pre_payment",
+                            "description": "Runtime scoring context for pre-payment or post-payment review."
+                        },
+                        "canonical_claim_context": {
+                            "$ref": "#/components/schemas/InboxCanonicalClaimContext"
+                        }
+                    },
+                    "not": {
+                        "anyOf": [
+                            { "required": ["claim_id"] },
                             { "required": ["claim"] },
                             { "required": ["items"] },
                             { "required": ["member"] },
@@ -2503,7 +2541,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     },
                     "not": {
-                        "required": ["claim_id"]
+                        "anyOf": [
+                            { "required": ["claim_id"] },
+                            { "required": ["canonical_claim_context"] }
+                        ]
                     }
                 },
                 "FullClaimPayload": {

@@ -175,6 +175,44 @@ Minimal stored-claim request:
 }
 ```
 
+Normalized inbox context request:
+
+```json
+{
+  "source_system": "tpa-demo",
+  "canonical_claim_context": {
+    "claim_header": {
+      "external_claim_id": "CLM-0287",
+      "total_amount": 8800,
+      "currency": "CNY",
+      "service_date": "2026-01-06"
+    },
+    "member_policy_snapshot": {
+      "masked_member_id": "masked-member-1",
+      "policy_id": "POL-0287",
+      "product_code": "MED",
+      "coverage_start_date": "2026-01-01",
+      "coverage_end_date": "2026-12-31",
+      "coverage_limit": 10000
+    },
+    "provider_snapshot": {
+      "provider_code": "PRV-0287",
+      "name": "Northwind Hospital",
+      "city": "SH"
+    },
+    "itemized_bill_lines": [],
+    "document_evidence": []
+  }
+}
+```
+
+Use this mode after `POST /api/v1/inbox/claims/normalize` returns
+`scoring_ready = true` or a reviewer resolves blocking validation findings.
+`claim_id`, full claim payload fields, and `canonical_claim_context` are
+mutually exclusive request modes. Canonical source paths and evidence refs from
+bill lines and document evidence are preserved in the scoring response and
+audit event.
+
 The response is audit-backed and must be treated as assistive risk routing, not an automatic denial:
 
 ```json
