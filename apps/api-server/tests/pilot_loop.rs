@@ -728,6 +728,7 @@ async fn lists_webhook_events_for_tpa_integrations() {
             events.iter().any(|event| {
                 event["event_type"] == expected
                     && event["claim_id"] == "CLM-WEBHOOK-1"
+                    && event["customer_scope_id"] == "demo-customer"
                     && event["delivery_status"] == "pending"
                     && event["retry_count"] == 0
                     && event["max_attempts"] == 3

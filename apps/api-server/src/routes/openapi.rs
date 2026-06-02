@@ -3858,7 +3858,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "WebhookEvent": {
                     "type": "object",
-                    "required": ["event_id", "event_type", "source_event_type", "source_audit_id", "claim_id", "run_id", "delivery_status", "retry_count", "max_attempts", "next_attempt_at", "last_attempt_at", "last_response_status_code", "last_error_message", "idempotency_key", "signature_key_id", "signature_algorithm", "signature_base_string", "payload", "evidence_refs", "occurred_at"],
+                    "required": ["event_id", "event_type", "source_event_type", "source_audit_id", "customer_scope_id", "claim_id", "run_id", "delivery_status", "retry_count", "max_attempts", "next_attempt_at", "last_attempt_at", "last_response_status_code", "last_error_message", "idempotency_key", "signature_key_id", "signature_algorithm", "signature_base_string", "payload", "evidence_refs", "occurred_at"],
                     "properties": {
                         "event_id": { "type": "string" },
                         "event_type": {
@@ -3867,6 +3867,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "source_event_type": { "type": "string" },
                         "source_audit_id": { "type": "string" },
+                        "customer_scope_id": { "type": "string" },
                         "claim_id": { "type": "string" },
                         "run_id": { "type": "string" },
                         "delivery_status": { "type": "string", "enum": ["pending", "retry_wait", "delivered", "failed"] },

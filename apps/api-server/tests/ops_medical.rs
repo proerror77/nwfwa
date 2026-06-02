@@ -171,6 +171,7 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
         .find(|event| event["event_type"] == "fwa.medical.reviewed")
         .expect("missing medical review webhook event");
     assert_eq!(medical_review_event["claim_id"], "CLM-MEDICAL-QUEUE-1");
+    assert_eq!(medical_review_event["customer_scope_id"], "demo-customer");
     assert_eq!(
         medical_review_event["source_event_type"],
         "medical.review.recorded"

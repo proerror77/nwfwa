@@ -2247,6 +2247,11 @@ async fn openapi_includes_operations_paths() {
         .unwrap()
         .iter()
         .any(|field| field == "idempotency_key"));
+    assert!(schema["components"]["schemas"]["WebhookEvent"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "customer_scope_id"));
     assert_eq!(
         schema["components"]["schemas"]["WebhookEvent"]["properties"]["delivery_status"]["enum"][1],
         "retry_wait"

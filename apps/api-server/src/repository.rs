@@ -1015,6 +1015,7 @@ pub struct WebhookEventRecord {
     pub event_type: String,
     pub source_event_type: String,
     pub source_audit_id: String,
+    pub customer_scope_id: String,
     pub claim_id: String,
     pub run_id: String,
     pub delivery_status: String,
@@ -8593,6 +8594,12 @@ fn webhook_event_from_audit(
     }
     let event_id = format!("webhook_{}", event.audit_id);
     let idempotency_key = format!("fwa-webhook:{}:{}", event_type, event.audit_id);
+    let customer_scope_id = event
+        .payload
+        .get("customer_scope_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let signature_base_string = format!(
         "{}.{}.{}.{}",
         event_type, event.audit_id, event.run_id, claim_id
@@ -8602,6 +8609,7 @@ fn webhook_event_from_audit(
         event_type: event_type.into(),
         source_event_type: event.event_type.clone(),
         source_audit_id: event.audit_id.clone(),
+        customer_scope_id,
         claim_id,
         run_id: event.run_id.clone(),
         delivery_status: "pending".into(),
