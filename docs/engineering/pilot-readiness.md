@@ -85,8 +85,11 @@ Minimum pilot monitoring:
   outlier, diagnosis-procedure mismatch, relationship concentration, and
   medical necessity evidence gap before a customer demo is treated as
   pilot-ready.
-- Permission readiness: production-impacting rule and model governance actions
-  require matching principal permissions, for example `ops:rules:publish` or
+- Permission readiness: TPA pilot endpoints require `tpa:*` or matching
+  fine-grained permissions such as `tpa:claims:score`,
+  `tpa:inbox:normalize`, `tpa:investigations:write`, `tpa:qa:write`, and
+  `tpa:audit:read`. Production-impacting rule and model governance actions
+  require matching `ops:*` permissions, for example `ops:rules:publish` or
   `ops:models:activate`. Missing permissions return `PERMISSION_DENIED`.
 - Source-system readiness: `/api/v1/health` check
   `source_system_configuration` must be `configured`, not

@@ -181,6 +181,26 @@ mod tests {
     }
 
     #[test]
+    fn authenticated_principal_matches_tpa_namespace_permissions() {
+        let principal = AuthenticatedPrincipal {
+            actor: ActorContext {
+                actor_id: "customer-tpa".into(),
+                actor_role: "tpa_system".into(),
+                source_system: "customer-claims-system".into(),
+                customer_scope_id: "customer-alpha".into(),
+            },
+            permissions: vec!["tpa:*".into(), "audit:read".into()],
+        };
+
+        assert!(principal.has_permission("tpa:claims:score"));
+        assert!(principal.has_permission("tpa:inbox:normalize"));
+        assert!(principal.has_permission("tpa:investigations:write"));
+        assert!(principal.has_permission("tpa:qa:write"));
+        assert!(principal.has_permission("tpa:audit:read"));
+        assert!(!principal.has_permission("ops:rules:publish"));
+    }
+
+    #[test]
     fn legacy_key_gets_compatibility_wildcard_permission() {
         let config = ApiKeyConfig {
             key: "legacy-secret".into(),

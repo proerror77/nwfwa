@@ -11,7 +11,10 @@ The Operations Studio and internal ops APIs are separate surfaces.
   principals with
   `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id|permission,permission;...`.
   The matched principal supplies audit actor context, customer scope, and
-  permission hints for route-level authorization.
+  route-level authorization. TPA pilot endpoints require `tpa:*` or the
+  matching fine-grained permission: `tpa:claims:score`,
+  `tpa:inbox:normalize`, `tpa:members:read`,
+  `tpa:investigations:write`, `tpa:qa:write`, or `tpa:audit:read`.
 - Content type: JSON request bodies must use `content-type: application/json`.
 - OpenAPI: `GET /api/openapi.json`.
 - Error shape: all documented errors return:

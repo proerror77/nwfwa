@@ -164,6 +164,12 @@ FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
 cargo run --locked -p api-server
 ```
 
+The demo principal includes `tpa:*` because the customer proof exercises TPA
+inbox normalization, claim scoring, member profile lookup, investigation
+writeback, QA writeback, and claim audit history. For production separation,
+split those into fine-grained permissions such as `tpa:claims:score`,
+`tpa:qa:write`, and `tpa:audit:read`.
+
 Then run:
 
 ```bash
