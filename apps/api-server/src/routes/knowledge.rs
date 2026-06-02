@@ -78,7 +78,7 @@ pub async fn publish_case(
 ) -> Result<Json<PublishKnowledgeCaseResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
     validate_publish_knowledge_case(&request)?;
-    merge_latest_canonical_evidence_refs(&state, &mut request).await?;
+    merge_latest_canonical_evidence_refs(&state, &actor.customer_scope_id, &mut request).await?;
 
     let scheme_family = request
         .scheme_family
@@ -143,6 +143,7 @@ pub async fn publish_case(
 
 async fn merge_latest_canonical_evidence_refs(
     state: &AppState,
+    customer_scope_id: &str,
     request: &mut PublishKnowledgeCaseRequest,
 ) -> Result<(), ApiError> {
     let Some(source_claim_id) = request.source_claim_id.as_ref() else {
@@ -155,6 +156,7 @@ async fn merge_latest_canonical_evidence_refs(
             event_type: Some("scoring.completed".into()),
             claim_id: Some(source_claim_id.clone()),
             has_canonical_trace: Some(true),
+            customer_scope_id: Some(customer_scope_id.into()),
             ..Default::default()
         })
         .await

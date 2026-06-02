@@ -1,8 +1,14 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::HeuristicModelScorer;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -22,6 +28,12 @@ fn test_config() -> AppConfig {
         observability_exporter_endpoint: "local://demo-observability".into(),
         agent_policy_id: "demo-agent-policy".into(),
     }
+}
+
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
 }
 
 async fn json_request(
@@ -579,6 +591,104 @@ async fn publish_knowledge_case_preserves_canonical_evidence_refs_from_scoring_a
         .contains(&serde_json::json!(
             "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
         )));
+}
+
+#[tokio::test]
+async fn publish_knowledge_case_does_not_merge_cross_customer_canonical_evidence_refs() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _body) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-KB-CROSS-SCOPE",
+              "total_amount": 9300,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-alpha",
+              "masked_certificate_id": "masked-cert-alpha",
+              "member_birth_date": "1988-03-12",
+              "member_gender": "F",
+              "policy_id": "POL-KB-CROSS-SCOPE",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-KB-CROSS-SCOPE",
+              "name": "Cross Scope Hospital",
+              "provider_type": "hospital",
+              "region": "Guangzhou",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "Alpha-only invoice line",
+                "fee_category": "lab",
+                "amount": 9300,
+                "diagnosis_list": [
+                  { "code": "E11", "name": "Type 2 diabetes mellitus" }
+                ],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:ALPHA-ONLY:fee_detail:LINE-1"]
+              }
+            ],
+            "document_evidence": [
+              {
+                "document_id": "MR-ALPHA-ONLY",
+                "medical_record_type": "outpatient_record",
+                "source_refs": ["medical_record:MR-ALPHA-ONLY"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        beta_app,
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-CROSS-SCOPE",
+          "title": "Published beta scope case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste; provider education opened.",
+          "tags": ["lab_overuse", "provider_pattern"],
+          "evidence_refs": ["investigation_results:INV-BETA-SCOPE"],
+          "source_claim_id": "CLM-KB-CROSS-SCOPE"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(!body["case"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("invoice:ALPHA-ONLY:fee_detail:LINE-1")));
 }
 
 #[tokio::test]
