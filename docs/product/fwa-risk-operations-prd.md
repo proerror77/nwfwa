@@ -304,6 +304,11 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   that identify blocking fields and next actions, including matching the local
   API key source-system config to `systemCode = "AiClaim Core"` and mapping
   `reportCase.policyList[0].coverageLimit` before direct scoring;
+- support local correction overlays via `--inbox-correction-file` so operators
+  can validate fixes without rewriting the raw customer payload. The overlay is
+  merged in memory before normalization; object fields merge by key and arrays
+  merge by index, allowing minimal patches such as
+  `reportCase.policyList[0].coverageLimit = 20000`;
 - when the normalized scoring run later enters QA, merge its canonical evidence
   refs into `POST /api/v1/qa/results` so QA conclusions and audit events remain
   traceable to the original bill-line and document evidence;

@@ -44,6 +44,23 @@ def load_json_file(path):
         return json.load(file)
 
 
+def merge_json_overlay(base, overlay):
+    if isinstance(base, dict) and isinstance(overlay, dict):
+        merged = dict(base)
+        for key, value in overlay.items():
+            merged[key] = merge_json_overlay(merged.get(key), value)
+        return merged
+    if isinstance(base, list) and isinstance(overlay, list):
+        merged = list(base)
+        for index, value in enumerate(overlay):
+            if index < len(merged):
+                merged[index] = merge_json_overlay(merged[index], value)
+            else:
+                merged.append(value)
+        return merged
+    return overlay
+
+
 def generated_inbox_payload(source_system, claim_id, suffix):
     return {
         "systemCode": source_system,
@@ -170,6 +187,10 @@ def main():
         help="Path to a raw TPA inbox JSON payload to normalize before scoring.",
     )
     parser.add_argument(
+        "--inbox-correction-file",
+        help="Path to a local JSON overlay merged into the inbox payload before normalization.",
+    )
+    parser.add_argument(
         "--normalize-only",
         action="store_true",
         help="Only call /api/v1/inbox/claims/normalize and print the normalization response.",
@@ -182,6 +203,11 @@ def main():
         if args.inbox_payload_file
         else generated_inbox_payload(args.source_system or "tpa-demo", args.claim_id, suffix)
     )
+    if args.inbox_correction_file:
+        raw_inbox_payload = merge_json_overlay(
+            raw_inbox_payload,
+            load_json_file(args.inbox_correction_file),
+        )
     source_system = args.source_system or raw_inbox_payload.get("systemCode") or "tpa-demo"
 
     inbox = request(

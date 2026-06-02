@@ -48,6 +48,33 @@ short next action, for example matching the API key source system to
 `systemCode = "AiClaim Core"` or mapping
 `reportCase.policyList[0].coverageLimit` before scoring.
 
+To test corrections without rewriting the raw customer payload, pass a local
+JSON overlay with `--inbox-correction-file`. Objects are merged by key and
+arrays are merged by index, so a coverage-limit correction can be as small as:
+
+```json
+{
+  "reportCase": {
+    "policyList": [
+      {
+        "coverageLimit": 20000
+      }
+    ]
+  }
+}
+```
+
+Then rerun the normalize check:
+
+```bash
+python3 scripts/demo/tpa_mock_client.py \
+  --base-url http://127.0.0.1:8080 \
+  --api-key dev-secret \
+  --inbox-payload-file /Users/proerror/Downloads/req.json \
+  --inbox-correction-file /Users/proerror/Downloads/req-correction.json \
+  --normalize-only
+```
+
 The endpoint validates the envelope, checks source-system identity, normalizes
 epoch-millisecond dates, masks PII-bearing values, maps claim-header,
 medical-record, invoice, provider, product, and liability fields into a

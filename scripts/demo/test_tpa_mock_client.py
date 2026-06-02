@@ -121,6 +121,68 @@ class TpaMockClientTest(unittest.TestCase):
         self.assertTrue(body["correction_hints"][0]["blocks_scoring"])
         self.assertFalse(body["correction_hints"][1]["blocks_scoring"])
 
+    def test_inbox_correction_file_merges_nested_policy_fields_before_normalize(self):
+        raw_payload = {
+            "systemCode": "AiClaim Core",
+            "reportCase": {
+                "policyList": [
+                    {
+                        "policyNo": "POL-1",
+                        "coverageLimit": None,
+                        "invoiceList": [{"invoiceNo": "INV-1"}],
+                    }
+                ]
+            },
+        }
+        correction_payload = {
+            "reportCase": {
+                "policyList": [
+                    {
+                        "coverageLimit": 20000,
+                    }
+                ]
+            }
+        }
+
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "tpa_mock_client.py",
+                    "--inbox-payload-file",
+                    "/tmp/req.json",
+                    "--inbox-correction-file",
+                    "/tmp/req-correction.json",
+                    "--normalize-only",
+                ],
+            ),
+            mock.patch.object(
+                tpa_mock_client,
+                "load_json_file",
+                side_effect=[raw_payload, correction_payload],
+            ),
+            mock.patch.object(
+                tpa_mock_client,
+                "request",
+                return_value={"scoring_ready": True},
+            ) as request_mock,
+        ):
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = tpa_mock_client.main()
+
+        self.assertEqual(exit_code, 0)
+        sent_payload = request_mock.call_args.args[4]
+        self.assertEqual(
+            sent_payload["reportCase"]["policyList"][0]["coverageLimit"],
+            20000,
+        )
+        self.assertEqual(
+            sent_payload["reportCase"]["policyList"][0]["invoiceList"][0]["invoiceNo"],
+            "INV-1",
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

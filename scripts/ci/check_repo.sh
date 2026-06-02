@@ -71,10 +71,12 @@ grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
 grep -q "canonical_claim_context" scripts/demo/tpa_mock_client.py
 grep -q "inbox_run_id" scripts/demo/tpa_mock_client.py
 grep -q -- "--inbox-payload-file" scripts/demo/tpa_mock_client.py
+grep -q -- "--inbox-correction-file" scripts/demo/tpa_mock_client.py
 grep -q -- "--normalize-only" scripts/demo/tpa_mock_client.py
 grep -q "allow_http_error=args.normalize_only" scripts/demo/tpa_mock_client.py
 grep -q "correction_hints" scripts/demo/tpa_mock_client.py
 grep -q -- "--inbox-payload-file /Users/proerror/Downloads/req.json" docs/engineering/tpa-integration-contract.md
+grep -q -- "--inbox-correction-file /Users/proerror/Downloads/req-correction.json" docs/engineering/tpa-integration-contract.md
 grep -q "correction_hints" docs/product/fwa-risk-operations-prd.md
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
