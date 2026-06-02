@@ -497,6 +497,9 @@ Required infrastructure principles:
   snapshots, evidence refs, audit events, and approval gates. Agents may prepare
   evidence and propose actions, but they must not autonomously deny claims,
   publish rules, promote models, delete audit records, or export sensitive data.
+- Agent investigation context snapshots should reuse normalized scoring traces,
+  including canonical evidence refs and source refs, when a prior scoring audit
+  event is available for the claim.
 - Optional infrastructure such as Redis, ClickHouse, Neo4j, OpenSearch, Qdrant,
   LanceDB, or Kubernetes is adopted only when a defined workload requires it.
 

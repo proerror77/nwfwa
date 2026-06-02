@@ -126,6 +126,7 @@ pub async fn investigate_case(
                 .cloned()
         })
         .collect::<Vec<_>>();
+    let canonical_trace = latest_canonical_claim_context_trace(&state, &request.claim_id).await?;
     let context_json = serde_json::json!({
         "claim_id": masked_claim_ref,
         "risk_score": request.risk_score,
@@ -136,13 +137,17 @@ pub async fn investigate_case(
             "diagnosis_code": request.similar_case_query.diagnosis_code.clone(),
             "provider_region": request.similar_case_query.provider_region.clone(),
             "tags": governed_tags,
-        }
+        },
+        "canonical_claim_context_trace": canonical_trace,
     });
-    let context_source_refs = vec![
+    let mut context_source_refs = vec![
         format!("claims:{}", masked_claim_ref),
         format!("risk_summary:{}", masked_claim_ref),
         format!("knowledge_query:{}", masked_claim_ref),
     ];
+    context_source_refs.extend(json_string_values(
+        &context_json["canonical_claim_context_trace"]["source_refs"],
+    ));
 
     let package = DeterministicInvestigator.investigate(InvestigationRequest {
         claim_id: masked_claim_ref,
@@ -324,6 +329,44 @@ fn validate_agent_investigation_request(
         ));
     }
     Ok(())
+}
+
+async fn latest_canonical_claim_context_trace(
+    state: &AppState,
+    claim_id: &str,
+) -> Result<Value, ApiError> {
+    let events = state
+        .repository
+        .claim_audit_history(claim_id)
+        .await
+        .map_err(internal_error("AGENT_CANONICAL_TRACE_LOOKUP_FAILED"))?;
+    Ok(events
+        .iter()
+        .rev()
+        .find_map(|event| {
+            if event.event_type == "scoring.completed" && event.event_status == "succeeded" {
+                event
+                    .payload
+                    .get("canonical_claim_context_trace")
+                    .and_then(Value::as_object)
+                    .map(|_| event.payload["canonical_claim_context_trace"].clone())
+            } else {
+                None
+            }
+        })
+        .unwrap_or(Value::Null))
+}
+
+fn json_string_values(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(|item| item.as_str().map(str::to_string))
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 fn infer_scheme_family(request: &AgentInvestigationRequest) -> String {

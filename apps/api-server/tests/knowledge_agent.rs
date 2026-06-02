@@ -934,6 +934,125 @@ async fn lists_agent_run_logs_for_governance_review() {
 }
 
 #[tokio::test]
+async fn agent_context_uses_canonical_trace_from_prior_scoring_audit() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-AGENT-CANONICAL",
+              "total_amount": 8800,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-agent",
+              "masked_certificate_id": "masked-cert-agent",
+              "member_birth_date": "1988-03-12",
+              "member_gender": "F",
+              "policy_id": "POL-AGENT-CANONICAL",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-AGENT-CANONICAL",
+              "name": "Agent Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "High cost imaging",
+                "fee_category": "procedure",
+                "amount": 8800,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-AGENT:fee_detail:LINE-1"]
+              }
+            ],
+            "document_evidence": [
+              {
+                "document_id": "MR-AGENT-1",
+                "medical_record_type": "outpatient_record",
+                "source_refs": ["medical_record:MR-AGENT-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-CANONICAL",
+          "risk_score": 87,
+          "rag": "RED",
+          "scheme_family": "diagnosis_procedure_mismatch",
+          "top_reasons": ["诊断-项目匹配度偏低"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["diagnosis_mismatch"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|run| run["agent_run_id"] == agent_run_id)
+        .expect("agent run should be listed for governance review");
+    let context_snapshot = run["context_snapshots"]
+        .as_array()
+        .unwrap()
+        .first()
+        .expect("agent context snapshot should be audited");
+    assert!(
+        context_snapshot["source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]"
+            )),
+        "agent context source refs should include normalized bill-line source path"
+    );
+    assert!(
+        context_snapshot["source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("medical_record:MR-AGENT-1")),
+        "agent context source refs should include normalized document source ref"
+    );
+    assert!(
+        context_snapshot["context_json"]["canonical_claim_context_trace"]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("invoice:INV-AGENT:fee_detail:LINE-1")),
+        "agent context should carry canonical evidence refs for investigation grounding"
+    );
+}
+
+#[tokio::test]
 async fn submits_agent_approval_decision_for_governance_review() {
     let app = build_app(test_config());
 

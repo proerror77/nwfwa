@@ -346,7 +346,11 @@ be routed.
 | POST | `/api/v1/agent/cases/investigate` | Generate assistive investigation package. | Yes | Persists agent run and audit evidence. |
 
 Agent responses must include `decision_boundary: assistive_only`. They are
-evidence packages for human review, not autonomous decisions.
+evidence packages for human review, not autonomous decisions. When a prior
+`scoring.completed` audit event for the claim contains
+`canonical_claim_context_trace`, the persisted Agent context snapshot carries
+the trace and source refs so reviewers can connect the summary back to
+normalized inbox evidence.
 
 ## Common Error Shape
 

@@ -431,6 +431,9 @@ and governed operations events where applicable. Normalized inbox scoring events
 include `canonical_claim_context_trace` in the event payload.
 Operations users can call `/api/v1/ops/audit-events?has_canonical_trace=true`
 to list normalized inbox scoring events that carry this trace.
+Agent investigation runs reuse the latest successful scoring trace for the
+same claim in their persisted context snapshot, including source refs from
+normalized bill lines and documents.
 
 Documented errors:
 

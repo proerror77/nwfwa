@@ -128,6 +128,8 @@ grep -q "Canonical Trace Only" apps/web-console/src/pages/GovernancePage.tsx
 grep -q "audit_coverage" apps/api-server/src/routes/openapi.rs
 grep -q "Audit Coverage" apps/web-console/src/pages/DashboardPage.tsx
 grep -q "Canonical Trace Coverage" scripts/demo/smoke_web_console.mjs
+grep -q "latest_canonical_claim_context_trace" apps/api-server/src/routes/agent.rs
+grep -q "Agent context snapshot carries" docs/project/api-reference.md
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py
 grep -q "/api/v1/qa/results" scripts/demo/smoke_demo.py
