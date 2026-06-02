@@ -631,6 +631,13 @@ pub struct DashboardValueMeasurementRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DashboardAuditCoverageRecord {
+    pub scoring_runs: u32,
+    pub canonical_trace_runs: u32,
+    pub canonical_trace_coverage: f64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct DashboardSummaryRecord {
     pub suspected_claims: u32,
     pub confirmed_fwa: u32,
@@ -644,6 +651,7 @@ pub struct DashboardSummaryRecord {
     pub saving_attributions: Vec<DashboardSavingAttributionRecord>,
     pub saving_segments: Vec<DashboardSavingSegmentRecord>,
     pub value_measurement: DashboardValueMeasurementRecord,
+    pub audit_coverage: DashboardAuditCoverageRecord,
     pub label_pool: DashboardLabelPoolRecord,
     pub qa_queue: DashboardQaQueueRecord,
     pub case_sla: DashboardCaseSlaRecord,
@@ -2550,6 +2558,26 @@ impl ScoringRepository for InMemoryScoringRepository {
             }
         }
         let runtime_events = self.audit_events.lock().await;
+        let scoring_audit_runs = runtime_events
+            .iter()
+            .filter(|event| {
+                event.event_type == "scoring.completed" && event.event_status == "succeeded"
+            })
+            .count() as u32;
+        let canonical_trace_audit_runs = runtime_events
+            .iter()
+            .filter(|event| {
+                event.event_type == "scoring.completed"
+                    && event.event_status == "succeeded"
+                    && event
+                        .payload
+                        .get("canonical_claim_context_trace")
+                        .and_then(Value::as_object)
+                        .is_some()
+            })
+            .count() as u32;
+        let audit_coverage =
+            summarize_dashboard_audit_coverage(scoring_audit_runs, canonical_trace_audit_runs);
         for event in runtime_events
             .iter()
             .filter(|event| event.event_type == "medical.review.recorded")
@@ -2652,6 +2680,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             saving_attributions,
             saving_segments,
             value_measurement,
+            audit_coverage,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(
                 &audit_samples,
@@ -5345,6 +5374,25 @@ impl ScoringRepository for PostgresScoringRepository {
         )
         .fetch_all(&self.pool)
         .await?;
+        let audit_coverage_row: (i64, Option<i64>) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint,
+                    SUM(
+                        CASE
+                            WHEN jsonb_typeof(payload->'canonical_claim_context_trace') = 'object'
+                            THEN 1
+                            ELSE 0
+                        END
+                    )::bigint
+             FROM audit_events
+             WHERE event_type = 'scoring.completed'
+               AND event_status = 'succeeded'",
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        let audit_coverage = summarize_dashboard_audit_coverage(
+            audit_coverage_row.0 as u32,
+            audit_coverage_row.1.unwrap_or(0) as u32,
+        );
         let mut layer_accumulators = BTreeMap::<String, (String, u32, u32, u32)>::new();
         for (payload,) in layer_payloads {
             for layer in payload
@@ -5595,6 +5643,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     .map(|record| record.false_positive_count)
                     .sum::<u32>(),
             ),
+            audit_coverage,
             label_pool: summarize_dashboard_label_pool(&outcome_labels),
             qa_queue: summarize_dashboard_qa_queue(
                 &audit_samples,
@@ -8965,6 +9014,21 @@ fn json_string_array(value: Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+fn summarize_dashboard_audit_coverage(
+    scoring_runs: u32,
+    canonical_trace_runs: u32,
+) -> DashboardAuditCoverageRecord {
+    DashboardAuditCoverageRecord {
+        scoring_runs,
+        canonical_trace_runs,
+        canonical_trace_coverage: if scoring_runs == 0 {
+            0.0
+        } else {
+            canonical_trace_runs as f64 / scoring_runs as f64
+        },
+    }
 }
 
 fn summarize_dashboard_label_pool(labels: &[OutcomeLabelRecord]) -> DashboardLabelPoolRecord {

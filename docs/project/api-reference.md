@@ -173,7 +173,11 @@ Main response fields:
 
 Dashboard rollups include suspected claims, risk amount, RAG distribution, rule
 hits, model scores, seven-layer coverage, QA signals, investigation writebacks,
-case SLA status, and saving attribution.
+case SLA status, saving attribution, and `audit_coverage` for normalized inbox
+trace governance. `audit_coverage.scoring_runs` counts successful
+`scoring.completed` audit events, `canonical_trace_runs` counts events with
+`canonical_claim_context_trace`, and `canonical_trace_coverage` is the ratio
+used by Operations Studio.
 
 ## Leads And Cases
 

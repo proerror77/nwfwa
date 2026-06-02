@@ -147,6 +147,116 @@ async fn register_model_dataset_for_dashboard(app: axum::Router) -> String {
 }
 
 #[tokio::test]
+async fn returns_dashboard_canonical_trace_coverage() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-DASHBOARD-FULL",
+            "claim_amount": "1200",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "PROC-LOW",
+              "item_type": "procedure",
+              "description": "Routine visit",
+              "quantity": 1,
+              "unit_amount": "1200",
+              "total_amount": "1200"
+            }
+          ],
+          "member": { "external_member_id": "MBR-DASHBOARD-FULL" },
+          "policy": {
+            "external_policy_id": "POL-DASHBOARD-FULL",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-DASHBOARD-FULL",
+            "name": "Routine Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "Low"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-DASHBOARD-CANONICAL",
+              "total_amount": 8800,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-dashboard",
+              "masked_certificate_id": "masked-cert-dashboard",
+              "member_birth_date": "1988-03-12",
+              "member_gender": "F",
+              "policy_id": "POL-DASHBOARD-CANONICAL",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-DASHBOARD-CANONICAL",
+              "name": "Inbox Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "High cost imaging",
+                "fee_category": "procedure",
+                "amount": 8800,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-DASHBOARD:fee_detail:LINE-1"]
+              }
+            ],
+            "document_evidence": [
+              {
+                "document_id": "MR-DASHBOARD-1",
+                "medical_record_type": "outpatient_record",
+                "source_refs": ["medical_record:MR-DASHBOARD-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, dashboard) = json_request(app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(dashboard["audit_coverage"]["scoring_runs"], 2);
+    assert_eq!(dashboard["audit_coverage"]["canonical_trace_runs"], 1);
+    assert_eq!(dashboard["audit_coverage"]["canonical_trace_coverage"], 0.5);
+}
+
+#[tokio::test]
 async fn returns_dashboard_summary_from_scoring_and_pilot_events() {
     let app = build_app(test_config());
 

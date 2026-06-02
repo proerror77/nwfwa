@@ -115,6 +115,12 @@ type DashboardValueMeasurement = {
   evidence_caveat: string;
 };
 
+type DashboardAuditCoverage = {
+  scoring_runs: number;
+  canonical_trace_runs: number;
+  canonical_trace_coverage: number;
+};
+
 type DashboardSavingSegment = {
   segment_type: string;
   segment_id: string;
@@ -138,6 +144,7 @@ type DashboardSummary = {
   saving_attributions: SavingAttributionSummary[];
   saving_segments: DashboardSavingSegment[];
   value_measurement: DashboardValueMeasurement;
+  audit_coverage: DashboardAuditCoverage;
   label_pool: DashboardLabelPool;
   qa_queue: DashboardQaQueue;
   case_sla: DashboardCaseSla;
@@ -395,6 +402,14 @@ export function buildDashboardValueMeasurementSummary(value?: DashboardValueMeas
   };
 }
 
+export function buildDashboardAuditCoverageSummary(coverage?: DashboardAuditCoverage) {
+  return {
+    scoringRuns: coverage?.scoring_runs ?? 0,
+    canonicalTraceRuns: coverage?.canonical_trace_runs ?? 0,
+    canonicalTraceCoverageLabel: formatPercent(coverage?.canonical_trace_coverage ?? 0),
+  };
+}
+
 export function buildProviderRiskSummary(summary?: ProviderRiskSummary) {
   const providerCount = summary?.provider_count ?? 0;
   const reviewRequiredCount = summary?.review_required_count ?? 0;
@@ -448,6 +463,7 @@ export function DashboardPage() {
   const modelGovernanceSummary = buildDashboardModelGovernanceSummary(summary?.model_governance);
   const ruleGovernanceSummary = buildDashboardRuleGovernanceSummary(summary?.rule_governance);
   const valueMeasurementSummary = buildDashboardValueMeasurementSummary(summary?.value_measurement);
+  const auditCoverageSummary = buildDashboardAuditCoverageSummary(summary?.audit_coverage);
   const providerRiskSummary = buildProviderRiskSummary(providerRisk);
 
   return (
@@ -497,6 +513,10 @@ export function DashboardPage() {
           <strong>
             {summary ? `${summary.qa_reviews} / ${summary.investigation_results}` : "-"}
           </strong>
+        </div>
+        <div>
+          <span>Canonical Trace Coverage</span>
+          <strong>{summary ? auditCoverageSummary.canonicalTraceCoverageLabel : "-"}</strong>
         </div>
       </div>
 
@@ -582,6 +602,24 @@ export function DashboardPage() {
             </div>
           </div>
           <p className="empty">{valueMeasurementSummary.evidenceCaveat}</p>
+        </div>
+
+        <div className="panel">
+          <h2>Audit Coverage</h2>
+          <div className="summary-grid">
+            <div>
+              <span>Scoring Runs</span>
+              <strong>{auditCoverageSummary.scoringRuns}</strong>
+            </div>
+            <div>
+              <span>Canonical Trace</span>
+              <strong>{auditCoverageSummary.canonicalTraceRuns}</strong>
+            </div>
+            <div>
+              <span>Coverage</span>
+              <strong>{auditCoverageSummary.canonicalTraceCoverageLabel}</strong>
+            </div>
+          </div>
         </div>
 
         <div className="panel">

@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   buildDashboardAgentGovernanceSummary,
+  buildDashboardAuditCoverageSummary,
   buildDashboardQaFeedbackTargetRows,
   buildDashboardLabelPoolSummary,
   buildDashboardCaseSlaSummary,
@@ -12,6 +13,30 @@ import {
   buildDashboardValueMeasurementSummary,
   buildProviderRiskSummary,
 } from "./DashboardPage";
+
+describe("buildDashboardAuditCoverageSummary", () => {
+  it("summarizes canonical trace coverage for dashboard governance", () => {
+    const summary = buildDashboardAuditCoverageSummary({
+      scoring_runs: 8,
+      canonical_trace_runs: 3,
+      canonical_trace_coverage: 0.375,
+    });
+
+    expect(summary).toEqual({
+      scoringRuns: 8,
+      canonicalTraceRuns: 3,
+      canonicalTraceCoverageLabel: "37.5%",
+    });
+  });
+
+  it("defaults canonical trace coverage to zero when unavailable", () => {
+    expect(buildDashboardAuditCoverageSummary()).toEqual({
+      scoringRuns: 0,
+      canonicalTraceRuns: 0,
+      canonicalTraceCoverageLabel: "0.0%",
+    });
+  });
+});
 
 describe("buildDashboardLabelPoolSummary", () => {
   it("summarizes governed label pool readiness for dashboard display", () => {

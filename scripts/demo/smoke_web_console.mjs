@@ -122,6 +122,8 @@ async function main() {
       "Confirmed Evidence",
       "Source Trace",
       "Lineage",
+      "Audit Coverage",
+      "Canonical Trace Coverage",
       "Canonical Trace",
       "Canonical Trace Only",
       "Input Mode",

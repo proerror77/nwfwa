@@ -828,6 +828,8 @@ Reference anchors:
 
 - Every score can be traced to feature values, rule hits, model signals, anomaly
   signals, and audit events.
+- Operations Dashboard reports canonical inbox trace coverage so normalized
+  scoring adoption is visible to governance users.
 - Every lead has a scheme family, lead source, evidence refs, and lifecycle
   disposition.
 - Rule changes are versioned, backtested, approved, and publishable.

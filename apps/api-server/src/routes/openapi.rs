@@ -4825,6 +4825,15 @@ pub async fn openapi_schema() -> Json<Value> {
                         "high_risk_count": { "type": "integer" }
                     }
                 },
+                "DashboardAuditCoverage": {
+                    "type": "object",
+                    "required": ["scoring_runs", "canonical_trace_runs", "canonical_trace_coverage"],
+                    "properties": {
+                        "scoring_runs": { "type": "integer" },
+                        "canonical_trace_runs": { "type": "integer" },
+                        "canonical_trace_coverage": { "type": "number" }
+                    }
+                },
                 "SavingAttributionSummary": {
                     "type": "object",
                     "required": ["source_type", "source_id", "action", "saving_amount", "currency", "claim_count", "evidence_refs"],
@@ -4853,7 +4862,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardSummaryResponse": {
                     "type": "object",
-                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "saving_segments", "value_measurement", "label_pool", "qa_queue", "case_sla", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
+                    "required": ["suspected_claims", "confirmed_fwa", "risk_amount", "saving_amount", "rag_distribution", "scheme_distribution", "rule_hits", "model_scores", "layer_scores", "saving_attributions", "saving_segments", "value_measurement", "audit_coverage", "label_pool", "qa_queue", "case_sla", "agent_governance", "model_governance", "rule_governance", "investigation_results", "qa_reviews"],
                     "properties": {
                         "suspected_claims": { "type": "integer" },
                         "confirmed_fwa": { "type": "integer" },
@@ -4885,6 +4894,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": { "$ref": "#/components/schemas/SavingSegmentSummary" }
                         },
                         "value_measurement": { "$ref": "#/components/schemas/DashboardValueMeasurement" },
+                        "audit_coverage": { "$ref": "#/components/schemas/DashboardAuditCoverage" },
                         "label_pool": { "$ref": "#/components/schemas/DashboardLabelPool" },
                         "qa_queue": { "$ref": "#/components/schemas/DashboardQaQueue" },
                         "case_sla": { "$ref": "#/components/schemas/DashboardCaseSla" },
