@@ -14,7 +14,7 @@ use axum::{
 };
 use chrono::NaiveDate;
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
+use fwa_auth::{authenticate_api_key, validate_api_key};
 use fwa_core::{
     canonical_scheme_family, AuditEventId, Claim, ClaimContext, ClaimId, Member, MemberId, Money,
     Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction, ScoringRunId,
@@ -282,7 +282,7 @@ pub async fn submit_rule_promotion_review(
     Path(rule_id): Path<String>,
     Json(request): Json<SubmitRulePromotionReviewRequest>,
 ) -> Result<Json<RulePromotionReviewRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:rules:review")?;
     if !matches!(request.decision.as_str(), "approved" | "rejected") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -927,6 +927,7 @@ pub async fn approve_rule(
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
+    authorize_permission(&state, &headers, "ops:rules:approve")?;
     update_status_with_required_previous(
         state,
         headers,
@@ -945,7 +946,7 @@ pub async fn publish_rule(
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:rules:publish")?;
     let previous = state
         .repository
         .get_rule(&rule_id)
@@ -1006,7 +1007,7 @@ pub async fn rollback_rule(
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:rules:rollback")?;
     let previous = state
         .repository
         .get_rule(&rule_id)
@@ -1164,6 +1165,32 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
             "invalid api key",
         )
     })
+}
+
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
 
 struct RuleAuditInput<'a> {

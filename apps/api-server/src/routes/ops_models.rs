@@ -15,7 +15,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
+use fwa_auth::{authenticate_api_key, validate_api_key};
 use fwa_core::{AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -833,7 +833,7 @@ pub async fn submit_model_promotion_review(
     Path(model_key): Path<String>,
     Json(request): Json<SubmitModelPromotionReviewRequest>,
 ) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
     if !matches!(request.decision.as_str(), "approved" | "rejected") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -919,7 +919,7 @@ pub async fn activate_model(
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:models:activate")?;
     let (candidate, gates) = load_model_promotion_gates(&state, &model_key).await?;
     if candidate.status == "active" {
         return Err(ApiError::new(
@@ -1008,7 +1008,7 @@ pub async fn rollback_model(
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:models:rollback")?;
     let models = state
         .repository
         .list_models()
@@ -1998,6 +1998,32 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
             "invalid api key",
         )
     })
+}
+
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

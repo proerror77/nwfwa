@@ -66,6 +66,9 @@ Minimum pilot monitoring:
   `configured`, not `local_dev_key`, before customer pilot traffic.
   `invalid_api_key_principals` means `FWA_API_KEY_PRINCIPALS` is present but no
   valid principal entry can be parsed.
+- Permission readiness: production-impacting rule and model governance actions
+  require matching principal permissions, for example `ops:rules:publish` or
+  `ops:models:activate`. Missing permissions return `PERMISSION_DENIED`.
 - Source-system readiness: `/api/v1/health` check
   `source_system_configuration` must be `configured`, not
   `local_demo_source`, before customer pilot traffic.
