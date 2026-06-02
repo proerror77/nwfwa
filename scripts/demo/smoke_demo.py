@@ -1468,6 +1468,7 @@ def assert_dashboard_roi(dashboard, agent, lead):
     )
     return {
         "net_value": value["net_value"],
+        "deterrence_estimate": value.get("deterrence_estimate", "0.00"),
         "estimated_impact": value["estimated_impact"],
         "attribution_count": len(attributions),
         "segment_count": len(segments),

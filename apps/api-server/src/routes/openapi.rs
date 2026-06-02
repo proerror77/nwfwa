@@ -4951,11 +4951,12 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardValueMeasurement": {
                     "type": "object",
-                    "required": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "estimated_impact", "review_cost", "false_positive_operational_cost", "reviewer_capacity_hours", "net_value", "currency", "evidence_caveat"],
+                    "required": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "deterrence_estimate", "estimated_impact", "review_cost", "false_positive_operational_cost", "reviewer_capacity_hours", "net_value", "currency", "evidence_caveat"],
                     "properties": {
                         "prevented_payment": { "type": "string", "format": "decimal" },
                         "recovered_amount": { "type": "string", "format": "decimal" },
                         "avoided_future_exposure": { "type": "string", "format": "decimal" },
+                        "deterrence_estimate": { "type": "string", "format": "decimal" },
                         "estimated_impact": { "type": "string", "format": "decimal" },
                         "review_cost": { "type": "string", "format": "decimal" },
                         "false_positive_operational_cost": { "type": "string", "format": "decimal" },

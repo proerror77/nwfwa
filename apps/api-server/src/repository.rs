@@ -621,6 +621,7 @@ pub struct DashboardValueMeasurementRecord {
     pub prevented_payment: String,
     pub recovered_amount: String,
     pub avoided_future_exposure: String,
+    pub deterrence_estimate: String,
     pub estimated_impact: String,
     pub review_cost: String,
     pub false_positive_operational_cost: String,
@@ -9377,7 +9378,8 @@ fn summarize_dashboard_value_measurement(
     let mut prevented_payment = Decimal::ZERO;
     let mut recovered_amount = Decimal::ZERO;
     let mut avoided_future_exposure = Decimal::ZERO;
-    let mut deterrence_or_other_estimate = Decimal::ZERO;
+    let mut deterrence_estimate = Decimal::ZERO;
+    let mut other_estimated_impact = Decimal::ZERO;
     let mut currency = None;
 
     for impact in impacts {
@@ -9387,9 +9389,8 @@ fn summarize_dashboard_value_measurement(
         match impact.impact_type.as_str() {
             "recovered_amount" => recovered_amount += impact.amount,
             "avoided_future_exposure" => avoided_future_exposure += impact.amount,
-            "deterrence_estimate" | "estimated_impact" => {
-                deterrence_or_other_estimate += impact.amount
-            }
+            "deterrence_estimate" => deterrence_estimate += impact.amount,
+            "estimated_impact" => other_estimated_impact += impact.amount,
             _ => prevented_payment += impact.amount,
         }
     }
@@ -9398,13 +9399,14 @@ fn summarize_dashboard_value_measurement(
     let false_positive_operational_cost =
         Decimal::from(false_positive_events) * Decimal::from(RULE_REVIEW_COST_AMOUNT as u32);
     let reviewer_capacity_hours = Decimal::from(review_events) * Decimal::new(25, 2);
-    let estimated_impact = avoided_future_exposure + deterrence_or_other_estimate;
+    let estimated_impact = avoided_future_exposure + deterrence_estimate + other_estimated_impact;
     let net_value = prevented_payment + recovered_amount + estimated_impact - review_cost;
 
     DashboardValueMeasurementRecord {
         prevented_payment: format_decimal_cents(prevented_payment),
         recovered_amount: format_decimal_cents(recovered_amount),
         avoided_future_exposure: format_decimal_cents(avoided_future_exposure),
+        deterrence_estimate: format_decimal_cents(deterrence_estimate),
         estimated_impact: format_decimal_cents(estimated_impact),
         review_cost: format_decimal_cents(review_cost),
         false_positive_operational_cost: format_decimal_cents(false_positive_operational_cost),

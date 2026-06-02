@@ -216,6 +216,11 @@ trace governance. `audit_coverage.scoring_runs` counts successful
 `scoring.completed` audit events, `canonical_trace_runs` counts events with
 `canonical_claim_context_trace`, and `canonical_trace_coverage` is the ratio
 used by Operations Studio.
+`value_measurement` separates observed `prevented_payment` and
+`recovered_amount` from estimated `avoided_future_exposure`,
+`deterrence_estimate`, and aggregate `estimated_impact`, with review cost,
+false-positive operational cost, reviewer capacity hours, net value, and an
+evidence caveat.
 
 ## Leads And Cases
 

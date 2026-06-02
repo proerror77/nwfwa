@@ -749,6 +749,17 @@ async fn dashboard_separates_observed_and_estimated_value() {
           "notes": "Estimated avoided future exposure from provider education.",
           "evidence_refs": ["investigation_results:INV-VALUE-3"]
         }"#,
+        r#"{
+          "claim_id": "CLM-VALUE-4",
+          "investigation_id": "INV-VALUE-4",
+          "outcome": "deterrence_signal_estimated",
+          "confirmed_fwa": true,
+          "financial_impact_type": "deterrence_estimate",
+          "saving_amount": "125.00",
+          "currency": "CNY",
+          "notes": "Estimated deterrence from provider behavior-change follow-up.",
+          "evidence_refs": ["investigation_results:INV-VALUE-4"]
+        }"#,
     ] {
         let (status, _) =
             json_request(app.clone(), "POST", "/api/v1/investigations/results", body).await;
@@ -767,9 +778,13 @@ async fn dashboard_separates_observed_and_estimated_value() {
         dashboard["value_measurement"]["avoided_future_exposure"],
         "500.00"
     );
-    assert_eq!(dashboard["value_measurement"]["estimated_impact"], "500.00");
+    assert_eq!(
+        dashboard["value_measurement"]["deterrence_estimate"],
+        "125.00"
+    );
+    assert_eq!(dashboard["value_measurement"]["estimated_impact"], "625.00");
     assert_eq!(dashboard["value_measurement"]["review_cost"], "0.00");
-    assert_eq!(dashboard["value_measurement"]["net_value"], "1750.00");
+    assert_eq!(dashboard["value_measurement"]["net_value"], "1875.00");
     assert!(dashboard["value_measurement"]["evidence_caveat"]
         .as_str()
         .unwrap()

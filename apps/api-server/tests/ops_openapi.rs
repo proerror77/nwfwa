@@ -2642,6 +2642,18 @@ async fn openapi_includes_operations_paths() {
             ["saving_attributions"]["items"]["$ref"],
         "#/components/schemas/SavingAttributionSummary"
     );
+    let value_measurement_required = schema["components"]["schemas"]["DashboardValueMeasurement"]
+        ["required"]
+        .as_array()
+        .unwrap();
+    assert!(value_measurement_required
+        .iter()
+        .any(|field| field == "deterrence_estimate"));
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardValueMeasurement"]["properties"]
+            ["deterrence_estimate"]["format"],
+        "decimal"
+    );
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["layer_scores"]
             ["additionalProperties"]["$ref"],
