@@ -89,6 +89,9 @@ async function main() {
     assertContains(builtText, "Claim Inbox", "web console bundle");
     assertContains(builtText, "Correction Review", "web console bundle");
     assertContains(builtText, "Runtime Scoring", "web console bundle");
+    assertContains(builtText, "Model Performance", "web console bundle");
+    assertContains(builtText, "Promotion Gates", "web console bundle");
+    assertContains(builtText, "Retraining Readiness", "web console bundle");
     for (const expectedModule of [
       "Dashboard",
       "Rules",
