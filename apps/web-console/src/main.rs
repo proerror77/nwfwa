@@ -809,6 +809,54 @@ struct AgentApprovalView {
     created_at: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentInvestigationResponse {
+    agent_run_id: String,
+    decision_boundary: String,
+    risk_summary: String,
+    findings: Vec<AgentInvestigationFinding>,
+    investigation_checklist: Vec<String>,
+    similar_cases: Vec<AgentInvestigationSimilarCase>,
+    qa_opinion_draft: String,
+    evidence_sufficiency: AgentEvidenceSufficiency,
+    evidence_refs: Vec<String>,
+    evidence_refs_by_type: AgentEvidenceBuckets,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentInvestigationFinding {
+    finding: String,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentInvestigationSimilarCase {
+    case_id: String,
+    similarity_score: f64,
+    matched_signals: Vec<String>,
+    provenance_refs: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentEvidenceSufficiency {
+    scheme_family: String,
+    status: String,
+    minimum_evidence: Vec<String>,
+    present_evidence: Vec<String>,
+    missing_evidence: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentEvidenceBuckets {
+    claim: Vec<String>,
+    rule: Vec<String>,
+    model: Vec<String>,
+    anomaly: Vec<String>,
+    document: Vec<String>,
+    similar_case: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct GovernanceSnapshot {
     audit_events: Vec<AuditEventRecord>,
@@ -1267,6 +1315,8 @@ fn app() -> Html {
                     <MedicalReviewPage />
                 } else if *active == "Knowledge Base" {
                     <KnowledgeBasePage />
+                } else if *active == "Agent Investigator" {
+                    <AgentInvestigatorPage />
                 } else if *active == "QA Review" {
                     <QaReviewPage />
                 } else if *active == "Governance" {
@@ -3943,6 +3993,271 @@ fn knowledge_base_view(props: &KnowledgeBaseProps) -> Html {
     }
 }
 
+#[function_component(AgentInvestigatorPage)]
+fn agent_investigator_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let claim_id = use_state(|| "CLM-0287".to_string());
+    let risk_score = use_state(|| "87".to_string());
+    let rag = use_state(|| "RED".to_string());
+    let scheme_family = use_state(|| "provider_peer_outlier".to_string());
+    let top_reasons = use_state(|| {
+        "金额高于同病种同地区 P99, 保单生效后短期高额理赔, Provider 高价项目比例异常".to_string()
+    });
+    let diagnosis_code = use_state(|| "J10".to_string());
+    let provider_region = use_state(|| "Shanghai".to_string());
+    let tags = use_state(|| "provider_pattern, high_amount, peer_deviation".to_string());
+    let investigation_state = use_state(|| ApiState::<AgentInvestigationResponse>::Idle);
+    let runs_state = use_state(|| ApiState::<Vec<AgentRunRecord>>::Idle);
+
+    let load_runs = {
+        let api_key = api_key.clone();
+        let runs_state = runs_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let runs_state = runs_state.clone();
+            runs_state.set(ApiState::Loading);
+            spawn_local(async move {
+                runs_state.set(match get_agent_runs(api_key).await {
+                    Ok(runs) => ApiState::Ready(runs),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let investigate = {
+        let api_key = api_key.clone();
+        let claim_id = claim_id.clone();
+        let risk_score = risk_score.clone();
+        let rag = rag.clone();
+        let scheme_family = scheme_family.clone();
+        let top_reasons = top_reasons.clone();
+        let diagnosis_code = diagnosis_code.clone();
+        let provider_region = provider_region.clone();
+        let tags = tags.clone();
+        let investigation_state = investigation_state.clone();
+        let load_runs = load_runs.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let payload = agent_investigation_payload(
+                (*claim_id).clone(),
+                (*risk_score).clone(),
+                (*rag).clone(),
+                (*scheme_family).clone(),
+                (*top_reasons).clone(),
+                (*diagnosis_code).clone(),
+                (*provider_region).clone(),
+                (*tags).clone(),
+            );
+            let investigation_state = investigation_state.clone();
+            let load_runs = load_runs.clone();
+            match payload {
+                Ok(payload) => {
+                    investigation_state.set(ApiState::Loading);
+                    spawn_local(async move {
+                        investigation_state.set(
+                            match post_agent_investigation(api_key, payload).await {
+                                Ok(response) => {
+                                    load_runs.emit(());
+                                    ApiState::Ready(response)
+                                }
+                                Err(error) => ApiState::Failed(error),
+                            },
+                        );
+                    });
+                }
+                Err(error) => investigation_state.set(ApiState::Failed(error)),
+            }
+        })
+    };
+
+    {
+        let load_runs = load_runs.clone();
+        use_effect_with((), move |_| {
+            load_runs.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Agent Investigator"}</h2>
+                    <p>{"Generate an assistive-only investigation package from seven-layer risk output and inspect the governed Agent run evidence trail."}</p>
+                </div>
+                <span class="status-pill">{"Assistive Investigation"}</span>
+            </div>
+
+            <section class="panel result-stack">
+                <h3>{"Investigation Request"}</h3>
+                <div class="form-grid">
+                    {text_input("API key", &api_key)}
+                    {text_input("Claim ID", &claim_id)}
+                    {text_input("Risk score", &risk_score)}
+                    {text_input("RAG", &rag)}
+                    {text_input("Scheme family", &scheme_family)}
+                    {text_input("Diagnosis code", &diagnosis_code)}
+                    {text_input("Provider region", &provider_region)}
+                    {text_input("Tags", &tags)}
+                </div>
+                <label>
+                    {"Top reasons"}
+                    <textarea
+                        value={(*top_reasons).clone()}
+                        oninput={{
+                            let top_reasons = top_reasons.clone();
+                            Callback::from(move |event: InputEvent| {
+                                top_reasons.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                            })
+                        }}
+                    />
+                </label>
+                <div class="button-row">
+                    <button onclick={investigate} disabled={matches!(&*investigation_state, ApiState::Loading)}>
+                        {if matches!(&*investigation_state, ApiState::Loading) { "Generating..." } else { "Generate investigation package" }}
+                    </button>
+                    <button onclick={{
+                        let load_runs = load_runs.clone();
+                        Callback::from(move |_| load_runs.emit(()))
+                    }} disabled={matches!(&*runs_state, ApiState::Loading)}>
+                        {if matches!(&*runs_state, ApiState::Loading) { "Refreshing..." } else { "Refresh Agent runs" }}
+                    </button>
+                </div>
+            </section>
+
+            <AgentInvestigationView state={(*investigation_state).clone()} />
+            <AgentRunsView state={(*runs_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct AgentInvestigationProps {
+    state: ApiState<AgentInvestigationResponse>,
+}
+
+#[function_component(AgentInvestigationView)]
+fn agent_investigation_view(props: &AgentInvestigationProps) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <h3>{"Investigation Package"}</h3>
+            {match &props.state {
+                ApiState::Idle => html! { <p class="empty">{"Generate an investigation package to inspect findings, checklist, similar cases, QA draft, and evidence sufficiency."}</p> },
+                ApiState::Loading => html! { <p>{"Generating investigation package..."}</p> },
+                ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                ApiState::Ready(response) => html! {
+                    <>
+                        <div class="score-hero">
+                            <div><span>{"Agent Run"}</span><strong>{&response.agent_run_id}</strong></div>
+                            <div><span>{"Boundary"}</span><strong>{&response.decision_boundary}</strong></div>
+                            <div><span>{"Evidence"}</span><strong>{response.evidence_refs.len()}</strong></div>
+                        </div>
+                        <p>{&response.risk_summary}</p>
+                        <div class="summary-grid">
+                            <div><span>{"Evidence Status"}</span><strong>{&response.evidence_sufficiency.status}</strong></div>
+                            <div><span>{"Scheme"}</span><strong>{&response.evidence_sufficiency.scheme_family}</strong></div>
+                            <div><span>{"Present"}</span><strong>{response.evidence_sufficiency.present_evidence.len()}</strong></div>
+                            <div><span>{"Missing"}</span><strong>{response.evidence_sufficiency.missing_evidence.len()}</strong></div>
+                        </div>
+
+                        <h4>{"Findings"}</h4>
+                        <div class="factor-card-grid">
+                            {for response.findings.iter().map(|finding| html! {
+                                <div class="metric-row">
+                                    <span>{&finding.finding}</span>
+                                    <strong>{finding.evidence_refs.len()}</strong>
+                                    <small>{refs_label(&finding.evidence_refs)}</small>
+                                </div>
+                            })}
+                        </div>
+
+                        <h4>{"Investigation Checklist"}</h4>
+                        <ul class="result-list">
+                            {for response.investigation_checklist.iter().map(|item| html! { <li>{item}</li> })}
+                        </ul>
+
+                        <h4>{"Similar Cases"}</h4>
+                        if response.similar_cases.is_empty() {
+                            <p class="empty">{"No similar cases returned."}</p>
+                        } else {
+                            <div class="factor-card-grid">
+                                {for response.similar_cases.iter().map(|case| html! {
+                                    <div class="metric-row">
+                                        <span>{&case.case_id}</span>
+                                        <strong>{format!("{:.2}", case.similarity_score)}</strong>
+                                        <small>{format!("signals: {}", refs_label(&case.matched_signals))}</small>
+                                        <small>{format!("provenance: {}", refs_label(&case.provenance_refs))}</small>
+                                    </div>
+                                })}
+                            </div>
+                        }
+
+                        <h4>{"QA Opinion Draft"}</h4>
+                        <p>{&response.qa_opinion_draft}</p>
+
+                        <h4>{"Evidence Buckets"}</h4>
+                        <div class="summary-grid">
+                            <div><span>{"Claim"}</span><strong>{response.evidence_refs_by_type.claim.len()}</strong></div>
+                            <div><span>{"Rule"}</span><strong>{response.evidence_refs_by_type.rule.len()}</strong></div>
+                            <div><span>{"Model"}</span><strong>{response.evidence_refs_by_type.model.len()}</strong></div>
+                            <div><span>{"Anomaly"}</span><strong>{response.evidence_refs_by_type.anomaly.len()}</strong></div>
+                            <div><span>{"Document"}</span><strong>{response.evidence_refs_by_type.document.len()}</strong></div>
+                            <div><span>{"Similar Case"}</span><strong>{response.evidence_refs_by_type.similar_case.len()}</strong></div>
+                        </div>
+                        <small>{format!("evidence: {}", refs_label(&response.evidence_refs))}</small>
+                    </>
+                },
+            }}
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct AgentRunsProps {
+    state: ApiState<Vec<AgentRunRecord>>,
+}
+
+#[function_component(AgentRunsView)]
+fn agent_runs_view(props: &AgentRunsProps) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <h3>{"Agent Run Evidence Trail"}</h3>
+            <p class="empty">{"Assistive Boundary: Agent outputs support investigation and require human approval before high-impact downstream action."}</p>
+            {match &props.state {
+                ApiState::Idle => html! { <p class="empty">{"Refresh Agent runs to inspect evidence trail."}</p> },
+                ApiState::Loading => html! { <p>{"Loading Agent runs..."}</p> },
+                ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                ApiState::Ready(runs) => html! {
+                    if runs.is_empty() {
+                        <p class="empty">{"No Agent runs returned."}</p>
+                    } else {
+                        <div class="factor-card-grid">
+                            {for runs.iter().take(8).map(|run| html! {
+                                <div class="factor-card">
+                                    <div>
+                                        <strong>{format!("{} / {}", run.agent_run_id, run.claim_id)}</strong>
+                                        <span>{format!("{} / {}", run.status, run.decision_boundary)}</span>
+                                    </div>
+                                    <div class="summary-grid">
+                                        <div><span>{"Steps"}</span><strong>{run.steps.len()}</strong></div>
+                                        <div><span>{"Tool Calls"}</span><strong>{run.tool_calls.len()}</strong></div>
+                                        <div><span>{"Policy Checks"}</span><strong>{run.policy_checks.len()}</strong></div>
+                                        <div><span>{"Approvals"}</span><strong>{run.approvals.len()}</strong></div>
+                                    </div>
+                                    <small>{format!("created: {} / completed: {}", run.created_at.as_deref().unwrap_or("unknown"), run.completed_at.as_deref().unwrap_or("pending"))}</small>
+                                    <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
+                                    <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
+                                </div>
+                            })}
+                        </div>
+                    }
+                },
+            }}
+        </section>
+    }
+}
+
 #[function_component(GovernancePage)]
 fn governance_page() -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
@@ -4708,6 +5023,21 @@ async fn get_knowledge_snapshot(
     Ok(KnowledgeSnapshot { cases, results })
 }
 
+async fn get_agent_runs(api_key: String) -> Result<Vec<AgentRunRecord>, String> {
+    Ok(
+        request_get_json::<AgentRunListResponse>("/api/v1/ops/agent-runs", api_key)
+            .await?
+            .runs,
+    )
+}
+
+async fn post_agent_investigation(
+    api_key: String,
+    payload: Value,
+) -> Result<AgentInvestigationResponse, String> {
+    request_json("/api/v1/agent/cases/investigate", api_key, payload).await
+}
+
 async fn get_governance_snapshot(
     api_key: String,
     event_group: String,
@@ -4725,9 +5055,7 @@ async fn get_governance_snapshot(
         request_get_json::<ApiCallListResponse>("/api/v1/ops/api-calls?limit=20", api_key.clone())
             .await?
             .calls;
-    let agent_runs = request_get_json::<AgentRunListResponse>("/api/v1/ops/agent-runs", api_key)
-        .await?
-        .runs;
+    let agent_runs = get_agent_runs(api_key).await?;
     Ok(GovernanceSnapshot {
         audit_events,
         api_calls,
@@ -5104,6 +5432,17 @@ fn parse_u32(value: &str, label: &str) -> Result<u32, String> {
         .map_err(|error| format!("{label} must be an unsigned integer: {error}"))
 }
 
+fn parse_risk_score(value: &str) -> Result<u8, String> {
+    let score = value
+        .trim()
+        .parse::<u8>()
+        .map_err(|error| format!("risk score must be an integer from 0 to 100: {error}"))?;
+    if score > 100 {
+        return Err("risk score must be between 0 and 100".into());
+    }
+    Ok(score)
+}
+
 fn optional_u64(value: Option<u64>) -> String {
     value
         .map(|number| number.to_string())
@@ -5260,6 +5599,49 @@ fn runtime_full_payload_template() -> Value {
             }
         }
     })
+}
+
+fn agent_investigation_payload(
+    claim_id: String,
+    risk_score: String,
+    rag: String,
+    scheme_family: String,
+    top_reasons: String,
+    diagnosis_code: String,
+    provider_region: String,
+    tags: String,
+) -> Result<Value, String> {
+    let top_reasons = parse_tags(&top_reasons);
+    let tags = parse_tags(&tags);
+    if claim_id.trim().is_empty() {
+        return Err("claim id is required".into());
+    }
+    if !matches!(rag.trim(), "GREEN" | "AMBER" | "RED") {
+        return Err("RAG must be GREEN, AMBER, or RED".into());
+    }
+    if top_reasons.is_empty() {
+        return Err("at least one top reason is required".into());
+    }
+    if diagnosis_code.trim().is_empty() || provider_region.trim().is_empty() || tags.is_empty() {
+        return Err("diagnosis code, provider region, and at least one tag are required".into());
+    }
+    let scheme_family = scheme_family.trim();
+    Ok(json!({
+        "claim_id": claim_id.trim(),
+        "risk_score": parse_risk_score(&risk_score)?,
+        "rag": rag.trim(),
+        "scheme_family": if scheme_family.is_empty() {
+            Value::Null
+        } else {
+            Value::String(scheme_family.to_string())
+        },
+        "top_reasons": top_reasons,
+        "similar_case_query": {
+            "diagnosis_code": diagnosis_code.trim(),
+            "provider_region": provider_region.trim(),
+            "tags": tags
+        }
+    }))
 }
 
 fn total_dataset_rows(datasets: &[DatasetRecord]) -> String {
