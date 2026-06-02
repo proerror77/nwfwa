@@ -686,7 +686,9 @@ Evidence sufficiency depends on the scheme family:
 Clinical review output must remain structured. Free-text notes can explain the
 case, but model training and rule tuning must use controlled outcome fields such
 as `documentation_issue`, `medical_necessity_review_required`, and
-`insufficient_evidence`.
+`insufficient_evidence`. The medical review writeback API stores these values in
+`clinical_outcomes`; if a reviewer omits the array, the platform derives a
+compatible controlled outcome from the review `decision`.
 
 ## Sampling And Audit Methodology
 

@@ -31,6 +31,8 @@ pub struct SubmitMedicalReviewResultRequest {
     pub scoring_audit_id: String,
     pub reviewer: String,
     pub decision: String,
+    #[serde(default)]
+    pub clinical_outcomes: Vec<String>,
     pub notes: String,
     pub evidence_refs: Vec<String>,
 }
@@ -43,6 +45,7 @@ pub struct MedicalReviewResultResponse {
     pub audit_id: String,
     pub run_id: String,
     pub review_status: String,
+    pub clinical_outcomes: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -112,6 +115,7 @@ pub async fn submit_medical_review_result(
     let audit_id = AuditEventId::new().to_string();
     let run_id = ScoringRunId::new().to_string();
     let review_status = medical_review_status(&request.decision).to_string();
+    let clinical_outcomes = controlled_clinical_outcomes(&request);
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -130,6 +134,7 @@ pub async fn submit_medical_review_result(
                 "reviewer": request.reviewer,
                 "decision": request.decision,
                 "review_status": review_status,
+                "clinical_outcomes": clinical_outcomes.clone(),
                 "notes": request.notes,
             }),
             evidence_refs: request
@@ -147,6 +152,7 @@ pub async fn submit_medical_review_result(
         audit_id,
         run_id,
         review_status,
+        clinical_outcomes,
         evidence_refs: request.evidence_refs,
     }))
 }
@@ -332,6 +338,16 @@ fn validate_medical_review_result(
             "decision must be evidence_sufficient, request_more_evidence, medical_necessity_issue, or no_medical_issue",
         ));
     }
+    if request.clinical_outcomes.iter().any(|outcome| {
+        let outcome = outcome.trim();
+        outcome.is_empty() || !is_allowed_clinical_outcome(outcome)
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_CLINICAL_OUTCOME",
+            "clinical_outcomes must use controlled clinical review outcome fields",
+        ));
+    }
     if request.notes.trim().is_empty()
         || request.evidence_refs.is_empty()
         || request
@@ -356,6 +372,47 @@ fn validate_medical_review_result(
         ));
     }
     Ok(())
+}
+
+fn controlled_clinical_outcomes(request: &SubmitMedicalReviewResultRequest) -> Vec<String> {
+    let outcomes = if request.clinical_outcomes.is_empty() {
+        vec![default_clinical_outcome(&request.decision).to_string()]
+    } else {
+        request
+            .clinical_outcomes
+            .iter()
+            .map(|outcome| outcome.trim().to_string())
+            .collect()
+    };
+    outcomes
+        .into_iter()
+        .fold(Vec::new(), |mut values, outcome| {
+            if !values.contains(&outcome) {
+                values.push(outcome);
+            }
+            values
+        })
+}
+
+fn default_clinical_outcome(decision: &str) -> &'static str {
+    match decision {
+        "request_more_evidence" => "insufficient_evidence",
+        "medical_necessity_issue" => "medical_necessity_issue",
+        "no_medical_issue" => "false_positive",
+        _ => "clinical_evidence_sufficient",
+    }
+}
+
+fn is_allowed_clinical_outcome(outcome: &str) -> bool {
+    matches!(
+        outcome,
+        "documentation_issue"
+            | "medical_necessity_review_required"
+            | "insufficient_evidence"
+            | "medical_necessity_issue"
+            | "clinical_evidence_sufficient"
+            | "false_positive"
+    )
 }
 
 fn medical_review_status(decision: &str) -> &'static str {

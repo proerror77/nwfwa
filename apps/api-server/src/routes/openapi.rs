@@ -3230,6 +3230,14 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["evidence_sufficient", "request_more_evidence", "medical_necessity_issue", "no_medical_issue"]
                         },
+                        "clinical_outcomes": {
+                            "type": "array",
+                            "description": "Optional controlled clinical outcome fields for model training and rule tuning. When omitted, the platform derives one compatible outcome from decision.",
+                            "items": {
+                                "type": "string",
+                                "enum": ["documentation_issue", "medical_necessity_review_required", "insufficient_evidence", "medical_necessity_issue", "clinical_evidence_sufficient", "false_positive"]
+                            }
+                        },
                         "notes": {
                             "type": "string",
                             "minLength": 1,
@@ -3245,7 +3253,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "MedicalReviewResultResponse": {
                     "type": "object",
-                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "review_status", "evidence_refs"],
+                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "review_status", "clinical_outcomes", "evidence_refs"],
                     "properties": {
                         "claim_id": { "type": "string" },
                         "event_type": { "type": "string" },
@@ -3253,6 +3261,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "audit_id": { "type": "string" },
                         "run_id": { "type": "string" },
                         "review_status": { "type": "string" },
+                        "clinical_outcomes": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },

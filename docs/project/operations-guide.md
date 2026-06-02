@@ -186,7 +186,7 @@ Writeback contract fields:
 - QA: `qa_case_id`, `claim_id`, `qa_conclusion`, `issue_type`,
   `feedback_target`, `notes`, and `evidence_refs`
 - medical review: `claim_id`, `scoring_audit_id`, `reviewer`, `decision`,
-  `notes`, and `evidence_refs`
+  optional controlled `clinical_outcomes`, `notes`, and `evidence_refs`
 
 ### Pilot Foundation Required Before Customer Data
 

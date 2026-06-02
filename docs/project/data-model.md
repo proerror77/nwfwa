@@ -109,6 +109,11 @@ agent workspace artifacts are a future infrastructure item, not a current table.
 
 These tables connect scoring to human workflow and feedback labels.
 
+Medical review results are persisted as `medical.review.recorded` audit events.
+Their payload carries controlled `clinical_outcomes`, which are converted into
+medical-review outcome labels for model training, rule tuning, and workflow
+feedback.
+
 Audit samples should preserve sampling mode, population definition, inclusion
 criteria, seed or selection method, sample size, reviewer assignment, assignment
 queue, and outcome distribution. This is the evidence trail for QA coverage,

@@ -321,6 +321,101 @@ async fn medical_review_preserves_canonical_trace_from_scoring_audit() {
 }
 
 #[tokio::test]
+async fn medical_review_records_controlled_clinical_outcomes_for_labels() {
+    let app = build_app(test_config());
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-MEDICAL-OUTCOMES",
+          "scoring_audit_id": "audit_scoring_outcomes",
+          "reviewer": "medical-reviewer-1",
+          "decision": "request_more_evidence",
+          "clinical_outcomes": ["documentation_issue", "insufficient_evidence"],
+          "notes": "Medical record and order evidence are required before necessity can be confirmed.",
+          "evidence_refs": ["audit:audit_scoring_outcomes", "claim_items:IMG-OUTCOMES"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        review["clinical_outcomes"],
+        serde_json::json!(["documentation_issue", "insufficient_evidence"])
+    );
+
+    let (status, audit) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/audit/claims/CLM-MEDICAL-OUTCOMES",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let medical_review_event = audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "medical.review.recorded")
+        .expect("medical review event should be in audit history");
+    assert_eq!(
+        medical_review_event["payload"]["clinical_outcomes"],
+        serde_json::json!(["documentation_issue", "insufficient_evidence"])
+    );
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let label_names = labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|label| label["label_name"].as_str().unwrap())
+        .collect::<Vec<_>>();
+    assert!(label_names.contains(&"documentation_issue"));
+    assert!(label_names.contains(&"insufficient_evidence"));
+}
+
+#[tokio::test]
+async fn medical_review_derives_false_positive_outcome_for_no_medical_issue() {
+    let app = build_app(test_config());
+
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        r#"{
+          "claim_id": "CLM-MEDICAL-FALSE-POSITIVE",
+          "scoring_audit_id": "audit_scoring_false_positive",
+          "reviewer": "medical-reviewer-1",
+          "decision": "no_medical_issue",
+          "notes": "Reviewed medical evidence supports the billed item.",
+          "evidence_refs": ["audit:audit_scoring_false_positive", "claim_items:IMG-FP"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        review["clinical_outcomes"],
+        serde_json::json!(["false_positive"])
+    );
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let false_positive_label = labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|label| label["label_name"] == "false_positive")
+        .expect("no_medical_issue should keep false_positive label compatibility");
+    assert_eq!(false_positive_label["feedback_target"], "model");
+    assert_eq!(
+        false_positive_label["governance_status"],
+        "approved_for_training"
+    );
+}
+
+#[tokio::test]
 async fn rejects_medical_review_result_without_evidence() {
     let app = build_app(test_config());
 

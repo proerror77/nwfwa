@@ -272,7 +272,11 @@ and procedure consistency, and reviewer feedback. Queue items expose
 `canonical_source_refs` and `canonical_evidence_refs` when the scoring audit
 came from a normalized inbox context. Medical review result writeback merges
 canonical evidence refs from the referenced scoring audit into the persisted
-review, response, and `medical.review.recorded` audit event.
+review, response, and `medical.review.recorded` audit event. Writeback may also
+include `clinical_outcomes` such as `documentation_issue`,
+`medical_necessity_review_required`, or `insufficient_evidence`; when omitted,
+the platform derives a compatible controlled outcome from `decision` for label
+governance.
 
 ## Audit And Governance
 

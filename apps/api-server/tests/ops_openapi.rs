@@ -2047,6 +2047,25 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"].is_object());
     assert!(schema["components"]["schemas"]["MedicalReviewResultResponse"].is_object());
     assert!(schema["components"]["schemas"]["MedicalReviewQueueResponse"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
+            ["clinical_outcomes"]["items"]["enum"],
+        serde_json::json!([
+            "documentation_issue",
+            "medical_necessity_review_required",
+            "insufficient_evidence",
+            "medical_necessity_issue",
+            "clinical_evidence_sufficient",
+            "false_positive"
+        ])
+    );
+    assert!(
+        schema["components"]["schemas"]["MedicalReviewResultResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "clinical_outcomes")
+    );
     assert!(
         schema["components"]["schemas"]["MedicalReviewQueueItem"]["required"]
             .as_array()
