@@ -126,6 +126,8 @@ grep -q "Leakage Candidates" scripts/demo/smoke_web_console.mjs
 grep -q "SLA Breached" scripts/demo/smoke_web_console.mjs
 grep -q "Calibration Signal" scripts/demo/smoke_web_console.mjs
 grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
+grep -q "Pilot Security Readiness" scripts/demo/smoke_web_console.mjs
+grep -q "/api/v1/health" apps/web-console/src/main.rs
 grep -q "Guardrail Boundary" scripts/demo/smoke_web_console.mjs
 grep -q "Human Gate" scripts/demo/smoke_web_console.mjs
 grep -q "Graph Risk" scripts/demo/smoke_web_console.mjs

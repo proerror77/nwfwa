@@ -926,9 +926,32 @@ struct AgentEvidenceBuckets {
 
 #[derive(Clone, Debug, PartialEq)]
 struct GovernanceSnapshot {
+    health: HealthResponse,
     audit_events: Vec<AuditEventRecord>,
     api_calls: Vec<ApiCallRecord>,
     agent_runs: Vec<AgentRunRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct HealthResponse {
+    status: String,
+    service: String,
+    version: String,
+    pilot_readiness: PilotReadiness,
+    checks: Vec<HealthCheck>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct PilotReadiness {
+    status: String,
+    blocking_checks: Vec<HealthCheck>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct HealthCheck {
+    name: String,
+    status: String,
+    runtime_kind: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -4846,6 +4869,39 @@ fn governance_view(props: &GovernanceProps) -> Html {
                 ApiState::Ready(snapshot) => html! {
                     <>
                         <section class="panel result-stack">
+                            <h3>{"Pilot Security Readiness"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Pilot Gate"}</span><strong>{&snapshot.health.pilot_readiness.status}</strong></div>
+                                <div><span>{"Blocking Checks"}</span><strong>{snapshot.health.pilot_readiness.blocking_checks.len()}</strong></div>
+                                <div><span>{"Health Checks"}</span><strong>{snapshot.health.checks.len()}</strong></div>
+                                <div><span>{"Service"}</span><strong>{format!("{} {}", snapshot.health.service, snapshot.health.version)}</strong></div>
+                            </div>
+                            if snapshot.health.pilot_readiness.blocking_checks.is_empty() {
+                                <p class="empty">{"All pilot configuration gates are configured for this environment."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.health.pilot_readiness.blocking_checks.iter().map(|check| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{&check.name}</strong>
+                                                <span>{&check.status}</span>
+                                            </div>
+                                            <small>{format!("runtime: {}", check.runtime_kind.as_deref().unwrap_or("n/a"))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                            <div class="summary-grid">
+                                {for snapshot.health.checks.iter().filter(|check| check.name.ends_with("_configuration")).map(|check| html! {
+                                    <div>
+                                        <span>{&check.name}</span>
+                                        <strong>{&check.status}</strong>
+                                    </div>
+                                })}
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
                             <h3>{"Audit Event Log"}</h3>
                             <div class="score-hero">
                                 <div><span>{"Audit Events"}</span><strong>{snapshot.audit_events.len()}</strong></div>
@@ -5559,6 +5615,8 @@ async fn get_governance_snapshot(
     api_key: String,
     event_group: String,
 ) -> Result<GovernanceSnapshot, String> {
+    let health =
+        request_get_json::<HealthResponse>("/api/v1/health", api_key.clone()).await?;
     let event_group = event_group.trim();
     let audit_path = if event_group.is_empty() {
         "/api/v1/ops/audit-events?limit=20".to_string()
@@ -5574,6 +5632,7 @@ async fn get_governance_snapshot(
             .calls;
     let agent_runs = get_agent_runs(api_key).await?;
     Ok(GovernanceSnapshot {
+        health,
         audit_events,
         api_calls,
         agent_runs,
