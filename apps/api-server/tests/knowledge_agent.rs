@@ -417,6 +417,157 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
 }
 
 #[tokio::test]
+async fn publish_knowledge_case_preserves_canonical_evidence_refs_from_scoring_audit() {
+    let app = build_app(test_config());
+
+    let (status, _body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-KB-CANONICAL",
+              "total_amount": 9100,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-kb",
+              "masked_certificate_id": "masked-cert-kb",
+              "member_birth_date": "1988-03-12",
+              "member_gender": "F",
+              "policy_id": "POL-KB-CANONICAL",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-KB-CANONICAL",
+              "name": "Knowledge Trace Hospital",
+              "provider_type": "hospital",
+              "region": "Guangzhou",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "Repeated lab panel",
+                "fee_category": "lab",
+                "amount": 9100,
+                "diagnosis_list": [
+                  { "code": "E11", "name": "Type 2 diabetes mellitus" }
+                ],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-KB-CANONICAL:fee_detail:LINE-1"]
+              }
+            ],
+            "document_evidence": [
+              {
+                "document_id": "MR-KB-CANONICAL-1",
+                "medical_record_type": "outpatient_record",
+                "source_refs": ["medical_record:MR-KB-CANONICAL-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-CANONICAL-EVIDENCE",
+          "title": "Published canonical trace case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste; provider education opened.",
+          "tags": ["lab_overuse", "provider_pattern"],
+          "evidence_refs": ["investigation_results:INV-KB-CANONICAL"],
+          "source_claim_id": "CLM-KB-CANONICAL"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(body["case"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
+        )));
+
+    let (status, body) =
+        json_request(app.clone(), "GET", "/api/v1/ops/knowledge/cases", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let published_case = body["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["case_id"] == "KC-CANONICAL-EVIDENCE")
+        .expect("published knowledge case should be listed");
+    assert!(published_case["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
+        )));
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/knowledge/search-similar",
+        r#"{
+          "claim_id": "CLM-KB-CANONICAL-SEARCH",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "tags": ["lab_overuse"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let published_result = body["results"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|case| case["case_id"] == "KC-CANONICAL-EVIDENCE")
+        .expect("published knowledge case should be searchable");
+    assert!(published_result["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
+        )));
+
+    let (status, body) =
+        json_request(app, "GET", "/api/v1/audit/claims/CLM-KB-CANONICAL", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let publish_event = body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "knowledge.case.published")
+        .expect("knowledge case publish should be audited");
+    assert!(publish_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
+        )));
+}
+
+#[tokio::test]
 async fn investigates_case_as_assistive_agent_with_evidence_refs() {
     let app = build_app(test_config());
 

@@ -5475,7 +5475,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Must include at least one confirmed review source: investigation_results:* or qa_reviews:* and must not contain PII.",
+                            "description": "Must include at least one confirmed review source: investigation_results:* or qa_reviews:* and must not contain PII. When source_claim_id has a prior canonical_claim_context_trace, publish automatically preserves canonical evidence_refs from the scoring audit.",
                             "items": { "type": "string", "minLength": 1 },
                             "contains": {
                                 "type": "string",

@@ -364,6 +364,12 @@ evidence packages for human review, not autonomous decisions. When a prior
 the trace and source refs so reviewers can connect the summary back to
 normalized inbox evidence.
 
+Knowledge case publish requires confirmed review evidence such as
+`investigation_results:*` or `qa_reviews:*`. When `source_claim_id` has a prior
+canonical scoring trace, knowledge case publish preserves canonical evidence
+refs from that trace in the saved case, similar-case search result, and
+`knowledge.case.published` audit event.
+
 ## Common Error Shape
 
 The API uses a simple JSON error shape for contract-facing endpoints:

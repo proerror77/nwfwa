@@ -130,7 +130,12 @@ grep -q "Audit Coverage" apps/web-console/src/pages/DashboardPage.tsx
 grep -q "Canonical Trace Coverage" scripts/demo/smoke_web_console.mjs
 grep -q "latest_canonical_claim_context_trace" apps/api-server/src/routes/agent.rs
 grep -q "Agent context snapshot carries" docs/project/api-reference.md
+grep -q "canonical scoring trace" docs/project/api-reference.md
+grep -q "canonical_claim_context.claim_header.external_claim_id" docs/product/fwa-risk-operations-prd.md
+grep -q "QA result writeback, investigation result writeback, medical review result" docs/product/fwa-risk-operations-prd.md
+grep -q "canonical invoice" docs/engineering/tpa-integration-contract.md
 grep -q "canonical_source_refs" apps/api-server/src/routes/openapi.rs
+grep -q "source_claim_id has a prior canonical_claim_context_trace" apps/api-server/src/routes/openapi.rs
 grep -q "merge_latest_canonical_evidence_refs_for_investigation" apps/api-server/src/routes/pilot_loop.rs
 grep -q "Investigation result writeback merges" docs/project/api-reference.md
 grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_loop.rs

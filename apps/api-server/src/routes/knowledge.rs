@@ -2,8 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        normalize_scheme_family, scheme_family_from_knowledge_signals, KnowledgeCaseRecord,
-        PersistedAuditEvent, SimilarCaseQuery, SimilarCaseRecord,
+        normalize_scheme_family, scheme_family_from_knowledge_signals, AuditEventListFilter,
+        KnowledgeCaseRecord, PersistedAuditEvent, SimilarCaseQuery, SimilarCaseRecord,
     },
     routes::pii,
 };
@@ -16,6 +16,7 @@ use fwa_audit::ActorContext;
 use fwa_auth::{validate_api_key, ApiKeyConfig};
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Serialize)]
 pub struct KnowledgeCaseListResponse {
@@ -73,10 +74,11 @@ pub async fn list_cases(
 pub async fn publish_case(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<PublishKnowledgeCaseRequest>,
+    Json(mut request): Json<PublishKnowledgeCaseRequest>,
 ) -> Result<Json<PublishKnowledgeCaseResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
     validate_publish_knowledge_case(&request)?;
+    merge_latest_canonical_evidence_refs(&state, &mut request).await?;
 
     let scheme_family = request
         .scheme_family
@@ -136,6 +138,40 @@ pub async fn publish_case(
         .await
         .map_err(internal_error("KNOWLEDGE_CASE_AUDIT_SAVE_FAILED"))?;
     Ok(Json(PublishKnowledgeCaseResponse { case, audit_id }))
+}
+
+async fn merge_latest_canonical_evidence_refs(
+    state: &AppState,
+    request: &mut PublishKnowledgeCaseRequest,
+) -> Result<(), ApiError> {
+    let Some(source_claim_id) = request.source_claim_id.as_ref() else {
+        return Ok(());
+    };
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 1,
+            event_type: Some("scoring.completed".into()),
+            claim_id: Some(source_claim_id.clone()),
+            has_canonical_trace: Some(true),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("KNOWLEDGE_CANONICAL_TRACE_LOOKUP_FAILED"))?;
+    let Some(event) = events
+        .iter()
+        .find(|event| event.event_status == "succeeded")
+    else {
+        return Ok(());
+    };
+    for reference in
+        unique_json_string_values(&event.payload["canonical_claim_context_trace"]["evidence_refs"])
+    {
+        if !request.evidence_refs.contains(&reference) {
+            request.evidence_refs.push(reference);
+        }
+    }
+    Ok(())
 }
 
 fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Result<(), ApiError> {
@@ -199,6 +235,25 @@ fn validate_publish_knowledge_case(request: &PublishKnowledgeCaseRequest) -> Res
         ));
     }
     Ok(())
+}
+
+fn unique_json_string_values(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .fold(Vec::new(), |mut values, value| {
+                    let value = value.to_string();
+                    if !values.contains(&value) {
+                        values.push(value);
+                    }
+                    values
+                })
+        })
+        .unwrap_or_default()
 }
 
 pub async fn search_similar(

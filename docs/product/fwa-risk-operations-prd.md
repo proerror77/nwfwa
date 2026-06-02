@@ -24,6 +24,36 @@ The product language must distinguish fraud, waste, abuse, improper payment,
 documentation issue, and medical necessity issue. A high score, anomaly, or
 rule hit is a lead, not a confirmed fraud finding.
 
+## Input Box And Canonical Evidence Trace
+
+The raw TPA inbox payload at `/Users/proerror/Downloads/req.json` is a
+`reportCase` envelope with `systemCode`, `transDate`, and `transNo`; it is not
+the final scoring contract by itself. Runtime scoring should normalize this
+shape into `source_system` plus `canonical_claim_context` before risk detection.
+
+Required normalization:
+
+- map `reportCase.id` or `reportCase.reportNo` to
+  `canonical_claim_context.claim_header.external_claim_id`;
+- map policy/member/provider snapshots from `reportCase.policyList`,
+  `reportCase.accidentPerson`, and available organization/provider fields;
+- map each invoice fee detail under
+  `reportCase.policyList[*].invoiceList[*].feeList[*].feeDetailList[*]` into
+  an itemized bill line with amount, code/name/category, source path, and a
+  stable evidence ref such as `invoice:{invoice_id}:fee_detail:{line_id}`;
+- map `reportCase.medicalRecordInfoList` into document evidence with source
+  refs such as `medical_record:{document_id}`;
+- keep raw source paths in `canonical_claim_context_trace.source_refs` and
+  keep generated evidence refs in `canonical_claim_context_trace.evidence_refs`.
+
+The canonical trace is part of the audit contract. Once a claim has a successful
+`scoring.completed` audit event with `canonical_claim_context_trace`, downstream
+QA result writeback, investigation result writeback, medical review result
+writeback, Agent context snapshots, and knowledge case publish must preserve
+those canonical evidence refs instead of replacing them with later workflow-only
+refs. This lets an auditor start from a confirmed knowledge case or QA outcome
+and trace back to the original normalized inbox invoice line or medical record.
+
 ## Product Modules
 
 - FWA Core Runtime: score claims through features, rules, model signals, anomaly

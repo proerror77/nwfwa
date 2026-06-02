@@ -323,6 +323,11 @@ Documented errors:
 - `400` invalid query, including blank diagnosis, region, or tags.
 - `401` missing or invalid API key.
 
+Similarity results return the saved knowledge case evidence refs. If the case
+was published with `source_claim_id` and that claim has a prior
+`canonical_claim_context_trace`, those refs include the canonical invoice,
+document, or line-item evidence preserved from the scoring audit.
+
 ### Investigation Result Writeback
 
 `POST /api/v1/investigations/results`
