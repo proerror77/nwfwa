@@ -15,6 +15,8 @@ the technical stack fits together, and what is ready for demo or pilot use.
   requirement, main inputs, outputs, and side effects.
 - [Data Model](data-model.md): PostgreSQL schema groups, relationships, and
   table responsibilities.
+- [ML Algorithm Strategy](ml-algorithm-strategy.md): researched model plan,
+  current baseline boundaries, validation gates, and production ML roadmap.
 - [Operations Guide](operations-guide.md): local demo, verification gates, CI,
   pilot readiness, and known production boundaries.
 
