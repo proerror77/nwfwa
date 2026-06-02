@@ -602,6 +602,20 @@ struct RoutingPolicySnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+struct MemberProfileSummary {
+    member_id: String,
+    claim_count: u32,
+    policy_count: u32,
+    total_claim_amount: Value,
+    currency: String,
+    high_risk_claim_count: u32,
+    latest_claim_id: Option<String>,
+    risk_level_summary: String,
+    profile_summary: String,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 struct QaQueueListResponse {
     items: Vec<QaQueueItem>,
 }
@@ -1247,6 +1261,8 @@ fn app() -> Html {
                     <FactorFactoryPage />
                 } else if *active == "Leads & Cases" {
                     <LeadsCasesPage />
+                } else if *active == "Member Profile" {
+                    <MemberProfilePage />
                 } else if *active == "Medical Review" {
                     <MedicalReviewPage />
                 } else if *active == "Knowledge Base" {
@@ -3154,6 +3170,110 @@ fn case_update_result_view(props: &CaseUpdateResultProps) -> Html {
     }
 }
 
+#[function_component(MemberProfilePage)]
+fn member_profile_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let member_id = use_state(|| "MBR-0287".to_string());
+    let profile_state = use_state(|| ApiState::<MemberProfileSummary>::Idle);
+
+    let load_profile = {
+        let api_key = api_key.clone();
+        let member_id = member_id.clone();
+        let profile_state = profile_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let member_id = (*member_id).clone();
+            let profile_state = profile_state.clone();
+            profile_state.set(ApiState::Loading);
+            spawn_local(async move {
+                profile_state.set(match get_member_profile_summary(api_key, member_id).await {
+                    Ok(profile) => ApiState::Ready(profile),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_profile = load_profile.clone();
+        Callback::from(move |_| load_profile.emit(()))
+    };
+
+    {
+        let load_profile = load_profile.clone();
+        use_effect_with((), move |_| {
+            load_profile.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Member Profile"}</h2>
+                    <p>{"Inspect the TPA-facing member profile summary used to explain utilization, policy exposure, high-risk history, and evidence-backed profile context."}</p>
+                </div>
+                <span class="status-pill">{"Profile Summary API"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Member Profile Source"}</h3>
+                <div class="form-grid">
+                    {text_input("API key", &api_key)}
+                    {text_input("Member ID", &member_id)}
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*profile_state, ApiState::Loading)}>
+                        {if matches!(&*profile_state, ApiState::Loading) { "Refreshing..." } else { "Refresh member profile" }}
+                    </button>
+                </div>
+            </section>
+
+            <MemberProfileView state={(*profile_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct MemberProfileProps {
+    state: ApiState<MemberProfileSummary>,
+}
+
+#[function_component(MemberProfileView)]
+fn member_profile_view(props: &MemberProfileProps) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <h3>{"Member Profile Summary"}</h3>
+            {match &props.state {
+                ApiState::Idle => html! { <p class="empty">{"Load a member profile summary to inspect utilization and evidence."}</p> },
+                ApiState::Loading => html! { <p>{"Loading member profile..."}</p> },
+                ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                ApiState::Ready(profile) => html! {
+                    <>
+                        <div class="score-hero">
+                            <div><span>{"Member"}</span><strong>{&profile.member_id}</strong></div>
+                            <div><span>{"Risk Summary"}</span><strong>{&profile.risk_level_summary}</strong></div>
+                            <div><span>{"High-Risk Claims"}</span><strong>{profile.high_risk_claim_count}</strong></div>
+                        </div>
+                        <div class="summary-grid">
+                            <div><span>{"Claims"}</span><strong>{profile.claim_count}</strong></div>
+                            <div><span>{"Policies"}</span><strong>{profile.policy_count}</strong></div>
+                            <div><span>{"Total Amount"}</span><strong>{format!("{} {}", display_value(&profile.total_claim_amount), profile.currency)}</strong></div>
+                            <div><span>{"Latest Claim"}</span><strong>{profile.latest_claim_id.as_deref().unwrap_or("none")}</strong></div>
+                            <div><span>{"Evidence Refs"}</span><strong>{profile.evidence_refs.len()}</strong></div>
+                        </div>
+                        <h4>{"Profile Narrative"}</h4>
+                        <p>{&profile.profile_summary}</p>
+                        <h4>{"Evidence"}</h4>
+                        <small>{refs_label(&profile.evidence_refs)}</small>
+                    </>
+                },
+            }}
+        </section>
+    }
+}
+
 #[function_component(MedicalReviewPage)]
 fn medical_review_page() -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
@@ -4494,6 +4614,21 @@ async fn post_case_status(
         &format!("/api/v1/ops/cases/{case_id}/status"),
         api_key,
         payload,
+    )
+    .await
+}
+
+async fn get_member_profile_summary(
+    api_key: String,
+    member_id: String,
+) -> Result<MemberProfileSummary, String> {
+    let member_id = member_id.trim();
+    if member_id.is_empty() {
+        return Err("member id is required".into());
+    }
+    request_get_json(
+        &format!("/api/v1/members/{member_id}/profile-summary"),
+        api_key,
     )
     .await
 }
