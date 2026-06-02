@@ -110,7 +110,8 @@ Minimum pilot monitoring:
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
-- Runtime logs: request path, status, run id, audit id, event type, source system
+- Runtime logs: request path, status, run id, audit id, event type, source
+  system, actor role
 - API call records: audit-backed scoring, investigation, and QA writeback calls
   in Governance with `actor_role` and `customer_scope_id` for role and tenant
   traceability

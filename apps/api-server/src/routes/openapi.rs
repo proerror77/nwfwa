@@ -3798,10 +3798,11 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AuditHistoryEvent": {
                     "type": "object",
-                    "required": ["audit_id", "run_id", "event_type", "event_status", "summary", "payload", "evidence_refs"],
+                    "required": ["audit_id", "run_id", "actor_role", "event_type", "event_status", "summary", "payload", "evidence_refs"],
                     "properties": {
                         "audit_id": { "type": "string" },
                         "run_id": { "type": "string" },
+                        "actor_role": { "type": "string" },
                         "event_type": { "type": "string" },
                         "event_status": { "type": "string" },
                         "summary": { "type": "string" },

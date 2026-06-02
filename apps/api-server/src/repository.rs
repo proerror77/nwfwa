@@ -1001,6 +1001,7 @@ pub fn canonical_feedback_target(feedback_target: &str) -> &str {
 pub struct AuditHistoryEventRecord {
     pub audit_id: String,
     pub run_id: String,
+    pub actor_role: String,
     pub event_type: String,
     pub event_status: String,
     pub summary: String,
@@ -1946,6 +1947,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -2598,6 +2600,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             let audit_event = AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -2897,6 +2900,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id,
             run_id: format!("pilot_investigation_{}", record.investigation_id),
+            actor_role: "tpa_system".into(),
             event_type: "investigation.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("Investigation result received: {}", record.outcome),
@@ -2925,6 +2929,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_qa_{}", record.qa_case_id),
             run_id: format!("pilot_qa_{}", record.qa_case_id),
+            actor_role: "tpa_system".into(),
             event_type: "qa.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("QA result received: {}", record.qa_conclusion),
@@ -2983,6 +2988,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: audit_id.clone(),
             run_id: format!("qa_feedback_status_{}", item.feedback_id),
+            actor_role: "fwa_operator".into(),
             event_type: "qa.feedback.status.updated".into(),
             event_status: "succeeded".into(),
             summary: format!(
@@ -3068,6 +3074,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                     labels_from_medical_review_event(&AuditHistoryEventRecord {
                         audit_id: event.audit_id.clone(),
                         run_id: event.run_id.clone(),
+                        actor_role: event.actor_role.clone(),
                         event_type: event.event_type.clone(),
                         event_status: event.event_status.clone(),
                         summary: event.summary.clone(),
@@ -3109,6 +3116,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -3142,6 +3150,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -3175,6 +3184,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 let audit_event = AuditHistoryEventRecord {
                     audit_id: event.audit_id.clone(),
                     run_id: event.run_id.clone(),
+                    actor_role: event.actor_role.clone(),
                     event_type: event.event_type.clone(),
                     event_status: event.event_status.clone(),
                     summary: event.summary.clone(),
@@ -4267,9 +4277,9 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         rule_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
+        let rows: Vec<(String, String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as(
-                "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+                "SELECT audit_id, run_id, actor_role, event_type, event_status, summary, payload, evidence_refs, created_at
                  FROM audit_events
                  WHERE payload ->> 'rule_id' = $1
                  ORDER BY created_at, audit_id",
@@ -4284,6 +4294,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -4293,6 +4304,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )| AuditHistoryEventRecord {
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6289,6 +6301,7 @@ impl ScoringRepository for PostgresScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_investigation_{}", record.investigation_id),
             run_id: format!("pilot_investigation_{}", record.investigation_id),
+            actor_role: "tpa_system".into(),
             event_type: "investigation.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("Investigation result received: {}", record.outcome),
@@ -6296,7 +6309,7 @@ impl ScoringRepository for PostgresScoringRepository {
             evidence_refs: record.evidence_refs.clone(),
             created_at: None,
         };
-        insert_pilot_audit_event(&mut tx, &record.claim_id, &event, "tpa_system").await?;
+        insert_pilot_audit_event(&mut tx, &record.claim_id, &event).await?;
         tx.commit().await?;
         Ok(event)
     }
@@ -6332,6 +6345,7 @@ impl ScoringRepository for PostgresScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_qa_{}", record.qa_case_id),
             run_id: format!("pilot_qa_{}", record.qa_case_id),
+            actor_role: "tpa_system".into(),
             event_type: "qa.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("QA result received: {}", record.qa_conclusion),
@@ -6339,7 +6353,7 @@ impl ScoringRepository for PostgresScoringRepository {
             evidence_refs: record.evidence_refs.clone(),
             created_at: None,
         };
-        insert_pilot_audit_event(&mut tx, &record.claim_id, &event, "qa_reviewer").await?;
+        insert_pilot_audit_event(&mut tx, &record.claim_id, &event).await?;
         tx.commit().await?;
         Ok(event)
     }
@@ -6514,6 +6528,7 @@ impl ScoringRepository for PostgresScoringRepository {
             &AuditHistoryEventRecord {
                 audit_id: audit_id.clone(),
                 run_id: format!("qa_feedback_status_{}", item.feedback_id),
+                actor_role: "fwa_operator".into(),
                 event_type: "qa.feedback.status.updated".into(),
                 event_status: "succeeded".into(),
                 summary: format!("QA feedback status updated: {}", item.status),
@@ -6531,7 +6546,6 @@ impl ScoringRepository for PostgresScoringRepository {
                 evidence_refs: input.evidence_refs,
                 created_at: None,
             },
-            "qa_operator",
         )
         .await?;
         tx.commit().await?;
@@ -6600,8 +6614,8 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .fetch_all(&self.pool)
             .await?;
-        let medical_review_rows: Vec<(String, Value, Value)> = sqlx::query_as(
-            "SELECT audit_id, payload, evidence_refs
+        let medical_review_rows: Vec<(String, String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, actor_role, payload, evidence_refs
              FROM audit_events
              WHERE event_type = 'medical.review.recorded'
                AND event_status = 'succeeded'
@@ -6609,8 +6623,8 @@ impl ScoringRepository for PostgresScoringRepository {
         )
         .fetch_all(&self.pool)
         .await?;
-        let lead_triage_rows: Vec<(String, String, Value, Value)> = sqlx::query_as(
-            "SELECT audit_id, run_id, payload, evidence_refs
+        let lead_triage_rows: Vec<(String, String, String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, run_id, actor_role, payload, evidence_refs
              FROM audit_events
              WHERE event_type = 'lead.triaged'
                AND event_status = 'succeeded'
@@ -6675,10 +6689,11 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             ))
             .chain(medical_review_rows.into_iter().flat_map(
-                |(audit_id, payload, evidence_refs)| {
+                |(audit_id, actor_role, payload, evidence_refs)| {
                     labels_from_medical_review_event(&AuditHistoryEventRecord {
                         audit_id,
                         run_id: String::new(),
+                        actor_role,
                         event_type: "medical.review.recorded".into(),
                         event_status: "succeeded".into(),
                         summary: String::new(),
@@ -6690,20 +6705,19 @@ impl ScoringRepository for PostgresScoringRepository {
             ))
             .collect::<Vec<_>>();
         labels.extend(labels_from_lead_triage_events(
-            lead_triage_rows
-                .into_iter()
-                .map(
-                    |(audit_id, run_id, payload, evidence_refs)| AuditHistoryEventRecord {
-                        audit_id,
-                        run_id,
-                        event_type: "lead.triaged".into(),
-                        event_status: "succeeded".into(),
-                        summary: String::new(),
-                        payload,
-                        evidence_refs: json_array_to_strings(evidence_refs),
-                        created_at: None,
-                    },
-                ),
+            lead_triage_rows.into_iter().map(
+                |(audit_id, run_id, actor_role, payload, evidence_refs)| AuditHistoryEventRecord {
+                    audit_id,
+                    run_id,
+                    actor_role,
+                    event_type: "lead.triaged".into(),
+                    event_status: "succeeded".into(),
+                    summary: String::new(),
+                    payload,
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                    created_at: None,
+                },
+            ),
         ));
         labels.extend(
             self.list_cases()
@@ -6719,9 +6733,9 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         claim_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
+        let rows: Vec<(String, String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as(
-                "SELECT ae.audit_id, ae.run_id, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
+                "SELECT ae.audit_id, ae.run_id, ae.actor_role, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
                  FROM audit_events ae
                  LEFT JOIN claims c ON c.id = ae.claim_id
                  WHERE payload ->> 'claim_id' = $1 OR c.external_claim_id = $1
@@ -6737,6 +6751,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6746,6 +6761,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )| AuditHistoryEventRecord {
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6767,11 +6783,12 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Value,
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT ae.audit_id, ae.run_id, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
+            "SELECT ae.audit_id, ae.run_id, ae.actor_role, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
              FROM audit_events ae
              LEFT JOIN claims c ON c.id = ae.claim_id
              WHERE ($2::text IS NULL OR ae.event_type = $2)
@@ -6837,6 +6854,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6846,6 +6864,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )| AuditHistoryEventRecord {
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6864,11 +6883,12 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Value,
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+            "SELECT audit_id, run_id, actor_role, event_type, event_status, summary, payload, evidence_refs, created_at
              FROM audit_events
              ORDER BY created_at, audit_id",
         )
@@ -6881,6 +6901,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6893,6 +6914,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         &AuditHistoryEventRecord {
                             audit_id,
                             run_id,
+                            actor_role,
                             event_type,
                             event_status,
                             summary,
@@ -9026,6 +9048,7 @@ fn audit_history_from_persisted(event: &PersistedAuditEvent) -> AuditHistoryEven
     AuditHistoryEventRecord {
         audit_id: event.audit_id.clone(),
         run_id: event.run_id.clone(),
+        actor_role: event.actor_role.clone(),
         event_type: event.event_type.clone(),
         event_status: event.event_status.clone(),
         summary: event.summary.clone(),
@@ -11440,7 +11463,6 @@ async fn insert_pilot_audit_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     claim_id: &str,
     event: &AuditHistoryEventRecord,
-    actor_role: &str,
 ) -> anyhow::Result<()> {
     sqlx::query(
         "INSERT INTO scoring_runs
@@ -11449,7 +11471,7 @@ async fn insert_pilot_audit_event(
          ON CONFLICT (run_id) DO NOTHING",
     )
     .bind(&event.run_id)
-    .bind(actor_role)
+    .bind(&event.actor_role)
     .execute(&mut **tx)
     .await?;
 
@@ -11466,7 +11488,7 @@ async fn insert_pilot_audit_event(
     .bind(&event.audit_id)
     .bind(&event.run_id)
     .bind(claim_id)
-    .bind(actor_role)
+    .bind(&event.actor_role)
     .bind(&event.event_type)
     .bind(&event.event_status)
     .bind(&event.summary)

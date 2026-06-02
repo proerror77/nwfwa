@@ -180,7 +180,7 @@ fn api_call_from_audit_event(
         status_code,
         result: event.event_status.clone(),
         source_system,
-        actor_role: actor_role_for_api_event(&event.event_type).to_string(),
+        actor_role: event.actor_role.clone(),
         customer_scope_id,
         claim_id,
         run_id: event.run_id.clone(),
@@ -199,16 +199,6 @@ fn tpa_endpoint_for_event(event: &AuditHistoryEventRecord) -> Option<(&'static s
         "investigation.result.received" => Some(("POST", "/api/v1/investigations/results")),
         "qa.result.received" => Some(("POST", "/api/v1/qa/results")),
         _ => None,
-    }
-}
-
-fn actor_role_for_api_event(event_type: &str) -> &'static str {
-    match event_type {
-        "inbox.claim.normalized"
-        | "scoring.completed"
-        | "investigation.result.received"
-        | "qa.result.received" => "tpa_system",
-        _ => "unknown",
     }
 }
 

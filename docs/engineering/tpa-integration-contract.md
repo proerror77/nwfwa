@@ -196,10 +196,10 @@ detail levels without collapsing those levels into one amount.
 Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
 validation results, data-quality signals, and a PII-safe `source_paths` summary
-for normalized evidence rows, not the full raw medical or identity payload. API
-call records expose the TPA `actor_role` and the authenticated
-`customer_scope_id` for governance review. Callers cannot provide or override
-the tenant/customer scope in the request body.
+for normalized evidence rows, not the full raw medical or identity payload.
+Audit events expose `actor_role`; API call records reuse that audit role and
+the authenticated `customer_scope_id` for governance review. Callers cannot
+provide or override the tenant/customer scope in the request body.
 
 `calculateRisk = N` is treated only as a source-system hint. It does not bypass
 FWA scoring unless a customer-specific config explicitly permits that behavior.
@@ -506,8 +506,8 @@ Documented errors:
 
 Returns the claim-level audit timeline, including scoring, investigation, QA,
 and governed operations events where applicable. Normalized inbox scoring events
-include `canonical_claim_context_trace` in the event payload. API call records
-expose `actor_role` and `customer_scope_id`; webhook event records expose
+include `canonical_claim_context_trace` in the event payload. Audit and API
+call records expose `actor_role`; API call and webhook event records expose
 `customer_scope_id` from authenticated API key configuration so TPA traffic and
 delivery attempts can be reviewed by role and tenant/customer scope.
 Operations users can call `/api/v1/ops/audit-events?has_canonical_trace=true`

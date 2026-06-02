@@ -1236,6 +1236,7 @@ mod tests {
         let scoring_event = AuditHistoryEventRecord {
             audit_id: "audit_scoring_medical_1".into(),
             run_id: "run_medical_1".into(),
+            actor_role: "tpa_system".into(),
             event_type: "scoring.completed".into(),
             event_status: "succeeded".into(),
             summary: "FWA scoring completed".into(),

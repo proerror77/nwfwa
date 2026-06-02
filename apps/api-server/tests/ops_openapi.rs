@@ -1645,6 +1645,13 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/AuditHistoryEvent"
     );
+    assert!(
+        schema["components"]["schemas"]["AuditHistoryEvent"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "actor_role")
+    );
     assert_eq!(
         schema["paths"]["/api/v1/ops/api-calls"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"]["$ref"],

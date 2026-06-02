@@ -87,6 +87,7 @@ async fn lists_global_audit_events_for_governance_review() {
         .iter()
         .find(|event| event["event_type"] == "routing_policy.candidate.saved")
         .expect("global audit log should include routing policy lifecycle events");
+    assert_eq!(event["actor_role"], "tpa_system");
     assert_eq!(event["payload"]["policy_id"], "audit_visible_policy");
     assert_eq!(event["payload"]["to_status"], "draft");
     assert_eq!(
