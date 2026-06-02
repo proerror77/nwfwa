@@ -182,6 +182,8 @@ grep -q "time_group_split_status" docs/project/api-reference.md
 grep -q "time_group_split_status" docs/engineering/demo-runbook.md
 grep -q "api_key_configuration" docs/project/api-reference.md
 grep -q "api_key_configuration" docs/engineering/pilot-readiness.md
+grep -q "source_system_configuration" docs/project/api-reference.md
+grep -q "source_system_configuration" docs/engineering/pilot-readiness.md
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml

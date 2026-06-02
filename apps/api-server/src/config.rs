@@ -35,6 +35,14 @@ impl AppConfig {
             "configured"
         }
     }
+
+    pub fn source_system_configuration_status(&self) -> &'static str {
+        if self.source_system == "tpa-demo" {
+            "local_demo_source"
+        } else {
+            "configured"
+        }
+    }
 }
 
 impl Default for AppConfig {
