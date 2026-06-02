@@ -566,12 +566,12 @@ async fn load_model_retraining_readiness(
     };
     let outcome_labels = state
         .repository
-        .list_outcome_labels()
+        .list_outcome_labels(None)
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
     let feedback_items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(None)
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
 
@@ -1231,12 +1231,12 @@ async fn load_model_promotion_gates(
         .map_err(internal_error("MODEL_PROMOTION_REVIEW_LOAD_FAILED"))?;
     let outcome_labels = state
         .repository
-        .list_outcome_labels()
+        .list_outcome_labels(None)
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
     let feedback_items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(None)
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     let gates = build_model_promotion_gates(

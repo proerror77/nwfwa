@@ -2165,6 +2165,116 @@ async fn member_profile_summary_is_scoped_to_authenticated_customer() {
 }
 
 #[tokio::test]
+async fn qa_feedback_and_dashboard_are_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-SCOPE-ALPHA-1",
+          "claim_id": "CLM-QA-SCOPE-ALPHA-1",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "medical_necessity_issue",
+          "feedback_target": "rules",
+          "notes": "Alpha QA found missing medical necessity evidence.",
+          "evidence_refs": ["qa_reviews:QA-SCOPE-ALPHA-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, alpha_feedback) = json_request(
+        alpha_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_feedback["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| {
+            item["feedback_id"] == "qa_feedback_QA-SCOPE-ALPHA-1"
+                && item["claim_id"] == "CLM-QA-SCOPE-ALPHA-1"
+        }));
+
+    let (status, beta_feedback) = json_request(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_feedback["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| {
+            item["feedback_id"] == "qa_feedback_QA-SCOPE-ALPHA-1"
+                || item["claim_id"] == "CLM-QA-SCOPE-ALPHA-1"
+        }));
+
+    let (status, beta_update) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-SCOPE-ALPHA-1/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "beta-reviewer",
+          "notes": "Beta reviewer must not update alpha feedback.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-SCOPE-ALPHA-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(beta_update["code"], "QA_FEEDBACK_NOT_FOUND");
+
+    let (status, beta_summary) = json_request(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/queue-summary",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(beta_summary["open_count"], 0);
+    assert_eq!(beta_summary["unresolved_count"], 0);
+
+    let (status, beta_labels) =
+        json_request(beta_app.clone(), "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|label| {
+            label["source_id"] == "QA-SCOPE-ALPHA-1" || label["claim_id"] == "CLM-QA-SCOPE-ALPHA-1"
+        }));
+
+    let (status, beta_dashboard) =
+        json_request(beta_app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(beta_dashboard["qa_reviews"], 0);
+    assert_eq!(beta_dashboard["qa_queue"]["feedback_open_count"], 0);
+    assert_eq!(beta_dashboard["label_pool"]["rule_feedback"], 0);
+}
+
+#[tokio::test]
 async fn pilot_loop_endpoints_require_api_key() {
     for (method, uri, body) in [
         (

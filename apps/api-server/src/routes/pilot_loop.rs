@@ -161,7 +161,7 @@ pub async fn write_investigation_result(
     validate_investigation_result_request(&request)?;
     validate_investigation_case_link(&state, &request, &actor.customer_scope_id).await?;
     merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
-    request.customer_scope_id = Some(actor.customer_scope_id);
+    request.customer_scope_id = Some(actor.customer_scope_id.clone());
     request.actor_id = Some(actor.actor_id);
     request.actor_role = Some(actor.actor_role);
     let claim_id = request.claim_id.clone();
@@ -190,7 +190,7 @@ pub async fn write_qa_result(
     validate_qa_review_request(&request)?;
     request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
     merge_latest_canonical_evidence_refs(&state, &mut request).await?;
-    request.customer_scope_id = Some(actor.customer_scope_id);
+    request.customer_scope_id = Some(actor.customer_scope_id.clone());
     request.actor_id = Some(actor.actor_id);
     request.actor_role = Some(actor.actor_role);
     let claim_id = request.claim_id.clone();
@@ -447,11 +447,11 @@ pub async fn list_qa_feedback_items(
     headers: HeaderMap,
     Query(query): Query<QaFeedbackItemListQuery>,
 ) -> Result<Json<QaFeedbackItemListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_qa_feedback_item_list_query(&query)?;
     let mut items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     if let Some(status) = &query.status {
@@ -526,10 +526,10 @@ pub async fn update_qa_feedback_status(
             format!("QA feedback status evidence_refs must include {required_ref}"),
         ));
     }
-    request.customer_scope_id = Some(actor.customer_scope_id);
+    request.customer_scope_id = Some(actor.customer_scope_id.clone());
     let record = state
         .repository
-        .update_qa_feedback_status(&feedback_id, request)
+        .update_qa_feedback_status(&feedback_id, request, Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_FEEDBACK_STATUS_UPDATE_FAILED"))?
         .ok_or_else(|| {
@@ -579,7 +579,7 @@ pub async fn list_qa_queue(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<QaQueueListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let samples = state
         .repository
         .list_audit_samples()
@@ -587,7 +587,7 @@ pub async fn list_qa_queue(
         .map_err(internal_error("AUDIT_SAMPLE_LIST_FAILED"))?;
     let reviews = state
         .repository
-        .list_qa_reviews()
+        .list_qa_reviews(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_REVIEW_LIST_FAILED"))?;
     let scoring_events = state
@@ -596,6 +596,7 @@ pub async fn list_qa_queue(
             limit: 1_000,
             event_type: Some("scoring.completed".into()),
             has_canonical_trace: Some(true),
+            customer_scope_id: Some(actor.customer_scope_id),
             ..Default::default()
         })
         .await
@@ -610,10 +611,10 @@ pub async fn qa_queue_summary(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<QaQueueSummaryResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     Ok(Json(build_qa_queue_summary(&items)))
@@ -623,10 +624,10 @@ pub async fn list_outcome_labels(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<OutcomeLabelListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let labels = state
         .repository
-        .list_outcome_labels()
+        .list_outcome_labels(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
     Ok(Json(OutcomeLabelListResponse { labels }))

@@ -1517,7 +1517,10 @@ pub trait ScoringRepository: Send + Sync {
         input: CompleteModelRetrainingJobInput<'_>,
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
 
-    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord>;
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord>;
 
     async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord>;
 
@@ -1567,17 +1570,27 @@ pub trait ScoringRepository: Send + Sync {
         record: QaReviewRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord>;
 
-    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
 
     async fn update_qa_feedback_status(
         &self,
         feedback_id: &str,
         input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>>;
 
-    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>>;
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>>;
 
-    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
 
     async fn claim_audit_history(
         &self,
@@ -2349,7 +2362,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             .cloned()
             .collect::<Vec<_>>();
         samples.sort_by(|left, right| left.sample_id.cmp(&right.sample_id));
-        let reviews = self.list_qa_reviews().await?;
+        let reviews = self.list_qa_reviews(None).await?;
         Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
@@ -2562,7 +2575,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(Some(job.clone()))
     }
 
-    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord> {
         let runs = self.runs.lock().await;
         let claims = self.claims.lock().await;
         let pilot_events = self.pilot_audit_events.lock().await;
@@ -2574,7 +2590,40 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut layer_accumulators = BTreeMap::<String, (String, u32, u32, u32)>::new();
         let mut rule_hits = 0_u32;
 
-        for run in runs.iter() {
+        let scoped_runs = runs
+            .iter()
+            .filter(|run| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&run.audit_event, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let scoped_pilot_events = pilot_events
+            .iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let scoped_claim_ids = scoped_runs
+            .iter()
+            .map(|run| run.claim_id.clone())
+            .chain(
+                scoped_pilot_events
+                    .iter()
+                    .map(|(claim_id, _)| claim_id.clone()),
+            )
+            .collect::<BTreeSet<_>>();
+        let scoped_saving_attributions = saving_attribution_records
+            .iter()
+            .filter(|attribution| {
+                customer_scope_id.is_none() || scoped_claim_ids.contains(&attribution.claim_id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for run in scoped_runs.iter() {
             if run.risk_score >= 70 {
                 if let Some(context) = claims.get(&run.claim_id) {
                     risk_amount += context.claim.amount.amount;
@@ -2624,9 +2673,14 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut qa_reviews = 0_u32;
         let mut outcome_labels = Vec::new();
         let mut financial_impacts = Vec::new();
-        let feedback_statuses = latest_qa_feedback_statuses(&pilot_events);
+        let feedback_statuses = latest_qa_feedback_statuses(
+            &scoped_pilot_events
+                .iter()
+                .map(|(claim_id, event)| ((*claim_id).clone(), (*event).clone()))
+                .collect::<Vec<_>>(),
+        );
 
-        for (_, event) in pilot_events.iter() {
+        for (_, event) in scoped_pilot_events.iter() {
             match event.event_type.as_str() {
                 "investigation.result.received" => {
                     investigation_results += 1;
@@ -2668,7 +2722,11 @@ impl ScoringRepository for InMemoryScoringRepository {
         let scoring_audit_runs = runtime_events
             .iter()
             .filter(|event| {
-                event.event_type == "scoring.completed" && event.event_status == "succeeded"
+                event.event_type == "scoring.completed"
+                    && event.event_status == "succeeded"
+                    && customer_scope_id.is_none_or(|scope| {
+                        audit_event_payload_matches_customer_scope(&event.payload, scope)
+                    })
             })
             .count() as u32;
         let canonical_trace_audit_runs = runtime_events
@@ -2676,6 +2734,9 @@ impl ScoringRepository for InMemoryScoringRepository {
             .filter(|event| {
                 event.event_type == "scoring.completed"
                     && event.event_status == "succeeded"
+                    && customer_scope_id.is_none_or(|scope| {
+                        audit_event_payload_matches_customer_scope(&event.payload, scope)
+                    })
                     && event
                         .payload
                         .get("canonical_claim_context_trace")
@@ -2685,10 +2746,12 @@ impl ScoringRepository for InMemoryScoringRepository {
             .count() as u32;
         let audit_coverage =
             summarize_dashboard_audit_coverage(scoring_audit_runs, canonical_trace_audit_runs);
-        for event in runtime_events
-            .iter()
-            .filter(|event| event.event_type == "medical.review.recorded")
-        {
+        for event in runtime_events.iter().filter(|event| {
+            event.event_type == "medical.review.recorded"
+                && customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+        }) {
             let audit_event = AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
@@ -2702,30 +2765,33 @@ impl ScoringRepository for InMemoryScoringRepository {
             };
             outcome_labels.extend(labels_from_medical_review_event(&audit_event));
         }
-        let suspected_claims = runs.iter().filter(|run| run.risk_score >= 70).count() as u32;
-        let saving_attributions = summarize_saving_attributions(&saving_attribution_records);
+        let suspected_claims = scoped_runs
+            .iter()
+            .filter(|run| run.risk_score >= 70)
+            .count() as u32;
+        let saving_attributions = summarize_saving_attributions(&scoped_saving_attributions);
         drop(runtime_events);
         drop(pilot_events);
         drop(claims);
         drop(runs);
 
         let audit_samples = self.list_audit_samples().await?;
-        let qa_review_records = self.list_qa_reviews().await?;
-        let qa_feedback_items = self.list_qa_feedback_items().await?;
-        let cases = self.list_cases(None).await?;
-        let agent_runs = self.list_agent_runs(None).await?;
+        let qa_review_records = self.list_qa_reviews(customer_scope_id).await?;
+        let qa_feedback_items = self.list_qa_feedback_items(customer_scope_id).await?;
+        let cases = self.list_cases(customer_scope_id).await?;
+        let agent_runs = self.list_agent_runs(customer_scope_id).await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
         let rules = self.list_rules().await?;
         let rule_performance = self.rule_performance().await?;
-        let leads = self.list_leads(None).await?;
+        let leads = self.list_leads(customer_scope_id).await?;
         let scheme_distribution = leads
             .iter()
             .fold(BTreeMap::new(), |mut distribution, lead| {
                 *distribution.entry(lead.scheme_family.clone()).or_insert(0) += 1;
                 distribution
             });
-        let saving_segments = summarize_saving_segments(&saving_attribution_records, &leads);
+        let saving_segments = summarize_saving_segments(&scoped_saving_attributions, &leads);
         let false_positive_count = rule_performance
             .iter()
             .map(|record| record.false_positive_count)
@@ -3054,10 +3120,21 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(event)
     }
 
-    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
         let events = self.pilot_audit_events.lock().await.clone();
-        let feedback_statuses = latest_qa_feedback_statuses(&events);
-        let mut items = events
+        let scoped_events = events
+            .into_iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let feedback_statuses = latest_qa_feedback_statuses(&scoped_events);
+        let mut items = scoped_events
             .iter()
             .filter_map(|(_, event)| {
                 (event.event_type == "qa.result.received")
@@ -3082,9 +3159,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         &self,
         feedback_id: &str,
         input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
         let Some(mut item) = self
-            .list_qa_feedback_items()
+            .list_qa_feedback_items(customer_scope_id)
             .await?
             .into_iter()
             .find(|item| item.feedback_id == feedback_id)
@@ -3129,12 +3207,20 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(Some(UpdateQaFeedbackStatusRecord { item, audit_id }))
     }
 
-    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>> {
         let mut reviews = self
             .pilot_audit_events
             .lock()
             .await
             .iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
             .filter_map(|(_, event)| {
                 (event.event_type == "qa.result.received")
                     .then(|| serde_json::from_value::<QaReviewRecord>(event.payload.clone()).ok())
@@ -3149,10 +3235,21 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(reviews)
     }
 
-    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
         let events = self.pilot_audit_events.lock().await.clone();
-        let feedback_statuses = latest_qa_feedback_statuses(&events);
-        let mut labels = events
+        let scoped_events = events
+            .into_iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let feedback_statuses = latest_qa_feedback_statuses(&scoped_events);
+        let mut labels = scoped_events
             .iter()
             .filter_map(|(_, event)| match event.event_type.as_str() {
                 "investigation.result.received" => {
@@ -3182,7 +3279,12 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .lock()
                 .await
                 .iter()
-                .filter(|event| event.event_type == "medical.review.recorded")
+                .filter(|event| {
+                    event.event_type == "medical.review.recorded"
+                        && customer_scope_id.is_none_or(|scope| {
+                            audit_event_payload_matches_customer_scope(&event.payload, scope)
+                        })
+                })
                 .flat_map(|event| {
                     labels_from_medical_review_event(&AuditHistoryEventRecord {
                         audit_id: event.audit_id.clone(),
@@ -3202,12 +3304,18 @@ impl ScoringRepository for InMemoryScoringRepository {
             .lock()
             .await
             .iter()
-            .filter(|event| event.event_type == "lead.triaged" && event.event_status == "succeeded")
+            .filter(|event| {
+                event.event_type == "lead.triaged"
+                    && event.event_status == "succeeded"
+                    && customer_scope_id.is_none_or(|scope| {
+                        audit_event_payload_matches_customer_scope(&event.payload, scope)
+                    })
+            })
             .map(audit_history_from_persisted)
             .collect::<Vec<_>>();
         labels.extend(labels_from_lead_triage_events(lead_triage_events));
         labels.extend(
-            self.list_cases(None)
+            self.list_cases(customer_scope_id)
                 .await?
                 .into_iter()
                 .flat_map(labels_from_case_status),
@@ -5067,7 +5175,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect::<Vec<_>>();
-        let reviews = self.list_qa_reviews().await?;
+        let reviews = self.list_qa_reviews(None).await?;
         Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
@@ -5528,40 +5636,80 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(row.map(model_retraining_job_from_pg_row))
     }
 
-    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord> {
         let suspected: (i64, Option<Decimal>) = sqlx::query_as(
             "SELECT COUNT(*)::bigint, COALESCE(SUM(c.claim_amount), 0)
              FROM scoring_runs sr
              LEFT JOIN claims c ON c.id = sr.claim_id
-             WHERE sr.risk_score >= 70",
+             WHERE sr.risk_score >= 70
+               AND ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))",
         )
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
 
         let rag_rows: Vec<(String, i64)> = sqlx::query_as(
             "SELECT COALESCE(rag, 'UNKNOWN'), COUNT(*)::bigint
-             FROM scoring_runs
+             FROM scoring_runs sr
              WHERE rag IS NOT NULL
+               AND ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))
              GROUP BY rag
              ORDER BY rag",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
-        let rule_hits: (i64,) =
-            sqlx::query_as("SELECT COUNT(*)::bigint FROM rule_runs WHERE matched = true")
-                .fetch_one(&self.pool)
-                .await?;
+        let rule_hits: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint
+             FROM rule_runs rr
+             JOIN scoring_runs sr ON sr.run_id = rr.run_id
+             WHERE rr.matched = true
+               AND ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))",
+        )
+        .bind(customer_scope_id)
+        .fetch_one(&self.pool)
+        .await?;
 
         let model_rows: Vec<(String, i64, Option<Decimal>, Option<i64>)> = sqlx::query_as(
             "SELECT model_key,
                     COUNT(*)::bigint,
                     AVG(score),
                     SUM(CASE WHEN score >= 70 THEN 1 ELSE 0 END)::bigint
-             FROM model_scores
+             FROM model_scores ms
+             JOIN scoring_runs sr ON sr.run_id = ms.run_id
+             WHERE ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))
              GROUP BY model_key
              ORDER BY model_key",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -5569,8 +5717,10 @@ impl ScoringRepository for PostgresScoringRepository {
             "SELECT payload
              FROM audit_events
              WHERE event_type = 'scoring.completed'
-               AND event_status = 'succeeded'",
+               AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
         let audit_coverage_row: (i64, Option<i64>) = sqlx::query_as(
@@ -5584,8 +5734,10 @@ impl ScoringRepository for PostgresScoringRepository {
                     )::bigint
              FROM audit_events
              WHERE event_type = 'scoring.completed'
-               AND event_status = 'succeeded'",
+               AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)",
         )
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
         let audit_coverage = summarize_dashboard_audit_coverage(
@@ -5620,30 +5772,65 @@ impl ScoringRepository for PostgresScoringRepository {
             "SELECT COUNT(*)::bigint,
                     COALESCE(SUM(CASE WHEN confirmed_fwa THEN 1 ELSE 0 END), 0)::bigint,
                     COALESCE(SUM(saving_amount), 0)
-             FROM investigation_results",
+             FROM investigation_results ir
+             WHERE ($1::text IS NULL OR EXISTS (
+               SELECT 1 FROM audit_events ae
+               WHERE ae.event_type = 'investigation.result.received'
+                 AND ae.event_status = 'succeeded'
+                 AND ae.payload ->> 'investigation_id' = ir.investigation_id
+                 AND ae.payload ->> 'customer_scope_id' = $1
+             ))",
         )
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
 
-        let qa_reviews: (i64,) = sqlx::query_as("SELECT COUNT(*)::bigint FROM qa_reviews")
-            .fetch_one(&self.pool)
-            .await?;
+        let qa_reviews: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint
+             FROM qa_reviews qr
+             WHERE ($1::text IS NULL OR EXISTS (
+               SELECT 1 FROM audit_events ae
+               WHERE ae.event_type = 'qa.result.received'
+                 AND ae.event_status = 'succeeded'
+                 AND ae.payload ->> 'qa_case_id' = qr.qa_case_id
+                 AND ae.payload ->> 'customer_scope_id' = $1
+             ))",
+        )
+        .bind(customer_scope_id)
+        .fetch_one(&self.pool)
+        .await?;
 
         let scheme_rows: Vec<(String, i64)> = sqlx::query_as(
             "SELECT scheme_family, COUNT(*)::bigint
-             FROM fwa_leads
+             FROM fwa_leads l
+             WHERE ($1::text IS NULL OR EXISTS (
+               SELECT 1 FROM audit_events ae
+               WHERE ae.run_id = l.run_id
+                 AND ae.event_type = 'scoring.completed'
+                 AND ae.event_status = 'succeeded'
+                 AND ae.payload ->> 'customer_scope_id' = $1
+             ))
              GROUP BY scheme_family
              ORDER BY scheme_family",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
         let financial_impact_rows: Vec<(bool, Option<String>, Option<Decimal>, Option<String>)> =
             sqlx::query_as(
                 "SELECT confirmed_fwa, financial_impact_type, saving_amount, currency
-                 FROM investigation_results
+                 FROM investigation_results ir
+                 WHERE ($1::text IS NULL OR EXISTS (
+                   SELECT 1 FROM audit_events ae
+                   WHERE ae.event_type = 'investigation.result.received'
+                     AND ae.event_status = 'succeeded'
+                     AND ae.payload ->> 'investigation_id' = ir.investigation_id
+                     AND ae.payload ->> 'customer_scope_id' = $1
+                 ))
                  ORDER BY created_at, investigation_id",
             )
+            .bind(customer_scope_id)
             .fetch_all(&self.pool)
             .await?;
         let financial_impacts = financial_impact_rows
@@ -5680,9 +5867,17 @@ impl ScoringRepository for PostgresScoringRepository {
                         ARRAY_REMOVE(ARRAY_AGG(DISTINCT ref.value ORDER BY ref.value), NULL)
                  FROM saving_attributions s
                  LEFT JOIN LATERAL jsonb_array_elements_text(s.evidence_refs) AS ref(value) ON TRUE
+                 WHERE ($1::text IS NULL OR EXISTS (
+                   SELECT 1 FROM audit_events ae
+                   WHERE ae.event_type = 'investigation.result.received'
+                     AND ae.event_status = 'succeeded'
+                     AND ae.payload ->> 'investigation_id' = s.investigation_id
+                     AND ae.payload ->> 'customer_scope_id' = $1
+                 ))
                  GROUP BY source_type, source_id, financial_impact_type, action, currency
                  ORDER BY source_type, source_id, financial_impact_type, action, currency",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
         let saving_segments: Vec<(String, String, Option<Decimal>, String, i64, i64)> =
@@ -5701,6 +5896,13 @@ impl ScoringRepository for PostgresScoringRepository {
                           s.claim_id
                    FROM saving_attributions s
                    LEFT JOIN fwa_leads l ON l.claim_id = s.claim_id
+                   WHERE ($1::text IS NULL OR EXISTS (
+                     SELECT 1 FROM audit_events ae
+                     WHERE ae.event_type = 'investigation.result.received'
+                       AND ae.event_status = 'succeeded'
+                       AND ae.payload ->> 'investigation_id' = s.investigation_id
+                       AND ae.payload ->> 'customer_scope_id' = $1
+                   ))
                    UNION ALL
                    SELECT 'scheme'::text AS segment_type,
                           COALESCE(l.scheme_family, 'unknown') AS segment_id,
@@ -5709,6 +5911,13 @@ impl ScoringRepository for PostgresScoringRepository {
                           s.claim_id
                    FROM saving_attributions s
                    LEFT JOIN fwa_leads l ON l.claim_id = s.claim_id
+                   WHERE ($1::text IS NULL OR EXISTS (
+                     SELECT 1 FROM audit_events ae
+                     WHERE ae.event_type = 'investigation.result.received'
+                       AND ae.event_status = 'succeeded'
+                       AND ae.payload ->> 'investigation_id' = s.investigation_id
+                       AND ae.payload ->> 'customer_scope_id' = $1
+                   ))
                    UNION ALL
                    SELECT 'campaign'::text AS segment_type,
                           COALESCE(NULLIF(regexp_replace(ref.value, '^campaigns?:', ''), ''), 'unknown') AS segment_id,
@@ -5717,19 +5926,27 @@ impl ScoringRepository for PostgresScoringRepository {
                           s.claim_id
                    FROM saving_attributions s
                    CROSS JOIN LATERAL jsonb_array_elements_text(s.evidence_refs) AS ref(value)
-                   WHERE ref.value LIKE 'campaign:%'
-                      OR ref.value LIKE 'campaigns:%'
+                   WHERE (ref.value LIKE 'campaign:%'
+                      OR ref.value LIKE 'campaigns:%')
+                     AND ($1::text IS NULL OR EXISTS (
+                       SELECT 1 FROM audit_events ae
+                       WHERE ae.event_type = 'investigation.result.received'
+                         AND ae.event_status = 'succeeded'
+                         AND ae.payload ->> 'investigation_id' = s.investigation_id
+                         AND ae.payload ->> 'customer_scope_id' = $1
+                     ))
                  ) segments
                  GROUP BY segment_type, segment_id, currency
                  ORDER BY segment_type, segment_id, currency",
             )
+            .bind(customer_scope_id)
             .fetch_all(&self.pool)
             .await?;
-        let outcome_labels = self.list_outcome_labels().await?;
+        let outcome_labels = self.list_outcome_labels(customer_scope_id).await?;
         let audit_samples = self.list_audit_samples().await?;
-        let qa_review_records = self.list_qa_reviews().await?;
-        let qa_feedback_items = self.list_qa_feedback_items().await?;
-        let agent_runs = self.list_agent_runs(None).await?;
+        let qa_review_records = self.list_qa_reviews(customer_scope_id).await?;
+        let qa_feedback_items = self.list_qa_feedback_items(customer_scope_id).await?;
+        let agent_runs = self.list_agent_runs(customer_scope_id).await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
         let rules = self.list_rules().await?;
@@ -5853,7 +6070,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 &qa_review_records,
                 &qa_feedback_items,
             ),
-            case_sla: summarize_dashboard_case_sla(&self.list_cases(None).await?),
+            case_sla: summarize_dashboard_case_sla(&self.list_cases(customer_scope_id).await?),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
             rule_governance: summarize_dashboard_rule_governance(&rules, &rule_performance),
@@ -6557,11 +6774,31 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(event)
     }
 
-    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+        let allowed_qa_case_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("qa.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| event.payload["qa_case_id"].as_str().map(str::to_string))
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
         let mut status_events = self
             .list_audit_events(AuditEventListFilter {
                 limit: 10_000,
                 event_type: Some("qa.feedback.status.updated".into()),
+                customer_scope_id: customer_scope_id.map(str::to_string),
                 ..Default::default()
             })
             .await?;
@@ -6600,6 +6837,11 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
         let mut items = rows
             .into_iter()
+            .filter(|(qa_case_id, _, _, _, _, _, _, _, _)| {
+                allowed_qa_case_ids
+                    .as_ref()
+                    .is_none_or(|ids| ids.contains(qa_case_id))
+            })
             .map(
                 |(
                     qa_case_id,
@@ -6642,10 +6884,28 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         feedback_id: &str,
         input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
         let Some(qa_case_id) = qa_case_id_from_feedback_id(feedback_id) else {
             return Ok(None);
         };
+        if let Some(scope) = customer_scope_id {
+            let is_in_scope = self
+                .list_audit_events(AuditEventListFilter {
+                    limit: 1,
+                    event_type: Some("qa.result.received".into()),
+                    qa_case_id: Some(qa_case_id.into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .next()
+                .is_some();
+            if !is_in_scope {
+                return Ok(None);
+            }
+        }
         let mut tx = self.pool.begin().await?;
         let row: Option<(
             String,
@@ -6755,7 +7015,26 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(Some(UpdateQaFeedbackStatusRecord { item, audit_id }))
     }
 
-    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>> {
+        let allowed_qa_case_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("qa.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| event.payload["qa_case_id"].as_str().map(str::to_string))
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
         let rows: Vec<(String, String, String, String, String, String, Value)> = sqlx::query_as(
             "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs
              FROM qa_reviews
@@ -6765,6 +7044,11 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
         Ok(rows
             .into_iter()
+            .filter(|(qa_case_id, _, _, _, _, _, _)| {
+                allowed_qa_case_ids
+                    .as_ref()
+                    .is_none_or(|ids| ids.contains(qa_case_id))
+            })
             .map(
                 |(
                     qa_case_id,
@@ -6793,7 +7077,46 @@ impl ScoringRepository for PostgresScoringRepository {
             .collect())
     }
 
-    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+        let allowed_investigation_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("investigation.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| {
+                    event.payload["investigation_id"]
+                        .as_str()
+                        .map(str::to_string)
+                })
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
+        let allowed_qa_case_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("qa.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| event.payload["qa_case_id"].as_str().map(str::to_string))
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
         let investigation_rows: Vec<(
             String,
             String,
@@ -6824,8 +7147,10 @@ impl ScoringRepository for PostgresScoringRepository {
              FROM audit_events
              WHERE event_type = 'medical.review.recorded'
                AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)
              ORDER BY created_at, audit_id",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
         let lead_triage_rows: Vec<(String, String, String, Value, Value)> = sqlx::query_as(
@@ -6833,13 +7158,20 @@ impl ScoringRepository for PostgresScoringRepository {
              FROM audit_events
              WHERE event_type = 'lead.triaged'
                AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)
              ORDER BY created_at, audit_id",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
         let mut labels = investigation_rows
             .into_iter()
+            .filter(|(investigation_id, _, _, _, _, _, _, _, _)| {
+                allowed_investigation_ids
+                    .as_ref()
+                    .is_none_or(|ids| ids.contains(investigation_id))
+            })
             .flat_map(
                 |(
                     investigation_id,
@@ -6869,34 +7201,43 @@ impl ScoringRepository for PostgresScoringRepository {
                     })
                 },
             )
-            .chain(qa_rows.into_iter().map(
-                |(
-                    qa_case_id,
-                    claim_id,
-                    qa_conclusion,
-                    issue_type,
-                    feedback_target,
-                    feedback_status,
-                    notes,
-                    evidence_refs,
-                )| {
-                    label_from_qa_review(
-                        QaReviewRecord {
+            .chain(
+                qa_rows
+                    .into_iter()
+                    .filter(|(qa_case_id, _, _, _, _, _, _, _)| {
+                        allowed_qa_case_ids
+                            .as_ref()
+                            .is_none_or(|ids| ids.contains(qa_case_id))
+                    })
+                    .map(
+                        |(
                             qa_case_id,
                             claim_id,
                             qa_conclusion,
                             issue_type,
                             feedback_target,
+                            feedback_status,
                             notes,
-                            evidence_refs: json_array_to_strings(evidence_refs),
-                            customer_scope_id: None,
-                            actor_id: None,
-                            actor_role: None,
+                            evidence_refs,
+                        )| {
+                            label_from_qa_review(
+                                QaReviewRecord {
+                                    qa_case_id,
+                                    claim_id,
+                                    qa_conclusion,
+                                    issue_type,
+                                    feedback_target,
+                                    notes,
+                                    evidence_refs: json_array_to_strings(evidence_refs),
+                                    customer_scope_id: None,
+                                    actor_id: None,
+                                    actor_role: None,
+                                },
+                                &feedback_status,
+                            )
                         },
-                        &feedback_status,
-                    )
-                },
-            ))
+                    ),
+            )
             .chain(medical_review_rows.into_iter().flat_map(
                 |(audit_id, actor_role, payload, evidence_refs)| {
                     labels_from_medical_review_event(&AuditHistoryEventRecord {
