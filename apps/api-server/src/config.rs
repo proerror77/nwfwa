@@ -43,6 +43,14 @@ impl AppConfig {
             "configured"
         }
     }
+
+    pub fn database_configuration_status(&self) -> &'static str {
+        if self.database_url == "postgres://postgres:postgres@localhost:5432/fwa" {
+            "local_dev_database"
+        } else {
+            "configured"
+        }
+    }
 }
 
 impl Default for AppConfig {

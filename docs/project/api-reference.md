@@ -33,12 +33,14 @@ dev-secret
 | GET | `/api/v1/health` | Return API health status. | No | None |
 | GET | `/api/openapi.json` | Return OpenAPI contract. | No | None |
 
-`/api/v1/health` includes `api_key_configuration` and
-`source_system_configuration` checks. They report `local_dev_key` when the API
-is still using the local `dev-secret` key, `local_demo_source` when the API is
-still using the local `tpa-demo` source system, and `configured` after
-non-default values are configured. The response never exposes the configured
-key or source-system value.
+`/api/v1/health` includes `api_key_configuration`,
+`source_system_configuration`, and `database_configuration` checks. They report
+`local_dev_key` when the API is still using the local `dev-secret` key,
+`local_demo_source` when the API is still using the local `tpa-demo` source
+system, `local_dev_database` when the API is still using the local development
+database URL, and `configured` after non-default values are configured. The
+response never exposes the configured key, source-system value, or database
+URL.
 
 ## Inbound Claim Inbox
 

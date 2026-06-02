@@ -3446,8 +3446,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "name": { "type": "string" },
                         "status": {
                             "type": "string",
-                            "enum": ["ok", "configured", "local_dev_key", "local_demo_source"],
-                            "description": "Check status. local_dev_key indicates the API is using the local development key. local_demo_source indicates the API is using the local demo source system. Both must be reconfigured before customer pilot or production use."
+                            "enum": ["ok", "configured", "local_dev_key", "local_demo_source", "local_dev_database"],
+                            "description": "Check status. local_dev_key indicates the API is using the local development key. local_demo_source indicates the API is using the local demo source system. local_dev_database indicates the API is using the local development database URL. These must be reconfigured before customer pilot or production use."
                         },
                         "runtime_kind": {
                             "type": "string",

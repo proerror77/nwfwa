@@ -126,7 +126,13 @@ async fn openapi_includes_operations_paths() {
     );
     assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["enum"],
-        serde_json::json!(["ok", "configured", "local_dev_key", "local_demo_source"])
+        serde_json::json!([
+            "ok",
+            "configured",
+            "local_dev_key",
+            "local_demo_source",
+            "local_dev_database"
+        ])
     );
     assert!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
@@ -141,6 +147,13 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("local_demo_source"),
         "missing health status source-system readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_dev_database"),
+        "missing health status database-readiness description"
     );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());

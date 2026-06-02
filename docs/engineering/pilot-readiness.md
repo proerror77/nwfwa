@@ -63,6 +63,8 @@ Minimum pilot monitoring:
 - Source-system readiness: `/api/v1/health` check
   `source_system_configuration` must be `configured`, not
   `local_demo_source`, before customer pilot traffic.
+- Database readiness: `/api/v1/health` check `database_configuration` must be
+  `configured`, not `local_dev_database`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
