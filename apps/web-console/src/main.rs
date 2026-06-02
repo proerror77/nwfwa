@@ -332,6 +332,82 @@ struct ModelOpsSnapshot {
     retraining: ModelRetrainingReadiness,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct QaQueueListResponse {
+    items: Vec<QaQueueItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct QaQueueItem {
+    qa_case_id: String,
+    sample_id: String,
+    lead_id: String,
+    claim_id: String,
+    scheme_family: String,
+    rag: String,
+    risk_score: u8,
+    reviewer: String,
+    assignment_queue: String,
+    status: String,
+    qa_conclusion: Option<String>,
+    issue_type: Option<String>,
+    feedback_target: Option<String>,
+    evidence_refs: Vec<String>,
+    canonical_source_refs: Vec<String>,
+    canonical_evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct QaQueueSummary {
+    open_count: u32,
+    in_progress_count: u32,
+    resolved_count: u32,
+    dismissed_count: u32,
+    unresolved_count: u32,
+    rules_feedback_count: u32,
+    models_feedback_count: u32,
+    features_feedback_count: u32,
+    provider_profile_feedback_count: u32,
+    workflow_feedback_count: u32,
+    tpa_feedback_count: u32,
+    high_priority_count: u32,
+    evidence_backed_count: u32,
+    highest_priority: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct QaFeedbackItemListResponse {
+    items: Vec<QaFeedbackItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct QaFeedbackItem {
+    feedback_id: String,
+    qa_case_id: String,
+    claim_id: String,
+    feedback_target: String,
+    issue_type: String,
+    qa_conclusion: String,
+    source: String,
+    status: String,
+    priority: String,
+    summary: String,
+    note_present: bool,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+    status_updated_by: Option<String>,
+    status_audit_id: Option<String>,
+    status_updated_at: Option<String>,
+    status_evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct QaReviewSnapshot {
+    queue: Vec<QaQueueItem>,
+    summary: QaQueueSummary,
+    feedback_items: Vec<QaFeedbackItem>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum ApiState<T> {
     Idle,
@@ -369,6 +445,8 @@ fn app() -> Html {
                     <ModelsPage />
                 } else if *active == "Factor Factory" {
                     <FactorFactoryPage />
+                } else if *active == "QA Review" {
+                    <QaReviewPage />
                 } else {
                     <ModuleStatusPage title={(*active).clone()} />
                 }
@@ -729,6 +807,183 @@ fn factor_readiness_view(props: &FactorReadinessProps) -> Html {
     }
 }
 
+#[function_component(QaReviewPage)]
+fn qa_review_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let snapshot_state = use_state(|| ApiState::<QaReviewSnapshot>::Idle);
+
+    let load_qa_review = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(match get_qa_review_snapshot(api_key).await {
+                    Ok(snapshot) => ApiState::Ready(snapshot),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_qa_review = load_qa_review.clone();
+        Callback::from(move |_| load_qa_review.emit(()))
+    };
+
+    {
+        let load_qa_review = load_qa_review.clone();
+        use_effect_with((), move |_| {
+            load_qa_review.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"QA Review"}</h2>
+                    <p>{"Inspect sampled QA cases, unresolved feedback, evidence coverage, and closure signals before routing changes or model promotion."}</p>
+                </div>
+                <span class="status-pill">{"QA Feedback Loop"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"QA Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh QA review" }}
+                    </button>
+                </div>
+            </section>
+
+            <QaReviewView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct QaReviewProps {
+    state: ApiState<QaReviewSnapshot>,
+}
+
+#[function_component(QaReviewView)]
+fn qa_review_view(props: &QaReviewProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load QA review to inspect queue and feedback closure."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading QA review..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"QA Queue Summary"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Open"}</span><strong>{snapshot.summary.open_count}</strong></div>
+                                <div><span>{"Unresolved"}</span><strong>{snapshot.summary.unresolved_count}</strong></div>
+                                <div><span>{"Highest Priority"}</span><strong>{&snapshot.summary.highest_priority}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"In Progress"}</span><strong>{snapshot.summary.in_progress_count}</strong></div>
+                                <div><span>{"Resolved"}</span><strong>{snapshot.summary.resolved_count}</strong></div>
+                                <div><span>{"Dismissed"}</span><strong>{snapshot.summary.dismissed_count}</strong></div>
+                                <div><span>{"High Priority"}</span><strong>{snapshot.summary.high_priority_count}</strong></div>
+                                <div><span>{"Evidence Backed"}</span><strong>{snapshot.summary.evidence_backed_count}</strong></div>
+                                <div><span>{"Queue Items"}</span><strong>{snapshot.queue.len()}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Rules Feedback"}</span><strong>{snapshot.summary.rules_feedback_count}</strong></div>
+                                <div><span>{"Models Feedback"}</span><strong>{snapshot.summary.models_feedback_count}</strong></div>
+                                <div><span>{"Features Feedback"}</span><strong>{snapshot.summary.features_feedback_count}</strong></div>
+                                <div><span>{"Provider Feedback"}</span><strong>{snapshot.summary.provider_profile_feedback_count}</strong></div>
+                                <div><span>{"Workflow Feedback"}</span><strong>{snapshot.summary.workflow_feedback_count}</strong></div>
+                                <div><span>{"TPA Feedback"}</span><strong>{snapshot.summary.tpa_feedback_count}</strong></div>
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Review Findings"}</h3>
+                            if snapshot.queue.is_empty() {
+                                <p class="empty">{"No sampled QA cases in the queue."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.queue.iter().take(8).map(|item| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} / {}", item.qa_case_id, item.claim_id)}</strong>
+                                                <span>{format!("{} / {} / {}", item.scheme_family, item.rag, item.assignment_queue)}</span>
+                                            </div>
+                                            <div class="summary-grid">
+                                                <div><span>{"Risk Score"}</span><strong>{item.risk_score}</strong></div>
+                                                <div><span>{"Status"}</span><strong>{&item.status}</strong></div>
+                                                <div><span>{"Reviewer"}</span><strong>{&item.reviewer}</strong></div>
+                                                <div><span>{"Conclusion"}</span><strong>{item.qa_conclusion.as_deref().unwrap_or("pending")}</strong></div>
+                                                <div><span>{"Issue"}</span><strong>{item.issue_type.as_deref().unwrap_or("pending")}</strong></div>
+                                                <div><span>{"Feedback"}</span><strong>{item.feedback_target.as_deref().unwrap_or("none")}</strong></div>
+                                            </div>
+                                            <small>{format!("sample: {} / lead: {}", item.sample_id, item.lead_id)}</small>
+                                            <small>{format!("evidence: {}", refs_label(&item.evidence_refs))}</small>
+                                            <small>{format!("canonical: {} / {}", refs_label(&item.canonical_source_refs), refs_label(&item.canonical_evidence_refs))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Feedback Closure"}</h3>
+                            if snapshot.feedback_items.is_empty() {
+                                <p class="empty">{"No QA feedback items returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.feedback_items.iter().take(8).map(|item| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} / {}", item.feedback_id, item.feedback_target)}</strong>
+                                                <span>{format!("{} / {} / {}", item.priority, item.status, item.source)}</span>
+                                            </div>
+                                            <p>{&item.summary}</p>
+                                            <div class="summary-grid">
+                                                <div><span>{"Claim"}</span><strong>{&item.claim_id}</strong></div>
+                                                <div><span>{"QA Case"}</span><strong>{&item.qa_case_id}</strong></div>
+                                                <div><span>{"Issue"}</span><strong>{&item.issue_type}</strong></div>
+                                                <div><span>{"Conclusion"}</span><strong>{&item.qa_conclusion}</strong></div>
+                                                <div><span>{"Notes"}</span><strong>{yes_no(item.note_present)}</strong></div>
+                                                <div><span>{"Updated By"}</span><strong>{item.status_updated_by.as_deref().unwrap_or("pending")}</strong></div>
+                                            </div>
+                                            <small>{format!("created: {} / updated: {}", item.created_at.as_deref().unwrap_or("unknown"), item.status_updated_at.as_deref().unwrap_or("pending"))}</small>
+                                            <small>{format!("status audit: {}", item.status_audit_id.as_deref().unwrap_or("pending"))}</small>
+                                            <small>{format!("evidence: {} / status evidence: {}", refs_label(&item.evidence_refs), refs_label(&item.status_evidence_refs))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
 #[derive(Properties, PartialEq)]
 struct ModuleStatusProps {
     title: String,
@@ -1065,6 +1320,23 @@ async fn get_model_ops_snapshot(
 
 async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse, String> {
     request_get_json("/api/v1/ops/factors/readiness", api_key).await
+}
+
+async fn get_qa_review_snapshot(api_key: String) -> Result<QaReviewSnapshot, String> {
+    let queue = request_get_json::<QaQueueListResponse>("/api/v1/ops/qa/queue", api_key.clone())
+        .await?
+        .items;
+    let summary =
+        request_get_json::<QaQueueSummary>("/api/v1/ops/qa/queue-summary", api_key.clone()).await?;
+    let feedback_items =
+        request_get_json::<QaFeedbackItemListResponse>("/api/v1/ops/qa/feedback-items", api_key)
+            .await?
+            .items;
+    Ok(QaReviewSnapshot {
+        queue,
+        summary,
+        feedback_items,
+    })
 }
 
 async fn request_json<T>(path: &str, api_key: String, payload: Value) -> Result<T, String>
@@ -1406,6 +1678,14 @@ fn issue_counts_label(counts: &Map<String, Value>) -> String {
         .map(|(key, value)| format!("{key}={}", display_value(value)))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn refs_label(refs: &[String]) -> String {
+    if refs.is_empty() {
+        "none".into()
+    } else {
+        refs.join(", ")
+    }
 }
 
 fn yes_no(value: bool) -> &'static str {
