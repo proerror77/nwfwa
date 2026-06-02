@@ -111,7 +111,8 @@ async fn record_audit_sample_created(
                 "sample_size": sample.sample_size,
                 "reviewer": sample.reviewer,
                 "assignment_queue": sample.assignment_queue,
-                "selected_lead_count": sample.selected_leads.len()
+                "selected_lead_count": sample.selected_leads.len(),
+                "outcome_distribution": sample.outcome_distribution
             }),
             evidence_refs: vec![serde_json::Value::String(format!(
                 "audit_samples:{}",

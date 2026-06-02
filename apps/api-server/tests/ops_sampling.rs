@@ -270,6 +270,25 @@ async fn creates_audit_sample_from_ranked_leads() {
     assert_eq!(sample["outcome_distribution"]["open_count"], 1);
 
     let sample_id = sample["sample_id"].as_str().unwrap();
+    let (status, audit_events) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?event_type=audit_sample.created&limit=1",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let created_event = &audit_events["events"][0];
+    assert_eq!(created_event["payload"]["sample_id"], sample["sample_id"]);
+    assert_eq!(
+        created_event["payload"]["outcome_distribution"]["selected_count"],
+        1
+    );
+    assert_eq!(
+        created_event["payload"]["outcome_distribution"]["open_count"],
+        1
+    );
+
     let lead_id = sample["selected_leads"][0]["lead_id"].as_str().unwrap();
     let qa_case_id = format!("qa_{sample_id}_{lead_id}");
     let claim_id = sample["selected_leads"][0]["claim_id"].as_str().unwrap();
