@@ -11,6 +11,7 @@ pub enum AuthError {
 pub struct ApiKeyConfig {
     pub key: String,
     pub source_system: String,
+    pub customer_scope_id: String,
 }
 
 pub fn validate_api_key(
@@ -22,6 +23,7 @@ pub fn validate_api_key(
             actor_id: config.source_system.clone(),
             actor_role: "tpa_system".into(),
             source_system: config.source_system.clone(),
+            customer_scope_id: config.customer_scope_id.clone(),
         }),
         _ => Err(AuthError::InvalidApiKey),
     }
@@ -36,9 +38,11 @@ mod tests {
         let config = ApiKeyConfig {
             key: "secret".into(),
             source_system: "tpa-demo".into(),
+            customer_scope_id: "customer-alpha".into(),
         };
         let actor = validate_api_key(Some("secret"), &config).unwrap();
         assert_eq!(actor.source_system, "tpa-demo");
+        assert_eq!(actor.customer_scope_id, "customer-alpha");
     }
 
     #[test]
@@ -46,6 +50,7 @@ mod tests {
         let config = ApiKeyConfig {
             key: "secret".into(),
             source_system: "tpa-demo".into(),
+            customer_scope_id: "customer-alpha".into(),
         };
         assert_eq!(
             validate_api_key(Some("wrong"), &config).unwrap_err(),

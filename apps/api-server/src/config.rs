@@ -1,3 +1,5 @@
+use fwa_auth::ApiKeyConfig;
+
 #[derive(Debug, Clone)]
 pub struct AppConfig {
     pub api_key: String,
@@ -171,6 +173,14 @@ impl AppConfig {
             "local_demo_agent_policy"
         } else {
             "configured"
+        }
+    }
+
+    pub fn api_key_config(&self) -> ApiKeyConfig {
+        ApiKeyConfig {
+            key: self.api_key.clone(),
+            source_system: self.source_system.clone(),
+            customer_scope_id: self.customer_scope_id.clone(),
         }
     }
 }

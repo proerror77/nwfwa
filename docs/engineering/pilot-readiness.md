@@ -79,6 +79,9 @@ Minimum pilot monitoring:
 - Customer scope readiness: `/api/v1/health` check
   `customer_scope_configuration` must be `configured`, not
   `local_demo_customer_scope`, before customer pilot traffic.
+  The customer scope is derived from the authenticated API key configuration,
+  not from caller-supplied claim payloads, and scoring audit payloads include
+  `customer_scope_id` for tenant/customer traceability.
 - Retention policy readiness: `/api/v1/health` check
   `retention_policy_configuration` must be `configured`, not
   `local_demo_retention_policy`, before customer pilot traffic.

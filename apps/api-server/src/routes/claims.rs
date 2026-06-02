@@ -10,7 +10,7 @@ use axum::{extract::State, http::HeaderMap, Json};
 use chrono::NaiveDate;
 use fwa_anomaly::detect_anomaly;
 use fwa_audit::ActorContext;
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_auth::validate_api_key;
 use fwa_clinical::{
     assess_clinical_evidence, ClinicalDocumentEvidence, ClinicalEvidenceAssessment,
 };
@@ -213,14 +213,7 @@ pub async fn score_claim(
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    let actor = validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map_err(|_| {
+    let actor = validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             axum::http::StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",
@@ -523,6 +516,7 @@ pub async fn score_claim(
     let audit_payload = serde_json::json!({
         "claim_id": context.claim.external_claim_id,
         "source_system": &request.source_system,
+        "customer_scope_id": &actor.customer_scope_id,
         "review_mode": &review_mode,
         "risk_score": decision.risk_score.value(),
         "rag": format!("{:?}", decision.rag),
@@ -1698,6 +1692,7 @@ async fn persist_failed_audit(input: FailedAuditInput<'_>) -> anyhow::Result<()>
             payload: serde_json::json!({
                 "claim_id": input.context.claim.external_claim_id,
                 "review_mode": input.review_mode,
+                "customer_scope_id": &input.actor.customer_scope_id,
                 "error": input.error_message
             }),
             evidence_refs: input.evidence_refs,

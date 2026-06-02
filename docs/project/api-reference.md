@@ -179,6 +179,9 @@ Request fields that affect policy selection:
 - `review_mode`: separates `pre_payment` and `post_payment` behavior.
 - `source_system`: scopes stored-claim lookup and audit source.
 - `claim_id`: identifies stored demo or pilot claim records.
+- `customer_scope_id`: not accepted from the request body. It is derived from
+  the authenticated API key configuration and persisted into scoring audit
+  payloads for tenant/customer-scope traceability.
 - `canonical_claim_context`: carries normalized claim header, member/policy,
   provider, bill-line, and document evidence from the inbox boundary into
   runtime scoring.

@@ -8,6 +8,7 @@ pub struct ActorContext {
     pub actor_id: String,
     pub actor_role: String,
     pub source_system: String,
+    pub customer_scope_id: String,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -80,6 +81,7 @@ mod tests {
                 actor_id: "tpa-demo".into(),
                 actor_role: "system".into(),
                 source_system: "tpa-demo".into(),
+                customer_scope_id: "demo-customer".into(),
             },
             serde_json::json!({"risk_score": 80}),
         );

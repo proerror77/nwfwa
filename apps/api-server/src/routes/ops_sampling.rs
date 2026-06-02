@@ -8,7 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_auth::validate_api_key;
 use fwa_core::AuditEventId;
 use serde::Serialize;
 
@@ -126,21 +126,15 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map(|_| ())
-    .map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
+    validate_api_key(api_key, &state.config.api_key_config())
+        .map(|_| ())
+        .map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

@@ -17,7 +17,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_auth::validate_api_key;
 use fwa_core::{canonical_scheme_family, AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -1342,14 +1342,7 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",

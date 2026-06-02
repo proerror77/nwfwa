@@ -371,6 +371,10 @@ async fn scores_spec_style_top_level_full_payload() {
     assert_eq!(scoring_event["payload"]["risk_level"], "Critical");
     assert_eq!(scoring_event["payload"]["confidence"], "High");
     assert_eq!(
+        scoring_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
         scoring_event["payload"]["scores"]["final_score"],
         body["scores"]["final_score"]
     );
