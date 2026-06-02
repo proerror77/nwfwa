@@ -84,6 +84,9 @@ Minimum pilot monitoring:
 - PII masking readiness: `/api/v1/health` check
   `pii_masking_configuration` must be `configured`, not
   `local_demo_pii_masking`, before customer pilot traffic.
+- Key rotation readiness: `/api/v1/health` check
+  `key_rotation_configuration` must be `configured`, not
+  `local_demo_key_rotation`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

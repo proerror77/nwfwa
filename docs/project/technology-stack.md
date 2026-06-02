@@ -183,6 +183,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_RETENTION_POLICY_ID` | `demo-retention-policy` | Local retention policy id |
 | `FWA_BACKUP_RESTORE_PLAN_ID` | `demo-backup-restore-plan` | Local backup and restore plan id |
 | `FWA_PII_MASKING_POLICY_ID` | `demo-pii-masking-policy` | Local PII masking policy id |
+| `FWA_KEY_ROTATION_POLICY_ID` | `demo-key-rotation-policy` | Local key rotation policy id |
 
 ## Current Non-Goals
 

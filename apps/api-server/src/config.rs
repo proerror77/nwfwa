@@ -9,6 +9,7 @@ pub struct AppConfig {
     pub retention_policy_id: String,
     pub backup_restore_plan_id: String,
     pub pii_masking_policy_id: String,
+    pub key_rotation_policy_id: String,
 }
 
 impl AppConfig {
@@ -30,6 +31,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "demo-backup-restore-plan".into()),
             pii_masking_policy_id: std::env::var("FWA_PII_MASKING_POLICY_ID")
                 .unwrap_or_else(|_| "demo-pii-masking-policy".into()),
+            key_rotation_policy_id: std::env::var("FWA_KEY_ROTATION_POLICY_ID")
+                .unwrap_or_else(|_| "demo-key-rotation-policy".into()),
         }
     }
 
@@ -114,6 +117,14 @@ impl AppConfig {
     pub fn pii_masking_configuration_status(&self) -> &'static str {
         if self.pii_masking_policy_id == "demo-pii-masking-policy" {
             "local_demo_pii_masking"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn key_rotation_configuration_status(&self) -> &'static str {
+        if self.key_rotation_policy_id == "demo-key-rotation-policy" {
+            "local_demo_key_rotation"
         } else {
             "configured"
         }

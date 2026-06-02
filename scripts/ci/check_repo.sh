@@ -214,6 +214,9 @@ grep -q "FWA_BACKUP_RESTORE_PLAN_ID" docs/project/technology-stack.md
 grep -q "pii_masking_configuration" docs/project/api-reference.md
 grep -q "pii_masking_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_PII_MASKING_POLICY_ID" docs/project/technology-stack.md
+grep -q "key_rotation_configuration" docs/project/api-reference.md
+grep -q "key_rotation_configuration" docs/engineering/pilot-readiness.md
+grep -q "FWA_KEY_ROTATION_POLICY_ID" docs/project/technology-stack.md
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml

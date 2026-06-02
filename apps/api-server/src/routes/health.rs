@@ -85,6 +85,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.pii_masking_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "key_rotation_configuration",
+                status: state.config.key_rotation_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

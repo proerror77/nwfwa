@@ -309,6 +309,7 @@ mod tests {
             retention_policy_id: "demo-retention-policy".into(),
             backup_restore_plan_id: "demo-backup-restore-plan".into(),
             pii_masking_policy_id: "demo-pii-masking-policy".into(),
+            key_rotation_policy_id: "demo-key-rotation-policy".into(),
         }
     }
 

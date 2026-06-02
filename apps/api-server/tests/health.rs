@@ -16,6 +16,7 @@ fn test_config() -> AppConfig {
         retention_policy_id: "demo-retention-policy".into(),
         backup_restore_plan_id: "demo-backup-restore-plan".into(),
         pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
     }
 }
 
@@ -126,6 +127,13 @@ async fn health_returns_service_metadata_and_checks() {
             "name": "pii_masking_configuration",
             "status": "local_demo_pii_masking"
         })));
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "key_rotation_configuration",
+            "status": "local_demo_key_rotation"
+        })));
     assert!(
         !body.to_string().contains("127.0.0.1:8001"),
         "health response must not expose internal model service URLs"
@@ -159,6 +167,10 @@ async fn health_returns_service_metadata_and_checks() {
     assert!(
         !body.to_string().contains("demo-pii-masking-policy"),
         "health response must not expose PII masking policy ids"
+    );
+    assert!(
+        !body.to_string().contains("demo-key-rotation-policy"),
+        "health response must not expose key rotation policy ids"
     );
 }
 
@@ -505,5 +517,39 @@ async fn health_reports_configured_pii_masking_without_exposing_value() {
     assert!(
         !body.to_string().contains("customer-alpha-pii-masking-v1"),
         "health response must not expose configured PII masking policy ids"
+    );
+}
+
+#[tokio::test]
+async fn health_reports_configured_key_rotation_without_exposing_value() {
+    let mut config = test_config();
+    config.key_rotation_policy_id = "customer-alpha-key-rotation-v1".into();
+    let app = build_app(config);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "key_rotation_configuration",
+            "status": "configured"
+        })));
+    assert!(
+        !body.to_string().contains("customer-alpha-key-rotation-v1"),
+        "health response must not expose configured key rotation policy ids"
     );
 }
