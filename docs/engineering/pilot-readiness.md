@@ -93,6 +93,9 @@ Minimum pilot monitoring:
   not from caller-supplied claim payloads. Inbox normalization, scoring, TPA
   writeback, case workflow, and governance audit payloads include
   `customer_scope_id` for tenant/customer traceability.
+  Audit event queries, API call records, claim audit history, webhook event
+  listings, and medical review queues are filtered by the authenticated
+  principal's `customer_scope_id`.
 - Retention policy readiness: `/api/v1/health` check
   `retention_policy_configuration` must be `configured`, not
   `local_demo_retention_policy`, before customer pilot traffic.

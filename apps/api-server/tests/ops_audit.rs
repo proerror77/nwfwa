@@ -1,8 +1,14 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::HeuristicModelScorer;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -21,6 +27,13 @@ fn test_config() -> AppConfig {
         alert_routing_policy_id: "demo-alert-routing-policy".into(),
         observability_exporter_endpoint: "local://demo-observability".into(),
         agent_policy_id: "demo-agent-policy".into(),
+    }
+}
+
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    AppConfig {
+        customer_scope_id: customer_scope_id.into(),
+        ..test_config()
     }
 }
 
@@ -46,6 +59,150 @@ async fn json_request(
     let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
     let body = serde_json::from_slice(&body).unwrap_or_else(|_| serde_json::json!({}));
     (status, body)
+}
+
+#[tokio::test]
+async fn audit_queries_are_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, score) = json_request(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-SCOPE-ISOLATION",
+            "claim_amount": "9000.00",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          },
+          "items": [
+            {
+              "item_code": "PROC-SCOPE",
+              "item_type": "procedure",
+              "description": "Scope isolation procedure",
+              "quantity": 1,
+              "unit_amount": "9000.00",
+              "total_amount": "9000.00"
+            }
+          ],
+          "member": { "external_member_id": "MBR-SCOPE-ISOLATION" },
+          "policy": {
+            "external_policy_id": "POL-SCOPE-ISOLATION",
+            "product_code": "HEALTH",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000.00",
+            "currency": "CNY"
+          },
+          "provider": {
+            "external_provider_id": "PRV-SCOPE-ISOLATION",
+            "name": "Scope Isolation Clinic",
+            "provider_type": "clinic",
+            "region": "Shanghai",
+            "risk_tier": "High"
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(score["claim_id"], serde_json::json!("CLM-SCOPE-ISOLATION"));
+
+    let (status, alpha_audit) = json_request(
+        alpha_app.clone(),
+        "GET",
+        "/api/v1/audit/claims/CLM-SCOPE-ISOLATION",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["payload"]["customer_scope_id"] == "customer-alpha"));
+
+    let (status, beta_audit) = json_request(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/audit/claims/CLM-SCOPE-ISOLATION",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(beta_audit["events"].as_array().unwrap().is_empty());
+
+    let (status, beta_audit_events) = json_request(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?claim_id=CLM-SCOPE-ISOLATION&limit=20",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(beta_audit_events["events"].as_array().unwrap().is_empty());
+
+    let (status, alpha_api_calls) = json_request(
+        alpha_app.clone(),
+        "GET",
+        "/api/v1/ops/api-calls?limit=20",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_api_calls["calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|call| {
+            call["claim_id"] == "CLM-SCOPE-ISOLATION"
+                && call["customer_scope_id"] == "customer-alpha"
+        }));
+
+    let (status, beta_api_calls) = json_request(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/ops/api-calls?limit=20",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_api_calls["calls"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|call| call["claim_id"] == "CLM-SCOPE-ISOLATION"));
+
+    let (status, alpha_webhooks) =
+        json_request(alpha_app, "GET", "/api/v1/ops/webhook-events", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_webhooks["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["claim_id"] == "CLM-SCOPE-ISOLATION"
+            && event["customer_scope_id"] == "customer-alpha"));
+
+    let (status, beta_webhooks) =
+        json_request(beta_app, "GET", "/api/v1/ops/webhook-events", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_webhooks["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["claim_id"] == "CLM-SCOPE-ISOLATION"));
 }
 
 #[tokio::test]

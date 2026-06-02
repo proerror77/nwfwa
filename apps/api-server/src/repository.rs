@@ -105,6 +105,7 @@ pub struct AuditEventListFilter {
     pub model_dataset_id: Option<String>,
     pub evaluation_run_id: Option<String>,
     pub has_canonical_trace: Option<bool>,
+    pub customer_scope_id: Option<String>,
 }
 
 const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
@@ -1576,6 +1577,7 @@ pub trait ScoringRepository: Send + Sync {
     async fn claim_audit_history(
         &self,
         claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
 
     async fn list_audit_events(
@@ -3120,6 +3122,7 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn claim_audit_history(
         &self,
         claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
         let mut events = self
             .audit_events
@@ -3127,6 +3130,11 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .iter()
             .filter(|event| event.claim_id == claim_id)
+            .filter(|event| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
@@ -3145,7 +3153,12 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .lock()
                 .await
                 .iter()
-                .filter(|(event_claim_id, _)| event_claim_id == claim_id)
+                .filter(|(event_claim_id, event)| {
+                    event_claim_id == claim_id
+                        && customer_scope_id.is_none_or(|scope| {
+                            audit_event_payload_matches_customer_scope(&event.payload, scope)
+                        })
+                })
                 .map(|(_, event)| event.clone()),
         );
         Ok(events)
@@ -6762,16 +6775,19 @@ impl ScoringRepository for PostgresScoringRepository {
     async fn claim_audit_history(
         &self,
         claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
         let rows: Vec<(String, String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as(
                 "SELECT ae.audit_id, ae.run_id, ae.actor_role, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
                  FROM audit_events ae
                  LEFT JOIN claims c ON c.id = ae.claim_id
-                 WHERE payload ->> 'claim_id' = $1 OR c.external_claim_id = $1
+                 WHERE (payload ->> 'claim_id' = $1 OR c.external_claim_id = $1)
+                   AND ($2::text IS NULL OR ae.payload ->> 'customer_scope_id' = $2)
                  ORDER BY ae.created_at, ae.audit_id",
             )
             .bind(claim_id)
+            .bind(customer_scope_id)
             .fetch_all(&self.pool)
             .await?;
 
@@ -6851,6 +6867,7 @@ impl ScoringRepository for PostgresScoringRepository {
                AND ($19::text IS NULL OR ae.payload ->> 'model_dataset_id' = $19)
                AND ($20::text IS NULL OR ae.payload ->> 'evaluation_run_id' = $20)
                AND ($21::bool IS NULL OR $21 = false OR ae.payload ? 'canonical_claim_context_trace')
+               AND ($22::text IS NULL OR ae.payload ->> 'customer_scope_id' = $22)
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -6875,6 +6892,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.model_dataset_id.as_deref())
         .bind(filter.evaluation_run_id.as_deref())
         .bind(filter.has_canonical_trace)
+        .bind(filter.customer_scope_id.as_deref())
         .fetch_all(&self.pool)
         .await?;
 
@@ -8315,6 +8333,13 @@ fn persisted_audit_event_matches_filter(
         return false;
     }
     if filter
+        .customer_scope_id
+        .as_deref()
+        .is_some_and(|scope| !audit_event_payload_matches_customer_scope(&event.payload, scope))
+    {
+        return false;
+    }
+    if filter
         .run_id
         .as_deref()
         .is_some_and(|run_id| event.run_id != run_id)
@@ -8375,6 +8400,13 @@ fn pilot_audit_event_matches_filter(
         }
     }
     if filter
+        .customer_scope_id
+        .as_deref()
+        .is_some_and(|scope| !audit_event_payload_matches_customer_scope(&event.payload, scope))
+    {
+        return false;
+    }
+    if filter
         .run_id
         .as_deref()
         .is_some_and(|run_id| event.run_id != run_id)
@@ -8420,6 +8452,10 @@ fn audit_event_payload_matches_actor(payload: &Value, actor_id: &str) -> bool {
         || payload["owner"].as_str() == Some(actor_id)
         || payload["approver"].as_str() == Some(actor_id)
         || payload["requested_by"].as_str() == Some(actor_id)
+}
+
+fn audit_event_payload_matches_customer_scope(payload: &Value, customer_scope_id: &str) -> bool {
+    payload["customer_scope_id"].as_str() == Some(customer_scope_id)
 }
 
 fn audit_event_matches_group(event_type: &str, filter: &AuditEventListFilter) -> bool {

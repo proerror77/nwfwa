@@ -636,10 +636,10 @@ pub async fn claim_audit_history(
     headers: HeaderMap,
     Path(claim_id): Path<String>,
 ) -> Result<Json<ClaimAuditHistoryResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
-        .claim_audit_history(&claim_id)
+        .claim_audit_history(&claim_id, Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("CLAIM_AUDIT_HISTORY_FAILED"))?;
     Ok(Json(ClaimAuditHistoryResponse { claim_id, events }))
@@ -649,12 +649,15 @@ pub async fn list_webhook_events(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<WebhookEventListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_webhook_events()
         .await
-        .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?;
+        .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?
+        .into_iter()
+        .filter(|event| event.customer_scope_id == actor.customer_scope_id)
+        .collect();
     Ok(Json(WebhookEventListResponse { events }))
 }
 
@@ -664,7 +667,7 @@ pub async fn submit_webhook_delivery_attempt(
     Path(event_id): Path<String>,
     Json(request): Json<SubmitWebhookDeliveryAttemptRequest>,
 ) -> Result<Json<WebhookDeliveryAttemptRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     if !matches!(request.delivery_status.as_str(), "delivered" | "failed") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -689,7 +692,9 @@ pub async fn submit_webhook_delivery_attempt(
         .await
         .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?
         .into_iter()
-        .any(|event| event.event_id == event_id);
+        .any(|event| {
+            event.event_id == event_id && event.customer_scope_id == actor.customer_scope_id
+        });
     if !known_event {
         return Err(ApiError::new(
             StatusCode::NOT_FOUND,

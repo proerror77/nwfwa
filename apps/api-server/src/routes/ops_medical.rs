@@ -78,12 +78,13 @@ pub async fn medical_review_queue(
     headers: HeaderMap,
     Query(query): Query<MedicalReviewQueueQuery>,
 ) -> Result<Json<MedicalReviewQueueResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_audit_events(AuditEventListFilter {
             limit: query.limit.unwrap_or(100).clamp(1, 200),
             event_type: Some("scoring.completed".into()),
+            customer_scope_id: Some(actor.customer_scope_id.clone()),
             ..Default::default()
         })
         .await
@@ -93,6 +94,7 @@ pub async fn medical_review_queue(
         .list_audit_events(AuditEventListFilter {
             limit: 10_000,
             event_type: Some("medical.review.recorded".into()),
+            customer_scope_id: Some(actor.customer_scope_id),
             ..Default::default()
         })
         .await
@@ -112,7 +114,12 @@ pub async fn submit_medical_review_result(
 ) -> Result<Json<MedicalReviewResultResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
     validate_medical_review_result(&request)?;
-    merge_canonical_evidence_refs_for_medical_review(&state, &mut request).await?;
+    merge_canonical_evidence_refs_for_medical_review(
+        &state,
+        &mut request,
+        &actor.customer_scope_id,
+    )
+    .await?;
     let audit_id = AuditEventId::new().to_string();
     let run_id = ScoringRunId::new().to_string();
     let review_status = medical_review_status(&request.decision).to_string();
@@ -231,10 +238,11 @@ fn json_array_to_strings(value: &Value) -> Vec<String> {
 async fn merge_canonical_evidence_refs_for_medical_review(
     state: &AppState,
     request: &mut SubmitMedicalReviewResultRequest,
+    customer_scope_id: &str,
 ) -> Result<(), ApiError> {
     let events = state
         .repository
-        .claim_audit_history(&request.claim_id)
+        .claim_audit_history(&request.claim_id, Some(customer_scope_id))
         .await
         .map_err(internal_error(
             "MEDICAL_REVIEW_CANONICAL_TRACE_LOOKUP_FAILED",

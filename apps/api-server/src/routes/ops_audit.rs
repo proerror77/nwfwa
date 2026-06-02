@@ -8,6 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::validate_api_key;
 use serde::{Deserialize, Serialize};
 
@@ -76,7 +77,7 @@ pub async fn list_audit_events(
     headers: HeaderMap,
     Query(query): Query<AuditEventListQuery>,
 ) -> Result<Json<AuditEventListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let filter = AuditEventListFilter {
         limit: query.limit.unwrap_or(50).clamp(1, 200),
         event_group: normalize_filter(query.event_group),
@@ -100,6 +101,7 @@ pub async fn list_audit_events(
         model_dataset_id: normalize_filter(query.model_dataset_id),
         evaluation_run_id: normalize_filter(query.evaluation_run_id),
         has_canonical_trace: query.has_canonical_trace,
+        customer_scope_id: Some(actor.customer_scope_id),
     };
     let events = state
         .repository
@@ -114,12 +116,13 @@ pub async fn list_api_calls(
     headers: HeaderMap,
     Query(query): Query<ApiCallListQuery>,
 ) -> Result<Json<ApiCallListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let events = state
         .repository
         .list_audit_events(AuditEventListFilter {
             limit: 200,
+            customer_scope_id: Some(actor.customer_scope_id),
             ..Default::default()
         })
         .await
@@ -213,19 +216,17 @@ fn normalize_filter(value: Option<String>) -> Option<String> {
     })
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config())
-        .map(|_| ())
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "INVALID_API_KEY",
+            "invalid api key",
+        )
+    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

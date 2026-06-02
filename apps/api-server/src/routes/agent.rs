@@ -128,7 +128,9 @@ pub async fn investigate_case(
                 .cloned()
         })
         .collect::<Vec<_>>();
-    let canonical_trace = latest_canonical_claim_context_trace(&state, &request.claim_id).await?;
+    let canonical_trace =
+        latest_canonical_claim_context_trace(&state, &request.claim_id, &actor.customer_scope_id)
+            .await?;
     let context_json = serde_json::json!({
         "claim_id": masked_claim_ref,
         "risk_score": request.risk_score,
@@ -363,10 +365,11 @@ fn validate_agent_investigation_request(
 async fn latest_canonical_claim_context_trace(
     state: &AppState,
     claim_id: &str,
+    customer_scope_id: &str,
 ) -> Result<Value, ApiError> {
     let events = state
         .repository
-        .claim_audit_history(claim_id)
+        .claim_audit_history(claim_id, Some(customer_scope_id))
         .await
         .map_err(internal_error("AGENT_CANONICAL_TRACE_LOOKUP_FAILED"))?;
     Ok(events
