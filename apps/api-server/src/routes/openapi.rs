@@ -3466,13 +3466,30 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "PilotReadiness": {
+                    "type": "object",
+                    "required": ["status", "blocking_checks"],
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["ready", "not_ready"],
+                            "description": "Aggregate customer pilot readiness derived from non-secret configuration checks."
+                        },
+                        "blocking_checks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/HealthCheck" },
+                            "description": "Configuration checks that must become configured before customer pilot traffic."
+                        }
+                    }
+                },
                 "HealthResponse": {
                     "type": "object",
-                    "required": ["status", "service", "version", "checks"],
+                    "required": ["status", "service", "version", "pilot_readiness", "checks"],
                     "properties": {
                         "status": { "type": "string", "enum": ["ok"] },
                         "service": { "type": "string" },
                         "version": { "type": "string" },
+                        "pilot_readiness": { "$ref": "#/components/schemas/PilotReadiness" },
                         "checks": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/HealthCheck" }

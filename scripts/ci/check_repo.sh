@@ -228,6 +228,8 @@ grep -q "observability_exporter_configuration" docs/engineering/pilot-readiness.
 grep -q "FWA_OBSERVABILITY_EXPORTER_ENDPOINT" docs/project/technology-stack.md
 grep -q "agent_policy_configuration" docs/project/api-reference.md
 grep -q "agent_policy_configuration" docs/engineering/pilot-readiness.md
+grep -q "pilot_readiness" docs/project/api-reference.md
+grep -q "pilot_readiness" docs/engineering/pilot-readiness.md
 grep -q "FWA_AGENT_POLICY_ID" docs/project/technology-stack.md
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml

@@ -116,7 +116,7 @@ async fn openapi_includes_operations_paths() {
             ["schema"]["$ref"],
         "#/components/schemas/HealthResponse"
     );
-    for field in ["status", "service", "version", "checks"] {
+    for field in ["status", "service", "version", "pilot_readiness", "checks"] {
         assert!(
             schema["components"]["schemas"]["HealthResponse"]["required"]
                 .as_array()
@@ -128,6 +128,23 @@ async fn openapi_includes_operations_paths() {
     }
     assert_eq!(
         schema["components"]["schemas"]["HealthResponse"]["properties"]["checks"]["items"]["$ref"],
+        "#/components/schemas/HealthCheck"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["HealthResponse"]["properties"]["pilot_readiness"]["$ref"],
+        "#/components/schemas/PilotReadiness"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["required"],
+        serde_json::json!(["status", "blocking_checks"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["status"]["enum"],
+        serde_json::json!(["ready", "not_ready"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["blocking_checks"]["items"]
+            ["$ref"],
         "#/components/schemas/HealthCheck"
     );
     assert_eq!(

@@ -58,6 +58,10 @@ Medical review results also produce governed outcome labels for model and workfl
 Minimum pilot monitoring:
 
 - API health: `GET /api/v1/health`
+- Pilot readiness gate: `/api/v1/health` field `pilot_readiness.status` must be
+  `ready` before customer pilot traffic. When it is `not_ready`,
+  `pilot_readiness.blocking_checks` lists the non-secret configuration check
+  names and statuses that still need remediation.
 - API key readiness: `/api/v1/health` check `api_key_configuration` must be
   `configured`, not `local_dev_key`, before customer pilot traffic.
 - Source-system readiness: `/api/v1/health` check

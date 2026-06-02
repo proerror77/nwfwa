@@ -24,6 +24,25 @@ fn test_config() -> AppConfig {
     }
 }
 
+fn customer_pilot_config() -> AppConfig {
+    AppConfig {
+        api_key: "customer-pilot-secret".into(),
+        source_system: "customer-claims-system".into(),
+        database_url: "postgres://customer-db.internal:5432/fwa".into(),
+        model_service_url: "https://models.customer.internal".into(),
+        object_storage_uri: "s3://customer-fwa-artifacts".into(),
+        customer_scope_id: "customer-alpha-prod".into(),
+        retention_policy_id: "customer-alpha-retention-v1".into(),
+        backup_restore_plan_id: "customer-alpha-backup-restore-v1".into(),
+        pii_masking_policy_id: "customer-alpha-pii-masking-v1".into(),
+        key_rotation_policy_id: "customer-alpha-key-rotation-v1".into(),
+        network_allowlist_id: "customer-alpha-network-allowlist-v1".into(),
+        alert_routing_policy_id: "customer-alpha-alert-routing-v1".into(),
+        observability_exporter_endpoint: "https://otel.customer-alpha.example".into(),
+        agent_policy_id: "customer-alpha-agent-policy-v1".into(),
+    }
+}
+
 #[tokio::test]
 async fn health_returns_service_metadata_and_checks() {
     let app = build_app(test_config());
@@ -219,6 +238,64 @@ async fn health_returns_service_metadata_and_checks() {
     assert!(
         !body.to_string().contains("demo-agent-policy"),
         "health response must not expose agent policy ids"
+    );
+    assert_eq!(body["pilot_readiness"]["status"], "not_ready");
+    let blocking_checks = body["pilot_readiness"]["blocking_checks"]
+        .as_array()
+        .expect("pilot readiness should list blocking checks");
+    assert!(blocking_checks.contains(&serde_json::json!({
+        "name": "api_key_configuration",
+        "status": "local_dev_key"
+    })));
+    assert!(blocking_checks.contains(&serde_json::json!({
+        "name": "model_service_configuration",
+        "status": "local_dev_model_service"
+    })));
+    assert!(blocking_checks.contains(&serde_json::json!({
+        "name": "agent_policy_configuration",
+        "status": "local_demo_agent_policy"
+    })));
+    assert!(
+        !body["pilot_readiness"].to_string().contains("dev-secret"),
+        "pilot readiness must not expose secret values"
+    );
+}
+
+#[tokio::test]
+async fn health_reports_pilot_readiness_ready_when_all_pilot_configuration_is_set() {
+    let app = build_app(customer_pilot_config());
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["pilot_readiness"]["status"], "ready");
+    assert_eq!(
+        body["pilot_readiness"]["blocking_checks"],
+        serde_json::json!([])
+    );
+    assert!(
+        !body.to_string().contains("customer-pilot-secret"),
+        "pilot readiness must not expose API key values"
+    );
+    assert!(
+        !body.to_string().contains("models.customer.internal"),
+        "pilot readiness must not expose model service URL values"
+    );
+    assert!(
+        !body.to_string().contains("customer-alpha-agent-policy-v1"),
+        "pilot readiness must not expose Agent policy ids"
     );
 }
 

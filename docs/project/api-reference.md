@@ -66,6 +66,11 @@ backup restore plan id, PII masking policy id, key rotation policy id, network
 allowlist id, alert routing policy id, observability exporter endpoint, or
 Agent policy id.
 
+The response also includes `pilot_readiness.status`. It is `ready` only when
+all customer pilot configuration checks report `configured`; otherwise it is
+`not_ready` and `pilot_readiness.blocking_checks` lists the non-secret check
+names and statuses that still block customer pilot traffic.
+
 ## Inbound Claim Inbox
 
 | Method | Path | Purpose | Auth | Side effects |
