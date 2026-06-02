@@ -87,7 +87,11 @@ class TpaMockClientTest(unittest.TestCase):
                     "--normalize-only",
                 ],
             ),
-            mock.patch.object(tpa_mock_client, "load_json_file", return_value={"systemCode": "AiClaim Core"}),
+            mock.patch.object(
+                tpa_mock_client,
+                "load_json_file",
+                return_value={"systemCode": "AiClaim Core"},
+            ),
             mock.patch.object(
                 tpa_mock_client,
                 "request",
@@ -127,6 +131,48 @@ class TpaMockClientTest(unittest.TestCase):
                     "policyList": [
                         {
                             "coverageLimit": "<REQUIRED_COVERAGE_LIMIT>",
+                        }
+                    ]
+                }
+            },
+        )
+
+    def test_correction_overlay_template_includes_policy_product_and_liability_dates(self):
+        template = tpa_mock_client.correction_overlay_template_for(
+            [
+                {"field_path": "reportCase.policyList[0].validateDate"},
+                {"field_path": "reportCase.policyList[0].productList[1].expireDate"},
+                {
+                    "field_path": (
+                        "reportCase.policyList[0].productList[1]."
+                        "claimLiabilityList[2].claimValidateDate"
+                    )
+                },
+            ]
+        )
+
+        self.assertEqual(
+            template,
+            {
+                "reportCase": {
+                    "policyList": [
+                        {
+                            "validateDate": "<REQUIRED_POLICY_VALIDATE_DATE_EPOCH_MS>",
+                            "productList": [
+                                {},
+                                {
+                                    "expireDate": "<REQUIRED_PRODUCT_EXPIRE_DATE_EPOCH_MS>",
+                                    "claimLiabilityList": [
+                                        {},
+                                        {},
+                                        {
+                                            "claimValidateDate": (
+                                                "<REQUIRED_LIABILITY_CLAIM_VALIDATE_DATE_EPOCH_MS>"
+                                            ),
+                                        },
+                                    ],
+                                },
+                            ],
                         }
                     ]
                 }

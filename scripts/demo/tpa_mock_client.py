@@ -147,16 +147,81 @@ def correction_overlay_template_for(errors):
     template = {}
     for error in errors:
         field_path = error.get("field_path", "")
-        match = re.fullmatch(r"reportCase\.policyList\[(\d+)\]\.coverageLimit", field_path)
-        if not match:
-            continue
-        policy_index = int(match.group(1))
-        report_case = template.setdefault("reportCase", {})
-        policies = report_case.setdefault("policyList", [])
-        while len(policies) <= policy_index:
-            policies.append({})
-        policies[policy_index]["coverageLimit"] = "<REQUIRED_COVERAGE_LIMIT>"
+        apply_overlay_template_field(template, field_path)
     return template
+
+
+def apply_overlay_template_field(template, field_path):
+    policy_match = re.fullmatch(
+        r"reportCase\.policyList\[(\d+)\]\.(coverageLimit|validateDate|expireDate)",
+        field_path,
+    )
+    if policy_match:
+        policy = policy_template(template, int(policy_match.group(1)))
+        field = policy_match.group(2)
+        policy[field] = placeholder_for("policy", field)
+        return
+
+    product_match = re.fullmatch(
+        r"reportCase\.policyList\[(\d+)\]\.productList\[(\d+)\]\."
+        r"(validateDate|expireDate|claimValidateDate)",
+        field_path,
+    )
+    if product_match:
+        product = product_template(
+            template,
+            int(product_match.group(1)),
+            int(product_match.group(2)),
+        )
+        field = product_match.group(3)
+        product[field] = placeholder_for("product", field)
+        return
+
+    liability_match = re.fullmatch(
+        r"reportCase\.policyList\[(\d+)\]\.productList\[(\d+)\]\."
+        r"claimLiabilityList\[(\d+)\]\.(validateDate|expireDate|claimValidateDate)",
+        field_path,
+    )
+    if liability_match:
+        liability = liability_template(
+            template,
+            int(liability_match.group(1)),
+            int(liability_match.group(2)),
+            int(liability_match.group(3)),
+        )
+        field = liability_match.group(4)
+        liability[field] = placeholder_for("liability", field)
+
+
+def policy_template(template, policy_index):
+    report_case = template.setdefault("reportCase", {})
+    policies = report_case.setdefault("policyList", [])
+    while len(policies) <= policy_index:
+        policies.append({})
+    return policies[policy_index]
+
+
+def product_template(template, policy_index, product_index):
+    policy = policy_template(template, policy_index)
+    products = policy.setdefault("productList", [])
+    while len(products) <= product_index:
+        products.append({})
+    return products[product_index]
+
+
+def liability_template(template, policy_index, product_index, liability_index):
+    product = product_template(template, policy_index, product_index)
+    liabilities = product.setdefault("claimLiabilityList", [])
+    while len(liabilities) <= liability_index:
+        liabilities.append({})
+    return liabilities[liability_index]
+
+
+def placeholder_for(scope, field):
+    if field == "coverageLimit":
+        return "<REQUIRED_COVERAGE_LIMIT>"
+    words = re.sub(r"(?<!^)([A-Z])", r"_\1", field).upper()
+    return f"<REQUIRED_{scope.upper()}_{words}_EPOCH_MS>"
 
 
 def add_correction_hints(normalize_response):

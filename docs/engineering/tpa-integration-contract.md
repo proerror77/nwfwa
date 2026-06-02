@@ -49,6 +49,8 @@ short next action, for example matching the API key source system to
 `reportCase.policyList[0].coverageLimit` before scoring. For supported
 blocking fields, the printed JSON also includes `correction_overlay_template`,
 which is a minimal overlay scaffold that can be saved as the correction file.
+The template covers policy coverage limits and policy/product/liability date
+window fields such as `validateDate`, `expireDate`, and `claimValidateDate`.
 
 To test corrections without rewriting the raw customer payload, pass a local
 JSON overlay with `--inbox-correction-file`. Objects are merged by key and

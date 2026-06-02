@@ -306,7 +306,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   `reportCase.policyList[0].coverageLimit` before direct scoring. For supported
   blocking fields, the same output should include `correction_overlay_template`
   so operators can copy a minimal overlay scaffold instead of editing the raw
-  intake file;
+  intake file. The overlay template must cover policy coverage limits and
+  policy/product/liability date-window fields such as `validateDate`,
+  `expireDate`, and `claimValidateDate`;
 - support local correction overlays via `--inbox-correction-file` so operators
   can validate fixes without rewriting the raw customer payload. The overlay is
   merged in memory before normalization; object fields merge by key and arrays
