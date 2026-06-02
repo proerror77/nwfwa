@@ -706,6 +706,116 @@ struct DashboardRuleGovernance {
     roi: f64,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleListResponse {
+    rules: Vec<RuleSummary>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleSummary {
+    rule_id: String,
+    name: String,
+    status: String,
+    owner: String,
+    active_version: Option<u32>,
+    latest_version: u32,
+    review_mode: String,
+    scheme_family: String,
+    score: u8,
+    alert_code: String,
+    recommended_action: String,
+    applicability_scope: RuleApplicabilityScope,
+    backtest_result: RuleBacktestSummary,
+    estimated_saving: String,
+    false_positive_history: RuleFalsePositiveHistory,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleApplicabilityScope {
+    review_mode: String,
+    scheme_family: String,
+    source: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleBacktestSummary {
+    status: String,
+    sample_count: u32,
+    matched_count: u32,
+    precision: f64,
+    recall: f64,
+    lift: f64,
+    false_positive_rate: f64,
+    estimated_saving: String,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleFalsePositiveHistory {
+    status: String,
+    false_positive_count: u32,
+    false_positive_rate: f64,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RulePerformanceResponse {
+    rules: Vec<RulePerformance>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RulePerformance {
+    rule_id: String,
+    alert_code: String,
+    trigger_count: u32,
+    reviewed_count: u32,
+    confirmed_fwa_count: u32,
+    false_positive_count: u32,
+    mark_rate: f64,
+    precision: f64,
+    false_positive_rate: f64,
+    saving_amount: String,
+    roi: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RulePromotionGates {
+    rule_id: String,
+    rule_version: u32,
+    review_mode: String,
+    decision: String,
+    status: String,
+    passed_count: usize,
+    total_count: usize,
+    trigger_count: u32,
+    reviewed_count: u32,
+    false_positive_rate: f64,
+    saving_amount: String,
+    open_rule_feedback_count: usize,
+    unresolved_rule_feedback_count: usize,
+    approved_label_count: usize,
+    needs_review_label_count: usize,
+    gates: Vec<RulePromotionGate>,
+    blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RulePromotionGate {
+    label: String,
+    passed: bool,
+    blocker: String,
+    evidence_source: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct RuleOpsSnapshot {
+    rules: Vec<RuleSummary>,
+    performance: Vec<RulePerformance>,
+    gates: RulePromotionGates,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum ApiState<T> {
     Idle,
@@ -741,6 +851,8 @@ fn app() -> Html {
                     <ClaimInboxPage />
                 } else if *active == "Dashboard" {
                     <DashboardPage />
+                } else if *active == "Rules" {
+                    <RulesPage />
                 } else if *active == "Models" {
                     <ModelsPage />
                 } else if *active == "Factor Factory" {
@@ -1010,6 +1122,225 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                             </div>
                         </section>
                     </>
+                },
+            }}
+        </>
+    }
+}
+
+#[function_component(RulesPage)]
+fn rules_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let rule_id = use_state(|| "rule_early_claim".to_string());
+    let snapshot_state = use_state(|| ApiState::<RuleOpsSnapshot>::Idle);
+
+    let load_rules = {
+        let api_key = api_key.clone();
+        let rule_id = rule_id.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let rule_id = (*rule_id).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(match get_rule_ops_snapshot(api_key, rule_id).await {
+                    Ok(snapshot) => ApiState::Ready(snapshot),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_rules = load_rules.clone();
+        Callback::from(move |_| load_rules.emit(()))
+    };
+
+    {
+        let load_rules = load_rules.clone();
+        use_effect_with((), move |_| {
+            load_rules.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Rules"}</h2>
+                    <p>{"Review deterministic rule inventory, runtime performance, backtest evidence, false-positive history, and promotion readiness before lifecycle actions."}</p>
+                </div>
+                <span class="status-pill">{"Rule Library"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Rule Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Rule ID"}
+                        <input
+                            value={(*rule_id).clone()}
+                            oninput={{
+                                let rule_id = rule_id.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    rule_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh rules" }}
+                    </button>
+                </div>
+            </section>
+
+            <RulesView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct RulesProps {
+    state: ApiState<RuleOpsSnapshot>,
+}
+
+#[function_component(RulesView)]
+fn rules_view(props: &RulesProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load rules to inspect deterministic detection controls."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading rule operations..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => {
+                    let selected_rule = snapshot.rules.iter().find(|rule| rule.rule_id == snapshot.gates.rule_id);
+                    html! {
+                        <>
+                            <section class="panel result-stack">
+                                <h3>{"Rule Library"}</h3>
+                                if snapshot.rules.is_empty() {
+                                    <p class="empty">{"No rules returned."}</p>
+                                } else {
+                                    <div class="factor-card-grid">
+                                        {for snapshot.rules.iter().take(10).map(|rule| {
+                                            let performance = rule_performance_for(&snapshot.performance, &rule.rule_id);
+                                            html! {
+                                                <div class="factor-card">
+                                                    <div>
+                                                        <strong>{format!("{} / {}", rule.rule_id, rule.name)}</strong>
+                                                        <span>{format!("{} / {} / {}", rule.status, rule.review_mode, rule.scheme_family)}</span>
+                                                    </div>
+                                                    <div class="summary-grid">
+                                                        <div><span>{"Score"}</span><strong>{rule.score}</strong></div>
+                                                        <div><span>{"Action"}</span><strong>{&rule.recommended_action}</strong></div>
+                                                        <div><span>{"Alert"}</span><strong>{&rule.alert_code}</strong></div>
+                                                        <div><span>{"Owner"}</span><strong>{&rule.owner}</strong></div>
+                                                        <div><span>{"Version"}</span><strong>{format!("active {} / latest {}", optional_u32(rule.active_version), rule.latest_version)}</strong></div>
+                                                        <div><span>{"Triggers"}</span><strong>{performance.map(|item| item.trigger_count).unwrap_or(0)}</strong></div>
+                                                    </div>
+                                                    <small>{format!("scope: {} / {} / {}", rule.applicability_scope.review_mode, rule.applicability_scope.scheme_family, rule.applicability_scope.source)}</small>
+                                                    <small>{format!("evidence: {}", refs_label(&rule.evidence_refs))}</small>
+                                                </div>
+                                            }
+                                        })}
+                                    </div>
+                                }
+                            </section>
+
+                            <section class="panel result-stack">
+                                <h3>{"Rule Performance"}</h3>
+                                if snapshot.performance.is_empty() {
+                                    <p class="empty">{"No rule performance records returned."}</p>
+                                } else {
+                                    <div class="factor-card-grid">
+                                        {for snapshot.performance.iter().take(10).map(|item| html! {
+                                            <div class="metric-row">
+                                                <span>{format!("{} / {}", item.rule_id, item.alert_code)}</span>
+                                                <strong>{format!("precision {}", percent_label(item.precision))}</strong>
+                                                <small>{format!("triggers {} / reviewed {} / confirmed {}", item.trigger_count, item.reviewed_count, item.confirmed_fwa_count)}</small>
+                                                <small>{format!("FP {} / rate {} / saving {} / ROI {:.2} / mark {}", item.false_positive_count, percent_label(item.false_positive_rate), item.saving_amount, item.roi, percent_label(item.mark_rate))}</small>
+                                            </div>
+                                        })}
+                                    </div>
+                                }
+                            </section>
+
+                            <section class="panel result-stack">
+                                <h3>{"Rule Promotion Readiness"}</h3>
+                                <div class="score-hero">
+                                    <div><span>{"Rule"}</span><strong>{&snapshot.gates.rule_id}</strong></div>
+                                    <div><span>{"Decision"}</span><strong>{&snapshot.gates.decision}</strong></div>
+                                    <div><span>{"Passed"}</span><strong>{format!("{} / {}", snapshot.gates.passed_count, snapshot.gates.total_count)}</strong></div>
+                                </div>
+                                <div class="summary-grid">
+                                    <div><span>{"Status"}</span><strong>{&snapshot.gates.status}</strong></div>
+                                    <div><span>{"Version"}</span><strong>{snapshot.gates.rule_version}</strong></div>
+                                    <div><span>{"Review Mode"}</span><strong>{&snapshot.gates.review_mode}</strong></div>
+                                    <div><span>{"Triggers"}</span><strong>{snapshot.gates.trigger_count}</strong></div>
+                                    <div><span>{"Reviewed"}</span><strong>{snapshot.gates.reviewed_count}</strong></div>
+                                    <div><span>{"False Positive Rate"}</span><strong>{percent_label(snapshot.gates.false_positive_rate)}</strong></div>
+                                    <div><span>{"Saving"}</span><strong>{&snapshot.gates.saving_amount}</strong></div>
+                                    <div><span>{"Open Feedback"}</span><strong>{snapshot.gates.open_rule_feedback_count}</strong></div>
+                                    <div><span>{"Unresolved Feedback"}</span><strong>{snapshot.gates.unresolved_rule_feedback_count}</strong></div>
+                                    <div><span>{"Approved Labels"}</span><strong>{snapshot.gates.approved_label_count}</strong></div>
+                                    <div><span>{"Needs Review Labels"}</span><strong>{snapshot.gates.needs_review_label_count}</strong></div>
+                                    <div><span>{"Selected Rule"}</span><strong>{selected_rule.map(|rule| rule.name.as_str()).unwrap_or("not listed")}</strong></div>
+                                </div>
+                                <h4>{"Backtest Evidence"}</h4>
+                                if let Some(rule) = selected_rule {
+                                    <div class="summary-grid">
+                                        <div><span>{"Status"}</span><strong>{&rule.backtest_result.status}</strong></div>
+                                        <div><span>{"Sample / Matched"}</span><strong>{format!("{} / {}", rule.backtest_result.sample_count, rule.backtest_result.matched_count)}</strong></div>
+                                        <div><span>{"Precision / Recall"}</span><strong>{format!("{} / {}", percent_label(rule.backtest_result.precision), percent_label(rule.backtest_result.recall))}</strong></div>
+                                        <div><span>{"Lift"}</span><strong>{format!("{:.2}", rule.backtest_result.lift)}</strong></div>
+                                        <div><span>{"FP Rate"}</span><strong>{percent_label(rule.backtest_result.false_positive_rate)}</strong></div>
+                                        <div><span>{"Saving"}</span><strong>{&rule.backtest_result.estimated_saving}</strong></div>
+                                        <div><span>{"Backtest At"}</span><strong>{rule.backtest_result.created_at.as_deref().unwrap_or("not_run")}</strong></div>
+                                        <div><span>{"Rule Estimate"}</span><strong>{&rule.estimated_saving}</strong></div>
+                                        <div><span>{"Backtest Evidence"}</span><strong>{refs_label(&rule.backtest_result.evidence_refs)}</strong></div>
+                                        <div><span>{"FP History"}</span><strong>{format!("{} / {} / {}", rule.false_positive_history.status, rule.false_positive_history.false_positive_count, percent_label(rule.false_positive_history.false_positive_rate))}</strong></div>
+                                        <div><span>{"FP Evidence"}</span><strong>{refs_label(&rule.false_positive_history.evidence_refs)}</strong></div>
+                                    </div>
+                                } else {
+                                    <p class="empty">{"Selected rule details were not returned in the library list."}</p>
+                                }
+                                <h4>{"Rule Promotion Gates"}</h4>
+                                <div class="factor-card-grid">
+                                    {for snapshot.gates.gates.iter().map(|gate| html! {
+                                        <div class="metric-row">
+                                            <span>{&gate.label}</span>
+                                            <strong>{if gate.passed { "passed" } else { "blocked" }}</strong>
+                                            <small>{&gate.evidence_source}</small>
+                                            <small>{&gate.blocker}</small>
+                                        </div>
+                                    })}
+                                </div>
+                                if snapshot.gates.blockers.is_empty() {
+                                    <p class="empty">{"No rule promotion blockers."}</p>
+                                } else {
+                                    <ul class="result-list">
+                                        {for snapshot.gates.blockers.iter().map(|blocker| html! { <li>{blocker}</li> })}
+                                    </ul>
+                                }
+                            </section>
+                        </>
+                    }
                 },
             }}
         </>
@@ -2261,6 +2592,37 @@ async fn get_dashboard_summary(api_key: String) -> Result<DashboardSummary, Stri
     request_get_json("/api/v1/ops/dashboard/summary", api_key).await
 }
 
+async fn get_rule_ops_snapshot(
+    api_key: String,
+    rule_id: String,
+) -> Result<RuleOpsSnapshot, String> {
+    let rules = request_get_json::<RuleListResponse>("/api/v1/ops/rules", api_key.clone())
+        .await?
+        .rules;
+    let selected_rule_id = rules
+        .iter()
+        .find(|rule| rule.rule_id == rule_id)
+        .map(|rule| rule.rule_id.clone())
+        .or_else(|| rules.first().map(|rule| rule.rule_id.clone()))
+        .unwrap_or(rule_id);
+    let performance = request_get_json::<RulePerformanceResponse>(
+        "/api/v1/ops/rules/performance",
+        api_key.clone(),
+    )
+    .await?
+    .rules;
+    let gates = request_get_json::<RulePromotionGates>(
+        &format!("/api/v1/ops/rules/{selected_rule_id}/promotion-gates"),
+        api_key,
+    )
+    .await?;
+    Ok(RuleOpsSnapshot {
+        rules,
+        performance,
+        gates,
+    })
+}
+
 async fn get_model_ops_snapshot(
     api_key: String,
     model_key: String,
@@ -2732,6 +3094,19 @@ fn map_counts_label(counts: &BTreeMap<String, u32>) -> String {
 
 fn percent_label(value: f64) -> String {
     format!("{:.1}%", value * 100.0)
+}
+
+fn optional_u32(value: Option<u32>) -> String {
+    value
+        .map(|number| number.to_string())
+        .unwrap_or_else(|| "none".into())
+}
+
+fn rule_performance_for<'a>(
+    performance: &'a [RulePerformance],
+    rule_id: &str,
+) -> Option<&'a RulePerformance> {
+    performance.iter().find(|item| item.rule_id == rule_id)
 }
 
 fn refs_label(refs: &[String]) -> String {
