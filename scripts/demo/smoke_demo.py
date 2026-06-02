@@ -1614,6 +1614,137 @@ def govern_agent_run(agent):
     }
 
 
+def score_normalized_inbox_context():
+    suffix = str(int(time.time()))
+    claim_id = f"CLM-INBOX-{suffix}"
+    invoice_id = f"INV-INBOX-{suffix}"
+    line_id = f"LINE-INBOX-{suffix}"
+    raw_claim = {
+        "systemCode": SOURCE_SYSTEM,
+        "transNo": f"DEMO-INBOX-{suffix}",
+        "reportCase": {
+            "reportNo": claim_id,
+            "claimReceiveDate": 1767801600000,
+            "calculateRisk": "Y",
+            "accidentPerson": {
+                "insuredNo": f"MBR-INBOX-{suffix}",
+                "insuredName": "Demo Member",
+                "certNo": f"CERT-INBOX-{suffix}",
+                "certType": "passport",
+                "gender": "F",
+                "birthday": 575078400000,
+            },
+            "medicalRecordInfoList": [
+                {
+                    "id": f"MR-INBOX-{suffix}",
+                    "patientName": "Demo Member",
+                    "hospitalName": "Inbox Hospital",
+                    "departmentName": "Imaging",
+                    "diagnosisName": "Influenza",
+                    "medicalRecordType": "outpatient_record",
+                    "medicalType": "outpatient",
+                    "visitDate": 1767628800000,
+                    "medicalRecordInformation": "诊断：Influenza/n处理措施/nHigh cost imaging",
+                }
+            ],
+            "policyList": [
+                {
+                    "policyNo": f"POL-INBOX-{suffix}",
+                    "insuredName": "Demo Member",
+                    "coverageLimit": 10000,
+                    "validateDate": 1767196800000,
+                    "expireDate": 1798646400000,
+                    "productList": [
+                        {
+                            "id": f"PROD-INBOX-{suffix}",
+                            "productCode": "MED",
+                            "productName": "Demo Medical",
+                            "validateDate": 1767196800000,
+                            "expireDate": 1798646400000,
+                            "claimLiabilityList": [
+                                {
+                                    "id": f"LIAB-INBOX-{suffix}",
+                                    "liabCode": "MED-LIAB",
+                                    "liabName": "Medical liability",
+                                    "validateDate": 1767196800000,
+                                    "expireDate": 1798646400000,
+                                    "claimValidateDate": 1767196800000,
+                                    "mainLiab": "Y",
+                                    "isSeriousDiseaseLiability": "N",
+                                }
+                            ],
+                        }
+                    ],
+                    "invoiceList": [
+                        {
+                            "id": invoice_id,
+                            "invoiceNo": invoice_id,
+                            "accidentPersonName": "Demo Member",
+                            "feeAmount": 8800,
+                            "startDate": 1767628800000,
+                            "endDate": 1767628800000,
+                            "hospitalCode": f"PRV-INBOX-{suffix}",
+                            "hospitalName": "Inbox Hospital",
+                            "hospitalClass": "tertiary",
+                            "hospitalProperty": "hospital",
+                            "hospitalCityName": "SH",
+                            "hospitalProvinceName": "Shanghai",
+                            "medicalType": "outpatient",
+                            "departmentName": "Imaging",
+                            "diagnosisList": [{"detailCode": "J10", "detailName": "Influenza"}],
+                            "feeList": [
+                                {
+                                    "feeCategory": "procedure",
+                                    "feeAmount": 8800,
+                                    "feeDetailList": [
+                                        {
+                                            "id": line_id,
+                                            "name": "High cost imaging",
+                                            "amount": 8800,
+                                            "medicalCategory": "procedure",
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+    inbox = request("POST", "/api/v1/inbox/claims/normalize", raw_claim)
+    assert_true(inbox.get("scoring_ready") is True, f"inbox context not scoring ready: {inbox}")
+    canonical_claim_context = inbox.get("canonical_claim_context")
+    assert_true(canonical_claim_context, "inbox normalize missing canonical_claim_context")
+
+    score = request(
+        "POST",
+        "/api/v1/claims/score",
+        {
+            "source_system": SOURCE_SYSTEM,
+            "canonical_claim_context": canonical_claim_context,
+        },
+    )
+    assert_true(score.get("claim_id") == claim_id, "canonical context score claim_id mismatch")
+    assert_true(score.get("audit_id"), "canonical context score missing audit_id")
+    assert_true(len(score.get("layers", [])) == 7, "canonical context score missing 7 layers")
+    assert_true(
+        f"invoice:{invoice_id}:fee_detail:{line_id}" in score.get("evidence_refs", []),
+        "canonical context score did not preserve inbox bill-line evidence ref",
+    )
+    audit = request("GET", f"/api/v1/audit/claims/{claim_id}")
+    assert_true(
+        any(event.get("event_type") == "scoring.completed" for event in audit.get("events", [])),
+        "canonical context score missing audit history",
+    )
+    return {
+        "claim_id": claim_id,
+        "run_id": score["run_id"],
+        "audit_id": score["audit_id"],
+        "inbox_run_id": inbox["run_id"],
+    }
+
+
 def main():
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
@@ -1625,6 +1756,7 @@ def main():
         "health endpoint missing http_router check",
     )
     scheme_taxonomy = assert_fwa_scheme_taxonomy()
+    inbox_canonical_score = score_normalized_inbox_context()
 
     score = request(
         "POST",
@@ -2111,6 +2243,7 @@ def main():
                 "webhook_delivery": webhook_delivery,
                 "rule_release": rule_release,
                 "routing_policy": routing_policy,
+                "inbox_canonical_score": inbox_canonical_score,
             },
             ensure_ascii=True,
         )

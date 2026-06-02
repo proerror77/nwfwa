@@ -116,6 +116,8 @@ grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/api-calls" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/api-calls" apps/web-console/src/api.ts
 grep -q "/api/v1/claims/score" scripts/demo/smoke_demo.py
+grep -q "score_normalized_inbox_context" scripts/demo/smoke_demo.py
+grep -q "canonical_claim_context" scripts/demo/smoke_demo.py
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py
 grep -q "/api/v1/qa/results" scripts/demo/smoke_demo.py
