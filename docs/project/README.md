@@ -17,6 +17,9 @@ the technical stack fits together, and what is ready for demo or pilot use.
   table responsibilities.
 - [ML Algorithm Strategy](ml-algorithm-strategy.md): researched model plan,
   current baseline boundaries, validation gates, and production ML roadmap.
+- [ML Pipeline Runbook](ml-pipeline-runbook.md): operating workflow for dataset
+  intake, training, registration, review, promotion, serving, monitoring, and
+  rollback.
 - [Operations Guide](operations-guide.md): local demo, verification gates, CI,
   pilot readiness, and known production boundaries.
 
