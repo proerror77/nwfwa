@@ -5,9 +5,11 @@ pilot environment.
 
 ## Local Demo Startup
 
-Install frontend dependencies before first UI use:
+Install frontend build tools and compatibility dependencies before first UI use:
 
 ```bash
+rustup target add wasm32-unknown-unknown
+cargo install trunk --version 0.21.14 --locked
 cd apps/web-console
 npm ci
 cd ../..
@@ -133,7 +135,7 @@ GitHub Actions runs:
 - retraining worker smoke
 - demo persistence SQL assertion
 - Python ML tests
-- frontend lint, Vitest, build, and build smoke
+- frontend WASM check, build, and build smoke
 
 CI uses `--locked` Rust commands and optimized cold-build settings:
 

@@ -19,7 +19,7 @@ Current checks:
 - PostgreSQL migration idempotency
 - demo seed idempotency, minimum demo-data presence, and API/ML demo smoke through `scripts/demo/seed_demo.sh` and `scripts/demo/smoke_demo.py`
 - Python ML service install and `pytest`
-- Web console `npm ci`, TypeScript lint, Vitest, and production build
+- Web console `npm ci`, Rust/WASM check, Trunk production build, and build smoke
 
 ## Rust Compilation
 
@@ -39,6 +39,7 @@ GitHub announced Node.js 20 deprecation for JavaScript actions and migration tow
 - `actions/checkout@v6`
 - `actions/setup-python@v6`
 - `actions/setup-node@v6`
+- `dtolnay/rust-toolchain@stable`
 - `Swatinem/rust-cache@v2`
 
 Keep hosted runners on GitHub-managed `ubuntu-latest`. If self-hosted runners are introduced, they must be at least runner `v2.327.1` before using the v6 setup actions.

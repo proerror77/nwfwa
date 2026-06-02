@@ -20,7 +20,7 @@ adjudication process.
   provider signals, scoring, model runtime, audit, auth, connectors, and agent
   packages.
 - Python FastAPI ML service used by the local demo scorer boundary.
-- React and Vite web console for the FWA Operations Studio.
+- Yew and Trunk web console for the FWA Operations Studio.
 - PostgreSQL schema and deterministic demo seed data.
 - Demo smoke tests, OpenAPI contract checks, CI gates, and pilot runbooks.
 
@@ -55,7 +55,7 @@ The default runtime path is:
    model metadata, case workflow, and feedback labels.
 2. The Python ML service provides the demo model scoring boundary.
 3. The Rust API server exposes TPA-facing and operations APIs.
-4. The React web console provides the operator experience.
+4. The Yew web console provides the operator experience.
 5. CI runs Rust, Python, frontend, migration, seed, OpenAPI, and smoke checks.
 
 Production ML and production infrastructure are not complete. Remaining work
@@ -99,8 +99,12 @@ The API uses `x-api-key` for local and pilot authentication.
 
 Path: `apps/web-console`
 
-The web console is a React 19 and Vite single-page app. It includes:
+The web console is a Yew and Trunk single-page app. Its first Yew-native
+operator workflow is Claim Inbox / Correction Review, with the existing
+operations modules retained as navigation contract surfaces during migration.
+It includes:
 
+- Claim Inbox
 - Dashboard
 - Runtime Scoring
 - Rules
@@ -287,6 +291,8 @@ The API server listens on `127.0.0.1:8080` by default.
 
 ```bash
 cd apps/web-console
+rustup target add wasm32-unknown-unknown
+cargo install trunk --version 0.21.14 --locked
 npm ci
 npm run dev
 ```
@@ -429,7 +435,7 @@ See [AGENTS.md](AGENTS.md) for project-local agent working instructions.
 ## Known Boundaries
 
 - The current demo is local-first and pilot-oriented.
-- The web console is a React/Vite application, not a Dioxus application.
+- The web console is a Yew/Trunk application, not a Dioxus application.
 - Agent workflows are deterministic and assistive-only.
 - The Python ML service is the demo scorer boundary, not a production training
   platform.

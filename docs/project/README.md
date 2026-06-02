@@ -9,7 +9,7 @@ the technical stack fits together, and what is ready for demo or pilot use.
 
 - [Architecture](architecture.md): product boundary, runtime topology, modules,
   workflow map, and deployment shape.
-- [Technology Stack](technology-stack.md): Rust, Python, React, PostgreSQL,
+- [Technology Stack](technology-stack.md): Rust, Python, Yew, PostgreSQL,
   Docker, CI, and development tooling.
 - [API Reference](api-reference.md): every API route, method, purpose, auth
   requirement, main inputs, outputs, and side effects.

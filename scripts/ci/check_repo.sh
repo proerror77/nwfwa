@@ -8,7 +8,10 @@ required_files=(
   "docs/engineering/ci-cd.md"
   "docs/engineering/tpa-integration-contract.md"
   "apps/ml-service/pyproject.toml"
+  "apps/web-console/Cargo.toml"
+  "apps/web-console/Trunk.toml"
   "apps/web-console/package.json"
+  "apps/web-console/src/main.rs"
   "migrations/0001_initial.sql"
   "scripts/demo/seed_demo.sh"
   "scripts/demo/seed_demo.sql"
@@ -93,6 +96,15 @@ grep -q "cargo run --locked -p worker -- run-retraining-job" .github/workflows/c
 grep -q "scripts/ci/assert_worker_health.py" .github/workflows/ci.yml
 grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
 grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
+grep -q "wasm32-unknown-unknown" .github/workflows/ci.yml
+grep -q "cargo install trunk --version 0.21.14 --locked" .github/workflows/ci.yml
+grep -q "yew = " apps/web-console/Cargo.toml
+grep -q "gloo-net" apps/web-console/Cargo.toml
+grep -q "trunk build --release --locked" apps/web-console/package.json
+grep -q "/api/v1/inbox/claims/normalize" apps/web-console/src/main.rs
+grep -q "Correction Review" apps/web-console/src/main.rs
+grep -q "correction_overlay_template_for" apps/web-console/src/main.rs
+grep -q "merge_overlay" apps/web-console/src/main.rs
 grep -q "Management Dashboard" scripts/demo/smoke_web_console.mjs
 grep -q "Model Governance" scripts/demo/smoke_web_console.mjs
 grep -q "Discovery Mode" scripts/demo/smoke_web_console.mjs
@@ -133,17 +145,16 @@ grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/api-calls" scripts/demo/smoke_demo.py
-grep -q "/api/v1/ops/api-calls" apps/web-console/src/api.ts
+grep -q "API Call Records" apps/web-console/src/main.rs
 grep -q "/api/v1/claims/score" scripts/demo/smoke_demo.py
 grep -q "score_normalized_inbox_context" scripts/demo/smoke_demo.py
 grep -q "canonical_claim_context" scripts/demo/smoke_demo.py
 grep -q "has_canonical_trace=true" scripts/demo/smoke_demo.py
 grep -q "has_canonical_trace" apps/api-server/src/routes/openapi.rs
 grep -q "has_canonical_trace" apps/api-server/src/routes/ops_audit.rs
-grep -q "has_canonical_trace" apps/web-console/src/api.ts
-grep -q "Canonical Trace Only" apps/web-console/src/pages/GovernancePage.tsx
+grep -q "Canonical Trace Only" apps/web-console/src/main.rs
 grep -q "audit_coverage" apps/api-server/src/routes/openapi.rs
-grep -q "Audit Coverage" apps/web-console/src/pages/DashboardPage.tsx
+grep -q "Audit Coverage" apps/web-console/src/main.rs
 grep -q "Canonical Trace Coverage" scripts/demo/smoke_web_console.mjs
 grep -q "latest_canonical_claim_context_trace" apps/api-server/src/routes/agent.rs
 grep -q "Agent context snapshot carries" docs/project/api-reference.md
@@ -159,7 +170,7 @@ grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_
 grep -q "QA result writeback merges" docs/project/api-reference.md
 grep -q "merge_canonical_evidence_refs_for_medical_review" apps/api-server/src/routes/ops_medical.rs
 grep -q "Medical review result writeback merges" docs/project/api-reference.md
-grep -q "Canonical Evidence" apps/web-console/src/pages/QAReviewPage.tsx
+grep -q "Canonical Evidence" apps/web-console/src/main.rs
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py
 grep -q "/api/v1/qa/results" scripts/demo/smoke_demo.py

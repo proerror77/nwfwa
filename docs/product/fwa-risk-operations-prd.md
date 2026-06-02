@@ -577,7 +577,7 @@ Required infrastructure principles:
 
 Staged infrastructure roadmap:
 
-- MVP: PostgreSQL, Rust API server, Rust worker, Python ML service, React
+- MVP: PostgreSQL, Rust API server, Rust worker, Python ML service, Yew
   console, migrations, seed scripts, and CI checks.
 - Pilot foundation: object storage, durable job state, backups, structured
   logs, minimum metrics, secret management, data masking, retention policy, and

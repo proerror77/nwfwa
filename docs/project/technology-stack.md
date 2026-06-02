@@ -74,11 +74,10 @@ platform. The Docker image uses `python:3.12-slim`.
 
 | Technology | Where | Purpose |
 | --- | --- | --- |
-| React 19 | `apps/web-console` | Operator UI |
-| Vite 6 | `apps/web-console` | Dev server and production build |
-| TypeScript 5 | `apps/web-console` | Static type checking |
-| TanStack Query 5 | `apps/web-console` | API query and mutation state |
-| Vitest 2 | `apps/web-console` | Page and helper tests |
+| Yew 0.21 | `apps/web-console` | Rust/WASM operator UI |
+| Trunk 0.21 | `apps/web-console` | Dev server and production build |
+| Rust WASM target | `apps/web-console` | Browser compile target |
+| Node 22 | `apps/web-console` | Compatibility wrapper for existing npm scripts and smoke runner |
 
 Frontend commands:
 
@@ -88,7 +87,33 @@ npm ci
 npm run lint
 npm test
 npm run build
+npm run smoke:build
 ```
+
+The npm commands are compatibility wrappers around the Rust/WASM toolchain. For
+local development install Trunk and the WASM target first:
+
+```bash
+rustup target add wasm32-unknown-unknown
+cargo install trunk --version 0.21.14 --locked
+```
+
+Then start the Yew web console:
+
+```bash
+cd apps/web-console
+npm run dev
+```
+
+Direct Rust/WASM checks are:
+
+```bash
+cargo check --locked --target wasm32-unknown-unknown
+trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
+```
+
+The active web-console entrypoint is `src/main.rs`.
 
 ## Database
 
@@ -131,17 +156,18 @@ CI includes:
 - API and ML demo smoke
 - retraining worker smoke path
 - Python ML service tests
-- frontend lint, tests, build, and build smoke
+- frontend WASM check, build, and build smoke
 
-CI uses Node 22 for frontend jobs and Python 3.12 for ML jobs. Actions include
-`actions/checkout@v6`, `actions/setup-python@v6`, `actions/setup-node@v6`, and
+CI uses Node 22 plus Rust WASM tooling for frontend jobs and Python 3.12 for ML
+jobs. Actions include `actions/checkout@v6`, `actions/setup-python@v6`,
+`actions/setup-node@v6`, `dtolnay/rust-toolchain@stable`, and
 `Swatinem/rust-cache@v2`.
 
 ## Declared And Resolved Versions
 
 `Cargo.toml`, `package.json`, and `pyproject.toml` describe declared dependency
-ranges. `Cargo.lock` and `package-lock.json` define resolved versions used by
-locked builds. Prefer locked commands when documenting reproducible verification.
+ranges. Rust and npm lock files define resolved versions used by locked builds.
+Prefer locked commands when documenting reproducible verification.
 
 ## Configuration
 
@@ -161,4 +187,4 @@ locked builds. Prefer locked commands when documenting reproducible verification
 - Production observability stack.
 - GPU inference runtime.
 - Real model training pipeline.
-- Dioxus replacement for the current React web console.
+- Dioxus replacement for the current Yew web console.

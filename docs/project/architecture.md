@@ -15,7 +15,7 @@ flowchart LR
     API --> DB[(PostgreSQL)]
     API --> ML[Python ML service]
     API --> Worker[Rust worker]
-    Web[React Operations Studio] --> API
+    Web[Yew Operations Studio] --> API
     API --> Audit[Audit and API call records]
     API --> OpenAPI[OpenAPI contract]
 ```
@@ -25,7 +25,7 @@ flowchart LR
 | Component | Path | Responsibility |
 | --- | --- | --- |
 | API server | `apps/api-server` | Axum API, scoring, ops workflows, OpenAPI, repository layer |
-| Web console | `apps/web-console` | React/Vite operator UI for scoring and operations |
+| Web console | `apps/web-console` | Yew/Trunk operator UI for inbox correction, scoring, and operations |
 | ML service | `apps/ml-service` | FastAPI scorer boundary for local demo model scores |
 | Worker | `apps/worker` | Health-checkable worker and retraining job runner |
 | PostgreSQL schema | `migrations/0001_initial.sql` | Claims, scoring, audit, rules, models, cases, QA, datasets |
@@ -123,6 +123,7 @@ backup, retention, or production monitoring setup is complete.
 
 | Module | Purpose |
 | --- | --- |
+| Claim Inbox | Normalize raw claim-system payloads, review findings, apply correction overlays, approve scoring |
 | Dashboard | Summary rollups, risk amount, RAG distribution, QA, cases, savings |
 | Runtime Scoring | Submit demo claims and inspect score layers |
 | Rules | Rule library, backtests, discovery, lifecycle, promotion, rollback |
@@ -147,7 +148,7 @@ The current repository supports a local modular monolith path:
 - PostgreSQL 16 through Docker Compose.
 - Python FastAPI ML service through Docker Compose or local uvicorn.
 - Rust API server through `cargo run --locked -p api-server`.
-- React web console through `npm run dev`.
+- Yew web console through `npm run dev`.
 
 Production deployment is not configured yet. Environment-specific deployment,
 secrets, key rotation, observability, object storage, and customer network

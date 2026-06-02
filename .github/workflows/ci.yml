@@ -200,11 +200,19 @@ jobs:
         working-directory: apps/web-console
     steps:
       - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: apps/web-console
+          cache-on-failure: true
       - uses: actions/setup-node@v6
         with:
           node-version: 22
           cache: npm
           cache-dependency-path: apps/web-console/package-lock.json
+      - run: cargo install trunk --version 0.21.14 --locked
       - run: npm ci
       - run: npm run lint
       - run: npm test

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
-import { spawn } from "node:child_process";
-import { access, readFile } from "node:fs/promises";
+import { access, readdir, readFile } from "node:fs/promises";
+import http from "node:http";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,13 +8,25 @@ const scriptDir = path.dirname(fileURLToPath(import.meta.url));
 const repoRoot = path.resolve(scriptDir, "../..");
 const webDir = path.join(repoRoot, "apps/web-console");
 const distDir = path.join(webDir, "dist");
-const viteBin = path.join(webDir, "node_modules/vite/bin/vite.js");
 const port = Number(process.env.WEB_CONSOLE_SMOKE_PORT ?? 4173);
 const baseUrl = `http://127.0.0.1:${port}`;
 
 async function requireBuiltArtifact() {
   await access(path.join(distDir, "index.html"));
-  await access(viteBin);
+}
+
+async function collectBuiltText(directory) {
+  const entries = await readdir(directory, { withFileTypes: true });
+  const chunks = [];
+  for (const entry of entries) {
+    const entryPath = path.join(directory, entry.name);
+    if (entry.isDirectory()) {
+      chunks.push(await collectBuiltText(entryPath));
+    } else if (/\.(html|js|wasm|css)$/.test(entry.name)) {
+      chunks.push((await readFile(entryPath)).toString("utf8"));
+    }
+  }
+  return chunks.join("\n");
 }
 
 async function fetchText(url) {
@@ -25,7 +37,7 @@ async function fetchText(url) {
   return response.text();
 }
 
-async function waitForPreview() {
+async function waitForServer() {
   let lastError;
   for (let attempt = 0; attempt < 60; attempt += 1) {
     try {
@@ -35,7 +47,7 @@ async function waitForPreview() {
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
   }
-  throw lastError ?? new Error("web console preview did not start");
+  throw lastError ?? new Error("web console static server did not start");
 }
 
 function assertContains(value, expected, label) {
@@ -44,34 +56,39 @@ function assertContains(value, expected, label) {
   }
 }
 
+function assertMatches(value, expected, label) {
+  if (!expected.test(value)) {
+    throw new Error(`expected ${label} to match ${expected}`);
+  }
+}
+
 async function main() {
   await requireBuiltArtifact();
 
-  const preview = spawn(
-    process.execPath,
-    [viteBin, "preview", "--host", "127.0.0.1", "--port", String(port), "--strictPort"],
-    { cwd: webDir, stdio: ["ignore", "pipe", "pipe"] },
-  );
-  let previewOutput = "";
-  preview.stdout.on("data", (chunk) => {
-    previewOutput += chunk.toString();
+  const server = http.createServer(async (request, response) => {
+    const url = new URL(request.url ?? "/", baseUrl);
+    const relativePath = url.pathname === "/" ? "index.html" : url.pathname.slice(1);
+    const filePath = path.normalize(path.join(distDir, relativePath));
+    if (!filePath.startsWith(distDir)) {
+      response.writeHead(403).end();
+      return;
+    }
+    try {
+      response.end(await readFile(filePath));
+    } catch {
+      response.writeHead(404).end();
+    }
   });
-  preview.stderr.on("data", (chunk) => {
-    previewOutput += chunk.toString();
-  });
+  await new Promise((resolve) => server.listen(port, "127.0.0.1", resolve));
 
   try {
-    const html = await waitForPreview();
-    assertContains(html, '<div id="root">', "index HTML");
-    const moduleMatch = html.match(/<script[^>]+type="module"[^>]+src="([^"]+\.js)"/);
-    if (!moduleMatch) {
-      throw new Error("index HTML does not reference a module JS asset");
-    }
-
-    const assetUrl = new URL(moduleMatch[1], baseUrl).toString();
-    const bundle = await fetchText(assetUrl);
-    assertContains(bundle, "FWA Studio", "web console bundle");
-    assertContains(bundle, "Runtime Scoring", "web console bundle");
+    const html = await waitForServer();
+    assertMatches(html, /<div\s+id="?root"?><\/div>/, "index HTML");
+    const builtText = await collectBuiltText(distDir);
+    assertContains(builtText, "FWA Studio", "web console bundle");
+    assertContains(builtText, "Claim Inbox", "web console bundle");
+    assertContains(builtText, "Correction Review", "web console bundle");
+    assertContains(builtText, "Runtime Scoring", "web console bundle");
     for (const expectedModule of [
       "Dashboard",
       "Rules",
@@ -89,7 +106,7 @@ async function main() {
       "QA Review",
       "Governance",
     ]) {
-      assertContains(bundle, expectedModule, "web console navigation bundle");
+      assertContains(builtText, expectedModule, "web console navigation bundle");
     }
     for (const expectedPanel of [
       "Management Dashboard",
@@ -129,17 +146,13 @@ async function main() {
       "Canonical Trace Only",
       "Input Mode",
     ]) {
-      assertContains(bundle, expectedPanel, "web console operations panel bundle");
+      assertContains(builtText, expectedPanel, "web console operations panel bundle");
     }
 
     const builtHtml = await readFile(path.join(distDir, "index.html"), "utf8");
-    assertContains(builtHtml, moduleMatch[1], "built index HTML");
+    assertContains(builtHtml, "wasm", "built index HTML");
   } finally {
-    preview.kill();
-  }
-
-  if (preview.exitCode && preview.exitCode !== 0) {
-    throw new Error(`vite preview exited unexpectedly:\n${previewOutput}`);
+    await new Promise((resolve) => server.close(resolve));
   }
 }
 

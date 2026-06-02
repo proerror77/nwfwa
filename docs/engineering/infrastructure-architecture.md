@@ -294,7 +294,7 @@ Current foundation:
 - Rust `api-server`;
 - Rust `worker`;
 - Python `ml-service`;
-- React `web-console`;
+- Yew `web-console`;
 - migrations, seed scripts, and CI checks.
 
 Keep this phase simple. Do not introduce Redis, ClickHouse, vector DB, graph DB,

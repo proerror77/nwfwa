@@ -35,7 +35,10 @@ cargo run --locked -p api-server
 In another terminal:
 
 ```bash
+rustup target add wasm32-unknown-unknown
+cargo install trunk --version 0.21.14 --locked
 cd apps/web-console
+npm ci
 npm run dev
 ```
 
@@ -180,6 +183,6 @@ npm run build
 
 ## 8. Demo Caveats
 
-- The first demo uses PostgreSQL, Python ML service, Rust API server, and React web console as a modular monolith path.
+- The first demo uses PostgreSQL, Python ML service, Rust API server, and Yew web console as a modular monolith path.
 - The QA queue is a UI demo queue that writes to the real QA writeback API.
 - Seeded historical audit data demonstrates timeline views; live scoring still creates new runtime audit events.
