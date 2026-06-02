@@ -4391,7 +4391,10 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": ["string", "null"],
                             "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
                         },
-                        "metrics_json": { "type": "object" }
+                        "metrics_json": {
+                            "type": "object",
+                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                        }
                     }
                 },
                 "ModelEvaluationRegistrationRequest": {
@@ -4416,7 +4419,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "minLength": 1,
                             "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
                         },
-                        "metrics_json": { "type": "object", "minProperties": 1 }
+                        "metrics_json": {
+                            "type": "object",
+                            "minProperties": 1,
+                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                        }
                     }
                 },
                 "ModelEvaluationLineage": {
@@ -4763,7 +4770,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "minLength": 1,
                             "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
                         },
-                        "metrics_json": { "type": "object", "minProperties": 1 }
+                        "metrics_json": {
+                            "type": "object",
+                            "minProperties": 1,
+                            "description": "Model governance metrics. Promotion-ready retraining outputs should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                        }
                     }
                 },
                 "CompleteModelRetrainingJobResponse": {

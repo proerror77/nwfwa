@@ -735,6 +735,29 @@ async fn openapi_includes_operations_paths() {
             ["metrics_json"]["minProperties"],
         1
     );
+    for schema_name in [
+        "ModelEvaluation",
+        "ModelEvaluationRegistrationRequest",
+        "CompleteModelRetrainingJobRequest",
+    ] {
+        let description = schema["components"]["schemas"][schema_name]["properties"]
+            ["metrics_json"]["description"]
+            .as_str()
+            .unwrap_or_default();
+        for required_hint in [
+            "time_group_split_status",
+            "time_split_field",
+            "group_split_fields",
+            "leakage_check_status",
+            "shadow_comparison_status",
+            "label_provenance_status",
+        ] {
+            assert!(
+                description.contains(required_hint),
+                "missing {schema_name}.metrics_json governance hint {required_hint}"
+            );
+        }
+    }
     assert_eq!(
         schema["components"]["schemas"]["ModelEvaluationListResponse"]["properties"]["lineage"]
             ["items"]["$ref"],
