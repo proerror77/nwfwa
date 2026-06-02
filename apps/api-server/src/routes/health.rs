@@ -41,6 +41,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 runtime_kind: Some(state.config.model_runtime_kind()),
             },
             HealthCheck {
+                name: "model_service_configuration",
+                status: state.config.model_service_configuration_status(),
+                runtime_kind: None,
+            },
+            HealthCheck {
                 name: "api_key_configuration",
                 status: state.config.api_key_configuration_status(),
                 runtime_kind: None,

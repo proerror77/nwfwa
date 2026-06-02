@@ -131,7 +131,9 @@ async fn openapi_includes_operations_paths() {
             "configured",
             "local_dev_key",
             "local_demo_source",
-            "local_dev_database"
+            "local_dev_database",
+            "local_dev_model_service",
+            "heuristic_model_scorer"
         ])
     );
     assert!(
@@ -154,6 +156,20 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("local_dev_database"),
         "missing health status database-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_dev_model_service"),
+        "missing health status model-service-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("heuristic_model_scorer"),
+        "missing health status heuristic-scorer-readiness description"
     );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());

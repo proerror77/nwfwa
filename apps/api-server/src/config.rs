@@ -28,6 +28,18 @@ impl AppConfig {
         }
     }
 
+    pub fn model_service_configuration_status(&self) -> &'static str {
+        if self.model_service_url == "heuristic"
+            || self.model_service_url.starts_with("heuristic://")
+        {
+            "heuristic_model_scorer"
+        } else if self.model_service_url == "http://127.0.0.1:8001" {
+            "local_dev_model_service"
+        } else {
+            "configured"
+        }
+    }
+
     pub fn api_key_configuration_status(&self) -> &'static str {
         if self.api_key == "dev-secret" {
             "local_dev_key"
