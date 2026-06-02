@@ -330,7 +330,8 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "shadow_comparison_status": "passed",
                 "feature_reproducibility_hash": "sha256:activation-features",
                 "label_provenance_status": "passed",
-                "label_reviewer_source": "qa_review"
+                "label_reviewer_source": "qa_review",
+                "pilot_validation_status": "passed"
               }}
             }}"#
         ),
@@ -592,7 +593,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
     assert_eq!(body["source_data_quality_status"], "missing");
     assert_eq!(body["passed_count"], 2);
-    assert_eq!(body["total_count"], 16);
+    assert_eq!(body["total_count"], 17);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -659,7 +660,8 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
                 "data_quality_score": 0.91,
                 "feature_reproducibility_hash": "sha256:quality-gate-features",
                 "label_provenance_status": "passed",
-                "label_reviewer_source": "qa_review"
+                "label_reviewer_source": "qa_review",
+                "pilot_validation_status": "passed"
               }}
             }}"#
         ),
@@ -743,6 +745,69 @@ async fn model_promotion_gates_require_time_group_split_strategy() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("time/group split strategy missing")));
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_public_research_dataset_evidence() {
+    let app = build_app(test_config());
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "public_research").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_public_research",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_public_research/v1/feature_importance.parquet",
+              "metrics_json": {{
+                "dataset_usage_scope": "public_kaggle_research",
+                "time_group_split_status": "passed",
+                "time_split_field": "service_date",
+                "group_split_fields": ["member_id", "policy_id", "provider_id"],
+                "review_capacity_threshold_status": "passed",
+                "leakage_check_status": "passed",
+                "shadow_comparison_status": "passed",
+                "feature_reproducibility_hash": "sha256:public-research-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "kaggle_public_dataset",
+                "approval_status": "approved",
+                "out_of_time_auc": 0.79
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["decision"], "routing_blocked");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("pilot/customer validation missing")));
+    let validation_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Pilot/customer validation")
+        .expect("model promotion gates should include pilot/customer validation");
+    assert_eq!(validation_gate["passed"], false);
+    assert_eq!(validation_gate["evidence_source"], "evaluation");
 }
 
 #[tokio::test]

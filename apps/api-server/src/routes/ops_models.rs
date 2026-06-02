@@ -1324,6 +1324,7 @@ fn build_model_promotion_gates(
             .and_then(|value| value.as_str())
             .map(|source| !source.trim().is_empty())
             .unwrap_or(false);
+    let pilot_customer_validation = pilot_customer_validation_gate(metrics);
     let approval = latest_review
         .map(|review| review.decision == "approved")
         .unwrap_or_else(|| {
@@ -1434,6 +1435,12 @@ fn build_model_promotion_gates(
             label_provenance,
             label_provenance_blocker(metrics),
             evidence_source(label_provenance, "evaluation"),
+        ),
+        gate(
+            "Pilot/customer validation",
+            pilot_customer_validation,
+            "pilot/customer validation missing",
+            pilot_customer_validation_evidence_source(metrics, pilot_customer_validation),
         ),
         gate(
             "Drift status",
@@ -1661,6 +1668,40 @@ fn time_group_split_strategy_gate(metrics: &serde_json::Value) -> bool {
         })
         .unwrap_or(false);
     status_passed && has_time_field && has_group_field
+}
+
+fn pilot_customer_validation_gate(metrics: &serde_json::Value) -> bool {
+    let validation_status_passed = ["pilot_validation_status", "customer_validation_status"]
+        .into_iter()
+        .any(|field| metrics.get(field).and_then(|value| value.as_str()) == Some("passed"));
+    let usage_scope_validated = metrics
+        .get("dataset_usage_scope")
+        .and_then(|value| value.as_str())
+        .is_some_and(|scope| {
+            matches!(
+                scope,
+                "customer_pilot_validated"
+                    | "customer_production_validated"
+                    | "customer_validated"
+                    | "pilot_validated"
+            )
+        });
+    validation_status_passed || usage_scope_validated
+}
+
+fn pilot_customer_validation_evidence_source(
+    metrics: &serde_json::Value,
+    passed: bool,
+) -> &'static str {
+    if passed
+        || metrics.get("dataset_usage_scope").is_some()
+        || metrics.get("pilot_validation_status").is_some()
+        || metrics.get("customer_validation_status").is_some()
+    {
+        "evaluation"
+    } else {
+        "missing"
+    }
 }
 
 fn source_data_quality_gate(

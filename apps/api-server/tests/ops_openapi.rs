@@ -905,6 +905,7 @@ async fn openapi_includes_operations_paths() {
             "leakage_check_status",
             "shadow_comparison_status",
             "label_provenance_status",
+            "pilot_validation_status",
         ] {
             assert!(
                 description.contains(required_hint),

@@ -363,7 +363,10 @@ Promotion-ready evaluations should also include time/group split evidence in
 `metrics_json`: `time_group_split_status = "passed"`, a non-empty
 `time_split_field`, and non-empty `group_split_fields`. Without those fields,
 model promotion gates keep routing blocked because FWA validation must not rely
-on random train/test splits.
+on random train/test splits. Promotion-ready evaluations must also carry
+`pilot_validation_status = "passed"` or `customer_validation_status = "passed"`;
+public or Kaggle-inspired offline research datasets remain research inputs and
+cannot serve as production promotion evidence.
 
 ## Models
 

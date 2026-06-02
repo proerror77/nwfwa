@@ -4436,7 +4436,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "metrics_json": {
                             "type": "object",
-                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         }
                     }
                 },
@@ -4465,7 +4465,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "metrics_json": {
                             "type": "object",
                             "minProperties": 1,
-                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         }
                     }
                 },
@@ -4816,7 +4816,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "metrics_json": {
                             "type": "object",
                             "minProperties": 1,
-                            "description": "Model governance metrics. Promotion-ready retraining outputs should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                            "description": "Model governance metrics. Promotion-ready retraining outputs should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         }
                     }
                 },

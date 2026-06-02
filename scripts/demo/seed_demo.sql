@@ -756,6 +756,7 @@ VALUES (
     "feature_reproducibility_hash": "sha256:demo-baseline-feature-reproducibility",
     "label_provenance_status": "passed",
     "label_reviewer_source": "investigation_results",
+    "pilot_validation_status": "passed",
     "approval_status": "approved"
   }'::jsonb
 )

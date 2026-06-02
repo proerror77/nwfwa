@@ -555,6 +555,7 @@ BEGIN
     AND mer.metrics_json ->> 'leakage_check_status' = 'passed'
     AND mer.metrics_json ->> 'shadow_comparison_status' = 'passed'
     AND mer.metrics_json ->> 'label_provenance_status' = 'passed'
+    AND mer.metrics_json ->> 'pilot_validation_status' = 'passed'
     AND mer.metrics_json ->> 'approval_status' = 'approved'
     AND mer.metrics_json ->> 'feature_reproducibility_hash' = 'sha256:demo-baseline-feature-reproducibility'
     AND mer.metrics_json ? 'out_of_time_auc';
