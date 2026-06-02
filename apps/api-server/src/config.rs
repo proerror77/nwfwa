@@ -7,6 +7,7 @@ pub struct AppConfig {
     pub object_storage_uri: String,
     pub customer_scope_id: String,
     pub retention_policy_id: String,
+    pub backup_restore_plan_id: String,
 }
 
 impl AppConfig {
@@ -24,6 +25,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "demo-customer".into()),
             retention_policy_id: std::env::var("FWA_RETENTION_POLICY_ID")
                 .unwrap_or_else(|_| "demo-retention-policy".into()),
+            backup_restore_plan_id: std::env::var("FWA_BACKUP_RESTORE_PLAN_ID")
+                .unwrap_or_else(|_| "demo-backup-restore-plan".into()),
         }
     }
 
@@ -92,6 +95,14 @@ impl AppConfig {
     pub fn retention_policy_configuration_status(&self) -> &'static str {
         if self.retention_policy_id == "demo-retention-policy" {
             "local_demo_retention_policy"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn backup_restore_configuration_status(&self) -> &'static str {
+        if self.backup_restore_plan_id == "demo-backup-restore-plan" {
+            "local_demo_backup_restore"
         } else {
             "configured"
         }

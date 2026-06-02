@@ -78,6 +78,9 @@ Minimum pilot monitoring:
 - Retention policy readiness: `/api/v1/health` check
   `retention_policy_configuration` must be `configured`, not
   `local_demo_retention_policy`, before customer pilot traffic.
+- Backup and restore readiness: `/api/v1/health` check
+  `backup_restore_configuration` must be `configured`, not
+  `local_demo_backup_restore`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

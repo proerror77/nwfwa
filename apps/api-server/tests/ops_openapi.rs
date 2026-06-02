@@ -14,6 +14,7 @@ fn test_config() -> AppConfig {
         object_storage_uri: "local://demo-artifacts".into(),
         customer_scope_id: "demo-customer".into(),
         retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
     }
 }
 
@@ -139,7 +140,8 @@ async fn openapi_includes_operations_paths() {
             "heuristic_model_scorer",
             "local_demo_object_storage",
             "local_demo_customer_scope",
-            "local_demo_retention_policy"
+            "local_demo_retention_policy",
+            "local_demo_backup_restore"
         ])
     );
     assert!(
@@ -197,6 +199,13 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("local_demo_retention_policy"),
         "missing health status retention-policy-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_backup_restore"),
+        "missing health status backup-restore-readiness description"
     );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());

@@ -75,6 +75,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.retention_policy_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "backup_restore_configuration",
+                status: state.config.backup_restore_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }
