@@ -113,6 +113,10 @@ async function main() {
     }
     for (const expectedPanel of [
       "Management Dashboard",
+      "Executive KPIs",
+      "Value Measurement",
+      "ROI Attribution",
+      "Seven-Layer Coverage",
       "Rule Promotion Gates",
       "Discovery Mode",
       "Candidate Source",

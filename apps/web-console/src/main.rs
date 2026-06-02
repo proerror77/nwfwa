@@ -1,6 +1,7 @@
 use gloo_net::http::Request;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
+use std::collections::BTreeMap;
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 use yew::prelude::*;
@@ -533,6 +534,178 @@ struct GovernanceSnapshot {
     agent_runs: Vec<AgentRunRecord>,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardSummary {
+    suspected_claims: u32,
+    confirmed_fwa: u32,
+    risk_amount: String,
+    saving_amount: String,
+    rag_distribution: BTreeMap<String, u32>,
+    scheme_distribution: BTreeMap<String, u32>,
+    rule_hits: u32,
+    model_scores: BTreeMap<String, DashboardModelScore>,
+    layer_scores: BTreeMap<String, DashboardLayerScore>,
+    saving_attributions: Vec<DashboardSavingAttribution>,
+    saving_segments: Vec<DashboardSavingSegment>,
+    value_measurement: DashboardValueMeasurement,
+    audit_coverage: DashboardAuditCoverage,
+    label_pool: DashboardLabelPool,
+    qa_queue: DashboardQaQueue,
+    case_sla: DashboardCaseSla,
+    agent_governance: DashboardAgentGovernance,
+    model_governance: DashboardModelGovernance,
+    rule_governance: DashboardRuleGovernance,
+    investigation_results: u32,
+    qa_reviews: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardModelScore {
+    model_key: String,
+    scored_runs: u32,
+    average_score: f64,
+    high_risk_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardLayerScore {
+    name: String,
+    scored_runs: u32,
+    average_score: f64,
+    high_risk_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardSavingAttribution {
+    source_type: String,
+    source_id: String,
+    financial_impact_type: String,
+    action: String,
+    saving_amount: String,
+    currency: String,
+    claim_count: u32,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardSavingSegment {
+    segment_type: String,
+    segment_id: String,
+    saving_amount: String,
+    currency: String,
+    claim_count: u32,
+    attribution_count: u32,
+    roi: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardValueMeasurement {
+    prevented_payment: String,
+    recovered_amount: String,
+    avoided_future_exposure: String,
+    deterrence_estimate: String,
+    estimated_impact: String,
+    review_cost: String,
+    false_positive_operational_cost: String,
+    reviewer_capacity_hours: String,
+    net_value: String,
+    currency: String,
+    evidence_caveat: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardAuditCoverage {
+    scoring_runs: u32,
+    canonical_trace_runs: u32,
+    canonical_trace_coverage: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardLabelPool {
+    total_labels: u32,
+    approved_for_training: u32,
+    needs_review: u32,
+    rule_feedback: u32,
+    model_feedback: u32,
+    features_feedback: u32,
+    provider_profile_feedback: u32,
+    workflow_feedback: u32,
+    case_status_labels: u32,
+    medical_review_labels: u32,
+    false_positive_labels: u32,
+    evidence_backed_labels: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardQaQueue {
+    sampled_cases: u32,
+    open_cases: u32,
+    reviewed_cases: u32,
+    disagreement_cases: u32,
+    disagreement_rate: f64,
+    feedback_open_count: u32,
+    feedback_in_progress_count: u32,
+    feedback_resolved_count: u32,
+    feedback_dismissed_count: u32,
+    unresolved_feedback_count: u32,
+    rules_unresolved_feedback_count: u32,
+    models_unresolved_feedback_count: u32,
+    features_unresolved_feedback_count: u32,
+    provider_profile_unresolved_feedback_count: u32,
+    workflow_unresolved_feedback_count: u32,
+    tpa_unresolved_feedback_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardCaseSla {
+    total_cases: u32,
+    open_cases: u32,
+    closed_cases: u32,
+    breached_cases: u32,
+    sla_breach_rate: f64,
+    average_time_to_triage_hours: f64,
+    average_time_to_closure_hours: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardAgentGovernance {
+    total_runs: u32,
+    successful_runs: u32,
+    evidence_backed_runs: u32,
+    tool_call_count: u32,
+    policy_check_count: u32,
+    denied_policy_check_count: u32,
+    failed_tool_call_count: u32,
+    pending_approvals: u32,
+    approved_approvals: u32,
+    rejected_approvals: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardModelGovernance {
+    total_models: u32,
+    evaluated_models: u32,
+    drift_watch_count: u32,
+    drift_detected_count: u32,
+    average_precision: Option<f64>,
+    average_recall: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DashboardRuleGovernance {
+    total_rules: u32,
+    active_rules: u32,
+    triggered_rules: u32,
+    total_trigger_count: u32,
+    reviewed_count: u32,
+    confirmed_fwa_count: u32,
+    false_positive_count: u32,
+    precision: f64,
+    false_positive_rate: f64,
+    saving_amount: String,
+    roi: f64,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum ApiState<T> {
     Idle,
@@ -566,6 +739,8 @@ fn app() -> Html {
             <main>
                 if *active == "Claim Inbox" {
                     <ClaimInboxPage />
+                } else if *active == "Dashboard" {
+                    <DashboardPage />
                 } else if *active == "Models" {
                     <ModelsPage />
                 } else if *active == "Factor Factory" {
@@ -581,6 +756,263 @@ fn app() -> Html {
                 }
             </main>
         </div>
+    }
+}
+
+#[function_component(DashboardPage)]
+fn dashboard_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let summary_state = use_state(|| ApiState::<DashboardSummary>::Idle);
+
+    let load_summary = {
+        let api_key = api_key.clone();
+        let summary_state = summary_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let summary_state = summary_state.clone();
+            summary_state.set(ApiState::Loading);
+            spawn_local(async move {
+                summary_state.set(match get_dashboard_summary(api_key).await {
+                    Ok(summary) => ApiState::Ready(summary),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_summary = load_summary.clone();
+        Callback::from(move |_| load_summary.emit(()))
+    };
+
+    {
+        let load_summary = load_summary.clone();
+        use_effect_with((), move |_| {
+            load_summary.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="dashboard">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Dashboard"}</h2>
+                    <p>{"Track suspected and confirmed FWA, value realization, seven-layer risk coverage, QA feedback, and governance readiness."}</p>
+                </div>
+                <span class="status-pill">{"Management Dashboard"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Dashboard Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*summary_state, ApiState::Loading)}>
+                        {if matches!(&*summary_state, ApiState::Loading) { "Refreshing..." } else { "Refresh dashboard" }}
+                    </button>
+                </div>
+            </section>
+
+            <DashboardView state={(*summary_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct DashboardProps {
+    state: ApiState<DashboardSummary>,
+}
+
+#[function_component(DashboardView)]
+fn dashboard_view(props: &DashboardProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load the dashboard to inspect operational value and governance coverage."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading dashboard summary..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(summary) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"Executive KPIs"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Suspected FWA"}</span><strong>{summary.suspected_claims}</strong></div>
+                                <div><span>{"Confirmed FWA"}</span><strong>{summary.confirmed_fwa}</strong></div>
+                                <div><span>{"Risk Amount"}</span><strong>{&summary.risk_amount}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Savings"}</span><strong>{&summary.saving_amount}</strong></div>
+                                <div><span>{"Rule Hits"}</span><strong>{summary.rule_hits}</strong></div>
+                                <div><span>{"Investigations"}</span><strong>{summary.investigation_results}</strong></div>
+                                <div><span>{"QA Reviews"}</span><strong>{summary.qa_reviews}</strong></div>
+                                <div><span>{"RAG Distribution"}</span><strong>{map_counts_label(&summary.rag_distribution)}</strong></div>
+                                <div><span>{"Schemes"}</span><strong>{map_counts_label(&summary.scheme_distribution)}</strong></div>
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Value Measurement"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Estimated Impact"}</span><strong>{&summary.value_measurement.estimated_impact}</strong></div>
+                                <div><span>{"Net Value"}</span><strong>{&summary.value_measurement.net_value}</strong></div>
+                                <div><span>{"Currency"}</span><strong>{&summary.value_measurement.currency}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Prevented Payment"}</span><strong>{&summary.value_measurement.prevented_payment}</strong></div>
+                                <div><span>{"Recovered"}</span><strong>{&summary.value_measurement.recovered_amount}</strong></div>
+                                <div><span>{"Future Exposure"}</span><strong>{&summary.value_measurement.avoided_future_exposure}</strong></div>
+                                <div><span>{"Deterrence"}</span><strong>{&summary.value_measurement.deterrence_estimate}</strong></div>
+                                <div><span>{"Review Cost"}</span><strong>{&summary.value_measurement.review_cost}</strong></div>
+                                <div><span>{"FP Cost"}</span><strong>{&summary.value_measurement.false_positive_operational_cost}</strong></div>
+                                <div><span>{"Reviewer Capacity"}</span><strong>{&summary.value_measurement.reviewer_capacity_hours}</strong></div>
+                                <div><span>{"Audit Coverage"}</span><strong>{percent_label(summary.audit_coverage.canonical_trace_coverage)}</strong></div>
+                                <div><span>{"Canonical Runs"}</span><strong>{format!("{} / {}", summary.audit_coverage.canonical_trace_runs, summary.audit_coverage.scoring_runs)}</strong></div>
+                            </div>
+                            <small>{&summary.value_measurement.evidence_caveat}</small>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"ROI Attribution"}</h3>
+                            if summary.saving_attributions.is_empty() {
+                                <p class="empty">{"No saving attribution records returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for summary.saving_attributions.iter().take(8).map(|item| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} / {}", item.source_type, item.source_id)}</strong>
+                                                <span>{format!("{} / {} / {}", item.financial_impact_type, item.action, item.currency)}</span>
+                                            </div>
+                                            <div class="summary-grid">
+                                                <div><span>{"Saving"}</span><strong>{&item.saving_amount}</strong></div>
+                                                <div><span>{"Claims"}</span><strong>{item.claim_count}</strong></div>
+                                                <div><span>{"Evidence"}</span><strong>{refs_label(&item.evidence_refs)}</strong></div>
+                                            </div>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                            <h4>{"Saving Segments"}</h4>
+                            if summary.saving_segments.is_empty() {
+                                <p class="empty">{"No saving segment records returned."}</p>
+                            } else {
+                                <div class="summary-grid">
+                                    {for summary.saving_segments.iter().take(6).map(|segment| html! {
+                                        <div>
+                                            <span>{format!("{} / {}", segment.segment_type, segment.segment_id)}</span>
+                                            <strong>{format!("{} {} / ROI {:.2}", segment.saving_amount, segment.currency, segment.roi)}</strong>
+                                            <small>{format!("claims {} / attributions {}", segment.claim_count, segment.attribution_count)}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Seven-Layer Coverage"}</h3>
+                            if summary.layer_scores.is_empty() {
+                                <p class="empty">{"No layer score records returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for summary.layer_scores.iter().map(|(layer_key, layer)| html! {
+                                        <div class="metric-row">
+                                            <span>{format!("{} / {}", layer_key, layer.name)}</span>
+                                            <strong>{format!("{:.1}", layer.average_score)}</strong>
+                                            <small>{format!("runs {}", layer.scored_runs)}</small>
+                                            <small>{format!("high risk {}", layer.high_risk_count)}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                            <h4>{"Model Score Distribution"}</h4>
+                            if summary.model_scores.is_empty() {
+                                <p class="empty">{"No model score records returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for summary.model_scores.iter().map(|(model_key, model)| html! {
+                                        <div class="metric-row">
+                                            <span>{format!("{} / {}", model_key, model.model_key)}</span>
+                                            <strong>{format!("{:.1}", model.average_score)}</strong>
+                                            <small>{format!("runs {}", model.scored_runs)}</small>
+                                            <small>{format!("high risk {}", model.high_risk_count)}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"QA And Case SLA"}</h3>
+                            <div class="summary-grid">
+                                <div><span>{"Sampled Cases"}</span><strong>{summary.qa_queue.sampled_cases}</strong></div>
+                                <div><span>{"Open QA"}</span><strong>{summary.qa_queue.open_cases}</strong></div>
+                                <div><span>{"Reviewed QA"}</span><strong>{summary.qa_queue.reviewed_cases}</strong></div>
+                                <div><span>{"Disagreements"}</span><strong>{format!("{} / {}", summary.qa_queue.disagreement_cases, percent_label(summary.qa_queue.disagreement_rate))}</strong></div>
+                                <div><span>{"Feedback Open"}</span><strong>{summary.qa_queue.feedback_open_count}</strong></div>
+                                <div><span>{"Feedback In Progress"}</span><strong>{summary.qa_queue.feedback_in_progress_count}</strong></div>
+                                <div><span>{"Feedback Resolved"}</span><strong>{summary.qa_queue.feedback_resolved_count}</strong></div>
+                                <div><span>{"Feedback Dismissed"}</span><strong>{summary.qa_queue.feedback_dismissed_count}</strong></div>
+                                <div><span>{"Unresolved Feedback"}</span><strong>{summary.qa_queue.unresolved_feedback_count}</strong></div>
+                                <div><span>{"Rule / Model Feedback"}</span><strong>{format!("{} / {}", summary.qa_queue.rules_unresolved_feedback_count, summary.qa_queue.models_unresolved_feedback_count)}</strong></div>
+                                <div><span>{"Feature / Provider Feedback"}</span><strong>{format!("{} / {}", summary.qa_queue.features_unresolved_feedback_count, summary.qa_queue.provider_profile_unresolved_feedback_count)}</strong></div>
+                                <div><span>{"Workflow / TPA Feedback"}</span><strong>{format!("{} / {}", summary.qa_queue.workflow_unresolved_feedback_count, summary.qa_queue.tpa_unresolved_feedback_count)}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Total Cases"}</span><strong>{summary.case_sla.total_cases}</strong></div>
+                                <div><span>{"Open Cases"}</span><strong>{summary.case_sla.open_cases}</strong></div>
+                                <div><span>{"Closed Cases"}</span><strong>{summary.case_sla.closed_cases}</strong></div>
+                                <div><span>{"Breached Cases"}</span><strong>{summary.case_sla.breached_cases}</strong></div>
+                                <div><span>{"SLA Breach Rate"}</span><strong>{percent_label(summary.case_sla.sla_breach_rate)}</strong></div>
+                                <div><span>{"Triage / Closure Hours"}</span><strong>{format!("{:.1} / {:.1}", summary.case_sla.average_time_to_triage_hours, summary.case_sla.average_time_to_closure_hours)}</strong></div>
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Governance Rollups"}</h3>
+                            <div class="summary-grid">
+                                <div><span>{"Labels"}</span><strong>{summary.label_pool.total_labels}</strong></div>
+                                <div><span>{"Approved Training"}</span><strong>{summary.label_pool.approved_for_training}</strong></div>
+                                <div><span>{"Needs Review"}</span><strong>{summary.label_pool.needs_review}</strong></div>
+                                <div><span>{"Rule / Model Feedback"}</span><strong>{format!("{} / {}", summary.label_pool.rule_feedback, summary.label_pool.model_feedback)}</strong></div>
+                                <div><span>{"Feature / Provider Feedback"}</span><strong>{format!("{} / {}", summary.label_pool.features_feedback, summary.label_pool.provider_profile_feedback)}</strong></div>
+                                <div><span>{"Workflow Feedback"}</span><strong>{summary.label_pool.workflow_feedback}</strong></div>
+                                <div><span>{"Case Status Labels"}</span><strong>{summary.label_pool.case_status_labels}</strong></div>
+                                <div><span>{"Medical Labels"}</span><strong>{summary.label_pool.medical_review_labels}</strong></div>
+                                <div><span>{"False Positive Labels"}</span><strong>{summary.label_pool.false_positive_labels}</strong></div>
+                                <div><span>{"Evidence Labels"}</span><strong>{summary.label_pool.evidence_backed_labels}</strong></div>
+                                <div><span>{"Agent Runs"}</span><strong>{format!("{} / {}", summary.agent_governance.successful_runs, summary.agent_governance.total_runs)}</strong></div>
+                                <div><span>{"Agent Evidence"}</span><strong>{summary.agent_governance.evidence_backed_runs}</strong></div>
+                                <div><span>{"Tool Calls"}</span><strong>{summary.agent_governance.tool_call_count}</strong></div>
+                                <div><span>{"Policy Checks"}</span><strong>{format!("{} / denied {}", summary.agent_governance.policy_check_count, summary.agent_governance.denied_policy_check_count)}</strong></div>
+                                <div><span>{"Failed Tool Calls"}</span><strong>{summary.agent_governance.failed_tool_call_count}</strong></div>
+                                <div><span>{"Approvals"}</span><strong>{format!("pending {} / approved {} / rejected {}", summary.agent_governance.pending_approvals, summary.agent_governance.approved_approvals, summary.agent_governance.rejected_approvals)}</strong></div>
+                                <div><span>{"Models"}</span><strong>{format!("{} / evaluated {}", summary.model_governance.total_models, summary.model_governance.evaluated_models)}</strong></div>
+                                <div><span>{"Drift"}</span><strong>{format!("watch {} / detected {}", summary.model_governance.drift_watch_count, summary.model_governance.drift_detected_count)}</strong></div>
+                                <div><span>{"Precision / Recall"}</span><strong>{format!("{} / {}", optional_number(summary.model_governance.average_precision), optional_number(summary.model_governance.average_recall))}</strong></div>
+                                <div><span>{"Rules"}</span><strong>{format!("{} / active {}", summary.rule_governance.total_rules, summary.rule_governance.active_rules)}</strong></div>
+                                <div><span>{"Rule Triggers"}</span><strong>{format!("{} / hits {}", summary.rule_governance.total_trigger_count, summary.rule_governance.triggered_rules)}</strong></div>
+                                <div><span>{"Rule Outcomes"}</span><strong>{format!("reviewed {} / confirmed {} / fp {}", summary.rule_governance.reviewed_count, summary.rule_governance.confirmed_fwa_count, summary.rule_governance.false_positive_count)}</strong></div>
+                                <div><span>{"Rule Precision"}</span><strong>{format!("{} / FP {}", percent_label(summary.rule_governance.precision), percent_label(summary.rule_governance.false_positive_rate))}</strong></div>
+                                <div><span>{"Rule ROI"}</span><strong>{format!("{} / {:.2}", summary.rule_governance.saving_amount, summary.rule_governance.roi)}</strong></div>
+                            </div>
+                        </section>
+                    </>
+                },
+            }}
+        </>
     }
 }
 
@@ -1825,6 +2257,10 @@ async fn score_canonical_claim(payload: Value, api_key: String) -> Result<ScoreR
     request_json("/api/v1/claims/score", api_key, payload).await
 }
 
+async fn get_dashboard_summary(api_key: String) -> Result<DashboardSummary, String> {
+    request_get_json("/api/v1/ops/dashboard/summary", api_key).await
+}
+
 async fn get_model_ops_snapshot(
     api_key: String,
     model_key: String,
@@ -2281,6 +2717,21 @@ fn issue_counts_label(counts: &Map<String, Value>) -> String {
         .map(|(key, value)| format!("{key}={}", display_value(value)))
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn map_counts_label(counts: &BTreeMap<String, u32>) -> String {
+    if counts.is_empty() {
+        return "none".into();
+    }
+    counts
+        .iter()
+        .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn percent_label(value: f64) -> String {
+    format!("{:.1}%", value * 100.0)
 }
 
 fn refs_label(refs: &[String]) -> String {
