@@ -3227,7 +3227,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "evidence_refs": {
                             "type": "array",
-                            "description": "Structured evidence references must not contain PII. For claims with a prior normalized scoring trace, canonical evidence refs from that trace are merged into the persisted QA review and response.",
+                            "description": "Structured evidence references must not contain PII. For claims with the referenced normalized scoring trace, canonical evidence refs from that trace are merged into the persisted medical review and response.",
                             "minItems": 1,
                             "items": { "type": "string", "minLength": 1 }
                         }
@@ -3248,7 +3248,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "MedicalReviewQueueItem": {
                     "type": "object",
-                    "required": ["claim_id", "run_id", "audit_id", "medical_reasonableness_score", "review_route", "evidence_status", "missing_evidence", "item_finding_count", "evidence_refs", "review_status"],
+                    "required": ["claim_id", "run_id", "audit_id", "medical_reasonableness_score", "review_route", "evidence_status", "missing_evidence", "item_finding_count", "evidence_refs", "canonical_source_refs", "canonical_evidence_refs", "review_status"],
                     "properties": {
                         "claim_id": { "type": "string" },
                         "run_id": { "type": "string" },
@@ -3261,6 +3261,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "first_item_code": { "type": ["string", "null"] },
                         "first_issue_type": { "type": ["string", "null"] },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "canonical_source_refs": { "type": "array", "items": { "type": "string" } },
+                        "canonical_evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "created_at": { "type": ["string", "null"], "format": "date-time" },
                         "review_status": { "type": "string" },
                         "review_audit_id": { "type": ["string", "null"] },

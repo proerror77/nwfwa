@@ -1877,6 +1877,20 @@ async fn openapi_includes_operations_paths() {
             .iter()
             .any(|field| field == "medical_reasonableness_score")
     );
+    assert!(
+        schema["components"]["schemas"]["MedicalReviewQueueItem"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "canonical_source_refs")
+    );
+    assert!(
+        schema["components"]["schemas"]["MedicalReviewQueueItem"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "canonical_evidence_refs")
+    );
     assert_eq!(
         schema["components"]["schemas"]["SimilarCase"]["properties"]["retrieval_method"]["type"],
         "string"

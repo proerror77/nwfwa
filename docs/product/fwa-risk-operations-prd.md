@@ -272,6 +272,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - when the normalized scoring run later enters QA, merge its canonical evidence
   refs into `POST /api/v1/qa/results` so QA conclusions and audit events remain
   traceable to the original bill-line and document evidence;
+- when the normalized scoring run enters Medical Review, expose canonical
+  source/evidence refs in `/api/v1/ops/medical-review/queue` and merge
+  canonical evidence refs into `/api/v1/ops/medical-review/results` so L5
+  medical conclusions remain traceable to the same original fee-detail evidence;
 - derive `external_message_id` from `systemCode + transNo + reportNo`, and use
   hashed internal run, audit, raw-payload, and idempotency identifiers so raw
   claim identifiers are not leaked downstream;
@@ -509,6 +513,9 @@ Required infrastructure principles:
 - QA result writeback should preserve canonical evidence refs from the latest
   successful normalized scoring trace for the claim, appending them to the
   persisted QA review and `qa.result.received` audit event.
+- Medical Review queue and writeback should reuse the referenced normalized
+  scoring trace, appending canonical evidence refs to the persisted
+  `medical.review.recorded` audit event.
 - Optional infrastructure such as Redis, ClickHouse, Neo4j, OpenSearch, Qdrant,
   LanceDB, or Kubernetes is adopted only when a defined workload requires it.
 

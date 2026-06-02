@@ -59,6 +59,8 @@ pub struct MedicalReviewQueueItem {
     pub first_item_code: Option<String>,
     pub first_issue_type: Option<String>,
     pub evidence_refs: Vec<String>,
+    pub canonical_source_refs: Vec<String>,
+    pub canonical_evidence_refs: Vec<String>,
     pub created_at: Option<String>,
     pub review_status: String,
     pub review_audit_id: Option<String>,
@@ -102,10 +104,11 @@ pub async fn medical_review_queue(
 pub async fn submit_medical_review_result(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<SubmitMedicalReviewResultRequest>,
+    Json(mut request): Json<SubmitMedicalReviewResultRequest>,
 ) -> Result<Json<MedicalReviewResultResponse>, ApiError> {
     authorize(&state, &headers)?;
     validate_medical_review_result(&request)?;
+    merge_canonical_evidence_refs_for_medical_review(&state, &mut request).await?;
     let audit_id = AuditEventId::new().to_string();
     let run_id = ScoringRunId::new().to_string();
     let review_status = medical_review_status(&request.decision).to_string();
@@ -190,6 +193,8 @@ fn medical_review_item_from_event(
             .and_then(|finding| finding["issue_type"].as_str())
             .map(str::to_string),
         evidence_refs: json_array_to_strings(&clinical["evidence_refs"]),
+        canonical_source_refs: canonical_trace_refs(event, "source_refs"),
+        canonical_evidence_refs: canonical_trace_refs(event, "evidence_refs"),
         created_at: event.created_at.clone(),
         review_status: review_status
             .map(|status| status.review_status.clone())
@@ -209,6 +214,55 @@ fn json_array_to_strings(value: &Value) -> Vec<String> {
                 .iter()
                 .filter_map(|item| item.as_str().map(str::to_string))
                 .collect()
+        })
+        .unwrap_or_default()
+}
+
+async fn merge_canonical_evidence_refs_for_medical_review(
+    state: &AppState,
+    request: &mut SubmitMedicalReviewResultRequest,
+) -> Result<(), ApiError> {
+    let events = state
+        .repository
+        .claim_audit_history(&request.claim_id)
+        .await
+        .map_err(internal_error(
+            "MEDICAL_REVIEW_CANONICAL_TRACE_LOOKUP_FAILED",
+        ))?;
+    let Some(scoring_event) = events.iter().find(|event| {
+        event.audit_id == request.scoring_audit_id
+            && event.event_type == "scoring.completed"
+            && event.event_status == "succeeded"
+    }) else {
+        return Ok(());
+    };
+    for reference in canonical_trace_refs(scoring_event, "evidence_refs") {
+        if !request.evidence_refs.contains(&reference) {
+            request.evidence_refs.push(reference);
+        }
+    }
+    Ok(())
+}
+
+fn canonical_trace_refs(event: &AuditHistoryEventRecord, field: &str) -> Vec<String> {
+    unique_json_string_values(&event.payload["canonical_claim_context_trace"][field])
+}
+
+fn unique_json_string_values(value: &Value) -> Vec<String> {
+    value
+        .as_array()
+        .map(|items| {
+            items
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|value| !value.trim().is_empty())
+                .fold(Vec::new(), |mut values, value| {
+                    let value = value.to_string();
+                    if !values.contains(&value) {
+                        values.push(value);
+                    }
+                    values
+                })
         })
         .unwrap_or_default()
 }

@@ -181,6 +181,136 @@ async fn lists_medical_review_queue_from_clinical_evidence_audit() {
 }
 
 #[tokio::test]
+async fn medical_review_preserves_canonical_trace_from_scoring_audit() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-MEDICAL-CANONICAL",
+              "total_amount": 12000,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-medical",
+              "masked_certificate_id": "masked-cert-medical",
+              "policy_id": "POL-MEDICAL-CANONICAL",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 15000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-MEDICAL-CANONICAL",
+              "name": "Medical Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_code": "IMG-CANONICAL",
+                "item_name": "High cost imaging",
+                "fee_category": "procedure",
+                "amount": 12000,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-MEDICAL:fee_detail:LINE-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, queue) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/medical-review/queue?limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let item = queue["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["claim_id"] == "CLM-MEDICAL-CANONICAL")
+        .expect("canonical claim should require medical review");
+    assert!(
+        item["canonical_source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]"
+            )),
+        "medical review queue should expose normalized bill-line source path"
+    );
+    assert!(
+        item["canonical_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("invoice:INV-MEDICAL:fee_detail:LINE-1")),
+        "medical review queue should expose canonical evidence refs"
+    );
+
+    let scoring_audit_id = item["audit_id"].as_str().unwrap();
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/medical-review/results",
+        &format!(
+            r#"{{
+              "claim_id": "CLM-MEDICAL-CANONICAL",
+              "scoring_audit_id": "{scoring_audit_id}",
+              "reviewer": "medical-reviewer-1",
+              "decision": "request_more_evidence",
+              "notes": "Medical record is required before necessity can be confirmed.",
+              "evidence_refs": ["audit:{scoring_audit_id}", "claim_items:IMG-CANONICAL"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        review["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("invoice:INV-MEDICAL:fee_detail:LINE-1")),
+        "medical review response should preserve canonical evidence refs"
+    );
+
+    let (status, audit) = json_request(
+        app,
+        "GET",
+        "/api/v1/audit/claims/CLM-MEDICAL-CANONICAL",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let medical_review_event = audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "medical.review.recorded")
+        .expect("medical review event should be in audit history");
+    assert!(
+        medical_review_event["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("invoice:INV-MEDICAL:fee_detail:LINE-1")),
+        "medical review audit event should preserve canonical evidence refs"
+    );
+}
+
+#[tokio::test]
 async fn rejects_medical_review_result_without_evidence() {
     let app = build_app(test_config());
 

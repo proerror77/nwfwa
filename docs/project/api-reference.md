@@ -218,7 +218,11 @@ persisted QA review, response, and `qa.result.received` audit event.
 | POST | `/api/v1/ops/medical-review/results` | Submit medical review result. | Yes | Appends audit event and medical-review feedback label. |
 
 Medical review focuses on clinical evidence gaps, medical necessity, diagnosis
-and procedure consistency, and reviewer feedback.
+and procedure consistency, and reviewer feedback. Queue items expose
+`canonical_source_refs` and `canonical_evidence_refs` when the scoring audit
+came from a normalized inbox context. Medical review result writeback merges
+canonical evidence refs from the referenced scoring audit into the persisted
+review, response, and `medical.review.recorded` audit event.
 
 ## Audit And Governance
 

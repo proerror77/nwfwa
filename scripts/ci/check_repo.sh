@@ -133,6 +133,8 @@ grep -q "Agent context snapshot carries" docs/project/api-reference.md
 grep -q "canonical_source_refs" apps/api-server/src/routes/openapi.rs
 grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_loop.rs
 grep -q "QA result writeback merges" docs/project/api-reference.md
+grep -q "merge_canonical_evidence_refs_for_medical_review" apps/api-server/src/routes/ops_medical.rs
+grep -q "Medical review result writeback merges" docs/project/api-reference.md
 grep -q "Canonical Evidence" apps/web-console/src/pages/QAReviewPage.tsx
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py

@@ -15,6 +15,8 @@ type MedicalReviewQueueItem = {
   first_item_code?: string | null;
   first_issue_type?: string | null;
   evidence_refs: string[];
+  canonical_source_refs?: string[];
+  canonical_evidence_refs?: string[];
   created_at?: string | null;
   review_status: string;
   review_audit_id?: string | null;
@@ -91,7 +93,7 @@ export function buildMedicalReviewEvidenceRefs(item: MedicalReviewQueueItem | nu
   if (!item) {
     return "";
   }
-  return [`audit:${item.audit_id}`, ...item.evidence_refs]
+  return [`audit:${item.audit_id}`, ...item.evidence_refs, ...(item.canonical_evidence_refs ?? [])]
     .filter((value, index, refs) => refs.indexOf(value) === index)
     .join("\n");
 }

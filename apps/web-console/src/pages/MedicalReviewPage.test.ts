@@ -76,6 +76,10 @@ describe("buildMedicalReviewQueueSummary", () => {
         first_item_code: "IMG-900",
         first_issue_type: "medical_necessity_review_required",
         evidence_refs: ["claim_items:IMG-900", "claim_items:IMG-900"],
+        canonical_source_refs: [
+          "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+        ],
+        canonical_evidence_refs: ["invoice:INV-MEDICAL:fee_detail:LINE-1"],
         created_at: null,
         review_status: "open",
         review_audit_id: null,
@@ -83,7 +87,7 @@ describe("buildMedicalReviewQueueSummary", () => {
         reviewer: null,
         reviewed_at: null,
       }),
-    ).toBe("audit:audit_1\nclaim_items:IMG-900");
+    ).toBe("audit:audit_1\nclaim_items:IMG-900\ninvoice:INV-MEDICAL:fee_detail:LINE-1");
   });
 });
 

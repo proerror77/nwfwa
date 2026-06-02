@@ -441,6 +441,11 @@ canonical evidence refs to the saved QA review, writeback response, and
 `qa.result.received` audit event. This keeps `/Users/proerror/Downloads/req.json`
 style inbox payloads traceable through normalization, scoring, QA, and audit
 without requiring the reviewer to manually copy every invoice or document ref.
+Medical Review queue items follow the same trace contract for L5 medical
+reasonableness: they expose canonical source/evidence refs from the scoring
+audit, and `POST /api/v1/ops/medical-review/results` appends canonical evidence
+refs from the referenced scoring audit to the review response and
+`medical.review.recorded` audit event.
 
 Documented errors:
 
