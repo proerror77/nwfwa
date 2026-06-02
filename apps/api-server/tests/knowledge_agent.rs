@@ -692,6 +692,70 @@ async fn publish_knowledge_case_does_not_merge_cross_customer_canonical_evidence
 }
 
 #[tokio::test]
+async fn agent_run_logs_and_approvals_are_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, body) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-SCOPE",
+          "risk_score": 93,
+          "rag": "RED",
+          "top_reasons": ["Agent run should remain scoped to alpha"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) =
+        json_request(beta_app.clone(), "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(!body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|run| run["agent_run_id"] == agent_run_id));
+
+    let (status, body) = json_request(
+        beta_app,
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "approved",
+          "approver": "beta-reviewer",
+          "reason": "Cross-customer approval attempt must be rejected.",
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "AGENT_RUN_NOT_FOUND");
+}
+
+#[tokio::test]
 async fn investigates_case_as_assistive_agent_with_evidence_refs() {
     let app = build_app(test_config());
 

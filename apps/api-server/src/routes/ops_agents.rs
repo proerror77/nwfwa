@@ -38,10 +38,10 @@ pub async fn list_agent_runs(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<AgentRunLogListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let runs = state
         .repository
-        .list_agent_runs()
+        .list_agent_runs(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("AGENT_RUN_LIST_FAILED"))?;
     Ok(Json(AgentRunLogListResponse { runs }))
@@ -57,7 +57,7 @@ pub async fn submit_agent_approval(
     validate_agent_approval_request(&request)?;
     let run = state
         .repository
-        .list_agent_runs()
+        .list_agent_runs(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("AGENT_RUN_LIST_FAILED"))?
         .into_iter()

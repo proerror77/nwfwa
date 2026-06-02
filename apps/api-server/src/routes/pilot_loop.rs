@@ -751,7 +751,7 @@ pub async fn list_ops_alerts(
         .map_err(internal_error("ALERT_AUDIT_LIST_FAILED"))?;
     let agent_runs = state
         .repository
-        .list_agent_runs()
+        .list_agent_runs(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("AGENT_RUN_LIST_FAILED"))?;
     Ok(Json(OpsAlertListResponse {
