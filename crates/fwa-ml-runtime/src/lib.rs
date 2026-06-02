@@ -4,7 +4,7 @@ use fwa_features::FeatureMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
-use std::time::Instant;
+use std::time::{Duration, Instant};
 use thiserror::Error;
 
 #[derive(Debug, Error)]
@@ -97,7 +97,11 @@ pub struct HttpModelScorer {
 impl HttpModelScorer {
     pub fn new(base_url: impl Into<String>) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .no_proxy()
+                .timeout(Duration::from_secs(5))
+                .build()
+                .expect("HTTP model scorer client configuration should be valid"),
             base_url: base_url.into().trim_end_matches('/').to_string(),
         }
     }
