@@ -124,6 +124,17 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["HealthCheck"]["properties"]["runtime_kind"]["description"],
         "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
     );
+    assert_eq!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["enum"],
+        serde_json::json!(["ok", "configured", "local_dev_key"])
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_dev_key"),
+        "missing health status secret-readiness description"
+    );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
     assert!(

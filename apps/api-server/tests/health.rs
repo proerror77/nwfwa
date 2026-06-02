@@ -58,9 +58,20 @@ async fn health_returns_service_metadata_and_checks() {
             "status": "ok",
             "runtime_kind": "python_http"
         })));
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "api_key_configuration",
+            "status": "local_dev_key"
+        })));
     assert!(
         !body.to_string().contains("127.0.0.1:8001"),
         "health response must not expose internal model service URLs"
+    );
+    assert!(
+        !body.to_string().contains("dev-secret"),
+        "health response must not expose API key values"
     );
 }
 
@@ -93,4 +104,38 @@ async fn health_reports_explicit_heuristic_model_scorer_mode() {
             "status": "ok",
             "runtime_kind": "heuristic"
         })));
+}
+
+#[tokio::test]
+async fn health_reports_configured_api_key_without_exposing_value() {
+    let mut config = test_config();
+    config.api_key = "customer-pilot-secret".into();
+    let app = build_app(config);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "api_key_configuration",
+            "status": "configured"
+        })));
+    assert!(
+        !body.to_string().contains("customer-pilot-secret"),
+        "health response must not expose configured API key values"
+    );
 }

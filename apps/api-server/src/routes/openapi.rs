@@ -3444,7 +3444,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["name", "status"],
                     "properties": {
                         "name": { "type": "string" },
-                        "status": { "type": "string", "enum": ["ok"] },
+                        "status": {
+                            "type": "string",
+                            "enum": ["ok", "configured", "local_dev_key"],
+                            "description": "Check status. local_dev_key indicates the API is using the local development key and must be reconfigured before customer pilot or production use."
+                        },
                         "runtime_kind": {
                             "type": "string",
                             "enum": ["python_http", "heuristic"],

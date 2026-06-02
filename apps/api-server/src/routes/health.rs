@@ -40,6 +40,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: "ok",
                 runtime_kind: Some(state.config.model_runtime_kind()),
             },
+            HealthCheck {
+                name: "api_key_configuration",
+                status: state.config.api_key_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

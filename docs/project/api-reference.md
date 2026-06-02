@@ -33,6 +33,11 @@ dev-secret
 | GET | `/api/v1/health` | Return API health status. | No | None |
 | GET | `/api/openapi.json` | Return OpenAPI contract. | No | None |
 
+`/api/v1/health` includes an `api_key_configuration` check. The check reports
+`local_dev_key` when the API is still using the local `dev-secret` key and
+`configured` when a non-default key is configured. The response never exposes
+the key value.
+
 ## Inbound Claim Inbox
 
 | Method | Path | Purpose | Auth | Side effects |

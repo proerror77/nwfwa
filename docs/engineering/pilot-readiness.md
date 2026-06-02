@@ -58,6 +58,8 @@ Medical review results also produce governed outcome labels for model and workfl
 Minimum pilot monitoring:
 
 - API health: `GET /api/v1/health`
+- API key readiness: `/api/v1/health` check `api_key_configuration` must be
+  `configured`, not `local_dev_key`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

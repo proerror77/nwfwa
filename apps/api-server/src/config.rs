@@ -27,6 +27,14 @@ impl AppConfig {
             "python_http"
         }
     }
+
+    pub fn api_key_configuration_status(&self) -> &'static str {
+        if self.api_key == "dev-secret" {
+            "local_dev_key"
+        } else {
+            "configured"
+        }
+    }
 }
 
 impl Default for AppConfig {
