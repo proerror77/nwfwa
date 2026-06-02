@@ -805,6 +805,10 @@ fn build_mock_retraining_output(
             "label_reviewer_source": "investigation_results",
             "pilot_validation_status": "passed",
             "shadow_comparison_status": "passed",
+            "serving_version_lock_status": "passed",
+            "artifact_integrity_status": "passed",
+            "feature_store_materialization_status": "passed",
+            "segment_fairness_status": "passed",
             "review_capacity_threshold_status": "passed"
         }),
         evidence_refs,
@@ -1110,6 +1114,13 @@ mod tests {
         );
         assert_eq!(output.metrics_json["label_provenance_status"], "passed");
         assert_eq!(output.metrics_json["pilot_validation_status"], "passed");
+        assert_eq!(output.metrics_json["serving_version_lock_status"], "passed");
+        assert_eq!(output.metrics_json["artifact_integrity_status"], "passed");
+        assert_eq!(
+            output.metrics_json["feature_store_materialization_status"],
+            "passed"
+        );
+        assert_eq!(output.metrics_json["segment_fairness_status"], "passed");
         assert_eq!(
             output.evidence_refs,
             vec![

@@ -912,6 +912,16 @@ def assert_dataset_model_lineage():
         decimal_value(evaluation.get("metrics_json", {}).get("psi")) <= Decimal("0.1"),
         "baseline evaluation PSI should be within demo governance threshold",
     )
+    for gate_status in [
+        "serving_version_lock_status",
+        "artifact_integrity_status",
+        "feature_store_materialization_status",
+        "segment_fairness_status",
+    ]:
+        assert_true(
+            evaluation.get("metrics_json", {}).get(gate_status) == "passed",
+            f"baseline evaluation missing {gate_status}",
+        )
 
     lineage = next(
         (
