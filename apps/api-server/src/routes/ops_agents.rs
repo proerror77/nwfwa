@@ -70,6 +70,14 @@ pub async fn submit_agent_approval(
         })?;
     validate_agent_approval_run_evidence(&request, &run)?;
     validate_agent_approval_is_pending(&run)?;
+    let mut evidence_refs = request.evidence_refs;
+    let policy_evidence_ref = format!("policy:{}", state.config.agent_policy_id);
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference == &policy_evidence_ref)
+    {
+        evidence_refs.push(policy_evidence_ref);
+    }
     let approval = AgentApprovalRecord {
         approval_id: format!("approval_{}", run.agent_run_id),
         agent_run_id: run.agent_run_id.clone(),
@@ -77,7 +85,7 @@ pub async fn submit_agent_approval(
         decision: request.decision,
         approver: request.approver,
         reason: request.reason,
-        evidence_refs: request.evidence_refs,
+        evidence_refs,
         created_at: None,
     };
     let approval = state

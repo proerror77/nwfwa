@@ -1574,6 +1574,10 @@ def govern_agent_run(agent):
         f"agent_run:{agent_run_id}" in approval_record.get("evidence_refs", []),
         "agent approval missing run evidence ref",
     )
+    assert_true(
+        "policy:demo-agent-policy" in approval_record.get("evidence_refs", []),
+        "agent approval missing policy evidence ref",
+    )
 
     approved_runs = request("GET", "/api/v1/ops/agent-runs").get("runs", [])
     approved_run = next((item for item in approved_runs if item.get("agent_run_id") == agent_run_id), None)

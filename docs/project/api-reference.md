@@ -402,6 +402,12 @@ evidence packages for human review, not autonomous decisions. When a prior
 the trace and source refs so reviewers can connect the summary back to
 normalized inbox evidence.
 
+Human approval decisions for Agent runs must include
+`agent_run:{agent_run_id}` in request `evidence_refs`. The platform appends
+`policy:{FWA_AGENT_POLICY_ID}` to the persisted approval and
+`agent.approval.decided` audit event so the approval gate remains tied to the
+configured Agent governance policy.
+
 Knowledge case publish requires confirmed review evidence such as
 `investigation_results:*` or `qa_reviews:*`. When `source_claim_id` has a prior
 canonical scoring trace, knowledge case publish preserves canonical evidence

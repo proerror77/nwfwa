@@ -5402,7 +5402,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Must include agent_run:{agent_run_id} for the approved or rejected run and must not contain PII.",
+                            "description": "Must include agent_run:{agent_run_id} for the approved or rejected run and must not contain PII. The platform appends policy:{FWA_AGENT_POLICY_ID} to the persisted approval and audit event.",
                             "items": { "type": "string", "minLength": 1 },
                             "contains": {
                                 "type": "string",

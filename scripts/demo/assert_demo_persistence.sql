@@ -353,6 +353,11 @@ BEGIN
       SELECT 1
       FROM jsonb_array_elements_text(aa.evidence_refs) AS ref(value)
       WHERE ref.value = 'agent_run:' || ar.agent_run_id
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(aa.evidence_refs) AS ref(value)
+      WHERE ref.value = 'policy:demo-agent-policy'
     );
   IF row_count < 1 THEN
     RAISE EXCEPTION 'expected approved human agent approval for %', demo_claim_id;

@@ -545,6 +545,9 @@ Do not put PII in:
 - free-text Agent or QA output
 
 Use structured references such as `audit:*`, `rule_runs:*`, `agent_run:*`, `knowledge_cases:*`, `investigation_results:*`, and `qa_reviews:*`.
+For Agent approval writeback, include `agent_run:{agent_run_id}`. The platform
+adds `policy:{FWA_AGENT_POLICY_ID}` when it persists the approval and
+`agent.approval.decided` audit event.
 
 ## Mock Client
 

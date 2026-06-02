@@ -1314,10 +1314,15 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(body["approval"]["agent_run_id"], agent_run_id);
     assert_eq!(body["approval"]["decision"], "approved");
     assert_eq!(body["approval"]["approver"], "qa-lead");
+    let approval_evidence_refs = body["approval"]["evidence_refs"].clone();
     assert!(body["approval"]["evidence_refs"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!(format!("agent_run:{agent_run_id}"))));
+    assert!(body["approval"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
     assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, body) = json_request(app.clone(), "GET", "/api/v1/ops/agent-runs", "{}").await;
@@ -1368,6 +1373,14 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "agent.approval.decided");
     assert_eq!(events[0]["payload"]["agent_run_id"], agent_run_id);
+    assert_eq!(
+        events[0]["payload"]["evidence_refs"],
+        approval_evidence_refs
+    );
+    assert!(events[0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
 
     let (status, body) = json_request(
         app.clone(),
