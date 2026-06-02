@@ -96,6 +96,9 @@ Minimum pilot monitoring:
 - Observability exporter readiness: `/api/v1/health` check
   `observability_exporter_configuration` must be `configured`, not
   `local_demo_observability_exporter`, before customer pilot traffic.
+- Agent policy readiness: `/api/v1/health` check
+  `agent_policy_configuration` must be `configured`, not
+  `local_demo_agent_policy`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

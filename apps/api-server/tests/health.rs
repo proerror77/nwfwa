@@ -20,6 +20,7 @@ fn test_config() -> AppConfig {
         network_allowlist_id: "demo-network-allowlist".into(),
         alert_routing_policy_id: "demo-alert-routing-policy".into(),
         observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 
@@ -158,6 +159,13 @@ async fn health_returns_service_metadata_and_checks() {
             "name": "observability_exporter_configuration",
             "status": "local_demo_observability_exporter"
         })));
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "agent_policy_configuration",
+            "status": "local_demo_agent_policy"
+        })));
     assert!(
         !body.to_string().contains("127.0.0.1:8001"),
         "health response must not expose internal model service URLs"
@@ -207,6 +215,10 @@ async fn health_returns_service_metadata_and_checks() {
     assert!(
         !body.to_string().contains("local://demo-observability"),
         "health response must not expose observability exporter endpoints"
+    );
+    assert!(
+        !body.to_string().contains("demo-agent-policy"),
+        "health response must not expose agent policy ids"
     );
 }
 
@@ -693,5 +705,39 @@ async fn health_reports_configured_observability_exporter_without_exposing_value
             .to_string()
             .contains("https://otel.customer-alpha.example"),
         "health response must not expose configured observability exporter endpoints"
+    );
+}
+
+#[tokio::test]
+async fn health_reports_configured_agent_policy_without_exposing_value() {
+    let mut config = test_config();
+    config.agent_policy_id = "customer-alpha-agent-policy-v1".into();
+    let app = build_app(config);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "agent_policy_configuration",
+            "status": "configured"
+        })));
+    assert!(
+        !body.to_string().contains("customer-alpha-agent-policy-v1"),
+        "health response must not expose configured agent policy ids"
     );
 }

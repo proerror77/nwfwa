@@ -13,6 +13,7 @@ pub struct AppConfig {
     pub network_allowlist_id: String,
     pub alert_routing_policy_id: String,
     pub observability_exporter_endpoint: String,
+    pub agent_policy_id: String,
 }
 
 impl AppConfig {
@@ -42,6 +43,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "demo-alert-routing-policy".into()),
             observability_exporter_endpoint: std::env::var("FWA_OBSERVABILITY_EXPORTER_ENDPOINT")
                 .unwrap_or_else(|_| "local://demo-observability".into()),
+            agent_policy_id: std::env::var("FWA_AGENT_POLICY_ID")
+                .unwrap_or_else(|_| "demo-agent-policy".into()),
         }
     }
 
@@ -158,6 +161,14 @@ impl AppConfig {
     pub fn observability_exporter_configuration_status(&self) -> &'static str {
         if self.observability_exporter_endpoint == "local://demo-observability" {
             "local_demo_observability_exporter"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn agent_policy_configuration_status(&self) -> &'static str {
+        if self.agent_policy_id == "demo-agent-policy" {
+            "local_demo_agent_policy"
         } else {
             "configured"
         }

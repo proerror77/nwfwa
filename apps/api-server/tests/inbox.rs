@@ -21,6 +21,7 @@ fn test_config() -> AppConfig {
         network_allowlist_id: "demo-network-allowlist".into(),
         alert_routing_policy_id: "demo-alert-routing-policy".into(),
         observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 

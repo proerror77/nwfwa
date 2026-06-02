@@ -187,6 +187,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_NETWORK_ALLOWLIST_ID` | `demo-network-allowlist` | Local network allowlist id |
 | `FWA_ALERT_ROUTING_POLICY_ID` | `demo-alert-routing-policy` | Local alert routing policy id |
 | `FWA_OBSERVABILITY_EXPORTER_ENDPOINT` | `local://demo-observability` | Local observability exporter endpoint |
+| `FWA_AGENT_POLICY_ID` | `demo-agent-policy` | Local Agent tool policy id |
 
 ## Current Non-Goals
 
