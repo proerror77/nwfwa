@@ -181,6 +181,12 @@ const SAMPLE_INBOX_PAYLOAD: &str = r#"{
   }
 }"#;
 
+const SAMPLE_RUNTIME_SCORE_REQUEST: &str = r#"{
+  "source_system": "tpa-demo",
+  "review_mode": "pre_payment",
+  "claim_id": "CLM-0287"
+}"#;
+
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct InboxNormalizeResponse {
     run_id: String,
@@ -206,11 +212,89 @@ struct InboxValidationError {
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct ScoreResponse {
+    run_id: Option<String>,
     claim_id: String,
+    review_mode: Option<String>,
     risk_score: Value,
+    rag: Option<Value>,
+    risk_level: Option<String>,
     recommended_action: Option<String>,
+    confidence_score: Option<u8>,
+    confidence: Option<String>,
+    routing_reason: Option<String>,
+    routing_policy: Option<Value>,
+    scores: Option<RuntimeScoreBreakdown>,
+    model_score: Option<RuntimeModelScore>,
+    #[serde(default)]
+    alerts: Vec<RuntimeAlert>,
+    #[serde(default)]
+    top_reasons: Vec<String>,
+    #[serde(default)]
+    layers: Vec<RuntimeLayerScore>,
+    clinical_evidence: Option<Value>,
+    provider_profile: Option<Value>,
+    provider_relationships: Option<Value>,
+    #[serde(default)]
+    similar_cases: Vec<Value>,
+    #[serde(default)]
+    feature_values: Vec<Value>,
     audit_id: Option<String>,
     evidence_refs: Option<Vec<String>>,
+    agent_investigation_prefill: Option<Value>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuntimeScoreBreakdown {
+    peer_deviation_score: u8,
+    rule_score: u8,
+    anomaly_score: u8,
+    ml_score: u8,
+    medical_reasonableness_score: u8,
+    provider_network_score: u8,
+    similar_case_score: u8,
+    final_score: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuntimeModelScore {
+    model_key: String,
+    model_version: String,
+    runtime_kind: String,
+    execution_provider: String,
+    score: u8,
+    label: String,
+    #[serde(default)]
+    explanations: Vec<ModelExplanationView>,
+    metadata: Value,
+    latency_ms: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelExplanationView {
+    feature: String,
+    direction: String,
+    contribution: f64,
+    reason: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuntimeAlert {
+    alert_code: String,
+    severity: String,
+    reason: String,
+    rule_id: String,
+    rule_version: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuntimeLayerScore {
+    layer_id: String,
+    name: String,
+    score: u8,
+    status: String,
+    reason: String,
+    #[serde(default)]
+    evidence_refs: Vec<Value>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -1089,6 +1173,8 @@ fn app() -> Html {
                     <ClaimInboxPage />
                 } else if *active == "Dashboard" {
                     <DashboardPage />
+                } else if *active == "Runtime Scoring" {
+                    <RuntimeScoringPage />
                 } else if *active == "Rules" {
                     <RulesPage />
                 } else if *active == "Models" {
@@ -1112,6 +1198,197 @@ fn app() -> Html {
                 }
             </main>
         </div>
+    }
+}
+
+#[function_component(RuntimeScoringPage)]
+fn runtime_scoring_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let request_payload = use_state(|| SAMPLE_RUNTIME_SCORE_REQUEST.to_string());
+    let score_state = use_state(|| ApiState::<ScoreResponse>::Idle);
+
+    let use_claim_id_template = {
+        let request_payload = request_payload.clone();
+        Callback::from(move |_| {
+            request_payload.set(SAMPLE_RUNTIME_SCORE_REQUEST.to_string());
+        })
+    };
+
+    let use_full_payload_template = {
+        let request_payload = request_payload.clone();
+        Callback::from(move |_| {
+            request_payload.set(pretty_json(&runtime_full_payload_template()));
+        })
+    };
+
+    let score = {
+        let api_key = api_key.clone();
+        let request_payload = request_payload.clone();
+        let score_state = score_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let score_state = score_state.clone();
+            match serde_json::from_str::<Value>(&request_payload) {
+                Ok(payload) => {
+                    score_state.set(ApiState::Loading);
+                    spawn_local(async move {
+                        score_state.set(match score_canonical_claim(payload, api_key).await {
+                            Ok(response) => ApiState::Ready(response),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    });
+                }
+                Err(error) => score_state.set(ApiState::Failed(format!(
+                    "runtime scoring request JSON is invalid: {error}"
+                ))),
+            }
+        })
+    };
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Runtime Scoring"}</h2>
+                    <p>{"Run a claim through the seven-layer FWA engine and inspect routing, evidence, alerts, model output, and Agent prefill."}</p>
+                </div>
+                <span class="status-pill">{"Claim Scoring API"}</span>
+            </div>
+
+            <div class="inbox-grid">
+                <section class="panel result-stack">
+                    <h3>{"Scoring Request"}</h3>
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <div class="button-row">
+                        <button onclick={use_claim_id_template}>{"Stored claim"}</button>
+                        <button onclick={use_full_payload_template}>{"Full payload"}</button>
+                    </div>
+                    <label>
+                        {"Request JSON"}
+                        <textarea
+                            class="payload-editor"
+                            value={(*request_payload).clone()}
+                            oninput={{
+                                let request_payload = request_payload.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    request_payload.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <div class="button-row">
+                        <button onclick={score} disabled={matches!(&*score_state, ApiState::Loading)}>
+                            {if matches!(&*score_state, ApiState::Loading) { "Scoring..." } else { "Score claim" }}
+                        </button>
+                    </div>
+                </section>
+
+                <RuntimeScoreView state={(*score_state).clone()} />
+            </div>
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct RuntimeScoreProps {
+    state: ApiState<ScoreResponse>,
+}
+
+#[function_component(RuntimeScoreView)]
+fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <h3>{"Scoring Decision"}</h3>
+            {match &props.state {
+                ApiState::Idle => html! { <p class="empty">{"Score a stored claim or full payload to inspect runtime output."}</p> },
+                ApiState::Loading => html! { <p>{"Scoring claim..."}</p> },
+                ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                ApiState::Ready(response) => html! {
+                    <>
+                        <div class="score-hero">
+                            <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
+                            <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
+                            <div><span>{"RAG"}</span><strong>{response.rag.as_ref().map(display_value).unwrap_or_else(|| "none".into())}</strong></div>
+                        </div>
+                        <div class="summary-grid">
+                            <div><span>{"Action"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
+                            <div><span>{"Risk Level"}</span><strong>{response.risk_level.as_deref().unwrap_or("unknown")}</strong></div>
+                            <div><span>{"Confidence"}</span><strong>{format!("{} / {}", response.confidence.as_deref().unwrap_or("unknown"), optional_u8(response.confidence_score))}</strong></div>
+                            <div><span>{"Review Mode"}</span><strong>{response.review_mode.as_deref().unwrap_or("unknown")}</strong></div>
+                            <div><span>{"Run"}</span><strong>{response.run_id.as_deref().unwrap_or("pending")}</strong></div>
+                            <div><span>{"Audit"}</span><strong>{response.audit_id.as_deref().unwrap_or("pending")}</strong></div>
+                        </div>
+                        <p class="empty">{response.routing_reason.as_deref().unwrap_or("No routing reason returned.")}</p>
+
+                        <h4>{"Seven-Layer Runtime Scores"}</h4>
+                        {runtime_score_breakdown(response)}
+                        <div class="factor-card-grid">
+                            {for response.layers.iter().map(|layer| html! {
+                                <div class="metric-row">
+                                    <span>{format!("{} / {}", layer.layer_id, layer.name)}</span>
+                                    <strong>{format!("{} / {}", layer.score, layer.status)}</strong>
+                                    <small>{&layer.reason}</small>
+                                    <small>{format!("evidence: {}", value_refs_label(&layer.evidence_refs))}</small>
+                                </div>
+                            })}
+                        </div>
+
+                        <h4>{"Alerts And Top Reasons"}</h4>
+                        <div class="factor-card-grid">
+                            {for response.alerts.iter().map(|alert| html! {
+                                <div class="metric-row">
+                                    <span>{&alert.alert_code}</span>
+                                    <strong>{&alert.severity}</strong>
+                                    <small>{&alert.reason}</small>
+                                    <small>{format!("rule {} v{}", alert.rule_id, alert.rule_version)}</small>
+                                </div>
+                            })}
+                        </div>
+                        if response.top_reasons.is_empty() {
+                            <p class="empty">{"No top reasons returned."}</p>
+                        } else {
+                            <ul class="result-list">
+                                {for response.top_reasons.iter().map(|reason| html! { <li>{reason}</li> })}
+                            </ul>
+                        }
+
+                        <h4>{"Model Output"}</h4>
+                        {runtime_model_output(response.model_score.as_ref())}
+
+                        <h4>{"Evidence And Agent Prefill"}</h4>
+                        <div class="summary-grid">
+                            <div><span>{"Evidence Refs"}</span><strong>{response.evidence_refs.as_ref().map(|refs| refs.len()).unwrap_or(0)}</strong></div>
+                            <div><span>{"Features"}</span><strong>{response.feature_values.len()}</strong></div>
+                            <div><span>{"Similar Cases"}</span><strong>{response.similar_cases.len()}</strong></div>
+                        </div>
+                        <small>{format!("evidence: {}", response.evidence_refs.as_ref().map(|refs| refs_label(refs)).unwrap_or_else(|| "none".into()))}</small>
+                        if let Some(prefill) = &response.agent_investigation_prefill {
+                            <pre>{pretty_json(prefill)}</pre>
+                        }
+                        <details>
+                            <summary>{"Routing and clinical payload"}</summary>
+                            <pre>{pretty_json(&json!({
+                                "routing_policy": response.routing_policy,
+                                "clinical_evidence": response.clinical_evidence,
+                                "provider_profile": response.provider_profile,
+                                "provider_relationships": response.provider_relationships
+                            }))}</pre>
+                        </details>
+                    </>
+                },
+            }}
+        </section>
     }
 }
 
@@ -4359,6 +4636,151 @@ fn optional_metric(value: &Option<Value>) -> String {
         .as_ref()
         .map(display_value)
         .unwrap_or_else(|| "none".into())
+}
+
+fn optional_u8(value: Option<u8>) -> String {
+    value
+        .map(|number| number.to_string())
+        .unwrap_or_else(|| "none".into())
+}
+
+fn value_refs_label(refs: &[Value]) -> String {
+    if refs.is_empty() {
+        return "none".into();
+    }
+    refs.iter()
+        .map(display_value)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn runtime_score_breakdown(response: &ScoreResponse) -> Html {
+    if let Some(scores) = &response.scores {
+        html! {
+            <div class="summary-grid">
+                <div><span>{"L1 Peer"}</span><strong>{scores.peer_deviation_score}</strong></div>
+                <div><span>{"L2 Rules"}</span><strong>{scores.rule_score}</strong></div>
+                <div><span>{"L3 Anomaly"}</span><strong>{scores.anomaly_score}</strong></div>
+                <div><span>{"L4 ML"}</span><strong>{scores.ml_score}</strong></div>
+                <div><span>{"L5 Medical"}</span><strong>{scores.medical_reasonableness_score}</strong></div>
+                <div><span>{"L6 Provider"}</span><strong>{scores.provider_network_score}</strong></div>
+                <div><span>{"Similar Cases"}</span><strong>{scores.similar_case_score}</strong></div>
+                <div><span>{"L7 Final"}</span><strong>{scores.final_score}</strong></div>
+            </div>
+        }
+    } else {
+        html! { <p class="empty">{"No score breakdown returned."}</p> }
+    }
+}
+
+fn runtime_model_output(model_score: Option<&RuntimeModelScore>) -> Html {
+    if let Some(model) = model_score {
+        html! {
+            <div class="result-stack">
+                <div class="summary-grid">
+                    <div><span>{"Model"}</span><strong>{format!("{} {}", model.model_key, model.model_version)}</strong></div>
+                    <div><span>{"Runtime"}</span><strong>{format!("{} / {}", model.runtime_kind, model.execution_provider)}</strong></div>
+                    <div><span>{"Score"}</span><strong>{model.score}</strong></div>
+                    <div><span>{"Label"}</span><strong>{&model.label}</strong></div>
+                    <div><span>{"Latency"}</span><strong>{format!("{} ms", model.latency_ms)}</strong></div>
+                    <div><span>{"Metadata"}</span><strong>{payload_keys_label(&model.metadata)}</strong></div>
+                </div>
+                if model.explanations.is_empty() {
+                    <p class="empty">{"No model explanations returned."}</p>
+                } else {
+                    <div class="factor-card-grid">
+                        {for model.explanations.iter().map(|explanation| html! {
+                            <div class="metric-row">
+                                <span>{&explanation.feature}</span>
+                                <strong>{format!("{} {:.2}", explanation.direction, explanation.contribution)}</strong>
+                                <small>{&explanation.reason}</small>
+                            </div>
+                        })}
+                    </div>
+                }
+            </div>
+        }
+    } else {
+        html! { <p class="empty">{"No model score returned."}</p> }
+    }
+}
+
+fn runtime_full_payload_template() -> Value {
+    json!({
+        "source_system": "tpa-demo",
+        "review_mode": "pre_payment",
+        "claim": {
+            "external_claim_id": "CLM-WEB-RUNTIME",
+            "claim_amount": "18900",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10",
+            "items": [
+                {
+                    "item_code": "IMG-001",
+                    "item_type": "procedure",
+                    "description": "High cost imaging",
+                    "quantity": 1,
+                    "unit_amount": "18900",
+                    "total_amount": "18900",
+                    "currency": "CNY"
+                }
+            ],
+            "member": {
+                "external_member_id": "MBR-WEB-RUNTIME",
+                "dob": "1985-03-14",
+                "gender": "F"
+            },
+            "policy": {
+                "external_policy_id": "POL-WEB-RUNTIME",
+                "product_code": "MED",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "20000",
+                "currency": "CNY"
+            },
+            "provider": {
+                "external_provider_id": "PRV-WEB-RUNTIME",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "Shanghai",
+                "risk_tier": "High"
+            },
+            "documents": [
+                {
+                    "external_document_id": "DOC-WEB-RUNTIME",
+                    "document_type": "medical_record",
+                    "linked_item_codes": ["IMG-001"]
+                }
+            ],
+            "provider_profile": {
+                "specialty": "general",
+                "network_status": "in_network",
+                "windows": [
+                    {
+                        "window_days": 30,
+                        "claim_count": 40,
+                        "total_claim_amount": "480000",
+                        "high_cost_item_ratio": 0.74,
+                        "diagnosis_procedure_mismatch_rate": 0.46,
+                        "peer_amount_percentile": 96,
+                        "peer_frequency_percentile": 93,
+                        "review_failure_count": 8,
+                        "confirmed_fwa_count": 3,
+                        "false_positive_count": 1
+                    }
+                ]
+            },
+            "provider_relationships": {
+                "high_risk_neighbor_ratio": 0.42,
+                "provider_patient_overlap_score": 0.72,
+                "referral_concentration_score": 0.66,
+                "connected_confirmed_fwa_count": 4,
+                "network_component_risk_score": 84,
+                "evidence_refs": ["provider_graph:PRV-WEB-RUNTIME"]
+            }
+        }
+    })
 }
 
 fn total_dataset_rows(datasets: &[DatasetRecord]) -> String {
