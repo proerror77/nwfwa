@@ -2051,7 +2051,7 @@ async fn rolls_back_active_model_version() {
     );
     assert_eq!(
         audit["events"][0]["payload"]["previous_active_version"],
-        candidate_version
+        "0.1.0"
     );
 }
 
@@ -2115,7 +2115,7 @@ async fn rollback_can_restore_replaced_active_version_from_rollback_history() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         audit["events"][0]["payload"]["previous_active_version"],
-        "0.1.0"
+        candidate_version
     );
     assert_eq!(
         audit["events"][0]["payload"]["replaced_active_version"],

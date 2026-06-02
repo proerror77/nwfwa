@@ -1888,7 +1888,7 @@ async fn record_model_rollback_audit(
                 "model_version": restored.version,
                 "from_status": restored_from_status,
                 "to_status": restored.status,
-                "previous_active_version": replaced_active.version,
+                "previous_active_version": restored.version,
                 "replaced_active_version": replaced_active.version,
                 "replaced_active_to_status": "approved",
                 "runtime_kind": restored.runtime_kind,

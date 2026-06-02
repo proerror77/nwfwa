@@ -367,6 +367,11 @@ on random train/test splits.
 Model APIs govern the demo and pilot model lifecycle. They are not a complete
 production model training system.
 
+Model rollback audit payloads separate the restored and replaced versions:
+`previous_active_version` is the approved historical version restored to
+`active`, while `replaced_active_version` is the version moved from `active`
+back to `approved`.
+
 Governed retraining boundary: retraining jobs model the offline worker contract,
 artifact evidence, validation metrics, and candidate registration. They do not
 represent automatic production training or automatic production deployment.
