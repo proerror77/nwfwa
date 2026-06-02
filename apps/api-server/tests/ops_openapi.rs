@@ -11,6 +11,7 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
     }
 }
 
@@ -133,7 +134,8 @@ async fn openapi_includes_operations_paths() {
             "local_demo_source",
             "local_dev_database",
             "local_dev_model_service",
-            "heuristic_model_scorer"
+            "heuristic_model_scorer",
+            "local_demo_object_storage"
         ])
     );
     assert!(
@@ -170,6 +172,13 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("heuristic_model_scorer"),
         "missing health status heuristic-scorer-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_object_storage"),
+        "missing health status object-storage-readiness description"
     );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());

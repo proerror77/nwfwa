@@ -304,6 +304,7 @@ mod tests {
             source_system: "tpa-demo".into(),
             database_url: "postgres://unused".into(),
             model_service_url,
+            object_storage_uri: "local://demo-artifacts".into(),
         }
     }
 

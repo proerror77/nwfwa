@@ -11,6 +11,7 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
         model_service_url: "http://127.0.0.1:8001".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
     }
 }
 
@@ -86,6 +87,13 @@ async fn health_returns_service_metadata_and_checks() {
             "name": "database_configuration",
             "status": "local_dev_database"
         })));
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "object_storage_configuration",
+            "status": "local_demo_object_storage"
+        })));
     assert!(
         !body.to_string().contains("127.0.0.1:8001"),
         "health response must not expose internal model service URLs"
@@ -99,6 +107,10 @@ async fn health_returns_service_metadata_and_checks() {
             .to_string()
             .contains("postgres://postgres:postgres@localhost:5432/fwa"),
         "health response must not expose database URLs"
+    );
+    assert!(
+        !body.to_string().contains("local://demo-artifacts"),
+        "health response must not expose object storage URIs"
     );
 }
 
@@ -273,5 +285,39 @@ async fn health_reports_configured_model_service_without_exposing_value() {
     assert!(
         !body.to_string().contains("models.customer.internal"),
         "health response must not expose configured model service URL values"
+    );
+}
+
+#[tokio::test]
+async fn health_reports_configured_object_storage_without_exposing_value() {
+    let mut config = test_config();
+    config.object_storage_uri = "s3://customer-fwa-artifacts".into();
+    let app = build_app(config);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "object_storage_configuration",
+            "status": "configured"
+        })));
+    assert!(
+        !body.to_string().contains("customer-fwa-artifacts"),
+        "health response must not expose configured object storage URI values"
     );
 }

@@ -4,6 +4,7 @@ pub struct AppConfig {
     pub source_system: String,
     pub database_url: String,
     pub model_service_url: String,
+    pub object_storage_uri: String,
 }
 
 impl AppConfig {
@@ -15,6 +16,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "postgres://postgres:postgres@localhost:5432/fwa".into()),
             model_service_url: std::env::var("FWA_MODEL_SERVICE_URL")
                 .unwrap_or_else(|_| "http://127.0.0.1:8001".into()),
+            object_storage_uri: std::env::var("FWA_OBJECT_STORAGE_URI")
+                .unwrap_or_else(|_| "local://demo-artifacts".into()),
         }
     }
 
@@ -59,6 +62,14 @@ impl AppConfig {
     pub fn database_configuration_status(&self) -> &'static str {
         if self.database_url == "postgres://postgres:postgres@localhost:5432/fwa" {
             "local_dev_database"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn object_storage_configuration_status(&self) -> &'static str {
+        if self.object_storage_uri == "local://demo-artifacts" {
+            "local_demo_object_storage"
         } else {
             "configured"
         }

@@ -69,6 +69,9 @@ Minimum pilot monitoring:
   `model_service_configuration` must be `configured`, not
   `local_dev_model_service` or `heuristic_model_scorer`, before customer pilot
   traffic.
+- Object storage readiness: `/api/v1/health` check
+  `object_storage_configuration` must be `configured`, not
+  `local_demo_object_storage`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

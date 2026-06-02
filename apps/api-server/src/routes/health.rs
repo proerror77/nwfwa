@@ -60,6 +60,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.database_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "object_storage_configuration",
+                status: state.config.object_storage_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

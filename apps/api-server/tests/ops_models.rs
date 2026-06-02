@@ -11,6 +11,7 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
     }
 }
 
