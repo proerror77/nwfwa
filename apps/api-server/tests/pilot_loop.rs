@@ -2275,6 +2275,133 @@ async fn qa_feedback_and_dashboard_are_scoped_to_authenticated_customer() {
 }
 
 #[tokio::test]
+async fn writeback_ids_cannot_be_reused_across_customers() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-CROSS-SCOPE-REUSE-1",
+          "claim_id": "CLM-QA-CROSS-SCOPE-ALPHA",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "medical_necessity_issue",
+          "feedback_target": "rules",
+          "notes": "Alpha QA result should own this QA case id.",
+          "evidence_refs": ["qa_reviews:QA-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, beta_qa) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-CROSS-SCOPE-REUSE-1",
+          "claim_id": "CLM-QA-CROSS-SCOPE-BETA",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "workflow_missing_evidence",
+          "feedback_target": "workflow",
+          "notes": "Beta must not overwrite alpha QA result.",
+          "evidence_refs": ["qa_reviews:QA-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(beta_qa["code"], "QA_CASE_SCOPE_CONFLICT");
+
+    let (status, alpha_feedback) = json_request(
+        alpha_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_feedback["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| {
+            item["qa_case_id"] == "QA-CROSS-SCOPE-REUSE-1"
+                && item["claim_id"] == "CLM-QA-CROSS-SCOPE-ALPHA"
+                && item["feedback_target"] == "rules"
+        }));
+
+    let (status, _) = json_request(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-INV-CROSS-SCOPE-ALPHA",
+          "investigation_id": "INV-CROSS-SCOPE-REUSE-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Alpha investigation result should own this investigation id.",
+          "evidence_refs": ["investigation_results:INV-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, beta_investigation) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-INV-CROSS-SCOPE-BETA",
+          "investigation_id": "INV-CROSS-SCOPE-REUSE-1",
+          "outcome": "no_issue_found",
+          "confirmed_fwa": false,
+          "saving_amount": "0.00",
+          "currency": "CNY",
+          "notes": "Beta must not overwrite alpha investigation result.",
+          "evidence_refs": ["investigation_results:INV-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        beta_investigation["code"],
+        "INVESTIGATION_RESULT_SCOPE_CONFLICT"
+    );
+
+    let (status, alpha_labels) = json_request(alpha_app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|label| {
+            label["source_id"] == "INV-CROSS-SCOPE-REUSE-1"
+                && label["claim_id"] == "CLM-INV-CROSS-SCOPE-ALPHA"
+        }));
+
+    let (status, beta_labels) = json_request(beta_app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|label| label["source_id"] == "INV-CROSS-SCOPE-REUSE-1"));
+}
+
+#[tokio::test]
 async fn pilot_loop_endpoints_require_api_key() {
     for (method, uri, body) in [
         (

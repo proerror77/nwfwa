@@ -159,6 +159,16 @@ pub async fn write_investigation_result(
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
     let actor = authorize_permission(&state, &headers, "tpa:investigations:write")?;
     validate_investigation_result_request(&request)?;
+    ensure_writeback_id_is_available_for_customer(
+        &state,
+        "investigation.result.received",
+        "investigation_id",
+        &request.investigation_id,
+        &actor.customer_scope_id,
+        "INVESTIGATION_RESULT_SCOPE_CONFLICT",
+        "investigation_id is already used by another customer scope",
+    )
+    .await?;
     validate_investigation_case_link(&state, &request, &actor.customer_scope_id).await?;
     merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
     request.customer_scope_id = Some(actor.customer_scope_id.clone());
@@ -189,6 +199,16 @@ pub async fn write_qa_result(
     let actor = authorize_permission(&state, &headers, "tpa:qa:write")?;
     validate_qa_review_request(&request)?;
     request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
+    ensure_writeback_id_is_available_for_customer(
+        &state,
+        "qa.result.received",
+        "qa_case_id",
+        &request.qa_case_id,
+        &actor.customer_scope_id,
+        "QA_CASE_SCOPE_CONFLICT",
+        "qa_case_id is already used by another customer scope",
+    )
+    .await?;
     merge_latest_canonical_evidence_refs(&state, &mut request).await?;
     request.customer_scope_id = Some(actor.customer_scope_id.clone());
     request.actor_id = Some(actor.actor_id);
@@ -1212,6 +1232,38 @@ fn authorize_permission(
         ));
     }
     Ok(principal.actor)
+}
+
+async fn ensure_writeback_id_is_available_for_customer(
+    state: &AppState,
+    event_type: &str,
+    id_field: &str,
+    id_value: &str,
+    customer_scope_id: &str,
+    conflict_code: &'static str,
+    conflict_message: &'static str,
+) -> Result<(), ApiError> {
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 10_000,
+            event_type: Some(event_type.into()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("WRITEBACK_SCOPE_LOOKUP_FAILED"))?;
+    let has_cross_scope_match = events.iter().any(|event| {
+        event.payload[id_field].as_str() == Some(id_value)
+            && event.payload["customer_scope_id"].as_str() != Some(customer_scope_id)
+    });
+    if has_cross_scope_match {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            conflict_code,
+            conflict_message,
+        ));
+    }
+    Ok(())
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
