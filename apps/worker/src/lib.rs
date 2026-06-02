@@ -803,6 +803,7 @@ fn build_mock_retraining_output(
             "feature_reproducibility_hash": "sha256:demo-retraining-feature-reproducibility",
             "label_provenance_status": "passed",
             "label_reviewer_source": "investigation_results",
+            "pilot_validation_status": "passed",
             "shadow_comparison_status": "passed",
             "review_capacity_threshold_status": "passed"
         }),
@@ -1108,6 +1109,7 @@ mod tests {
             serde_json::json!(["member_id", "policy_id", "provider_id"])
         );
         assert_eq!(output.metrics_json["label_provenance_status"], "passed");
+        assert_eq!(output.metrics_json["pilot_validation_status"], "passed");
         assert_eq!(
             output.evidence_refs,
             vec![
