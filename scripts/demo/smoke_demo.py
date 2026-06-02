@@ -102,6 +102,28 @@ def assert_health_readiness_contract(health):
         "health endpoint missing pilot readiness status",
     )
     blocking_checks = pilot_readiness.get("blocking_checks", [])
+    ready_checks = pilot_readiness.get("ready_checks", [])
+    required_check_names = pilot_readiness.get("required_check_names", [])
+    required_check_count = pilot_readiness.get("required_check_count")
+    blocking_check_count = pilot_readiness.get("blocking_check_count")
+    ready_check_count = pilot_readiness.get("ready_check_count")
+    assert_true(required_check_names, "pilot readiness missing required check names")
+    assert_true(
+        required_check_count == len(required_check_names),
+        "pilot readiness required check count mismatch",
+    )
+    assert_true(
+        blocking_check_count == len(blocking_checks),
+        "pilot readiness blocking check count mismatch",
+    )
+    assert_true(
+        ready_check_count == len(ready_checks),
+        "pilot readiness ready check count mismatch",
+    )
+    assert_true(
+        required_check_count == blocking_check_count + ready_check_count,
+        "pilot readiness check counts do not reconcile",
+    )
     if CUSTOMER_PRINCIPAL_ASSERTIONS:
         health_checks = health.get("checks", [])
         assert_true(
@@ -119,6 +141,18 @@ def assert_health_readiness_contract(health):
         assert_true(
             not has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
             "customer principal smoke must not use the local dev API key",
+        )
+        assert_true(
+            not any(
+                check.get("name")
+                in {
+                    "api_key_configuration",
+                    "source_system_configuration",
+                    "customer_scope_configuration",
+                }
+                for check in blocking_checks
+            ),
+            "customer principal smoke has customer identity readiness blockers",
         )
         return
 

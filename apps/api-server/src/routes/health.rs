@@ -15,6 +15,11 @@ pub struct HealthResponse {
 #[derive(Debug, Serialize)]
 pub struct PilotReadiness {
     pub status: &'static str,
+    pub required_check_names: Vec<&'static str>,
+    pub required_check_count: usize,
+    pub ready_check_count: usize,
+    pub blocking_check_count: usize,
+    pub ready_checks: Vec<HealthCheck>,
     pub blocking_checks: Vec<HealthCheck>,
 }
 
@@ -125,6 +130,16 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
 }
 
 fn pilot_readiness(checks: &[HealthCheck]) -> PilotReadiness {
+    let required_checks: Vec<HealthCheck> = checks
+        .iter()
+        .copied()
+        .filter(|check| check.name.ends_with("_configuration"))
+        .collect();
+    let ready_checks: Vec<HealthCheck> = required_checks
+        .iter()
+        .copied()
+        .filter(|check| check.status == "configured")
+        .collect();
     let blocking_checks: Vec<HealthCheck> = checks
         .iter()
         .copied()
@@ -137,6 +152,11 @@ fn pilot_readiness(checks: &[HealthCheck]) -> PilotReadiness {
     };
     PilotReadiness {
         status,
+        required_check_names: required_checks.iter().map(|check| check.name).collect(),
+        required_check_count: required_checks.len(),
+        ready_check_count: ready_checks.len(),
+        blocking_check_count: blocking_checks.len(),
+        ready_checks,
         blocking_checks,
     }
 }

@@ -248,6 +248,11 @@ grep -q "agent_policy_configuration" docs/engineering/pilot-readiness.md
 grep -q "pilot_readiness" docs/project/api-reference.md
 grep -q "pilot_readiness" docs/engineering/pilot-readiness.md
 grep -q "pilot_readiness" scripts/demo/smoke_demo.py
+grep -q "required_check_names" apps/api-server/src/routes/health.rs
+grep -q "blocking_check_count" apps/api-server/src/routes/health.rs
+grep -q "ready_check_count" scripts/demo/smoke_demo.py
+grep -q "required_check_count" docs/project/api-reference.md
+grep -q "blocking_check_count" docs/engineering/pilot-readiness.md
 grep -q "FWA_AGENT_POLICY_ID" docs/project/technology-stack.md
 grep -q "node ../../scripts/demo/smoke_web_console.mjs" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml

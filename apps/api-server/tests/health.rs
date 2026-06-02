@@ -240,9 +240,26 @@ async fn health_returns_service_metadata_and_checks() {
         "health response must not expose agent policy ids"
     );
     assert_eq!(body["pilot_readiness"]["status"], "not_ready");
+    assert_eq!(body["pilot_readiness"]["required_check_count"], 14);
     let blocking_checks = body["pilot_readiness"]["blocking_checks"]
         .as_array()
         .expect("pilot readiness should list blocking checks");
+    assert_eq!(
+        body["pilot_readiness"]["blocking_check_count"],
+        blocking_checks.len()
+    );
+    assert_eq!(body["pilot_readiness"]["ready_check_count"], 0);
+    let required_check_names = body["pilot_readiness"]["required_check_names"]
+        .as_array()
+        .expect("pilot readiness should list required check names");
+    assert!(required_check_names.contains(&serde_json::json!("api_key_configuration")));
+    assert!(required_check_names.contains(&serde_json::json!("agent_policy_configuration")));
+    assert_eq!(
+        required_check_names.len(),
+        body["pilot_readiness"]["required_check_count"]
+            .as_u64()
+            .unwrap() as usize
+    );
     assert!(blocking_checks.contains(&serde_json::json!({
         "name": "api_key_configuration",
         "status": "local_dev_key"
@@ -281,9 +298,19 @@ async fn health_reports_pilot_readiness_ready_when_all_pilot_configuration_is_se
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(body["pilot_readiness"]["status"], "ready");
+    assert_eq!(body["pilot_readiness"]["required_check_count"], 14);
+    assert_eq!(body["pilot_readiness"]["ready_check_count"], 14);
+    assert_eq!(body["pilot_readiness"]["blocking_check_count"], 0);
     assert_eq!(
         body["pilot_readiness"]["blocking_checks"],
         serde_json::json!([])
+    );
+    assert_eq!(
+        body["pilot_readiness"]["ready_checks"]
+            .as_array()
+            .expect("ready pilot readiness should list ready checks")
+            .len(),
+        14
     );
     assert!(
         !body.to_string().contains("customer-pilot-secret"),
