@@ -51,6 +51,8 @@ async fn tpa_contract_docs_and_mock_client_match_openapi() {
         assert!(docs.contains(term), "TPA contract doc missing {term}");
     }
     for term in [
+        "canonical_claim_context",
+        "inbox_run_id",
         "investigation_idempotency_key",
         "qa_idempotency_key",
         "audit_event_types",

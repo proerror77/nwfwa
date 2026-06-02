@@ -93,14 +93,23 @@ def main():
         },
     )
     require(inbox.get("idempotency_key"), "inbox normalize missing idempotency_key")
+    require(inbox.get("scoring_ready") is True, f"inbox context not scoring ready: {inbox}")
+    canonical_claim_context = require(
+        inbox.get("canonical_claim_context"),
+        "inbox normalize missing canonical_claim_context",
+    )
 
     score = request(
         args.base_url,
         args.api_key,
         "POST",
         "/api/v1/claims/score",
-        {"source_system": args.source_system, "claim_id": args.claim_id},
+        {
+            "source_system": args.source_system,
+            "canonical_claim_context": canonical_claim_context,
+        },
     )
+    require(score.get("claim_id") == args.claim_id, "canonical score claim_id mismatch")
     audit_id = require(score.get("audit_id"), "score response missing audit_id")
 
     member = request(
@@ -184,6 +193,7 @@ def main():
             {
                 "claim_id": args.claim_id,
                 "inbox_idempotency_key": inbox.get("idempotency_key"),
+                "inbox_run_id": inbox.get("run_id"),
                 "score": {
                     "run_id": score.get("run_id"),
                     "audit_id": audit_id,

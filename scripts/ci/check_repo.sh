@@ -67,6 +67,8 @@ grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_doc
 grep -q "ErrorResponse" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
 grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
+grep -q "canonical_claim_context" scripts/demo/tpa_mock_client.py
+grep -q "inbox_run_id" scripts/demo/tpa_mock_client.py
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
