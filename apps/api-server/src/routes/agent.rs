@@ -75,6 +75,7 @@ pub async fn investigate_case(
         .iter()
         .map(|tag| sanitize_agent_free_text(tag))
         .collect::<Vec<_>>();
+    let agent_policy_id = state.config.agent_policy_id.clone();
     let tool_call_id = format!("tool_call_{}", masked_claim_ref);
     let tool_result_id = format!("tool_result_{}", masked_claim_ref);
     let policy_check = AgentPolicyCheckRecord {
@@ -82,11 +83,11 @@ pub async fn investigate_case(
         agent_run_id: format!("agent_{}", masked_claim_ref),
         tool_call_id: tool_call_id.clone(),
         tool_name: "knowledge.search_similar".into(),
-        policy_name: "agent_tool_allowlist".into(),
+        policy_name: agent_policy_id.clone(),
         decision: "allowed".into(),
         reason: "Tool is allowlisted for read-only similar-case evidence retrieval.".into(),
         evidence_refs: vec![
-            "policy:agent_tool_allowlist".into(),
+            format!("policy:{agent_policy_id}"),
             format!("knowledge_query:{}", masked_claim_ref),
         ],
         created_at: None,

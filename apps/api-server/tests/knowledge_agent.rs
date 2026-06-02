@@ -1065,9 +1065,12 @@ async fn lists_agent_run_logs_for_governance_review() {
         .find(|check| check["tool_name"] == "knowledge.search_similar")
         .expect("tool policy check should be audited before tool activity");
     assert_eq!(policy_check["decision"], "allowed");
-    assert_eq!(policy_check["policy_name"], "agent_tool_allowlist");
+    assert_eq!(policy_check["policy_name"], "demo-agent-policy");
     assert_eq!(policy_check["tool_call_id"], tool_call["tool_call_id"]);
-    assert!(!policy_check["evidence_refs"].as_array().unwrap().is_empty());
+    assert!(policy_check["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
     let tool_result = run["tool_results"]
         .as_array()
         .unwrap()
@@ -1092,6 +1095,59 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
     assert!(run["output_json"]["evidence_sufficiency"].is_object());
     assert!(!run["output_json"].to_string().contains("CLM-AGENT-LOGS"));
+}
+
+#[tokio::test]
+async fn agent_policy_check_uses_configured_policy_id_for_governance_trace() {
+    let mut config = test_config();
+    config.agent_policy_id = "customer-alpha-agent-policy-v1".into();
+    let app = build_app(config);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-POLICY-CONFIG",
+          "risk_score": 90,
+          "rag": "RED",
+          "top_reasons": ["Configured policy should govern Agent tool access"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|run| run["agent_run_id"] == agent_run_id)
+        .expect("agent run should be listed for governance review");
+    let policy_check = run["policy_checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["tool_name"] == "knowledge.search_similar")
+        .expect("tool policy check should be audited before tool activity");
+
+    assert_eq!(
+        policy_check["policy_name"],
+        "customer-alpha-agent-policy-v1"
+    );
+    assert!(policy_check["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:customer-alpha-agent-policy-v1")));
 }
 
 #[tokio::test]
