@@ -1738,6 +1738,10 @@ def score_normalized_inbox_context():
     assert_true(score.get("audit_id"), "canonical context score missing audit_id")
     assert_true(len(score.get("layers", [])) == 7, "canonical context score missing 7 layers")
     assert_true(
+        all(layer.get("evidence_refs") for layer in score.get("layers", [])),
+        "canonical context score layers missing evidence refs",
+    )
+    assert_true(
         f"invoice:{invoice_id}:fee_detail:{line_id}" in score.get("evidence_refs", []),
         "canonical context score did not preserve inbox bill-line evidence ref",
     )
@@ -1785,6 +1789,10 @@ def main():
     assert_true(score.get("audit_id"), "score response missing audit_id")
     assert_true(isinstance(score.get("risk_score"), int), "score response missing risk_score")
     assert_true(len(score.get("layers", [])) == 7, "score response must include 7 layers")
+    assert_true(
+        all(layer.get("evidence_refs") for layer in score.get("layers", [])),
+        "score response layers missing evidence refs",
+    )
     assert_true(score.get("top_reasons"), "score response missing top_reasons")
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
     model_score = score.get("model_score", {})

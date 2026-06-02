@@ -300,6 +300,31 @@ async fn scores_spec_style_top_level_full_payload() {
     assert_eq!(layers[5]["layer_id"], "L6_PROVIDER_GRAPH_RISK");
     assert_eq!(layers[6]["layer_id"], "L7_RISK_FUSION_ROUTING");
     assert_eq!(layers[6]["score"], body["scores"]["final_score"]);
+    assert!(layers.iter().all(|layer| {
+        layer["evidence_refs"]
+            .as_array()
+            .is_some_and(|refs| !refs.is_empty())
+    }));
+    assert!(layers[0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "feature_values:claim_amount_peer_percentile:v1"
+        )));
+    assert!(layers[1]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rules:rule_early_claim:v1")));
+    assert!(layers[3]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0")));
+    assert!(layers[6]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "routing_policies:fwa_risk_fusion_routing:v1:pre_payment"
+        )));
     let evidence_refs = body["evidence_refs"]
         .as_array()
         .expect("response should include evidence refs");
@@ -2139,7 +2164,14 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     let layer_schema = &schema["components"]["schemas"]["DetectionLayerScore"];
     assert_eq!(
         layer_schema["required"],
-        serde_json::json!(["layer_id", "name", "score", "status", "reason"])
+        serde_json::json!([
+            "layer_id",
+            "name",
+            "score",
+            "status",
+            "reason",
+            "evidence_refs"
+        ])
     );
     assert_eq!(
         layer_schema["properties"]["layer_id"]["enum"],
@@ -2155,6 +2187,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     );
     assert_eq!(layer_schema["properties"]["score"]["minimum"], 0);
     assert_eq!(layer_schema["properties"]["score"]["maximum"], 100);
+    assert_eq!(layer_schema["properties"]["evidence_refs"]["minItems"], 1);
 
     let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
         .as_array()

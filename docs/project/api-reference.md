@@ -189,7 +189,7 @@ Main response fields:
 - `audit_id`
 - risk score and RAG band
 - recommended action
-- score layers
+- score layers, each with layer-level `evidence_refs`
 - alerts
 - top reasons
 - evidence refs

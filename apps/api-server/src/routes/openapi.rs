@@ -3015,7 +3015,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DetectionLayerScore": {
                     "type": "object",
-                    "required": ["layer_id", "name", "score", "status", "reason"],
+                    "required": ["layer_id", "name", "score", "status", "reason", "evidence_refs"],
                     "properties": {
                         "layer_id": {
                             "type": "string",
@@ -3039,7 +3039,17 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["active", "baseline", "no_data"]
                         },
-                        "reason": { "type": "string" }
+                        "reason": { "type": "string" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                                "oneOf": [
+                                    { "type": "string" },
+                                    { "$ref": "#/components/schemas/EvidenceRef" }
+                                ]
+                            }
+                        }
                     }
                 },
                 "RoutingPolicy": {
