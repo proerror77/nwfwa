@@ -223,6 +223,9 @@ grep -q "FWA_NETWORK_ALLOWLIST_ID" docs/project/technology-stack.md
 grep -q "alert_routing_configuration" docs/project/api-reference.md
 grep -q "alert_routing_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_ALERT_ROUTING_POLICY_ID" docs/project/technology-stack.md
+grep -q "observability_exporter_configuration" docs/project/api-reference.md
+grep -q "observability_exporter_configuration" docs/engineering/pilot-readiness.md
+grep -q "FWA_OBSERVABILITY_EXPORTER_ENDPOINT" docs/project/technology-stack.md
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml

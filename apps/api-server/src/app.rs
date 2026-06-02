@@ -312,6 +312,7 @@ mod tests {
             key_rotation_policy_id: "demo-key-rotation-policy".into(),
             network_allowlist_id: "demo-network-allowlist".into(),
             alert_routing_policy_id: "demo-alert-routing-policy".into(),
+            observability_exporter_endpoint: "local://demo-observability".into(),
         }
     }
 

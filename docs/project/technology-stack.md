@@ -186,6 +186,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_KEY_ROTATION_POLICY_ID` | `demo-key-rotation-policy` | Local key rotation policy id |
 | `FWA_NETWORK_ALLOWLIST_ID` | `demo-network-allowlist` | Local network allowlist id |
 | `FWA_ALERT_ROUTING_POLICY_ID` | `demo-alert-routing-policy` | Local alert routing policy id |
+| `FWA_OBSERVABILITY_EXPORTER_ENDPOINT` | `local://demo-observability` | Local observability exporter endpoint |
 
 ## Current Non-Goals
 

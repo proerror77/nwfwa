@@ -12,6 +12,7 @@ pub struct AppConfig {
     pub key_rotation_policy_id: String,
     pub network_allowlist_id: String,
     pub alert_routing_policy_id: String,
+    pub observability_exporter_endpoint: String,
 }
 
 impl AppConfig {
@@ -39,6 +40,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "demo-network-allowlist".into()),
             alert_routing_policy_id: std::env::var("FWA_ALERT_ROUTING_POLICY_ID")
                 .unwrap_or_else(|_| "demo-alert-routing-policy".into()),
+            observability_exporter_endpoint: std::env::var("FWA_OBSERVABILITY_EXPORTER_ENDPOINT")
+                .unwrap_or_else(|_| "local://demo-observability".into()),
         }
     }
 
@@ -147,6 +150,14 @@ impl AppConfig {
     pub fn alert_routing_configuration_status(&self) -> &'static str {
         if self.alert_routing_policy_id == "demo-alert-routing-policy" {
             "local_demo_alert_routing"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn observability_exporter_configuration_status(&self) -> &'static str {
+        if self.observability_exporter_endpoint == "local://demo-observability" {
+            "local_demo_observability_exporter"
         } else {
             "configured"
         }

@@ -100,6 +100,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.alert_routing_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "observability_exporter_configuration",
+                status: state.config.observability_exporter_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

@@ -93,6 +93,9 @@ Minimum pilot monitoring:
 - Alert routing readiness: `/api/v1/health` check
   `alert_routing_configuration` must be `configured`, not
   `local_demo_alert_routing`, before customer pilot traffic.
+- Observability exporter readiness: `/api/v1/health` check
+  `observability_exporter_configuration` must be `configured`, not
+  `local_demo_observability_exporter`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
@@ -100,7 +103,7 @@ Minimum pilot monitoring:
 - API call records: audit-backed scoring, investigation, and QA writeback calls in Governance
 - Database checks: migration success and audit event append rate
 
-OpenTelemetry, Grafana, and Loki are production setup tasks after pilot environment selection.
+Grafana and Loki dashboards are production setup tasks after pilot environment selection.
 
 ## PII Handling
 
