@@ -28,6 +28,20 @@ Use this endpoint when the TPA or claim administration system sends a
 customer-specific raw intake payload rather than the canonical scoring request.
 The current pilot-shaped adapter supports an `AiClaim Core` envelope with
 `systemCode`, `transNo`, and a nested `reportCase`.
+For local correction checks, run the mock client in normalize-only mode against
+a raw file:
+
+```bash
+python3 scripts/demo/tpa_mock_client.py \
+  --base-url http://127.0.0.1:8080 \
+  --api-key dev-secret \
+  --inbox-payload-file /Users/proerror/Downloads/req.json \
+  --normalize-only
+```
+
+The command prints the normalize response and exits non-zero when
+`scoring_ready` is false, so the returned `validation_errors` are the concrete
+input-box fields to fix before scoring.
 
 The endpoint validates the envelope, checks source-system identity, normalizes
 epoch-millisecond dates, masks PII-bearing values, maps claim-header,

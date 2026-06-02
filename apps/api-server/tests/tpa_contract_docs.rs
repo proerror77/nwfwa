@@ -234,7 +234,7 @@ fn core_tpa_endpoint_contracts() -> Vec<TpaEndpointContract<'static>> {
             path: "/api/v1/audit/claims/{claim_id}",
             doc_heading: "### Claim Audit History",
             doc_line: "`GET /api/v1/audit/claims/{claim_id}`",
-            mock_fragment: "/api/v1/audit/claims/{args.claim_id}",
+            mock_fragment: "/api/v1/audit/claims/",
             request_ref: None,
             response_ref: "#/components/schemas/ClaimAuditHistoryResponse",
             error_statuses: &["401"],

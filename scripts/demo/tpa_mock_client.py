@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import sys
 import time
 import urllib.error
 import urllib.request
@@ -33,70 +34,102 @@ def require(value, message):
     return value
 
 
+def load_json_file(path):
+    with open(path, encoding="utf-8") as file:
+        return json.load(file)
+
+
+def generated_inbox_payload(source_system, claim_id, suffix):
+    return {
+        "systemCode": source_system,
+        "transNo": f"MOCK-INBOX-{suffix}",
+        "reportCase": {
+            "reportNo": claim_id,
+            "claimReceiveDate": 1779811200000,
+            "calculateRisk": "Y",
+            "policyList": [
+                {
+                    "policyNo": "POL-MOCK",
+                    "insuredName": "Mock Member",
+                    "coverageLimit": 20000,
+                    "invoiceList": [
+                        {
+                            "invoiceNo": f"INV-MOCK-{suffix}",
+                            "feeAmount": 397.06,
+                            "startDate": 1766678400000,
+                            "hospitalName": "Mock Hospital",
+                            "diagnosisList": [
+                                {
+                                    "detailCode": "K05.300",
+                                    "detailName": "慢性牙周炎",
+                                }
+                            ],
+                            "feeList": [
+                                {
+                                    "feeCategory": "westernMedicineFee",
+                                    "medicareAmount": 21.55,
+                                    "feeDetailList": [
+                                        {
+                                            "name": "双氯芬酸二乙胺乳胶剂",
+                                            "amount": 51.51,
+                                        }
+                                    ],
+                                }
+                            ],
+                        }
+                    ],
+                }
+            ],
+        },
+    }
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run the pilot TPA integration flow.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
     parser.add_argument("--api-key", default="dev-secret")
-    parser.add_argument("--source-system", default="tpa-demo")
+    parser.add_argument("--source-system")
     parser.add_argument("--claim-id", default="CLM-0287")
     parser.add_argument("--member-id", default="MBR-0287")
+    parser.add_argument(
+        "--inbox-payload-file",
+        help="Path to a raw TPA inbox JSON payload to normalize before scoring.",
+    )
+    parser.add_argument(
+        "--normalize-only",
+        action="store_true",
+        help="Only call /api/v1/inbox/claims/normalize and print the normalization response.",
+    )
     args = parser.parse_args()
 
     suffix = str(int(time.time()))
+    raw_inbox_payload = (
+        load_json_file(args.inbox_payload_file)
+        if args.inbox_payload_file
+        else generated_inbox_payload(args.source_system or "tpa-demo", args.claim_id, suffix)
+    )
+    source_system = args.source_system or raw_inbox_payload.get("systemCode") or "tpa-demo"
 
     inbox = request(
         args.base_url,
         args.api_key,
         "POST",
         "/api/v1/inbox/claims/normalize",
-        {
-            "systemCode": args.source_system,
-            "transNo": f"MOCK-INBOX-{suffix}",
-            "reportCase": {
-                "reportNo": args.claim_id,
-                "claimReceiveDate": 1779811200000,
-                "calculateRisk": "Y",
-                "policyList": [
-                    {
-                        "policyNo": "POL-MOCK",
-                        "insuredName": "Mock Member",
-                        "coverageLimit": 20000,
-                        "invoiceList": [
-                            {
-                                "invoiceNo": f"INV-MOCK-{suffix}",
-                                "feeAmount": 397.06,
-                                "startDate": 1766678400000,
-                                "hospitalName": "Mock Hospital",
-                                "diagnosisList": [
-                                    {
-                                        "detailCode": "K05.300",
-                                        "detailName": "慢性牙周炎",
-                                    }
-                                ],
-                                "feeList": [
-                                    {
-                                        "feeCategory": "westernMedicineFee",
-                                        "medicareAmount": 21.55,
-                                        "feeDetailList": [
-                                            {
-                                                "name": "双氯芬酸二乙胺乳胶剂",
-                                                "amount": 51.51,
-                                            }
-                                        ],
-                                    }
-                                ],
-                            }
-                        ],
-                    }
-                ],
-            },
-        },
+        raw_inbox_payload,
     )
     require(inbox.get("idempotency_key"), "inbox normalize missing idempotency_key")
+    if args.normalize_only:
+        print(json.dumps(inbox, ensure_ascii=False, indent=2, sort_keys=True))
+        return 0 if inbox.get("scoring_ready") is True else 2
+
     require(inbox.get("scoring_ready") is True, f"inbox context not scoring ready: {inbox}")
     canonical_claim_context = require(
         inbox.get("canonical_claim_context"),
         "inbox normalize missing canonical_claim_context",
+    )
+    effective_claim_id = canonical_claim_context.get("claim_header", {}).get(
+        "external_claim_id",
+        args.claim_id,
     )
 
     score = request(
@@ -105,11 +138,11 @@ def main():
         "POST",
         "/api/v1/claims/score",
         {
-            "source_system": args.source_system,
+            "source_system": source_system,
             "canonical_claim_context": canonical_claim_context,
         },
     )
-    require(score.get("claim_id") == args.claim_id, "canonical score claim_id mismatch")
+    require(score.get("claim_id") == effective_claim_id, "canonical score claim_id mismatch")
     audit_id = require(score.get("audit_id"), "score response missing audit_id")
 
     member = request(
@@ -126,7 +159,7 @@ def main():
         "POST",
         "/api/v1/knowledge/search-similar",
         {
-            "claim_id": args.claim_id,
+            "claim_id": effective_claim_id,
             "diagnosis_code": "J10",
             "provider_region": "Shanghai",
             "tags": ["early_claim", "high_amount"],
@@ -140,7 +173,7 @@ def main():
         "POST",
         "/api/v1/investigations/results",
         {
-            "claim_id": args.claim_id,
+            "claim_id": effective_claim_id,
             "investigation_id": f"INV-MOCK-{suffix}",
             "outcome": "confirmed_fwa_review_needed",
             "confirmed_fwa": True,
@@ -164,7 +197,7 @@ def main():
         "/api/v1/qa/results",
         {
             "qa_case_id": f"QA-MOCK-{suffix}",
-            "claim_id": args.claim_id,
+            "claim_id": effective_claim_id,
             "qa_conclusion": "issue_found_escalate",
             "issue_type": "alert_handling_incomplete",
             "feedback_target": "rules",
@@ -178,7 +211,7 @@ def main():
         args.base_url,
         args.api_key,
         "GET",
-        f"/api/v1/audit/claims/{args.claim_id}",
+        f"/api/v1/audit/claims/{effective_claim_id}",
     )
     event_types = [event.get("event_type") for event in audit.get("events", [])]
     for expected in [
@@ -191,7 +224,7 @@ def main():
     print(
         json.dumps(
             {
-                "claim_id": args.claim_id,
+                "claim_id": effective_claim_id,
                 "inbox_idempotency_key": inbox.get("idempotency_key"),
                 "inbox_run_id": inbox.get("run_id"),
                 "score": {
@@ -210,7 +243,8 @@ def main():
             sort_keys=True,
         )
     )
+    return 0
 
 
 if __name__ == "__main__":
-    main()
+    sys.exit(main())
