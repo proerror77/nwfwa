@@ -152,6 +152,11 @@ grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/api-calls" scripts/demo/smoke_demo.py
+grep -q -- "--customer-principal-smoke" scripts/demo/smoke_demo.py
+grep -q "FWA_DEMO_EXPECTED_ACTOR_ROLE" scripts/demo/smoke_demo.py
+grep -q "FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID" scripts/demo/smoke_demo.py
+grep -q -- "--customer-principal-smoke" docs/engineering/demo-runbook.md
+grep -q -- "--customer-principal-smoke" docs/engineering/pilot-readiness.md
 grep -q "API Call Records" apps/web-console/src/main.rs
 grep -q "/api/v1/claims/score" scripts/demo/smoke_demo.py
 grep -q "score_normalized_inbox_context" scripts/demo/smoke_demo.py

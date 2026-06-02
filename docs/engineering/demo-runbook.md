@@ -148,6 +148,35 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/demo/assert_demo_persistence.
 
 The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, API call records, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`. The SQL assertion verifies the same demo run was persisted across `scoring_runs`, `feature_values`, `rule_runs`, `model_scores`, `audit_events`, lead/case tables, QA, investigation, and saving attribution tables.
 
+Run the customer principal smoke when preparing a pilot demo. Start the API
+server with a non-dev principal and a non-demo customer scope:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
+FWA_API_KEY=legacy-customer-secret \
+FWA_API_KEY_PRINCIPALS='customer-demo-key|customer-demo-ops|fwa_operator|customer-demo-tpa|customer-alpha-pilot|ops:*,tpa:*,medical:*,agent:*,audit:read' \
+FWA_SOURCE_SYSTEM=customer-demo-tpa \
+FWA_CUSTOMER_SCOPE_ID=customer-alpha-pilot \
+FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
+cargo run --locked -p api-server
+```
+
+Then run:
+
+```bash
+FWA_API_KEY=customer-demo-key \
+FWA_SOURCE_SYSTEM=customer-demo-tpa \
+FWA_DEMO_EXPECTED_ACTOR_ROLE=fwa_operator \
+FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID=customer-alpha-pilot \
+scripts/demo/smoke_demo.py --customer-principal-smoke
+```
+
+This uses the same end-to-end path as the local demo, but additionally asserts
+that API call records and claim audit history carry the expected
+`actor_role` and `customer_scope_id` for scoring, investigation writeback, QA
+writeback, and medical review. It also verifies that health readiness no longer
+classifies the API key or customer scope as local demo configuration.
+
 ## 6. Model Promotion Evidence
 
 For model promotion demos, use Models -> Promotion Gates and the API contract as

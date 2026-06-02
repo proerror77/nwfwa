@@ -9,6 +9,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
@@ -109,7 +110,7 @@ pub async fn submit_medical_review_result(
     headers: HeaderMap,
     Json(mut request): Json<SubmitMedicalReviewResultRequest>,
 ) -> Result<Json<MedicalReviewResultResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_medical_review_result(&request)?;
     merge_canonical_evidence_refs_for_medical_review(&state, &mut request).await?;
     let audit_id = AuditEventId::new().to_string();
@@ -123,13 +124,15 @@ pub async fn submit_medical_review_result(
             run_id: run_id.clone(),
             claim_id: request.claim_id.clone(),
             source_system: "ops-studio".into(),
-            actor_id: request.reviewer.clone(),
-            actor_role: "medical_reviewer".into(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
             event_type: "medical.review.recorded".into(),
             event_status: "succeeded".into(),
             summary: format!("Medical review recorded: {}", request.decision),
             payload: json!({
-                "customer_scope_id": state.config.customer_scope_id,
+                "customer_scope_id": actor.customer_scope_id.clone(),
+                "actor_id": actor.actor_id.clone(),
+                "actor_role": actor.actor_role.clone(),
                 "claim_id": request.claim_id,
                 "scoring_audit_id": request.scoring_audit_id,
                 "reviewer": request.reviewer,
@@ -424,19 +427,17 @@ fn medical_review_status(decision: &str) -> &'static str {
     }
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config())
-        .map(|_| ())
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "INVALID_API_KEY",
+            "invalid api key",
+        )
+    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

@@ -224,6 +224,9 @@ Before a customer pilot contract test:
 - Validate scoring on representative pilot claims.
 - Validate investigation, QA, and medical review writebacks.
 - Verify audit history for every demo flow.
+- Run `scripts/demo/smoke_demo.py --customer-principal-smoke` to prove the
+  customer principal actor role and customer scope appear in API call records
+  and claim audit history.
 - Confirm high-risk outputs remain assistive-only.
 
 Writeback contract fields:

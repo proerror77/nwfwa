@@ -14,6 +14,14 @@ SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
 CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
 MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
+EXPECTED_ACTOR_ROLE = os.environ.get("FWA_DEMO_EXPECTED_ACTOR_ROLE")
+EXPECTED_CUSTOMER_SCOPE_ID = os.environ.get("FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID")
+CUSTOMER_PRINCIPAL_SMOKE = "--customer-principal-smoke" in sys.argv
+CUSTOMER_PRINCIPAL_ASSERTIONS = (
+    CUSTOMER_PRINCIPAL_SMOKE
+    or EXPECTED_ACTOR_ROLE is not None
+    or EXPECTED_CUSTOMER_SCOPE_ID is not None
+)
 CANDIDATE_RULE_ID = "candidate_early_high_amount"
 ROUTING_POLICY_PREFIX = "demo_strict_prepay"
 
@@ -50,6 +58,23 @@ def assert_true(condition, message):
         raise AssertionError(message)
 
 
+def require_customer_principal_smoke_config():
+    if not CUSTOMER_PRINCIPAL_ASSERTIONS:
+        return
+    assert_true(
+        API_KEY != "dev-secret",
+        "customer principal smoke requires a non-dev FWA_API_KEY",
+    )
+    assert_true(
+        EXPECTED_ACTOR_ROLE,
+        "customer principal smoke requires FWA_DEMO_EXPECTED_ACTOR_ROLE",
+    )
+    assert_true(
+        EXPECTED_CUSTOMER_SCOPE_ID,
+        "customer principal smoke requires FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID",
+    )
+
+
 def agent_rag(score_rag):
     return {
         "Green": "GREEN",
@@ -68,6 +93,51 @@ def has_label(labels, **expected):
 
 def has_health_check(checks, name, status):
     return any(check.get("name") == name and check.get("status") == status for check in checks)
+
+
+def assert_health_readiness_contract(health):
+    pilot_readiness = health.get("pilot_readiness", {})
+    assert_true(
+        pilot_readiness.get("status") in {"ready", "not_ready"},
+        "health endpoint missing pilot readiness status",
+    )
+    blocking_checks = pilot_readiness.get("blocking_checks", [])
+    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+        health_checks = health.get("checks", [])
+        assert_true(
+            has_health_check(health_checks, "api_key_configuration", "configured"),
+            "customer principal smoke requires configured API key readiness",
+        )
+        assert_true(
+            has_health_check(health_checks, "source_system_configuration", "configured"),
+            "customer principal smoke requires configured source-system readiness",
+        )
+        assert_true(
+            has_health_check(health_checks, "customer_scope_configuration", "configured"),
+            "customer principal smoke requires configured customer-scope readiness",
+        )
+        assert_true(
+            not has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
+            "customer principal smoke must not use the local dev API key",
+        )
+        return
+
+    assert_true(
+        pilot_readiness.get("status") == "not_ready",
+        "local demo health should expose pilot readiness as not_ready",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
+        "pilot readiness missing local API key blocker",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "model_service_configuration", "local_dev_model_service"),
+        "pilot readiness missing local model service blocker",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "agent_policy_configuration", "local_demo_agent_policy"),
+        "pilot readiness missing local Agent policy blocker",
+    )
 
 
 def decimal_value(value):
@@ -1187,10 +1257,60 @@ def assert_tpa_api_call_observability(score, investigation, qa):
             f"{event_type} idempotency key mismatch",
         )
         assert_true(call.get("evidence_refs"), f"{event_type} evidence refs missing")
+        if CUSTOMER_PRINCIPAL_ASSERTIONS:
+            assert_true(
+                call.get("actor_role") == EXPECTED_ACTOR_ROLE,
+                f"{event_type} actor role mismatch",
+            )
+            assert_true(
+                call.get("customer_scope_id") == EXPECTED_CUSTOMER_SCOPE_ID,
+                f"{event_type} customer scope mismatch",
+            )
 
-    return {
+    result = {
         "api_call_count": len(api_calls),
         "observed_event_types": sorted(expected),
+    }
+    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+        result["expected_actor_role"] = EXPECTED_ACTOR_ROLE
+        result["expected_customer_scope_id"] = EXPECTED_CUSTOMER_SCOPE_ID
+    return result
+
+
+def assert_customer_principal_audit_observability(audit):
+    if not CUSTOMER_PRINCIPAL_ASSERTIONS:
+        return None
+    expected_event_types = {
+        "scoring.completed",
+        "investigation.result.received",
+        "qa.result.received",
+        "medical.review.recorded",
+    }
+    observed = {}
+    for event_type in expected_event_types:
+        observed[event_type] = next(
+            (
+                event
+                for event in audit.get("events", [])
+                if event.get("event_type") == event_type
+            ),
+            None,
+        )
+    missing = {event_type for event_type, event in observed.items() if event is None}
+    assert_true(not missing, f"customer principal audit missing event types: {sorted(missing)}")
+    for event_type, event in observed.items():
+        assert_true(
+            event.get("actor_role") == EXPECTED_ACTOR_ROLE,
+            f"{event_type} audit actor role mismatch",
+        )
+        assert_true(
+            event.get("payload", {}).get("customer_scope_id") == EXPECTED_CUSTOMER_SCOPE_ID,
+            f"{event_type} audit customer scope mismatch",
+        )
+    return {
+        "observed_event_types": sorted(expected_event_types),
+        "expected_actor_role": EXPECTED_ACTOR_ROLE,
+        "expected_customer_scope_id": EXPECTED_CUSTOMER_SCOPE_ID,
     }
 
 
@@ -1817,6 +1937,7 @@ def score_normalized_inbox_context():
 
 
 def main():
+    require_customer_principal_smoke_config()
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
     assert_true(health.get("service") == "api-server", "health endpoint missing service metadata")
@@ -1826,24 +1947,7 @@ def main():
         has_health_check(health_checks, "http_router", "ok"),
         "health endpoint missing http_router check",
     )
-    pilot_readiness = health.get("pilot_readiness", {})
-    assert_true(
-        pilot_readiness.get("status") == "not_ready",
-        "local demo health should expose pilot readiness as not_ready",
-    )
-    blocking_checks = pilot_readiness.get("blocking_checks", [])
-    assert_true(
-        has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
-        "pilot readiness missing local API key blocker",
-    )
-    assert_true(
-        has_health_check(blocking_checks, "model_service_configuration", "local_dev_model_service"),
-        "pilot readiness missing local model service blocker",
-    )
-    assert_true(
-        has_health_check(blocking_checks, "agent_policy_configuration", "local_demo_agent_policy"),
-        "pilot readiness missing local Agent policy blocker",
-    )
+    assert_health_readiness_contract(health)
     scheme_taxonomy = assert_fwa_scheme_taxonomy()
     inbox_canonical_score = score_normalized_inbox_context()
 
@@ -2146,6 +2250,7 @@ def main():
         "knowledge.case.published" in event_types,
         "audit history missing knowledge.case.published",
     )
+    customer_principal_audit = assert_customer_principal_audit_observability(audit)
     api_call_observability = assert_tpa_api_call_observability(score, investigation, qa)
     governance_audit = assert_governance_audit_trail(
         agent_governance,
@@ -2330,6 +2435,7 @@ def main():
                 "qa_feedback_update": qa_feedback_update,
                 "knowledge_publish": knowledge_publish,
                 "api_call_observability": api_call_observability,
+                "customer_principal_audit": customer_principal_audit,
                 "governance_audit": governance_audit,
                 "dataset_model_lineage": dataset_model_lineage,
                 "factor_readiness": factor_readiness,
@@ -2347,10 +2453,10 @@ if __name__ == "__main__":
     try:
         if len(sys.argv) == 2 and sys.argv[1] == "--govern-retraining-candidate":
             govern_retraining_candidate()
-        elif len(sys.argv) == 1:
+        elif len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] == "--customer-principal-smoke"):
             main()
         else:
-            raise RuntimeError("usage: smoke_demo.py [--govern-retraining-candidate]")
+            raise RuntimeError("usage: smoke_demo.py [--govern-retraining-candidate|--customer-principal-smoke]")
     except Exception as error:
         print(f"demo smoke failed: {error}", file=sys.stderr)
         sys.exit(1)

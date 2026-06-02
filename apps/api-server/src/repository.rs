@@ -894,6 +894,10 @@ pub struct InvestigationResultRecord {
     pub evidence_refs: Vec<String>,
     #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
     pub customer_scope_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_role: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -928,6 +932,10 @@ pub struct QaReviewRecord {
     pub evidence_refs: Vec<String>,
     #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
     pub customer_scope_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_role: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2900,7 +2908,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id,
             run_id: format!("pilot_investigation_{}", record.investigation_id),
-            actor_role: "tpa_system".into(),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "investigation.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("Investigation result received: {}", record.outcome),
@@ -2929,7 +2940,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_qa_{}", record.qa_case_id),
             run_id: format!("pilot_qa_{}", record.qa_case_id),
-            actor_role: "tpa_system".into(),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "qa.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("QA result received: {}", record.qa_conclusion),
@@ -6301,7 +6315,10 @@ impl ScoringRepository for PostgresScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_investigation_{}", record.investigation_id),
             run_id: format!("pilot_investigation_{}", record.investigation_id),
-            actor_role: "tpa_system".into(),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "investigation.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("Investigation result received: {}", record.outcome),
@@ -6345,7 +6362,10 @@ impl ScoringRepository for PostgresScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_qa_{}", record.qa_case_id),
             run_id: format!("pilot_qa_{}", record.qa_case_id),
-            actor_role: "tpa_system".into(),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "qa.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("QA result received: {}", record.qa_conclusion),
@@ -6425,6 +6445,8 @@ impl ScoringRepository for PostgresScoringRepository {
                             notes,
                             evidence_refs: json_array_to_strings(evidence_refs),
                             customer_scope_id: None,
+                            actor_id: None,
+                            actor_role: None,
                         },
                         Some(created_at.to_rfc3339()),
                         &feedback_status,
@@ -6511,6 +6533,8 @@ impl ScoringRepository for PostgresScoringRepository {
                 notes,
                 evidence_refs: json_array_to_strings(evidence_refs),
                 customer_scope_id: None,
+                actor_id: None,
+                actor_role: None,
             },
             Some(created_at.to_rfc3339()),
             &feedback_status,
@@ -6582,6 +6606,8 @@ impl ScoringRepository for PostgresScoringRepository {
                         notes,
                         evidence_refs: json_array_to_strings(evidence_refs),
                         customer_scope_id: None,
+                        actor_id: None,
+                        actor_role: None,
                     }
                 },
             )
@@ -6659,6 +6685,8 @@ impl ScoringRepository for PostgresScoringRepository {
                         notes,
                         evidence_refs: json_array_to_strings(evidence_refs),
                         customer_scope_id: None,
+                        actor_id: None,
+                        actor_role: None,
                     })
                 },
             )
@@ -6683,6 +6711,8 @@ impl ScoringRepository for PostgresScoringRepository {
                             notes,
                             evidence_refs: json_array_to_strings(evidence_refs),
                             customer_scope_id: None,
+                            actor_id: None,
+                            actor_role: None,
                         },
                         &feedback_status,
                     )

@@ -66,6 +66,11 @@ Minimum pilot monitoring:
   `configured`, not `local_dev_key`, before customer pilot traffic.
   `invalid_api_key_principals` means `FWA_API_KEY_PRINCIPALS` is present but no
   valid principal entry can be parsed.
+- Customer principal smoke: `scripts/demo/smoke_demo.py --customer-principal-smoke`
+  requires a non-dev `FWA_API_KEY`, `FWA_DEMO_EXPECTED_ACTOR_ROLE`, and
+  `FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID`. It fails if scoring, investigation
+  writeback, QA writeback, or medical review audit/API observability does not
+  carry the configured principal role and customer scope.
 - Permission readiness: production-impacting rule and model governance actions
   require matching principal permissions, for example `ops:rules:publish` or
   `ops:models:activate`. Missing permissions return `PERMISSION_DENIED`.
@@ -146,5 +151,8 @@ Evidence references should point to structured objects, for example `rule_runs:E
 - Write back an investigation result.
 - Write back a QA result.
 - Query `/api/v1/audit/claims/{claim_id}` and verify the timeline contains scoring, investigation, and QA events where applicable.
+- Run `scripts/demo/smoke_demo.py --customer-principal-smoke` with the customer
+  principal and confirm actor/scope propagation in API call records and claim
+  audit history.
 - Confirm high-risk outputs are assistive only and do not directly reject claims.
 - Confirm customer pilot data is registered as Parquet dataset metadata before model training or evaluation use.

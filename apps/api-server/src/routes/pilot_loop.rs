@@ -162,6 +162,8 @@ pub async fn write_investigation_result(
     validate_investigation_case_link(&state, &request).await?;
     merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
     request.customer_scope_id = Some(actor.customer_scope_id);
+    request.actor_id = Some(actor.actor_id);
+    request.actor_role = Some(actor.actor_role);
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -189,6 +191,8 @@ pub async fn write_qa_result(
     request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
     merge_latest_canonical_evidence_refs(&state, &mut request).await?;
     request.customer_scope_id = Some(actor.customer_scope_id);
+    request.actor_id = Some(actor.actor_id);
+    request.actor_role = Some(actor.actor_role);
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
