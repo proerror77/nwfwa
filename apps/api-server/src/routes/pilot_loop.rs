@@ -154,11 +154,12 @@ pub async fn member_profile_summary(
 pub async fn write_investigation_result(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<InvestigationResultRecord>,
+    Json(mut request): Json<InvestigationResultRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
     authorize(&state, &headers)?;
     validate_investigation_result_request(&request)?;
     validate_investigation_case_link(&state, &request).await?;
+    merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -290,6 +291,39 @@ async fn validate_investigation_case_link(
             "case not found for investigation result claim",
         ))
     }
+}
+
+async fn merge_latest_canonical_evidence_refs_for_investigation(
+    state: &AppState,
+    request: &mut InvestigationResultRecord,
+) -> Result<(), ApiError> {
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 1,
+            event_type: Some("scoring.completed".into()),
+            claim_id: Some(request.claim_id.clone()),
+            has_canonical_trace: Some(true),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error(
+            "INVESTIGATION_CANONICAL_TRACE_LOOKUP_FAILED",
+        ))?;
+    let Some(event) = events
+        .iter()
+        .find(|event| event.event_status == "succeeded")
+    else {
+        return Ok(());
+    };
+    for reference in
+        unique_json_string_values(&event.payload["canonical_claim_context_trace"]["evidence_refs"])
+    {
+        if !request.evidence_refs.contains(&reference) {
+            request.evidence_refs.push(reference);
+        }
+    }
+    Ok(())
 }
 
 fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> {

@@ -5635,7 +5635,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "evidence_refs": {
                             "type": "array",
-                            "description": "Structured evidence references must not contain PII.",
+                            "description": "Structured evidence references must not contain PII. For claims with a prior normalized scoring trace, canonical evidence refs from that trace are merged into the persisted investigation result and response.",
                             "minItems": 1,
                             "items": { "type": "string", "minLength": 1 }
                         }

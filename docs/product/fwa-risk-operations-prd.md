@@ -272,6 +272,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - when the normalized scoring run later enters QA, merge its canonical evidence
   refs into `POST /api/v1/qa/results` so QA conclusions and audit events remain
   traceable to the original bill-line and document evidence;
+- when the normalized scoring run later enters Investigation Result writeback,
+  merge its canonical evidence refs into `POST /api/v1/investigations/results`
+  so confirmed FWA labels, saving attribution, and investigation audit events
+  remain traceable to the original fee-detail evidence;
 - when the normalized scoring run enters Medical Review, expose canonical
   source/evidence refs in `/api/v1/ops/medical-review/queue` and merge
   canonical evidence refs into `/api/v1/ops/medical-review/results` so L5
@@ -507,6 +511,10 @@ Required infrastructure principles:
 - Agent investigation context snapshots should reuse normalized scoring traces,
   including canonical evidence refs and source refs, when a prior scoring audit
   event is available for the claim.
+- Investigation result writeback should preserve canonical evidence refs from
+  the latest successful normalized scoring trace for the claim, appending them
+  to the persisted investigation result, outcome labels, saving attribution
+  evidence, and `investigation.result.received` audit event.
 - QA review queue items should surface normalized scoring trace source refs and
   canonical evidence refs so reviewers can ground feedback in original bill-line
   and document evidence.

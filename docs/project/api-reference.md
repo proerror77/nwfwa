@@ -206,7 +206,10 @@ preserve claim, rule, model, anomaly, document, and similar-case references.
 Writebacks append evidence. They do not adjudicate claims. QA queue items carry
 `canonical_source_refs` and `canonical_evidence_refs` when a prior normalized
 scoring audit event exists for the claim, allowing reviewers to trace sampled
-cases back to source bill lines and documents. QA result writeback merges the
+cases back to source bill lines and documents. Investigation result writeback merges
+the latest successful normalized scoring trace's canonical evidence refs into
+the persisted investigation result, response, outcome labels, and
+`investigation.result.received` audit event. QA result writeback merges the
 latest successful normalized scoring trace's canonical evidence refs into the
 persisted QA review, response, and `qa.result.received` audit event.
 

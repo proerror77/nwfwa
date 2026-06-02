@@ -303,6 +303,136 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
 }
 
 #[tokio::test]
+async fn investigation_result_writeback_preserves_canonical_evidence_refs_from_scoring_audit() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-INVESTIGATION-CANONICAL",
+              "total_amount": 12000,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-investigation",
+              "masked_certificate_id": "masked-cert-investigation",
+              "policy_id": "POL-INVESTIGATION-CANONICAL",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 15000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-INVESTIGATION-CANONICAL",
+              "name": "Investigation Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_code": "IMG-INVESTIGATION",
+                "item_name": "High cost imaging",
+                "fee_category": "procedure",
+                "amount": 12000,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-INVESTIGATION:fee_detail:LINE-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, investigation) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-INVESTIGATION-CANONICAL",
+          "investigation_id": "INV-CANONICAL-WRITEBACK",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "financial_impact_type": "prevented_payment",
+          "saving_amount": "8200.00",
+          "currency": "CNY",
+          "notes": "TPA investigation confirmed over-treatment signals.",
+          "evidence_refs": ["investigation_results:INV-CANONICAL-WRITEBACK"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        investigation["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "invoice:INV-INVESTIGATION:fee_detail:LINE-1"
+            )),
+        "investigation response should preserve canonical evidence refs"
+    );
+
+    let (status, audit) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/audit/claims/CLM-INVESTIGATION-CANONICAL",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation_event = audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "investigation.result.received")
+        .expect("investigation event should be in audit history");
+    assert!(
+        investigation_event["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "invoice:INV-INVESTIGATION:fee_detail:LINE-1"
+            )),
+        "investigation audit event should preserve canonical evidence refs"
+    );
+    assert!(
+        investigation_event["payload"]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "invoice:INV-INVESTIGATION:fee_detail:LINE-1"
+            )),
+        "investigation audit payload should preserve canonical evidence refs"
+    );
+
+    let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let label = labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|label| label["source_id"] == "INV-CANONICAL-WRITEBACK")
+        .expect("investigation label should be listed");
+    assert!(
+        label["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "invoice:INV-INVESTIGATION:fee_detail:LINE-1"
+            )),
+        "investigation outcome label should preserve canonical evidence refs"
+    );
+}
+
+#[tokio::test]
 async fn rejects_pii_in_investigation_and_qa_writebacks() {
     let app = build_app(test_config());
 

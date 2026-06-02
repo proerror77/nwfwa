@@ -131,6 +131,8 @@ grep -q "Canonical Trace Coverage" scripts/demo/smoke_web_console.mjs
 grep -q "latest_canonical_claim_context_trace" apps/api-server/src/routes/agent.rs
 grep -q "Agent context snapshot carries" docs/project/api-reference.md
 grep -q "canonical_source_refs" apps/api-server/src/routes/openapi.rs
+grep -q "merge_latest_canonical_evidence_refs_for_investigation" apps/api-server/src/routes/pilot_loop.rs
+grep -q "Investigation result writeback merges" docs/project/api-reference.md
 grep -q "merge_latest_canonical_evidence_refs" apps/api-server/src/routes/pilot_loop.rs
 grep -q "QA result writeback merges" docs/project/api-reference.md
 grep -q "merge_canonical_evidence_refs_for_medical_review" apps/api-server/src/routes/ops_medical.rs

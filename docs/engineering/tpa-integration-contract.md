@@ -353,6 +353,10 @@ Request:
 match an existing FWA case for the same claim and the platform projects the
 final outcome, reviewer notes, and `investigation_id` onto that case for the
 Operations Studio case list.
+For claims scored from normalized inbox context, investigation writeback appends
+canonical evidence refs from the latest successful scoring trace to the saved
+investigation result, response, outcome label, saving attribution evidence, and
+`investigation.result.received` audit event.
 
 Response:
 
