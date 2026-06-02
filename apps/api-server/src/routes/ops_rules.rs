@@ -927,7 +927,15 @@ pub async fn approve_rule(
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    update_status(state, headers, rule_id, "approved", request.evidence_refs).await
+    update_status_with_required_previous(
+        state,
+        headers,
+        rule_id,
+        "approved",
+        Some("submitted"),
+        request.evidence_refs,
+    )
+    .await
 }
 
 pub async fn publish_rule(
@@ -1071,8 +1079,8 @@ async fn update_status_with_required_previous(
         if previous.status != required_status {
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
-                "RULE_APPROVAL_REQUIRED",
-                format!("rule must be {required_status} before publish"),
+                "RULE_STATUS_REQUIRED",
+                format!("rule must be {required_status} before {status}"),
             ));
         }
     }
