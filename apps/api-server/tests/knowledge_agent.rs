@@ -1151,6 +1151,70 @@ async fn agent_policy_check_uses_configured_policy_id_for_governance_trace() {
 }
 
 #[tokio::test]
+async fn agent_investigation_audit_payload_traces_governance_controls() {
+    let mut config = test_config();
+    config.agent_policy_id = "customer-beta-agent-policy-v2".into();
+    let app = build_app(config);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-AUDIT-GOVERNANCE",
+          "risk_score": 93,
+          "rag": "RED",
+          "top_reasons": ["Agent audit should expose governance controls"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        &format!("/api/v1/ops/audit-events?agent_run_id={agent_run_id}&limit=10"),
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let event = body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "agent.investigation.completed")
+        .expect("agent investigation completion should be audited");
+
+    assert_eq!(event["payload"]["agent_run_id"], agent_run_id);
+    assert_eq!(event["payload"]["decision_boundary"], "assistive_only");
+    assert_eq!(
+        event["payload"]["agent_policy_id"],
+        "customer-beta-agent-policy-v2"
+    );
+    assert_eq!(event["payload"]["tool_name"], "knowledge.search_similar");
+    assert!(event["payload"]["policy_check_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("policy_check_masked:claim:"));
+    assert!(event["payload"]["tool_call_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("tool_call_masked:claim:"));
+    assert!(event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:customer-beta-agent-policy-v2")));
+}
+
+#[tokio::test]
 async fn agent_context_uses_canonical_trace_from_prior_scoring_audit() {
     let app = build_app(test_config());
 

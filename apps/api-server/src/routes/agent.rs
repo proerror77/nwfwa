@@ -181,6 +181,29 @@ pub async fn investigate_case(
             })
         })
         .collect::<Vec<_>>();
+    let audit_policy_check_id = policy_check.policy_check_id.clone();
+    let audit_tool_call_id = tool_call_id.clone();
+    let mut audit_payload = output_json.clone();
+    if let Value::Object(payload) = &mut audit_payload {
+        payload.insert(
+            "agent_policy_id".into(),
+            Value::String(agent_policy_id.clone()),
+        );
+        payload.insert(
+            "policy_check_id".into(),
+            Value::String(audit_policy_check_id),
+        );
+        payload.insert("tool_call_id".into(), Value::String(audit_tool_call_id));
+        payload.insert(
+            "tool_name".into(),
+            Value::String("knowledge.search_similar".into()),
+        );
+    }
+    let mut audit_evidence_refs = evidence_refs.clone();
+    let policy_evidence_ref = Value::String(format!("policy:{agent_policy_id}"));
+    if !audit_evidence_refs.contains(&policy_evidence_ref) {
+        audit_evidence_refs.push(policy_evidence_ref);
+    }
 
     state
         .repository
@@ -251,8 +274,8 @@ pub async fn investigate_case(
             event_type: "agent.investigation.completed".into(),
             event_status: "succeeded".into(),
             summary: "Agent investigation package generated".into(),
-            payload: output_json,
-            evidence_refs,
+            payload: audit_payload,
+            evidence_refs: audit_evidence_refs,
         })
         .await
         .map_err(internal_error("AGENT_AUDIT_SAVE_FAILED"))?;

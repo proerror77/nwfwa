@@ -1611,9 +1611,42 @@ def govern_agent_run(agent):
         "GET",
         f"/api/v1/ops/audit-events?agent_run_id={agent_run_id}&limit=10",
     ).get("events", [])
+    investigation_event = next(
+        (
+            event
+            for event in audit_events
+            if event.get("event_type") == "agent.investigation.completed"
+        ),
+        None,
+    )
     assert_true(
-        any(event.get("event_type") == "agent.investigation.completed" for event in audit_events),
+        investigation_event is not None,
         "agent audit log missing investigation completion",
+    )
+    investigation_payload = investigation_event.get("payload", {})
+    assert_true(
+        investigation_payload.get("decision_boundary") == "assistive_only",
+        "agent investigation audit missing assistive-only boundary",
+    )
+    assert_true(
+        investigation_payload.get("agent_policy_id") == "demo-agent-policy",
+        "agent investigation audit missing policy id",
+    )
+    assert_true(
+        investigation_payload.get("tool_name") == "knowledge.search_similar",
+        "agent investigation audit missing tool name",
+    )
+    assert_true(
+        investigation_payload.get("policy_check_id"),
+        "agent investigation audit missing policy check id",
+    )
+    assert_true(
+        investigation_payload.get("tool_call_id"),
+        "agent investigation audit missing tool call id",
+    )
+    assert_true(
+        "policy:demo-agent-policy" in investigation_event.get("evidence_refs", []),
+        "agent investigation audit missing policy evidence ref",
     )
     assert_true(
         any(event.get("event_type") == "agent.approval.decided" for event in audit_events),

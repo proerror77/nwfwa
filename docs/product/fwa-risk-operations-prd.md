@@ -597,6 +597,14 @@ high-impact writes for human approval. This keeps the architecture compatible
 with modern agentic workflows without turning the FWA platform into an
 uncontrolled autonomous adjudication system.
 
+Agent investigation completion audit events must expose the applied governance
+controls directly in the audit payload, including `decision_boundary`,
+`agent_policy_id`, `policy_check_id`, `tool_call_id`, and `tool_name`, and the
+event evidence refs must include the applied policy ref. The persisted agent run
+may hold the fuller step/tool/approval records, but the audit timeline itself
+must still be sufficient to trace the policy and allowlisted tool used for the
+output.
+
 ## Lead Generation Lifecycle
 
 Analytics creates leads. It does not directly create fraud conclusions.
