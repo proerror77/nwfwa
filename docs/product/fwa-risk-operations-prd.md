@@ -299,6 +299,11 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - route it through `POST /api/v1/inbox/claims/normalize`, then score only the
   normalized canonical context when `scoring_ready` is true or a reviewer has
   resolved blocking validation findings;
+- use the mock client's `--normalize-only` mode as the correction gate. When
+  `scoring_ready = false`, the printed JSON must include `correction_hints`
+  that identify blocking fields and next actions, including matching the local
+  API key source-system config to `systemCode = "AiClaim Core"` and mapping
+  `reportCase.policyList[0].coverageLimit` before direct scoring;
 - when the normalized scoring run later enters QA, merge its canonical evidence
   refs into `POST /api/v1/qa/results` so QA conclusions and audit events remain
   traceable to the original bill-line and document evidence;

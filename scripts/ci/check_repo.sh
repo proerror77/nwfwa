@@ -73,7 +73,9 @@ grep -q "inbox_run_id" scripts/demo/tpa_mock_client.py
 grep -q -- "--inbox-payload-file" scripts/demo/tpa_mock_client.py
 grep -q -- "--normalize-only" scripts/demo/tpa_mock_client.py
 grep -q "allow_http_error=args.normalize_only" scripts/demo/tpa_mock_client.py
+grep -q "correction_hints" scripts/demo/tpa_mock_client.py
 grep -q -- "--inbox-payload-file /Users/proerror/Downloads/req.json" docs/engineering/tpa-integration-contract.md
+grep -q "correction_hints" docs/product/fwa-risk-operations-prd.md
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml

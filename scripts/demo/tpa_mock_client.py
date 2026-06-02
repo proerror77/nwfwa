@@ -89,6 +89,75 @@ def generated_inbox_payload(source_system, claim_id, suffix):
     }
 
 
+def is_direct_scoring_blocker(field_path, severity):
+    if severity == "error":
+        return True
+    if severity != "warning":
+        return False
+    if not field_path.startswith("reportCase.policyList["):
+        return False
+    if ".invoiceList[" in field_path:
+        return False
+    if ".productList[" in field_path:
+        return field_path.rsplit(".", 1)[-1] in {
+            "validateDate",
+            "claimValidateDate",
+            "expireDate",
+        }
+    return field_path.rsplit(".", 1)[-1] in {
+        "coverageLimit",
+        "validateDate",
+        "expireDate",
+    }
+
+
+def next_action_for_validation_error(error):
+    field_path = error.get("field_path", "")
+    remediation = error.get("remediation", "")
+    if field_path == "systemCode":
+        return "use an API key/source-system config that matches the payload systemCode"
+    if field_path.endswith(".coverageLimit"):
+        return "map the policy or liability coverage limit before direct scoring"
+    if field_path.endswith((".validateDate", ".expireDate", ".claimValidateDate")):
+        return "fix or reviewer-resolve the policy/product/liability date window before scoring"
+    if field_path == "reportCase.calculateRisk":
+        return "keep the payload in the FWA audit path unless customer config explicitly allows bypass"
+    return remediation or "review this field before scoring"
+
+
+def add_correction_hints(normalize_response):
+    if normalize_response.get("scoring_ready") is True:
+        return normalize_response
+
+    hints = []
+    for error in normalize_response.get("validation_errors", []):
+        field_path = error.get("field_path", "")
+        severity = error.get("severity", "")
+        hints.append(
+            {
+                "field_path": field_path,
+                "severity": severity,
+                "blocks_scoring": is_direct_scoring_blocker(field_path, severity),
+                "next_action": next_action_for_validation_error(error),
+            }
+        )
+
+    if normalize_response.get("code") == "SOURCE_SYSTEM_MISMATCH" and not hints:
+        hints.append(
+            {
+                "field_path": "systemCode",
+                "severity": "error",
+                "blocks_scoring": True,
+                "next_action": "use an API key/source-system config that matches the payload systemCode",
+            }
+        )
+
+    if hints:
+        normalize_response = dict(normalize_response)
+        normalize_response["correction_hints"] = hints
+    return normalize_response
+
+
 def main():
     parser = argparse.ArgumentParser(description="Run the pilot TPA integration flow.")
     parser.add_argument("--base-url", default="http://127.0.0.1:8080")
@@ -124,6 +193,7 @@ def main():
         allow_http_error=args.normalize_only,
     )
     if args.normalize_only:
+        inbox = add_correction_hints(inbox)
         print(json.dumps(inbox, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if inbox.get("scoring_ready") is True else 2
 

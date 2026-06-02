@@ -49,7 +49,11 @@ class TpaMockClientTest(unittest.TestCase):
                     "--normalize-only",
                 ],
             ),
-            mock.patch.object(tpa_mock_client, "load_json_file", return_value={"systemCode": "AiClaim Core"}),
+            mock.patch.object(
+                tpa_mock_client,
+                "load_json_file",
+                return_value={"systemCode": "AiClaim Core"},
+            ),
             mock.patch.object(
                 tpa_mock_client,
                 "request",
@@ -66,6 +70,56 @@ class TpaMockClientTest(unittest.TestCase):
         self.assertEqual(exit_code, 2)
         body = json.loads(stdout.getvalue())
         self.assertEqual(body["code"], "SOURCE_SYSTEM_MISMATCH")
+        self.assertEqual(
+            body["correction_hints"][0]["next_action"],
+            "use an API key/source-system config that matches the payload systemCode",
+        )
+
+    def test_normalize_only_prints_blocking_warning_hints(self):
+        with (
+            mock.patch.object(
+                sys,
+                "argv",
+                [
+                    "tpa_mock_client.py",
+                    "--inbox-payload-file",
+                    "/tmp/req.json",
+                    "--normalize-only",
+                ],
+            ),
+            mock.patch.object(tpa_mock_client, "load_json_file", return_value={"systemCode": "AiClaim Core"}),
+            mock.patch.object(
+                tpa_mock_client,
+                "request",
+                return_value={
+                    "scoring_ready": False,
+                    "validation_errors": [
+                        {
+                            "field_path": "reportCase.policyList[0].coverageLimit",
+                            "severity": "warning",
+                            "remediation": "map policy or liability coverage limit before direct scoring",
+                        },
+                        {
+                            "field_path": "reportCase.calculateRisk",
+                            "severity": "warning",
+                            "remediation": "treat calculateRisk=N as a source hint",
+                        },
+                    ],
+                },
+            ),
+        ):
+            stdout = io.StringIO()
+            with contextlib.redirect_stdout(stdout):
+                exit_code = tpa_mock_client.main()
+
+        self.assertEqual(exit_code, 2)
+        body = json.loads(stdout.getvalue())
+        self.assertEqual(
+            body["correction_hints"][0]["field_path"],
+            "reportCase.policyList[0].coverageLimit",
+        )
+        self.assertTrue(body["correction_hints"][0]["blocks_scoring"])
+        self.assertFalse(body["correction_hints"][1]["blocks_scoring"])
 
 
 if __name__ == "__main__":

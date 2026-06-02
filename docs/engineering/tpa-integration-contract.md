@@ -41,7 +41,12 @@ python3 scripts/demo/tpa_mock_client.py \
 
 The command prints the normalize response and exits non-zero when
 `scoring_ready` is false, so the returned `validation_errors` are the concrete
-input-box fields to fix before scoring.
+input-box fields to fix before scoring. In normalize-only mode the mock client
+also adds a local `correction_hints` array to the printed JSON. These hints mark
+whether each finding blocks direct scoring and translate the remediation into a
+short next action, for example matching the API key source system to
+`systemCode = "AiClaim Core"` or mapping
+`reportCase.policyList[0].coverageLimit` before scoring.
 
 The endpoint validates the envelope, checks source-system identity, normalizes
 epoch-millisecond dates, masks PII-bearing values, maps claim-header,
