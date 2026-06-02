@@ -978,6 +978,7 @@ def assert_model_governance_controls(dashboard):
         "Immutable dataset",
         "Holdout metrics",
         "Out-of-time evidence",
+        "Time/group split strategy",
         "Review-capacity threshold",
         "Explanation artifact",
         "Leakage check",

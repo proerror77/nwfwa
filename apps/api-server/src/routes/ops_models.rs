@@ -1278,6 +1278,7 @@ fn build_model_promotion_gates(
     let has_out_of_time_metric = metrics.get("out_of_time_auc").is_some()
         || metrics.get("out_of_time_precision").is_some()
         || metrics.get("out_of_time_recall").is_some();
+    let time_group_split_strategy = time_group_split_strategy_gate(metrics);
     let immutable_dataset = latest_evaluation
         .map(|evaluation| !evaluation.model_dataset_id.is_empty())
         .unwrap_or(false);
@@ -1385,6 +1386,12 @@ fn build_model_promotion_gates(
             has_out_of_time_metric,
             "out-of-time metrics missing",
             evidence_source(has_out_of_time_metric, "evaluation"),
+        ),
+        gate(
+            "Time/group split strategy",
+            time_group_split_strategy,
+            "time/group split strategy missing",
+            evidence_source(time_group_split_strategy, "evaluation"),
         ),
         gate(
             "Review-capacity threshold",
@@ -1632,6 +1639,28 @@ fn label_governance_blocker(approved_count: usize, needs_review_count: usize) ->
     } else {
         "none"
     }
+}
+
+fn time_group_split_strategy_gate(metrics: &serde_json::Value) -> bool {
+    let status_passed = metrics
+        .get("time_group_split_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let has_time_field = metrics
+        .get("time_split_field")
+        .and_then(|value| value.as_str())
+        .map(|value| !value.trim().is_empty())
+        .unwrap_or(false);
+    let has_group_field = metrics
+        .get("group_split_fields")
+        .and_then(|value| value.as_array())
+        .map(|fields| {
+            fields
+                .iter()
+                .any(|field| field.as_str().is_some_and(|value| !value.trim().is_empty()))
+        })
+        .unwrap_or(false);
+    status_passed && has_time_field && has_group_field
 }
 
 fn source_data_quality_gate(

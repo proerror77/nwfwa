@@ -174,6 +174,10 @@ grep -q "routing_policy_id=" scripts/demo/smoke_demo.py
 grep -q "agent_run_id=" scripts/demo/smoke_demo.py
 grep -q "saving_attributions" scripts/demo/smoke_demo.py
 grep -q "saving_segments" scripts/demo/smoke_demo.py
+grep -q "Time/group split strategy" apps/api-server/src/routes/ops_models.rs
+grep -q "time_group_split_status" scripts/demo/seed_demo.sql
+grep -q "time_group_split_status" docs/product/fwa-risk-operations-prd.md
+grep -q "time_group_split_status" docs/project/api-reference.md
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml

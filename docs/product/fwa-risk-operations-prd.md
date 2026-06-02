@@ -720,6 +720,8 @@ Rule promotion requires:
 Model promotion requires:
 
 - immutable dataset and feature-set versions;
+- explicit time/group split evidence: `time_group_split_status = passed`,
+  non-empty `time_split_field`, and non-empty `group_split_fields`;
 - leakage checks across member, policy, provider, and related-case groups;
 - holdout and out-of-time metrics;
 - threshold selection tied to review capacity;
@@ -776,6 +778,8 @@ Overfitting controls are product requirements, not optional data-science notes:
 
 - use time-based holdout and out-of-time validation;
 - prevent provider, member, policy, and related-case leakage across splits;
+- store time/group split evidence in model evaluation metrics so promotion
+  gates can block models that only report random train/test splits;
 - block post-investigation fields and final adjudication artifacts from feature
   sets unless explicitly approved as labels;
 - report PR-AUC, precision at review capacity, recall, false-positive burden,

@@ -308,6 +308,11 @@ PostgreSQL.
 
 Model evaluation registration should include the FWA `scheme_family` dimension
 so performance, drift, and promotion gates can be interpreted by FWA pattern.
+Promotion-ready evaluations should also include time/group split evidence in
+`metrics_json`: `time_group_split_status = "passed"`, a non-empty
+`time_split_field`, and non-empty `group_split_fields`. Without those fields,
+model promotion gates keep routing blocked because FWA validation must not rely
+on random train/test splits.
 
 ## Models
 
