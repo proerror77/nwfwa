@@ -261,6 +261,130 @@ struct FactorCard {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DatasetListResponse {
+    datasets: Vec<DatasetRecord>,
+    health: Vec<DatasetHealthRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DatasetRecord {
+    dataset_id: String,
+    source_key: String,
+    display_name: String,
+    business_domain: String,
+    dataset_key: String,
+    dataset_version: String,
+    sample_grain: String,
+    label_column: String,
+    entity_keys: Vec<String>,
+    manifest_uri: String,
+    schema_uri: String,
+    profile_uri: String,
+    storage_format: String,
+    schema_hash: String,
+    row_count: u64,
+    status: String,
+    splits: Vec<DatasetSplitRecord>,
+    fields: Vec<SchemaFieldRecord>,
+    mappings: Vec<FieldMappingRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DatasetSplitRecord {
+    split_name: String,
+    data_uri: String,
+    row_count: u64,
+    positive_count: Option<u64>,
+    negative_count: Option<u64>,
+    label_distribution_json: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct SchemaFieldRecord {
+    field_name: String,
+    logical_type: String,
+    nullable: bool,
+    semantic_role: String,
+    description: String,
+    profile_json: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct FieldMappingRecord {
+    mapping_id: String,
+    dataset_id: String,
+    external_field: String,
+    canonical_target: String,
+    feature_name: Option<String>,
+    transform_kind: String,
+    transform_json: Value,
+    status: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct DatasetHealthRecord {
+    dataset_id: String,
+    dataset_key: String,
+    dataset_version: String,
+    data_quality_score: f64,
+    data_quality_status: String,
+    field_count: u32,
+    label_count: u32,
+    entity_key_count: u32,
+    high_missing_count: u32,
+    unstable_field_count: u32,
+    unowned_field_count: u32,
+    online_ready_count: u32,
+    issue_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelEvaluationListResponse {
+    evaluations: Vec<ModelEvaluationRecord>,
+    lineage: Vec<ModelEvaluationLineageRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelEvaluationRecord {
+    evaluation_run_id: String,
+    model_key: String,
+    model_version: String,
+    model_dataset_id: String,
+    scheme_family: String,
+    auc: Option<Value>,
+    ks: Option<Value>,
+    precision: Option<Value>,
+    recall: Option<Value>,
+    f1: Option<Value>,
+    accuracy: Option<Value>,
+    threshold: Option<Value>,
+    confusion_matrix_json: Value,
+    feature_importance_uri: Option<String>,
+    metrics_json: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelEvaluationLineageRecord {
+    evaluation_run_id: String,
+    model_key: String,
+    model_version: String,
+    model_dataset_id: String,
+    source_dataset_id: Option<String>,
+    source_dataset_key: Option<String>,
+    source_dataset_version: Option<String>,
+    source_data_quality_score: Option<f64>,
+    source_data_quality_status: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct DataSourcesSnapshot {
+    datasets: Vec<DatasetRecord>,
+    health: Vec<DatasetHealthRecord>,
+    evaluations: Vec<ModelEvaluationRecord>,
+    lineage: Vec<ModelEvaluationLineageRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 struct ModelListResponse {
     models: Vec<ModelVersion>,
 }
@@ -969,6 +1093,8 @@ fn app() -> Html {
                     <RulesPage />
                 } else if *active == "Models" {
                     <ModelsPage />
+                } else if *active == "Data Sources" {
+                    <DataSourcesPage />
                 } else if *active == "Factor Factory" {
                     <FactorFactoryPage />
                 } else if *active == "Leads & Cases" {
@@ -1809,6 +1935,249 @@ fn factor_readiness_view(props: &FactorReadinessProps) -> Html {
                                     </div>
                                 })}
                             </div>
+                        </section>
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
+#[function_component(DataSourcesPage)]
+fn data_sources_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let snapshot_state = use_state(|| ApiState::<DataSourcesSnapshot>::Idle);
+
+    let load_sources = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(match get_data_sources_snapshot(api_key).await {
+                    Ok(snapshot) => ApiState::Ready(snapshot),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_sources = load_sources.clone();
+        Callback::from(move |_| load_sources.emit(()))
+    };
+
+    {
+        let load_sources = load_sources.clone();
+        use_effect_with((), move |_| {
+            load_sources.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Data Sources"}</h2>
+                    <p>{"Inspect parquet dataset catalog, data health, schema coverage, field mappings, and model evaluation lineage for governed feature and model operations."}</p>
+                </div>
+                <span class="status-pill">{"Data & Metric Foundation"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Data Source Control"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh data sources" }}
+                    </button>
+                </div>
+            </section>
+
+            <DataSourcesView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct DataSourcesProps {
+    state: ApiState<DataSourcesSnapshot>,
+}
+
+#[function_component(DataSourcesView)]
+fn data_sources_view(props: &DataSourcesProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load data sources to inspect catalog and lineage."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading data source catalog..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"Dataset Catalog"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Datasets"}</span><strong>{snapshot.datasets.len()}</strong></div>
+                                <div><span>{"Rows"}</span><strong>{total_dataset_rows(&snapshot.datasets)}</strong></div>
+                                <div><span>{"Evaluations"}</span><strong>{snapshot.evaluations.len()}</strong></div>
+                            </div>
+                            if snapshot.datasets.is_empty() {
+                                <p class="empty">{"No datasets registered."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.datasets.iter().take(8).map(|dataset| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{&dataset.display_name}</strong>
+                                                <span>{format!("{}:{} / {}", dataset.dataset_key, dataset.dataset_version, dataset.status)}</span>
+                                            </div>
+                                            <div class="summary-grid">
+                                                <div><span>{"Domain"}</span><strong>{&dataset.business_domain}</strong></div>
+                                                <div><span>{"Rows"}</span><strong>{dataset.row_count}</strong></div>
+                                                <div><span>{"Fields"}</span><strong>{dataset.fields.len()}</strong></div>
+                                                <div><span>{"Splits"}</span><strong>{dataset.splits.len()}</strong></div>
+                                                <div><span>{"Mappings"}</span><strong>{dataset.mappings.len()}</strong></div>
+                                                <div><span>{"Format"}</span><strong>{&dataset.storage_format}</strong></div>
+                                            </div>
+                                            <small>{format!("source: {} / grain: {} / label: {}", dataset.source_key, dataset.sample_grain, empty_label(&dataset.label_column))}</small>
+                                            <small>{format!("entity keys: {}", refs_label(&dataset.entity_keys))}</small>
+                                            <small>{format!("manifest: {}", dataset.manifest_uri)}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Dataset Health"}</h3>
+                            if snapshot.health.is_empty() {
+                                <p class="empty">{"No dataset health records returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.health.iter().map(|health| html! {
+                                        <div class="metric-row">
+                                            <span>{format!("{}:{}", health.dataset_key, health.dataset_version)}</span>
+                                            <strong>{format!("{} / {:.2}", health.data_quality_status, health.data_quality_score)}</strong>
+                                            <small>{format!("fields {} / labels {} / keys {}", health.field_count, health.label_count, health.entity_key_count)}</small>
+                                            <small>{format!("issues {} / missing {} / unstable {} / unowned {} / online {}", health.issue_count, health.high_missing_count, health.unstable_field_count, health.unowned_field_count, health.online_ready_count)}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Split And Schema Coverage"}</h3>
+                            if snapshot.datasets.is_empty() {
+                                <p class="empty">{"No split or schema coverage available."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.datasets.iter().take(6).map(|dataset| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{}:{}", dataset.dataset_key, dataset.dataset_version)}</strong>
+                                                <span>{format!("schema hash: {}", dataset.schema_hash)}</span>
+                                            </div>
+                                            <h4>{"Splits"}</h4>
+                                            if dataset.splits.is_empty() {
+                                                <p class="empty">{"No split records."}</p>
+                                            } else {
+                                                <div class="table-list">
+                                                    {for dataset.splits.iter().map(|split| html! {
+                                                        <div class="metric-row compact-metric-row">
+                                                            <span>{format!("{} / {}", split.split_name, split.data_uri)}</span>
+                                                            <strong>{format!("rows {}", split.row_count)}</strong>
+                                                            <small>{format!("positive {} / negative {}", optional_u64(split.positive_count), optional_u64(split.negative_count))}</small>
+                                                            <small>{format!("labels: {}", payload_keys_label(&split.label_distribution_json))}</small>
+                                                        </div>
+                                                    })}
+                                                </div>
+                                            }
+                                            <h4>{"Schema Fields"}</h4>
+                                            <div class="table-list">
+                                                {for dataset.fields.iter().take(8).map(|field| html! {
+                                                    <div class="metric-row">
+                                                        <span>{&field.field_name}</span>
+                                                        <strong>{format!("{} / {}", field.logical_type, field.semantic_role)}</strong>
+                                                        <small>{if field.nullable { "nullable" } else { "required" }}</small>
+                                                        <small>{format!("profile: {}", payload_keys_label(&field.profile_json))}</small>
+                                                    </div>
+                                                })}
+                                            </div>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Field Mapping Lineage"}</h3>
+                            if !snapshot.datasets.iter().any(|dataset| !dataset.mappings.is_empty()) {
+                                <p class="empty">{"No field mappings registered."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.datasets.iter().flat_map(|dataset| {
+                                        dataset.mappings.iter().map(move |mapping| (dataset, mapping))
+                                    }).take(12).map(|(dataset, mapping)| html! {
+                                        <div class="metric-row">
+                                            <span>{format!("{} -> {}", mapping.external_field, mapping.canonical_target)}</span>
+                                            <strong>{mapping.feature_name.as_deref().unwrap_or("no feature")}</strong>
+                                            <small>{format!("{} / {}", mapping.transform_kind, mapping.status)}</small>
+                                            <small>{format!("dataset {}:{} / transform {}", dataset.dataset_key, dataset.dataset_version, payload_keys_label(&mapping.transform_json))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Model Evaluation Lineage"}</h3>
+                            if snapshot.evaluations.is_empty() {
+                                <p class="empty">{"No model evaluations registered."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.evaluations.iter().take(8).map(|evaluation| {
+                                        let lineage = lineage_for(&snapshot.lineage, &evaluation.evaluation_run_id);
+                                        html! {
+                                            <div class="factor-card">
+                                                <div>
+                                                    <strong>{format!("{} / {}", evaluation.model_key, evaluation.model_version)}</strong>
+                                                    <span>{format!("{} / {}", evaluation.evaluation_run_id, evaluation.scheme_family)}</span>
+                                                </div>
+                                                <div class="summary-grid">
+                                                    <div><span>{"AUC"}</span><strong>{optional_metric(&evaluation.auc)}</strong></div>
+                                                    <div><span>{"Precision"}</span><strong>{optional_metric(&evaluation.precision)}</strong></div>
+                                                    <div><span>{"Recall"}</span><strong>{optional_metric(&evaluation.recall)}</strong></div>
+                                                    <div><span>{"F1"}</span><strong>{optional_metric(&evaluation.f1)}</strong></div>
+                                                    <div><span>{"Threshold"}</span><strong>{optional_metric(&evaluation.threshold)}</strong></div>
+                                                    <div><span>{"Data Quality"}</span><strong>{lineage_data_quality_label(lineage)}</strong></div>
+                                                </div>
+                                                <small>{format!("model dataset: {}", evaluation.model_dataset_id)}</small>
+                                                <small>{format!("source dataset: {}", lineage_source_label(lineage))}</small>
+                                                <small>{format!("metrics: {}", payload_keys_label(&evaluation.metrics_json))}</small>
+                                                <small>{format!("confusion matrix: {}", payload_keys_label(&evaluation.confusion_matrix_json))}</small>
+                                                <small>{format!("feature importance: {}", evaluation.feature_importance_uri.as_deref().unwrap_or("none"))}</small>
+                                            </div>
+                                        }
+                                    })}
+                                </div>
+                            }
                         </section>
                     </>
                 },
@@ -3465,6 +3834,20 @@ async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse
     request_get_json("/api/v1/ops/factors/readiness", api_key).await
 }
 
+async fn get_data_sources_snapshot(api_key: String) -> Result<DataSourcesSnapshot, String> {
+    let datasets = request_get_json::<DatasetListResponse>("/api/v1/ops/datasets", api_key.clone())
+        .await?;
+    let evaluations =
+        request_get_json::<ModelEvaluationListResponse>("/api/v1/ops/model-evaluations", api_key)
+            .await?;
+    Ok(DataSourcesSnapshot {
+        datasets: datasets.datasets,
+        health: datasets.health,
+        evaluations: evaluations.evaluations,
+        lineage: evaluations.lineage,
+    })
+}
+
 async fn get_leads_cases_snapshot(api_key: String) -> Result<LeadsCasesSnapshot, String> {
     let leads = request_get_json::<LeadListResponse>("/api/v1/ops/leads", api_key.clone())
         .await?
@@ -3963,6 +4346,66 @@ fn optional_u32(value: Option<u32>) -> String {
     value
         .map(|number| number.to_string())
         .unwrap_or_else(|| "none".into())
+}
+
+fn optional_u64(value: Option<u64>) -> String {
+    value
+        .map(|number| number.to_string())
+        .unwrap_or_else(|| "none".into())
+}
+
+fn optional_metric(value: &Option<Value>) -> String {
+    value
+        .as_ref()
+        .map(display_value)
+        .unwrap_or_else(|| "none".into())
+}
+
+fn total_dataset_rows(datasets: &[DatasetRecord]) -> String {
+    datasets
+        .iter()
+        .map(|dataset| dataset.row_count)
+        .sum::<u64>()
+        .to_string()
+}
+
+fn lineage_for<'a>(
+    lineage: &'a [ModelEvaluationLineageRecord],
+    evaluation_run_id: &str,
+) -> Option<&'a ModelEvaluationLineageRecord> {
+    lineage
+        .iter()
+        .find(|record| record.evaluation_run_id == evaluation_run_id)
+}
+
+fn lineage_data_quality_label(lineage: Option<&ModelEvaluationLineageRecord>) -> String {
+    lineage
+        .map(|record| {
+            format!(
+                "{} / {}",
+                record
+                    .source_data_quality_status
+                    .as_deref()
+                    .unwrap_or("missing"),
+                optional_number(record.source_data_quality_score)
+            )
+        })
+        .unwrap_or_else(|| "missing".into())
+}
+
+fn lineage_source_label(lineage: Option<&ModelEvaluationLineageRecord>) -> String {
+    lineage
+        .map(|record| {
+            format!(
+                "{}:{} / {} / {} {}",
+                record.source_dataset_key.as_deref().unwrap_or("missing"),
+                record.source_dataset_version.as_deref().unwrap_or("missing"),
+                record.source_dataset_id.as_deref().unwrap_or("missing"),
+                record.model_key,
+                record.model_version
+            )
+        })
+        .unwrap_or_else(|| "missing".into())
 }
 
 fn rule_performance_for<'a>(
