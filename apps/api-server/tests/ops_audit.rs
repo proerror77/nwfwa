@@ -191,6 +191,7 @@ async fn lists_audit_backed_tpa_api_calls() {
     assert_eq!(scoring_call["status_code"], 200);
     assert_eq!(scoring_call["result"], "succeeded");
     assert_eq!(scoring_call["source_system"], "tpa-demo");
+    assert_eq!(scoring_call["customer_scope_id"], "demo-customer");
     assert_eq!(scoring_call["claim_id"], "CLM-API-CALLS");
     assert_eq!(scoring_call["run_id"], score["run_id"]);
     assert_eq!(scoring_call["audit_id"], score["audit_id"]);
@@ -208,6 +209,7 @@ async fn lists_audit_backed_tpa_api_calls() {
     assert_eq!(investigation_call["status_code"], 200);
     assert_eq!(investigation_call["result"], "succeeded");
     assert_eq!(investigation_call["source_system"], "tpa-demo");
+    assert_eq!(investigation_call["customer_scope_id"], "demo-customer");
     assert_eq!(investigation_call["claim_id"], "CLM-API-CALLS");
     assert_eq!(investigation_call["run_id"], investigation["run_id"]);
     assert_eq!(investigation_call["audit_id"], investigation["audit_id"]);
@@ -230,6 +232,7 @@ async fn lists_audit_backed_tpa_api_calls() {
     assert_eq!(qa_call["status_code"], 200);
     assert_eq!(qa_call["result"], "succeeded");
     assert_eq!(qa_call["source_system"], "tpa-demo");
+    assert_eq!(qa_call["customer_scope_id"], "demo-customer");
     assert_eq!(qa_call["claim_id"], "CLM-API-CALLS");
     assert_eq!(qa_call["run_id"], qa["run_id"]);
     assert_eq!(qa_call["audit_id"], qa["audit_id"]);

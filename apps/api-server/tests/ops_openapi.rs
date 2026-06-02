@@ -1665,6 +1665,7 @@ async fn openapi_includes_operations_paths() {
         "method",
         "status_code",
         "source_system",
+        "customer_scope_id",
         "audit_id",
         "idempotency_key",
     ] {

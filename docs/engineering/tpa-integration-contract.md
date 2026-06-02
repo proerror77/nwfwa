@@ -506,6 +506,8 @@ Documented errors:
 
 Returns the claim-level audit timeline, including scoring, investigation, QA,
 and governed operations events where applicable. Normalized inbox scoring events
+and API call records expose `customer_scope_id` from authenticated API key
+configuration so TPA traffic can be reviewed by tenant/customer scope.
 include `canonical_claim_context_trace` in the event payload.
 Operations users can call `/api/v1/ops/audit-events?has_canonical_trace=true`
 to list normalized inbox scoring events that carry this trace.

@@ -55,6 +55,7 @@ pub struct ApiCallRecord {
     pub status_code: u16,
     pub result: String,
     pub source_system: String,
+    pub customer_scope_id: String,
     pub claim_id: String,
     pub run_id: String,
     pub audit_id: String,
@@ -147,6 +148,12 @@ fn api_call_from_audit_event(
         .and_then(serde_json::Value::as_str)
         .unwrap_or(default_source_system)
         .to_string();
+    let customer_scope_id = event
+        .payload
+        .get("customer_scope_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let status_code = event
         .payload
         .get("status_code")
@@ -172,6 +179,7 @@ fn api_call_from_audit_event(
         status_code,
         result: event.event_status.clone(),
         source_system,
+        customer_scope_id,
         claim_id,
         run_id: event.run_id.clone(),
         audit_id: event.audit_id,
