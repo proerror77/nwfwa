@@ -65,12 +65,14 @@ grep -q "Error shape" docs/engineering/tpa-integration-contract.md
 grep -q "docs/engineering/tpa-integration-contract.md" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "ErrorResponse" apps/api-server/tests/tpa_contract_docs.rs
+python3 -m unittest scripts.demo.test_tpa_mock_client
 grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
 grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
 grep -q "canonical_claim_context" scripts/demo/tpa_mock_client.py
 grep -q "inbox_run_id" scripts/demo/tpa_mock_client.py
 grep -q -- "--inbox-payload-file" scripts/demo/tpa_mock_client.py
 grep -q -- "--normalize-only" scripts/demo/tpa_mock_client.py
+grep -q "allow_http_error=args.normalize_only" scripts/demo/tpa_mock_client.py
 grep -q -- "--inbox-payload-file /Users/proerror/Downloads/req.json" docs/engineering/tpa-integration-contract.md
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml

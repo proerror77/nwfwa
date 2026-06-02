@@ -7,7 +7,7 @@ import urllib.error
 import urllib.request
 
 
-def request(base_url, api_key, method, path, payload=None):
+def request(base_url, api_key, method, path, payload=None, allow_http_error=False):
     body = None
     headers = {"x-api-key": api_key}
     if payload is not None:
@@ -25,6 +25,11 @@ def request(base_url, api_key, method, path, payload=None):
             return json.loads(raw) if raw else {}
     except urllib.error.HTTPError as error:
         raw = error.read().decode("utf-8", errors="replace")
+        if allow_http_error:
+            try:
+                return json.loads(raw) if raw else {"code": f"HTTP_{error.code}"}
+            except json.JSONDecodeError:
+                return {"code": f"HTTP_{error.code}", "message": raw}
         raise RuntimeError(f"{method} {path} returned HTTP {error.code}: {raw}") from error
 
 
@@ -116,12 +121,13 @@ def main():
         "POST",
         "/api/v1/inbox/claims/normalize",
         raw_inbox_payload,
+        allow_http_error=args.normalize_only,
     )
-    require(inbox.get("idempotency_key"), "inbox normalize missing idempotency_key")
     if args.normalize_only:
         print(json.dumps(inbox, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if inbox.get("scoring_ready") is True else 2
 
+    require(inbox.get("idempotency_key"), "inbox normalize missing idempotency_key")
     require(inbox.get("scoring_ready") is True, f"inbox context not scoring ready: {inbox}")
     canonical_claim_context = require(
         inbox.get("canonical_claim_context"),
