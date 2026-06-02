@@ -24,6 +24,13 @@ CUSTOMER_PRINCIPAL_ASSERTIONS = (
 )
 CANDIDATE_RULE_ID = "candidate_early_high_amount"
 ROUTING_POLICY_PREFIX = "demo_strict_prepay"
+STANDARD_RULE_PACK = {
+    "EARLY_HIGH_AMOUNT": "early_high_value_claim",
+    "DUPLICATE_CLAIM": "duplicate_billing",
+    "PROVIDER_PROFILE_HIGH": "provider_peer_outlier",
+    "LOW_MEDICAL_MATCH": "diagnosis_procedure_mismatch",
+    "MEDICALLY_UNNECESSARY_SERVICE": "medically_unnecessary_service",
+}
 
 
 def request(method, path, payload=None, retries=1):
@@ -1563,6 +1570,30 @@ def assert_fwa_scheme_taxonomy():
     }
 
 
+def assert_standard_rule_pack():
+    rules = request("GET", "/api/v1/ops/rules").get("rules", [])
+    by_alert_code = {rule.get("alert_code"): rule for rule in rules}
+    for alert_code, scheme_family in STANDARD_RULE_PACK.items():
+        rule = by_alert_code.get(alert_code)
+        assert_true(rule is not None, f"standard FWA rule pack missing {alert_code}")
+        assert_true(
+            rule.get("status") == "active",
+            f"standard FWA rule pack rule {alert_code} is not active",
+        )
+        assert_true(
+            rule.get("scheme_family") == scheme_family,
+            f"standard FWA rule pack rule {alert_code} scheme mismatch",
+        )
+        assert_true(
+            rule.get("review_mode") in ("both", "pre_payment", "post_payment"),
+            f"standard FWA rule pack rule {alert_code} missing review mode",
+        )
+    return {
+        "rule_count": len(rules),
+        "alert_codes": sorted(STANDARD_RULE_PACK.keys()),
+    }
+
+
 def assert_dashboard_roi(dashboard, agent, lead):
     value = dashboard.get("value_measurement", {})
     assert_true(
@@ -1983,6 +2014,7 @@ def main():
     )
     assert_health_readiness_contract(health)
     scheme_taxonomy = assert_fwa_scheme_taxonomy()
+    standard_rule_pack = assert_standard_rule_pack()
     inbox_canonical_score = score_normalized_inbox_context()
 
     score = request(
@@ -2452,6 +2484,7 @@ def main():
                 "audit_id": score["audit_id"],
                 "risk_score": score["risk_score"],
                 "scheme_taxonomy": {"scheme_count": scheme_taxonomy["scheme_count"]},
+                "standard_rule_pack": standard_rule_pack,
                 "member_profile": member_profile,
                 "provider_risk": provider_risk,
                 "similar_case": results[0]["case_id"],

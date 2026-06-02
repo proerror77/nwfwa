@@ -147,6 +147,13 @@ grep -q -- "--govern-retraining-candidate" .github/workflows/ci.yml
 grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/candidates" scripts/demo/smoke_demo.py
+grep -q "assert_standard_rule_pack" scripts/demo/smoke_demo.py
+grep -q "DUPLICATE_CLAIM" scripts/demo/smoke_demo.py
+grep -q "MEDICALLY_UNNECESSARY_SERVICE" scripts/demo/smoke_demo.py
+grep -q "rule_duplicate_claim" scripts/demo/seed_demo.sql
+grep -q "rule_medically_unnecessary_service" scripts/demo/seed_demo.sql
+grep -q "provider peer outlier" docs/engineering/demo-runbook.md
+grep -q "medical necessity" docs/engineering/pilot-readiness.md
 grep -q "/api/v1/ops/qa/feedback-items" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/knowledge/cases" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/datasets" scripts/demo/smoke_demo.py

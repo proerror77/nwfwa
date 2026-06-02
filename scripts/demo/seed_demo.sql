@@ -140,7 +140,12 @@ VALUES
 INSERT INTO rules (id, rule_key, name, status, owner)
 VALUES
   ('50000000-0000-0000-0000-000000000001', 'rule_early_claim', 'Early claim', 'active', 'rules-ops'),
-  ('50000000-0000-0000-0000-000000000002', 'rule_high_amount_to_limit', 'High amount to policy limit', 'active', 'rules-ops')
+  ('50000000-0000-0000-0000-000000000002', 'rule_high_amount_to_limit', 'High amount to policy limit', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000003', 'rule_early_high_amount', 'Early high amount', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000004', 'rule_duplicate_claim', 'Duplicate claim', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000005', 'rule_provider_profile_high', 'Provider profile high', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000006', 'rule_low_medical_match', 'Low medical match', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000007', 'rule_medically_unnecessary_service', 'Medically unnecessary service', 'active', 'rules-ops')
 ON CONFLICT (rule_key) DO UPDATE
 SET name = EXCLUDED.name,
     status = EXCLUDED.status,
@@ -161,7 +166,7 @@ VALUES
   (
     (SELECT id FROM rules WHERE rule_key = 'rule_early_claim'),
     1,
-    '{"conditions":[{"field":"days_since_policy_start","operator":"<=","value":7}],"action":{"score":75,"alert_code":"EARLY_CLAIM","recommended_action":"ManualReview","reason":"Policy start within 7 days"}}'::jsonb,
+    '{"review_mode":"both","scheme_family":"early_high_value_claim","conditions":[{"field":"days_since_policy_start","operator":"<=","value":7}],"action":{"score":75,"alert_code":"EARLY_CLAIM","recommended_action":"ManualReview","reason":"Policy start within 7 days"}}'::jsonb,
     75,
     'ManualReview',
     'seed',
@@ -171,7 +176,57 @@ VALUES
   (
     (SELECT id FROM rules WHERE rule_key = 'rule_high_amount_to_limit'),
     1,
-    '{"conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.75}],"action":{"score":30,"alert_code":"HIGH_AMOUNT_TO_LIMIT","recommended_action":"ManualReview","reason":"Claim amount consumes a high share of policy limit"}}'::jsonb,
+    '{"review_mode":"both","scheme_family":"early_high_value_claim","conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.75}],"action":{"score":30,"alert_code":"HIGH_AMOUNT_TO_LIMIT","recommended_action":"ManualReview","reason":"Claim amount consumes a high share of policy limit"}}'::jsonb,
+    30,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_early_high_amount'),
+    1,
+    '{"review_mode":"both","scheme_family":"early_high_value_claim","conditions":[{"field":"days_since_policy_start","operator":"<=","value":10},{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.7}],"action":{"score":45,"alert_code":"EARLY_HIGH_AMOUNT","recommended_action":"ManualReview","reason":"Policy start is recent and claim amount is high relative to limit"}}'::jsonb,
+    45,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_duplicate_claim'),
+    1,
+    '{"review_mode":"both","scheme_family":"duplicate_billing","conditions":[{"field":"duplicate_claim_similarity_score","operator":">=","value":0.95}],"action":{"score":35,"alert_code":"DUPLICATE_CLAIM","recommended_action":"ManualReview","reason":"Similar member, provider, service date, item, and amount indicate possible duplicate billing"}}'::jsonb,
+    35,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_provider_profile_high'),
+    1,
+    '{"review_mode":"both","scheme_family":"provider_peer_outlier","conditions":[{"field":"provider_profile_score","operator":">=","value":70}],"action":{"score":30,"alert_code":"PROVIDER_PROFILE_HIGH","recommended_action":"ManualReview","reason":"Provider risk profile score is high versus peer baseline"}}'::jsonb,
+    30,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_low_medical_match'),
+    1,
+    '{"review_mode":"both","scheme_family":"diagnosis_procedure_mismatch","conditions":[{"field":"diagnosis_procedure_match_score","operator":"<=","value":0.4}],"action":{"score":30,"alert_code":"LOW_MEDICAL_MATCH","recommended_action":"ManualReview","reason":"Diagnosis and billed procedure have weak medical match"}}'::jsonb,
+    30,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_medically_unnecessary_service'),
+    1,
+    '{"review_mode":"both","scheme_family":"medically_unnecessary_service","conditions":[{"field":"clinical_review_required","operator":"==","value":1}],"action":{"score":30,"alert_code":"MEDICALLY_UNNECESSARY_SERVICE","recommended_action":"ManualReview","reason":"Clinical evidence is missing or insufficient for medical necessity"}}'::jsonb,
     30,
     'ManualReview',
     'seed',
