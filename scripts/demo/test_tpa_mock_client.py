@@ -120,6 +120,18 @@ class TpaMockClientTest(unittest.TestCase):
         )
         self.assertTrue(body["correction_hints"][0]["blocks_scoring"])
         self.assertFalse(body["correction_hints"][1]["blocks_scoring"])
+        self.assertEqual(
+            body["correction_overlay_template"],
+            {
+                "reportCase": {
+                    "policyList": [
+                        {
+                            "coverageLimit": "<REQUIRED_COVERAGE_LIMIT>",
+                        }
+                    ]
+                }
+            },
+        )
 
     def test_inbox_correction_file_merges_nested_policy_fields_before_normalize(self):
         raw_payload = {

@@ -303,7 +303,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   `scoring_ready = false`, the printed JSON must include `correction_hints`
   that identify blocking fields and next actions, including matching the local
   API key source-system config to `systemCode = "AiClaim Core"` and mapping
-  `reportCase.policyList[0].coverageLimit` before direct scoring;
+  `reportCase.policyList[0].coverageLimit` before direct scoring. For supported
+  blocking fields, the same output should include `correction_overlay_template`
+  so operators can copy a minimal overlay scaffold instead of editing the raw
+  intake file;
 - support local correction overlays via `--inbox-correction-file` so operators
   can validate fixes without rewriting the raw customer payload. The overlay is
   merged in memory before normalization; object fields merge by key and arrays

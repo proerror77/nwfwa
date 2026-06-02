@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import argparse
 import json
+import re
 import sys
 import time
 import urllib.error
@@ -142,6 +143,22 @@ def next_action_for_validation_error(error):
     return remediation or "review this field before scoring"
 
 
+def correction_overlay_template_for(errors):
+    template = {}
+    for error in errors:
+        field_path = error.get("field_path", "")
+        match = re.fullmatch(r"reportCase\.policyList\[(\d+)\]\.coverageLimit", field_path)
+        if not match:
+            continue
+        policy_index = int(match.group(1))
+        report_case = template.setdefault("reportCase", {})
+        policies = report_case.setdefault("policyList", [])
+        while len(policies) <= policy_index:
+            policies.append({})
+        policies[policy_index]["coverageLimit"] = "<REQUIRED_COVERAGE_LIMIT>"
+    return template
+
+
 def add_correction_hints(normalize_response):
     if normalize_response.get("scoring_ready") is True:
         return normalize_response
@@ -172,6 +189,11 @@ def add_correction_hints(normalize_response):
     if hints:
         normalize_response = dict(normalize_response)
         normalize_response["correction_hints"] = hints
+        overlay_template = correction_overlay_template_for(
+            normalize_response.get("validation_errors", [])
+        )
+        if overlay_template:
+            normalize_response["correction_overlay_template"] = overlay_template
     return normalize_response
 
 

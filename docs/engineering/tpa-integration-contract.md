@@ -46,7 +46,9 @@ also adds a local `correction_hints` array to the printed JSON. These hints mark
 whether each finding blocks direct scoring and translate the remediation into a
 short next action, for example matching the API key source system to
 `systemCode = "AiClaim Core"` or mapping
-`reportCase.policyList[0].coverageLimit` before scoring.
+`reportCase.policyList[0].coverageLimit` before scoring. For supported
+blocking fields, the printed JSON also includes `correction_overlay_template`,
+which is a minimal overlay scaffold that can be saved as the correction file.
 
 To test corrections without rewriting the raw customer payload, pass a local
 JSON overlay with `--inbox-correction-file`. Objects are merged by key and
