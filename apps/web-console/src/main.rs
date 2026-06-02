@@ -3835,8 +3835,8 @@ async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse
 }
 
 async fn get_data_sources_snapshot(api_key: String) -> Result<DataSourcesSnapshot, String> {
-    let datasets = request_get_json::<DatasetListResponse>("/api/v1/ops/datasets", api_key.clone())
-        .await?;
+    let datasets =
+        request_get_json::<DatasetListResponse>("/api/v1/ops/datasets", api_key.clone()).await?;
     let evaluations =
         request_get_json::<ModelEvaluationListResponse>("/api/v1/ops/model-evaluations", api_key)
             .await?;
@@ -4399,7 +4399,10 @@ fn lineage_source_label(lineage: Option<&ModelEvaluationLineageRecord>) -> Strin
             format!(
                 "{}:{} / {} / {} {}",
                 record.source_dataset_key.as_deref().unwrap_or("missing"),
-                record.source_dataset_version.as_deref().unwrap_or("missing"),
+                record
+                    .source_dataset_version
+                    .as_deref()
+                    .unwrap_or("missing"),
                 record.source_dataset_id.as_deref().unwrap_or("missing"),
                 record.model_key,
                 record.model_version
