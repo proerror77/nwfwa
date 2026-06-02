@@ -539,6 +539,7 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(event["run_id"], body["run_id"]);
     assert_eq!(event["event_status"], "accepted_with_warnings");
     assert_eq!(event["payload"]["mapping_version"], "aiclaim-core-v1");
+    assert_eq!(event["payload"]["customer_scope_id"], "demo-customer");
     assert!(event["payload"]["external_message_id"].is_null());
     assert!(event["payload"]["external_message_fingerprint"]
         .as_str()

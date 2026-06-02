@@ -80,7 +80,8 @@ Minimum pilot monitoring:
   `customer_scope_configuration` must be `configured`, not
   `local_demo_customer_scope`, before customer pilot traffic.
   The customer scope is derived from the authenticated API key configuration,
-  not from caller-supplied claim payloads, and scoring audit payloads include
+  not from caller-supplied claim payloads. Inbox normalization, scoring, TPA
+  writeback, case workflow, and governance audit payloads include
   `customer_scope_id` for tenant/customer traceability.
 - Retention policy readiness: `/api/v1/health` check
   `retention_policy_configuration` must be `configured`, not

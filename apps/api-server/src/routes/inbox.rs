@@ -196,6 +196,7 @@ pub async fn normalize_claim_inbox(
             payload: json!({
                 "claim_id": claim_id,
                 "source_system": system_code.clone().unwrap_or_else(|| state.config.source_system.clone()),
+                "customer_scope_id": actor.customer_scope_id,
                 "external_message_fingerprint": external_message_fingerprint,
                 "idempotency_key": idempotency_key,
                 "mapping_version": MAPPING_VERSION,

@@ -196,7 +196,10 @@ detail levels without collapsing those levels into one amount.
 Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
 validation results, data-quality signals, and a PII-safe `source_paths` summary
-for normalized evidence rows, not the full raw medical or identity payload.
+for normalized evidence rows, not the full raw medical or identity payload. The
+audit payload also includes `customer_scope_id` from the authenticated API key
+configuration; callers cannot provide or override the tenant/customer scope in
+the request body.
 
 `calculateRisk = N` is treated only as a source-system hint. It does not bypass
 FWA scoring unless a customer-specific config explicitly permits that behavior.

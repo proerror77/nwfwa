@@ -88,7 +88,9 @@ context to `/api/v1/claims/score`.
 The audit event stores source trace metadata and validation outcomes, not the
 full raw PII-bearing payload. Its payload includes a PII-safe `source_paths`
 summary gathered from normalized document, bill-line, product, and liability
-evidence paths.
+evidence paths. `customer_scope_id` is derived from the authenticated API key
+configuration and persisted in the inbox audit payload; callers cannot provide
+or override it in the request body.
 `canonical_claim_context.claim_header` preserves service, receive, and accident
 dates for timing and waiting-period features. Epoch-millisecond source dates are
 normalized with the source business timezone for the adapter. The current
