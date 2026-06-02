@@ -220,6 +220,45 @@ struct CorrectionHint {
     next_action: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct FactorReadinessResponse {
+    dataset_count: u32,
+    factor_count: u32,
+    data_quality_score: f64,
+    data_quality_status: String,
+    online_ready_count: u32,
+    rule_convertible_count: u32,
+    ready_factor_count: u32,
+    review_factor_count: u32,
+    scheme_readiness: Vec<FactorSchemeReadiness>,
+    factor_cards: Vec<FactorCard>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct FactorSchemeReadiness {
+    scheme_family: String,
+    factor_count: u32,
+    ready_factor_count: u32,
+    review_factor_count: u32,
+    online_ready_count: u32,
+    rule_convertible_count: u32,
+    readiness_issue_counts: Map<String, Value>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct FactorCard {
+    dataset_key: String,
+    factor_name: String,
+    scheme_family: String,
+    chinese_name: String,
+    entity_type: String,
+    business_meaning: String,
+    readiness_status: String,
+    owner: String,
+    online_available: bool,
+    rule_convertible: bool,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum ApiState<T> {
     Idle,
@@ -253,11 +292,161 @@ fn app() -> Html {
             <main>
                 if *active == "Claim Inbox" {
                     <ClaimInboxPage />
+                } else if *active == "Factor Factory" {
+                    <FactorFactoryPage />
                 } else {
                     <ModuleStatusPage title={(*active).clone()} />
                 }
             </main>
         </div>
+    }
+}
+
+#[function_component(FactorFactoryPage)]
+fn factor_factory_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let readiness_state = use_state(|| ApiState::<FactorReadinessResponse>::Idle);
+
+    let load_readiness = {
+        let api_key = api_key.clone();
+        let readiness_state = readiness_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let readiness_state = readiness_state.clone();
+            readiness_state.set(ApiState::Loading);
+            spawn_local(async move {
+                readiness_state.set(match get_factor_readiness(api_key).await {
+                    Ok(response) => ApiState::Ready(response),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_readiness = load_readiness.clone();
+        Callback::from(move |_| load_readiness.emit(()))
+    };
+
+    {
+        let load_readiness = load_readiness.clone();
+        use_effect_with((), move |_| {
+            load_readiness.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Factor Factory"}</h2>
+                    <p>{"Review factor readiness by scheme family, online availability, rule convertibility, ownership, and evidence quality."}</p>
+                </div>
+                <span class="status-pill">{"Factor Readiness"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Readiness Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*readiness_state, ApiState::Loading)}>
+                        {if matches!(&*readiness_state, ApiState::Loading) { "Refreshing..." } else { "Refresh readiness" }}
+                    </button>
+                </div>
+            </section>
+
+            <FactorReadinessView state={(*readiness_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct FactorReadinessProps {
+    state: ApiState<FactorReadinessResponse>,
+}
+
+#[function_component(FactorReadinessView)]
+fn factor_readiness_view(props: &FactorReadinessProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load readiness to inspect factor governance status."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading factor readiness..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(readiness) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"Readiness Summary"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Datasets"}</span><strong>{readiness.dataset_count}</strong></div>
+                                <div><span>{"Factors"}</span><strong>{readiness.factor_count}</strong></div>
+                                <div><span>{"Data Quality"}</span><strong>{format!("{} / {:.2}", readiness.data_quality_status, readiness.data_quality_score)}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Online Ready"}</span><strong>{readiness.online_ready_count}</strong></div>
+                                <div><span>{"Rule Convertible"}</span><strong>{readiness.rule_convertible_count}</strong></div>
+                                <div><span>{"Ready / Review"}</span><strong>{format!("{} / {}", readiness.ready_factor_count, readiness.review_factor_count)}</strong></div>
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Scheme Readiness"}</h3>
+                            <div class="factor-card-grid">
+                                {for readiness.scheme_readiness.iter().map(|scheme| html! {
+                                    <div class="factor-card">
+                                        <div>
+                                            <strong>{&scheme.scheme_family}</strong>
+                                            <span>{format!("ready {} of {} factors", scheme.ready_factor_count, scheme.factor_count)}</span>
+                                        </div>
+                                        <div class="summary-grid">
+                                            <div><span>{"Online"}</span><strong>{scheme.online_ready_count}</strong></div>
+                                            <div><span>{"Rule convertible"}</span><strong>{scheme.rule_convertible_count}</strong></div>
+                                            <div><span>{"Review"}</span><strong>{scheme.review_factor_count}</strong></div>
+                                        </div>
+                                        <small>{format!("issues: {}", issue_counts_label(&scheme.readiness_issue_counts))}</small>
+                                    </div>
+                                })}
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Factor Cards"}</h3>
+                            <div class="factor-card-grid">
+                                {for readiness.factor_cards.iter().take(8).map(|card| html! {
+                                    <div class="factor-card">
+                                        <div>
+                                            <strong>{&card.factor_name}</strong>
+                                            <span>{format!("{} / {} / {}", card.chinese_name, card.entity_type, card.scheme_family)}</span>
+                                        </div>
+                                        <p>{&card.business_meaning}</p>
+                                        <div class="summary-grid">
+                                            <div><span>{"Status"}</span><strong>{&card.readiness_status}</strong></div>
+                                            <div><span>{"Online"}</span><strong>{yes_no(card.online_available)}</strong></div>
+                                            <div><span>{"Rule"}</span><strong>{yes_no(card.rule_convertible)}</strong></div>
+                                        </div>
+                                        <small>{format!("dataset: {} / owner: {}", card.dataset_key, card.owner)}</small>
+                                    </div>
+                                })}
+                            </div>
+                        </section>
+                    </>
+                },
+            }}
+        </>
     }
 }
 
@@ -559,6 +748,10 @@ async fn score_canonical_claim(payload: Value, api_key: String) -> Result<ScoreR
     request_json("/api/v1/claims/score", api_key, payload).await
 }
 
+async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse, String> {
+    request_get_json("/api/v1/ops/factors/readiness", api_key).await
+}
+
 async fn request_json<T>(path: &str, api_key: String, payload: Value) -> Result<T, String>
 where
     T: for<'de> Deserialize<'de>,
@@ -569,6 +762,27 @@ where
         .body(payload.to_string())
         .map_err(|error| error.to_string())?;
     let response = request.send().await.map_err(|error| error.to_string())?;
+    let status = response.status();
+    let body: Value = response.json().await.map_err(|error| error.to_string())?;
+    if !(200..300).contains(&status) {
+        return Err(body
+            .get("message")
+            .and_then(Value::as_str)
+            .map(str::to_string)
+            .unwrap_or_else(|| format!("HTTP {status}: {}", pretty_json(&body))));
+    }
+    serde_json::from_value(body).map_err(|error| error.to_string())
+}
+
+async fn request_get_json<T>(path: &str, api_key: String) -> Result<T, String>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let response = Request::get(path)
+        .header("x-api-key", &api_key)
+        .send()
+        .await
+        .map_err(|error| error.to_string())?;
     let status = response.status();
     let body: Value = response.json().await.map_err(|error| error.to_string())?;
     if !(200..300).contains(&status) {
@@ -860,6 +1074,25 @@ fn display_value(value: &Value) -> String {
         .map(|number| format!("{number:.1}"))
         .or_else(|| value.as_str().map(str::to_string))
         .unwrap_or_else(|| value.to_string())
+}
+
+fn issue_counts_label(counts: &Map<String, Value>) -> String {
+    if counts.is_empty() {
+        return "none".into();
+    }
+    counts
+        .iter()
+        .map(|(key, value)| format!("{key}={}", display_value(value)))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value {
+        "yes"
+    } else {
+        "no"
+    }
 }
 
 fn main() {
