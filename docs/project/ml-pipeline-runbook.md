@@ -283,6 +283,34 @@ verifies it with `FWA_MODEL_SIGNATURE_KEY`. When
 baseline score, score delta, and shadow status without changing the primary
 model score.
 
+For Rust runtime scoring, `FWA_MODEL_ARTIFACT_URI` points to a local JSON
+logistic-regression artifact consumed by the API server's
+`ArtifactModelScorer`. The Python ML service path above continues to use the
+trained `.joblib` artifact. The Rust artifact uses this shape:
+
+```json
+{
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-rust",
+  "runtime_kind": "rust_logistic_regression",
+  "execution_provider": "cpu",
+  "threshold": 0.5,
+  "feature_columns": ["claim_amount_to_limit_ratio", "provider_profile_score"],
+  "intercept": -2.0,
+  "coefficients": {
+    "claim_amount_to_limit_ratio": 4.0,
+    "provider_profile_score": 0.01
+  }
+}
+```
+
+The active serving selector is:
+
+1. `FWA_MODEL_ARTIFACT_URI` set: API server uses Rust artifact scoring.
+2. `FWA_MODEL_SERVICE_URL=heuristic` or `heuristic://...`: API server uses the
+   Rust heuristic fallback.
+3. Otherwise: API server uses the Python HTTP compatibility scorer.
+
 Production serving should additionally provide:
 
 - model artifact URI;

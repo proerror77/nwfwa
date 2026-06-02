@@ -137,6 +137,30 @@ FWA_MODEL_SHADOW_HEURISTIC=true \
 python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
 ```
 
+Rust runtime artifact scoring is available for local JSON logistic-regression
+artifacts. Configure the API server with `FWA_MODEL_ARTIFACT_URI` plus the same
+optional checksum, signature, and version lock variables. When this is set,
+`/api/v1/health` reports `model_scorer.runtime_kind = rust_artifact` and the
+scoring response model metadata includes artifact integrity, signature, and
+serving version lock status.
+
+Minimal Rust artifact shape:
+
+```json
+{
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-rust",
+  "runtime_kind": "rust_logistic_regression",
+  "execution_provider": "cpu",
+  "threshold": 0.5,
+  "feature_columns": ["claim_amount_to_limit_ratio"],
+  "intercept": -1.0,
+  "coefficients": {
+    "claim_amount_to_limit_ratio": 4.0
+  }
+}
+```
+
 Worker-driven training registration:
 
 ```bash

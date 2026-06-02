@@ -53,6 +53,9 @@ The API server uses:
 - API-key authentication through `x-api-key`.
 - OpenAPI JSON generated from `apps/api-server/src/routes/openapi.rs`.
 - An HTTP model scorer by default when `FWA_MODEL_SERVICE_URL` is a URL.
+- A Rust artifact scorer when `FWA_MODEL_ARTIFACT_URI` is configured, using
+  local JSON logistic-regression artifacts with checksum, signature, and
+  version-lock metadata.
 - A heuristic scorer only when `FWA_MODEL_SERVICE_URL` is `heuristic` or
   starts with `heuristic://`.
 
@@ -60,8 +63,9 @@ The API server uses:
 
 | Technology | Where | Purpose |
 | --- | --- | --- |
-| Python 3.12 | `apps/ml-service` | Demo model service runtime |
-| FastAPI | `apps/ml-service` | HTTP model scoring API |
+| Rust | `crates/fwa-ml-runtime` | Production-oriented JSON logistic artifact inference |
+| Python 3.12 | `apps/ml-service` | Training/export workflow and compatibility model service runtime |
+| FastAPI | `apps/ml-service` | HTTP model scoring API for demo compatibility |
 | pandas | `apps/ml-service` | Parquet training dataset loading |
 | pyarrow | `apps/ml-service` | Parquet training and feature-importance artifacts |
 | scikit-learn | `apps/ml-service` | Logistic-regression baseline training and inference |
@@ -179,6 +183,11 @@ Prefer locked commands when documenting reproducible verification.
 | `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/fwa` | API database |
 | `FWA_API_KEY` | `dev-secret` | Local API key |
 | `FWA_MODEL_SERVICE_URL` | `http://127.0.0.1:8001` | ML scorer endpoint |
+| `FWA_MODEL_ARTIFACT_URI` | unset | Optional Rust JSON artifact scorer path |
+| `FWA_MODEL_VERSION_LOCK` | unset | Optional serving version lock for artifact scorer |
+| `FWA_MODEL_ARTIFACT_SHA256` | unset | Optional artifact checksum |
+| `FWA_MODEL_ARTIFACT_SIGNATURE` | unset | Optional HMAC artifact signature |
+| `FWA_MODEL_SIGNATURE_KEY` | unset | HMAC signature verification key |
 | `FWA_API_BASE_URL` | `http://127.0.0.1:8080` | Smoke and worker API base |
 | `FWA_SOURCE_SYSTEM` | `tpa-demo` | Demo source system |
 | `FWA_OBJECT_STORAGE_URI` | `local://demo-artifacts` | Local artifact storage URI |

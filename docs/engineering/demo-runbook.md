@@ -224,6 +224,7 @@ node ../../scripts/demo/smoke_web_console.mjs
 
 ## 8. Demo Caveats
 
-- The first demo uses PostgreSQL, Python ML service, Rust API server, and Yew web console as a modular monolith path.
+- The first demo uses PostgreSQL, Rust API server scoring, optional Python ML
+  service compatibility, and Yew web console as a modular monolith path.
 - The QA queue is a UI demo queue that writes to the real QA writeback API.
 - Seeded historical audit data demonstrates timeline views; live scoring still creates new runtime audit events.

@@ -53,16 +53,16 @@ The default runtime path is:
 
 1. PostgreSQL stores operational data, audit events, demo claims, rule state,
    model metadata, case workflow, and feedback labels.
-2. The Python ML service provides the demo model scoring boundary.
-3. The Rust API server exposes TPA-facing and operations APIs.
+2. The Rust API server can score with a local JSON logistic-regression artifact
+   when `FWA_MODEL_ARTIFACT_URI` is configured.
+3. The Python ML service remains the training/export tool and HTTP demo scorer.
 4. The Yew web console provides the operator experience.
 5. CI runs Rust, Python, frontend, migration, seed, OpenAPI, and smoke checks.
 
 Production ML and production infrastructure are not complete. Remaining work
 includes customer environment deployment, secrets and key rotation, observability
-stack selection, object storage strategy, real training pipelines, real model
-artifact loading, customer holdout validation, drift monitoring, and operational
-runbooks.
+stack selection, object storage strategy, customer holdout validation, long-term
+drift monitoring, production feature materialization, and operational runbooks.
 
 ### Readiness Legend
 
@@ -124,13 +124,19 @@ It includes:
 
 Use API key `dev-secret` for the local demo.
 
-### ML Service
+### ML Runtime And Service
 
 Path: `apps/ml-service`
 
-The ML service is a Python FastAPI service. The local API server calls it through
-`FWA_MODEL_SERVICE_URL`. Use `heuristic` or `heuristic://...` only when you want
-the Rust heuristic fallback instead of the configured model scorer.
+The production-oriented serving path is the Rust `ArtifactModelScorer` in
+`crates/fwa-ml-runtime`. Set `FWA_MODEL_ARTIFACT_URI` to a local JSON logistic
+artifact and optionally set `FWA_MODEL_VERSION_LOCK`,
+`FWA_MODEL_ARTIFACT_SHA256`, `FWA_MODEL_ARTIFACT_SIGNATURE`, and
+`FWA_MODEL_SIGNATURE_KEY`.
+
+The Python FastAPI ML service remains available through `FWA_MODEL_SERVICE_URL`
+for local demo compatibility and for the current training/export workflow. Use
+`heuristic` or `heuristic://...` only when you want the Rust heuristic fallback.
 
 ### Worker
 
@@ -405,6 +411,11 @@ Common local settings:
 | `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/fwa` | API database connection |
 | `FWA_API_KEY` | `dev-secret` | API key accepted by local server |
 | `FWA_MODEL_SERVICE_URL` | `http://127.0.0.1:8001` | Configured ML scorer endpoint |
+| `FWA_MODEL_ARTIFACT_URI` | unset | Optional Rust JSON artifact scorer path; overrides `FWA_MODEL_SERVICE_URL` |
+| `FWA_MODEL_VERSION_LOCK` | unset | Optional active model version lock for artifact serving |
+| `FWA_MODEL_ARTIFACT_SHA256` | unset | Optional `sha256:<digest>` integrity check |
+| `FWA_MODEL_ARTIFACT_SIGNATURE` | unset | Optional `hmac-sha256:<signature>` artifact signature |
+| `FWA_MODEL_SIGNATURE_KEY` | unset | HMAC key used to verify `FWA_MODEL_ARTIFACT_SIGNATURE` |
 
 Use customer-specific secrets, key rotation, and network allowlists for pilots.
 Do not use local demo credentials outside local development.
@@ -436,9 +447,12 @@ See [AGENTS.md](AGENTS.md) for project-local agent working instructions.
 - The current demo is local-first and pilot-oriented.
 - The web console is a Yew/Trunk application, not a Dioxus application.
 - Agent workflows are deterministic and assistive-only.
-- The Python ML service now supports a minimum artifact-backed logistic
-  baseline and keeps the demo heuristic scorer as fallback; it is not yet a
-  full production feature store, shadow evaluation, or monitoring platform.
+- Rust artifact scoring now supports local JSON logistic-regression artifacts
+  with model identity checks, checksum validation, optional HMAC signature
+  verification, version lock metadata, explanations, and latency metadata.
+- Python training still emits `.joblib` artifacts for the compatibility service;
+  exporting trained candidates into the Rust JSON artifact format is the next
+  production pipeline step.
 - Production deployment, observability, secrets management, object storage,
   customer data onboarding, and model training operations still need environment
   decisions.

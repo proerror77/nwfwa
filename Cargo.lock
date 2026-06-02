@@ -929,9 +929,11 @@ dependencies = [
  "async-trait",
  "fwa-core",
  "fwa-features",
+ "hmac",
  "reqwest",
  "serde",
  "serde_json",
+ "sha2",
  "thiserror",
  "tokio",
 ]

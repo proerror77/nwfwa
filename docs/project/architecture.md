@@ -13,7 +13,8 @@ packages, but it does not directly adjudicate, deny, approve, or accuse fraud.
 flowchart LR
     TPA[TPA or claim system] --> API[Rust Axum API server]
     API --> DB[(PostgreSQL)]
-    API --> ML[Python ML service]
+    API --> RML[Rust artifact scorer]
+    API --> ML[Python ML service compatibility path]
     API --> Worker[Rust worker]
     Web[Yew Operations Studio] --> API
     API --> Audit[Audit and API call records]
@@ -24,9 +25,10 @@ flowchart LR
 
 | Component | Path | Responsibility |
 | --- | --- | --- |
-| API server | `apps/api-server` | Axum API, scoring, ops workflows, OpenAPI, repository layer |
+| API server | `apps/api-server` | Axum API, scoring, ops workflows, OpenAPI, repository layer, Rust artifact scorer selection |
 | Web console | `apps/web-console` | Yew/Trunk operator UI for inbox correction, scoring, and operations |
-| ML service | `apps/ml-service` | FastAPI scorer boundary for local demo model scores |
+| ML runtime | `crates/fwa-ml-runtime` | Rust scorer trait, JSON logistic artifact scorer, HTTP scorer compatibility, heuristic fallback |
+| ML service | `apps/ml-service` | FastAPI compatibility scorer and Python training/export workflow |
 | Worker | `apps/worker` | Health-checkable worker and retraining job runner |
 | PostgreSQL schema | `migrations/0001_initial.sql` | Claims, scoring, audit, rules, models, cases, QA, datasets |
 | Demo scripts | `scripts/demo` | Seed data, smoke checks, persistence assertions, mock TPA client |

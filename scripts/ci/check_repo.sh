@@ -160,6 +160,12 @@ grep -q "/api/v1/ops/datasets" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/model-evaluations" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/models/{MODEL_KEY}/promotion-gates" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/models/{MODEL_KEY}/performance" scripts/demo/smoke_demo.py
+grep -q "ArtifactModelScorer" apps/api-server/src/app.rs
+grep -q "ArtifactModelScorer" crates/fwa-ml-runtime/src/lib.rs
+grep -q "artifact_signature_status" crates/fwa-ml-runtime/src/lib.rs
+grep -q "rust_artifact" apps/api-server/src/config.rs
+grep -q "FWA_MODEL_ARTIFACT_URI" docs/project/technology-stack.md
+grep -q "Rust runtime artifact scoring" docs/project/operations-guide.md
 grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py

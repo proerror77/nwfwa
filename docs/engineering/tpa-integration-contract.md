@@ -303,8 +303,8 @@ The response is audit-backed and must be treated as assistive risk routing, not 
   "recommended_action": "ManualReview",
   "model_score": {
     "model_key": "baseline_fwa",
-    "model_version": "0.1.0",
-    "runtime_kind": "python_http",
+    "model_version": "0.2.0-rust",
+    "runtime_kind": "rust_logistic_regression",
     "execution_provider": "cpu",
     "score": 83,
     "label": "HIGH_RISK",

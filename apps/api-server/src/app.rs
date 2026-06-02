@@ -11,7 +11,7 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use fwa_ml_runtime::{HeuristicModelScorer, HttpModelScorer, ModelScorer};
+use fwa_ml_runtime::{ArtifactModelScorer, HeuristicModelScorer, HttpModelScorer, ModelScorer};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -27,7 +27,15 @@ pub fn build_app(config: AppConfig) -> Router {
 }
 
 pub fn configured_model_scorer(config: &AppConfig) -> Arc<dyn ModelScorer> {
-    if config.model_runtime_kind() == "heuristic" {
+    if let Some(artifact_uri) = config.model_artifact_uri() {
+        Arc::new(ArtifactModelScorer::from_env(
+            artifact_uri,
+            config.model_version_lock(),
+            config.model_artifact_sha256(),
+            config.model_artifact_signature(),
+            config.model_signature_key(),
+        ))
+    } else if config.model_runtime_kind() == "heuristic" {
         Arc::new(HeuristicModelScorer)
     } else {
         Arc::new(HttpModelScorer::new(config.model_service_url.clone()))
@@ -290,11 +298,15 @@ pub fn build_app_with_parts(
 mod tests {
     use super::*;
     use fwa_core::{ClaimId, ScoringRunId};
+    use fwa_features::FeatureValue;
     use fwa_ml_runtime::ModelScoreRequest;
     use std::{
         collections::BTreeMap,
+        fs,
         io::{Read, Write},
         net::TcpListener,
+        path::PathBuf,
+        sync::{Mutex, OnceLock},
         thread,
     };
 
@@ -317,6 +329,24 @@ mod tests {
         }
     }
 
+    fn scorer_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn clear_model_artifact_env() {
+        for name in [
+            "FWA_MODEL_ARTIFACT_URI",
+            "FWA_MODEL_VERSION_LOCK",
+            "FWA_MODEL_ARTIFACT_SHA256",
+            "FWA_MODEL_ARTIFACT_CHECKSUM",
+            "FWA_MODEL_ARTIFACT_SIGNATURE",
+            "FWA_MODEL_SIGNATURE_KEY",
+        ] {
+            std::env::remove_var(name);
+        }
+    }
+
     #[tokio::test]
     async fn configured_model_scorer_uses_http_for_service_url() {
         let listener = TcpListener::bind("127.0.0.1:0").unwrap();
@@ -333,7 +363,11 @@ mod tests {
             );
             stream.write_all(response.as_bytes()).unwrap();
         });
-        let scorer = configured_model_scorer(&config(format!("http://{address}")));
+        let scorer = {
+            let _guard = scorer_env_lock().lock().unwrap();
+            clear_model_artifact_env();
+            configured_model_scorer(&config(format!("http://{address}")))
+        };
 
         let result = scorer
             .score(ModelScoreRequest {
@@ -355,7 +389,11 @@ mod tests {
 
     #[tokio::test]
     async fn configured_model_scorer_allows_explicit_heuristic_fallback() {
-        let scorer = configured_model_scorer(&config("heuristic://local".into()));
+        let scorer = {
+            let _guard = scorer_env_lock().lock().unwrap();
+            clear_model_artifact_env();
+            configured_model_scorer(&config("heuristic://local".into()))
+        };
 
         let result = scorer
             .score(ModelScoreRequest {
@@ -371,5 +409,70 @@ mod tests {
 
         assert_eq!(result.runtime_kind, "heuristic");
         assert_eq!(result.score, 0);
+    }
+
+    #[tokio::test]
+    async fn configured_model_scorer_prefers_rust_artifact_uri() {
+        let artifact_path = write_artifact(serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "runtime_kind": "rust_logistic_regression",
+            "execution_provider": "cpu",
+            "threshold": 0.5,
+            "feature_columns": ["claim_amount_to_limit_ratio"],
+            "intercept": -1.0,
+            "coefficients": {"claim_amount_to_limit_ratio": 4.0}
+        }));
+        let scorer = {
+            let _guard = scorer_env_lock().lock().unwrap();
+            clear_model_artifact_env();
+            std::env::set_var("FWA_MODEL_ARTIFACT_URI", &artifact_path);
+            let scorer = configured_model_scorer(&config("http://127.0.0.1:1".into()));
+            clear_model_artifact_env();
+            scorer
+        };
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_configured_artifact"),
+                claim_id: ClaimId::from_external("CLM-CONFIGURED-ARTIFACT"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.2.0-rust".into(),
+                endpoint_url: None,
+                features: features([("claim_amount_to_limit_ratio", 0.8)]),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.runtime_kind, "rust_logistic_regression");
+        assert_eq!(result.model_version, "0.2.0-rust");
+        assert_eq!(result.score, 90);
+        fs::remove_file(artifact_path).unwrap();
+    }
+
+    fn features(
+        values: impl IntoIterator<Item = (&'static str, f64)>,
+    ) -> BTreeMap<String, FeatureValue> {
+        values
+            .into_iter()
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    FeatureValue {
+                        name: name.to_string(),
+                        version: 1,
+                        value: serde_json::json!(value),
+                        evidence_refs: vec![],
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn write_artifact(payload: serde_json::Value) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("nwfwa-api-artifact-{}.json", ScoringRunId::new()));
+        fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
+        path
     }
 }

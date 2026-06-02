@@ -51,7 +51,9 @@ impl AppConfig {
     }
 
     pub fn model_runtime_kind(&self) -> &'static str {
-        if self.model_service_url == "heuristic"
+        if self.model_artifact_uri().is_some() {
+            "rust_artifact"
+        } else if self.model_service_url == "heuristic"
             || self.model_service_url.starts_with("heuristic://")
         {
             "heuristic"
@@ -61,7 +63,9 @@ impl AppConfig {
     }
 
     pub fn model_service_configuration_status(&self) -> &'static str {
-        if self.model_service_url == "heuristic"
+        if self.model_artifact_uri().is_some() {
+            "configured"
+        } else if self.model_service_url == "heuristic"
             || self.model_service_url.starts_with("heuristic://")
         {
             "heuristic_model_scorer"
@@ -70,6 +74,27 @@ impl AppConfig {
         } else {
             "configured"
         }
+    }
+
+    pub fn model_artifact_uri(&self) -> Option<String> {
+        configured_env_value("FWA_MODEL_ARTIFACT_URI")
+    }
+
+    pub fn model_version_lock(&self) -> Option<String> {
+        configured_env_value("FWA_MODEL_VERSION_LOCK")
+    }
+
+    pub fn model_artifact_sha256(&self) -> Option<String> {
+        configured_env_value("FWA_MODEL_ARTIFACT_SHA256")
+            .or_else(|| configured_env_value("FWA_MODEL_ARTIFACT_CHECKSUM"))
+    }
+
+    pub fn model_artifact_signature(&self) -> Option<String> {
+        configured_env_value("FWA_MODEL_ARTIFACT_SIGNATURE")
+    }
+
+    pub fn model_signature_key(&self) -> Option<String> {
+        configured_env_value("FWA_MODEL_SIGNATURE_KEY")
     }
 
     pub fn api_key_configuration_status(&self) -> &'static str {
@@ -205,6 +230,13 @@ fn api_key_principal_specs() -> Vec<String> {
         .filter(|spec| !spec.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+fn configured_env_value(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .map(|value| value.trim().to_string())
+        .filter(|value| !value.is_empty())
 }
 
 fn api_key_principal_configuration_status(specs: &[String], legacy_key: &str) -> &'static str {
