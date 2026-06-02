@@ -74,6 +74,11 @@ Minimum pilot monitoring:
   `FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID`. It fails if scoring, investigation
   writeback, QA writeback, or medical review audit/API observability does not
   carry the configured principal role and customer scope.
+- Customer pilot proof: `scripts/demo/customer_pilot_proof.sh` applies the demo
+  seed, runs the customer principal smoke, and checks persistence across
+  scoring, feature, rule, model, audit, case, QA, investigation, and ROI tables.
+  This is the preferred single command for local customer demo hardening after
+  PostgreSQL, ML service, and API server are already running.
 - Permission readiness: production-impacting rule and model governance actions
   require matching principal permissions, for example `ops:rules:publish` or
   `ops:models:activate`. Missing permissions return `PERMISSION_DENIED`.
@@ -160,5 +165,7 @@ Evidence references should point to structured objects, for example `rule_runs:E
 - Run `scripts/demo/smoke_demo.py --customer-principal-smoke` with the customer
   principal and confirm actor/scope propagation in API call records and claim
   audit history.
+- Run `scripts/demo/customer_pilot_proof.sh` for the full local pilot proof
+  path when using the deterministic demo database.
 - Confirm high-risk outputs are assistive only and do not directly reject claims.
 - Confirm customer pilot data is registered as Parquet dataset metadata before model training or evaluation use.

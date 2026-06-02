@@ -227,6 +227,9 @@ Before a customer pilot contract test:
 - Run `scripts/demo/smoke_demo.py --customer-principal-smoke` to prove the
   customer principal actor role and customer scope appear in API call records
   and claim audit history.
+- For the local customer pilot demo database, prefer
+  `scripts/demo/customer_pilot_proof.sh` because it combines seed, customer
+  principal smoke, and persistence assertions in one proof command.
 - Confirm high-risk outputs remain assistive-only.
 
 Writeback contract fields:

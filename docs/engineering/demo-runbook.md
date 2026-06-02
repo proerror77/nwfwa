@@ -168,14 +168,18 @@ FWA_API_KEY=customer-demo-key \
 FWA_SOURCE_SYSTEM=customer-demo-tpa \
 FWA_DEMO_EXPECTED_ACTOR_ROLE=fwa_operator \
 FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID=customer-alpha-pilot \
-scripts/demo/smoke_demo.py --customer-principal-smoke
+scripts/demo/customer_pilot_proof.sh
 ```
 
-This uses the same end-to-end path as the local demo, but additionally asserts
-that API call records and claim audit history carry the expected
-`actor_role` and `customer_scope_id` for scoring, investigation writeback, QA
-writeback, and medical review. It also verifies that health readiness no longer
-classifies the API key or customer scope as local demo configuration.
+The proof script applies migrations and deterministic seed data, runs the same
+end-to-end path as the local demo with `--customer-principal-smoke`, and then
+executes the SQL persistence assertions. It additionally asserts that API call
+records and claim audit history carry the expected `actor_role` and
+`customer_scope_id` for scoring, investigation writeback, QA writeback, and
+medical review. It also verifies that health readiness no longer classifies
+the API key or customer scope as local demo configuration. Use
+`FWA_PROOF_SKIP_SEED=1` or `FWA_PROOF_SKIP_PERSISTENCE=1` only when the
+environment is managed outside the local demo database.
 
 ## 6. Model Promotion Evidence
 
