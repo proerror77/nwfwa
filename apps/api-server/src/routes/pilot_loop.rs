@@ -16,6 +16,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::validate_api_key;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -156,10 +157,11 @@ pub async fn write_investigation_result(
     headers: HeaderMap,
     Json(mut request): Json<InvestigationResultRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_investigation_result_request(&request)?;
     validate_investigation_case_link(&state, &request).await?;
     merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
+    request.customer_scope_id = Some(actor.customer_scope_id);
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -182,10 +184,11 @@ pub async fn write_qa_result(
     headers: HeaderMap,
     Json(mut request): Json<QaReviewRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_qa_review_request(&request)?;
     request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
     merge_latest_canonical_evidence_refs(&state, &mut request).await?;
+    request.customer_scope_id = Some(actor.customer_scope_id);
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -460,9 +463,9 @@ pub async fn update_qa_feedback_status(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(feedback_id): Path<String>,
-    Json(request): Json<UpdateQaFeedbackStatusInput>,
+    Json(mut request): Json<UpdateQaFeedbackStatusInput>,
 ) -> Result<Json<UpdateQaFeedbackStatusRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     if !is_supported_qa_feedback_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -518,6 +521,7 @@ pub async fn update_qa_feedback_status(
             format!("QA feedback status evidence_refs must include {required_ref}"),
         ));
     }
+    request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
         .repository
         .update_qa_feedback_status(&feedback_id, request)
@@ -1160,19 +1164,17 @@ fn highest_priority(items: &[&QaFeedbackItemRecord]) -> &'static str {
     }
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config())
-        .map(|_| ())
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "INVALID_API_KEY",
+            "invalid api key",
+        )
+    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

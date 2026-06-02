@@ -888,6 +888,8 @@ pub struct InvestigationResultRecord {
     pub currency: Option<String>,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -920,6 +922,8 @@ pub struct QaReviewRecord {
     pub feedback_target: String,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -958,6 +962,8 @@ pub struct UpdateQaFeedbackStatusInput {
     pub actor_id: String,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2985,7 +2991,8 @@ impl ScoringRepository for InMemoryScoringRepository {
                 "from_status": from_status,
                 "to_status": item.status,
                 "actor_id": input.actor_id,
-                "notes": input.notes
+                "notes": input.notes,
+                "customer_scope_id": input.customer_scope_id
             }),
             evidence_refs: input.evidence_refs,
             created_at: None,
@@ -6396,6 +6403,7 @@ impl ScoringRepository for PostgresScoringRepository {
                             feedback_target,
                             notes,
                             evidence_refs: json_array_to_strings(evidence_refs),
+                            customer_scope_id: None,
                         },
                         Some(created_at.to_rfc3339()),
                         &feedback_status,
@@ -6481,6 +6489,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 feedback_target,
                 notes,
                 evidence_refs: json_array_to_strings(evidence_refs),
+                customer_scope_id: None,
             },
             Some(created_at.to_rfc3339()),
             &feedback_status,
@@ -6509,7 +6518,8 @@ impl ScoringRepository for PostgresScoringRepository {
                     "from_status": from_status,
                     "to_status": item.status,
                     "actor_id": input.actor_id,
-                    "notes": input.notes
+                    "notes": input.notes,
+                    "customer_scope_id": input.customer_scope_id
                 }),
                 evidence_refs: input.evidence_refs,
                 created_at: None,
@@ -6550,6 +6560,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         feedback_target,
                         notes,
                         evidence_refs: json_array_to_strings(evidence_refs),
+                        customer_scope_id: None,
                     }
                 },
             )
@@ -6626,6 +6637,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         currency,
                         notes,
                         evidence_refs: json_array_to_strings(evidence_refs),
+                        customer_scope_id: None,
                     })
                 },
             )
@@ -6649,6 +6661,7 @@ impl ScoringRepository for PostgresScoringRepository {
                             feedback_target,
                             notes,
                             evidence_refs: json_array_to_strings(evidence_refs),
+                            customer_scope_id: None,
                         },
                         &feedback_status,
                     )

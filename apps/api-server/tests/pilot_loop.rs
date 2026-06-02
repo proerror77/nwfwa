@@ -168,6 +168,7 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
           "saving_amount": "8200.00",
           "currency": "CNY",
           "notes": "TPA investigation confirmed over-treatment signals.",
+          "customer_scope_id": "spoofed-customer",
           "evidence_refs": ["agent_run:agent_CLM-0287", "knowledge_cases:KC-1001"]
         }"#,
     )
@@ -268,6 +269,7 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
           "issue_type": "alert_handling_incomplete",
           "feedback_target": "rules",
           "notes": "Reviewer should attach provider history evidence.",
+          "customer_scope_id": "spoofed-customer",
           "evidence_refs": ["audit:investigation.result.received", "rule_runs:EARLY_CLAIM"]
         }"#,
     )
@@ -307,6 +309,8 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(events.len(), 2);
     assert_eq!(events[0]["event_type"], "investigation.result.received");
     assert_eq!(events[1]["event_type"], "qa.result.received");
+    assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
+    assert_eq!(events[1]["payload"]["customer_scope_id"], "demo-customer");
     assert!(events
         .iter()
         .all(|event| !event["evidence_refs"].as_array().unwrap().is_empty()));
@@ -1244,12 +1248,19 @@ async fn updates_qa_feedback_item_status_with_audit_trail() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(audit["events"]
+    let status_event = audit["events"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|event| event["event_type"] == "qa.feedback.status.updated"
-            && event["payload"]["to_status"] == "resolved"));
+        .find(|event| {
+            event["event_type"] == "qa.feedback.status.updated"
+                && event["payload"]["to_status"] == "resolved"
+        })
+        .expect("feedback status update should be audited");
+    assert_eq!(
+        status_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
 }
 
 #[tokio::test]
