@@ -542,6 +542,66 @@ struct ModelOpsSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RoutingPolicyListResponse {
+    policies: Vec<RoutingPolicyRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RoutingPolicyRecord {
+    policy_id: String,
+    version: u32,
+    review_mode: String,
+    status: String,
+    owner: String,
+    risk_thresholds: RoutingRiskThresholds,
+    confidence_thresholds: RoutingConfidenceThresholds,
+    provider_review_threshold: u8,
+    activated_at: Option<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RoutingRiskThresholds {
+    low_max: u8,
+    medium_min: u8,
+    high_min: u8,
+    critical_min: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RoutingConfidenceThresholds {
+    low_confidence_below: u8,
+    high_confidence_min: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RoutingPolicyPromotionGates {
+    policy_id: String,
+    version: u32,
+    review_mode: String,
+    status: String,
+    decision: String,
+    passed_count: u32,
+    total_count: u32,
+    gates: Vec<RoutingPolicyPromotionGate>,
+    blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RoutingPolicyPromotionGate {
+    label: String,
+    passed: bool,
+    blocker: String,
+    evidence_source: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct RoutingPolicySnapshot {
+    policies: Vec<RoutingPolicyRecord>,
+    gates: RoutingPolicyPromotionGates,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 struct QaQueueListResponse {
     items: Vec<QaQueueItem>,
 }
@@ -1179,6 +1239,8 @@ fn app() -> Html {
                     <RulesPage />
                 } else if *active == "Models" {
                     <ModelsPage />
+                } else if *active == "Routing Policies" {
+                    <RoutingPoliciesPage />
                 } else if *active == "Data Sources" {
                     <DataSourcesPage />
                 } else if *active == "Factor Factory" {
@@ -2069,6 +2131,229 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+#[function_component(RoutingPoliciesPage)]
+fn routing_policies_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let policy_id = use_state(|| "fwa_risk_fusion_routing".to_string());
+    let review_mode = use_state(|| "pre_payment".to_string());
+    let version = use_state(|| "1".to_string());
+    let evidence_refs =
+        use_state(|| "routing_policies:fwa_risk_fusion_routing:v1:pre_payment".to_string());
+    let snapshot_state = use_state(|| ApiState::<RoutingPolicySnapshot>::Idle);
+    let action_state = use_state(|| ApiState::<RoutingPolicyRecord>::Idle);
+
+    let load_policies = {
+        let api_key = api_key.clone();
+        let policy_id = policy_id.clone();
+        let review_mode = review_mode.clone();
+        let version = version.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let policy_id = (*policy_id).clone();
+            let review_mode = (*review_mode).clone();
+            let version = (*version).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(
+                    match get_routing_policy_snapshot(api_key, policy_id, review_mode, version)
+                        .await
+                    {
+                        Ok(snapshot) => ApiState::Ready(snapshot),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
+            });
+        })
+    };
+
+    let refresh = {
+        let load_policies = load_policies.clone();
+        Callback::from(move |_| load_policies.emit(()))
+    };
+
+    let lifecycle_action = |action: &'static str| {
+        let api_key = api_key.clone();
+        let policy_id = policy_id.clone();
+        let review_mode = review_mode.clone();
+        let version = version.clone();
+        let evidence_refs = evidence_refs.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let policy_id = (*policy_id).clone();
+            let review_mode = (*review_mode).clone();
+            let version = (*version).clone();
+            let evidence_refs = parse_tags(&evidence_refs);
+            let action_state = action_state.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                action_state.set(
+                    match update_routing_policy_lifecycle(
+                        api_key,
+                        policy_id,
+                        review_mode,
+                        version,
+                        action,
+                        evidence_refs,
+                    )
+                    .await
+                    {
+                        Ok(record) => ApiState::Ready(record),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
+            });
+        })
+    };
+
+    {
+        let load_policies = load_policies.clone();
+        use_effect_with((), move |_| {
+            load_policies.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Routing Policies"}</h2>
+                    <p>{"Govern L7 risk fusion thresholds, confidence gates, provider review routing, approvals, activation, and rollback evidence."}</p>
+                </div>
+                <span class="status-pill">{"Risk Fusion Routing"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Routing Policy Control"}</h3>
+                <div class="form-grid">
+                    {text_input("API key", &api_key)}
+                    {text_input("Policy ID", &policy_id)}
+                    {text_input("Review mode", &review_mode)}
+                    {text_input("Version", &version)}
+                    {text_input("Evidence refs", &evidence_refs)}
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh routing policies" }}
+                    </button>
+                    <button onclick={lifecycle_action("submit")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit"}</button>
+                    <button onclick={lifecycle_action("approve")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Approve"}</button>
+                    <button onclick={lifecycle_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate"}</button>
+                    <button onclick={lifecycle_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback"}</button>
+                </div>
+                <RoutingPolicyActionView state={(*action_state).clone()} />
+            </section>
+
+            <RoutingPoliciesView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct RoutingPoliciesProps {
+    state: ApiState<RoutingPolicySnapshot>,
+}
+
+#[function_component(RoutingPoliciesView)]
+fn routing_policies_view(props: &RoutingPoliciesProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load routing policies to inspect L7 routing governance."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading routing policies..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"Routing Policy Inventory"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Policies"}</span><strong>{snapshot.policies.len()}</strong></div>
+                                <div><span>{"Active"}</span><strong>{snapshot.policies.iter().filter(|policy| policy.status == "active").count()}</strong></div>
+                                <div><span>{"Review Modes"}</span><strong>{routing_review_modes(&snapshot.policies)}</strong></div>
+                            </div>
+                            <div class="factor-card-grid">
+                                {for snapshot.policies.iter().map(|policy| html! {
+                                    <div class="factor-card">
+                                        <div>
+                                            <strong>{format!("{} v{} / {}", policy.policy_id, policy.version, policy.review_mode)}</strong>
+                                            <span>{format!("{} / owner {}", policy.status, policy.owner)}</span>
+                                        </div>
+                                        <div class="summary-grid">
+                                            <div><span>{"Low / Medium"}</span><strong>{format!("{} / {}", policy.risk_thresholds.low_max, policy.risk_thresholds.medium_min)}</strong></div>
+                                            <div><span>{"High / Critical"}</span><strong>{format!("{} / {}", policy.risk_thresholds.high_min, policy.risk_thresholds.critical_min)}</strong></div>
+                                            <div><span>{"Confidence"}</span><strong>{format!("{} / {}", policy.confidence_thresholds.low_confidence_below, policy.confidence_thresholds.high_confidence_min)}</strong></div>
+                                            <div><span>{"Provider Review"}</span><strong>{policy.provider_review_threshold}</strong></div>
+                                        </div>
+                                        <small>{format!("activated: {} / created: {}", policy.activated_at.as_deref().unwrap_or("none"), policy.created_at.as_deref().unwrap_or("none"))}</small>
+                                    </div>
+                                })}
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Routing Promotion Gates"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Policy"}</span><strong>{format!("{} v{}", snapshot.gates.policy_id, snapshot.gates.version)}</strong></div>
+                                <div><span>{"Decision"}</span><strong>{&snapshot.gates.decision}</strong></div>
+                                <div><span>{"Passed"}</span><strong>{format!("{} / {}", snapshot.gates.passed_count, snapshot.gates.total_count)}</strong></div>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Review Mode"}</span><strong>{&snapshot.gates.review_mode}</strong></div>
+                                <div><span>{"Status"}</span><strong>{&snapshot.gates.status}</strong></div>
+                                <div><span>{"Blockers"}</span><strong>{snapshot.gates.blockers.len()}</strong></div>
+                            </div>
+                            if snapshot.gates.blockers.is_empty() {
+                                <p class="empty">{"No routing policy blockers."}</p>
+                            } else {
+                                <ul class="result-list compact-list">
+                                    {for snapshot.gates.blockers.iter().map(|blocker| html! { <li>{blocker}</li> })}
+                                </ul>
+                            }
+                            <div class="factor-card-grid">
+                                {for snapshot.gates.gates.iter().map(|gate| html! {
+                                    <div class="metric-row">
+                                        <span>{&gate.label}</span>
+                                        <strong>{if gate.passed { "passed" } else { "blocked" }}</strong>
+                                        <small>{&gate.evidence_source}</small>
+                                        <small>{&gate.blocker}</small>
+                                    </div>
+                                })}
+                            </div>
+                        </section>
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct RoutingPolicyActionProps {
+    state: ApiState<RoutingPolicyRecord>,
+}
+
+#[function_component(RoutingPolicyActionView)]
+fn routing_policy_action_view(props: &RoutingPolicyActionProps) -> Html {
+    match &props.state {
+        ApiState::Idle => {
+            html! { <p class="empty">{"Lifecycle actions require evidence refs and enforce current policy status."}</p> }
+        }
+        ApiState::Loading => html! { <p>{"Updating routing policy..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(record) => html! {
+            <div class="summary-grid">
+                <div><span>{"Policy"}</span><strong>{format!("{} v{}", record.policy_id, record.version)}</strong></div>
+                <div><span>{"Review Mode"}</span><strong>{&record.review_mode}</strong></div>
+                <div><span>{"Status"}</span><strong>{&record.status}</strong></div>
+                <div><span>{"Owner"}</span><strong>{&record.owner}</strong></div>
+            </div>
+        },
     }
 }
 
@@ -4111,6 +4396,58 @@ async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse
     request_get_json("/api/v1/ops/factors/readiness", api_key).await
 }
 
+async fn get_routing_policy_snapshot(
+    api_key: String,
+    policy_id: String,
+    review_mode: String,
+    version: String,
+) -> Result<RoutingPolicySnapshot, String> {
+    let policies = request_get_json::<RoutingPolicyListResponse>(
+        "/api/v1/ops/routing-policies",
+        api_key.clone(),
+    )
+    .await?
+    .policies;
+    let version = parse_u32(&version, "routing policy version")?;
+    let gates = request_get_json::<RoutingPolicyPromotionGates>(
+        &format!(
+            "/api/v1/ops/routing-policies/{}/{}/{}/promotion-gates",
+            policy_id.trim(),
+            review_mode.trim(),
+            version
+        ),
+        api_key,
+    )
+    .await?;
+    Ok(RoutingPolicySnapshot { policies, gates })
+}
+
+async fn update_routing_policy_lifecycle(
+    api_key: String,
+    policy_id: String,
+    review_mode: String,
+    version: String,
+    action: &str,
+    evidence_refs: Vec<String>,
+) -> Result<RoutingPolicyRecord, String> {
+    if evidence_refs.is_empty() {
+        return Err("routing policy lifecycle actions require evidence refs".into());
+    }
+    let version = parse_u32(&version, "routing policy version")?;
+    request_json(
+        &format!(
+            "/api/v1/ops/routing-policies/{}/{}/{}/{}",
+            policy_id.trim(),
+            review_mode.trim(),
+            version,
+            action
+        ),
+        api_key,
+        json!({ "evidence_refs": evidence_refs }),
+    )
+    .await
+}
+
 async fn get_data_sources_snapshot(api_key: String) -> Result<DataSourcesSnapshot, String> {
     let datasets =
         request_get_json::<DatasetListResponse>("/api/v1/ops/datasets", api_key.clone()).await?;
@@ -4625,6 +4962,13 @@ fn optional_u32(value: Option<u32>) -> String {
         .unwrap_or_else(|| "none".into())
 }
 
+fn parse_u32(value: &str, label: &str) -> Result<u32, String> {
+    value
+        .trim()
+        .parse::<u32>()
+        .map_err(|error| format!("{label} must be an unsigned integer: {error}"))
+}
+
 fn optional_u64(value: Option<u64>) -> String {
     value
         .map(|number| number.to_string())
@@ -4916,6 +5260,10 @@ fn case_status_summary(cases: &[CaseRecord]) -> String {
 
 fn lead_scheme_summary(leads: &[LeadRecord]) -> String {
     count_by(leads.iter().map(|lead| lead.scheme_family.as_str()))
+}
+
+fn routing_review_modes(policies: &[RoutingPolicyRecord]) -> String {
+    count_by(policies.iter().map(|policy| policy.review_mode.as_str()))
 }
 
 fn count_by<'a>(values: impl Iterator<Item = &'a str>) -> String {
