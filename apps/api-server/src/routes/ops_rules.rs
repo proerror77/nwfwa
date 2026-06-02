@@ -1173,6 +1173,7 @@ async fn record_rule_audit(
     input: RuleAuditInput<'_>,
 ) -> anyhow::Result<()> {
     let payload = serde_json::json!({
+        "customer_scope_id": actor.customer_scope_id,
         "rule_id": input.rule.rule_id,
         "rule_version": input.rule.latest_version,
         "from_status": input.from_status,
@@ -1212,7 +1213,13 @@ async fn record_rule_backtest_audit(
     actor: &ActorContext,
     record: &RuleBacktestRecord,
 ) -> anyhow::Result<()> {
-    let payload = serde_json::to_value(record)?;
+    let mut payload = serde_json::to_value(record)?;
+    if let Some(payload) = payload.as_object_mut() {
+        payload.insert(
+            "customer_scope_id".into(),
+            serde_json::json!(actor.customer_scope_id),
+        );
+    }
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -1253,6 +1260,7 @@ async fn record_rule_promotion_audit(
             event_status: "succeeded".into(),
             summary: format!("Rule promotion review: {}", review.decision),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "rule_id": review.rule_id,
                 "rule_version": review.rule_version,
                 "decision": review.decision,

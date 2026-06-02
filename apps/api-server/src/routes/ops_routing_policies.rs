@@ -509,6 +509,7 @@ async fn record_routing_policy_audit(
     input: RoutingPolicyAuditInput<'_>,
 ) -> anyhow::Result<()> {
     let payload = serde_json::json!({
+        "customer_scope_id": actor.customer_scope_id,
         "policy_id": &input.record.policy_id,
         "version": input.record.version,
         "review_mode": &input.record.review_mode,

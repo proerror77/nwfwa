@@ -2093,6 +2093,17 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
         .iter()
         .any(|model| model["version"] == "0.1.0" && model["status"] == "approved"));
 
+    let (status, audit) = get_json(
+        app.clone(),
+        "/api/v1/ops/audit-events?event_type=model.activation.completed&limit=1",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        audit["events"][0]["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+
     let (status, gates) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(gates["decision"], "routing_allowed");
@@ -2148,6 +2159,10 @@ async fn rolls_back_active_model_version() {
     assert_eq!(
         audit["events"][0]["payload"]["previous_active_version"],
         "0.1.0"
+    );
+    assert_eq!(
+        audit["events"][0]["payload"]["customer_scope_id"],
+        "demo-customer"
     );
 }
 

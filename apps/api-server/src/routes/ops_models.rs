@@ -1844,6 +1844,7 @@ async fn record_model_promotion_audit(
             event_status: "succeeded".into(),
             summary: format!("Model promotion review: {}", review.decision),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "model_key": review.model_key,
                 "model_version": review.model_version,
                 "decision": review.decision,
@@ -1890,6 +1891,7 @@ async fn record_model_retraining_audit(
             event_status: "succeeded".into(),
             summary: format!("Model retraining job {} is {}", job.job_id, job.status),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "job_id": job.job_id,
                 "model_key": job.model_key,
                 "model_version": job.model_version,
@@ -1928,6 +1930,7 @@ async fn record_model_activation_audit(
             event_status: "succeeded".into(),
             summary: "Model activation completed".into(),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "model_key": model.model_key,
                 "model_version": model.version,
                 "from_status": from_status,
@@ -1965,6 +1968,7 @@ async fn record_model_rollback_audit(
             event_status: "succeeded".into(),
             summary: "Model rollback completed".into(),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "model_key": restored.model_key,
                 "model_version": restored.version,
                 "from_status": restored_from_status,

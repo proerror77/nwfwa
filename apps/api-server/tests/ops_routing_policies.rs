@@ -431,6 +431,17 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
     assert_eq!(status, StatusCode::OK);
     assert_eq!(rolled_back["status"], "approved");
 
+    let (status, audit) = get_json(
+        app.clone(),
+        "/api/v1/ops/audit-events?event_type=routing_policy.activation.completed&limit=5",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(audit["events"].as_array().unwrap().iter().any(|event| {
+        event["payload"]["policy_id"] == "candidate_strict_prepay"
+            && event["payload"]["customer_scope_id"] == "demo-customer"
+    }));
+
     let (status, scored_after_rollback) = post_json(
         app,
         "/api/v1/claims/score",

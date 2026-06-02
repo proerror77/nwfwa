@@ -1312,8 +1312,16 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
         audit_events[0]["payload"]["rule_id"],
         "candidate_audit_rule"
     );
+    assert_eq!(
+        audit_events[0]["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert_eq!(audit_events[0]["payload"]["to_status"], "draft");
     assert_eq!(audit_events[1]["event_type"], "rule.status.changed");
+    assert_eq!(
+        audit_events[1]["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert_eq!(audit_events[1]["payload"]["from_status"], "draft");
     assert_eq!(audit_events[1]["payload"]["to_status"], "submitted");
     assert_eq!(
@@ -1606,6 +1614,10 @@ async fn rolls_back_active_rule_with_audit_event() {
     assert_eq!(rollback_event["payload"]["from_status"], "active");
     assert_eq!(rollback_event["payload"]["to_status"], "approved");
     assert_eq!(rollback_event["payload"]["rule_version"], 1);
+    assert_eq!(
+        rollback_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert_eq!(
         rollback_event["evidence_refs"][0],
         "rules:rule_early_claim:v1"
