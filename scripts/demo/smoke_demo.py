@@ -66,6 +66,10 @@ def has_label(labels, **expected):
     )
 
 
+def has_health_check(checks, name, status):
+    return any(check.get("name") == name and check.get("status") == status for check in checks)
+
+
 def decimal_value(value):
     return Decimal(str(value))
 
@@ -1773,8 +1777,26 @@ def main():
     assert_true(health.get("version"), "health endpoint missing version metadata")
     health_checks = health.get("checks", [])
     assert_true(
-        any(check.get("name") == "http_router" and check.get("status") == "ok" for check in health_checks),
+        has_health_check(health_checks, "http_router", "ok"),
         "health endpoint missing http_router check",
+    )
+    pilot_readiness = health.get("pilot_readiness", {})
+    assert_true(
+        pilot_readiness.get("status") == "not_ready",
+        "local demo health should expose pilot readiness as not_ready",
+    )
+    blocking_checks = pilot_readiness.get("blocking_checks", [])
+    assert_true(
+        has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
+        "pilot readiness missing local API key blocker",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "model_service_configuration", "local_dev_model_service"),
+        "pilot readiness missing local model service blocker",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "agent_policy_configuration", "local_demo_agent_policy"),
+        "pilot readiness missing local Agent policy blocker",
     )
     scheme_taxonomy = assert_fwa_scheme_taxonomy()
     inbox_canonical_score = score_normalized_inbox_context()
