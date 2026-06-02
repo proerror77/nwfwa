@@ -453,6 +453,86 @@ struct KnowledgeSnapshot {
     results: Vec<SimilarCase>,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AuditEventListResponse {
+    events: Vec<AuditEventRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AuditEventRecord {
+    audit_id: String,
+    run_id: String,
+    event_type: String,
+    event_status: String,
+    summary: String,
+    payload: Value,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ApiCallListResponse {
+    calls: Vec<ApiCallRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ApiCallRecord {
+    call_id: String,
+    endpoint: String,
+    method: String,
+    status_code: u16,
+    result: String,
+    source_system: String,
+    claim_id: String,
+    run_id: String,
+    audit_id: String,
+    event_type: String,
+    idempotency_key: Option<String>,
+    evidence_refs: Vec<String>,
+    observed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentRunListResponse {
+    runs: Vec<AgentRunRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentRunRecord {
+    agent_run_id: String,
+    claim_id: String,
+    status: String,
+    decision_boundary: String,
+    output_json: Value,
+    evidence_refs: Vec<String>,
+    steps: Vec<Value>,
+    context_snapshots: Vec<Value>,
+    policy_checks: Vec<Value>,
+    tool_calls: Vec<Value>,
+    tool_results: Vec<Value>,
+    approvals: Vec<AgentApprovalView>,
+    created_at: Option<String>,
+    completed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AgentApprovalView {
+    approval_id: String,
+    proposed_action: String,
+    decision: String,
+    approver: String,
+    reason: String,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct GovernanceSnapshot {
+    audit_events: Vec<AuditEventRecord>,
+    api_calls: Vec<ApiCallRecord>,
+    agent_runs: Vec<AgentRunRecord>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 enum ApiState<T> {
     Idle,
@@ -494,6 +574,8 @@ fn app() -> Html {
                     <KnowledgeBasePage />
                 } else if *active == "QA Review" {
                     <QaReviewPage />
+                } else if *active == "Governance" {
+                    <GovernancePage />
                 } else {
                     <ModuleStatusPage title={(*active).clone()} />
                 }
@@ -1245,6 +1327,206 @@ fn knowledge_base_view(props: &KnowledgeBaseProps) -> Html {
     }
 }
 
+#[function_component(GovernancePage)]
+fn governance_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let event_group = use_state(|| "governance".to_string());
+    let snapshot_state = use_state(|| ApiState::<GovernanceSnapshot>::Idle);
+
+    let load_governance = {
+        let api_key = api_key.clone();
+        let event_group = event_group.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let event_group = (*event_group).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(match get_governance_snapshot(api_key, event_group).await {
+                    Ok(snapshot) => ApiState::Ready(snapshot),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let refresh = {
+        let load_governance = load_governance.clone();
+        Callback::from(move |_| load_governance.emit(()))
+    };
+
+    {
+        let load_governance = load_governance.clone();
+        use_effect_with((), move |_| {
+            load_governance.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Governance"}</h2>
+                    <p>{"Review audit events, API call records, and assistive Agent run logs with evidence references before operational approval."}</p>
+                </div>
+                <span class="status-pill">{"Audit Coverage"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Governance Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Audit event group"}
+                        <input
+                            value={(*event_group).clone()}
+                            oninput={{
+                                let event_group = event_group.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    event_group.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh governance" }}
+                    </button>
+                </div>
+            </section>
+
+            <GovernanceView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct GovernanceProps {
+    state: ApiState<GovernanceSnapshot>,
+}
+
+#[function_component(GovernanceView)]
+fn governance_view(props: &GovernanceProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load governance logs to inspect audit and Agent controls."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading governance records..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => html! {
+                    <>
+                        <section class="panel result-stack">
+                            <h3>{"Audit Event Log"}</h3>
+                            <div class="score-hero">
+                                <div><span>{"Audit Events"}</span><strong>{snapshot.audit_events.len()}</strong></div>
+                                <div><span>{"API Call Records"}</span><strong>{snapshot.api_calls.len()}</strong></div>
+                                <div><span>{"Agent Run Logs"}</span><strong>{snapshot.agent_runs.len()}</strong></div>
+                            </div>
+                            if snapshot.audit_events.is_empty() {
+                                <p class="empty">{"No audit events returned for this filter."}</p>
+                            } else {
+                                <ol class="audit-timeline">
+                                    {for snapshot.audit_events.iter().take(8).map(|event| html! {
+                                        <li>
+                                            <div>
+                                                <strong>{&event.event_type}</strong>
+                                                <span>{&event.event_status}</span>
+                                            </div>
+                                            <p>{&event.summary}</p>
+                                            <small>{format!("audit: {} / run: {} / at: {}", event.audit_id, event.run_id, event.created_at.as_deref().unwrap_or("unknown"))}</small>
+                                            <small>{format!("evidence: {}", refs_label(&event.evidence_refs))}</small>
+                                            <span class="inline-detail">
+                                                <strong>{"Payload Trace"}</strong>
+                                                <small>{payload_keys_label(&event.payload)}</small>
+                                            </span>
+                                        </li>
+                                    })}
+                                </ol>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"API Call Records"}</h3>
+                            if snapshot.api_calls.is_empty() {
+                                <p class="empty">{"No API call records returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.api_calls.iter().take(8).map(|call| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} {}", call.method, call.endpoint)}</strong>
+                                                <span>{format!("{} / {} / {}", call.status_code, call.result, call.source_system)}</span>
+                                            </div>
+                                            <div class="summary-grid">
+                                                <div><span>{"Claim"}</span><strong>{empty_label(&call.claim_id)}</strong></div>
+                                                <div><span>{"Event"}</span><strong>{&call.event_type}</strong></div>
+                                                <div><span>{"Idempotency"}</span><strong>{call.idempotency_key.as_deref().unwrap_or("none")}</strong></div>
+                                                <div><span>{"Run"}</span><strong>{&call.run_id}</strong></div>
+                                                <div><span>{"Audit"}</span><strong>{&call.audit_id}</strong></div>
+                                                <div><span>{"Observed"}</span><strong>{call.observed_at.as_deref().unwrap_or("unknown")}</strong></div>
+                                            </div>
+                                            <small>{format!("call: {} / evidence: {}", call.call_id, refs_label(&call.evidence_refs))}</small>
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Agent Run Logs"}</h3>
+                            <p class="empty">{"Assistive Boundary: Agent outputs remain investigation support and require human approval for high-impact actions."}</p>
+                            if snapshot.agent_runs.is_empty() {
+                                <p class="empty">{"No Agent run logs returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.agent_runs.iter().take(8).map(|run| html! {
+                                        <div class="factor-card">
+                                            <div>
+                                                <strong>{format!("{} / {}", run.agent_run_id, run.claim_id)}</strong>
+                                                <span>{format!("{} / {}", run.status, run.decision_boundary)}</span>
+                                            </div>
+                                            <div class="summary-grid">
+                                                <div><span>{"Steps"}</span><strong>{run.steps.len()}</strong></div>
+                                                <div><span>{"Tool Calls"}</span><strong>{run.tool_calls.len()}</strong></div>
+                                                <div><span>{"Tool Results"}</span><strong>{run.tool_results.len()}</strong></div>
+                                                <div><span>{"Policy Checks"}</span><strong>{run.policy_checks.len()}</strong></div>
+                                                <div><span>{"Context Snapshots"}</span><strong>{run.context_snapshots.len()}</strong></div>
+                                                <div><span>{"Approvals"}</span><strong>{run.approvals.len()}</strong></div>
+                                            </div>
+                                            <small>{format!("created: {} / completed: {}", run.created_at.as_deref().unwrap_or("unknown"), run.completed_at.as_deref().unwrap_or("pending"))}</small>
+                                            <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
+                                            <small>{format!("output: {}", payload_keys_label(&run.output_json))}</small>
+                                            if run.approvals.is_empty() {
+                                                <small>{"approval: none"}</small>
+                                            } else {
+                                                <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
+                                            }
+                                        </div>
+                                    })}
+                                </div>
+                            }
+                        </section>
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
 #[derive(Properties, PartialEq)]
 struct ModuleStatusProps {
     title: String,
@@ -1633,6 +1915,33 @@ async fn get_knowledge_snapshot(
     Ok(KnowledgeSnapshot { cases, results })
 }
 
+async fn get_governance_snapshot(
+    api_key: String,
+    event_group: String,
+) -> Result<GovernanceSnapshot, String> {
+    let event_group = event_group.trim();
+    let audit_path = if event_group.is_empty() {
+        "/api/v1/ops/audit-events?limit=20".to_string()
+    } else {
+        format!("/api/v1/ops/audit-events?event_group={event_group}&limit=20")
+    };
+    let audit_events = request_get_json::<AuditEventListResponse>(&audit_path, api_key.clone())
+        .await?
+        .events;
+    let api_calls =
+        request_get_json::<ApiCallListResponse>("/api/v1/ops/api-calls?limit=20", api_key.clone())
+            .await?
+            .calls;
+    let agent_runs = request_get_json::<AgentRunListResponse>("/api/v1/ops/agent-runs", api_key)
+        .await?
+        .runs;
+    Ok(GovernanceSnapshot {
+        audit_events,
+        api_calls,
+        agent_runs,
+    })
+}
+
 async fn request_json<T>(path: &str, api_key: String, payload: Value) -> Result<T, String>
 where
     T: for<'de> Deserialize<'de>,
@@ -1989,6 +2298,46 @@ fn parse_tags(tags_text: &str) -> Vec<String> {
         .filter(|tag| !tag.is_empty())
         .map(str::to_string)
         .collect()
+}
+
+fn payload_keys_label(value: &Value) -> String {
+    value
+        .as_object()
+        .map(|object| {
+            if object.is_empty() {
+                "empty object".into()
+            } else {
+                object.keys().cloned().collect::<Vec<_>>().join(", ")
+            }
+        })
+        .unwrap_or_else(|| display_value(value))
+}
+
+fn empty_label(value: &str) -> &str {
+    if value.trim().is_empty() {
+        "none"
+    } else {
+        value
+    }
+}
+
+fn approval_summary(approvals: &[AgentApprovalView]) -> String {
+    approvals
+        .iter()
+        .map(|approval| {
+            format!(
+                "{} {}:{} by {} at {} evidence={} reason={}",
+                approval.approval_id,
+                approval.proposed_action,
+                approval.decision,
+                approval.approver,
+                approval.created_at.as_deref().unwrap_or("unknown"),
+                approval.evidence_refs.len(),
+                approval.reason
+            )
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn yes_no(value: bool) -> &'static str {
