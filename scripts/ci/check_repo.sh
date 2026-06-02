@@ -120,6 +120,11 @@ grep -q "/api/v1/ops/api-calls" apps/web-console/src/api.ts
 grep -q "/api/v1/claims/score" scripts/demo/smoke_demo.py
 grep -q "score_normalized_inbox_context" scripts/demo/smoke_demo.py
 grep -q "canonical_claim_context" scripts/demo/smoke_demo.py
+grep -q "has_canonical_trace=true" scripts/demo/smoke_demo.py
+grep -q "has_canonical_trace" apps/api-server/src/routes/openapi.rs
+grep -q "has_canonical_trace" apps/api-server/src/routes/ops_audit.rs
+grep -q "has_canonical_trace" apps/web-console/src/api.ts
+grep -q "Canonical Trace Only" apps/web-console/src/pages/GovernancePage.tsx
 grep -q "/api/v1/knowledge/search-similar" scripts/demo/smoke_demo.py
 grep -q "/api/v1/investigations/results" scripts/demo/smoke_demo.py
 grep -q "/api/v1/qa/results" scripts/demo/smoke_demo.py

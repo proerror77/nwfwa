@@ -329,6 +329,7 @@ export type GlobalAuditEventFilterState = {
   featureSetId: string;
   modelDatasetId: string;
   evaluationRunId: string;
+  hasCanonicalTrace: boolean;
   limit: string;
 };
 
@@ -390,6 +391,7 @@ export function buildGlobalAuditEventFilters(
     feature_set_id: filters.featureSetId,
     model_dataset_id: filters.modelDatasetId,
     evaluation_run_id: filters.evaluationRunId,
+    has_canonical_trace: filters.hasCanonicalTrace ? true : undefined,
   };
 }
 
@@ -418,6 +420,7 @@ export function focusGlobalAuditFiltersOnAgentRun(
     featureSetId: "",
     modelDatasetId: "",
     evaluationRunId: "",
+    hasCanonicalTrace: false,
   };
 }
 
@@ -446,6 +449,7 @@ export function focusGlobalAuditFiltersOnQaEvent(
     featureSetId: "",
     modelDatasetId: "",
     evaluationRunId: "",
+    hasCanonicalTrace: false,
   };
 }
 
@@ -1048,6 +1052,7 @@ export function GovernancePage({ auditTimelineContext }: GovernancePageProps = {
       auditEventFilters.featureSetId,
       auditEventFilters.modelDatasetId,
       auditEventFilters.evaluationRunId,
+      auditEventFilters.hasCanonicalTrace,
     ],
     queryFn: () =>
       listAuditEvents(
@@ -1861,6 +1866,19 @@ export function GovernancePage({ auditTimelineContext }: GovernancePageProps = {
               }))
             }
           />
+        </label>
+        <label className="checkbox-row">
+          <input
+            checked={auditEventFilters.hasCanonicalTrace}
+            onChange={(event) =>
+              setAuditEventFilters((filters) => ({
+                ...filters,
+                hasCanonicalTrace: event.target.checked,
+              }))
+            }
+            type="checkbox"
+          />
+          Canonical Trace Only
         </label>
         <label>
           Limit

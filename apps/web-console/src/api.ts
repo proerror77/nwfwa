@@ -485,6 +485,7 @@ export type AuditEventListFilters = {
   feature_set_id?: string;
   model_dataset_id?: string;
   evaluation_run_id?: string;
+  has_canonical_trace?: boolean;
 };
 
 export async function listAuditEvents(

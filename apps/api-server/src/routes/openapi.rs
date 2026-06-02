@@ -964,6 +964,12 @@ pub async fn openapi_schema() -> Json<Value> {
                             "in": "query",
                             "required": false,
                             "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "has_canonical_trace",
+                            "in": "query",
+                            "required": false,
+                            "schema": { "type": "boolean" }
                         }
                     ],
                     "responses": {

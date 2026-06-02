@@ -1453,6 +1453,7 @@ async fn openapi_includes_operations_paths() {
         "feature_set_id",
         "model_dataset_id",
         "evaluation_run_id",
+        "has_canonical_trace",
     ] {
         assert!(
             audit_event_parameters

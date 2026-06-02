@@ -34,6 +34,7 @@ pub struct AuditEventListQuery {
     pub feature_set_id: Option<String>,
     pub model_dataset_id: Option<String>,
     pub evaluation_run_id: Option<String>,
+    pub has_canonical_trace: Option<bool>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -96,6 +97,7 @@ pub async fn list_audit_events(
         feature_set_id: normalize_filter(query.feature_set_id),
         model_dataset_id: normalize_filter(query.model_dataset_id),
         evaluation_run_id: normalize_filter(query.evaluation_run_id),
+        has_canonical_trace: query.has_canonical_trace,
     };
     let events = state
         .repository

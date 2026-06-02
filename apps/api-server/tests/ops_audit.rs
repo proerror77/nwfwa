@@ -453,6 +453,69 @@ async fn filters_global_audit_events_for_governance_search() {
         "CLM-AUDIT-FILTER"
     );
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-AUDIT-CANONICAL",
+              "total_amount": 8800,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-audit",
+              "policy_id": "POL-AUDIT-CANONICAL",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-AUDIT-CANONICAL",
+              "name": "Audit Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "High cost imaging",
+                "fee_category": "procedure",
+                "amount": 8800,
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-AUDIT:fee_detail:LINE-AUDIT"]
+              }
+            ],
+            "document_evidence": [
+              {
+                "document_id": "MR-AUDIT-CANONICAL",
+                "source_refs": ["medical_record:MR-AUDIT-CANONICAL"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, canonical_trace_events) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?has_canonical_trace=true&limit=10",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let canonical_trace_events = canonical_trace_events["events"].as_array().unwrap();
+    assert_eq!(canonical_trace_events.len(), 1);
+    assert_eq!(canonical_trace_events[0]["event_type"], "scoring.completed");
+    assert_eq!(
+        canonical_trace_events[0]["payload"]["canonical_claim_context_trace"]["input_mode"],
+        "canonical_claim_context"
+    );
+
     let (status, governance_events) = json_request(
         app.clone(),
         "GET",

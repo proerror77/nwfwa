@@ -64,6 +64,7 @@ describe("buildGlobalAuditEventFilters", () => {
           featureSetId: "feature_set_1",
           modelDatasetId: "model_dataset_1",
           evaluationRunId: "eval_1",
+          hasCanonicalTrace: true,
           limit: "25",
         },
         25,
@@ -89,6 +90,7 @@ describe("buildGlobalAuditEventFilters", () => {
       feature_set_id: "feature_set_1",
       model_dataset_id: "model_dataset_1",
       evaluation_run_id: "eval_1",
+      has_canonical_trace: true,
     });
   });
 });
@@ -115,6 +117,7 @@ describe("focusGlobalAuditFiltersOnAgentRun", () => {
       featureSetId: "feature_set_1",
       modelDatasetId: "model_dataset_1",
       evaluationRunId: "eval_1",
+      hasCanonicalTrace: true,
       limit: "25",
     };
 
@@ -153,6 +156,7 @@ describe("focusGlobalAuditFiltersOnAgentRun", () => {
       featureSetId: "",
       modelDatasetId: "",
       evaluationRunId: "",
+      hasCanonicalTrace: false,
     });
   });
 });
@@ -179,6 +183,7 @@ describe("focusGlobalAuditFiltersOnQaEvent", () => {
       featureSetId: "feature_set_1",
       modelDatasetId: "model_dataset_1",
       evaluationRunId: "eval_1",
+      hasCanonicalTrace: true,
       limit: "25",
     };
 
@@ -220,6 +225,7 @@ describe("focusGlobalAuditFiltersOnQaEvent", () => {
       featureSetId: "",
       modelDatasetId: "",
       evaluationRunId: "",
+      hasCanonicalTrace: false,
     });
   });
 });

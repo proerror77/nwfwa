@@ -56,6 +56,7 @@ export function buildGovernanceAuditFiltersFromContext(context?: GovernanceAudit
     featureSetId: "",
     modelDatasetId: "",
     evaluationRunId: "",
+    hasCanonicalTrace: false,
     limit: "50",
   };
 }

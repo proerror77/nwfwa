@@ -123,6 +123,7 @@ async function main() {
       "Source Trace",
       "Lineage",
       "Canonical Trace",
+      "Canonical Trace Only",
       "Input Mode",
     ]) {
       assertContains(bundle, expectedPanel, "web console operations panel bundle");

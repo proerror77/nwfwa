@@ -104,6 +104,7 @@ pub struct AuditEventListFilter {
     pub feature_set_id: Option<String>,
     pub model_dataset_id: Option<String>,
     pub evaluation_run_id: Option<String>,
+    pub has_canonical_trace: Option<bool>,
 }
 
 const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
@@ -6731,6 +6732,7 @@ impl ScoringRepository for PostgresScoringRepository {
                AND ($18::text IS NULL OR ae.payload ->> 'feature_set_id' = $18)
                AND ($19::text IS NULL OR ae.payload ->> 'model_dataset_id' = $19)
                AND ($20::text IS NULL OR ae.payload ->> 'evaluation_run_id' = $20)
+               AND ($21::bool IS NULL OR $21 = false OR ae.payload ? 'canonical_claim_context_trace')
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -6754,6 +6756,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.feature_set_id.as_deref())
         .bind(filter.model_dataset_id.as_deref())
         .bind(filter.evaluation_run_id.as_deref())
+        .bind(filter.has_canonical_trace)
         .fetch_all(&self.pool)
         .await?;
 
@@ -8221,6 +8224,9 @@ fn persisted_audit_event_matches_filter(
     if !audit_event_payload_matches_data_lineage_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_canonical_trace_filter(&event.payload, filter) {
+        return false;
+    }
     true
 }
 
@@ -8278,6 +8284,9 @@ fn pilot_audit_event_matches_filter(
     if !audit_event_payload_matches_data_lineage_filter(&event.payload, filter) {
         return false;
     }
+    if !audit_event_payload_matches_canonical_trace_filter(&event.payload, filter) {
+        return false;
+    }
     true
 }
 
@@ -8295,6 +8304,19 @@ fn audit_event_matches_group(event_type: &str, filter: &AuditEventListFilter) ->
         Some("governance") => GOVERNANCE_AUDIT_EVENT_TYPES.contains(&event_type),
         Some(_) => false,
     }
+}
+
+fn audit_event_payload_matches_canonical_trace_filter(
+    payload: &Value,
+    filter: &AuditEventListFilter,
+) -> bool {
+    if filter.has_canonical_trace != Some(true) {
+        return true;
+    }
+    payload
+        .get("canonical_claim_context_trace")
+        .and_then(Value::as_object)
+        .is_some()
 }
 
 fn audit_event_payload_matches_rule_filter(payload: &Value, filter: &AuditEventListFilter) -> bool {

@@ -1737,6 +1737,14 @@ def score_normalized_inbox_context():
         any(event.get("event_type") == "scoring.completed" for event in audit.get("events", [])),
         "canonical context score missing audit history",
     )
+    canonical_trace_events = request(
+        "GET",
+        "/api/v1/ops/audit-events?has_canonical_trace=true&limit=20",
+    ).get("events", [])
+    assert_true(
+        any(event.get("payload", {}).get("claim_id") == claim_id for event in canonical_trace_events),
+        "canonical trace audit filter did not return normalized inbox scoring event",
+    )
     return {
         "claim_id": claim_id,
         "run_id": score["run_id"],
