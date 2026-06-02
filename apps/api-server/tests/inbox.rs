@@ -19,6 +19,7 @@ fn test_config() -> AppConfig {
         pii_masking_policy_id: "demo-pii-masking-policy".into(),
         key_rotation_policy_id: "demo-key-rotation-policy".into(),
         network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
     }
 }
 

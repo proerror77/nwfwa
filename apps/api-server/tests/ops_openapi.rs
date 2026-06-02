@@ -18,6 +18,7 @@ fn test_config() -> AppConfig {
         pii_masking_policy_id: "demo-pii-masking-policy".into(),
         key_rotation_policy_id: "demo-key-rotation-policy".into(),
         network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
     }
 }
 
@@ -147,7 +148,8 @@ async fn openapi_includes_operations_paths() {
             "local_demo_backup_restore",
             "local_demo_pii_masking",
             "local_demo_key_rotation",
-            "local_demo_network_allowlist"
+            "local_demo_network_allowlist",
+            "local_demo_alert_routing"
         ])
     );
     assert!(
@@ -233,6 +235,13 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("local_demo_network_allowlist"),
         "missing health status network-allowlist-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_alert_routing"),
+        "missing health status alert-routing-readiness description"
     );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());

@@ -11,6 +11,7 @@ pub struct AppConfig {
     pub pii_masking_policy_id: String,
     pub key_rotation_policy_id: String,
     pub network_allowlist_id: String,
+    pub alert_routing_policy_id: String,
 }
 
 impl AppConfig {
@@ -36,6 +37,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "demo-key-rotation-policy".into()),
             network_allowlist_id: std::env::var("FWA_NETWORK_ALLOWLIST_ID")
                 .unwrap_or_else(|_| "demo-network-allowlist".into()),
+            alert_routing_policy_id: std::env::var("FWA_ALERT_ROUTING_POLICY_ID")
+                .unwrap_or_else(|_| "demo-alert-routing-policy".into()),
         }
     }
 
@@ -136,6 +139,14 @@ impl AppConfig {
     pub fn network_allowlist_configuration_status(&self) -> &'static str {
         if self.network_allowlist_id == "demo-network-allowlist" {
             "local_demo_network_allowlist"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn alert_routing_configuration_status(&self) -> &'static str {
+        if self.alert_routing_policy_id == "demo-alert-routing-policy" {
+            "local_demo_alert_routing"
         } else {
             "configured"
         }

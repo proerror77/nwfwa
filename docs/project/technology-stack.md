@@ -185,6 +185,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_PII_MASKING_POLICY_ID` | `demo-pii-masking-policy` | Local PII masking policy id |
 | `FWA_KEY_ROTATION_POLICY_ID` | `demo-key-rotation-policy` | Local key rotation policy id |
 | `FWA_NETWORK_ALLOWLIST_ID` | `demo-network-allowlist` | Local network allowlist id |
+| `FWA_ALERT_ROUTING_POLICY_ID` | `demo-alert-routing-policy` | Local alert routing policy id |
 
 ## Current Non-Goals
 

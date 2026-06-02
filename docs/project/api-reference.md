@@ -38,8 +38,9 @@ dev-secret
 `model_service_configuration`, `object_storage_configuration`,
 `customer_scope_configuration`, `retention_policy_configuration`, and
 `backup_restore_configuration`, `pii_masking_configuration`, and
-`key_rotation_configuration`, and `network_allowlist_configuration` checks. They
-report `local_dev_key` when the API is still using the local `dev-secret` key,
+`key_rotation_configuration`, `network_allowlist_configuration`, and
+`alert_routing_configuration` checks. They report `local_dev_key` when the API
+is still using the local `dev-secret` key,
 `local_demo_source` when the API is still using the local `tpa-demo` source
 system, `local_dev_database` when the API is still using the local development
 database URL, `local_dev_model_service` when the API is still using the local
@@ -53,11 +54,13 @@ and restore plan id, `local_demo_pii_masking` when the API is still using the
 local demo PII masking policy id, `local_demo_key_rotation` when the API is
 still using the local demo key rotation policy id,
 `local_demo_network_allowlist` when the API is still using the local demo
-network allowlist id, and `configured` after non-default values are configured.
-The response never exposes the configured key, source-system value, database
-URL, model service URL, object storage URI, customer scope id, retention policy
-id, backup restore plan id, PII masking policy id, key rotation policy id, or
-network allowlist id.
+network allowlist id, `local_demo_alert_routing` when the API is still using
+the local demo alert routing policy id, and `configured` after non-default
+values are configured. The response never exposes the configured key,
+source-system value, database URL, model service URL, object storage URI,
+customer scope id, retention policy id, backup restore plan id, PII masking
+policy id, key rotation policy id, network allowlist id, or alert routing
+policy id.
 
 ## Inbound Claim Inbox
 

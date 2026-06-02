@@ -18,6 +18,7 @@ fn test_config() -> AppConfig {
         pii_masking_policy_id: "demo-pii-masking-policy".into(),
         key_rotation_policy_id: "demo-key-rotation-policy".into(),
         network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
     }
 }
 
@@ -142,6 +143,13 @@ async fn health_returns_service_metadata_and_checks() {
             "name": "network_allowlist_configuration",
             "status": "local_demo_network_allowlist"
         })));
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "alert_routing_configuration",
+            "status": "local_demo_alert_routing"
+        })));
     assert!(
         !body.to_string().contains("127.0.0.1:8001"),
         "health response must not expose internal model service URLs"
@@ -183,6 +191,10 @@ async fn health_returns_service_metadata_and_checks() {
     assert!(
         !body.to_string().contains("demo-network-allowlist"),
         "health response must not expose network allowlist ids"
+    );
+    assert!(
+        !body.to_string().contains("demo-alert-routing-policy"),
+        "health response must not expose alert routing policy ids"
     );
 }
 
@@ -599,5 +611,39 @@ async fn health_reports_configured_network_allowlist_without_exposing_value() {
             .to_string()
             .contains("customer-alpha-network-allowlist-v1"),
         "health response must not expose configured network allowlist ids"
+    );
+}
+
+#[tokio::test]
+async fn health_reports_configured_alert_routing_without_exposing_value() {
+    let mut config = test_config();
+    config.alert_routing_policy_id = "customer-alpha-alert-routing-v1".into();
+    let app = build_app(config);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "alert_routing_configuration",
+            "status": "configured"
+        })));
+    assert!(
+        !body.to_string().contains("customer-alpha-alert-routing-v1"),
+        "health response must not expose configured alert routing policy ids"
     );
 }
