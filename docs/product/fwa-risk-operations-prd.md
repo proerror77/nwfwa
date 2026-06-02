@@ -269,6 +269,9 @@ Correction record for `/Users/proerror/Downloads/req.json`:
 - route it through `POST /api/v1/inbox/claims/normalize`, then score only the
   normalized canonical context when `scoring_ready` is true or a reviewer has
   resolved blocking validation findings;
+- when the normalized scoring run later enters QA, merge its canonical evidence
+  refs into `POST /api/v1/qa/results` so QA conclusions and audit events remain
+  traceable to the original bill-line and document evidence;
 - derive `external_message_id` from `systemCode + transNo + reportNo`, and use
   hashed internal run, audit, raw-payload, and idempotency identifiers so raw
   claim identifiers are not leaked downstream;
@@ -503,6 +506,9 @@ Required infrastructure principles:
 - QA review queue items should surface normalized scoring trace source refs and
   canonical evidence refs so reviewers can ground feedback in original bill-line
   and document evidence.
+- QA result writeback should preserve canonical evidence refs from the latest
+  successful normalized scoring trace for the claim, appending them to the
+  persisted QA review and `qa.result.received` audit event.
 - Optional infrastructure such as Redis, ClickHouse, Neo4j, OpenSearch, Qdrant,
   LanceDB, or Kubernetes is adopted only when a defined workload requires it.
 

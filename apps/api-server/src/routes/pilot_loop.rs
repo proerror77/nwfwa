@@ -184,6 +184,7 @@ pub async fn write_qa_result(
     authorize(&state, &headers)?;
     validate_qa_review_request(&request)?;
     request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
+    merge_latest_canonical_evidence_refs(&state, &mut request).await?;
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -354,6 +355,37 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
         ));
     }
     validate_writeback_pii(&request.notes, &request.evidence_refs)?;
+    Ok(())
+}
+
+async fn merge_latest_canonical_evidence_refs(
+    state: &AppState,
+    request: &mut QaReviewRecord,
+) -> Result<(), ApiError> {
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 1,
+            event_type: Some("scoring.completed".into()),
+            claim_id: Some(request.claim_id.clone()),
+            has_canonical_trace: Some(true),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("QA_CANONICAL_TRACE_LOOKUP_FAILED"))?;
+    let Some(event) = events
+        .iter()
+        .find(|event| event.event_status == "succeeded")
+    else {
+        return Ok(());
+    };
+    for reference in
+        unique_json_string_values(&event.payload["canonical_claim_context_trace"]["evidence_refs"])
+    {
+        if !request.evidence_refs.contains(&reference) {
+            request.evidence_refs.push(reference);
+        }
+    }
     Ok(())
 }
 

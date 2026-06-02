@@ -436,6 +436,11 @@ same claim in their persisted context snapshot, including source refs from
 normalized bill lines and documents.
 QA queue items also expose canonical source refs and canonical evidence refs
 from the latest successful normalized scoring trace for reviewer grounding.
+When a QA result is written back for the same claim, the platform appends those
+canonical evidence refs to the saved QA review, writeback response, and
+`qa.result.received` audit event. This keeps `/Users/proerror/Downloads/req.json`
+style inbox payloads traceable through normalization, scoring, QA, and audit
+without requiring the reviewer to manually copy every invoice or document ref.
 
 Documented errors:
 

@@ -1437,6 +1437,115 @@ async fn qa_queue_items_include_canonical_trace_from_prior_scoring_audit() {
 }
 
 #[tokio::test]
+async fn qa_result_writeback_preserves_canonical_evidence_refs_from_scoring_audit() {
+    let app = build_app(test_config());
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-QA-WRITEBACK-CANONICAL",
+              "total_amount": 9300,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-qa-writeback",
+              "masked_certificate_id": "masked-cert-qa-writeback",
+              "policy_id": "POL-QA-WRITEBACK-CANONICAL",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-QA-WRITEBACK-CANONICAL",
+              "name": "QA Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "High cost imaging",
+                "fee_category": "procedure",
+                "amount": 9300,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:INV-QA-WRITEBACK:fee_detail:LINE-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, qa) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-WRITEBACK-CANONICAL",
+          "claim_id": "CLM-QA-WRITEBACK-CANONICAL",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "workflow_missing_evidence",
+          "feedback_target": "workflow",
+          "notes": "Reviewer found incomplete evidence handling.",
+          "evidence_refs": ["qa_reviews:QA-WRITEBACK-CANONICAL"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        qa["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "invoice:INV-QA-WRITEBACK:fee_detail:LINE-1"
+            )),
+        "QA writeback response should preserve canonical evidence refs"
+    );
+
+    let (status, audit) = json_request(
+        app,
+        "GET",
+        "/api/v1/audit/claims/CLM-QA-WRITEBACK-CANONICAL",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let qa_event = audit["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "qa.result.received")
+        .expect("QA result should be in audit history");
+    assert!(
+        qa_event["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "invoice:INV-QA-WRITEBACK:fee_detail:LINE-1"
+            )),
+        "QA audit event should preserve canonical evidence refs"
+    );
+    assert!(
+        qa_event["payload"]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "invoice:INV-QA-WRITEBACK:fee_detail:LINE-1"
+            )),
+        "QA audit payload should preserve canonical evidence refs"
+    );
+}
+
+#[tokio::test]
 async fn lists_governed_outcome_labels_from_investigation_and_qa() {
     let app = build_app(test_config());
 
