@@ -957,18 +957,31 @@ INSERT INTO scoring_runs (
   recommended_action,
   completed_at
 )
-VALUES (
-  '80000000-0000-0000-0000-000000000001',
-  'run-demo-historical-9100',
-  '40000000-0000-0000-0000-000000000900',
-  'tpa-demo',
-  'seed',
-  'completed',
-  82,
-  'Red',
-  'ManualReview',
-  now()
-)
+VALUES
+  (
+    '80000000-0000-0000-0000-000000000001',
+    'run-demo-historical-9100',
+    '40000000-0000-0000-0000-000000000900',
+    'tpa-demo',
+    'seed',
+    'completed',
+    82,
+    'Red',
+    'ManualReview',
+    now()
+  ),
+  (
+    '80000000-0000-0000-0000-000000000287',
+    'run-demo-scope-0287',
+    '40000000-0000-0000-0000-000000000287',
+    'tpa-demo',
+    'seed',
+    'seeded_scope',
+    NULL,
+    NULL,
+    NULL,
+    now()
+  )
 ON CONFLICT (run_id) DO UPDATE
 SET claim_id = EXCLUDED.claim_id,
     source_system = EXCLUDED.source_system,
@@ -1054,6 +1067,19 @@ INSERT INTO audit_events (
 )
 VALUES
   (
+    'audit-demo-scope-0287',
+    'run-demo-scope-0287',
+    '40000000-0000-0000-0000-000000000287',
+    'seed',
+    'system',
+    'tpa-demo',
+    'claim.seeded',
+    'completed',
+    'Seeded demo claim assigned to demo customer scope.',
+    '{"customer_scope_id":"demo-customer","seed_scope":true}'::jsonb,
+    '["claims:CLM-0287"]'::jsonb
+  ),
+  (
     'audit-demo-score-9100',
     'run-demo-historical-9100',
     '40000000-0000-0000-0000-000000000900',
@@ -1063,7 +1089,7 @@ VALUES
     'claim.scored',
     'completed',
     'Seeded historical claim scored as Red.',
-    '{"risk_score":82,"rag":"Red","recommended_action":"ManualReview"}'::jsonb,
+    '{"customer_scope_id":"demo-customer","risk_score":82,"rag":"Red","recommended_action":"ManualReview"}'::jsonb,
     '["scoring_runs:run-demo-historical-9100"]'::jsonb
   ),
   (
@@ -1076,7 +1102,7 @@ VALUES
     'qa.result.received',
     'completed',
     'Seeded QA review found provider-pattern issue.',
-    '{"qa_case_id":"QA-9100","feedback_target":"rules"}'::jsonb,
+    '{"customer_scope_id":"demo-customer","qa_case_id":"QA-9100","feedback_target":"rules"}'::jsonb,
     '["qa_reviews:QA-9100","rule_runs:HIGH_AMOUNT_TO_LIMIT"]'::jsonb
   )
 ON CONFLICT (audit_id) DO UPDATE

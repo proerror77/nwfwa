@@ -3788,7 +3788,7 @@ impl ScoringRepository for PostgresScoringRepository {
                  $2::text IS NULL OR EXISTS (
                    SELECT 1
                    FROM audit_events ae
-                   WHERE ae.claim_id = c.external_claim_id
+                   WHERE ae.claim_id = c.id
                      AND ae.payload ->> 'customer_scope_id' = $2
                  )
                )",
@@ -3829,7 +3829,7 @@ impl ScoringRepository for PostgresScoringRepository {
                  $2::text IS NULL OR EXISTS (
                    SELECT 1
                    FROM claims c
-                   JOIN audit_events ae ON ae.claim_id = c.external_claim_id
+                   JOIN audit_events ae ON ae.claim_id = c.id
                    WHERE c.member_id = m.id
                      AND ae.payload ->> 'customer_scope_id' = $2
                  )
@@ -3856,7 +3856,7 @@ impl ScoringRepository for PostgresScoringRepository {
                  $2::text IS NULL OR EXISTS (
                    SELECT 1
                    FROM audit_events ae
-                   WHERE ae.claim_id = c.external_claim_id
+                   WHERE ae.claim_id = c.id
                      AND ae.payload ->> 'customer_scope_id' = $2
                  )
                )",
@@ -3874,7 +3874,7 @@ impl ScoringRepository for PostgresScoringRepository {
                  $2::text IS NULL OR EXISTS (
                    SELECT 1
                    FROM audit_events ae
-                   WHERE ae.claim_id = c.external_claim_id
+                   WHERE ae.claim_id = c.id
                      AND ae.payload ->> 'customer_scope_id' = $2
                  )
                )
@@ -3895,7 +3895,7 @@ impl ScoringRepository for PostgresScoringRepository {
                  $2::text IS NULL OR EXISTS (
                    SELECT 1
                    FROM audit_events ae
-                   WHERE ae.claim_id = c.external_claim_id
+                   WHERE ae.claim_id = c.id
                      AND ae.payload ->> 'customer_scope_id' = $2
                  )
                )
@@ -10027,7 +10027,8 @@ async fn load_leads(
            $1::text IS NULL OR EXISTS (
              SELECT 1
              FROM audit_events ae
-             WHERE ae.claim_id = fwa_leads.claim_id
+             JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+             WHERE scoped_claim.external_claim_id = fwa_leads.claim_id
                AND ae.payload ->> 'customer_scope_id' = $1
            )
          )
@@ -10123,7 +10124,8 @@ async fn load_lead_in_tx(
              $2::text IS NULL OR EXISTS (
                SELECT 1
                FROM audit_events ae
-               WHERE ae.claim_id = fwa_leads.claim_id
+               JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+               WHERE scoped_claim.external_claim_id = fwa_leads.claim_id
                  AND ae.payload ->> 'customer_scope_id' = $2
              )
            )",
@@ -10184,7 +10186,8 @@ async fn load_cases(
            $1::text IS NULL OR EXISTS (
              SELECT 1
              FROM audit_events ae
-             WHERE ae.claim_id = c.claim_id
+             JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+             WHERE scoped_claim.external_claim_id = c.claim_id
                AND ae.payload ->> 'customer_scope_id' = $1
            )
          )
@@ -10210,7 +10213,8 @@ async fn load_case_in_tx(
              $2::text IS NULL OR EXISTS (
                SELECT 1
                FROM audit_events ae
-               WHERE ae.claim_id = c.claim_id
+               JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+               WHERE scoped_claim.external_claim_id = c.claim_id
                  AND ae.payload ->> 'customer_scope_id' = $2
              )
            )",
