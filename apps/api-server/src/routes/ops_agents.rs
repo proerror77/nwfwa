@@ -9,6 +9,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::validate_api_key;
 use fwa_core::AuditEventId;
 use serde::{Deserialize, Serialize};
@@ -52,7 +53,7 @@ pub async fn submit_agent_approval(
     Path(agent_run_id): Path<String>,
     Json(request): Json<SubmitAgentApprovalRequest>,
 ) -> Result<Json<SubmitAgentApprovalResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_agent_approval_request(&request)?;
     let run = state
         .repository
@@ -94,6 +95,18 @@ pub async fn submit_agent_approval(
         .await
         .map_err(internal_error("AGENT_APPROVAL_SAVE_FAILED"))?;
     let audit_id = AuditEventId::new().to_string();
+    let mut payload =
+        serde_json::to_value(&approval).map_err(internal_error("AGENT_APPROVAL_ENCODE_FAILED"))?;
+    if let Some(payload) = payload.as_object_mut() {
+        payload.insert(
+            "customer_scope_id".into(),
+            Value::String(actor.customer_scope_id),
+        );
+        payload.insert(
+            "agent_policy_id".into(),
+            Value::String(state.config.agent_policy_id.clone()),
+        );
+    }
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -106,8 +119,7 @@ pub async fn submit_agent_approval(
             event_type: "agent.approval.decided".into(),
             event_status: "succeeded".into(),
             summary: format!("Agent approval decision: {}", approval.decision),
-            payload: serde_json::to_value(&approval)
-                .map_err(internal_error("AGENT_APPROVAL_ENCODE_FAILED"))?,
+            payload,
             evidence_refs: approval
                 .evidence_refs
                 .iter()
@@ -198,19 +210,17 @@ fn validate_agent_approval_request(request: &SubmitAgentApprovalRequest) -> Resu
     Ok(())
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config())
-        .map(|_| ())
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "INVALID_API_KEY",
+            "invalid api key",
+        )
+    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

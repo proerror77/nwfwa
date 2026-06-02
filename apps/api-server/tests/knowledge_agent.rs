@@ -1437,6 +1437,8 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "agent.approval.decided");
     assert_eq!(events[0]["payload"]["agent_run_id"], agent_run_id);
+    assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
+    assert_eq!(events[0]["payload"]["agent_policy_id"], "demo-agent-policy");
     assert_eq!(
         events[0]["payload"]["evidence_refs"],
         approval_evidence_refs
