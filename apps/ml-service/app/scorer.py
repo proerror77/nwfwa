@@ -5,7 +5,7 @@ from typing import Any
 import joblib
 import pandas as pd
 
-from .mlops import artifact_signature, file_sha256
+from .mlops import artifact_signature, file_sha256, heuristic_score_from_features
 from .schemas import ModelExplanation, ScoreRequest, ScoreResponse
 
 
@@ -95,8 +95,7 @@ def score_with_artifact(request: ScoreRequest, artifact_uri: str) -> ScoreRespon
         "serving_version_lock_status": "passed",
     }
     if shadow_heuristic_enabled():
-        shadow = score_with_heuristic(request)
-        shadow_score = shadow.score
+        shadow_score = heuristic_score_from_features(request.features)
         shadow_delta = score - shadow_score
         metadata.update(
             {

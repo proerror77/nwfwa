@@ -1309,6 +1309,22 @@ fn build_model_promotion_gates(
         .get("shadow_comparison_status")
         .and_then(|value| value.as_str())
         == Some("passed");
+    let serving_version_lock = metrics
+        .get("serving_version_lock_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let artifact_integrity = metrics
+        .get("artifact_integrity_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let feature_store_materialization = metrics
+        .get("feature_store_materialization_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let segment_fairness = metrics
+        .get("segment_fairness_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
     let source_data_quality = source_data_quality_gate(metrics, source_dataset);
     let feature_reproducibility = metrics
         .get("feature_reproducibility_hash")
@@ -1417,6 +1433,30 @@ fn build_model_promotion_gates(
             shadow_comparison,
             "shadow comparison missing",
             evidence_source(shadow_comparison, "evaluation"),
+        ),
+        gate(
+            "Serving version lock",
+            serving_version_lock,
+            "serving version lock missing",
+            evidence_source(serving_version_lock, "evaluation"),
+        ),
+        gate(
+            "Artifact integrity",
+            artifact_integrity,
+            "artifact integrity missing",
+            evidence_source(artifact_integrity, "evaluation"),
+        ),
+        gate(
+            "Feature materialization",
+            feature_store_materialization,
+            "feature-store materialization missing",
+            evidence_source(feature_store_materialization, "evaluation"),
+        ),
+        gate(
+            "Segment fairness",
+            segment_fairness,
+            "segment fairness review missing",
+            evidence_source(segment_fairness, "evaluation"),
         ),
         gate(
             "Source data quality",

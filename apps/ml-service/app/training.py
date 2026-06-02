@@ -138,6 +138,7 @@ def train_from_manifest(
         shadow_report_path,
     )
     drift_report = build_drift_report(
+        pipeline,
         train,
         out_of_time,
         feature_columns,

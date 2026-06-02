@@ -114,6 +114,7 @@ def build_shadow_report(
 
 
 def build_drift_report(
+    pipeline: Any,
     baseline: pd.DataFrame,
     current: pd.DataFrame,
     feature_columns: list[str],
@@ -123,10 +124,13 @@ def build_drift_report(
         feature: population_stability_index(baseline[feature], current[feature])
         for feature in feature_columns
     }
-    score_psi = max(feature_psi.values(), default=0.0)
+    baseline_scores = pd.Series(pipeline.predict_proba(baseline[feature_columns])[:, 1])
+    current_scores = pd.Series(pipeline.predict_proba(current[feature_columns])[:, 1])
+    score_psi = population_stability_index(baseline_scores, current_scores)
     report = {
         "status": drift_status(score_psi),
         "score_psi": round(score_psi, 6),
+        "max_feature_psi": round(max(feature_psi.values(), default=0.0), 6),
         "feature_psi": {key: round(value, 6) for key, value in feature_psi.items()},
     }
     write_json(output_path, report)
@@ -172,11 +176,32 @@ def build_fairness_report(
 
 
 def heuristic_probability(row: pd.Series) -> float:
-    ratio = float(row.get("claim_amount_to_limit_ratio", 0.0))
-    provider_score = float(row.get("provider_profile_score", 0.0))
-    high_cost_item_ratio = float(row.get("high_cost_item_ratio", 0.0))
+    return heuristic_probability_from_values(
+        row.get("claim_amount_to_limit_ratio", 0.0),
+        row.get("provider_profile_score", 0.0),
+        row.get("high_cost_item_ratio", 0.0),
+    )
+
+
+def heuristic_probability_from_values(
+    claim_amount_to_limit_ratio: object,
+    provider_profile_score: object,
+    high_cost_item_ratio: object,
+) -> float:
+    ratio = float(claim_amount_to_limit_ratio)
+    provider_score = float(provider_profile_score)
+    high_cost_item_ratio = float(high_cost_item_ratio)
     score = ratio * 0.65 + provider_score / 250.0 + high_cost_item_ratio * 0.15
     return max(0.0, min(1.0, score))
+
+
+def heuristic_score_from_features(features: dict[str, object]) -> int:
+    probability = heuristic_probability_from_values(
+        features.get("claim_amount_to_limit_ratio", 0.0),
+        features.get("provider_profile_score", 0.0),
+        features.get("high_cost_item_ratio", 0.0),
+    )
+    return max(0, min(100, round(probability * 100)))
 
 
 def population_stability_index(expected: pd.Series, actual: pd.Series) -> float:

@@ -328,6 +328,10 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "time_split_field": "service_date",
                 "group_split_fields": ["member_id", "policy_id", "provider_id"],
                 "shadow_comparison_status": "passed",
+                "serving_version_lock_status": "passed",
+                "artifact_integrity_status": "passed",
+                "feature_store_materialization_status": "passed",
+                "segment_fairness_status": "passed",
                 "feature_reproducibility_hash": "sha256:activation-features",
                 "label_provenance_status": "passed",
                 "label_reviewer_source": "qa_review",
@@ -593,7 +597,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
     assert_eq!(body["source_data_quality_status"], "missing");
     assert_eq!(body["passed_count"], 2);
-    assert_eq!(body["total_count"], 17);
+    assert_eq!(body["total_count"], 21);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -622,6 +626,22 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("shadow comparison missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("serving version lock missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("artifact integrity missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("feature-store materialization missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("segment fairness review missing")));
     let dataset_gate = body["gates"]
         .as_array()
         .unwrap()
@@ -661,7 +681,11 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
                 "feature_reproducibility_hash": "sha256:quality-gate-features",
                 "label_provenance_status": "passed",
                 "label_reviewer_source": "qa_review",
-                "pilot_validation_status": "passed"
+                "pilot_validation_status": "passed",
+                "serving_version_lock_status": "passed",
+                "artifact_integrity_status": "passed",
+                "feature_store_materialization_status": "passed",
+                "segment_fairness_status": "passed"
               }}
             }}"#
         ),
@@ -682,7 +706,14 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
         .unwrap();
     assert_eq!(source_gate["passed"], true);
     assert_eq!(source_gate["evidence_source"], "dataset");
-    for label in ["Feature reproducibility", "Label provenance"] {
+    for label in [
+        "Serving version lock",
+        "Artifact integrity",
+        "Feature materialization",
+        "Segment fairness",
+        "Feature reproducibility",
+        "Label provenance",
+    ] {
         let gate = body["gates"]
             .as_array()
             .unwrap()

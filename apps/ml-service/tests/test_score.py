@@ -3,7 +3,7 @@ import hashlib
 import joblib
 
 from app.main import app
-from app.mlops import artifact_signature
+from app.mlops import artifact_signature, heuristic_score_from_features
 from app.scorer import reset_model_artifact_cache
 
 
@@ -23,6 +23,24 @@ def score_payload(features: dict[str, object]) -> dict[str, object]:
         "model_version": "0.1.0",
         "features": features,
     }
+
+
+def write_test_artifact(tmp_path, model_version: str = "0.2.0-candidate"):
+    artifact_path = tmp_path / "model.joblib"
+    joblib.dump(
+        {
+            "model_key": "baseline_fwa",
+            "model_version": model_version,
+            "runtime_kind": "sklearn_logistic_regression",
+            "execution_provider": "cpu",
+            "threshold": 0.5,
+            "feature_columns": ["claim_amount_to_limit_ratio"],
+            "pipeline": FixedProbabilityModel(),
+        },
+        artifact_path,
+    )
+    checksum = "sha256:" + hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    return artifact_path, checksum
 
 
 def test_health_returns_ok():
@@ -163,20 +181,7 @@ def test_score_uses_configured_model_artifact(monkeypatch, tmp_path):
 
 
 def test_score_enforces_artifact_checksum_and_version_lock(monkeypatch, tmp_path):
-    artifact_path = tmp_path / "model.joblib"
-    joblib.dump(
-        {
-            "model_key": "baseline_fwa",
-            "model_version": "0.2.0-candidate",
-            "runtime_kind": "sklearn_logistic_regression",
-            "execution_provider": "cpu",
-            "threshold": 0.5,
-            "feature_columns": ["claim_amount_to_limit_ratio"],
-            "pipeline": FixedProbabilityModel(),
-        },
-        artifact_path,
-    )
-    checksum = "sha256:" + hashlib.sha256(artifact_path.read_bytes()).hexdigest()
+    artifact_path, checksum = write_test_artifact(tmp_path)
     monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
     monkeypatch.setenv("FWA_MODEL_VERSION_LOCK", "0.2.0-candidate")
     monkeypatch.setenv("FWA_MODEL_ARTIFACT_SHA256", checksum)
@@ -207,19 +212,7 @@ def test_score_enforces_artifact_checksum_and_version_lock(monkeypatch, tmp_path
 
 
 def test_score_rejects_locked_model_version_mismatch(monkeypatch, tmp_path):
-    artifact_path = tmp_path / "model.joblib"
-    joblib.dump(
-        {
-            "model_key": "baseline_fwa",
-            "model_version": "0.2.0-candidate",
-            "runtime_kind": "sklearn_logistic_regression",
-            "execution_provider": "cpu",
-            "threshold": 0.5,
-            "feature_columns": ["claim_amount_to_limit_ratio"],
-            "pipeline": FixedProbabilityModel(),
-        },
-        artifact_path,
-    )
+    artifact_path, _checksum = write_test_artifact(tmp_path)
     monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
     monkeypatch.setenv("FWA_MODEL_VERSION_LOCK", "0.3.0-active")
     reset_model_artifact_cache()
@@ -234,38 +227,73 @@ def test_score_rejects_locked_model_version_mismatch(monkeypatch, tmp_path):
     assert response.json()["detail"]["code"] == "MODEL_VERSION_LOCK_MISMATCH"
 
 
-def test_score_records_shadow_heuristic_comparison(monkeypatch, tmp_path):
-    artifact_path = tmp_path / "model.joblib"
-    joblib.dump(
-        {
-            "model_key": "baseline_fwa",
-            "model_version": "0.2.0-candidate",
-            "runtime_kind": "sklearn_logistic_regression",
-            "execution_provider": "cpu",
-            "threshold": 0.5,
-            "feature_columns": ["claim_amount_to_limit_ratio"],
-            "pipeline": FixedProbabilityModel(),
-        },
-        artifact_path,
-    )
+def test_score_rejects_artifact_checksum_mismatch(monkeypatch, tmp_path):
+    artifact_path, _checksum = write_test_artifact(tmp_path)
     monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
-    monkeypatch.setenv("FWA_MODEL_SHADOW_HEURISTIC", "true")
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_SHA256", "sha256:wrong")
     reset_model_artifact_cache()
 
     response = client.post(
         "/score",
-        json=score_payload(
-            {
-                "claim_amount_to_limit_ratio": 0.92,
-                "provider_risk_tier": "MEDIUM",
-            },
-        ),
+        json=score_payload({"claim_amount_to_limit_ratio": 0.92}),
     )
+
+    reset_model_artifact_cache()
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "MODEL_ARTIFACT_CHECKSUM_MISMATCH"
+
+
+def test_score_rejects_signature_without_signing_key(monkeypatch, tmp_path):
+    artifact_path, _checksum = write_test_artifact(tmp_path)
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_SIGNATURE", "hmac-sha256:configured")
+    reset_model_artifact_cache()
+
+    response = client.post(
+        "/score",
+        json=score_payload({"claim_amount_to_limit_ratio": 0.92}),
+    )
+
+    reset_model_artifact_cache()
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "MODEL_ARTIFACT_SIGNATURE_KEY_MISSING"
+
+
+def test_score_rejects_artifact_signature_mismatch(monkeypatch, tmp_path):
+    artifact_path, _checksum = write_test_artifact(tmp_path)
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
+    monkeypatch.setenv("FWA_MODEL_SIGNATURE_KEY", "test-signing-key")
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_SIGNATURE", "hmac-sha256:wrong")
+    reset_model_artifact_cache()
+
+    response = client.post(
+        "/score",
+        json=score_payload({"claim_amount_to_limit_ratio": 0.92}),
+    )
+
+    reset_model_artifact_cache()
+    assert response.status_code == 409
+    assert response.json()["detail"]["code"] == "MODEL_ARTIFACT_SIGNATURE_MISMATCH"
+
+
+def test_score_records_shadow_heuristic_comparison(monkeypatch, tmp_path):
+    artifact_path, _checksum = write_test_artifact(tmp_path)
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
+    monkeypatch.setenv("FWA_MODEL_SHADOW_HEURISTIC", "true")
+    reset_model_artifact_cache()
+
+    features = {
+        "claim_amount_to_limit_ratio": 0.92,
+        "provider_profile_score": 80.0,
+        "provider_risk_tier": "MEDIUM",
+        "high_cost_item_ratio": 0.6,
+    }
+    response = client.post("/score", json=score_payload(features))
 
     reset_model_artifact_cache()
     assert response.status_code == 200
     metadata = response.json()["metadata"]
     assert metadata["shadow_mode"] == "heuristic_baseline"
-    assert metadata["shadow_score"] == 100
+    assert metadata["shadow_score"] == heuristic_score_from_features(features)
     assert metadata["shadow_delta"] == -18
     assert metadata["shadow_status"] == "watch"
