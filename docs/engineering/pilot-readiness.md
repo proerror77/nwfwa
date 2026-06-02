@@ -111,7 +111,9 @@ Minimum pilot monitoring:
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
 - Runtime logs: request path, status, run id, audit id, event type, source system
-- API call records: audit-backed scoring, investigation, and QA writeback calls in Governance
+- API call records: audit-backed scoring, investigation, and QA writeback calls
+  in Governance with `actor_role` and `customer_scope_id` for role and tenant
+  traceability
 - Database checks: migration success and audit event append rate
 
 Grafana and Loki dashboards are production setup tasks after pilot environment selection.

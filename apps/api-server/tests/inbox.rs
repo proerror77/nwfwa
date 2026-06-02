@@ -584,6 +584,7 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(call["method"], "POST");
     assert_eq!(call["status_code"], 200);
     assert_eq!(call["result"], "accepted_with_warnings");
+    assert_eq!(call["actor_role"], "tpa_system");
     assert_eq!(call["customer_scope_id"], "demo-customer");
     assert_eq!(call["claim_id"], "SAAS0300040388200349");
     assert_eq!(call["audit_id"], body["audit_id"]);
@@ -626,6 +627,7 @@ async fn rejects_inbox_payload_with_structured_field_errors() {
     assert_eq!(call["endpoint"], "/api/v1/inbox/claims/normalize");
     assert_eq!(call["status_code"], 400);
     assert_eq!(call["result"], "rejected");
+    assert_eq!(call["actor_role"], "tpa_system");
     assert_eq!(call["customer_scope_id"], "demo-customer");
 }
 

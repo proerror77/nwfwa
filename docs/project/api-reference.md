@@ -296,13 +296,15 @@ governance.
 | POST | `/api/v1/ops/agent-runs/{agent_run_id}/approvals` | Submit human approval decision for an agent run. | Yes | Records approval and audit event. |
 
 Governance endpoints are read-heavy and audit-first. Mutating governance actions
-record human context and evidence refs. API call records expose
-`customer_scope_id` from the underlying audit payload so externally reachable
-TPA calls can be reviewed by tenant/customer scope. Webhook event records expose
-the same `customer_scope_id` for delivery governance. `/api/v1/ops/audit-events` supports
-operational filters for event type, event group, actor, claim, run, rule,
-model, routing policy, review mode, QA, Agent, data lineage, and
-`has_canonical_trace=true` to isolate normalized inbox scoring trace events.
+record human context and evidence refs. API call records expose the TPA
+`actor_role` and `customer_scope_id` from the underlying audit payload so
+externally reachable TPA calls can be reviewed by role and tenant/customer
+scope. Webhook event records expose the same `customer_scope_id` for delivery
+governance.
+`/api/v1/ops/audit-events` supports operational filters for event type, event
+group, actor, claim, run, rule, model, routing policy, review mode, QA, Agent,
+data lineage, and `has_canonical_trace=true` to isolate normalized inbox
+scoring trace events.
 
 ## Rules
 

@@ -3825,7 +3825,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ApiCallRecord": {
                     "type": "object",
-                    "required": ["call_id", "endpoint", "method", "status_code", "result", "source_system", "customer_scope_id", "claim_id", "run_id", "audit_id", "event_type", "idempotency_key", "evidence_refs", "observed_at"],
+                    "required": ["call_id", "endpoint", "method", "status_code", "result", "source_system", "actor_role", "customer_scope_id", "claim_id", "run_id", "audit_id", "event_type", "idempotency_key", "evidence_refs", "observed_at"],
                     "properties": {
                         "call_id": { "type": "string" },
                         "endpoint": { "type": "string" },
@@ -3833,6 +3833,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status_code": { "type": "integer" },
                         "result": { "type": "string" },
                         "source_system": { "type": "string" },
+                        "actor_role": { "type": "string" },
                         "customer_scope_id": { "type": "string" },
                         "claim_id": { "type": "string" },
                         "run_id": { "type": "string" },
