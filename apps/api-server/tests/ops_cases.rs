@@ -333,6 +333,10 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
         serde_json::json!(["triage_decisions:open_case"])
     );
     assert_eq!(
+        triage_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
         triage_event["evidence_refs"],
         serde_json::json!(["triage_decisions:open_case"])
     );
@@ -932,6 +936,10 @@ async fn updates_case_status_with_audit_trail() {
     assert_eq!(status_event["payload"]["case_id"], case_id);
     assert_eq!(status_event["run_id"], scoring_run_id);
     assert_eq!(status_event["payload"]["to_status"], "investigating");
+    assert_eq!(
+        status_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert!(status_event["evidence_refs"]
         .as_array()
         .unwrap()

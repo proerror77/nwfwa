@@ -12,6 +12,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::validate_api_key;
 use serde::Serialize;
 
@@ -42,10 +43,11 @@ pub async fn triage_lead(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(lead_id): Path<String>,
-    Json(request): Json<TriageLeadInput>,
+    Json(mut request): Json<TriageLeadInput>,
 ) -> Result<Json<TriageLeadRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_triage_request(&lead_id, &request)?;
+    request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
         .repository
         .triage_lead(&lead_id, request)
@@ -133,9 +135,9 @@ pub async fn update_case_status(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(case_id): Path<String>,
-    Json(request): Json<UpdateCaseStatusInput>,
+    Json(mut request): Json<UpdateCaseStatusInput>,
 ) -> Result<Json<UpdateCaseStatusRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     if !is_supported_case_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -179,6 +181,7 @@ pub async fn update_case_status(
             "case workflow notes and evidence_refs must not contain PII",
         ));
     }
+    request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
         .repository
         .update_case_status(&case_id, request)
@@ -195,19 +198,17 @@ fn is_supported_case_status(status: &str) -> bool {
     )
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config())
-        .map(|_| ())
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "INVALID_API_KEY",
+            "invalid api key",
+        )
+    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

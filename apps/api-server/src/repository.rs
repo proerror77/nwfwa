@@ -315,6 +315,8 @@ pub struct TriageLeadInput {
     pub notes: String,
     #[serde(default)]
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -330,6 +332,8 @@ pub struct UpdateCaseStatusInput {
     pub actor_id: String,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -2190,7 +2194,8 @@ impl ScoringRepository for InMemoryScoringRepository {
                 "lead_id": case.lead_id,
                 "from_status": from_status,
                 "to_status": case.status,
-                "notes": input.notes
+                "notes": input.notes,
+                "customer_scope_id": input.customer_scope_id
             }),
             evidence_refs: input
                 .evidence_refs
@@ -4757,7 +4762,8 @@ impl ScoringRepository for PostgresScoringRepository {
                     "lead_id": case.lead_id,
                     "from_status": from_status,
                     "to_status": case.status,
-                    "notes": input.notes
+                    "notes": input.notes,
+                    "customer_scope_id": input.customer_scope_id
                 }),
                 evidence_refs: input
                     .evidence_refs
@@ -7749,6 +7755,7 @@ fn triage_audit_payload(
         "disposition": lead.disposition.clone(),
         "merge_target_lead_id": input.merge_target_lead_id.clone(),
         "notes": input.notes.clone(),
+        "customer_scope_id": input.customer_scope_id.clone(),
         "evidence_sufficiency": evidence_sufficiency,
         "evidence_refs_by_type": case.and_then(|case| case.evidence_package.get("evidence_refs_by_type")).cloned(),
         "evidence_refs": input.evidence_refs.clone()
