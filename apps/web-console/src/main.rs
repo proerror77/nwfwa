@@ -5615,8 +5615,7 @@ async fn get_governance_snapshot(
     api_key: String,
     event_group: String,
 ) -> Result<GovernanceSnapshot, String> {
-    let health =
-        request_get_json::<HealthResponse>("/api/v1/health", api_key.clone()).await?;
+    let health = request_get_json::<HealthResponse>("/api/v1/health", api_key.clone()).await?;
     let event_group = event_group.trim();
     let audit_path = if event_group.is_empty() {
         "/api/v1/ops/audit-events?limit=20".to_string()
