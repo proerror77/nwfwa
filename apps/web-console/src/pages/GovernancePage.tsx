@@ -40,6 +40,11 @@ type AuditEvent = {
   created_at?: string | null;
 };
 
+type CanonicalTraceRow = {
+  label: string;
+  value: string;
+};
+
 type ClaimAuditHistoryResponse = {
   claim_id: string;
   events: AuditEvent[];
@@ -487,6 +492,33 @@ function payloadString(payload: Record<string, unknown> | undefined, key: string
   return String(value);
 }
 
+function payloadStringArray(value: unknown) {
+  return Array.isArray(value)
+    ? value.filter((item): item is string => typeof item === "string" && item.trim().length > 0)
+    : [];
+}
+
+export function buildCanonicalTraceRows(event: AuditEvent): CanonicalTraceRow[] {
+  const trace = event.payload?.canonical_claim_context_trace;
+  if (!trace || typeof trace !== "object" || Array.isArray(trace)) {
+    return [];
+  }
+  const tracePayload = trace as Record<string, unknown>;
+  const inputMode =
+    typeof tracePayload.input_mode === "string" && tracePayload.input_mode.trim().length > 0
+      ? [{ label: "Input Mode", value: tracePayload.input_mode }]
+      : [];
+  const evidenceRefs = payloadStringArray(tracePayload.evidence_refs).map((value) => ({
+    label: "Evidence Ref",
+    value,
+  }));
+  const sourceRefs = payloadStringArray(tracePayload.source_refs).map((value) => ({
+    label: "Source Ref",
+    value,
+  }));
+  return [...inputMode, ...evidenceRefs, ...sourceRefs];
+}
+
 function governanceChangeDomain(eventType: string) {
   if (
     eventType.startsWith("dataset.") ||
@@ -930,6 +962,26 @@ export function filterOutcomeLabels(
       (!sourceType || label.source_type === sourceType) &&
       (!canonicalTarget || canonicalFeedbackTarget(label.feedback_target) === canonicalTarget) &&
       (!governanceStatus || label.governance_status === governanceStatus),
+  );
+}
+
+function CanonicalTraceBlock({ event }: { event: AuditEvent }) {
+  const rows = buildCanonicalTraceRows(event);
+  if (rows.length === 0) {
+    return null;
+  }
+  return (
+    <div className="inline-detail">
+      <strong>Canonical Trace</strong>
+      <dl>
+        {rows.map((row) => (
+          <div key={`${row.label}:${row.value}`}>
+            <dt>{row.label}</dt>
+            <dd>{row.value}</dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -1856,6 +1908,7 @@ export function GovernancePage({ auditTimelineContext }: GovernancePageProps = {
                     <li key={reference}>{reference}</li>
                   ))}
                 </ul>
+                <CanonicalTraceBlock event={event} />
                 {event.event_type.startsWith("qa.") ? (
                   <div className="button-row">
                     <button
@@ -1895,6 +1948,7 @@ export function GovernancePage({ auditTimelineContext }: GovernancePageProps = {
                     <li key={reference}>{reference}</li>
                   ))}
                 </ul>
+                <CanonicalTraceBlock event={event} />
               </li>
             ))}
           </ol>

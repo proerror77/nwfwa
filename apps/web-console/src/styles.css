@@ -340,6 +340,35 @@ pre {
   margin: 8px 0;
 }
 
+.audit-timeline .inline-detail {
+  display: block;
+  margin-top: 10px;
+  border-top: 1px solid #e5e9ef;
+  padding-top: 10px;
+}
+
+.audit-timeline .inline-detail dl {
+  display: grid;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.audit-timeline .inline-detail dl div {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.audit-timeline .inline-detail dt {
+  color: #5f6b7a;
+  font-size: 12px;
+}
+
+.audit-timeline .inline-detail dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .metric-row span,
 .metric-row strong {
   overflow-wrap: anywhere;

@@ -7,6 +7,7 @@ import {
   buildApiCallSummary,
   buildAuditSummary,
   buildAgentApprovalPayload,
+  buildCanonicalTraceRows,
   buildGlobalAuditEventFilters,
   canSubmitAgentApproval,
   focusGlobalAuditFiltersOnAgentRun,
@@ -282,6 +283,61 @@ describe("buildAuditSummary", () => {
     });
 
     expect(summary.latestEventType).toBe("routing_policy.activation.completed");
+  });
+});
+
+describe("buildCanonicalTraceRows", () => {
+  it("extracts normalized inbox evidence and source refs from scoring audit payloads", () => {
+    expect(
+      buildCanonicalTraceRows({
+        audit_id: "audit_scoring",
+        run_id: "run_scoring",
+        event_type: "scoring.completed",
+        event_status: "succeeded",
+        summary: "Scoring completed",
+        payload: {
+          canonical_claim_context_trace: {
+            input_mode: "canonical_claim_context",
+            evidence_refs: ["invoice:INV-INBOX-1:fee_detail:LINE-INBOX-1"],
+            source_refs: [
+              "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+              "medical_record:MR-INBOX-1",
+            ],
+          },
+        },
+        evidence_refs: ["invoice:INV-INBOX-1:fee_detail:LINE-INBOX-1"],
+      }),
+    ).toEqual([
+      {
+        label: "Input Mode",
+        value: "canonical_claim_context",
+      },
+      {
+        label: "Evidence Ref",
+        value: "invoice:INV-INBOX-1:fee_detail:LINE-INBOX-1",
+      },
+      {
+        label: "Source Ref",
+        value: "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+      },
+      {
+        label: "Source Ref",
+        value: "medical_record:MR-INBOX-1",
+      },
+    ]);
+  });
+
+  it("returns no rows when the audit event has no canonical trace", () => {
+    expect(
+      buildCanonicalTraceRows({
+        audit_id: "audit_qa",
+        run_id: "run_qa",
+        event_type: "qa.result.received",
+        event_status: "succeeded",
+        summary: "QA result received",
+        evidence_refs: ["qa_reviews:QA-1"],
+      }),
+    ).toEqual([]);
   });
 });
 

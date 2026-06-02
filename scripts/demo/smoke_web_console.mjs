@@ -122,6 +122,8 @@ async function main() {
       "Confirmed Evidence",
       "Source Trace",
       "Lineage",
+      "Canonical Trace",
+      "Input Mode",
     ]) {
       assertContains(bundle, expectedPanel, "web console operations panel bundle");
     }
