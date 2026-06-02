@@ -75,6 +75,9 @@ Minimum pilot monitoring:
 - Customer scope readiness: `/api/v1/health` check
   `customer_scope_configuration` must be `configured`, not
   `local_demo_customer_scope`, before customer pilot traffic.
+- Retention policy readiness: `/api/v1/health` check
+  `retention_policy_configuration` must be `configured`, not
+  `local_demo_retention_policy`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

@@ -306,6 +306,7 @@ mod tests {
             model_service_url,
             object_storage_uri: "local://demo-artifacts".into(),
             customer_scope_id: "demo-customer".into(),
+            retention_policy_id: "demo-retention-policy".into(),
         }
     }
 

@@ -13,6 +13,7 @@ fn test_config() -> AppConfig {
         model_service_url: "heuristic://local".into(),
         object_storage_uri: "local://demo-artifacts".into(),
         customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
     }
 }
 
@@ -137,7 +138,8 @@ async fn openapi_includes_operations_paths() {
             "local_dev_model_service",
             "heuristic_model_scorer",
             "local_demo_object_storage",
-            "local_demo_customer_scope"
+            "local_demo_customer_scope",
+            "local_demo_retention_policy"
         ])
     );
     assert!(
@@ -188,6 +190,13 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("local_demo_customer_scope"),
         "missing health status customer-scope-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_retention_policy"),
+        "missing health status retention-policy-readiness description"
     );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());

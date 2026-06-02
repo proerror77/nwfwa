@@ -6,6 +6,7 @@ pub struct AppConfig {
     pub model_service_url: String,
     pub object_storage_uri: String,
     pub customer_scope_id: String,
+    pub retention_policy_id: String,
 }
 
 impl AppConfig {
@@ -21,6 +22,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "local://demo-artifacts".into()),
             customer_scope_id: std::env::var("FWA_CUSTOMER_SCOPE_ID")
                 .unwrap_or_else(|_| "demo-customer".into()),
+            retention_policy_id: std::env::var("FWA_RETENTION_POLICY_ID")
+                .unwrap_or_else(|_| "demo-retention-policy".into()),
         }
     }
 
@@ -81,6 +84,14 @@ impl AppConfig {
     pub fn customer_scope_configuration_status(&self) -> &'static str {
         if self.customer_scope_id == "demo-customer" {
             "local_demo_customer_scope"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn retention_policy_configuration_status(&self) -> &'static str {
+        if self.retention_policy_id == "demo-retention-policy" {
+            "local_demo_retention_policy"
         } else {
             "configured"
         }

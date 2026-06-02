@@ -180,6 +180,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_SOURCE_SYSTEM` | `tpa-demo` | Demo source system |
 | `FWA_OBJECT_STORAGE_URI` | `local://demo-artifacts` | Local artifact storage URI |
 | `FWA_CUSTOMER_SCOPE_ID` | `demo-customer` | Local customer scope id |
+| `FWA_RETENTION_POLICY_ID` | `demo-retention-policy` | Local retention policy id |
 
 ## Current Non-Goals
 

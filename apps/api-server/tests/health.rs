@@ -13,6 +13,7 @@ fn test_config() -> AppConfig {
         model_service_url: "http://127.0.0.1:8001".into(),
         object_storage_uri: "local://demo-artifacts".into(),
         customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
     }
 }
 
@@ -102,6 +103,13 @@ async fn health_returns_service_metadata_and_checks() {
             "name": "customer_scope_configuration",
             "status": "local_demo_customer_scope"
         })));
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "retention_policy_configuration",
+            "status": "local_demo_retention_policy"
+        })));
     assert!(
         !body.to_string().contains("127.0.0.1:8001"),
         "health response must not expose internal model service URLs"
@@ -123,6 +131,10 @@ async fn health_returns_service_metadata_and_checks() {
     assert!(
         !body.to_string().contains("demo-customer"),
         "health response must not expose customer scope ids"
+    );
+    assert!(
+        !body.to_string().contains("demo-retention-policy"),
+        "health response must not expose retention policy ids"
     );
 }
 
@@ -365,5 +377,39 @@ async fn health_reports_configured_customer_scope_without_exposing_value() {
     assert!(
         !body.to_string().contains("customer-alpha-prod"),
         "health response must not expose configured customer scope ids"
+    );
+}
+
+#[tokio::test]
+async fn health_reports_configured_retention_policy_without_exposing_value() {
+    let mut config = test_config();
+    config.retention_policy_id = "customer-alpha-retention-v1".into();
+    let app = build_app(config);
+
+    let response = app
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/api/v1/health")
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert!(body["checks"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!({
+            "name": "retention_policy_configuration",
+            "status": "configured"
+        })));
+    assert!(
+        !body.to_string().contains("customer-alpha-retention-v1"),
+        "health response must not expose configured retention policy ids"
     );
 }

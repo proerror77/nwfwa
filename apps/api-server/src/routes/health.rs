@@ -70,6 +70,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.customer_scope_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "retention_policy_configuration",
+                status: state.config.retention_policy_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

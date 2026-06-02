@@ -34,19 +34,21 @@ dev-secret
 | GET | `/api/openapi.json` | Return OpenAPI contract. | No | None |
 
 `/api/v1/health` includes `api_key_configuration`,
-`source_system_configuration`, `database_configuration`, and
-`model_service_configuration`, `object_storage_configuration`, and
-`customer_scope_configuration` checks. They report `local_dev_key` when the API
-is still using the local `dev-secret` key, `local_demo_source` when the API is
-still using the local `tpa-demo` source system, `local_dev_database` when the
-API is still using the local development database URL,
-`local_dev_model_service` when the API is still using the local development
-model service URL, `heuristic_model_scorer` when the API is using the heuristic
-fallback scorer, `local_demo_object_storage` when the API is still using local
-demo artifact storage, `local_demo_customer_scope` when the API is still using
-the local demo customer scope, and `configured` after non-default values are
-configured. The response never exposes the configured key, source-system value,
-database URL, model service URL, object storage URI, or customer scope id.
+`source_system_configuration`, `database_configuration`,
+`model_service_configuration`, `object_storage_configuration`,
+`customer_scope_configuration`, and `retention_policy_configuration` checks.
+They report `local_dev_key` when the API is still using the local `dev-secret`
+key, `local_demo_source` when the API is still using the local `tpa-demo` source
+system, `local_dev_database` when the API is still using the local development
+database URL, `local_dev_model_service` when the API is still using the local
+development model service URL, `heuristic_model_scorer` when the API is using
+the heuristic fallback scorer, `local_demo_object_storage` when the API is still
+using local demo artifact storage, `local_demo_customer_scope` when the API is
+still using the local demo customer scope, `local_demo_retention_policy` when
+the API is still using the local demo retention policy id, and `configured`
+after non-default values are configured. The response never exposes the
+configured key, source-system value, database URL, model service URL, object
+storage URI, customer scope id, or retention policy id.
 
 ## Inbound Claim Inbox
 
