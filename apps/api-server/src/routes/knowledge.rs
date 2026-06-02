@@ -119,6 +119,7 @@ pub async fn publish_case(
             event_status: "succeeded".into(),
             summary: format!("Knowledge case published: {}", case.case_id),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "claim_id": source_claim_id,
                 "case_id": case.case_id,
                 "fwa_type": case.fwa_type,

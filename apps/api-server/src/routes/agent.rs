@@ -16,6 +16,7 @@ use axum::{
 use fwa_agent::{
     DeterministicInvestigator, EvidenceSufficiency, InvestigationRequest, SimilarCaseInput,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::validate_api_key;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -57,7 +58,7 @@ pub async fn investigate_case(
     headers: HeaderMap,
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_agent_investigation_request(&request)?;
     let masked_claim_ref = mask_agent_claim_ref(&request.claim_id);
     let scheme_family = request
@@ -188,6 +189,10 @@ pub async fn investigate_case(
         payload.insert(
             "agent_policy_id".into(),
             Value::String(agent_policy_id.clone()),
+        );
+        payload.insert(
+            "customer_scope_id".into(),
+            Value::String(actor.customer_scope_id),
         );
         payload.insert(
             "policy_check_id".into(),
@@ -470,19 +475,17 @@ fn stable_fnv1a64(scope: &str, value: &str) -> u64 {
     hash
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config())
-        .map(|_| ())
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "INVALID_API_KEY",
+            "invalid api key",
+        )
+    })
 }
 
 fn internal_error(

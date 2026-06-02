@@ -424,6 +424,10 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
         publish_event["payload"]["scheme_family"],
         "laboratory_testing_abuse"
     );
+    assert_eq!(
+        publish_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
 }
 
 #[tokio::test]
@@ -1199,6 +1203,7 @@ async fn agent_investigation_audit_payload_traces_governance_controls() {
         event["payload"]["agent_policy_id"],
         "customer-beta-agent-policy-v2"
     );
+    assert_eq!(event["payload"]["customer_scope_id"], "demo-customer");
     assert_eq!(event["payload"]["tool_name"], "knowledge.search_similar");
     assert!(event["payload"]["policy_check_id"]
         .as_str()
