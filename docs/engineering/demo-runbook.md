@@ -145,7 +145,24 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/demo/assert_demo_persistence.
 
 The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, API call records, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`. The SQL assertion verifies the same demo run was persisted across `scoring_runs`, `feature_values`, `rule_runs`, `model_scores`, `audit_events`, lead/case tables, QA, investigation, and saving attribution tables.
 
-## 6. Verification Gates
+## 6. Model Promotion Evidence
+
+For model promotion demos, use Models -> Promotion Gates and the API contract as
+the source of truth. A promotion-ready `metrics_json` must include:
+
+- `time_group_split_status = "passed"`
+- `time_split_field`
+- `group_split_fields`
+- `leakage_check_status = "passed"`
+- `shadow_comparison_status = "passed"`
+- `label_provenance_status = "passed"`
+
+If these fields are missing or not passing, `/api/v1/ops/models/{model_key}/promotion-gates`
+must keep routing blocked. This is intentional: model promotion is allowed only
+when evaluation evidence covers time split, group leakage control, shadow
+comparison, and label provenance.
+
+## 7. Verification Gates
 
 ```bash
 cargo fmt --all -- --check
@@ -161,7 +178,7 @@ npm test
 npm run build
 ```
 
-## 7. Demo Caveats
+## 8. Demo Caveats
 
 - The first demo uses PostgreSQL, Python ML service, Rust API server, and React web console as a modular monolith path.
 - The QA queue is a UI demo queue that writes to the real QA writeback API.

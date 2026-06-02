@@ -179,6 +179,7 @@ grep -q "time_group_split_status" apps/worker/src/lib.rs
 grep -q "time_group_split_status" scripts/demo/seed_demo.sql
 grep -q "time_group_split_status" docs/product/fwa-risk-operations-prd.md
 grep -q "time_group_split_status" docs/project/api-reference.md
+grep -q "time_group_split_status" docs/engineering/demo-runbook.md
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml
