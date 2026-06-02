@@ -87,6 +87,9 @@ Minimum pilot monitoring:
 - Key rotation readiness: `/api/v1/health` check
   `key_rotation_configuration` must be `configured`, not
   `local_demo_key_rotation`, before customer pilot traffic.
+- Network allowlist readiness: `/api/v1/health` check
+  `network_allowlist_configuration` must be `configured`, not
+  `local_demo_network_allowlist`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`

@@ -90,6 +90,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.key_rotation_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "network_allowlist_configuration",
+                status: state.config.network_allowlist_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

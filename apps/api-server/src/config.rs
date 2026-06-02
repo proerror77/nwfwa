@@ -10,6 +10,7 @@ pub struct AppConfig {
     pub backup_restore_plan_id: String,
     pub pii_masking_policy_id: String,
     pub key_rotation_policy_id: String,
+    pub network_allowlist_id: String,
 }
 
 impl AppConfig {
@@ -33,6 +34,8 @@ impl AppConfig {
                 .unwrap_or_else(|_| "demo-pii-masking-policy".into()),
             key_rotation_policy_id: std::env::var("FWA_KEY_ROTATION_POLICY_ID")
                 .unwrap_or_else(|_| "demo-key-rotation-policy".into()),
+            network_allowlist_id: std::env::var("FWA_NETWORK_ALLOWLIST_ID")
+                .unwrap_or_else(|_| "demo-network-allowlist".into()),
         }
     }
 
@@ -125,6 +128,14 @@ impl AppConfig {
     pub fn key_rotation_configuration_status(&self) -> &'static str {
         if self.key_rotation_policy_id == "demo-key-rotation-policy" {
             "local_demo_key_rotation"
+        } else {
+            "configured"
+        }
+    }
+
+    pub fn network_allowlist_configuration_status(&self) -> &'static str {
+        if self.network_allowlist_id == "demo-network-allowlist" {
+            "local_demo_network_allowlist"
         } else {
             "configured"
         }

@@ -17,6 +17,7 @@ fn test_config() -> AppConfig {
         backup_restore_plan_id: "demo-backup-restore-plan".into(),
         pii_masking_policy_id: "demo-pii-masking-policy".into(),
         key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
     }
 }
 
