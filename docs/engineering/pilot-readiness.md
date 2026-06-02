@@ -16,7 +16,7 @@ Pilot API endpoints:
 - `POST /api/v1/ops/medical-review/results`
 - `GET /api/v1/ops/api-calls`
 
-All endpoints require `x-api-key`. Customer-specific credentials, network allowlists, and key rotation are configured outside the repository before pilot start. Pilot environments may use the legacy single-key settings or configure multiple principals with `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id;...` so each caller resolves to the correct audit actor and customer scope.
+All endpoints require `x-api-key`. Customer-specific credentials, network allowlists, and key rotation are configured outside the repository before pilot start. Pilot environments may use the legacy single-key settings or configure multiple principals with `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id|permission,permission;...` so each caller resolves to the correct audit actor, customer scope, and permission hints.
 
 ## Writeback Contract
 

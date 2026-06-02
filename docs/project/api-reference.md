@@ -17,13 +17,17 @@ Pilot deployments can keep the legacy single-key settings
 multiple authenticated principals with:
 
 ```text
-FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id;...
+FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id|permission,permission;...
 ```
 
 Each matched principal supplies the audit `actor_id`, `actor_role`,
-`source_system`, and `customer_scope_id`. The legacy single key remains valid
-as a fallback only when it is not the local default `dev-secret`, so existing
-customer configuration can migrate without keeping the local demo key active.
+`source_system`, `customer_scope_id`, and permission hints for route-level
+authorization. The permissions field is optional; when omitted, the runtime
+uses conservative defaults for known roles such as `tpa_system`,
+`fwa_operator`, `operations_reviewer`, `medical_reviewer`, and `agent`. The
+legacy single key remains valid as a fallback only when it is not the local
+default `dev-secret`, so existing customer configuration can migrate without
+keeping the local demo key active.
 
 ## API Groups
 

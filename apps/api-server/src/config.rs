@@ -231,12 +231,17 @@ fn api_key_principal_from_spec(spec: &str) -> Option<ApiKeyPrincipal> {
     let actor_role = parts.next()?;
     let source_system = parts.next()?;
     let customer_scope_id = parts.next()?;
+    let permissions = match parts.next() {
+        Some(value) => permissions_from_spec(value),
+        None => default_permissions_for_role(actor_role),
+    };
     if parts.next().is_some()
         || key.is_empty()
         || actor_id.is_empty()
         || actor_role.is_empty()
         || source_system.is_empty()
         || customer_scope_id.is_empty()
+        || permissions.is_empty()
     {
         return None;
     }
@@ -246,7 +251,27 @@ fn api_key_principal_from_spec(spec: &str) -> Option<ApiKeyPrincipal> {
         actor_role: actor_role.into(),
         source_system: source_system.into(),
         customer_scope_id: customer_scope_id.into(),
+        permissions,
     })
+}
+
+fn permissions_from_spec(spec: &str) -> Vec<String> {
+    spec.split(',')
+        .map(str::trim)
+        .filter(|permission| !permission.is_empty())
+        .map(str::to_string)
+        .collect()
+}
+
+fn default_permissions_for_role(actor_role: &str) -> Vec<String> {
+    match actor_role {
+        "tpa_system" => vec!["tpa:*".into()],
+        "fwa_operator" => vec!["ops:*".into(), "audit:read".into()],
+        "operations_reviewer" => vec!["ops:read".into(), "audit:read".into()],
+        "medical_reviewer" => vec!["medical:*".into(), "audit:read".into()],
+        "agent" => vec!["agent:*".into()],
+        _ => Vec::new(),
+    }
 }
 
 impl Default for AppConfig {
@@ -271,13 +296,34 @@ mod tests {
         assert_eq!(principal.actor_role, "fwa_operator");
         assert_eq!(principal.source_system, "ops-studio");
         assert_eq!(principal.customer_scope_id, "customer-beta");
+        assert_eq!(
+            principal.permissions,
+            vec!["ops:*".to_string(), "audit:read".to_string()]
+        );
+    }
+
+    #[test]
+    fn parses_api_key_principal_permissions_spec() {
+        let principal = api_key_principal_from_spec(
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta|ops:rules:publish,audit:read",
+        )
+        .unwrap();
+
+        assert_eq!(
+            principal.permissions,
+            vec!["ops:rules:publish".to_string(), "audit:read".to_string()]
+        );
     }
 
     #[test]
     fn rejects_malformed_api_key_principal_spec() {
         assert!(api_key_principal_from_spec("ops-secret|ops-console").is_none());
         assert!(api_key_principal_from_spec(
-            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta|extra",
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta|audit:read|extra",
+        )
+        .is_none());
+        assert!(api_key_principal_from_spec(
+            "ops-secret|ops-console|unknown_role|ops-studio|customer-beta",
         )
         .is_none());
     }

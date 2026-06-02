@@ -22,31 +22,63 @@ pub struct ApiKeyPrincipal {
     pub actor_role: String,
     pub source_system: String,
     pub customer_scope_id: String,
+    pub permissions: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub struct AuthenticatedPrincipal {
+    pub actor: ActorContext,
+    pub permissions: Vec<String>,
+}
+
+impl AuthenticatedPrincipal {
+    pub fn has_permission(&self, required: &str) -> bool {
+        self.permissions.iter().any(|permission| {
+            permission == "*"
+                || permission == required
+                || permission
+                    .strip_suffix(":*")
+                    .is_some_and(|prefix| required.starts_with(&format!("{prefix}:")))
+        })
+    }
 }
 
 pub fn validate_api_key(
     provided_key: Option<&str>,
     config: &ApiKeyConfig,
 ) -> Result<ActorContext, AuthError> {
+    authenticate_api_key(provided_key, config).map(|principal| principal.actor)
+}
+
+pub fn authenticate_api_key(
+    provided_key: Option<&str>,
+    config: &ApiKeyConfig,
+) -> Result<AuthenticatedPrincipal, AuthError> {
     if let Some(value) = provided_key {
         if let Some(principal) = config
             .principals
             .iter()
             .find(|principal| principal.key == value)
         {
-            return Ok(ActorContext {
-                actor_id: principal.actor_id.clone(),
-                actor_role: principal.actor_role.clone(),
-                source_system: principal.source_system.clone(),
-                customer_scope_id: principal.customer_scope_id.clone(),
+            return Ok(AuthenticatedPrincipal {
+                actor: ActorContext {
+                    actor_id: principal.actor_id.clone(),
+                    actor_role: principal.actor_role.clone(),
+                    source_system: principal.source_system.clone(),
+                    customer_scope_id: principal.customer_scope_id.clone(),
+                },
+                permissions: principal.permissions.clone(),
             });
         }
         if value == config.key {
-            return Ok(ActorContext {
-                actor_id: config.source_system.clone(),
-                actor_role: "tpa_system".into(),
-                source_system: config.source_system.clone(),
-                customer_scope_id: config.customer_scope_id.clone(),
+            return Ok(AuthenticatedPrincipal {
+                actor: ActorContext {
+                    actor_id: config.source_system.clone(),
+                    actor_role: "tpa_system".into(),
+                    source_system: config.source_system.clone(),
+                    customer_scope_id: config.customer_scope_id.clone(),
+                },
+                permissions: vec!["*".into()],
             });
         }
     }
@@ -83,6 +115,7 @@ mod tests {
                 actor_role: "fwa_operator".into(),
                 source_system: "ops-studio".into(),
                 customer_scope_id: "customer-beta".into(),
+                permissions: vec!["ops:*".into()],
             }],
         };
 
@@ -106,6 +139,7 @@ mod tests {
                 actor_role: "fwa_operator".into(),
                 source_system: "ops-studio".into(),
                 customer_scope_id: "customer-beta".into(),
+                permissions: vec!["ops:*".into()],
             }],
         };
 
@@ -127,5 +161,37 @@ mod tests {
             validate_api_key(Some("wrong"), &config).unwrap_err(),
             AuthError::InvalidApiKey
         );
+    }
+
+    #[test]
+    fn authenticated_principal_matches_exact_and_wildcard_permissions() {
+        let principal = AuthenticatedPrincipal {
+            actor: ActorContext {
+                actor_id: "ops-console".into(),
+                actor_role: "fwa_operator".into(),
+                source_system: "ops-studio".into(),
+                customer_scope_id: "customer-beta".into(),
+            },
+            permissions: vec!["audit:read".into(), "ops:*".into()],
+        };
+
+        assert!(principal.has_permission("audit:read"));
+        assert!(principal.has_permission("ops:rules:publish"));
+        assert!(!principal.has_permission("claims:score"));
+    }
+
+    #[test]
+    fn legacy_key_gets_compatibility_wildcard_permission() {
+        let config = ApiKeyConfig {
+            key: "legacy-secret".into(),
+            source_system: "tpa-demo".into(),
+            customer_scope_id: "customer-alpha".into(),
+            principals: Vec::new(),
+        };
+
+        let principal = authenticate_api_key(Some("legacy-secret"), &config).unwrap();
+
+        assert!(principal.has_permission("claims:score"));
+        assert_eq!(principal.actor.actor_role, "tpa_system");
     }
 }
