@@ -51,7 +51,7 @@ Primary sources:
 | Area | Current implementation | Assessment |
 | --- | --- | --- |
 | Python ML service | `apps/ml-service/app/scorer.py` keeps the deterministic baseline fallback and can load a trained `.joblib` artifact through `FWA_MODEL_ARTIFACT_URI`. `apps/ml-service/app/training.py` trains a logistic-regression baseline from a Parquet manifest and writes model, validation, and feature-importance artifacts. | Minimum production ML slice is now artifact-backed for local/offline use. It is still not a full feature store, shadow evaluation system, or monitored production serving platform. |
-| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, model identity checks, score-range validation, explanations, metadata, and latency. | Good runtime boundary for pilot integration. Production still needs pinned serving identity and artifact checksum enforcement. |
+| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, model identity checks, score-range validation, explanations, metadata, latency, and bounded HTTP model-service calls that bypass host proxy settings. | Good runtime boundary for pilot integration. Production still needs service-level SLOs, active failure-rate monitoring, and environment-specific timeout policy. |
 | Feature layer | `crates/fwa-features` emits claim amount ratio, peer-percentile baseline, item count, high-cost item ratio, diagnosis/procedure match, and provider tier/profile features. | Suitable for demo. Production needs rolling provider/member/history, peer cohort, duplicate/similarity, graph, and label-delay features. |
 | Anomaly layer | `crates/fwa-anomaly` uses explainable threshold signals. | Reasonable explainable anomaly baseline. Not yet an unsupervised anomaly model. |
 | Risk fusion | `crates/fwa-scoring` combines seven layers with explicit weights and evidence refs. | Good demo and pilot decision-support structure. Weights are policy defaults, not learned coefficients. |
@@ -171,17 +171,25 @@ Before production impact, replace demo runtime assumptions with:
 
 ## Open Implementation Gaps
 
-The current plan is reasonable, but these gaps remain before production ML:
+The current plan is reasonable, but the remaining gaps are now mostly pilot-data
+and production-operations gaps rather than missing demo mechanics:
 
-- real offline training pipeline;
-- real model artifact generation and loading;
-- real feature store or reproducible feature materialization;
-- calibrated probability outputs;
-- real shadow traffic evaluation;
-- model monitoring dashboards and alerts;
-- segment-level drift and fairness review;
-- reviewer disagreement and label-delay handling;
-- production object storage and artifact retention policy.
+- real customer or pilot labels with provenance, delayed-label handling, and
+  reviewer-disagreement measurement;
+- production feature store or scheduled feature materialization beyond the
+  current manifest-backed offline baseline;
+- calibrated probability outputs with calibration evidence and disjoint
+  calibration data;
+- real shadow traffic evaluation against live routing and QA outcomes, not just
+  generated shadow comparison reports;
+- model monitoring dashboards, alert routes, and incident response tied to live
+  latency, error, drift, calibration, and segment metrics;
+- production segment-level drift and fairness review using customer-approved
+  cohorts and policy constraints;
+- production object storage, artifact retention, legal hold, and signing-key
+  management outside local/demo artifact paths;
+- production serving registry and rollout automation for pinned serving images
+  or endpoints.
 
 ## Decision
 
