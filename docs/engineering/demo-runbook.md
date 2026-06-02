@@ -38,8 +38,7 @@ In another terminal:
 rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
 cd apps/web-console
-npm ci
-npm run dev
+NO_COLOR=false trunk serve
 ```
 
 Open `http://127.0.0.1:5173`.
@@ -177,9 +176,10 @@ cd apps/ml-service
 pytest
 
 cd ../web-console
-npm run lint
-npm test
-npm run build
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 ## 8. Demo Caveats

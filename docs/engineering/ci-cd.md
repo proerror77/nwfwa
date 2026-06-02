@@ -19,7 +19,7 @@ Current checks:
 - PostgreSQL migration idempotency
 - demo seed idempotency, minimum demo-data presence, and API/ML demo smoke through `scripts/demo/seed_demo.sh` and `scripts/demo/smoke_demo.py`
 - Python ML service install and `pytest`
-- Web console `npm ci`, Rust/WASM check, Trunk production build, and build smoke
+- Web console Rust/WASM check, Trunk production build, and Node-based build smoke
 
 ## Rust Compilation
 

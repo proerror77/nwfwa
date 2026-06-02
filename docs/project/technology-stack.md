@@ -81,21 +81,20 @@ platform. The Docker image uses `python:3.12-slim`.
 | Yew 0.21 | `apps/web-console` | Rust/WASM operator UI |
 | Trunk 0.21 | `apps/web-console` | Dev server and production build |
 | Rust WASM target | `apps/web-console` | Browser compile target |
-| Node 22 | `apps/web-console` | Compatibility wrapper for existing npm scripts and smoke runner |
+| Node 22 | `scripts/demo/smoke_web_console.mjs` | Static build smoke runner only |
 
 Frontend commands:
 
 ```bash
 cd apps/web-console
-npm ci
-npm run lint
-npm test
-npm run build
-npm run smoke:build
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
-The npm commands are compatibility wrappers around the Rust/WASM toolchain. For
-local development install Trunk and the WASM target first:
+The web console no longer carries npm package metadata or npm wrapper scripts.
+For local development install Trunk and the WASM target first:
 
 ```bash
 rustup target add wasm32-unknown-unknown
@@ -106,14 +105,14 @@ Then start the Yew web console:
 
 ```bash
 cd apps/web-console
-npm run dev
+NO_COLOR=false trunk serve
 ```
 
 Direct Rust/WASM checks are:
 
 ```bash
 cargo check --locked --target wasm32-unknown-unknown
-trunk build --release --locked
+NO_COLOR=false trunk build --release --locked
 node ../../scripts/demo/smoke_web_console.mjs
 ```
 
@@ -160,17 +159,17 @@ CI includes:
 - API and ML demo smoke
 - retraining worker smoke path
 - Python ML service tests
-- frontend WASM check, build, and build smoke
+- frontend WASM check, Trunk build, and Node-based static build smoke
 
-CI uses Node 22 plus Rust WASM tooling for frontend jobs and Python 3.12 for ML
+CI uses Rust WASM tooling plus Node 22 for the static smoke runner and Python 3.12 for ML
 jobs. Actions include `actions/checkout@v6`, `actions/setup-python@v6`,
 `actions/setup-node@v6`, `dtolnay/rust-toolchain@stable`, and
 `Swatinem/rust-cache@v2`.
 
 ## Declared And Resolved Versions
 
-`Cargo.toml`, `package.json`, and `pyproject.toml` describe declared dependency
-ranges. Rust and npm lock files define resolved versions used by locked builds.
+`Cargo.toml` and `pyproject.toml` describe declared dependency ranges. Rust
+lock files define resolved versions used by locked builds.
 Prefer locked commands when documenting reproducible verification.
 
 ## Configuration

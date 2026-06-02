@@ -210,11 +210,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: apps/web-console/package-lock.json
       - run: cargo install trunk --version 0.21.14 --locked
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
-      - run: npm run smoke:build
+      - run: cargo fmt -- --check
+      - run: cargo check --locked --target wasm32-unknown-unknown
+      - run: NO_COLOR=false trunk build --release --locked
+      - run: node ../../scripts/demo/smoke_web_console.mjs

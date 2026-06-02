@@ -148,7 +148,7 @@ The current repository supports a local modular monolith path:
 - PostgreSQL 16 through Docker Compose.
 - Python FastAPI ML service through Docker Compose or local uvicorn.
 - Rust API server through `cargo run --locked -p api-server`.
-- Yew web console through `npm run dev`.
+- Yew web console through `NO_COLOR=false trunk serve`.
 
 Production deployment is not configured yet. Environment-specific deployment,
 secrets, key rotation, observability, object storage, and customer network

@@ -252,7 +252,7 @@ customer adjudication state.
 - Docker with Compose support
 - PostgreSQL client tools
 - Python 3.12
-- Node.js and npm
+- Node.js for the web-console build smoke script
 - `jq` for command-line response inspection
 
 ### Start PostgreSQL And ML Service
@@ -293,8 +293,7 @@ The API server listens on `127.0.0.1:8080` by default.
 cd apps/web-console
 rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
-npm ci
-npm run dev
+NO_COLOR=false trunk serve
 ```
 
 Open `http://127.0.0.1:5173`.
@@ -362,10 +361,10 @@ pytest
 
 ```bash
 cd apps/web-console
-npm ci
-npm run lint
-npm test
-npm run build
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 ### OpenAPI

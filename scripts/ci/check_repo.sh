@@ -10,7 +10,6 @@ required_files=(
   "apps/ml-service/pyproject.toml"
   "apps/web-console/Cargo.toml"
   "apps/web-console/Trunk.toml"
-  "apps/web-console/package.json"
   "apps/web-console/src/main.rs"
   "migrations/0001_initial.sql"
   "scripts/demo/seed_demo.sh"
@@ -98,9 +97,15 @@ grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
 grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
 grep -q "wasm32-unknown-unknown" .github/workflows/ci.yml
 grep -q "cargo install trunk --version 0.21.14 --locked" .github/workflows/ci.yml
+grep -q "cargo check --locked --target wasm32-unknown-unknown" .github/workflows/ci.yml
+grep -q "NO_COLOR=false trunk build --release --locked" .github/workflows/ci.yml
+grep -q "node ../../scripts/demo/smoke_web_console.mjs" .github/workflows/ci.yml
+if [[ -f apps/web-console/package.json || -f apps/web-console/package-lock.json ]]; then
+  echo "web-console should use direct Cargo/Trunk commands, not npm wrappers" >&2
+  exit 1
+fi
 grep -q "yew = " apps/web-console/Cargo.toml
 grep -q "gloo-net" apps/web-console/Cargo.toml
-grep -q "trunk build --release --locked" apps/web-console/package.json
 grep -q "/api/v1/inbox/claims/normalize" apps/web-console/src/main.rs
 grep -q "Correction Review" apps/web-console/src/main.rs
 grep -q "correction_overlay_template_for" apps/web-console/src/main.rs
@@ -232,7 +237,7 @@ grep -q "pilot_readiness" docs/project/api-reference.md
 grep -q "pilot_readiness" docs/engineering/pilot-readiness.md
 grep -q "pilot_readiness" scripts/demo/smoke_demo.py
 grep -q "FWA_AGENT_POLICY_ID" docs/project/technology-stack.md
-grep -q "npm run smoke:build" .github/workflows/ci.yml
+grep -q "node ../../scripts/demo/smoke_web_console.mjs" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml
 grep -q "Rust Compile Rules" AGENTS.md

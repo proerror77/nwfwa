@@ -5,14 +5,11 @@ pilot environment.
 
 ## Local Demo Startup
 
-Install frontend build tools and compatibility dependencies before first UI use:
+Install frontend build tools before first UI use:
 
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
-cd apps/web-console
-npm ci
-cd ../..
 ```
 
 Start PostgreSQL and the ML service:
@@ -40,7 +37,7 @@ Start the web console:
 
 ```bash
 cd apps/web-console
-npm run dev
+NO_COLOR=false trunk serve
 ```
 
 Open:
@@ -84,8 +81,8 @@ Run web build smoke:
 
 ```bash
 cd apps/web-console
-npm run build
-npm run smoke:build
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 ## Full Local Validation
@@ -142,11 +139,10 @@ Frontend:
 
 ```bash
 cd apps/web-console
-npm ci
-npm run lint
-npm test
-npm run build
-npm run smoke:build
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 Worker health:
