@@ -4880,10 +4880,14 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "SavingAttributionSummary": {
                     "type": "object",
-                    "required": ["source_type", "source_id", "action", "saving_amount", "currency", "claim_count", "evidence_refs"],
+                    "required": ["source_type", "source_id", "financial_impact_type", "action", "saving_amount", "currency", "claim_count", "evidence_refs"],
                     "properties": {
                         "source_type": { "type": "string" },
                         "source_id": { "type": "string" },
+                        "financial_impact_type": {
+                            "type": "string",
+                            "enum": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "deterrence_estimate", "estimated_impact"]
+                        },
                         "action": { "type": "string" },
                         "saving_amount": { "type": "string", "format": "decimal" },
                         "currency": { "type": "string" },

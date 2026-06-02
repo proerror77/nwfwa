@@ -2632,6 +2632,20 @@ async fn openapi_includes_operations_paths() {
     assert!(saving_attribution_required
         .iter()
         .any(|field| field == "evidence_refs"));
+    assert!(saving_attribution_required
+        .iter()
+        .any(|field| field == "financial_impact_type"));
+    assert_eq!(
+        schema["components"]["schemas"]["SavingAttributionSummary"]["properties"]
+            ["financial_impact_type"]["enum"],
+        serde_json::json!([
+            "prevented_payment",
+            "recovered_amount",
+            "avoided_future_exposure",
+            "deterrence_estimate",
+            "estimated_impact"
+        ])
+    );
     assert_eq!(
         schema["components"]["schemas"]["SavingAttributionSummary"]["properties"]["evidence_refs"]
             ["items"]["minLength"],

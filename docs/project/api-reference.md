@@ -221,6 +221,10 @@ used by Operations Studio.
 `deterrence_estimate`, and aggregate `estimated_impact`, with review cost,
 false-positive operational cost, reviewer capacity hours, net value, and an
 evidence caveat.
+Each `saving_attributions` item carries `financial_impact_type` so source-level
+rule, model, and agent ROI can distinguish prevented payment, recovered amount,
+avoided exposure, deterrence estimate, and other estimated impact instead of
+mixing them into one source total.
 
 ## Leads And Cases
 

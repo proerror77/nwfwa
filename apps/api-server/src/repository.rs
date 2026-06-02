@@ -484,6 +484,7 @@ pub struct DashboardLayerScoreRecord {
 pub struct DashboardSavingAttributionRecord {
     pub source_type: String,
     pub source_id: String,
+    pub financial_impact_type: String,
     pub action: String,
     pub saving_amount: String,
     pub currency: String,
@@ -896,6 +897,7 @@ struct SavingAttributionRecord {
     investigation_id: String,
     source_type: String,
     source_id: String,
+    financial_impact_type: String,
     action: String,
     saving_amount: Decimal,
     currency: String,
@@ -5466,6 +5468,7 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Option<Decimal>,
             String,
             i64,
@@ -5473,6 +5476,7 @@ impl ScoringRepository for PostgresScoringRepository {
         )> = sqlx::query_as(
             "SELECT source_type,
                         source_id,
+                        financial_impact_type,
                         action,
                         COALESCE(SUM(saving_amount), 0),
                         currency,
@@ -5480,8 +5484,8 @@ impl ScoringRepository for PostgresScoringRepository {
                         ARRAY_REMOVE(ARRAY_AGG(DISTINCT ref.value ORDER BY ref.value), NULL)
                  FROM saving_attributions s
                  LEFT JOIN LATERAL jsonb_array_elements_text(s.evidence_refs) AS ref(value) ON TRUE
-                 GROUP BY source_type, source_id, action, currency
-                 ORDER BY source_type, source_id, action, currency",
+                 GROUP BY source_type, source_id, financial_impact_type, action, currency
+                 ORDER BY source_type, source_id, financial_impact_type, action, currency",
         )
         .fetch_all(&self.pool)
         .await?;
@@ -5591,6 +5595,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     |(
                         source_type,
                         source_id,
+                        financial_impact_type,
                         action,
                         saving_amount,
                         currency,
@@ -5600,6 +5605,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         DashboardSavingAttributionRecord {
                             source_type,
                             source_id,
+                            financial_impact_type,
                             action,
                             saving_amount: format_decimal_cents(
                                 saving_amount.unwrap_or(Decimal::ZERO),
@@ -6255,14 +6261,15 @@ impl ScoringRepository for PostgresScoringRepository {
         for attribution in saving_attributions {
             sqlx::query(
                 "INSERT INTO saving_attributions
-                 (attribution_id, claim_id, investigation_id, source_type, source_id, action, saving_amount, currency, evidence_refs)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                 (attribution_id, claim_id, investigation_id, source_type, source_id, financial_impact_type, action, saving_amount, currency, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
             )
             .bind(&attribution.attribution_id)
             .bind(&attribution.claim_id)
             .bind(&attribution.investigation_id)
             .bind(&attribution.source_type)
             .bind(&attribution.source_id)
+            .bind(&attribution.financial_impact_type)
             .bind(&attribution.action)
             .bind(attribution.saving_amount)
             .bind(&attribution.currency)
@@ -11021,6 +11028,8 @@ fn derive_saving_attributions(record: &InvestigationResultRecord) -> Vec<SavingA
 
     let share = (total_saving / Decimal::from(sources.len() as u32)).round_dp(2);
     let currency = record.currency.clone().unwrap_or_else(|| "UNKNOWN".into());
+    let financial_impact_type =
+        normalize_financial_impact_type(record.financial_impact_type.as_deref()).to_string();
 
     sources
         .into_iter()
@@ -11035,6 +11044,7 @@ fn derive_saving_attributions(record: &InvestigationResultRecord) -> Vec<SavingA
             investigation_id: record.investigation_id.clone(),
             source_type,
             source_id,
+            financial_impact_type: financial_impact_type.clone(),
             action: "investigation_confirmed".into(),
             saving_amount: share,
             currency: currency.clone(),
@@ -11075,12 +11085,15 @@ fn non_empty_prefix_before_version(reference_body: &str) -> Option<&str> {
 fn summarize_saving_attributions(
     records: &[SavingAttributionRecord],
 ) -> Vec<DashboardSavingAttributionRecord> {
-    let mut accumulators =
-        BTreeMap::<(String, String, String, String), (Decimal, u32, BTreeSet<String>)>::new();
+    let mut accumulators = BTreeMap::<
+        (String, String, String, String, String),
+        (Decimal, u32, BTreeSet<String>),
+    >::new();
     for record in records {
         let key = (
             record.source_type.clone(),
             record.source_id.clone(),
+            record.financial_impact_type.clone(),
             record.action.clone(),
             record.currency.clone(),
         );
@@ -11096,12 +11109,13 @@ fn summarize_saving_attributions(
         .into_iter()
         .map(
             |(
-                (source_type, source_id, action, currency),
+                (source_type, source_id, financial_impact_type, action, currency),
                 (saving_amount, claim_count, evidence_refs),
             )| {
                 DashboardSavingAttributionRecord {
                     source_type,
                     source_id,
+                    financial_impact_type,
                     action,
                     saving_amount: format_decimal_cents(saving_amount),
                     currency,

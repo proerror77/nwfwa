@@ -682,14 +682,34 @@ async fn dashboard_attributes_savings_to_governed_rule_and_model_evidence() {
     .await;
     assert_eq!(status, StatusCode::OK);
 
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-GOV-ATTR-2",
+          "investigation_id": "INV-GOV-ATTR-2",
+          "outcome": "recovery_confirmed",
+          "confirmed_fwa": true,
+          "financial_impact_type": "recovered_amount",
+          "saving_amount": "2000.00",
+          "currency": "CNY",
+          "notes": "Confirmed post-payment recovery with the same governed rule and model evidence.",
+          "evidence_refs": ["rules:rule_early_claim:v1", "model_versions:baseline_fwa:0.1.0"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
     let (status, dashboard) = json_request(app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
 
     assert_eq!(status, StatusCode::OK);
     let attributions = dashboard["saving_attributions"].as_array().unwrap();
-    assert_eq!(attributions.len(), 2);
+    assert_eq!(attributions.len(), 4);
     assert!(attributions.iter().any(|attribution| {
         attribution["source_type"] == "rule"
             && attribution["source_id"] == "rule_early_claim"
+            && attribution["financial_impact_type"] == "prevented_payment"
             && attribution["action"] == "investigation_confirmed"
             && attribution["saving_amount"] == "3000.00"
             && attribution["claim_count"] == 1
@@ -699,10 +719,35 @@ async fn dashboard_attributes_savings_to_governed_rule_and_model_evidence() {
                 .contains(&serde_json::json!("rules:rule_early_claim:v1"))
     }));
     assert!(attributions.iter().any(|attribution| {
+        attribution["source_type"] == "rule"
+            && attribution["source_id"] == "rule_early_claim"
+            && attribution["financial_impact_type"] == "recovered_amount"
+            && attribution["action"] == "investigation_confirmed"
+            && attribution["saving_amount"] == "1000.00"
+            && attribution["claim_count"] == 1
+            && attribution["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("rules:rule_early_claim:v1"))
+    }));
+    assert!(attributions.iter().any(|attribution| {
         attribution["source_type"] == "model"
             && attribution["source_id"] == "baseline_fwa"
+            && attribution["financial_impact_type"] == "prevented_payment"
             && attribution["action"] == "investigation_confirmed"
             && attribution["saving_amount"] == "3000.00"
+            && attribution["claim_count"] == 1
+            && attribution["evidence_refs"]
+                .as_array()
+                .unwrap()
+                .contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0"))
+    }));
+    assert!(attributions.iter().any(|attribution| {
+        attribution["source_type"] == "model"
+            && attribution["source_id"] == "baseline_fwa"
+            && attribution["financial_impact_type"] == "recovered_amount"
+            && attribution["action"] == "investigation_confirmed"
+            && attribution["saving_amount"] == "1000.00"
             && attribution["claim_count"] == 1
             && attribution["evidence_refs"]
                 .as_array()

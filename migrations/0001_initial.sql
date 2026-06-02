@@ -628,12 +628,16 @@ CREATE TABLE IF NOT EXISTS saving_attributions (
   investigation_id TEXT NOT NULL,
   source_type TEXT NOT NULL,
   source_id TEXT NOT NULL,
+  financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment',
   action TEXT NOT NULL,
   saving_amount NUMERIC NOT NULL,
   currency TEXT NOT NULL,
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE saving_attributions
+  ADD COLUMN IF NOT EXISTS financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment';
 
 CREATE TABLE IF NOT EXISTS qa_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -104,7 +104,7 @@ agent workspace artifacts are a future infrastructure item, not a current table.
 | `investigation_cases` | Case workflow, SLA, assignment, reviewer, and evidence package. |
 | `audit_samples` | QA and audit sampling records. |
 | `investigation_results` | Investigation writeback outcomes. |
-| `saving_attributions` | Prevented, recovered, and attribution amounts. |
+| `saving_attributions` | Prevented, recovered, estimated, and source-attributed amounts with financial impact type. |
 | `qa_reviews` | QA review writebacks and feedback targets. |
 
 These tables connect scoring to human workflow and feedback labels.

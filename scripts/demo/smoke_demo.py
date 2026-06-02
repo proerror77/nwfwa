@@ -1420,6 +1420,7 @@ def assert_dashboard_roi(dashboard, agent, lead):
         any(
             item.get("source_type") == "agent"
             and item.get("source_id") == agent["agent_run_id"]
+            and item.get("financial_impact_type") == "estimated_impact"
             and decimal_value(item.get("saving_amount", "0")) > Decimal("0")
             and f"agent_run:{agent['agent_run_id']}" in item.get("evidence_refs", [])
             for item in attributions
@@ -1430,6 +1431,7 @@ def assert_dashboard_roi(dashboard, agent, lead):
         any(
             item.get("source_type") == "rule"
             and item.get("source_id") == "EARLY_CLAIM"
+            and item.get("financial_impact_type") == "estimated_impact"
             and decimal_value(item.get("saving_amount", "0")) > Decimal("0")
             and "rule_runs:EARLY_CLAIM" in item.get("evidence_refs", [])
             for item in attributions
