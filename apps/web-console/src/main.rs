@@ -644,6 +644,45 @@ struct ProviderRiskItem {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AuditSampleListResponse {
+    samples: Vec<AuditSampleRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AuditSampleRecord {
+    sample_id: String,
+    sample_mode: String,
+    population_definition: String,
+    inclusion_criteria: Value,
+    deterministic_seed: Option<String>,
+    selection_method: String,
+    sample_size: usize,
+    reviewer: String,
+    assignment_queue: String,
+    selected_leads: Vec<AuditSampleLead>,
+    outcome_distribution: Value,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AuditSampleLead {
+    lead_id: String,
+    claim_id: String,
+    scheme_family: String,
+    review_mode: String,
+    provider_id: String,
+    provider_type: String,
+    provider_region: String,
+    policy_type: String,
+    risk_band: String,
+    strata_key: String,
+    prior_reviewer_sample_count: u32,
+    risk_score: u8,
+    rag: String,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 struct QaQueueListResponse {
     items: Vec<QaQueueItem>,
 }
@@ -1343,6 +1382,8 @@ fn app() -> Html {
                     <ProviderRiskPage />
                 } else if *active == "Medical Review" {
                     <MedicalReviewPage />
+                } else if *active == "Audit Sampling" {
+                    <AuditSamplingPage />
                 } else if *active == "Knowledge Base" {
                     <KnowledgeBasePage />
                 } else if *active == "Agent Investigator" {
@@ -3477,6 +3518,297 @@ fn provider_risk_view(props: &ProviderRiskProps) -> Html {
     }
 }
 
+#[function_component(AuditSamplingPage)]
+fn audit_sampling_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let sample_mode = use_state(|| "risk_ranked".to_string());
+    let population_definition = use_state(|| "Open high-risk leads for QA sampling".to_string());
+    let inclusion_criteria = use_state(|| {
+        pretty_json(&json!({
+            "min_risk_score": 70,
+            "rag": "RED",
+            "review_mode": "pre_payment"
+        }))
+    });
+    let sample_size = use_state(|| "5".to_string());
+    let reviewer = use_state(|| "qa-reviewer-1".to_string());
+    let assignment_queue = use_state(|| "qa-high-risk".to_string());
+    let deterministic_seed = use_state(|| "demo-seed-2026".to_string());
+    let selected_sample_id = use_state(String::new);
+    let samples_state = use_state(|| ApiState::<Vec<AuditSampleRecord>>::Idle);
+    let create_state = use_state(|| ApiState::<AuditSampleRecord>::Idle);
+    let events_state = use_state(|| ApiState::<Vec<AuditEventRecord>>::Idle);
+
+    let load_samples = {
+        let api_key = api_key.clone();
+        let samples_state = samples_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let samples_state = samples_state.clone();
+            samples_state.set(ApiState::Loading);
+            spawn_local(async move {
+                samples_state.set(match get_audit_samples(api_key).await {
+                    Ok(samples) => ApiState::Ready(samples),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let create_sample = {
+        let api_key = api_key.clone();
+        let sample_mode = sample_mode.clone();
+        let population_definition = population_definition.clone();
+        let inclusion_criteria = inclusion_criteria.clone();
+        let sample_size = sample_size.clone();
+        let reviewer = reviewer.clone();
+        let assignment_queue = assignment_queue.clone();
+        let deterministic_seed = deterministic_seed.clone();
+        let create_state = create_state.clone();
+        let load_samples = load_samples.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let payload = audit_sample_payload(
+                (*sample_mode).clone(),
+                (*population_definition).clone(),
+                (*inclusion_criteria).clone(),
+                (*sample_size).clone(),
+                (*reviewer).clone(),
+                (*assignment_queue).clone(),
+                (*deterministic_seed).clone(),
+            );
+            let create_state = create_state.clone();
+            let load_samples = load_samples.clone();
+            match payload {
+                Ok(payload) => {
+                    create_state.set(ApiState::Loading);
+                    spawn_local(async move {
+                        create_state.set(match post_audit_sample(api_key, payload).await {
+                            Ok(sample) => {
+                                load_samples.emit(());
+                                ApiState::Ready(sample)
+                            }
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    });
+                }
+                Err(error) => create_state.set(ApiState::Failed(error)),
+            }
+        })
+    };
+
+    let load_events = {
+        let api_key = api_key.clone();
+        let selected_sample_id = selected_sample_id.clone();
+        let events_state = events_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let selected_sample_id = (*selected_sample_id).clone();
+            let events_state = events_state.clone();
+            events_state.set(ApiState::Loading);
+            spawn_local(async move {
+                events_state.set(
+                    match get_audit_events_for_sample(api_key, selected_sample_id).await {
+                        Ok(events) => ApiState::Ready(events),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
+            });
+        })
+    };
+
+    {
+        let load_samples = load_samples.clone();
+        use_effect_with((), move |_| {
+            load_samples.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Audit Sampling"}</h2>
+                    <p>{"Create governed QA audit samples, inspect selected leads and outcome distribution, and trace audit_sample.created events by sample ID."}</p>
+                </div>
+                <span class="status-pill">{"QA Sampling Governance"}</span>
+            </div>
+
+            <section class="panel result-stack">
+                <h3>{"Audit Sample Control"}</h3>
+                <div class="form-grid">
+                    {text_input("API key", &api_key)}
+                    {text_input("Sample mode", &sample_mode)}
+                    {text_input("Population", &population_definition)}
+                    {text_input("Sample size", &sample_size)}
+                    {text_input("Reviewer", &reviewer)}
+                    {text_input("Assignment queue", &assignment_queue)}
+                    {text_input("Deterministic seed", &deterministic_seed)}
+                    {text_input("Audit sample ID", &selected_sample_id)}
+                </div>
+                <label>
+                    {"Inclusion criteria JSON"}
+                    <textarea
+                        class="payload-editor"
+                        value={(*inclusion_criteria).clone()}
+                        oninput={{
+                            let inclusion_criteria = inclusion_criteria.clone();
+                            Callback::from(move |event: InputEvent| {
+                                inclusion_criteria.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                            })
+                        }}
+                    />
+                </label>
+                <div class="button-row">
+                    <button onclick={create_sample} disabled={matches!(&*create_state, ApiState::Loading)}>
+                        {if matches!(&*create_state, ApiState::Loading) { "Creating..." } else { "Create audit sample" }}
+                    </button>
+                    <button onclick={{
+                        let load_samples = load_samples.clone();
+                        Callback::from(move |_| load_samples.emit(()))
+                    }} disabled={matches!(&*samples_state, ApiState::Loading)}>
+                        {if matches!(&*samples_state, ApiState::Loading) { "Refreshing..." } else { "Refresh samples" }}
+                    </button>
+                    <button onclick={load_events} disabled={matches!(&*events_state, ApiState::Loading)}>
+                        {if matches!(&*events_state, ApiState::Loading) { "Loading..." } else { "Load sample audit events" }}
+                    </button>
+                </div>
+                <AuditSampleCreateView state={(*create_state).clone()} />
+            </section>
+
+            <AuditSamplesView state={(*samples_state).clone()} />
+            <AuditSampleEventsView state={(*events_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct AuditSampleCreateProps {
+    state: ApiState<AuditSampleRecord>,
+}
+
+#[function_component(AuditSampleCreateView)]
+fn audit_sample_create_view(props: &AuditSampleCreateProps) -> Html {
+    match &props.state {
+        ApiState::Idle => {
+            html! { <p class="empty">{"Supported sample modes: risk_ranked, random_control, stratified, post_payment_audit, qa_calibration."}</p> }
+        }
+        ApiState::Loading => html! { <p>{"Creating audit sample..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(sample) => html! {
+            <div class="summary-grid">
+                <div><span>{"Sample"}</span><strong>{&sample.sample_id}</strong></div>
+                <div><span>{"Mode"}</span><strong>{&sample.sample_mode}</strong></div>
+                <div><span>{"Selected Leads"}</span><strong>{sample.selected_leads.len()}</strong></div>
+                <div><span>{"Selection"}</span><strong>{&sample.selection_method}</strong></div>
+            </div>
+        },
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct AuditSamplesProps {
+    state: ApiState<Vec<AuditSampleRecord>>,
+}
+
+#[function_component(AuditSamplesView)]
+fn audit_samples_view(props: &AuditSamplesProps) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <h3>{"Audit Sample Inventory"}</h3>
+            {match &props.state {
+                ApiState::Idle => html! { <p class="empty">{"Load audit samples to inspect sampling coverage."}</p> },
+                ApiState::Loading => html! { <p>{"Loading audit samples..."}</p> },
+                ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                ApiState::Ready(samples) => html! {
+                    if samples.is_empty() {
+                        <p class="empty">{"No audit samples returned."}</p>
+                    } else {
+                        <div class="factor-card-grid">
+                            {for samples.iter().take(10).map(|sample| html! {
+                                <div class="factor-card">
+                                    <div>
+                                        <strong>{format!("{} / {}", sample.sample_id, sample.sample_mode)}</strong>
+                                        <span>{format!("{} / {}", sample.selection_method, sample.assignment_queue)}</span>
+                                    </div>
+                                    <p>{&sample.population_definition}</p>
+                                    <div class="summary-grid">
+                                        <div><span>{"Requested"}</span><strong>{sample.sample_size}</strong></div>
+                                        <div><span>{"Selected"}</span><strong>{sample.selected_leads.len()}</strong></div>
+                                        <div><span>{"Reviewer"}</span><strong>{&sample.reviewer}</strong></div>
+                                        <div><span>{"Seed"}</span><strong>{sample.deterministic_seed.as_deref().unwrap_or("none")}</strong></div>
+                                        <div><span>{"Created"}</span><strong>{sample.created_at.as_deref().unwrap_or("unknown")}</strong></div>
+                                        <div><span>{"Criteria"}</span><strong>{payload_keys_label(&sample.inclusion_criteria)}</strong></div>
+                                    </div>
+                                    <small>{format!("outcome: {}", payload_keys_label(&sample.outcome_distribution))}</small>
+                                    <details>
+                                        <summary>{"Selected leads"}</summary>
+                                        if sample.selected_leads.is_empty() {
+                                            <p class="empty">{"No selected leads in this sample."}</p>
+                                        } else {
+                                            <div class="factor-card-grid">
+                                                {for sample.selected_leads.iter().take(6).map(|lead| html! {
+                                                    <div class="metric-row">
+                                                        <span>{format!("{} / {}", lead.lead_id, lead.claim_id)}</span>
+                                                        <strong>{format!("{} / {}", lead.risk_score, lead.rag)}</strong>
+                                                        <small>{format!("{} / {} / {}", lead.scheme_family, lead.review_mode, lead.risk_band)}</small>
+                                                        <small>{format!("provider: {} / {} / {}", lead.provider_id, lead.provider_type, lead.provider_region)}</small>
+                                                        <small>{format!("policy: {} / strata: {} / prior reviewer samples: {}", lead.policy_type, lead.strata_key, lead.prior_reviewer_sample_count)}</small>
+                                                        <small>{format!("evidence: {}", refs_label(&lead.evidence_refs))}</small>
+                                                    </div>
+                                                })}
+                                            </div>
+                                        }
+                                    </details>
+                                </div>
+                            })}
+                        </div>
+                    }
+                },
+            }}
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct AuditSampleEventsProps {
+    state: ApiState<Vec<AuditEventRecord>>,
+}
+
+#[function_component(AuditSampleEventsView)]
+fn audit_sample_events_view(props: &AuditSampleEventsProps) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <h3>{"Audit Sample Event Trace"}</h3>
+            {match &props.state {
+                ApiState::Idle => html! { <p class="empty">{"Enter an audit sample ID and load sample audit events."}</p> },
+                ApiState::Loading => html! { <p>{"Loading sample audit events..."}</p> },
+                ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                ApiState::Ready(events) => html! {
+                    if events.is_empty() {
+                        <p class="empty">{"No audit events returned for this sample."}</p>
+                    } else {
+                        <ol class="audit-timeline">
+                            {for events.iter().map(|event| html! {
+                                <li>
+                                    <div>
+                                        <strong>{&event.event_type}</strong>
+                                        <span>{&event.event_status}</span>
+                                    </div>
+                                    <p>{&event.summary}</p>
+                                    <small>{format!("audit: {} / run: {} / at: {}", event.audit_id, event.run_id, event.created_at.as_deref().unwrap_or("unknown"))}</small>
+                                    <small>{format!("payload: {} / evidence: {}", payload_keys_label(&event.payload), refs_label(&event.evidence_refs))}</small>
+                                </li>
+                            })}
+                        </ol>
+                    }
+                },
+            }}
+        </section>
+    }
+}
+
 #[function_component(MedicalReviewPage)]
 fn medical_review_page() -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
@@ -5105,6 +5437,34 @@ async fn get_provider_risk_summary(api_key: String) -> Result<ProviderRiskSummar
     request_get_json("/api/v1/ops/providers/risk-summary", api_key).await
 }
 
+async fn get_audit_samples(api_key: String) -> Result<Vec<AuditSampleRecord>, String> {
+    Ok(
+        request_get_json::<AuditSampleListResponse>("/api/v1/ops/audit-samples", api_key)
+            .await?
+            .samples,
+    )
+}
+
+async fn post_audit_sample(api_key: String, payload: Value) -> Result<AuditSampleRecord, String> {
+    request_json("/api/v1/ops/audit-samples", api_key, payload).await
+}
+
+async fn get_audit_events_for_sample(
+    api_key: String,
+    sample_id: String,
+) -> Result<Vec<AuditEventRecord>, String> {
+    let sample_id = sample_id.trim();
+    if sample_id.is_empty() {
+        return Err("audit sample id is required".into());
+    }
+    Ok(request_get_json::<AuditEventListResponse>(
+        &format!("/api/v1/ops/audit-events?sample_id={sample_id}&limit=20"),
+        api_key,
+    )
+    .await?
+    .events)
+}
+
 async fn get_medical_review_queue(
     api_key: String,
     limit: String,
@@ -5797,6 +6157,56 @@ fn agent_investigation_payload(
             "diagnosis_code": diagnosis_code.trim(),
             "provider_region": provider_region.trim(),
             "tags": tags
+        }
+    }))
+}
+
+fn audit_sample_payload(
+    sample_mode: String,
+    population_definition: String,
+    inclusion_criteria: String,
+    sample_size: String,
+    reviewer: String,
+    assignment_queue: String,
+    deterministic_seed: String,
+) -> Result<Value, String> {
+    let sample_mode = sample_mode.trim();
+    if !matches!(
+        sample_mode,
+        "risk_ranked" | "random_control" | "stratified" | "post_payment_audit" | "qa_calibration"
+    ) {
+        return Err("sample mode must be risk_ranked, random_control, stratified, post_payment_audit, or qa_calibration".into());
+    }
+    if population_definition.trim().is_empty() {
+        return Err("population definition is required".into());
+    }
+    if reviewer.trim().is_empty() || assignment_queue.trim().is_empty() {
+        return Err("reviewer and assignment queue are required".into());
+    }
+    let sample_size = sample_size
+        .trim()
+        .parse::<usize>()
+        .map_err(|error| format!("sample size must be a positive integer: {error}"))?;
+    if sample_size == 0 {
+        return Err("sample size must be greater than zero".into());
+    }
+    let inclusion_criteria = serde_json::from_str::<Value>(&inclusion_criteria)
+        .map_err(|error| format!("inclusion criteria JSON is invalid: {error}"))?;
+    if !inclusion_criteria.is_object() {
+        return Err("inclusion criteria must be a JSON object".into());
+    }
+    let deterministic_seed = deterministic_seed.trim();
+    Ok(json!({
+        "sample_mode": sample_mode,
+        "population_definition": population_definition.trim(),
+        "inclusion_criteria": inclusion_criteria,
+        "sample_size": sample_size,
+        "reviewer": reviewer.trim(),
+        "assignment_queue": assignment_queue.trim(),
+        "deterministic_seed": if deterministic_seed.is_empty() {
+            Value::Null
+        } else {
+            Value::String(deterministic_seed.to_string())
         }
     }))
 }
