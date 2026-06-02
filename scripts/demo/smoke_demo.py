@@ -1509,8 +1509,12 @@ def govern_agent_run(agent):
     assert_true(policy_check is not None, "agent run log missing tool policy check")
     assert_true(policy_check.get("decision") == "allowed", "agent tool policy check did not allow tool")
     assert_true(
-        policy_check.get("policy_name") == "agent_tool_allowlist",
+        policy_check.get("policy_name") == "demo-agent-policy",
         "agent tool policy check policy mismatch",
+    )
+    assert_true(
+        "policy:demo-agent-policy" in policy_check.get("evidence_refs", []),
+        "agent tool policy check missing configured policy evidence",
     )
     tool_result = next(
         (

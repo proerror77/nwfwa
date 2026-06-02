@@ -331,9 +331,9 @@ BEGIN
     AND tc.tool_name = 'knowledge.search_similar'
     AND tc.status = 'succeeded'
     AND tc.evidence_refs <> '[]'::jsonb
-    AND apc.policy_name = 'agent_tool_allowlist'
+    AND apc.policy_name = 'demo-agent-policy'
     AND apc.decision = 'allowed'
-    AND apc.evidence_refs <> '[]'::jsonb
+    AND apc.evidence_refs ? 'policy:demo-agent-policy'
     AND tr.status = 'succeeded'
     AND (tr.output_json ->> 'result_count')::integer > 0
     AND tr.evidence_refs <> '[]'::jsonb;
