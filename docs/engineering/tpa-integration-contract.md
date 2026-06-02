@@ -211,7 +211,11 @@ Use this mode after `POST /api/v1/inbox/claims/normalize` returns
 `claim_id`, full claim payload fields, and `canonical_claim_context` are
 mutually exclusive request modes. Canonical source paths and evidence refs from
 bill lines and document evidence are preserved in the scoring response and
-audit event.
+audit event. For normalized inbox scoring, the `scoring.completed` audit
+payload includes `canonical_claim_context_trace` with `input_mode`,
+`evidence_refs`, and `source_refs` so QA and Agent summaries can trace the
+score back to normalized bill-line and document sources without exposing raw
+PII.
 
 The response is audit-backed and must be treated as assistive risk routing, not an automatic denial:
 
@@ -422,7 +426,9 @@ Documented errors:
 
 `GET /api/v1/audit/claims/{claim_id}`
 
-Returns the claim-level audit timeline, including scoring, investigation, QA, and governed operations events where applicable.
+Returns the claim-level audit timeline, including scoring, investigation, QA,
+and governed operations events where applicable. Normalized inbox scoring events
+include `canonical_claim_context_trace` in the event payload.
 
 Documented errors:
 

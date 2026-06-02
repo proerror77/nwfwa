@@ -457,12 +457,37 @@ async fn scores_inbox_canonical_claim_context() {
         .await
         .unwrap();
     let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
-    assert!(audit_body["events"]
+    let scoring_event = audit_body["events"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|event| event["event_type"] == "scoring.completed"
-            && event["payload"]["claim_id"] == "CLM-INBOX-CANONICAL"));
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    assert_eq!(scoring_event["payload"]["claim_id"], "CLM-INBOX-CANONICAL");
+    assert!(scoring_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("invoice:INV-1:fee_detail:LINE-1")));
+    assert!(
+        scoring_event["payload"]["canonical_claim_context_trace"]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("invoice:INV-1:fee_detail:LINE-1"))
+    );
+    assert!(
+        scoring_event["payload"]["canonical_claim_context_trace"]["source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]"
+            ))
+    );
+    assert!(
+        scoring_event["payload"]["canonical_claim_context_trace"]["source_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("medical_record:MR-INBOX-1"))
+    );
 }
 
 #[tokio::test]

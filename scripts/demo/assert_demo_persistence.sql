@@ -70,6 +70,36 @@ BEGIN
   END IF;
 
   SELECT COUNT(*) INTO row_count
+  FROM audit_events ae
+  JOIN claims c ON c.id = ae.claim_id
+  WHERE c.external_claim_id LIKE 'CLM-INBOX-%'
+    AND ae.event_type = 'scoring.completed'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'input_mode' = 'canonical_claim_context'
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.evidence_refs) AS ref(value)
+      WHERE ref.value LIKE 'invoice:INV-INBOX-%:fee_detail:LINE-INBOX-%'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.payload -> 'canonical_claim_context_trace' -> 'evidence_refs') AS ref(value)
+      WHERE ref.value LIKE 'invoice:INV-INBOX-%:fee_detail:LINE-INBOX-%'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.payload -> 'canonical_claim_context_trace' -> 'source_refs') AS ref(value)
+      WHERE ref.value = 'reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.payload -> 'canonical_claim_context_trace' -> 'source_refs') AS ref(value)
+      WHERE ref.value LIKE 'medical_record:MR-INBOX-%'
+    );
+  IF row_count < 1 THEN
+    RAISE EXCEPTION 'expected normalized inbox canonical scoring audit trace';
+  END IF;
+
+  SELECT COUNT(*) INTO row_count
   FROM audit_events
   WHERE run_id = demo_run_id
     AND claim_id = demo_claim_uuid

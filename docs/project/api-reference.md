@@ -144,6 +144,8 @@ Request fields that affect policy selection:
 - `canonical_claim_context`: carries normalized claim header, member/policy,
   provider, bill-line, and document evidence from the inbox boundary into
   runtime scoring.
+  Scoring audit events persist `canonical_claim_context_trace` with normalized
+  evidence refs and source refs for QA, Agent summaries, and audit review.
 
 `review_mode` participates in routing policy, active model, and threshold
 selection. It does not change the assistive-only decision boundary.

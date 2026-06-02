@@ -94,6 +94,10 @@ async fn tpa_contract_docs_and_mock_client_match_openapi() {
         score_claim_section.contains("canonical_claim_context"),
         "TPA Score Claim contract should document normalized inbox canonical context scoring"
     );
+    assert!(
+        score_claim_section.contains("canonical_claim_context_trace"),
+        "TPA Score Claim contract should document canonical scoring audit trace"
+    );
     for recommended_action in [
         "StandardProcessing",
         "QaSample",

@@ -264,6 +264,7 @@ pub async fn score_claim(
         provider_profile_input,
         provider_relationships_input,
         request_evidence_refs,
+        canonical_claim_context_trace,
     ) = if let Some(claim_id) = request.claim_id.clone() {
         let context = state
             .repository
@@ -277,7 +278,7 @@ pub async fn score_claim(
                     "claim_id was not found",
                 )
             })?;
-        (context, Vec::new(), None, None, Vec::new())
+        (context, Vec::new(), None, None, Vec::new(), None)
     } else if let Some(canonical_claim_context) = request.canonical_claim_context.clone() {
         if has_full_payload {
             return Err(ApiError::new(
@@ -301,6 +302,7 @@ pub async fn score_claim(
             None,
             None,
             canonical.evidence_refs,
+            Some(canonical.trace),
         )
     } else {
         let mut payload = request.claim.clone().expect("validated claim payload");
@@ -356,6 +358,7 @@ pub async fn score_claim(
             provider_profile_input,
             provider_relationships_input,
             Vec::new(),
+            None,
         )
     };
 
@@ -536,6 +539,7 @@ pub async fn score_claim(
         "provider_profile": &provider_profile,
         "provider_relationships": &provider_relationships,
         "similar_cases": &similar_cases,
+        "canonical_claim_context_trace": &canonical_claim_context_trace,
         "feature_values": &feature_values,
         "model_score": &model_score,
         "agent_investigation_prefill": &agent_investigation_prefill,
@@ -1101,6 +1105,7 @@ struct CanonicalScoreInput {
     context: ClaimContext,
     clinical_documents: Vec<ClinicalDocumentEvidence>,
     evidence_refs: Vec<serde_json::Value>,
+    trace: serde_json::Value,
 }
 
 fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInput, ApiError> {
@@ -1176,6 +1181,7 @@ fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInpu
     evidence_refs.extend(canonical_document_refs(&documents));
     evidence_refs.sort_by_key(|value| value.to_string());
     evidence_refs.dedup();
+    let trace = canonical_claim_context_trace(&bill_lines, &documents);
 
     Ok(CanonicalScoreInput {
         context: demo_context(FullClaimPayload {
@@ -1194,6 +1200,7 @@ fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInpu
         }),
         clinical_documents,
         evidence_refs,
+        trace,
     })
 }
 
@@ -1398,6 +1405,53 @@ fn canonical_document_refs(documents: &[serde_json::Value]) -> Vec<serde_json::V
                 .collect::<Vec<_>>()
         })
         .collect()
+}
+
+fn canonical_claim_context_trace(
+    bill_lines: &[serde_json::Value],
+    documents: &[serde_json::Value],
+) -> serde_json::Value {
+    let mut evidence_refs = bill_lines
+        .iter()
+        .flat_map(|line| {
+            line.get("evidence_refs")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        })
+        .collect::<Vec<_>>();
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    let mut source_refs = bill_lines
+        .iter()
+        .filter_map(|line| {
+            line.get("source_path")
+                .and_then(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+        })
+        .chain(documents.iter().flat_map(|document| {
+            document
+                .get("source_refs")
+                .and_then(serde_json::Value::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(serde_json::Value::as_str)
+                .map(ToOwned::to_owned)
+                .collect::<Vec<_>>()
+        }))
+        .collect::<Vec<_>>();
+    source_refs.sort();
+    source_refs.dedup();
+
+    serde_json::json!({
+        "input_mode": "canonical_claim_context",
+        "evidence_refs": evidence_refs,
+        "source_refs": source_refs
+    })
 }
 
 fn provider_risk_tier_from_str(value: &str) -> Option<ProviderRiskTier> {
