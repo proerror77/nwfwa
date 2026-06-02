@@ -25,11 +25,22 @@ CUSTOMER_PRINCIPAL_ASSERTIONS = (
 CANDIDATE_RULE_ID = "candidate_early_high_amount"
 ROUTING_POLICY_PREFIX = "demo_strict_prepay"
 STANDARD_RULE_PACK = {
+    "EARLY_CLAIM": "early_high_value_claim",
+    "LARGE_LIMIT_USAGE": "early_high_value_claim",
+    "PEER_P95_AMOUNT": "provider_peer_outlier",
+    "PEER_P99_AMOUNT": "provider_peer_outlier",
     "EARLY_HIGH_AMOUNT": "early_high_value_claim",
     "DUPLICATE_CLAIM": "duplicate_billing",
     "PROVIDER_PROFILE_HIGH": "provider_peer_outlier",
     "LOW_MEDICAL_MATCH": "diagnosis_procedure_mismatch",
     "MEDICALLY_UNNECESSARY_SERVICE": "medically_unnecessary_service",
+    "MANY_CLAIM_ITEMS": "excessive_utilization",
+    "HIGH_COST_SINGLE_ITEM": "high_risk_claim",
+    "PROVIDER_HIGH_RISK_TIER": "provider_peer_outlier",
+    "UPCODING_COMPLEXITY": "upcoding",
+    "UNBUNDLING_COMPONENT_PATTERN": "unbundling",
+    "SAME_MEMBER_REPEATED_SERVICE": "excessive_utilization",
+    "RELATIONSHIP_CONCENTRATION": "relationship_concentration",
 }
 
 
@@ -1573,6 +1584,10 @@ def assert_fwa_scheme_taxonomy():
 def assert_standard_rule_pack():
     rules = request("GET", "/api/v1/ops/rules").get("rules", [])
     by_alert_code = {rule.get("alert_code"): rule for rule in rules}
+    assert_true(
+        len(rules) >= len(STANDARD_RULE_PACK),
+        "standard FWA rule pack has fewer rules than expected",
+    )
     for alert_code, scheme_family in STANDARD_RULE_PACK.items():
         rule = by_alert_code.get(alert_code)
         assert_true(rule is not None, f"standard FWA rule pack missing {alert_code}")
@@ -1587,6 +1602,19 @@ def assert_standard_rule_pack():
         assert_true(
             rule.get("review_mode") in ("both", "pre_payment", "post_payment"),
             f"standard FWA rule pack rule {alert_code} missing review mode",
+        )
+        assert_true(
+            rule.get("evidence_refs"),
+            f"standard FWA rule pack rule {alert_code} missing evidence refs",
+        )
+        assert_true(
+            rule.get("backtest_result", {}).get("status") in ("not_run", "completed"),
+            f"standard FWA rule pack rule {alert_code} missing backtest governance",
+        )
+        assert_true(
+            rule.get("false_positive_history", {}).get("status")
+            in ("not_observed", "observed"),
+            f"standard FWA rule pack rule {alert_code} missing false-positive governance",
         )
     return {
         "rule_count": len(rules),

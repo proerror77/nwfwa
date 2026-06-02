@@ -17,9 +17,10 @@ scripts/demo/seed_demo.sh
 The seed includes:
 
 - Claims: `CLM-0287`, `CLM-9100`
-- Rules: standard FWA rule pack covering early high-value claim, duplicate
-  billing, provider peer outlier, diagnosis-procedure mismatch, and medical
-  necessity evidence gap
+- Rules: 16-rule standard FWA rule pack covering early high-value claim,
+  duplicate billing, upcoding, unbundling, excessive utilization, provider peer
+  outlier, diagnosis-procedure mismatch, relationship concentration, and
+  medical necessity evidence gap
 - Knowledge cases: `KC-1001`, `KC-1002`
 - Dataset catalog: `demo_claims_fwa@2026-05-demo`
 - Model evaluation: `eval-baseline-fwa-2026-05-demo`

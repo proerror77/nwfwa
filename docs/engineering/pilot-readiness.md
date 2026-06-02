@@ -80,9 +80,11 @@ Minimum pilot monitoring:
   This is the preferred single command for local customer demo hardening after
   PostgreSQL, ML service, and API server are already running.
 - Standard FWA rule pack readiness: the deterministic seed and customer smoke
-  must expose active rules for early high-value claim, duplicate billing,
-  provider peer outlier, diagnosis-procedure mismatch, and medical necessity
-  evidence gap before a customer demo is treated as pilot-ready.
+  must expose the active 16-rule FWA rule pack for early high-value claim,
+  duplicate billing, upcoding, unbundling, excessive utilization, provider peer
+  outlier, diagnosis-procedure mismatch, relationship concentration, and
+  medical necessity evidence gap before a customer demo is treated as
+  pilot-ready.
 - Permission readiness: production-impacting rule and model governance actions
   require matching principal permissions, for example `ops:rules:publish` or
   `ops:models:activate`. Missing permissions return `PERMISSION_DENIED`.

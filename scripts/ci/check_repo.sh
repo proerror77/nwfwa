@@ -148,11 +148,21 @@ grep -q "/api/v1/ops/rules/backtest" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/discover" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/rules/candidates" scripts/demo/smoke_demo.py
 grep -q "assert_standard_rule_pack" scripts/demo/smoke_demo.py
+grep -q "EARLY_CLAIM" scripts/demo/smoke_demo.py
+grep -q "LARGE_LIMIT_USAGE" scripts/demo/smoke_demo.py
+grep -q "UPCODING_COMPLEXITY" scripts/demo/smoke_demo.py
+grep -q "UNBUNDLING_COMPONENT_PATTERN" scripts/demo/smoke_demo.py
+grep -q "RELATIONSHIP_CONCENTRATION" scripts/demo/smoke_demo.py
+grep -q "false_positive_history" scripts/demo/smoke_demo.py
 grep -q "DUPLICATE_CLAIM" scripts/demo/smoke_demo.py
 grep -q "MEDICALLY_UNNECESSARY_SERVICE" scripts/demo/smoke_demo.py
 grep -q "rule_duplicate_claim" scripts/demo/seed_demo.sql
+grep -q "rule_upcoding_complexity" scripts/demo/seed_demo.sql
+grep -q "rule_unbundling_component_pattern" scripts/demo/seed_demo.sql
+grep -q "rule_relationship_concentration" scripts/demo/seed_demo.sql
 grep -q "rule_medically_unnecessary_service" scripts/demo/seed_demo.sql
-grep -q "provider peer outlier" docs/engineering/demo-runbook.md
+grep -q "provider peer" docs/engineering/demo-runbook.md
+grep -q "16-rule FWA rule pack" docs/engineering/pilot-readiness.md
 grep -q "medical necessity" docs/engineering/pilot-readiness.md
 grep -q "/api/v1/ops/qa/feedback-items" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/knowledge/cases" scripts/demo/smoke_demo.py
