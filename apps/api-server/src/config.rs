@@ -64,7 +64,7 @@ impl AppConfig {
 
     pub fn model_service_configuration_status(&self) -> &'static str {
         if self.model_artifact_uri().is_some() {
-            "configured"
+            "rust_artifact_model_scorer"
         } else if self.model_service_url == "heuristic"
             || self.model_service_url.starts_with("heuristic://")
         {
