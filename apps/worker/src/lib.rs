@@ -686,6 +686,9 @@ fn build_mock_retraining_output(
             "out_of_time_auc": 0.82,
             "score_psi": 0.04,
             "leakage_check_status": "passed",
+            "time_group_split_status": "passed",
+            "time_split_field": "service_date",
+            "group_split_fields": ["member_id", "policy_id", "provider_id"],
             "feature_reproducibility_hash": "sha256:demo-retraining-feature-reproducibility",
             "label_provenance_status": "passed",
             "label_reviewer_source": "investigation_results",
@@ -987,6 +990,12 @@ mod tests {
         assert_eq!(output.confusion_matrix_json["tp"], 24);
         assert_eq!(output.metrics_json["shadow_comparison_status"], "passed");
         assert_eq!(output.metrics_json["leakage_check_status"], "passed");
+        assert_eq!(output.metrics_json["time_group_split_status"], "passed");
+        assert_eq!(output.metrics_json["time_split_field"], "service_date");
+        assert_eq!(
+            output.metrics_json["group_split_fields"],
+            serde_json::json!(["member_id", "policy_id", "provider_id"])
+        );
         assert_eq!(output.metrics_json["label_provenance_status"], "passed");
         assert_eq!(
             output.evidence_refs,
