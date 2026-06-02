@@ -202,6 +202,9 @@ grep -q "model_service_configuration" docs/engineering/pilot-readiness.md
 grep -q "object_storage_configuration" docs/project/api-reference.md
 grep -q "object_storage_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_OBJECT_STORAGE_URI" docs/project/technology-stack.md
+grep -q "customer_scope_configuration" docs/project/api-reference.md
+grep -q "customer_scope_configuration" docs/engineering/pilot-readiness.md
+grep -q "FWA_CUSTOMER_SCOPE_ID" docs/project/technology-stack.md
 grep -q "npm run smoke:build" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
 grep -q "CARGO_INCREMENTAL: \"0\"" .github/workflows/ci.yml

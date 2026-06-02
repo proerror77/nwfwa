@@ -65,6 +65,11 @@ pub async fn health(State(state): State<AppState>) -> Json<HealthResponse> {
                 status: state.config.object_storage_configuration_status(),
                 runtime_kind: None,
             },
+            HealthCheck {
+                name: "customer_scope_configuration",
+                status: state.config.customer_scope_configuration_status(),
+                runtime_kind: None,
+            },
         ],
     })
 }

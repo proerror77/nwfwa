@@ -3446,8 +3446,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "name": { "type": "string" },
                         "status": {
                             "type": "string",
-                            "enum": ["ok", "configured", "local_dev_key", "local_demo_source", "local_dev_database", "local_dev_model_service", "heuristic_model_scorer", "local_demo_object_storage"],
-                            "description": "Check status. local_dev_key indicates the API is using the local development key. local_demo_source indicates the API is using the local demo source system. local_dev_database indicates the API is using the local development database URL. local_dev_model_service indicates the API is using the local development model service URL. heuristic_model_scorer indicates the API is using the heuristic fallback scorer. local_demo_object_storage indicates the API is using the local demo object storage URI. These must be reconfigured before customer pilot or production use."
+                            "enum": ["ok", "configured", "local_dev_key", "local_demo_source", "local_dev_database", "local_dev_model_service", "heuristic_model_scorer", "local_demo_object_storage", "local_demo_customer_scope"],
+                            "description": "Check status. local_dev_key indicates the API is using the local development key. local_demo_source indicates the API is using the local demo source system. local_dev_database indicates the API is using the local development database URL. local_dev_model_service indicates the API is using the local development model service URL. heuristic_model_scorer indicates the API is using the heuristic fallback scorer. local_demo_object_storage indicates the API is using the local demo object storage URI. local_demo_customer_scope indicates the API is using the local demo customer scope id. These must be reconfigured before customer pilot or production use."
                         },
                         "runtime_kind": {
                             "type": "string",

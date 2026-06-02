@@ -305,6 +305,7 @@ mod tests {
             database_url: "postgres://unused".into(),
             model_service_url,
             object_storage_uri: "local://demo-artifacts".into(),
+            customer_scope_id: "demo-customer".into(),
         }
     }
 

@@ -179,6 +179,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_API_BASE_URL` | `http://127.0.0.1:8080` | Smoke and worker API base |
 | `FWA_SOURCE_SYSTEM` | `tpa-demo` | Demo source system |
 | `FWA_OBJECT_STORAGE_URI` | `local://demo-artifacts` | Local artifact storage URI |
+| `FWA_CUSTOMER_SCOPE_ID` | `demo-customer` | Local customer scope id |
 
 ## Current Non-Goals
 
