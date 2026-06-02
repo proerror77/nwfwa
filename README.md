@@ -437,8 +437,9 @@ See [AGENTS.md](AGENTS.md) for project-local agent working instructions.
 - The current demo is local-first and pilot-oriented.
 - The web console is a Yew/Trunk application, not a Dioxus application.
 - Agent workflows are deterministic and assistive-only.
-- The Python ML service is the demo scorer boundary, not a production training
-  platform.
+- The Python ML service now supports a minimum artifact-backed logistic
+  baseline and keeps the demo heuristic scorer as fallback; it is not yet a
+  full production feature store, shadow evaluation, or monitoring platform.
 - Production deployment, observability, secrets management, object storage,
   customer data onboarding, and model training operations still need environment
   decisions.

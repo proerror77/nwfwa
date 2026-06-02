@@ -50,12 +50,12 @@ Primary sources:
 
 | Area | Current implementation | Assessment |
 | --- | --- | --- |
-| Python ML service | `apps/ml-service/app/scorer.py` computes a deterministic baseline from claim amount ratio, provider tier, and high-cost item ratio. | Reasonable demo scorer. Not a trained model. |
-| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, model identity checks, score-range validation, explanations, metadata, and latency. | Good runtime boundary for pilot integration. Needs real artifact loading or pinned serving versions for production. |
+| Python ML service | `apps/ml-service/app/scorer.py` keeps the deterministic baseline fallback and can load a trained `.joblib` artifact through `FWA_MODEL_ARTIFACT_URI`. `apps/ml-service/app/training.py` trains a logistic-regression baseline from a Parquet manifest and writes model, validation, and feature-importance artifacts. | Minimum production ML slice is now artifact-backed for local/offline use. It is still not a full feature store, shadow evaluation system, or monitored production serving platform. |
+| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, model identity checks, score-range validation, explanations, metadata, and latency. | Good runtime boundary for pilot integration. Production still needs pinned serving identity and artifact checksum enforcement. |
 | Feature layer | `crates/fwa-features` emits claim amount ratio, peer-percentile baseline, item count, high-cost item ratio, diagnosis/procedure match, and provider tier/profile features. | Suitable for demo. Production needs rolling provider/member/history, peer cohort, duplicate/similarity, graph, and label-delay features. |
 | Anomaly layer | `crates/fwa-anomaly` uses explainable threshold signals. | Reasonable explainable anomaly baseline. Not yet an unsupervised anomaly model. |
 | Risk fusion | `crates/fwa-scoring` combines seven layers with explicit weights and evidence refs. | Good demo and pilot decision-support structure. Weights are policy defaults, not learned coefficients. |
-| Retraining worker | `apps/worker` can claim jobs and register deterministic mock candidate outputs. | Good contract smoke path. Not real training. |
+| Retraining worker | `apps/worker` can keep the deterministic mock candidate output for demo smoke, or call `python -m app.train` when `run-retraining-job` receives `--training-manifest`. | Real candidate registration can now be driven by a local training manifest. Demo fallback remains available. |
 | Model governance | `apps/api-server/src/routes/ops_models.rs` enforces dataset, holdout, out-of-time, split, leakage, explanation, shadow, data quality, label, drift, feedback, and approval gates. | Strong governance skeleton. It still depends on real evaluation evidence being produced later. |
 
 ## What The Demo Can Claim
@@ -75,7 +75,8 @@ The demo must not claim:
 - the Python scorer is a trained production ML model;
 - current metadata probabilities are statistically calibrated probabilities;
 - the anomaly layer is a full unsupervised model;
-- retraining jobs train real candidate models today;
+- retraining jobs train real candidate models unless a `--training-manifest`
+  path and trainer Python runtime are provided;
 - model promotion evidence is real customer holdout or shadow evidence unless
   such evidence has been registered from an actual pilot.
 
@@ -135,7 +136,8 @@ Every candidate evaluation should record:
 - rule-only and previous-model comparisons;
 - feature importance or SHAP artifact URI;
 - shadow-mode comparison against live traffic, QA outcomes, and routing impact;
-- source data quality score, label provenance, drift status, and human approval.
+- source data quality score, label provenance, pilot or customer validation,
+  drift status, and human approval.
 
 Minimum `metrics_json` fields for promotion-ready model evaluations:
 
@@ -150,6 +152,7 @@ Minimum `metrics_json` fields for promotion-ready model evaluations:
   "feature_reproducibility_hash": "sha256:<feature-build-hash>",
   "label_provenance_status": "passed",
   "label_reviewer_source": "qa_review",
+  "pilot_validation_status": "passed",
   "source_data_quality_score": 0.95
 }
 ```

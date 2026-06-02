@@ -106,6 +106,38 @@ python -m pip install -e '.[dev]'
 pytest
 ```
 
+Production ML baseline training:
+
+```bash
+cd apps/ml-service
+python -m pip install -e '.[dev]'
+python -m app.train \
+  --manifest ../../data/training/manifest.json \
+  --artifact-base-uri ../../data/model-artifacts \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor trainer-worker
+```
+
+The command prints the retraining output payload expected by
+`POST /api/v1/ops/model-retraining-jobs/{job_id}/output`. To serve the resulting
+artifact locally, start the ML service with `FWA_MODEL_ARTIFACT_URI` pointing to
+the generated `model.joblib`.
+
+Worker-driven training registration:
+
+```bash
+cargo run --locked -p worker -- run-retraining-job \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --actor trainer-worker \
+  --artifact-base-uri data/model-artifacts \
+  --training-manifest data/training/manifest.json \
+  --trainer-python python \
+  --model-key baseline_fwa
+```
+
 Frontend:
 
 ```bash

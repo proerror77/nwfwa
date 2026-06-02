@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     path::{Path, PathBuf},
+    process::Command,
 };
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -68,7 +69,7 @@ struct UpdateRetrainingJobStatusPayload<'a> {
     notes: &'a str,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct CompleteRetrainingJobPayload {
     actor: String,
     notes: String,
@@ -88,6 +89,12 @@ struct CompleteRetrainingJobPayload {
     feature_importance_uri: Option<String>,
     metrics_json: serde_json::Value,
     evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct TrainingCommand {
+    program: String,
+    args: Vec<String>,
 }
 
 pub async fn claim_next_retraining_job(
@@ -160,6 +167,15 @@ pub async fn complete_retraining_job_with_mock_output(
     artifact_base_uri: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let output = build_mock_retraining_output(job, actor, artifact_base_uri)?;
+    register_retraining_output(api_base_url, api_key, job, &output).await
+}
+
+async fn register_retraining_output(
+    api_base_url: &str,
+    api_key: &str,
+    job: &ClaimedRetrainingJob,
+    output: &CompleteRetrainingJobPayload,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,
@@ -184,12 +200,33 @@ pub async fn complete_retraining_job_with_mock_output(
         .context("parse retraining job output response")
 }
 
+pub async fn complete_retraining_job_with_training_output(
+    api_base_url: &str,
+    api_key: &str,
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+    artifact_base_uri: &str,
+    training_manifest: &str,
+    trainer_python: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let output = build_training_retraining_output(
+        job,
+        actor,
+        artifact_base_uri,
+        training_manifest,
+        trainer_python,
+    )?;
+    register_retraining_output(api_base_url, api_key, job, &output).await
+}
+
 pub async fn run_one_retraining_job(
     api_base_url: &str,
     api_key: &str,
     actor: &str,
     model_key: Option<&str>,
     artifact_base_uri: &str,
+    training_manifest: Option<&str>,
+    trainer_python: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let job = claim_next_retraining_job(
         api_base_url,
@@ -205,17 +242,34 @@ pub async fn run_one_retraining_job(
         &job.job_id,
         "validation",
         actor,
-        "Mock retraining completed; validation metrics are ready.",
+        if training_manifest.is_some() {
+            "Training pipeline completed; validation metrics are ready."
+        } else {
+            "Mock retraining completed; validation metrics are ready."
+        },
     )
     .await?;
-    complete_retraining_job_with_mock_output(
-        api_base_url,
-        api_key,
-        &validation_job,
-        actor,
-        artifact_base_uri,
-    )
-    .await
+    if let Some(training_manifest) = training_manifest {
+        complete_retraining_job_with_training_output(
+            api_base_url,
+            api_key,
+            &validation_job,
+            actor,
+            artifact_base_uri,
+            training_manifest,
+            trainer_python,
+        )
+        .await
+    } else {
+        complete_retraining_job_with_mock_output(
+            api_base_url,
+            api_key,
+            &validation_job,
+            actor,
+            artifact_base_uri,
+        )
+        .await
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -626,6 +680,63 @@ fn retraining_job_output_path(job_id: &str) -> String {
     format!("/api/v1/ops/model-retraining-jobs/{job_id}/output")
 }
 
+fn build_training_command(
+    python: &str,
+    manifest_path: &str,
+    artifact_base_uri: &str,
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+) -> TrainingCommand {
+    TrainingCommand {
+        program: python.to_string(),
+        args: vec![
+            "-m".into(),
+            "app.train".into(),
+            "--manifest".into(),
+            manifest_path.into(),
+            "--artifact-base-uri".into(),
+            artifact_base_uri.into(),
+            "--model-key".into(),
+            job.model_key.clone(),
+            "--base-model-version".into(),
+            job.model_version.clone(),
+            "--job-id".into(),
+            job.job_id.clone(),
+            "--actor".into(),
+            actor.into(),
+        ],
+    }
+}
+
+fn build_training_retraining_output(
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+    artifact_base_uri: &str,
+    training_manifest: &str,
+    trainer_python: &str,
+) -> anyhow::Result<CompleteRetrainingJobPayload> {
+    let training_command = build_training_command(
+        trainer_python,
+        training_manifest,
+        artifact_base_uri,
+        job,
+        actor,
+    );
+    let output = Command::new(&training_command.program)
+        .args(&training_command.args)
+        .output()
+        .with_context(|| format!("run model training command {}", training_command.program))?;
+    if !output.status.success() {
+        bail!(
+            "model training command failed with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    serde_json::from_slice::<CompleteRetrainingJobPayload>(&output.stdout)
+        .context("parse model training output")
+}
+
 fn build_mock_retraining_output(
     job: &ClaimedRetrainingJob,
     actor: &str,
@@ -1022,6 +1133,47 @@ mod tests {
         let error = build_mock_retraining_output(&job, "trainer-worker", " ").unwrap_err();
 
         assert!(error.to_string().contains("artifact_base_uri"));
+    }
+
+    #[test]
+    fn builds_training_command_for_retraining_job() {
+        let job = ClaimedRetrainingJob {
+            job_id: "model_retraining_job_1".into(),
+            model_key: "baseline_fwa".into(),
+            model_version: "0.1.0".into(),
+            status: "validation".into(),
+            updated_by: "trainer-worker".into(),
+            status_note: "Validation metrics are ready.".into(),
+        };
+
+        let command = build_training_command(
+            "python3",
+            "data/training/manifest.json",
+            "artifacts/models",
+            &job,
+            "trainer-worker",
+        );
+
+        assert_eq!(command.program, "python3");
+        assert_eq!(
+            command.args,
+            vec![
+                "-m",
+                "app.train",
+                "--manifest",
+                "data/training/manifest.json",
+                "--artifact-base-uri",
+                "artifacts/models",
+                "--model-key",
+                "baseline_fwa",
+                "--base-model-version",
+                "0.1.0",
+                "--job-id",
+                "model_retraining_job_1",
+                "--actor",
+                "trainer-worker",
+            ]
+        );
     }
 
     #[test]

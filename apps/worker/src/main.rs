@@ -57,6 +57,9 @@ async fn main() -> anyhow::Result<()> {
             let actor = take_flag_value(&mut args, "--actor")?;
             let artifact_base_uri = take_flag_value(&mut args, "--artifact-base-uri")?;
             let model_key = take_optional_flag_value(&mut args, "--model-key")?;
+            let training_manifest = take_optional_flag_value(&mut args, "--training-manifest")?;
+            let trainer_python = take_optional_flag_value(&mut args, "--trainer-python")?
+                .unwrap_or_else(|| "python".into());
             if !args.is_empty() {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
             }
@@ -66,6 +69,8 @@ async fn main() -> anyhow::Result<()> {
                 &actor,
                 model_key.as_deref(),
                 &artifact_base_uri,
+                training_manifest.as_deref(),
+                &trainer_python,
             )
             .await?;
             println!("{}", serde_json::to_string_pretty(&result)?);

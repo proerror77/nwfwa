@@ -1,9 +1,16 @@
 from fastapi.testclient import TestClient
+import joblib
 
 from app.main import app
+from app.scorer import reset_model_artifact_cache
 
 
 client = TestClient(app)
+
+
+class FixedProbabilityModel:
+    def predict_proba(self, _features):
+        return [[0.18, 0.82]]
 
 
 def score_payload(features: dict[str, object]) -> dict[str, object]:
@@ -110,3 +117,44 @@ def test_score_rejects_invalid_payload():
     )
 
     assert response.status_code == 422
+
+
+def test_score_uses_configured_model_artifact(monkeypatch, tmp_path):
+    artifact_path = tmp_path / "model.joblib"
+    joblib.dump(
+        {
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-candidate",
+            "runtime_kind": "sklearn_logistic_regression",
+            "execution_provider": "cpu",
+            "threshold": 0.5,
+            "feature_columns": [
+                "claim_amount_to_limit_ratio",
+                "provider_profile_score",
+            ],
+            "pipeline": FixedProbabilityModel(),
+        },
+        artifact_path,
+    )
+    monkeypatch.setenv("FWA_MODEL_ARTIFACT_URI", str(artifact_path))
+    reset_model_artifact_cache()
+
+    response = client.post(
+        "/score",
+        json=score_payload(
+            {
+                "claim_amount_to_limit_ratio": 0.92,
+                "provider_profile_score": 80.0,
+            },
+        ),
+    )
+
+    reset_model_artifact_cache()
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["model_key"] == "baseline_fwa"
+    assert payload["model_version"] == "0.2.0-candidate"
+    assert payload["score"] == 82
+    assert payload["label"] == "HIGH_RISK"
+    assert payload["metadata"]["runtime_kind"] == "sklearn_logistic_regression"
+    assert payload["metadata"]["calibration"] == "artifact_threshold"

@@ -62,6 +62,10 @@ The API server uses:
 | --- | --- | --- |
 | Python 3.12 | `apps/ml-service` | Demo model service runtime |
 | FastAPI | `apps/ml-service` | HTTP model scoring API |
+| pandas | `apps/ml-service` | Parquet training dataset loading |
+| pyarrow | `apps/ml-service` | Parquet training and feature-importance artifacts |
+| scikit-learn | `apps/ml-service` | Logistic-regression baseline training and inference |
+| joblib | `apps/ml-service` | Model artifact serialization |
 | Pydantic 2 | `apps/ml-service` | Request and response validation |
 | Uvicorn | `apps/ml-service` | ASGI server |
 | Pytest | `apps/ml-service` | ML service tests |
