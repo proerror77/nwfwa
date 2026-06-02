@@ -102,6 +102,7 @@ async fn record_audit_sample_created(
             event_status: "succeeded".into(),
             summary: format!("Audit sample created: {}", sample.sample_mode),
             payload: serde_json::json!({
+                "customer_scope_id": state.config.customer_scope_id,
                 "sample_id": sample.sample_id,
                 "sample_mode": sample.sample_mode,
                 "population_definition": sample.population_definition,

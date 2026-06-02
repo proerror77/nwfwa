@@ -363,6 +363,10 @@ async fn medical_review_records_controlled_clinical_outcomes_for_labels() {
         medical_review_event["payload"]["clinical_outcomes"],
         serde_json::json!(["documentation_issue", "insufficient_evidence"])
     );
+    assert_eq!(
+        medical_review_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
 
     let (status, labels) = json_request(app, "GET", "/api/v1/ops/labels", "{}").await;
     assert_eq!(status, StatusCode::OK);

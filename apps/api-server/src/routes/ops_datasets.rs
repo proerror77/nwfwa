@@ -1316,6 +1316,13 @@ async fn record_data_lineage_audit(
     actor: &ActorContext,
     input: DataLineageAuditInput,
 ) -> anyhow::Result<()> {
+    let mut payload = input.payload;
+    if let Some(payload) = payload.as_object_mut() {
+        payload.insert(
+            "customer_scope_id".into(),
+            serde_json::json!(actor.customer_scope_id),
+        );
+    }
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -1328,7 +1335,7 @@ async fn record_data_lineage_audit(
             event_type: input.event_type.into(),
             event_status: "succeeded".into(),
             summary: input.summary.into(),
-            payload: input.payload,
+            payload,
             evidence_refs: input
                 .evidence_refs
                 .into_iter()

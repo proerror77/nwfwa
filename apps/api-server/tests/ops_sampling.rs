@@ -281,6 +281,10 @@ async fn creates_audit_sample_from_ranked_leads() {
     let created_event = &audit_events["events"][0];
     assert_eq!(created_event["payload"]["sample_id"], sample["sample_id"]);
     assert_eq!(
+        created_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
         created_event["payload"]["outcome_distribution"]["selected_count"],
         1
     );

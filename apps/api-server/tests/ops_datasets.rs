@@ -717,6 +717,10 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
         "diagnosis_procedure_mismatch"
     );
     assert_eq!(
+        model_evaluation_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
         model_evaluation_event["evidence_refs"][0],
         "model_evaluations:eval_renewal_v1"
     );

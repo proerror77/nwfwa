@@ -129,6 +129,7 @@ pub async fn submit_medical_review_result(
             event_status: "succeeded".into(),
             summary: format!("Medical review recorded: {}", request.decision),
             payload: json!({
+                "customer_scope_id": state.config.customer_scope_id,
                 "claim_id": request.claim_id,
                 "scoring_audit_id": request.scoring_audit_id,
                 "reviewer": request.reviewer,
