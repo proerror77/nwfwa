@@ -136,10 +136,10 @@ pub async fn member_profile_summary(
     headers: HeaderMap,
     Path(member_id): Path<String>,
 ) -> Result<Json<MemberProfileSummaryRecord>, ApiError> {
-    authorize_permission(&state, &headers, "tpa:members:read")?;
+    let actor = authorize_permission(&state, &headers, "tpa:members:read")?;
     let profile = state
         .repository
-        .member_profile_summary(&member_id)
+        .member_profile_summary(&member_id, Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("MEMBER_PROFILE_SUMMARY_FAILED"))?
         .ok_or_else(|| {
@@ -159,7 +159,7 @@ pub async fn write_investigation_result(
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
     let actor = authorize_permission(&state, &headers, "tpa:investigations:write")?;
     validate_investigation_result_request(&request)?;
-    validate_investigation_case_link(&state, &request).await?;
+    validate_investigation_case_link(&state, &request, &actor.customer_scope_id).await?;
     merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
     request.customer_scope_id = Some(actor.customer_scope_id);
     request.actor_id = Some(actor.actor_id);
@@ -277,13 +277,14 @@ fn validate_investigation_result_request(
 async fn validate_investigation_case_link(
     state: &AppState,
     request: &InvestigationResultRecord,
+    customer_scope_id: &str,
 ) -> Result<(), ApiError> {
     let Some(case_id) = request.case_id.as_deref() else {
         return Ok(());
     };
     let cases = state
         .repository
-        .list_cases()
+        .list_cases(Some(customer_scope_id))
         .await
         .map_err(internal_error("CASE_LOOKUP_FAILED"))?;
     if cases
@@ -719,15 +720,15 @@ pub async fn list_ops_alerts(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<OpsAlertListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let leads = state
         .repository
-        .list_leads()
+        .list_leads(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("LEAD_LIST_FAILED"))?;
     let cases = state
         .repository
-        .list_cases()
+        .list_cases(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("CASE_LIST_FAILED"))?;
     let scoring_events = state

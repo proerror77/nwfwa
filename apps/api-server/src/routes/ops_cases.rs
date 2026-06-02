@@ -30,10 +30,10 @@ pub async fn list_leads(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<LeadListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let leads = state
         .repository
-        .list_leads()
+        .list_leads(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("LEAD_LIST_FAILED"))?;
     Ok(Json(LeadListResponse { leads }))
@@ -122,10 +122,10 @@ pub async fn list_cases(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<CaseListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let cases = state
         .repository
-        .list_cases()
+        .list_cases(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("CASE_LIST_FAILED"))?;
     Ok(Json(CaseListResponse { cases }))

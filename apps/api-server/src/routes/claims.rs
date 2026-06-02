@@ -270,7 +270,7 @@ pub async fn score_claim(
     ) = if let Some(claim_id) = request.claim_id.clone() {
         let context = state
             .repository
-            .load_claim_context(&claim_id)
+            .load_claim_context(&claim_id, Some(&actor.customer_scope_id))
             .await
             .map_err(internal_error("CLAIM_LOAD_FAILED"))?
             .ok_or_else(|| {

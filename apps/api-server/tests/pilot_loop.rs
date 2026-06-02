@@ -1,8 +1,14 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::HeuristicModelScorer;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -22,6 +28,12 @@ fn test_config() -> AppConfig {
         observability_exporter_endpoint: "local://demo-observability".into(),
         agent_policy_id: "demo-agent-policy".into(),
     }
+}
+
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
 }
 
 async fn json_request(
@@ -2078,6 +2090,78 @@ async fn returns_member_profile_summary_from_scored_claims() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("members:MBR-PROFILE-1")));
+}
+
+#[tokio::test]
+async fn member_profile_summary_is_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-MEMBER-SCOPE-1",
+            "claim_amount": "9200.00",
+            "currency": "CNY",
+            "service_date": "2026-02-05",
+            "diagnosis_code": "J10",
+            "member": {
+              "external_member_id": "MBR-SCOPE-PROFILE-1"
+            },
+            "policy": {
+              "external_policy_id": "POL-MEMBER-SCOPE-1",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": "10000.00",
+              "currency": "CNY"
+            },
+            "provider": {
+              "external_provider_id": "PRV-MEMBER-SCOPE-1",
+              "name": "Profile Hospital",
+              "provider_type": "hospital",
+              "region": "Shanghai",
+              "risk_tier": "Medium"
+            },
+            "items": [
+              {
+                "item_code": "PROC-1",
+                "item_type": "procedure",
+                "description": "Procedure",
+                "quantity": 1,
+                "unit_amount": "9200.00",
+                "total_amount": "9200.00",
+                "currency": "CNY"
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/members/MBR-SCOPE-PROFILE-1/profile-summary")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let response = beta_app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
 }
 
 #[tokio::test]

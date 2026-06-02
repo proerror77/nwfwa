@@ -34,6 +34,12 @@ fn test_config() -> AppConfig {
     }
 }
 
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
+}
+
 async fn activate_candidate_model(repository: SharedRepository) {
     repository
         .update_model_status("baseline_fwa", "0.1.0", "approved")
@@ -184,6 +190,90 @@ async fn scores_full_payload_with_api_key() {
 
     let response = app.oneshot(request).await.unwrap();
     assert_eq!(response.status(), StatusCode::OK);
+}
+
+#[tokio::test]
+async fn claim_id_scoring_is_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HighRiskScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HighRiskScorer),
+        repository,
+    );
+
+    let alpha_score = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-SCOPE-CLAIM-1",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10",
+                "items": [
+                  {
+                    "item_code": "PROC-001",
+                    "item_type": "procedure",
+                    "description": "Imaging",
+                    "quantity": 1,
+                    "unit_amount": "8000",
+                    "total_amount": "8000"
+                  }
+                ],
+                "member": {
+                  "external_member_id": "MBR-SCOPE-CLAIM-1"
+                },
+                "policy": {
+                  "external_policy_id": "POL-SCOPE-CLAIM-1",
+                  "product_code": "MED",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": "10000",
+                  "currency": "CNY"
+                },
+                "provider": {
+                  "external_provider_id": "PRV-SCOPE-CLAIM-1",
+                  "name": "Scope Hospital",
+                  "provider_type": "hospital",
+                  "region": "SH",
+                  "risk_tier": "High"
+                }
+              }
+            }"#,
+        ))
+        .unwrap();
+    let alpha_response = alpha_app.oneshot(alpha_score).await.unwrap();
+    assert_eq!(alpha_response.status(), StatusCode::OK);
+
+    let beta_reload = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim_id": "CLM-SCOPE-CLAIM-1"
+            }"#,
+        ))
+        .unwrap();
+    let beta_response = beta_app.oneshot(beta_reload).await.unwrap();
+    assert_eq!(beta_response.status(), StatusCode::NOT_FOUND);
+    let body = to_bytes(beta_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "CLAIM_NOT_FOUND");
 }
 
 #[tokio::test]

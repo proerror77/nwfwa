@@ -1334,11 +1334,13 @@ pub trait ScoringRepository: Send + Sync {
     async fn load_claim_context(
         &self,
         external_claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ClaimContext>>;
 
     async fn member_profile_summary(
         &self,
         member_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<MemberProfileSummaryRecord>>;
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()>;
@@ -1427,7 +1429,7 @@ pub trait ScoringRepository: Send + Sync {
         rule_version: u32,
     ) -> anyhow::Result<Option<RulePromotionReviewRecord>>;
 
-    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>>;
+    async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>>;
 
     async fn triage_lead(
         &self,
@@ -1435,7 +1437,7 @@ pub trait ScoringRepository: Send + Sync {
         input: TriageLeadInput,
     ) -> anyhow::Result<Option<TriageLeadRecord>>;
 
-    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>>;
+    async fn list_cases(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<CaseRecord>>;
 
     async fn update_case_status(
         &self,
@@ -1689,6 +1691,18 @@ impl InMemoryScoringRepository {
             ..Self::default()
         })
     }
+
+    async fn claim_visible_to_scope(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> bool {
+        let Some(scope) = customer_scope_id else {
+            return true;
+        };
+        scoped_claim_ids_from_audit_events(self.audit_events.lock().await.iter(), scope)
+            .contains(claim_id)
+    }
 }
 
 #[async_trait]
@@ -1708,20 +1722,40 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn load_claim_context(
         &self,
         external_claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ClaimContext>> {
+        if !self
+            .claim_visible_to_scope(external_claim_id, customer_scope_id)
+            .await
+        {
+            return Ok(None);
+        }
         Ok(self.claims.lock().await.get(external_claim_id).cloned())
     }
 
     async fn member_profile_summary(
         &self,
         member_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<MemberProfileSummaryRecord>> {
+        let visible_claim_ids = match customer_scope_id {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
         let member_claims = self
             .claims
             .lock()
             .await
             .values()
             .filter(|context| context.member.external_member_id == member_id)
+            .filter(|context| {
+                visible_claim_ids
+                    .as_ref()
+                    .is_none_or(|claim_ids| claim_ids.contains(&context.claim.external_claim_id))
+            })
             .cloned()
             .collect::<Vec<_>>();
         Ok(member_profile_from_contexts(
@@ -2089,12 +2123,24 @@ impl ScoringRepository for InMemoryScoringRepository {
             .cloned())
     }
 
-    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>> {
+    async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>> {
+        let visible_claim_ids = match customer_scope_id {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
         let mut leads = self
             .leads
             .lock()
             .await
             .values()
+            .filter(|lead| {
+                visible_claim_ids
+                    .as_ref()
+                    .is_none_or(|claim_ids| claim_ids.contains(&lead.claim_id))
+            })
             .cloned()
             .collect::<Vec<_>>();
         leads.sort_by(|left, right| left.lead_id.cmp(&right.lead_id));
@@ -2107,12 +2153,27 @@ impl ScoringRepository for InMemoryScoringRepository {
         input: TriageLeadInput,
     ) -> anyhow::Result<Option<TriageLeadRecord>> {
         let mut leads = self.leads.lock().await;
-        if input.decision == "merge_lead" && !merge_target_exists_in_memory(&leads, &input) {
+        let visible_claim_ids = match input.customer_scope_id.as_deref() {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
+        if input.decision == "merge_lead"
+            && !merge_target_exists_in_memory(&leads, &input, visible_claim_ids.as_ref())
+        {
             return Ok(None);
         }
         let Some(lead) = leads.get_mut(lead_id) else {
             return Ok(None);
         };
+        if visible_claim_ids
+            .as_ref()
+            .is_some_and(|claim_ids| !claim_ids.contains(&lead.claim_id))
+        {
+            return Ok(None);
+        }
         lead.status = triage_status_for_decision(&input.decision).into();
         lead.disposition = triage_disposition_for_decision(&input.decision).into();
         let lead = lead.clone();
@@ -2151,12 +2212,24 @@ impl ScoringRepository for InMemoryScoringRepository {
         }))
     }
 
-    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
+    async fn list_cases(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<CaseRecord>> {
+        let visible_claim_ids = match customer_scope_id {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
         let mut cases = self
             .cases
             .lock()
             .await
             .values()
+            .filter(|case| {
+                visible_claim_ids
+                    .as_ref()
+                    .is_none_or(|claim_ids| claim_ids.contains(&case.claim_id))
+            })
             .cloned()
             .collect::<Vec<_>>();
         cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
@@ -2172,6 +2245,12 @@ impl ScoringRepository for InMemoryScoringRepository {
         let Some(case) = cases.get_mut(case_id) else {
             return Ok(None);
         };
+        if !self
+            .claim_visible_to_scope(&case.claim_id, input.customer_scope_id.as_deref())
+            .await
+        {
+            return Ok(None);
+        }
         let from_status = case.status.clone();
         case.status = input.status.clone();
         if is_terminal_case_status(&case.status) {
@@ -2235,7 +2314,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .map(|run| control_lead_from_scoring_run(run, claims.get(&run.claim_id)))
                 .collect()
         } else {
-            self.list_leads().await?
+            self.list_leads(None).await?
         };
         let claims = self.claims.lock().await;
         let strata_contexts = audit_sample_strata_contexts_from_claims(&claims);
@@ -2630,13 +2709,13 @@ impl ScoringRepository for InMemoryScoringRepository {
         let audit_samples = self.list_audit_samples().await?;
         let qa_review_records = self.list_qa_reviews().await?;
         let qa_feedback_items = self.list_qa_feedback_items().await?;
-        let cases = self.list_cases().await?;
+        let cases = self.list_cases(None).await?;
         let agent_runs = self.list_agent_runs().await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
         let rules = self.list_rules().await?;
         let rule_performance = self.rule_performance().await?;
-        let leads = self.list_leads().await?;
+        let leads = self.list_leads(None).await?;
         let scheme_distribution = leads
             .iter()
             .fold(BTreeMap::new(), |mut distribution, lead| {
@@ -3110,7 +3189,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect::<Vec<_>>();
         labels.extend(labels_from_lead_triage_events(lead_triage_events));
         labels.extend(
-            self.list_cases()
+            self.list_cases(None)
                 .await?
                 .into_iter()
                 .flat_map(labels_from_case_status),
@@ -3678,6 +3757,7 @@ impl ScoringRepository for PostgresScoringRepository {
     async fn load_claim_context(
         &self,
         external_claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ClaimContext>> {
         let row: Option<ClaimContextRow> = sqlx::query_as(
             "SELECT c.external_claim_id,
@@ -3703,9 +3783,18 @@ impl ScoringRepository for PostgresScoringRepository {
              JOIN members m ON m.id = c.member_id
              JOIN policies p ON p.id = c.policy_id
              JOIN providers pr ON pr.id = c.provider_id
-             WHERE c.external_claim_id = $1",
+             WHERE c.external_claim_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.external_claim_id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )",
         )
         .bind(external_claim_id)
+        .bind(customer_scope_id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -3730,12 +3819,26 @@ impl ScoringRepository for PostgresScoringRepository {
     async fn member_profile_summary(
         &self,
         member_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<MemberProfileSummaryRecord>> {
-        let member_exists: Option<(String,)> =
-            sqlx::query_as("SELECT external_member_id FROM members WHERE external_member_id = $1")
-                .bind(member_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let member_exists: Option<(String,)> = sqlx::query_as(
+            "SELECT m.external_member_id
+             FROM members m
+             WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM claims c
+                   JOIN audit_events ae ON ae.claim_id = c.external_claim_id
+                   WHERE c.member_id = m.id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )",
+        )
+        .bind(member_id)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
         if member_exists.is_none() {
             return Ok(None);
         }
@@ -3748,9 +3851,18 @@ impl ScoringRepository for PostgresScoringRepository {
              FROM members m
              LEFT JOIN claims c ON c.member_id = m.id
              LEFT JOIN policies p ON p.id = c.policy_id
-             WHERE m.external_member_id = $1",
+             WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.external_claim_id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )",
         )
         .bind(member_id)
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
         let latest_claim: Option<(String,)> = sqlx::query_as(
@@ -3758,10 +3870,19 @@ impl ScoringRepository for PostgresScoringRepository {
              FROM claims c
              JOIN members m ON m.id = c.member_id
              WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.external_claim_id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )
              ORDER BY c.service_date DESC, c.external_claim_id DESC
              LIMIT 1",
         )
         .bind(member_id)
+        .bind(customer_scope_id)
         .fetch_optional(&self.pool)
         .await?;
         let high_risk: (i64,) = sqlx::query_as(
@@ -3770,9 +3891,18 @@ impl ScoringRepository for PostgresScoringRepository {
              JOIN claims c ON c.member_id = m.id
              JOIN scoring_runs sr ON sr.claim_id = c.id
              WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.external_claim_id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )
                AND sr.risk_score >= 70",
         )
         .bind(member_id)
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
 
@@ -4653,8 +4783,8 @@ impl ScoringRepository for PostgresScoringRepository {
         ))
     }
 
-    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>> {
-        load_leads(&self.pool).await
+    async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>> {
+        load_leads(&self.pool, customer_scope_id).await
     }
 
     async fn triage_lead(
@@ -4663,7 +4793,7 @@ impl ScoringRepository for PostgresScoringRepository {
         input: TriageLeadInput,
     ) -> anyhow::Result<Option<TriageLeadRecord>> {
         let mut tx = self.pool.begin().await?;
-        let lead = load_lead_in_tx(&mut tx, lead_id).await?;
+        let lead = load_lead_in_tx(&mut tx, lead_id, input.customer_scope_id.as_deref()).await?;
         let Some(mut lead) = lead else {
             return Ok(None);
         };
@@ -4750,8 +4880,8 @@ impl ScoringRepository for PostgresScoringRepository {
         }))
     }
 
-    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
-        load_cases(&self.pool).await
+    async fn list_cases(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<CaseRecord>> {
+        load_cases(&self.pool, customer_scope_id).await
     }
 
     async fn update_case_status(
@@ -4760,14 +4890,15 @@ impl ScoringRepository for PostgresScoringRepository {
         input: UpdateCaseStatusInput,
     ) -> anyhow::Result<Option<UpdateCaseStatusRecord>> {
         let mut tx = self.pool.begin().await?;
-        let case = load_case_in_tx(&mut tx, case_id).await?;
+        let case = load_case_in_tx(&mut tx, case_id, input.customer_scope_id.as_deref()).await?;
         let Some(mut case) = case else {
             return Ok(None);
         };
-        let audit_run_id = load_lead_in_tx(&mut tx, &case.lead_id)
-            .await?
-            .map(|lead| lead.run_id)
-            .unwrap_or_else(|| format!("case_status_{}", case.case_id));
+        let audit_run_id =
+            load_lead_in_tx(&mut tx, &case.lead_id, input.customer_scope_id.as_deref())
+                .await?
+                .map(|lead| lead.run_id)
+                .unwrap_or_else(|| format!("case_status_{}", case.case_id));
         let from_status = case.status.clone();
         case.status = input.status.clone();
         sqlx::query(
@@ -4779,7 +4910,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&case.status)
         .execute(&mut *tx)
         .await?;
-        let case = load_case_in_tx(&mut tx, case_id)
+        let case = load_case_in_tx(&mut tx, case_id, input.customer_scope_id.as_deref())
             .await?
             .expect("case should exist after status update");
 
@@ -4826,7 +4957,7 @@ impl ScoringRepository for PostgresScoringRepository {
         let leads = if input.sample_mode == "random_control" {
             load_control_audit_population(&self.pool).await?
         } else {
-            self.list_leads().await?
+            self.list_leads(None).await?
         };
         let strata_contexts = load_audit_sample_strata_contexts(&self.pool).await?;
         let existing_samples = self.list_audit_samples().await?;
@@ -5704,7 +5835,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 &qa_review_records,
                 &qa_feedback_items,
             ),
-            case_sla: summarize_dashboard_case_sla(&self.list_cases().await?),
+            case_sla: summarize_dashboard_case_sla(&self.list_cases(None).await?),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
             rule_governance: summarize_dashboard_rule_governance(&rules, &rule_performance),
@@ -6763,7 +6894,7 @@ impl ScoringRepository for PostgresScoringRepository {
             ),
         ));
         labels.extend(
-            self.list_cases()
+            self.list_cases(None)
                 .await?
                 .into_iter()
                 .flat_map(labels_from_case_status),
@@ -7864,8 +7995,13 @@ fn merge_target_lead_id(input: &TriageLeadInput) -> Option<&str> {
 fn merge_target_exists_in_memory(
     leads: &HashMap<String, LeadRecord>,
     input: &TriageLeadInput,
+    visible_claim_ids: Option<&BTreeSet<String>>,
 ) -> bool {
-    merge_target_lead_id(input).is_some_and(|target_lead_id| leads.contains_key(target_lead_id))
+    merge_target_lead_id(input).is_some_and(|target_lead_id| {
+        leads.get(target_lead_id).is_some_and(|lead| {
+            visible_claim_ids.is_none_or(|claim_ids| claim_ids.contains(&lead.claim_id))
+        })
+    })
 }
 
 async fn merge_target_lead_in_tx(
@@ -7873,7 +8009,9 @@ async fn merge_target_lead_in_tx(
     input: &TriageLeadInput,
 ) -> anyhow::Result<Option<LeadRecord>> {
     match merge_target_lead_id(input) {
-        Some(target_lead_id) => load_lead_in_tx(tx, target_lead_id).await,
+        Some(target_lead_id) => {
+            load_lead_in_tx(tx, target_lead_id, input.customer_scope_id.as_deref()).await
+        }
         None => Ok(None),
     }
 }
@@ -8456,6 +8594,18 @@ fn audit_event_payload_matches_actor(payload: &Value, actor_id: &str) -> bool {
 
 fn audit_event_payload_matches_customer_scope(payload: &Value, customer_scope_id: &str) -> bool {
     payload["customer_scope_id"].as_str() == Some(customer_scope_id)
+}
+
+fn scoped_claim_ids_from_audit_events<'a>(
+    events: impl Iterator<Item = &'a PersistedAuditEvent>,
+    customer_scope_id: &str,
+) -> BTreeSet<String> {
+    events
+        .filter(|event| {
+            audit_event_payload_matches_customer_scope(&event.payload, customer_scope_id)
+        })
+        .map(|event| event.claim_id.clone())
+        .collect()
 }
 
 fn audit_event_matches_group(event_type: &str, filter: &AuditEventListFilter) -> bool {
@@ -9866,12 +10016,24 @@ fn deterministic_rank(seed: &str, lead_id: &str) -> u64 {
     hasher.finish()
 }
 
-async fn load_leads(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
+async fn load_leads(
+    pool: &PgPool,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<LeadRecord>> {
     let rows: Vec<LeadRow> = sqlx::query_as(
         "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, COALESCE(review_mode, 'pre_payment'), scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
          FROM fwa_leads
+         WHERE (
+           $1::text IS NULL OR EXISTS (
+             SELECT 1
+             FROM audit_events ae
+             WHERE ae.claim_id = fwa_leads.claim_id
+               AND ae.payload ->> 'customer_scope_id' = $1
+           )
+         )
          ORDER BY created_at, lead_id",
     )
+    .bind(customer_scope_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(lead_from_row).collect())
@@ -9951,13 +10113,23 @@ async fn load_audit_sample_strata_contexts(
 async fn load_lead_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     lead_id: &str,
+    customer_scope_id: Option<&str>,
 ) -> anyhow::Result<Option<LeadRecord>> {
     let row: Option<LeadRow> = sqlx::query_as(
         "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, COALESCE(review_mode, 'pre_payment'), scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
          FROM fwa_leads
-         WHERE lead_id = $1",
+         WHERE lead_id = $1
+           AND (
+             $2::text IS NULL OR EXISTS (
+               SELECT 1
+               FROM audit_events ae
+               WHERE ae.claim_id = fwa_leads.claim_id
+                 AND ae.payload ->> 'customer_scope_id' = $2
+             )
+           )",
     )
     .bind(lead_id)
+    .bind(customer_scope_id)
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row.map(lead_from_row))
@@ -10000,13 +10172,25 @@ fn lead_from_row(row: LeadRow) -> LeadRecord {
     }
 }
 
-async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
+async fn load_cases(
+    pool: &PgPool,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<CaseRecord>> {
     let rows: Vec<CaseRow> = sqlx::query_as(
         "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, COALESCE(c.review_mode, l.review_mode, 'pre_payment') AS review_mode, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
+         WHERE (
+           $1::text IS NULL OR EXISTS (
+             SELECT 1
+             FROM audit_events ae
+             WHERE ae.claim_id = c.claim_id
+               AND ae.payload ->> 'customer_scope_id' = $1
+           )
+         )
          ORDER BY c.created_at, c.case_id",
     )
+    .bind(customer_scope_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(case_from_row).collect())
@@ -10015,14 +10199,24 @@ async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
 async fn load_case_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     case_id: &str,
+    customer_scope_id: Option<&str>,
 ) -> anyhow::Result<Option<CaseRecord>> {
     let row: Option<CaseRow> = sqlx::query_as(
         "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, COALESCE(c.review_mode, l.review_mode, 'pre_payment') AS review_mode, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
-         WHERE c.case_id = $1",
+         WHERE c.case_id = $1
+           AND (
+             $2::text IS NULL OR EXISTS (
+               SELECT 1
+               FROM audit_events ae
+               WHERE ae.claim_id = c.claim_id
+                 AND ae.payload ->> 'customer_scope_id' = $2
+             )
+           )",
     )
     .bind(case_id)
+    .bind(customer_scope_id)
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row.map(case_from_row))
