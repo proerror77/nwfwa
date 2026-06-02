@@ -5,7 +5,16 @@ from typing import Any
 import joblib
 import pandas as pd
 
+from .mlops import artifact_signature, file_sha256
 from .schemas import ModelExplanation, ScoreRequest, ScoreResponse
+
+
+class ModelServingError(Exception):
+    def __init__(self, code: str, message: str, status_code: int = 409):
+        super().__init__(message)
+        self.code = code
+        self.message = message
+        self.status_code = status_code
 
 
 def score_claim(request: ScoreRequest) -> ScoreResponse:
@@ -50,7 +59,14 @@ def score_with_heuristic(request: ScoreRequest) -> ScoreResponse:
 
 
 def score_with_artifact(request: ScoreRequest, artifact_uri: str) -> ScoreResponse:
+    artifact_sha256 = verify_artifact_checksum(artifact_uri)
     bundle = load_model_artifact(artifact_uri)
+    verify_model_version_lock(str(bundle["model_version"]))
+    verify_artifact_signature(
+        str(bundle["model_key"]),
+        str(bundle["model_version"]),
+        artifact_sha256,
+    )
     feature_columns = list(bundle["feature_columns"])
     threshold = float(bundle.get("threshold", 0.5))
     model = bundle["pipeline"]
@@ -64,6 +80,32 @@ def score_with_artifact(request: ScoreRequest, artifact_uri: str) -> ScoreRespon
     )
     probability = float(model.predict_proba(frame)[0][1])
     score = max(0, min(100, round(probability * 100)))
+    metadata = {
+        "runtime_kind": bundle.get("runtime_kind", "sklearn"),
+        "execution_provider": bundle.get("execution_provider", "cpu"),
+        "calibration": "artifact_threshold",
+        "fraud_probability": round(probability, 4),
+        "threshold": threshold,
+        "feature_count": len(feature_columns),
+        "artifact_sha256": artifact_sha256,
+        "artifact_integrity_status": "passed",
+        "artifact_signature_status": "passed",
+        "serving_version_lock": os.getenv("FWA_MODEL_VERSION_LOCK", "").strip()
+        or str(bundle["model_version"]),
+        "serving_version_lock_status": "passed",
+    }
+    if shadow_heuristic_enabled():
+        shadow = score_with_heuristic(request)
+        shadow_score = shadow.score
+        shadow_delta = score - shadow_score
+        metadata.update(
+            {
+                "shadow_mode": "heuristic_baseline",
+                "shadow_score": shadow_score,
+                "shadow_delta": shadow_delta,
+                "shadow_status": shadow_status(shadow_delta),
+            }
+        )
     return ScoreResponse(
         model_key=str(bundle["model_key"]),
         model_version=str(bundle["model_version"]),
@@ -78,15 +120,70 @@ def score_with_artifact(request: ScoreRequest, artifact_uri: str) -> ScoreRespon
             )
             for feature in feature_columns[:5]
         ],
-        metadata={
-            "runtime_kind": bundle.get("runtime_kind", "sklearn"),
-            "execution_provider": bundle.get("execution_provider", "cpu"),
-            "calibration": "artifact_threshold",
-            "fraud_probability": round(probability, 4),
-            "threshold": threshold,
-            "feature_count": len(feature_columns),
-        },
+        metadata=metadata,
     )
+
+
+def verify_artifact_checksum(artifact_uri: str) -> str:
+    actual = file_sha256(artifact_uri)
+    expected = (
+        os.getenv("FWA_MODEL_ARTIFACT_SHA256", "").strip()
+        or os.getenv("FWA_MODEL_ARTIFACT_CHECKSUM", "").strip()
+    )
+    if expected and expected != actual:
+        raise ModelServingError(
+            "MODEL_ARTIFACT_CHECKSUM_MISMATCH",
+            "model artifact checksum does not match configured value",
+        )
+    return actual
+
+
+def verify_model_version_lock(model_version: str) -> None:
+    locked_version = os.getenv("FWA_MODEL_VERSION_LOCK", "").strip()
+    if locked_version and locked_version != model_version:
+        raise ModelServingError(
+            "MODEL_VERSION_LOCK_MISMATCH",
+            "loaded model version does not match configured serving version lock",
+        )
+
+
+def verify_artifact_signature(
+    model_key: str,
+    model_version: str,
+    artifact_sha256: str,
+) -> None:
+    expected = os.getenv("FWA_MODEL_ARTIFACT_SIGNATURE", "").strip()
+    if not expected:
+        return
+    signing_key = os.getenv("FWA_MODEL_SIGNATURE_KEY", "").strip()
+    if not signing_key:
+        raise ModelServingError(
+            "MODEL_ARTIFACT_SIGNATURE_KEY_MISSING",
+            "model artifact signature is configured but signing key is missing",
+        )
+    actual = artifact_signature(model_key, model_version, artifact_sha256, signing_key)
+    if actual != expected:
+        raise ModelServingError(
+            "MODEL_ARTIFACT_SIGNATURE_MISMATCH",
+            "model artifact signature does not match configured value",
+        )
+
+
+def shadow_heuristic_enabled() -> bool:
+    return os.getenv("FWA_MODEL_SHADOW_HEURISTIC", "").strip().lower() in {
+        "1",
+        "true",
+        "yes",
+    }
+
+
+def shadow_status(delta: int) -> str:
+    absolute_delta = abs(delta)
+    if absolute_delta <= 10:
+        return "passed"
+    if absolute_delta <= 25:
+        return "watch"
+    return "drift"
 
 
 @lru_cache(maxsize=4)

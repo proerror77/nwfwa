@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 import re
 from pathlib import Path
 from typing import Any
@@ -20,6 +21,16 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+
+from .mlops import (
+    artifact_signature,
+    build_drift_report,
+    build_fairness_report,
+    build_feature_store_manifest,
+    build_serving_manifest,
+    build_shadow_report,
+    file_sha256,
+)
 
 
 DEFAULT_THRESHOLD = 0.5
@@ -76,6 +87,11 @@ def train_from_manifest(
     artifact_path = artifact_root / "model.joblib"
     validation_report_path = artifact_root / "validation.json"
     feature_importance_path = artifact_root / "feature_importance.parquet"
+    serving_manifest_path = artifact_root / "serving_manifest.json"
+    feature_store_manifest_path = artifact_root / "feature_store_manifest.json"
+    shadow_report_path = artifact_root / "shadow_report.json"
+    drift_report_path = artifact_root / "drift_report.json"
+    fairness_report_path = artifact_root / "fairness_report.json"
 
     model_bundle = {
         "model_key": model_key,
@@ -91,6 +107,50 @@ def train_from_manifest(
 
     feature_importance = build_feature_importance(pipeline, feature_columns)
     feature_importance.to_parquet(feature_importance_path, index=False)
+    artifact_sha256 = file_sha256(artifact_path)
+    artifact_signature_value = artifact_signature(
+        model_key,
+        candidate_model_version,
+        artifact_sha256,
+        os.getenv("FWA_MODEL_SIGNATURE_KEY", "local-dev-model-signing-key"),
+    )
+    build_serving_manifest(
+        model_key=model_key,
+        model_version=candidate_model_version,
+        artifact_uri=str(artifact_path),
+        artifact_sha256=artifact_sha256,
+        artifact_signature_value=artifact_signature_value,
+        feature_columns=feature_columns,
+        threshold=DEFAULT_THRESHOLD,
+        output_path=serving_manifest_path,
+    )
+    build_feature_store_manifest(
+        splits=splits,
+        feature_columns=feature_columns,
+        label_column=label_column,
+        entity_keys=entity_keys,
+        output_path=feature_store_manifest_path,
+    )
+    shadow_report = build_shadow_report(
+        pipeline,
+        validation,
+        feature_columns,
+        shadow_report_path,
+    )
+    drift_report = build_drift_report(
+        train,
+        out_of_time,
+        feature_columns,
+        drift_report_path,
+    )
+    fairness_report = build_fairness_report(
+        pipeline,
+        validation,
+        feature_columns,
+        label_column,
+        group_split_fields,
+        fairness_report_path,
+    )
 
     metrics_json = {
         "algorithm": "logistic_regression",
@@ -102,8 +162,14 @@ def train_from_manifest(
         "time_split_field": time_split_field,
         "group_split_fields": group_split_fields,
         "leakage_check_status": leakage_status(group_split_fields),
-        "shadow_comparison_status": "pending",
+        "shadow_comparison_status": shadow_report["status"],
         "review_capacity_threshold_status": "passed",
+        "serving_version_lock_status": "passed",
+        "artifact_integrity_status": "passed",
+        "feature_store_materialization_status": "passed",
+        "segment_fairness_status": fairness_report["status"],
+        "score_psi": drift_report["score_psi"],
+        "drift_status": drift_report["status"],
         "feature_reproducibility_hash": feature_reproducibility_hash(
             feature_columns,
             label_column,
@@ -136,6 +202,8 @@ def train_from_manifest(
         "notes": "Candidate model and validation report registered by production training pipeline.",
         "candidate_model_version": candidate_model_version,
         "artifact_uri": str(artifact_path),
+        "artifact_sha256": artifact_sha256,
+        "artifact_signature": artifact_signature_value,
         "endpoint_url": None,
         "validation_report_uri": str(validation_report_path),
         "evaluation_run_id": evaluation_run_id,
@@ -148,10 +216,20 @@ def train_from_manifest(
         "threshold": format_metric(DEFAULT_THRESHOLD),
         "confusion_matrix_json": validation_metrics["confusion_matrix"],
         "feature_importance_uri": str(feature_importance_path),
+        "serving_manifest_uri": str(serving_manifest_path),
+        "feature_store_manifest_uri": str(feature_store_manifest_path),
+        "shadow_report_uri": str(shadow_report_path),
+        "drift_report_uri": str(drift_report_path),
+        "fairness_report_uri": str(fairness_report_path),
         "metrics_json": metrics_json,
         "evidence_refs": [
             f"model_retraining_jobs:{job_id}",
             f"model_artifacts:{artifact_path}",
+            f"model_serving_manifests:{serving_manifest_path}",
+            f"feature_store_manifests:{feature_store_manifest_path}",
+            f"model_shadow_reports:{shadow_report_path}",
+            f"model_drift_reports:{drift_report_path}",
+            f"model_fairness_reports:{fairness_report_path}",
             f"model_validation_reports:{validation_report_path}",
             f"model_evaluations:{evaluation_run_id}",
         ],

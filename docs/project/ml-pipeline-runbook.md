@@ -161,6 +161,12 @@ Current implementation:
 - `.joblib` model artifact;
 - `validation.json`;
 - `feature_importance.parquet`;
+- `serving_manifest.json` with artifact checksum, signature, and version lock;
+- `feature_store_manifest.json` with materialized feature columns, split row
+  counts, entity keys, and null-count evidence;
+- `shadow_report.json` comparing the candidate against the heuristic baseline;
+- `drift_report.json` with feature PSI and aggregate score PSI;
+- `fairness_report.json` with segment precision and recall slices;
 - retraining output payload printed to stdout.
 
 The first production candidate should remain interpretable. Gradient-boosted
@@ -261,10 +267,23 @@ Local artifact-backed serving:
 
 ```bash
 FWA_MODEL_ARTIFACT_URI=data/model-artifacts/baseline_fwa/<version>/model.joblib \
+FWA_MODEL_VERSION_LOCK=<version> \
+FWA_MODEL_ARTIFACT_SHA256=sha256:<artifact-digest> \
+FWA_MODEL_ARTIFACT_SIGNATURE=hmac-sha256:<artifact-signature> \
+FWA_MODEL_SIGNATURE_KEY=<signing-key> \
+FWA_MODEL_SHADOW_HEURISTIC=true \
 python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
 ```
 
-Production serving should additionally record:
+The service rejects an artifact when `FWA_MODEL_VERSION_LOCK` does not match the
+loaded model version or when `FWA_MODEL_ARTIFACT_SHA256` does not match the file
+digest. If `FWA_MODEL_ARTIFACT_SIGNATURE` is configured, the service also
+verifies it with `FWA_MODEL_SIGNATURE_KEY`. When
+`FWA_MODEL_SHADOW_HEURISTIC=true`, the response metadata records the heuristic
+baseline score, score delta, and shadow status without changing the primary
+model score.
+
+Production serving should additionally provide:
 
 - model artifact URI;
 - artifact checksum;

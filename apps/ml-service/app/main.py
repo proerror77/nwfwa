@@ -1,7 +1,7 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 
 from .schemas import ScoreRequest, ScoreResponse
-from .scorer import score_claim
+from .scorer import ModelServingError, score_claim
 
 app = FastAPI(title="FWA ML Service")
 
@@ -21,4 +21,10 @@ def health() -> dict[str, object]:
 
 @app.post("/score", response_model=ScoreResponse)
 def score(request: ScoreRequest) -> ScoreResponse:
-    return score_claim(request)
+    try:
+        return score_claim(request)
+    except ModelServingError as error:
+        raise HTTPException(
+            status_code=error.status_code,
+            detail={"code": error.code, "message": error.message},
+        ) from error

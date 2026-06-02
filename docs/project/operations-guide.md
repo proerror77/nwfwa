@@ -120,7 +120,22 @@ python -m app.train \
 The command prints the retraining output payload expected by
 `POST /api/v1/ops/model-retraining-jobs/{job_id}/output`. To serve the resulting
 artifact locally, start the ML service with `FWA_MODEL_ARTIFACT_URI` pointing to
-the generated `model.joblib`.
+the generated `model.joblib`. The training command also writes a serving
+manifest, artifact checksum/signature, feature-store materialization manifest,
+shadow comparison report, drift report, and segment fairness report next to the
+model artifact.
+
+Artifact-backed local serving with integrity and version lock:
+
+```bash
+FWA_MODEL_ARTIFACT_URI=../../data/model-artifacts/baseline_fwa/<version>/model.joblib \
+FWA_MODEL_VERSION_LOCK=<version> \
+FWA_MODEL_ARTIFACT_SHA256=sha256:<artifact-digest> \
+FWA_MODEL_ARTIFACT_SIGNATURE=hmac-sha256:<artifact-signature> \
+FWA_MODEL_SIGNATURE_KEY=<signing-key> \
+FWA_MODEL_SHADOW_HEURISTIC=true \
+python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
+```
 
 Worker-driven training registration:
 
@@ -257,10 +272,11 @@ Not complete yet:
 - pilot backup and restore automation
 - pilot retention and legal hold automation
 - customer scoping enforcement
-- real training pipeline
-- real model artifact loader
-- customer holdout and out-of-time validation process
-- long-running drift monitoring
+- external orchestrator for scheduled training, shadow, drift, and fairness jobs
+- production artifact signing key management
+- production serving image/version registry
+- customer holdout validation process
+- production observability dashboards for long-running drift and fairness review
 - full rollback runbook for customer environments
 
 ## Troubleshooting

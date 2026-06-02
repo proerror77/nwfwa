@@ -385,8 +385,12 @@ cannot serve as production promotion evidence.
 | POST | `/api/v1/ops/models/{model_key}/activate` | Activate the latest governed candidate that passes gates. | Yes | Demotes previous active model, activates target, and records audit trail. |
 | POST | `/api/v1/ops/models/{model_key}/rollback` | Roll back active model to recorded previous active version. | Yes | Restores approved previous active model and records audit trail. |
 
-Model APIs govern the demo and pilot model lifecycle. They are not a complete
-production model training system.
+Model APIs govern the demo and pilot model lifecycle. The local ML service now
+produces a production-style baseline bundle with artifact checksum/signature,
+serving manifest, feature materialization manifest, shadow comparison report,
+drift report, and segment fairness report. External scheduler, serving image
+registry, secrets manager, observability dashboards, and customer environment
+deployment remain outside this repository.
 
 Model rollback audit payloads separate the restored and replaced versions:
 `previous_active_version` is the approved historical version restored to
@@ -394,8 +398,9 @@ Model rollback audit payloads separate the restored and replaced versions:
 back to `approved`.
 
 Governed retraining boundary: retraining jobs model the offline worker contract,
-artifact evidence, validation metrics, and candidate registration. They do not
-represent automatic production training or automatic production deployment.
+artifact evidence, validation metrics, MLOps reports, and candidate
+registration. They do not represent automatic production promotion or automatic
+customer-environment deployment.
 
 Promotion gates should be read as the policy checklist for activation. They
 cover data quality, label provenance, drift, promotion review evidence, feature

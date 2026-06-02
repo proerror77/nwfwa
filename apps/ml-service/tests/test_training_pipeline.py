@@ -103,14 +103,51 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["artifact_uri"].endswith("/model.joblib")
     assert payload["validation_report_uri"].endswith("/validation.json")
     assert payload["feature_importance_uri"].endswith("/feature_importance.parquet")
+    assert payload["serving_manifest_uri"].endswith("/serving_manifest.json")
+    assert payload["feature_store_manifest_uri"].endswith("/feature_store_manifest.json")
+    assert payload["shadow_report_uri"].endswith("/shadow_report.json")
+    assert payload["drift_report_uri"].endswith("/drift_report.json")
+    assert payload["fairness_report_uri"].endswith("/fairness_report.json")
     assert Path(payload["artifact_uri"]).exists()
     assert Path(payload["validation_report_uri"]).exists()
     assert Path(payload["feature_importance_uri"]).exists()
+    assert Path(payload["serving_manifest_uri"]).exists()
+    assert Path(payload["feature_store_manifest_uri"]).exists()
+    assert Path(payload["shadow_report_uri"]).exists()
+    assert Path(payload["drift_report_uri"]).exists()
+    assert Path(payload["fairness_report_uri"]).exists()
+    assert payload["artifact_sha256"].startswith("sha256:")
+    assert payload["artifact_signature"].startswith("hmac-sha256:")
     assert payload["metrics_json"]["time_group_split_status"] == "passed"
     assert payload["metrics_json"]["leakage_check_status"] == "passed"
-    assert payload["metrics_json"]["shadow_comparison_status"] == "pending"
+    assert payload["metrics_json"]["shadow_comparison_status"] == "passed"
+    assert payload["metrics_json"]["serving_version_lock_status"] == "passed"
+    assert payload["metrics_json"]["artifact_integrity_status"] == "passed"
+    assert payload["metrics_json"]["feature_store_materialization_status"] == "passed"
+    assert payload["metrics_json"]["segment_fairness_status"] == "passed"
+    assert payload["metrics_json"]["score_psi"] is not None
     assert payload["metrics_json"]["label_provenance_status"] == "passed"
     assert payload["auc"] is not None
     assert payload["precision"] is not None
     assert payload["recall"] is not None
     assert payload["threshold"] == "0.5000"
+
+    serving_manifest = json.loads(
+        Path(payload["serving_manifest_uri"]).read_text(encoding="utf-8")
+    )
+    assert serving_manifest["model_version"] == payload["candidate_model_version"]
+    assert serving_manifest["artifact_sha256"] == payload["artifact_sha256"]
+    assert serving_manifest["artifact_signature"] == payload["artifact_signature"]
+    assert serving_manifest["version_lock"] == payload["candidate_model_version"]
+
+    feature_store_manifest = json.loads(
+        Path(payload["feature_store_manifest_uri"]).read_text(encoding="utf-8")
+    )
+    assert feature_store_manifest["materialization_status"] == "materialized"
+    assert feature_store_manifest["feature_columns"] == [
+        "service_date_ord",
+        "claim_amount_to_limit_ratio",
+        "provider_profile_score",
+        "high_cost_item_ratio",
+    ]
+    assert feature_store_manifest["split_row_counts"]["train"] == 4

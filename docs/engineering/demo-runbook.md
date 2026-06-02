@@ -158,12 +158,17 @@ the source of truth. A promotion-ready `metrics_json` must include:
 - `group_split_fields`
 - `leakage_check_status = "passed"`
 - `shadow_comparison_status = "passed"`
+- `serving_version_lock_status = "passed"`
+- `artifact_integrity_status = "passed"`
+- `feature_store_materialization_status = "passed"`
+- `segment_fairness_status = "passed"`
 - `label_provenance_status = "passed"`
 
 If these fields are missing or not passing, `/api/v1/ops/models/{model_key}/promotion-gates`
 must keep routing blocked. This is intentional: model promotion is allowed only
 when evaluation evidence covers time split, group leakage control, shadow
-comparison, and label provenance.
+comparison, serving integrity, feature materialization, segment review, and
+label provenance.
 
 ## 7. Verification Gates
 
