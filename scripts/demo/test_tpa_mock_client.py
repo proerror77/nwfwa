@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import sys
+import tempfile
 import unittest
 import urllib.error
 from pathlib import Path
@@ -240,6 +241,106 @@ class TpaMockClientTest(unittest.TestCase):
             sent_payload["reportCase"]["policyList"][0]["invoiceList"][0]["invoiceNo"],
             "INV-1",
         )
+
+    def test_normalize_only_can_write_correction_overlay_template(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            template_path = Path(temp_dir) / "req-correction.json"
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "tpa_mock_client.py",
+                        "--inbox-payload-file",
+                        "/tmp/req.json",
+                        "--normalize-only",
+                        "--write-correction-template",
+                        str(template_path),
+                    ],
+                ),
+                mock.patch.object(
+                    tpa_mock_client,
+                    "load_json_file",
+                    return_value={"systemCode": "AiClaim Core"},
+                ),
+                mock.patch.object(
+                    tpa_mock_client,
+                    "request",
+                    return_value={
+                        "scoring_ready": False,
+                        "validation_errors": [
+                            {
+                                "field_path": "reportCase.policyList[0].coverageLimit",
+                                "severity": "warning",
+                            }
+                        ],
+                    },
+                ),
+            ):
+                stdout = io.StringIO()
+                with contextlib.redirect_stdout(stdout):
+                    exit_code = tpa_mock_client.main()
+
+            self.assertEqual(exit_code, 2)
+            self.assertEqual(
+                json.loads(template_path.read_text(encoding="utf-8")),
+                {
+                    "reportCase": {
+                        "policyList": [
+                            {
+                                "coverageLimit": "<REQUIRED_COVERAGE_LIMIT>",
+                            }
+                        ]
+                    }
+                },
+            )
+
+    def test_correction_template_write_does_not_overwrite_without_flag(self):
+        with tempfile.TemporaryDirectory() as temp_dir:
+            template_path = Path(temp_dir) / "req-correction.json"
+            template_path.write_text('{"existing": true}', encoding="utf-8")
+            with (
+                mock.patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "tpa_mock_client.py",
+                        "--inbox-payload-file",
+                        "/tmp/req.json",
+                        "--normalize-only",
+                        "--write-correction-template",
+                        str(template_path),
+                    ],
+                ),
+                mock.patch.object(
+                    tpa_mock_client,
+                    "load_json_file",
+                    return_value={"systemCode": "AiClaim Core"},
+                ),
+                mock.patch.object(
+                    tpa_mock_client,
+                    "request",
+                    return_value={
+                        "scoring_ready": False,
+                        "validation_errors": [
+                            {
+                                "field_path": "reportCase.policyList[0].coverageLimit",
+                                "severity": "warning",
+                            }
+                        ],
+                    },
+                ),
+            ):
+                stderr = io.StringIO()
+                with contextlib.redirect_stderr(stderr):
+                    exit_code = tpa_mock_client.main()
+
+            self.assertEqual(exit_code, 2)
+            self.assertEqual(
+                json.loads(template_path.read_text(encoding="utf-8")),
+                {"existing": True},
+            )
+            self.assertIn("--overwrite-correction-template", stderr.getvalue())
 
 
 if __name__ == "__main__":

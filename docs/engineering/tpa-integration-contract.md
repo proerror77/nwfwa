@@ -51,6 +51,10 @@ blocking fields, the printed JSON also includes `correction_overlay_template`,
 which is a minimal overlay scaffold that can be saved as the correction file.
 The template covers policy coverage limits and policy/product/liability date
 window fields such as `validateDate`, `expireDate`, and `claimValidateDate`.
+To avoid copying the template by hand, add `--write-correction-template` in
+normalize-only mode. The mock client writes the template to a local JSON file
+without mutating the raw payload; existing files are preserved unless
+`--overwrite-correction-template` is passed.
 
 To test corrections without rewriting the raw customer payload, pass a local
 JSON overlay with `--inbox-correction-file`. Objects are merged by key and
@@ -68,7 +72,19 @@ arrays are merged by index, so a coverage-limit correction can be as small as:
 }
 ```
 
-Then rerun the normalize check:
+To write that scaffold directly:
+
+```bash
+python3 scripts/demo/tpa_mock_client.py \
+  --base-url http://127.0.0.1:8080 \
+  --api-key dev-secret \
+  --inbox-payload-file /Users/proerror/Downloads/req.json \
+  --write-correction-template /Users/proerror/Downloads/req-correction.json \
+  --normalize-only
+```
+
+After replacing placeholder values in the generated overlay, rerun the
+normalize check:
 
 ```bash
 python3 scripts/demo/tpa_mock_client.py \

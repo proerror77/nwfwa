@@ -45,6 +45,13 @@ def load_json_file(path):
         return json.load(file)
 
 
+def write_json_file(path, payload, overwrite=False):
+    mode = "w" if overwrite else "x"
+    with open(path, mode, encoding="utf-8") as file:
+        json.dump(payload, file, ensure_ascii=False, indent=2, sort_keys=True)
+        file.write("\n")
+
+
 def merge_json_overlay(base, overlay):
     if isinstance(base, dict) and isinstance(overlay, dict):
         merged = dict(base)
@@ -282,7 +289,18 @@ def main():
         action="store_true",
         help="Only call /api/v1/inbox/claims/normalize and print the normalization response.",
     )
+    parser.add_argument(
+        "--write-correction-template",
+        help="Write correction_overlay_template from normalize-only output to this JSON file.",
+    )
+    parser.add_argument(
+        "--overwrite-correction-template",
+        action="store_true",
+        help="Allow --write-correction-template to replace an existing file.",
+    )
     args = parser.parse_args()
+    if args.write_correction_template and not args.normalize_only:
+        parser.error("--write-correction-template requires --normalize-only")
 
     suffix = str(int(time.time()))
     raw_inbox_payload = (
@@ -307,6 +325,29 @@ def main():
     )
     if args.normalize_only:
         inbox = add_correction_hints(inbox)
+        if args.write_correction_template:
+            overlay_template = inbox.get("correction_overlay_template")
+            if overlay_template:
+                try:
+                    write_json_file(
+                        args.write_correction_template,
+                        overlay_template,
+                        overwrite=args.overwrite_correction_template,
+                    )
+                except FileExistsError:
+                    print(
+                        (
+                            f"{args.write_correction_template} already exists; rerun with "
+                            "--overwrite-correction-template to replace it"
+                        ),
+                        file=sys.stderr,
+                    )
+                    return 2
+            else:
+                print(
+                    "normalize response did not include correction_overlay_template",
+                    file=sys.stderr,
+                )
         print(json.dumps(inbox, ensure_ascii=False, indent=2, sort_keys=True))
         return 0 if inbox.get("scoring_ready") is True else 2
 

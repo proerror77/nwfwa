@@ -308,7 +308,10 @@ Correction record for `/Users/proerror/Downloads/req.json`:
   so operators can copy a minimal overlay scaffold instead of editing the raw
   intake file. The overlay template must cover policy coverage limits and
   policy/product/liability date-window fields such as `validateDate`,
-  `expireDate`, and `claimValidateDate`;
+  `expireDate`, and `claimValidateDate`. Operators may use
+  `--write-correction-template` in normalize-only mode to save this scaffold to
+  a local correction file; existing correction files must not be overwritten
+  unless `--overwrite-correction-template` is explicitly passed;
 - support local correction overlays via `--inbox-correction-file` so operators
   can validate fixes without rewriting the raw customer payload. The overlay is
   merged in memory before normalization; object fields merge by key and arrays
