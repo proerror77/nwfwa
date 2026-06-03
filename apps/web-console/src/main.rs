@@ -4392,6 +4392,8 @@ fn qa_review_view(props: &QaReviewProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <>
+                        {qa_feedback_loop_cockpit(snapshot)}
+
                         <section class="panel result-stack">
                             <h3>{"QA Queue Summary"}</h3>
                             <div class="score-hero">
@@ -4479,6 +4481,121 @@ fn qa_review_view(props: &QaReviewProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn qa_feedback_loop_cockpit(snapshot: &QaReviewSnapshot) -> Html {
+    let selected_queue = snapshot.queue.first();
+    let selected_feedback = selected_queue
+        .and_then(|queue| {
+            snapshot
+                .feedback_items
+                .iter()
+                .find(|feedback| feedback.qa_case_id == queue.qa_case_id)
+        })
+        .or_else(|| snapshot.feedback_items.first());
+    let qa_case_id = selected_queue
+        .map(|item| item.qa_case_id.as_str())
+        .or_else(|| selected_feedback.map(|item| item.qa_case_id.as_str()))
+        .unwrap_or("no qa case");
+    let claim_id = selected_queue
+        .map(|item| item.claim_id.as_str())
+        .or_else(|| selected_feedback.map(|item| item.claim_id.as_str()))
+        .unwrap_or("no claim");
+    let conclusion = selected_queue
+        .and_then(|item| item.qa_conclusion.as_deref())
+        .or_else(|| selected_feedback.map(|item| item.qa_conclusion.as_str()))
+        .unwrap_or("pending");
+    let issue_type = selected_queue
+        .and_then(|item| item.issue_type.as_deref())
+        .or_else(|| selected_feedback.map(|item| item.issue_type.as_str()))
+        .unwrap_or("issue pending");
+    let feedback_target = selected_queue
+        .and_then(|item| item.feedback_target.as_deref())
+        .or_else(|| selected_feedback.map(|item| item.feedback_target.as_str()))
+        .unwrap_or("target pending");
+    let feedback_status = selected_feedback
+        .map(|item| item.status.as_str())
+        .or_else(|| selected_queue.map(|item| item.status.as_str()))
+        .unwrap_or("status pending");
+    let status_audit = selected_feedback
+        .and_then(|item| item.status_audit_id.as_deref())
+        .unwrap_or("audit pending");
+    let evidence_ref = selected_queue
+        .and_then(|item| item.evidence_refs.first().map(String::as_str))
+        .or_else(|| {
+            selected_feedback.and_then(|item| item.evidence_refs.first().map(String::as_str))
+        })
+        .unwrap_or("evidence pending");
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"QA feedback loop cockpit"}</h3>
+                    <p>{"Sampled review findings move into governed feedback targets for rule, model, feature, provider, workflow, and TPA remediation."}</p>
+                </div>
+                <span class={classes!("status-token", status_tone(feedback_status))}>{feedback_status}</span>
+            </div>
+            <div class="qa-cockpit">
+                <aside class="case-brief qa-brief">
+                    <span>{"Selected QA case"}</span>
+                    <strong>{qa_case_id}</strong>
+                    <dl>
+                        <div><dt>{"Claim"}</dt><dd>{claim_id}</dd></div>
+                        <div><dt>{"Conclusion"}</dt><dd>{conclusion}</dd></div>
+                        <div><dt>{"Issue"}</dt><dd>{issue_type}</dd></div>
+                        <div><dt>{"Target"}</dt><dd>{feedback_target}</dd></div>
+                    </dl>
+                    <div class="tag-grid compact-tags">
+                        <span>{format!("open {}", snapshot.summary.open_count)}</span>
+                        <span>{format!("unresolved {}", snapshot.summary.unresolved_count)}</span>
+                        <span>{format!("evidence backed {}", snapshot.summary.evidence_backed_count)}</span>
+                    </div>
+                </aside>
+
+                <div class="qa-loop-map">
+                    <div class="qa-map-title">
+                        <span>{"QA closed-loop routing"}</span>
+                        <strong>{format!("{} -> {}", issue_type, feedback_target)}</strong>
+                    </div>
+                    <div class="qa-link horizontal"></div>
+                    <div class="qa-link diagonal-a"></div>
+                    <div class="qa-link diagonal-b"></div>
+                    <div class="qa-core">
+                        <span>{"QA"}</span>
+                        <strong>{"feedback gate"}</strong>
+                    </div>
+                    <div class="qa-node sample">
+                        <span>{"Sampled case"}</span>
+                        <strong>{claim_id}</strong>
+                    </div>
+                    <div class="qa-node reviewer">
+                        <span>{"Reviewer finding"}</span>
+                        <strong>{conclusion}</strong>
+                    </div>
+                    <div class="qa-node target">
+                        <span>{"Feedback target"}</span>
+                        <strong>{feedback_target}</strong>
+                    </div>
+                    <div class="qa-node evidence">
+                        <span>{"Canonical evidence"}</span>
+                        <strong>{evidence_ref}</strong>
+                    </div>
+                    <div class="qa-node audit">
+                        <span>{"Audit status"}</span>
+                        <strong>{status_audit}</strong>
+                    </div>
+                </div>
+
+                <aside class="case-timeline qa-trace">
+                    <h4>{"Feedback closure path"}</h4>
+                    {timeline_item("Sample", qa_case_id, "done")}
+                    {timeline_item("Review", conclusion, "review")}
+                    {timeline_item("Route", feedback_target, "ready")}
+                    {timeline_item("Closure", feedback_status, feedback_status)}
+                </aside>
+            </div>
+        </section>
     }
 }
 
