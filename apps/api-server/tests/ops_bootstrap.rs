@@ -266,3 +266,43 @@ async fn label_bootstrap_rejects_training_approval_before_evidence_is_received()
     assert_eq!(status, StatusCode::BAD_REQUEST, "{review}");
     assert_eq!(review["code"], "LABEL_BOOTSTRAP_EVIDENCE_NOT_RECEIVED");
 }
+
+#[tokio::test]
+async fn evidence_request_rejects_received_status_without_document_evidence() {
+    let app = build_app(test_config());
+    score_claim_with_missing_clinical_evidence(app.clone(), "CLM-BOOTSTRAP-3").await;
+
+    let (status, generated) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/evidence-requests/generate",
+        r#"{
+          "claim_id": "CLM-BOOTSTRAP-3",
+          "requested_by": "clinical-ops",
+          "reviewer_queue": "clinical-evidence",
+          "notes": "Generate missing clinical evidence checklist.",
+          "limit": 10
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{generated}");
+    let request_id = generated["requests"][0]["request_id"].as_str().unwrap();
+
+    let (status, update) = json_request(
+        app,
+        "POST",
+        &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
+        r#"{
+          "status": "received",
+          "actor_id": "clinical-ops",
+          "notes": "Attempt to mark received without document evidence.",
+          "evidence_refs": ["evidence_requests:placeholder"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{update}");
+    assert_eq!(
+        update["code"],
+        "EVIDENCE_REQUEST_DOCUMENT_EVIDENCE_REQUIRED"
+    );
+}
