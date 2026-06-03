@@ -611,7 +611,7 @@ pub async fn list_qa_queue(
     let actor = authorize(&state, &headers)?;
     let samples = state
         .repository
-        .list_audit_samples()
+        .list_audit_samples(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("AUDIT_SAMPLE_LIST_FAILED"))?;
     let reviews = state

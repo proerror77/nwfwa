@@ -8,6 +8,7 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
+use fwa_audit::ActorContext;
 use fwa_auth::validate_api_key;
 use fwa_core::AuditEventId;
 use serde::Serialize;
@@ -21,10 +22,10 @@ pub async fn list_audit_samples(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<AuditSampleListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let samples = state
         .repository
-        .list_audit_samples()
+        .list_audit_samples(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("AUDIT_SAMPLE_LIST_FAILED"))?;
     Ok(Json(AuditSampleListResponse { samples }))
@@ -33,9 +34,9 @@ pub async fn list_audit_samples(
 pub async fn create_audit_sample(
     State(state): State<AppState>,
     headers: HeaderMap,
-    Json(request): Json<CreateAuditSampleInput>,
+    Json(mut request): Json<CreateAuditSampleInput>,
 ) -> Result<Json<AuditSampleRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     if !matches!(
         request.sample_mode.as_str(),
         "risk_ranked" | "random_control" | "stratified" | "post_payment_audit" | "qa_calibration"
@@ -74,12 +75,13 @@ pub async fn create_audit_sample(
             "assignment_queue is required",
         ));
     }
+    request.customer_scope_id = Some(actor.customer_scope_id.clone());
     let sample = state
         .repository
         .create_audit_sample(request)
         .await
         .map_err(internal_error("AUDIT_SAMPLE_CREATE_FAILED"))?;
-    record_audit_sample_created(&state, &sample)
+    record_audit_sample_created(&state, &actor, &sample)
         .await
         .map_err(internal_error("AUDIT_SAMPLE_AUDIT_FAILED"))?;
     Ok(Json(sample))
@@ -87,6 +89,7 @@ pub async fn create_audit_sample(
 
 async fn record_audit_sample_created(
     state: &AppState,
+    actor: &ActorContext,
     sample: &AuditSampleRecord,
 ) -> anyhow::Result<()> {
     state
@@ -95,14 +98,14 @@ async fn record_audit_sample_created(
             audit_id: AuditEventId::new().to_string(),
             run_id: format!("audit_sample_{}", sample.sample_id),
             claim_id: String::new(),
-            source_system: state.config.source_system.clone(),
-            actor_id: state.config.source_system.clone(),
-            actor_role: "fwa_operator".into(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
             event_type: "audit_sample.created".into(),
             event_status: "succeeded".into(),
             summary: format!("Audit sample created: {}", sample.sample_mode),
             payload: serde_json::json!({
-                "customer_scope_id": state.config.customer_scope_id,
+                "customer_scope_id": sample.customer_scope_id,
                 "sample_id": sample.sample_id,
                 "sample_mode": sample.sample_mode,
                 "population_definition": sample.population_definition,
@@ -123,19 +126,17 @@ async fn record_audit_sample_created(
         .await
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config())
-        .map(|_| ())
-        .map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+        ApiError::new(
+            StatusCode::UNAUTHORIZED,
+            "INVALID_API_KEY",
+            "invalid api key",
+        )
+    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

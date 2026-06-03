@@ -423,6 +423,7 @@ WHERE c.lead_id = l.lead_id
 CREATE TABLE IF NOT EXISTS audit_samples (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sample_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL DEFAULT 'demo-customer',
   sample_mode TEXT NOT NULL,
   population_definition TEXT NOT NULL,
   inclusion_criteria_json JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -436,6 +437,12 @@ CREATE TABLE IF NOT EXISTS audit_samples (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE audit_samples
+  ADD COLUMN IF NOT EXISTS customer_scope_id TEXT NOT NULL DEFAULT 'demo-customer';
+
+CREATE INDEX IF NOT EXISTS idx_audit_samples_customer_scope
+  ON audit_samples(customer_scope_id);
 
 CREATE TABLE IF NOT EXISTS external_data_sources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -338,6 +338,9 @@ call records reuse that audit role and expose `customer_scope_id` from the
 underlying audit payload so externally reachable TPA calls can be reviewed by
 role and tenant/customer scope. Webhook event records expose the same
 `customer_scope_id` for delivery governance.
+Audit samples are also customer scoped: the platform derives
+`customer_scope_id` from the authenticated API key, uses it to select the sample
+population, and only lists samples visible to that customer scope.
 `/api/v1/ops/audit-events` supports operational filters for event type, event
 group, actor, claim, run, rule, model, routing policy, review mode, QA, Agent,
 data lineage, and `has_canonical_trace=true` to isolate normalized inbox

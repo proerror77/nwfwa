@@ -5381,9 +5381,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AuditSampleRecord": {
                     "type": "object",
-                    "required": ["sample_id", "sample_mode", "population_definition", "inclusion_criteria", "selection_method", "sample_size", "reviewer", "assignment_queue", "selected_leads", "outcome_distribution"],
+                    "required": ["sample_id", "customer_scope_id", "sample_mode", "population_definition", "inclusion_criteria", "selection_method", "sample_size", "reviewer", "assignment_queue", "selected_leads", "outcome_distribution"],
                     "properties": {
                         "sample_id": { "type": "string" },
+                        "customer_scope_id": {
+                            "type": "string",
+                            "description": "Derived from the authenticated API key and used to scope sample population and list visibility."
+                        },
                         "sample_mode": { "type": "string" },
                         "population_definition": { "type": "string" },
                         "inclusion_criteria": { "type": "object" },

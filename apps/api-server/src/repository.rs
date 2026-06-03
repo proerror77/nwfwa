@@ -399,11 +399,14 @@ pub struct CreateAuditSampleInput {
     pub sample_size: usize,
     pub reviewer: String,
     pub assignment_queue: String,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditSampleRecord {
     pub sample_id: String,
+    pub customer_scope_id: String,
     pub sample_mode: String,
     pub population_definition: String,
     pub inclusion_criteria: Value,
@@ -1523,7 +1526,10 @@ pub trait ScoringRepository: Send + Sync {
         input: CreateAuditSampleInput,
     ) -> anyhow::Result<AuditSampleRecord>;
 
-    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>>;
+    async fn list_audit_samples(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditSampleRecord>>;
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
@@ -2434,16 +2440,29 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut sequence = self.audit_sample_sequence.lock().await;
         *sequence += 1;
         let sample_id = format!("sample_{}", *sequence);
+        let customer_scope_id = input.customer_scope_id.as_deref();
         let leads = if input.sample_mode == "random_control" {
+            let visible_claim_ids = match customer_scope_id {
+                Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                    self.audit_events.lock().await.iter(),
+                    scope,
+                )),
+                None => None,
+            };
             let claims = self.claims.lock().await;
             self.runs
                 .lock()
                 .await
                 .iter()
+                .filter(|run| {
+                    visible_claim_ids
+                        .as_ref()
+                        .is_none_or(|claim_ids| claim_ids.contains(&run.claim_id))
+                })
                 .map(|run| control_lead_from_scoring_run(run, claims.get(&run.claim_id)))
                 .collect()
         } else {
-            self.list_leads(None).await?
+            self.list_leads(customer_scope_id).await?
         };
         let claims = self.claims.lock().await;
         let strata_contexts = audit_sample_strata_contexts_from_claims(&claims);
@@ -2466,16 +2485,22 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(sample)
     }
 
-    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>> {
+    async fn list_audit_samples(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditSampleRecord>> {
         let mut samples = self
             .audit_samples
             .lock()
             .await
             .values()
+            .filter(|sample| {
+                customer_scope_id.is_none_or(|scope| sample.customer_scope_id == scope)
+            })
             .cloned()
             .collect::<Vec<_>>();
         samples.sort_by(|left, right| left.sample_id.cmp(&right.sample_id));
-        let reviews = self.list_qa_reviews(None).await?;
+        let reviews = self.list_qa_reviews(customer_scope_id).await?;
         Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
@@ -2888,7 +2913,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         drop(claims);
         drop(runs);
 
-        let audit_samples = self.list_audit_samples().await?;
+        let audit_samples = self.list_audit_samples(customer_scope_id).await?;
         let qa_review_records = self.list_qa_reviews(customer_scope_id).await?;
         let qa_feedback_items = self.list_qa_feedback_items(customer_scope_id).await?;
         let cases = self.list_cases(customer_scope_id).await?;
@@ -5286,13 +5311,15 @@ impl ScoringRepository for PostgresScoringRepository {
         input: CreateAuditSampleInput,
     ) -> anyhow::Result<AuditSampleRecord> {
         let sample_id = format!("sample_{}", AuditEventId::new());
+        let customer_scope_filter = input.customer_scope_id.clone();
+        let customer_scope_id = customer_scope_filter.as_deref();
         let leads = if input.sample_mode == "random_control" {
-            load_control_audit_population(&self.pool).await?
+            load_control_audit_population(&self.pool, customer_scope_id).await?
         } else {
-            self.list_leads(None).await?
+            self.list_leads(customer_scope_id).await?
         };
         let strata_contexts = load_audit_sample_strata_contexts(&self.pool).await?;
-        let existing_samples = self.list_audit_samples().await?;
+        let existing_samples = self.list_audit_samples(customer_scope_id).await?;
         let reviewer_history =
             reviewer_lead_sample_counts(existing_samples.iter(), &input.reviewer);
         let sample = build_audit_sample(
@@ -5305,10 +5332,11 @@ impl ScoringRepository for PostgresScoringRepository {
         );
         sqlx::query(
             "INSERT INTO audit_samples
-             (sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+             (sample_id, customer_scope_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
         )
         .bind(&sample.sample_id)
+        .bind(&sample.customer_scope_id)
         .bind(&sample.sample_mode)
         .bind(&sample.population_definition)
         .bind(&sample.inclusion_criteria)
@@ -5321,15 +5349,19 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&sample.outcome_distribution)
         .execute(&self.pool)
         .await?;
-        self.list_audit_samples()
+        self.list_audit_samples(customer_scope_id)
             .await?
             .into_iter()
             .find(|record| record.sample_id == sample.sample_id)
             .ok_or_else(|| anyhow::anyhow!("created audit sample was not found"))
     }
 
-    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>> {
+    async fn list_audit_samples(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditSampleRecord>> {
         let rows: Vec<(
+            String,
             String,
             String,
             String,
@@ -5343,10 +5375,12 @@ impl ScoringRepository for PostgresScoringRepository {
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json, created_at
+            "SELECT sample_id, customer_scope_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json, created_at
              FROM audit_samples
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
              ORDER BY created_at, sample_id",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
         let samples = rows
@@ -5354,6 +5388,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .map(
                 |(
                     sample_id,
+                    customer_scope_id,
                     sample_mode,
                     population_definition,
                     inclusion_criteria,
@@ -5367,6 +5402,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     created_at,
                 )| AuditSampleRecord {
                     sample_id,
+                    customer_scope_id,
                     sample_mode,
                     population_definition,
                     inclusion_criteria,
@@ -5381,7 +5417,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect::<Vec<_>>();
-        let reviews = self.list_qa_reviews(None).await?;
+        let reviews = self.list_qa_reviews(customer_scope_id).await?;
         Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
@@ -6149,7 +6185,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .fetch_all(&self.pool)
             .await?;
         let outcome_labels = self.list_outcome_labels(customer_scope_id).await?;
-        let audit_samples = self.list_audit_samples().await?;
+        let audit_samples = self.list_audit_samples(customer_scope_id).await?;
         let qa_review_records = self.list_qa_reviews(customer_scope_id).await?;
         let qa_feedback_items = self.list_qa_feedback_items(customer_scope_id).await?;
         let agent_runs = self.list_agent_runs(customer_scope_id).await?;
@@ -8648,6 +8684,7 @@ fn build_audit_sample(
 
     let mut sample = AuditSampleRecord {
         sample_id,
+        customer_scope_id: input.customer_scope_id.unwrap_or_default(),
         sample_mode: input.sample_mode,
         population_definition: input.population_definition,
         inclusion_criteria: input.inclusion_criteria,
@@ -10622,7 +10659,10 @@ async fn load_leads(
     Ok(rows.into_iter().map(lead_from_row).collect())
 }
 
-async fn load_control_audit_population(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
+async fn load_control_audit_population(
+    pool: &PgPool,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<LeadRecord>> {
     let rows: Vec<LeadRow> = sqlx::query_as(
         "SELECT 'control_lead_' || c.external_claim_id,
                 sr.run_id,
@@ -10656,8 +10696,10 @@ async fn load_control_audit_population(pool: &PgPool) -> anyhow::Result<Vec<Lead
          ) scoring_event ON TRUE
          WHERE sr.status = 'succeeded'
            AND sr.risk_score IS NOT NULL
+           AND ($1::text IS NULL OR scoring_event.payload->>'customer_scope_id' = $1)
          ORDER BY sr.completed_at, sr.run_id",
     )
+    .bind(customer_scope_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(lead_from_row).collect())

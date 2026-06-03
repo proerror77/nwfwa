@@ -102,7 +102,7 @@ agent workspace artifacts are a future infrastructure item, not a current table.
 | --- | --- |
 | `fwa_leads` | Generated leads from scoring or operational signals. |
 | `investigation_cases` | Case workflow, SLA, assignment, reviewer, and evidence package. |
-| `audit_samples` | QA and audit sampling records. |
+| `audit_samples` | Customer-scoped QA and audit sampling records. |
 | `investigation_results` | Investigation writeback outcomes. |
 | `saving_attributions` | Prevented, recovered, estimated, and source-attributed amounts with financial impact type. |
 | `qa_reviews` | QA review writebacks and feedback targets. |
@@ -182,6 +182,7 @@ identifiers are also unique:
 - `fwa_leads.lead_id`
 - `investigation_cases.case_id`
 - `audit_samples.sample_id`
+- `audit_samples.customer_scope_id`
 - `investigation_results.investigation_id`
 - `saving_attributions.attribution_id`
 - `qa_reviews.qa_case_id`
