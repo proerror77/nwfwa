@@ -1061,6 +1061,11 @@ struct HealthResponse {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct PilotReadiness {
     status: String,
+    required_check_names: Vec<String>,
+    required_check_count: usize,
+    ready_check_count: usize,
+    blocking_check_count: usize,
+    ready_checks: Vec<HealthCheck>,
     blocking_checks: Vec<HealthCheck>,
 }
 
@@ -6702,9 +6707,11 @@ fn governance_view(props: &GovernanceProps) -> Html {
 
                         <section class="panel result-stack">
                             <h3>{"Pilot Security Readiness"}</h3>
+                            {pilot_readiness_cockpit(&snapshot.health)}
                             <div class="score-hero">
                                 <div><span>{"Pilot Gate"}</span><strong>{&snapshot.health.pilot_readiness.status}</strong></div>
-                                <div><span>{"Blocking Checks"}</span><strong>{snapshot.health.pilot_readiness.blocking_checks.len()}</strong></div>
+                                <div><span>{"Ready Checks"}</span><strong>{format!("{} / {}", snapshot.health.pilot_readiness.ready_check_count, snapshot.health.pilot_readiness.required_check_count)}</strong></div>
+                                <div><span>{"Blocking Checks"}</span><strong>{snapshot.health.pilot_readiness.blocking_check_count}</strong></div>
                                 <div><span>{"Health Checks"}</span><strong>{snapshot.health.checks.len()}</strong></div>
                                 <div><span>{"Service"}</span><strong>{format!("{} {}", snapshot.health.service, snapshot.health.version)}</strong></div>
                             </div>
@@ -6831,6 +6838,77 @@ fn governance_view(props: &GovernanceProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn pilot_readiness_cockpit(health: &HealthResponse) -> Html {
+    let readiness = &health.pilot_readiness;
+    let ready_count = readiness.ready_check_count;
+    let required_count = readiness.required_check_count;
+    let blocked_count = readiness.blocking_check_count;
+    let ready_pct = if required_count == 0 {
+        0
+    } else {
+        ((ready_count * 100) / required_count).min(100)
+    };
+    let blocker_label = readiness
+        .blocking_checks
+        .first()
+        .map(|check| check.name.as_str())
+        .unwrap_or("no active blocker");
+    let ready_label = readiness
+        .ready_checks
+        .first()
+        .map(|check| check.name.as_str())
+        .unwrap_or("no ready checks");
+    let required_label = readiness
+        .required_check_names
+        .first()
+        .map(String::as_str)
+        .unwrap_or("required checks not reported");
+
+    html! {
+        <div class="pilot-readiness-cockpit">
+            <aside class="pilot-readiness-brief">
+                <span class="eyebrow">{"Pilot gate status"}</span>
+                <strong>{&readiness.status}</strong>
+                <dl>
+                    <div><dt>{"Ready"}</dt><dd>{format!("{ready_count} / {required_count}")}</dd></div>
+                    <div><dt>{"Blocked"}</dt><dd>{blocked_count}</dd></div>
+                    <div><dt>{"Health"}</dt><dd>{health.checks.len()}</dd></div>
+                    <div><dt>{"Service"}</dt><dd>{format!("{} {}", health.service, health.version)}</dd></div>
+                </dl>
+            </aside>
+
+            <div class="pilot-readiness-map">
+                <div class="readiness-track"></div>
+                <div class="readiness-progress" style={format!("width: {ready_pct}%;")}></div>
+                {readiness_node("Required", &required_count.to_string(), required_label, "required")}
+                {readiness_node("Ready", &format!("{ready_pct}%"), ready_label, "ready")}
+                {readiness_node("Blocked", &blocked_count.to_string(), blocker_label, "blocked")}
+                {readiness_node("Decision", &readiness.status, "worker check-pilot-readiness", "decision")}
+            </div>
+
+            <aside class="pilot-readiness-actions">
+                <span class="eyebrow">{"Next blocker"}</span>
+                <strong>{blocker_label}</strong>
+                if let Some(check) = readiness.blocking_checks.first() {
+                    <small>{check.remediation.as_deref().unwrap_or("no remediation returned")}</small>
+                } else {
+                    <small>{"Pilot readiness has no blocking configuration checks."}</small>
+                }
+            </aside>
+        </div>
+    }
+}
+
+fn readiness_node(label: &str, value: &str, detail: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("readiness-node", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{detail}</small>
+        </div>
     }
 }
 
