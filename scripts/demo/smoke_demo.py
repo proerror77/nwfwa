@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import http.client
 import os
 import sys
 import time
@@ -80,7 +81,12 @@ def request(method, path, payload=None, retries=1):
         except urllib.error.HTTPError as error:
             last_error = f"HTTP {error.code}: {error.read().decode('utf-8', errors='replace')}"
             time.sleep(1)
-        except (urllib.error.URLError, TimeoutError) as error:
+        except (
+            urllib.error.URLError,
+            http.client.RemoteDisconnected,
+            ConnectionError,
+            TimeoutError,
+        ) as error:
             last_error = error
             time.sleep(1)
     raise RuntimeError(f"{method} {path} failed: {last_error}")
