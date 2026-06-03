@@ -6410,29 +6410,116 @@ fn agent_runs_view(props: &AgentRunsProps) -> Html {
                     if runs.is_empty() {
                         <p class="empty">{"No Agent runs returned."}</p>
                     } else {
-                        <div class="factor-card-grid">
-                            {for runs.iter().take(8).map(|run| html! {
-                                <div class="factor-card">
-                                    <div>
-                                        <strong>{format!("{} / {}", run.agent_run_id, run.claim_id)}</strong>
-                                        <span>{format!("{} / {}", run.status, run.decision_boundary)}</span>
+                        <>
+                            {agent_run_governance_cockpit(&runs[0])}
+                            <div class="factor-card-grid">
+                                {for runs.iter().take(8).map(|run| html! {
+                                    <div class="factor-card">
+                                        <div>
+                                            <strong>{format!("{} / {}", run.agent_run_id, run.claim_id)}</strong>
+                                            <span>{format!("{} / {}", run.status, run.decision_boundary)}</span>
+                                        </div>
+                                        <div class="summary-grid">
+                                            <div><span>{"Steps"}</span><strong>{run.steps.len()}</strong></div>
+                                            <div><span>{"Tool Calls"}</span><strong>{run.tool_calls.len()}</strong></div>
+                                            <div><span>{"Policy Checks"}</span><strong>{run.policy_checks.len()}</strong></div>
+                                            <div><span>{"Approvals"}</span><strong>{run.approvals.len()}</strong></div>
+                                        </div>
+                                        <small>{format!("created: {} / completed: {}", run.created_at.as_deref().unwrap_or("unknown"), run.completed_at.as_deref().unwrap_or("pending"))}</small>
+                                        <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
+                                        <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
                                     </div>
-                                    <div class="summary-grid">
-                                        <div><span>{"Steps"}</span><strong>{run.steps.len()}</strong></div>
-                                        <div><span>{"Tool Calls"}</span><strong>{run.tool_calls.len()}</strong></div>
-                                        <div><span>{"Policy Checks"}</span><strong>{run.policy_checks.len()}</strong></div>
-                                        <div><span>{"Approvals"}</span><strong>{run.approvals.len()}</strong></div>
-                                    </div>
-                                    <small>{format!("created: {} / completed: {}", run.created_at.as_deref().unwrap_or("unknown"), run.completed_at.as_deref().unwrap_or("pending"))}</small>
-                                    <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
-                                    <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
-                                </div>
-                            })}
-                        </div>
+                                })}
+                            </div>
+                        </>
                     }
                 },
             }}
         </section>
+    }
+}
+
+fn agent_run_governance_cockpit(run: &AgentRunRecord) -> Html {
+    let policy_label = run
+        .policy_checks
+        .first()
+        .map(payload_keys_label)
+        .unwrap_or_else(|| "no policy check".into());
+    let tool_label = run
+        .tool_calls
+        .first()
+        .map(payload_keys_label)
+        .unwrap_or_else(|| "no tool call".into());
+    let result_label = run
+        .tool_results
+        .first()
+        .map(payload_keys_label)
+        .unwrap_or_else(|| "no tool result".into());
+    let context_label = run
+        .context_snapshots
+        .first()
+        .map(payload_keys_label)
+        .unwrap_or_else(|| "no context snapshot".into());
+    let step_label = run
+        .steps
+        .first()
+        .map(payload_keys_label)
+        .unwrap_or_else(|| "no step".into());
+    let approval_label = approval_summary(&run.approvals);
+
+    html! {
+        <div class="agent-run-cockpit">
+            <aside class="agent-run-brief">
+                <span class="eyebrow">{"Agent Run Governance Map"}</span>
+                <strong>{&run.agent_run_id}</strong>
+                <dl>
+                    <div><dt>{"Claim"}</dt><dd>{&run.claim_id}</dd></div>
+                    <div><dt>{"Status"}</dt><dd>{&run.status}</dd></div>
+                    <div><dt>{"Boundary"}</dt><dd>{&run.decision_boundary}</dd></div>
+                    <div><dt>{"Evidence"}</dt><dd>{run.evidence_refs.len()}</dd></div>
+                </dl>
+            </aside>
+
+            <div class="agent-run-map">
+                <div class="agent-run-map-title">
+                    <span>{"Governed agent execution"}</span>
+                    <strong>{"context -> policy check -> tool allowlist -> result -> human approval -> audit"}</strong>
+                </div>
+                <div class="agent-run-link"></div>
+                <div class="agent-run-link diagonal-a"></div>
+                <div class="agent-run-link diagonal-b"></div>
+                <div class="agent-run-core">
+                    <span>{"Assistive Only"}</span>
+                    <strong>{&run.status}</strong>
+                </div>
+                {agent_run_node("Context snapshot", &context_label, "context")}
+                {agent_run_node("Policy check", &policy_label, "policy")}
+                {agent_run_node("Tool allowlist", &tool_label, "tool")}
+                {agent_run_node("Tool result", &result_label, "result")}
+                {agent_run_node("Human approval gate", &approval_label, "approval")}
+                {agent_run_node("Evidence audit trail", &refs_label(&run.evidence_refs), "audit")}
+            </div>
+
+            <aside class="agent-run-trace">
+                <span class="eyebrow">{"Execution counters"}</span>
+                <div class="provider-signal-stack">
+                    {provider_signal_row("Steps", &format!("{} / {}", run.steps.len(), step_label), "neutral")}
+                    {provider_signal_row("Policy checks", &run.policy_checks.len().to_string(), "strong")}
+                    {provider_signal_row("Tool calls", &run.tool_calls.len().to_string(), "warning")}
+                    {provider_signal_row("Approvals", &run.approvals.len().to_string(), "danger")}
+                    {provider_signal_row("Output JSON", &payload_keys_label(&run.output_json), "neutral")}
+                </div>
+            </aside>
+        </div>
+    }
+}
+
+fn agent_run_node(label: &str, value: &str, position: &str) -> Html {
+    html! {
+        <div class={classes!("agent-run-node", position.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
     }
 }
 

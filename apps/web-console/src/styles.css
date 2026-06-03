@@ -3407,6 +3407,191 @@ pre {
   background: #ffffff;
 }
 
+.agent-run-cockpit {
+  display: grid;
+  grid-template-columns: minmax(200px, 0.76fr) minmax(460px, 1.56fr) minmax(220px, 0.86fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.agent-run-brief,
+.agent-run-trace {
+  min-width: 0;
+  padding: 14px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.agent-run-brief strong {
+  display: block;
+  margin-top: 6px;
+  color: #102f58;
+  overflow-wrap: anywhere;
+}
+
+.agent-run-brief dl {
+  display: grid;
+  gap: 8px;
+  margin: 12px 0 0;
+}
+
+.agent-run-brief dl div {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.agent-run-brief dt {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.agent-run-brief dd {
+  margin: 0;
+  color: #19335b;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.agent-run-map {
+  position: relative;
+  min-height: 430px;
+  overflow: hidden;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.98)),
+    radial-gradient(circle at 50% 50%, rgba(111, 91, 213, 0.13), transparent 48%),
+    radial-gradient(circle at 15% 28%, rgba(23, 105, 224, 0.1), transparent 28%),
+    radial-gradient(circle at 86% 29%, rgba(31, 143, 84, 0.1), transparent 28%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.agent-run-map-title {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.agent-run-map-title span,
+.agent-run-node span,
+.agent-run-core span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-run-map-title strong {
+  display: block;
+  margin-top: 4px;
+  color: #0c315f;
+  overflow-wrap: anywhere;
+}
+
+.agent-run-link {
+  position: absolute;
+  left: 10%;
+  right: 10%;
+  top: 52%;
+  height: 2px;
+  background: #c8d8ef;
+}
+
+.agent-run-link.diagonal-a {
+  transform: rotate(24deg);
+}
+
+.agent-run-link.diagonal-b {
+  transform: rotate(-24deg);
+}
+
+.agent-run-node,
+.agent-run-core {
+  position: absolute;
+  z-index: 2;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.agent-run-node {
+  width: 158px;
+  min-height: 84px;
+  padding: 11px;
+  border-top: 4px solid var(--blue);
+}
+
+.agent-run-node strong,
+.agent-run-core strong {
+  display: block;
+  margin-top: 6px;
+  color: #0c315f;
+  overflow-wrap: anywhere;
+  line-height: 1.18;
+}
+
+.agent-run-core {
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  padding: 13px;
+  text-align: center;
+  background: linear-gradient(180deg, #6f5bd5 0%, #352a8f 100%);
+  border: 6px solid #e7e3ff;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.agent-run-core span,
+.agent-run-core strong {
+  color: #ffffff;
+}
+
+.agent-run-node.context {
+  left: 7%;
+  top: 24%;
+  border-top-color: #1769e0;
+}
+
+.agent-run-node.policy {
+  right: 7%;
+  top: 24%;
+  border-top-color: var(--amber);
+}
+
+.agent-run-node.tool {
+  left: 8%;
+  bottom: 16%;
+  border-top-color: #6f5bd5;
+}
+
+.agent-run-node.result {
+  right: 8%;
+  bottom: 16%;
+  border-top-color: #1f8f54;
+}
+
+.agent-run-node.approval {
+  left: 50%;
+  top: 21%;
+  transform: translateX(-50%);
+  border-top-color: var(--red);
+}
+
+.agent-run-node.audit {
+  left: 50%;
+  bottom: 6%;
+  transform: translateX(-50%);
+  border-top-color: #102f58;
+}
+
 .knowledge-cockpit {
   display: grid;
   grid-template-columns: minmax(190px, 0.74fr) minmax(440px, 1.52fr) minmax(220px, 0.86fr);
@@ -4721,6 +4906,7 @@ pre {
   .provider-risk-cockpit,
   .audit-sampling-cockpit,
   .routing-cockpit,
+  .agent-run-cockpit,
   .leads-cases-workflow {
     grid-template-columns: 1fr;
   }
@@ -4881,6 +5067,7 @@ pre {
   .clinical-cockpit,
   .clinical-outcome-grid,
   .agent-cockpit,
+  .agent-run-cockpit,
   .knowledge-cockpit,
   .qa-cockpit,
   .audit-sampling-cockpit,
@@ -4950,6 +5137,10 @@ pre {
 
   .agent-evidence-map {
     min-height: 600px;
+  }
+
+  .agent-run-map {
+    min-height: 680px;
   }
 
   .knowledge-map {
