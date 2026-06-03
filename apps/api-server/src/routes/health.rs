@@ -15,10 +15,13 @@ pub struct HealthResponse {
 #[derive(Debug, Serialize)]
 pub struct PilotReadiness {
     pub status: &'static str,
+    pub ready_for_customer_pilot: bool,
     pub required_check_names: Vec<&'static str>,
     pub required_check_count: usize,
     pub ready_check_count: usize,
     pub blocking_check_count: usize,
+    pub blocking_check_names: Vec<&'static str>,
+    pub remediation_summary: Vec<&'static str>,
     pub ready_checks: Vec<HealthCheck>,
     pub blocking_checks: Vec<HealthCheck>,
 }
@@ -168,12 +171,19 @@ fn pilot_readiness(checks: &[HealthCheck]) -> PilotReadiness {
     } else {
         "not_ready"
     };
+    let ready_for_customer_pilot = blocking_checks.is_empty();
     PilotReadiness {
         status,
+        ready_for_customer_pilot,
         required_check_names: required_checks.iter().map(|check| check.name).collect(),
         required_check_count: required_checks.len(),
         ready_check_count: ready_checks.len(),
         blocking_check_count: blocking_checks.len(),
+        blocking_check_names: blocking_checks.iter().map(|check| check.name).collect(),
+        remediation_summary: blocking_checks
+            .iter()
+            .filter_map(|check| check.remediation)
+            .collect(),
         ready_checks,
         blocking_checks,
     }
@@ -210,10 +220,35 @@ mod tests {
         let readiness = pilot_readiness(&checks);
 
         assert_eq!(readiness.status, "not_ready");
+        assert!(!readiness.ready_for_customer_pilot);
         assert_eq!(readiness.blocking_check_count, 1);
+        assert_eq!(
+            readiness.blocking_check_names,
+            vec!["object_storage_configuration"]
+        );
+        assert_eq!(
+            readiness.remediation_summary,
+            vec!["Set FWA_OBJECT_STORAGE_URI."]
+        );
         assert_eq!(
             readiness.blocking_checks[0].remediation,
             Some("Set FWA_OBJECT_STORAGE_URI.")
         );
+    }
+
+    #[test]
+    fn pilot_readiness_marks_customer_pilot_ready_when_required_checks_pass() {
+        let checks = vec![config_check(
+            "object_storage_configuration",
+            "configured",
+            "Set FWA_OBJECT_STORAGE_URI.",
+        )];
+        let readiness = pilot_readiness(&checks);
+
+        assert_eq!(readiness.status, "ready");
+        assert!(readiness.ready_for_customer_pilot);
+        assert_eq!(readiness.blocking_check_count, 0);
+        assert!(readiness.blocking_check_names.is_empty());
+        assert!(readiness.remediation_summary.is_empty());
     }
 }

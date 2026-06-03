@@ -59,12 +59,15 @@ Minimum pilot monitoring:
 
 - API health: `GET /api/v1/health`
 - Pilot readiness gate: `/api/v1/health` field `pilot_readiness.status` must be
-  `ready` before customer pilot traffic. When it is `not_ready`,
+  `ready` and `pilot_readiness.ready_for_customer_pilot` must be `true` before
+  customer pilot traffic. When it is `not_ready`,
   `pilot_readiness.blocking_checks` lists the non-secret configuration check
   names, statuses, and remediation hints that still need action.
-  `required_check_names`, `required_check_count`, `ready_check_count`,
-  `blocking_check_count`, and `ready_checks` make the blocker list
-  machine-checkable in demo smoke and customer pilot contract tests.
+  `blocking_check_names` and `remediation_summary` provide compact
+  machine-readable blocker output for scripts, while `required_check_names`,
+  `required_check_count`, `ready_check_count`, `blocking_check_count`, and
+  `ready_checks` preserve the full readiness evidence for demo smoke and
+  customer pilot contract tests.
 - API key readiness: `/api/v1/health` check `api_key_configuration` must be
   `configured`, not `local_dev_key`, before customer pilot traffic.
   `invalid_api_key_principals` means `FWA_API_KEY_PRINCIPALS` is present but no
