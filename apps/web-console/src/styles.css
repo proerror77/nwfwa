@@ -1382,6 +1382,138 @@ pre {
   border-top-color: var(--teal);
 }
 
+.pilot-runway-panel {
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(15, 123, 140, 0.08), rgba(255, 255, 255, 0) 42%),
+    #ffffff;
+}
+
+.pilot-runway-map {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+  padding: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(247, 250, 255, 0.94), rgba(255, 255, 255, 0.96)),
+    repeating-linear-gradient(90deg, rgba(23, 105, 224, 0.07) 0 1px, transparent 1px 32px);
+  border: 1px solid #c9dbf3;
+  border-radius: 8px;
+}
+
+.runway-line {
+  position: absolute;
+  left: 7%;
+  right: 7%;
+  top: 50%;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #8ab5ee 12%, #1769e0 50%, #8ab5ee 88%, transparent);
+}
+
+.pilot-runway-step {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 112px;
+  padding: 12px;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--blue);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.pilot-runway-step:hover {
+  border-color: #9abff4;
+  box-shadow: 0 16px 28px rgba(15, 46, 89, 0.12);
+  transform: translateY(-1px);
+}
+
+.pilot-runway-step span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.pilot-runway-step strong {
+  color: #0c315f;
+  font-size: 18px;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.pilot-runway-step small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.pilot-runway-step.source {
+  border-top-color: var(--teal);
+}
+
+.pilot-runway-step.intake {
+  border-top-color: #17436f;
+}
+
+.pilot-runway-step.score {
+  border-top-color: var(--blue);
+}
+
+.pilot-runway-step.case {
+  border-top-color: var(--amber);
+}
+
+.pilot-runway-step.qa {
+  border-top-color: #6f5bd5;
+}
+
+.pilot-runway-step.audit {
+  border-top-color: #1f8f54;
+}
+
+.pilot-runway-step.roi {
+  border-top-color: var(--red);
+}
+
+.pilot-runway-proof {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.pilot-runway-proof > div {
+  min-width: 0;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.pilot-runway-proof span,
+.pilot-runway-proof small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.pilot-runway-proof strong {
+  display: block;
+  margin: 5px 0;
+  color: #0c315f;
+  overflow-wrap: anywhere;
+}
+
 .visual-icon {
   width: 34px;
   height: 34px;
@@ -5047,6 +5179,8 @@ pre {
   .evidence-runtime-map,
   .evidence-runtime-grid,
   .runtime-path-card,
+  .pilot-runway-map,
+  .pilot-runway-proof,
   .data-lineage-proof-grid,
   .member-profile-cockpit,
   .provider-risk-cockpit,
@@ -5061,6 +5195,7 @@ pre {
   .mission-board,
   .evidence-visual-board,
   .runtime-visual-cockpit,
+  .pilot-runway-proof,
   .member-profile-cockpit,
   .provider-risk-cockpit,
   .audit-sampling-cockpit,
@@ -5184,6 +5319,8 @@ pre {
   .metric-row,
   .ops-stat-strip,
   .health-card dl,
+  .pilot-runway-map,
+  .pilot-runway-proof,
   .data-lineage-map,
   .data-lineage-proof-grid,
   .split-row,
@@ -5224,6 +5361,7 @@ pre {
   .inbox-pipeline,
   .finding-command-strip,
   .case-investigation-board,
+  .pilot-runway-proof,
   .data-lineage-proof-grid,
   .member-profile-cockpit,
   .provider-risk-cockpit,
@@ -5251,6 +5389,10 @@ pre {
   .runtime-signal-map::after,
   .evidence-pipeline-rail::before,
   .evidence-runtime-map::before {
+    display: none;
+  }
+
+  .runway-line {
     display: none;
   }
 

@@ -2537,6 +2537,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                 ApiState::Ready(summary) => html! {
                     <>
                         {dashboard_mission_visual(summary)}
+                        {dashboard_pilot_runway(summary, &props.on_navigate)}
                         <section class="panel result-stack">
                             <h3>{"Executive KPIs"}</h3>
                             <div class="score-hero visual-kpis">
@@ -2732,6 +2733,76 @@ fn dashboard_mission_visual(summary: &DashboardSummary) -> Html {
                 </div>
             </div>
         </section>
+    }
+}
+
+fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<String>) -> Html {
+    let layer_label = if summary.layer_scores.is_empty() {
+        "no layer evidence".into()
+    } else {
+        format!("{} layers active", summary.layer_scores.len())
+    };
+    let qa_work = summary.qa_queue.open_cases + summary.qa_queue.unresolved_feedback_count;
+    let audit_label = percent_label(summary.audit_coverage.canonical_trace_coverage);
+    html! {
+        <section class="panel pilot-runway-panel">
+            <div class="section-header">
+                <div>
+                    <h3>{"Customer Pilot Proof Runway"}</h3>
+                    <p>{"A one-screen path for proving a scoped customer principal can move from intake to scoring, human review, QA feedback, audit trace, and ROI measurement."}</p>
+                </div>
+                <span class="status-token strong">{"demo chain"}</span>
+            </div>
+            <div class="pilot-runway-map">
+                <div class="runway-line"></div>
+                {pilot_runway_step("Principal", "Scoped API key", "actor + customer scope", "Claim Inbox", "source", on_navigate)}
+                {pilot_runway_step("Inbox", &summary.suspected_claims.to_string(), "normalized claims", "Claim Inbox", "intake", on_navigate)}
+                {pilot_runway_step("Score", &layer_label, &map_counts_label(&summary.rag_distribution), "Runtime Scoring", "score", on_navigate)}
+                {pilot_runway_step("Case", &summary.case_sla.open_cases.to_string(), "open investigations", "Leads & Cases", "case", on_navigate)}
+                {pilot_runway_step("QA", &qa_work.to_string(), "open QA + feedback", "Review Workbench", "qa", on_navigate)}
+                {pilot_runway_step("Audit", &audit_label, "canonical trace coverage", "Governance", "audit", on_navigate)}
+                {pilot_runway_step("ROI", &summary.value_measurement.net_value, "net value evidence", "Dashboard", "roi", on_navigate)}
+            </div>
+            <div class="pilot-runway-proof">
+                <div>
+                    <span>{"Human gate"}</span>
+                    <strong>{format!("{} cases / {} QA", summary.case_sla.open_cases, summary.qa_queue.open_cases)}</strong>
+                    <small>{"High-risk work remains routed to manual review, medical review, QA, or investigation."}</small>
+                </div>
+                <div>
+                    <span>{"Agent boundary"}</span>
+                    <strong>{format!("{} evidence-backed / {} runs", summary.agent_governance.evidence_backed_runs, summary.agent_governance.total_runs)}</strong>
+                    <small>{"Agent output is shown as investigation assistance, with policy checks and approvals tracked separately."}</small>
+                </div>
+                <div>
+                    <span>{"Value proof"}</span>
+                    <strong>{format!("{} / {}", summary.value_measurement.net_value, summary.saving_amount)}</strong>
+                    <small>{"Savings and net value remain attributable to rule, model, agent, and operational outcomes."}</small>
+                </div>
+            </div>
+        </section>
+    }
+}
+
+fn pilot_runway_step(
+    label: &'static str,
+    value: &str,
+    detail: &str,
+    target: &'static str,
+    tone: &'static str,
+    on_navigate: &Callback<String>,
+) -> Html {
+    let target_name = target.to_string();
+    let on_navigate = on_navigate.clone();
+    html! {
+        <button
+            class={classes!("pilot-runway-step", tone)}
+            onclick={Callback::from(move |_| on_navigate.emit(target_name.clone()))}
+        >
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{detail}</small>
+        </button>
     }
 }
 
