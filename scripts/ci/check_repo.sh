@@ -185,7 +185,12 @@ grep -q "Calibration Signal" scripts/demo/smoke_web_console.mjs
 grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
 grep -q "Pilot Security Readiness" scripts/demo/smoke_web_console.mjs
 grep -q "NOVA FWA" scripts/demo/smoke_web_console.mjs
-grep -q "Risk Operations" scripts/demo/smoke_web_console.mjs
+grep -q "Daily Work" scripts/demo/smoke_web_console.mjs
+grep -q "Control Rooms" scripts/demo/smoke_web_console.mjs
+grep -q "Review Workbench" scripts/demo/smoke_web_console.mjs
+grep -q "Evidence Hub" scripts/demo/smoke_web_console.mjs
+grep -q "Next actions" scripts/demo/smoke_web_console.mjs
+grep -q "click to work" scripts/demo/smoke_web_console.mjs
 grep -q "FWA operating map" scripts/demo/smoke_web_console.mjs
 grep -q "PRD runtime topology" scripts/demo/smoke_web_console.mjs
 grep -q "module_context" apps/web-console/src/main.rs

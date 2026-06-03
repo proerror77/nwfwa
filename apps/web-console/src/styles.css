@@ -246,7 +246,7 @@ button {
   top: 0;
   z-index: 3;
   display: grid;
-  grid-template-columns: minmax(260px, 1.2fr) minmax(260px, 0.9fr) auto;
+  grid-template-columns: minmax(260px, 1fr) auto;
   align-items: center;
   gap: 12px;
   margin: -2px -2px 16px;
@@ -274,24 +274,6 @@ button {
   color: var(--blue);
 }
 
-.topbar-search {
-  min-width: 0;
-  padding: 10px 12px;
-  color: #8a9ab0;
-  background: #f6f9fe;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.8);
-}
-
-.topbar-search span {
-  display: block;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 13px;
-}
-
 .topbar-actions {
   display: flex;
   align-items: center;
@@ -301,7 +283,6 @@ button {
 }
 
 .api-chip,
-.alert-chip,
 .user-chip,
 .status-pill,
 .status-token,
@@ -332,13 +313,6 @@ button {
   background: #1fc16b;
   border-radius: 999px;
   box-shadow: 0 0 0 4px rgba(31, 193, 107, 0.13);
-}
-
-.alert-chip {
-  padding: 7px 9px;
-  color: #b3123a;
-  background: var(--red-soft);
-  border: 1px solid #ffc2d0;
 }
 
 .user-chip {
@@ -1011,6 +985,7 @@ pre {
   border-left: 4px solid var(--blue);
   border-radius: 8px;
   box-shadow: 0 9px 20px rgba(15, 46, 89, 0.06);
+  text-align: left;
 }
 
 .operator-queue-card span,
@@ -1180,6 +1155,84 @@ pre {
 
 .ops-map-node.audit {
   border-left-color: var(--amber);
+}
+
+.workflow-hub {
+  display: grid;
+  gap: 16px;
+}
+
+.workflow-card-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.workflow-action-card {
+  display: grid;
+  min-width: 0;
+  gap: 8px;
+  min-height: 148px;
+  padding: 16px;
+  text-align: left;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  box-shadow: 0 9px 22px rgba(15, 46, 89, 0.06);
+}
+
+.operator-queue-card:hover,
+.workflow-action-card:hover {
+  transform: translateY(-1px);
+  border-color: #9dbbe2;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.1);
+}
+
+.workflow-action-card span,
+.workflow-action-card small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.workflow-action-card span {
+  color: #17436f;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.workflow-action-card strong {
+  display: block;
+  color: #0c315f;
+  font-size: 20px;
+  line-height: 1.12;
+  overflow-wrap: anywhere;
+}
+
+.workflow-action-card small {
+  line-height: 1.45;
+}
+
+.workflow-action-card.danger {
+  border-left-color: var(--red);
+}
+
+.workflow-action-card.warning {
+  border-left-color: var(--amber);
+}
+
+.workflow-action-card.strong {
+  border-left-color: var(--blue);
+}
+
+.workflow-action-card.neutral {
+  border-left-color: var(--line-strong);
+}
+
+.workflow-action-card.success {
+  border-left-color: #1f8f54;
 }
 
 .rule-bars {
@@ -2972,6 +3025,7 @@ pre {
   .visual-board,
   .operator-queue,
   .ops-system-map,
+  .workflow-card-grid,
   .model-telemetry {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -3061,7 +3115,6 @@ pre {
   }
 
   .api-chip,
-  .alert-chip,
   .user-chip,
   .status-pill {
     justify-self: start;
@@ -3098,6 +3151,7 @@ pre {
   .matrix-grid,
   .operator-queue,
   .ops-system-map,
+  .workflow-card-grid,
   .inbox-pipeline,
   .finding-command-strip,
   .case-investigation-board,

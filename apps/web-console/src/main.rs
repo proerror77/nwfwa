@@ -10,26 +10,17 @@ const API_KEY_DEFAULT: &str = "dev-secret";
 
 const NAV_SECTIONS: &[(&str, &[&str])] = &[
     (
-        "Risk Operations",
-        &["Dashboard", "Runtime Scoring", "Leads & Cases"],
-    ),
-    ("Review Queues", &["Medical Review", "QA Review"]),
-    (
-        "Detection Controls",
-        &["Rules", "Models", "Routing Policies", "Factor Factory"],
-    ),
-    (
-        "Evidence & Context",
+        "Daily Work",
         &[
-            "Provider Risk",
-            "Member Profile",
-            "Knowledge Base",
-            "Data Sources",
+            "Dashboard",
+            "Runtime Scoring",
+            "Leads & Cases",
+            "Review Workbench",
         ],
     ),
     (
-        "Pilot Governance",
-        &["Audit Sampling", "Agent Investigator", "Governance"],
+        "Control Rooms",
+        &["Detection Controls", "Evidence Hub", "Governance"],
     ),
 ];
 
@@ -1366,6 +1357,10 @@ enum ApiState<T> {
 #[function_component(App)]
 fn app() -> Html {
     let active = use_state(|| "Dashboard".to_string());
+    let select_module = {
+        let active = active.clone();
+        Callback::from(move |module: String| active.set(module))
+    };
 
     html! {
         <div class="app">
@@ -1380,13 +1375,13 @@ fn app() -> Html {
                         <div class="nav-section">
                             <p class="nav-section-title">{section}</p>
                             {for modules.iter().map(|module| {
-                                let active = active.clone();
+                                let select_module = select_module.clone();
                                 let module_name = (*module).to_string();
                                 let is_active = *active == module_name;
                                 html! {
                                     <button
                                         class={classes!(is_active.then_some("active"))}
-                                        onclick={Callback::from(move |_| active.set(module_name.clone()))}
+                                        onclick={Callback::from(move |_| select_module.emit(module_name.clone()))}
                                     >
                                         <span class={classes!("nav-icon", module_icon_class(module))}></span>
                                         <span class="nav-copy">
@@ -1406,12 +1401,8 @@ fn app() -> Html {
                         <span class="eyebrow">{"Real-time operations"}</span>
                         <strong>{module_context(&active)}</strong>
                     </div>
-                    <div class="topbar-search" aria-label="Global search placeholder">
-                        <span>{"Search claim / case / provider / evidence"}</span>
-                    </div>
                     <div class="topbar-actions">
                         <span class="api-chip status-live">{"live"}</span>
-                        <span class="alert-chip">{"12 alerts"}</span>
                         <span class="user-chip">{"Pilot Ops"}</span>
                     </div>
                 </div>
@@ -1419,9 +1410,15 @@ fn app() -> Html {
                     if *active == "Claim Inbox" {
                         <ClaimInboxPage />
                     } else if *active == "Dashboard" {
-                        <DashboardPage />
+                        <DashboardPage on_navigate={select_module.clone()} />
                     } else if *active == "Runtime Scoring" {
                         <RuntimeScoringPage />
+                    } else if *active == "Review Workbench" {
+                        {review_workbench_page(select_module.clone())}
+                    } else if *active == "Detection Controls" {
+                        {detection_controls_page(select_module.clone())}
+                    } else if *active == "Evidence Hub" {
+                        {evidence_hub_page(select_module.clone())}
                     } else if *active == "Rules" {
                         <RulesPage />
                     } else if *active == "Models" {
@@ -1462,8 +1459,15 @@ fn app() -> Html {
 fn module_context(module: &str) -> &'static str {
     match module {
         "Claim Inbox" => "Normalize TPA claim payloads into governed canonical intake.",
-        "Dashboard" => "Track claim risk value, governance coverage, and operating load.",
-        "Runtime Scoring" => "Score claims with deterministic evidence and review mode controls.",
+        "Dashboard" => "Choose the next operational action from live risk and review queues.",
+        "Runtime Scoring" => "Score a claim and route the result into case or review workflow.",
+        "Review Workbench" => "Resolve clinical and QA review queues from one place.",
+        "Detection Controls" => {
+            "Promote rules, models, routing, and features through one control room."
+        }
+        "Evidence Hub" => {
+            "Open member, provider, knowledge, and dataset context from one evidence hub."
+        }
         "Rules" => "Operate deterministic FWA controls and promotion gates.",
         "Models" => "Review model readiness, thresholds, and production evidence.",
         "Routing Policies" => "Inspect routing boundaries for model and policy execution.",
@@ -1485,8 +1489,11 @@ fn module_context(module: &str) -> &'static str {
 fn module_description(module: &str) -> &'static str {
     match module {
         "Claim Inbox" => "TPA intake",
-        "Dashboard" => "risk value",
-        "Runtime Scoring" => "claim scoring",
+        "Dashboard" => "next action",
+        "Runtime Scoring" => "score & route",
+        "Review Workbench" => "medical + QA",
+        "Detection Controls" => "rules + models",
+        "Evidence Hub" => "context lookup",
         "Rules" => "deterministic controls",
         "Models" => "threshold evidence",
         "Routing Policies" => "execution routing",
@@ -1510,6 +1517,9 @@ fn module_icon_class(module: &str) -> &'static str {
         "Claim Inbox" => "icon-inbox",
         "Dashboard" => "icon-dashboard",
         "Runtime Scoring" => "icon-scoring",
+        "Review Workbench" => "icon-qa",
+        "Detection Controls" => "icon-rules",
+        "Evidence Hub" => "icon-knowledge",
         "Rules" => "icon-rules",
         "Models" => "icon-models",
         "Routing Policies" => "icon-routing",
@@ -1525,6 +1535,86 @@ fn module_icon_class(module: &str) -> &'static str {
         "QA Review" => "icon-qa",
         "Governance" => "icon-governance",
         _ => "icon-default",
+    }
+}
+
+fn review_workbench_page(on_navigate: Callback<String>) -> Html {
+    html! {
+        <section class="workflow-hub">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Review Workbench"}</h2>
+                    <p>{"Use this as the single entry point for human review. Clinical necessity and QA feedback stay separate, but operators do not need two top-level menus."}</p>
+                </div>
+                <span class="status-pill">{"Human review"}</span>
+            </div>
+            <div class="workflow-card-grid">
+                {workflow_action_card("Medical Review", "Resolve clinical reasonableness, necessity, and documentation questions.", "Open clinical queue", "Medical Review", "strong", &on_navigate)}
+                {workflow_action_card("QA Review", "Close sampled findings, reviewer disagreement, and feedback calibration.", "Open QA queue", "QA Review", "warning", &on_navigate)}
+            </div>
+        </section>
+    }
+}
+
+fn detection_controls_page(on_navigate: Callback<String>) -> Html {
+    html! {
+        <section class="workflow-hub">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Detection Controls"}</h2>
+                    <p>{"Control fraud logic from the promotion path instead of scattering rules, models, routing, and features across unrelated screens."}</p>
+                </div>
+                <span class="status-pill">{"Promotion path"}</span>
+            </div>
+            <div class="workflow-card-grid">
+                {workflow_action_card("Rules", "Operate deterministic controls, backtests, false-positive history, and promotion gates.", "Review rules", "Rules", "strong", &on_navigate)}
+                {workflow_action_card("Models", "Inspect threshold readiness, drift, precision, recall, and production evidence.", "Review models", "Models", "warning", &on_navigate)}
+                {workflow_action_card("Routing Policies", "Check which engine path receives each score request and where manual review is required.", "Review routing", "Routing Policies", "neutral", &on_navigate)}
+                {workflow_action_card("Factor Factory", "Confirm feature availability, ownership, leakage checks, and online readiness.", "Review factors", "Factor Factory", "success", &on_navigate)}
+            </div>
+        </section>
+    }
+}
+
+fn evidence_hub_page(on_navigate: Callback<String>) -> Html {
+    html! {
+        <section class="workflow-hub">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Evidence Hub"}</h2>
+                    <p>{"Look up the evidence an investigator needs before making a case decision. This keeps context lookup separate from scoring and review actions."}</p>
+                </div>
+                <span class="status-pill">{"Context lookup"}</span>
+            </div>
+            <div class="workflow-card-grid">
+                {workflow_action_card("Provider Risk", "Open provider graph signals, suspicious patterns, and network flags.", "Review provider", "Provider Risk", "danger", &on_navigate)}
+                {workflow_action_card("Member Profile", "Inspect member-level utilization, policy, and claim history context.", "Review member", "Member Profile", "neutral", &on_navigate)}
+                {workflow_action_card("Knowledge Base", "Search confirmed evidence without crossing adjudication boundaries.", "Search evidence", "Knowledge Base", "strong", &on_navigate)}
+                {workflow_action_card("Data Sources", "Check dataset lineage, schema mapping, and evaluation inputs.", "Review data", "Data Sources", "success", &on_navigate)}
+            </div>
+        </section>
+    }
+}
+
+fn workflow_action_card(
+    title: &str,
+    description: &str,
+    command: &str,
+    target: &str,
+    tone: &str,
+    on_navigate: &Callback<String>,
+) -> Html {
+    let target = target.to_string();
+    let on_navigate = on_navigate.clone();
+    html! {
+        <button
+            class={classes!("workflow-action-card", tone.to_string())}
+            onclick={Callback::from(move |_| on_navigate.emit(target.clone()))}
+        >
+            <span>{title}</span>
+            <strong>{command}</strong>
+            <small>{description}</small>
+        </button>
     }
 }
 
@@ -1719,8 +1809,13 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
     }
 }
 
+#[derive(Properties, PartialEq)]
+struct DashboardPageProps {
+    on_navigate: Callback<String>,
+}
+
 #[function_component(DashboardPage)]
-fn dashboard_page() -> Html {
+fn dashboard_page(props: &DashboardPageProps) -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
     let summary_state = use_state(|| ApiState::<DashboardSummary>::Idle);
 
@@ -1786,7 +1881,7 @@ fn dashboard_page() -> Html {
                 </div>
             </section>
 
-            <DashboardView state={(*summary_state).clone()} />
+            <DashboardView state={(*summary_state).clone()} on_navigate={props.on_navigate.clone()} />
         </section>
     }
 }
@@ -1794,6 +1889,7 @@ fn dashboard_page() -> Html {
 #[derive(Properties, PartialEq)]
 struct DashboardProps {
     state: ApiState<DashboardSummary>,
+    on_navigate: Callback<String>,
 }
 
 #[function_component(DashboardView)]
@@ -1826,7 +1922,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                                 {distribution_bars("Scheme mix", &summary.scheme_distribution)}
                                 {risk_ops_matrix(summary)}
                             </div>
-                            {operator_queue_snapshot(summary)}
+                            {operator_queue_snapshot(summary, &props.on_navigate)}
                         </section>
 
                         <section class="panel result-stack">
@@ -6807,32 +6903,45 @@ fn dashboard_layer_flow(layers: &BTreeMap<String, DashboardLayerScore>) -> Html 
     }
 }
 
-fn operator_queue_snapshot(summary: &DashboardSummary) -> Html {
+fn operator_queue_snapshot(summary: &DashboardSummary, on_navigate: &Callback<String>) -> Html {
     html! {
         <div class="visual-panel wide-visual operator-queue-panel">
             <div class="panel-heading-row">
-                <h4>{"Operator queue"}</h4>
-                <span class="status-token strong">{"action view"}</span>
+                <h4>{"Next actions"}</h4>
+                <span class="status-token strong">{"click to work"}</span>
             </div>
             <div class="operator-queue">
-                {operator_queue_card("Score", &summary.suspected_claims.to_string(), "suspected claims", "Runtime Scoring", "danger")}
-                {operator_queue_card("Investigate", &summary.case_sla.open_cases.to_string(), "open cases", "Leads & Cases", "warning")}
-                {operator_queue_card("Review", &summary.qa_queue.open_cases.to_string(), "open QA samples", "QA Review", "strong")}
-                {operator_queue_card("Govern", &percent_label(summary.audit_coverage.canonical_trace_coverage), "trace coverage", "Audit Sampling", "success")}
+                {operator_queue_card("Score", &summary.suspected_claims.to_string(), "suspected claims", "Runtime Scoring", "danger", on_navigate)}
+                {operator_queue_card("Investigate", &summary.case_sla.open_cases.to_string(), "open cases", "Leads & Cases", "warning", on_navigate)}
+                {operator_queue_card("Review", &summary.qa_queue.open_cases.to_string(), "open QA samples", "Review Workbench", "strong", on_navigate)}
+                {operator_queue_card("Govern", &percent_label(summary.audit_coverage.canonical_trace_coverage), "trace coverage", "Governance", "success", on_navigate)}
             </div>
             {dashboard_operations_map(summary)}
         </div>
     }
 }
 
-fn operator_queue_card(action: &str, value: &str, metric: &str, module: &str, tone: &str) -> Html {
+fn operator_queue_card(
+    action: &str,
+    value: &str,
+    metric: &str,
+    target: &str,
+    tone: &str,
+    on_navigate: &Callback<String>,
+) -> Html {
+    let target = target.to_string();
+    let target_label = target.clone();
+    let on_navigate = on_navigate.clone();
     html! {
-        <div class={classes!("operator-queue-card", tone.to_string())}>
+        <button
+            class={classes!("operator-queue-card", tone.to_string())}
+            onclick={Callback::from(move |_| on_navigate.emit(target.clone()))}
+        >
             <span>{action}</span>
             <strong>{value}</strong>
             <small>{metric}</small>
-            <em>{module}</em>
-        </div>
+            <em>{target_label}</em>
+        </button>
     }
 }
 
