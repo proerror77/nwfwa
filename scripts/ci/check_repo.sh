@@ -129,6 +129,8 @@ grep -q "check-pilot-readiness" apps/worker/src/main.rs
 grep -q -- "--require-ready" apps/worker/src/main.rs
 grep -q "check_pilot_readiness" apps/worker/src/lib.rs
 grep -q "ready_for_customer_pilot" apps/worker/src/lib.rs
+grep -q "remediation_summary" apps/worker/src/lib.rs
+grep -q "unwrap_or_else(|| format!(\"{}={}\"" apps/worker/src/lib.rs
 grep -q "check-pilot-readiness" docs/project/operations-guide.md
 grep -q -- "--require-ready" docs/project/operations-guide.md
 grep -q "check-pilot-readiness" docs/engineering/pilot-readiness.md
@@ -168,6 +170,10 @@ grep -q "Calibration Signal" scripts/demo/smoke_web_console.mjs
 grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
 grep -q "Pilot Security Readiness" scripts/demo/smoke_web_console.mjs
 grep -q "/api/v1/health" apps/web-console/src/main.rs
+grep -q "remediation" apps/api-server/src/routes/health.rs
+grep -q "remediation" apps/web-console/src/main.rs
+grep -q "remediation hints" docs/engineering/pilot-readiness.md
+grep -q "remediation hints" docs/project/api-reference.md
 grep -q "Guardrail Boundary" scripts/demo/smoke_web_console.mjs
 grep -q "Human Gate" scripts/demo/smoke_web_console.mjs
 grep -q "Graph Risk" scripts/demo/smoke_web_console.mjs

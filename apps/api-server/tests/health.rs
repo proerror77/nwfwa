@@ -43,6 +43,24 @@ fn customer_pilot_config() -> AppConfig {
     }
 }
 
+fn health_check<'a>(body: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
+    body["checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["name"] == name)
+        .unwrap_or_else(|| panic!("missing health check {name}"))
+}
+
+fn blocking_check<'a>(body: &'a serde_json::Value, name: &str) -> &'a serde_json::Value {
+    body["pilot_readiness"]["blocking_checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["name"] == name)
+        .unwrap_or_else(|| panic!("missing blocking check {name}"))
+}
+
 #[tokio::test]
 async fn health_returns_service_metadata_and_checks() {
     let app = build_app(test_config());
@@ -87,104 +105,69 @@ async fn health_returns_service_metadata_and_checks() {
             "status": "ok",
             "runtime_kind": "python_http"
         })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "model_service_configuration",
-            "status": "local_dev_model_service"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "api_key_configuration",
-            "status": "local_dev_key"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "source_system_configuration",
-            "status": "local_demo_source"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "database_configuration",
-            "status": "local_dev_database"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "object_storage_configuration",
-            "status": "local_demo_object_storage"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "customer_scope_configuration",
-            "status": "local_demo_customer_scope"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "retention_policy_configuration",
-            "status": "local_demo_retention_policy"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "backup_restore_configuration",
-            "status": "local_demo_backup_restore"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "pii_masking_configuration",
-            "status": "local_demo_pii_masking"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "key_rotation_configuration",
-            "status": "local_demo_key_rotation"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "network_allowlist_configuration",
-            "status": "local_demo_network_allowlist"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "alert_routing_configuration",
-            "status": "local_demo_alert_routing"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "observability_exporter_configuration",
-            "status": "local_demo_observability_exporter"
-        })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "agent_policy_configuration",
-            "status": "local_demo_agent_policy"
-        })));
+    assert_eq!(
+        health_check(&body, "model_service_configuration")["status"],
+        "local_dev_model_service"
+    );
+    assert_eq!(
+        health_check(&body, "api_key_configuration")["status"],
+        "local_dev_key"
+    );
+    assert_eq!(
+        health_check(&body, "source_system_configuration")["status"],
+        "local_demo_source"
+    );
+    assert_eq!(
+        health_check(&body, "database_configuration")["status"],
+        "local_dev_database"
+    );
+    assert_eq!(
+        health_check(&body, "object_storage_configuration")["status"],
+        "local_demo_object_storage"
+    );
+    assert_eq!(
+        health_check(&body, "customer_scope_configuration")["status"],
+        "local_demo_customer_scope"
+    );
+    assert_eq!(
+        health_check(&body, "retention_policy_configuration")["status"],
+        "local_demo_retention_policy"
+    );
+    assert_eq!(
+        health_check(&body, "backup_restore_configuration")["status"],
+        "local_demo_backup_restore"
+    );
+    assert_eq!(
+        health_check(&body, "pii_masking_configuration")["status"],
+        "local_demo_pii_masking"
+    );
+    assert_eq!(
+        health_check(&body, "key_rotation_configuration")["status"],
+        "local_demo_key_rotation"
+    );
+    assert_eq!(
+        health_check(&body, "network_allowlist_configuration")["status"],
+        "local_demo_network_allowlist"
+    );
+    assert_eq!(
+        health_check(&body, "alert_routing_configuration")["status"],
+        "local_demo_alert_routing"
+    );
+    assert_eq!(
+        health_check(&body, "observability_exporter_configuration")["status"],
+        "local_demo_observability_exporter"
+    );
+    assert_eq!(
+        health_check(&body, "agent_policy_configuration")["status"],
+        "local_demo_agent_policy"
+    );
+    assert!(
+        health_check(&body, "api_key_configuration")["remediation"]
+            .as_str()
+            .unwrap()
+            .contains("FWA_API_KEY_PRINCIPALS"),
+        "blocking API key check should include non-secret remediation"
+    );
     assert!(
         !body.to_string().contains("127.0.0.1:8001"),
         "health response must not expose internal model service URLs"
@@ -260,18 +243,18 @@ async fn health_returns_service_metadata_and_checks() {
             .as_u64()
             .unwrap() as usize
     );
-    assert!(blocking_checks.contains(&serde_json::json!({
-        "name": "api_key_configuration",
-        "status": "local_dev_key"
-    })));
-    assert!(blocking_checks.contains(&serde_json::json!({
-        "name": "model_service_configuration",
-        "status": "local_dev_model_service"
-    })));
-    assert!(blocking_checks.contains(&serde_json::json!({
-        "name": "agent_policy_configuration",
-        "status": "local_demo_agent_policy"
-    })));
+    assert_eq!(
+        blocking_check(&body, "api_key_configuration")["status"],
+        "local_dev_key"
+    );
+    assert_eq!(
+        blocking_check(&body, "model_service_configuration")["status"],
+        "local_dev_model_service"
+    );
+    assert_eq!(
+        blocking_check(&body, "agent_policy_configuration")["status"],
+        "local_demo_agent_policy"
+    );
     assert!(
         !body["pilot_readiness"].to_string().contains("dev-secret"),
         "pilot readiness must not expose secret values"
@@ -355,13 +338,17 @@ async fn health_reports_explicit_heuristic_model_scorer_mode() {
             "status": "ok",
             "runtime_kind": "heuristic"
         })));
-    assert!(body["checks"]
-        .as_array()
-        .unwrap()
-        .contains(&serde_json::json!({
-            "name": "model_service_configuration",
-            "status": "heuristic_model_scorer"
-        })));
+    assert_eq!(
+        health_check(&body, "model_service_configuration")["status"],
+        "heuristic_model_scorer"
+    );
+    assert!(
+        health_check(&body, "model_service_configuration")["remediation"]
+            .as_str()
+            .unwrap()
+            .contains("FWA_MODEL_SERVICE_URL"),
+        "heuristic scorer mode should include model runtime remediation"
+    );
 }
 
 #[tokio::test]

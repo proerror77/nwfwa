@@ -80,6 +80,8 @@ pub struct ApiHealthCheck {
     pub status: String,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub runtime_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -130,7 +132,12 @@ pub fn build_pilot_readiness_report(health: ApiHealthResponse) -> PilotReadiness
         .pilot_readiness
         .blocking_checks
         .iter()
-        .map(|check| format!("{}={}", check.name, check.status))
+        .map(|check| {
+            check
+                .remediation
+                .clone()
+                .unwrap_or_else(|| format!("{}={}", check.name, check.status))
+        })
         .collect::<Vec<_>>();
     let evidence_refs = vec![
         "api_health:/api/v1/health".to_string(),
@@ -1382,6 +1389,7 @@ mod tests {
                 name: "model_scorer".into(),
                 status: "ok".into(),
                 runtime_kind: Some("rust_artifact".into()),
+                remediation: None,
             }],
             pilot_readiness: ApiPilotReadiness {
                 status: "not_ready".into(),
@@ -1396,11 +1404,13 @@ mod tests {
                     name: "api_key_configuration".into(),
                     status: "configured".into(),
                     runtime_kind: None,
+                    remediation: None,
                 }],
                 blocking_checks: vec![ApiHealthCheck {
                     name: "object_storage_configuration".into(),
                     status: "local_demo_object_storage".into(),
                     runtime_kind: None,
+                    remediation: Some("Set FWA_OBJECT_STORAGE_URI.".into()),
                 }],
             },
         });
@@ -1414,7 +1424,7 @@ mod tests {
         assert_eq!(report.model_runtime_kind.as_deref(), Some("rust_artifact"));
         assert_eq!(
             report.remediation_summary,
-            vec!["object_storage_configuration=local_demo_object_storage"]
+            vec!["Set FWA_OBJECT_STORAGE_URI."]
         );
         assert!(report
             .evidence_refs
@@ -1431,6 +1441,7 @@ mod tests {
                 name: "model_scorer".into(),
                 status: "ok".into(),
                 runtime_kind: Some("python_http".into()),
+                remediation: None,
             }],
             pilot_readiness: ApiPilotReadiness {
                 status: "ready".into(),
@@ -1442,6 +1453,7 @@ mod tests {
                     name: "api_key_configuration".into(),
                     status: "configured".into(),
                     runtime_kind: None,
+                    remediation: None,
                 }],
                 blocking_checks: Vec::new(),
             },

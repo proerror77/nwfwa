@@ -61,10 +61,10 @@ Minimum pilot monitoring:
 - Pilot readiness gate: `/api/v1/health` field `pilot_readiness.status` must be
   `ready` before customer pilot traffic. When it is `not_ready`,
   `pilot_readiness.blocking_checks` lists the non-secret configuration check
-  names and statuses that still need remediation. `required_check_names`,
-  `required_check_count`, `ready_check_count`, `blocking_check_count`, and
-  `ready_checks` make the blocker list machine-checkable in demo smoke and
-  customer pilot contract tests.
+  names, statuses, and remediation hints that still need action.
+  `required_check_names`, `required_check_count`, `ready_check_count`,
+  `blocking_check_count`, and `ready_checks` make the blocker list
+  machine-checkable in demo smoke and customer pilot contract tests.
 - API key readiness: `/api/v1/health` check `api_key_configuration` must be
   `configured`, not `local_dev_key`, before customer pilot traffic.
   `invalid_api_key_principals` means `FWA_API_KEY_PRINCIPALS` is present but no
@@ -163,7 +163,9 @@ Minimum pilot monitoring:
   `cargo run --locked -p worker -- check-pilot-readiness --api-url <api-base-url> --api-key <pilot-api-key> --require-ready`
   reads the API health contract and returns `ready_for_customer_pilot`,
   `blocking_checks`, `remediation_summary`, and evidence refs for the readiness
-  decision. With `--require-ready`, unresolved blockers make the command fail
+  decision. `remediation_summary` prefers the non-secret `remediation` hints
+  from `/api/v1/health` and falls back to `name=status` for older health
+  payloads. With `--require-ready`, unresolved blockers make the command fail
   after printing the JSON report.
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `staging-proof`, `migrations`, `rust`, `python`, `frontend`

@@ -952,6 +952,7 @@ struct HealthCheck {
     name: String,
     status: String,
     runtime_kind: Option<String>,
+    remediation: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -4887,6 +4888,9 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                                 <span>{&check.status}</span>
                                             </div>
                                             <small>{format!("runtime: {}", check.runtime_kind.as_deref().unwrap_or("n/a"))}</small>
+                                            if let Some(remediation) = &check.remediation {
+                                                <small>{remediation}</small>
+                                            }
                                         </div>
                                     })}
                                 </div>
