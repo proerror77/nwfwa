@@ -274,10 +274,6 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-      - run: |
-          sudo apt-get update
-          sudo apt-get install -y binaryen
-          wasm-opt --version
       - run: cargo install trunk --version 0.21.14 --locked
       - run: cargo fmt -- --check
       - run: cargo check --locked --target wasm32-unknown-unknown
