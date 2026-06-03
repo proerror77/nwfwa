@@ -10,7 +10,11 @@ tracing into one pilot-oriented platform.
 The platform is assistive only. It can surface suspicious patterns, explain risk
 signals, route cases, and prepare evidence packages. It must not automatically
 deny claims, approve claims, or accuse fraud without a customer-controlled
-adjudication process.
+adjudication process. Pre-payment automatic denial or straight-through approval
+is allowed only for customer-approved deterministic policy, eligibility,
+coverage, or clinical-compatibility rules; ML, anomaly, provider graph,
+similar-case, and Agent outputs remain review-routing signals, not sole
+adjudication authority.
 
 ## What This Repository Contains
 
@@ -254,8 +258,10 @@ is part of the scoring, routing, rule, model, and threshold governance boundary.
 Pre-payment flows optimize review precision and payment control. Post-payment
 flows can favor recovery, audit sampling, model evaluation, and ROI analysis.
 
-Recommended actions are review guidance. They do not approve, deny, or adjudicate
-claims.
+Recommended actions are review guidance unless a customer-approved deterministic
+adjudication rule explicitly produces an auditable `auto_deny` or
+`straight_through` outcome. ML, anomaly, provider graph, similar-case, and Agent
+signals cannot approve, deny, or adjudicate claims by themselves.
 
 ### Claim Scoring
 

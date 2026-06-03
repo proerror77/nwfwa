@@ -12,6 +12,8 @@ completed without real customer data:
 - inbound claim inbox, normalization, correction templates, and canonical trace;
 - deterministic scoring, FWA rule pack, review modes, rule lifecycle, and
   promotion controls;
+- customer-approved deterministic adjudication-policy boundary for hard-deny,
+  straight-through, pending-evidence, manual-review, and score-only rules;
 - lead, case, investigation, QA, medical review, label, and audit workflows;
 - model registry, evaluation gates, retraining jobs, Rust artifact scoring,
   external training handoff, and scheduled MLOps monitoring-plan contracts;
@@ -53,9 +55,9 @@ expected code, document, workflow, or proof artifact is missing.
 
 | PRD capability | Current status | Repository evidence | Remaining boundary |
 | --- | --- | --- | --- |
-| Decision boundary | Implemented | `docs/product/fwa-risk-operations-prd.md`, `apps/api-server/src/routes/agent.rs`, `apps/api-server/tests/knowledge_agent.rs` | Customer governance must still approve production adjudication policy. |
+| Decision boundary | Implemented | `docs/product/fwa-risk-operations-prd.md`, `docs/project/ml-algorithm-strategy.md`, `apps/api-server/src/routes/agent.rs`, `apps/api-server/tests/knowledge_agent.rs` | Customer governance must still approve production adjudication policy and automatic denial or straight-through rule authority. |
 | Inbound claim inbox and canonical trace | Implemented | `apps/api-server/src/routes/inbox.rs`, `apps/api-server/src/routes/claims.rs`, `scripts/demo/tpa_mock_client.py` | Customer-specific raw payload adapters and PII policy remain environment-specific. |
-| Core scoring, rules, and review modes | Implemented | `crates/fwa-scoring`, `crates/fwa-rules`, `apps/api-server/src/routes/ops_rules.rs`, demo seed/smoke | Customer thresholds and production routing impact require promotion evidence. |
+| Core scoring, rules, and review modes | Implemented with adjudication-policy design pending runtime expansion | `crates/fwa-scoring`, `crates/fwa-rules`, `apps/api-server/src/routes/ops_rules.rs`, demo seed/smoke, `docs/product/fwa-risk-operations-prd.md` | Customer thresholds, hard-deny rule approvals, exception checks, appeal/override routing, and production routing impact require promotion evidence. |
 | Lead, case, QA, medical, and feedback loop | Implemented | `apps/api-server/src/routes/ops_cases.rs`, `apps/api-server/src/routes/ops_medical.rs`, `apps/api-server/src/routes/pilot_loop.rs` | Real reviewer workflow tools and customer operating procedure remain external. |
 | Model operations and MLOps pipeline | Implemented with customer validation boundary | `apps/api-server/src/routes/ops_models.rs`, `crates/fwa-ml-runtime`, `apps/worker`, `docs/project/ml-pipeline-runbook.md` | Real labels, live shadow traffic, customer holdout, and production drift evidence. |
 | Dataset, feature, and label governance | Implemented with customer validation boundary | `apps/api-server/src/routes/ops_datasets.rs`, `scripts/data/build_public_data_mvp.py`, `docs/project/public-data-mvp.md` | Real customer dataset intake, source data quality, and label provenance. |

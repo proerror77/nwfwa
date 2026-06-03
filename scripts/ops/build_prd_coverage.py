@@ -17,14 +17,17 @@ CAPABILITIES = [
     {
         "capability": "decision_boundary",
         "status": "implemented",
-        "summary": "Assistive-only boundary is documented and enforced through agent approval and promotion gates.",
+        "summary": "Assistive-by-default boundary is documented; automatic denial or straight-through approval is limited to customer-approved deterministic adjudication rules, while ML and Agent outputs remain non-adjudicating signals.",
         "evidence": [
             "docs/product/fwa-risk-operations-prd.md",
+            "docs/project/ml-algorithm-strategy.md",
             "apps/api-server/src/routes/agent.rs",
             "apps/api-server/src/routes/ops_models.rs",
         ],
         "required_text": [
             ("docs/product/fwa-risk-operations-prd.md", "No autonomous fraud accusation"),
+            ("docs/product/fwa-risk-operations-prd.md", "customer-approved deterministic"),
+            ("docs/project/ml-algorithm-strategy.md", "they cannot be the sole denial authority"),
             ("apps/api-server/tests/knowledge_agent.rs", "assistive_only"),
         ],
         "customer_data_required": False,
@@ -48,16 +51,18 @@ CAPABILITIES = [
     {
         "capability": "core_scoring_rules_and_review_modes",
         "status": "implemented",
-        "summary": "Deterministic scoring, standard FWA rule pack, review modes, and promotion controls are implemented for demo and pilot contracts.",
+        "summary": "Deterministic scoring, standard FWA rule pack, review modes, promotion controls, and the adjudication action-class design are implemented for demo and pilot contracts.",
         "evidence": [
             "crates/fwa-scoring/src/lib.rs",
             "crates/fwa-rules/src/lib.rs",
             "apps/api-server/src/routes/ops_rules.rs",
+            "docs/product/fwa-risk-operations-prd.md",
         ],
         "required_text": [
             ("scripts/demo/smoke_demo.py", "assert_standard_rule_pack"),
             ("scripts/demo/seed_demo.sql", "rule_medically_unnecessary_service"),
             ("apps/api-server/src/routes/ops_rules.rs", "promotion"),
+            ("docs/product/fwa-risk-operations-prd.md", "Rule Action Classes"),
         ],
         "customer_data_required": False,
     },

@@ -16,13 +16,77 @@ operator control before autonomous decisioning.
 
 ## Decision Boundary
 
-The platform is assistive. It can recommend review actions, surface suspicious
-patterns, and prepare evidence packages, but it must not automatically deny,
-approve, or accuse a claim without a customer-controlled adjudication process.
+The platform is assistive by default. It can recommend review actions, surface
+suspicious patterns, and prepare evidence packages, but it must not
+automatically deny, approve, or accuse a claim without a customer-controlled
+adjudication process.
+
+Pre-payment integrations may support customer-approved deterministic
+adjudication rules. Those rules are not ML decisions. They are explicit policy,
+eligibility, coverage, or clinical-compatibility checks that the customer has
+approved for straight-through processing. Any automatic denial or automatic
+approval must include rule id, rule version, customer policy authority, input
+field evidence, exception-check outcome, audit id, and appeal or reviewer
+override path. ML scores, anomaly scores, provider graph signals, similar-case
+signals, and Agent outputs must never be the sole authority for automatic
+denial or automatic approval.
 
 The product language must distinguish fraud, waste, abuse, improper payment,
 documentation issue, and medical necessity issue. A high score, anomaly, or
 rule hit is a lead, not a confirmed fraud finding.
+
+### Decision Routing Outcomes
+
+Real-time claim scoring should route each claim into one of the following
+outcomes:
+
+- `straight_through`: low-risk or explicitly eligible claim can continue normal
+  processing under the customer's policy;
+- `auto_deny`: a customer-approved deterministic rule establishes ineligibility,
+  exclusion, contradiction, or invalid coverage with no unresolved exception;
+- `pending_evidence`: required documents or clinical evidence are missing, so
+  payment is paused until the evidence request is resolved;
+- `manual_review`: rules, model signals, anomaly signals, provider signals, or
+  clinical uncertainty require human review;
+- `qa_sample`: low or medium risk claims are sampled for quality assurance,
+  calibration, or missed-risk measurement;
+- `post_payment_audit`: post-payment mode routes claims to audit, recovery
+  review, or provider review instead of pre-payment hold or denial.
+
+The scoring response should expose both the business outcome and the authority
+behind it:
+
+- `decision_outcome`;
+- `decision_authority`: `customer_policy_rule`, `clinical_policy_rule`,
+  `risk_routing_policy`, `human_reviewer`, or `qa_policy`;
+- `decision_confidence`: `deterministic`, `high`, `medium`, or `low`;
+- `reason_code`;
+- `appeal_or_review_required`;
+- evidence refs and audit ids.
+
+### Rule Action Classes
+
+Rules are not all equivalent. The rule library must classify each production
+rule by action class:
+
+- `hard_deny`: deterministic policy, eligibility, coverage, or clinical
+  contradiction rules that can deny only after customer approval and exception
+  checks;
+- `straight_through`: deterministic eligibility or low-risk rules that can allow
+  normal processing only under customer policy;
+- `pending_evidence`: evidence sufficiency rules that request documents such as
+  X-ray images, prescriptions, medication details, lab reports, or medical
+  records;
+- `manual_review`: suspicious or clinically uncertain rules that require human
+  review;
+- `score_only`: rules that contribute risk, prioritization, or monitoring
+  signals but cannot adjudicate.
+
+Examples of hard-deny candidates include gender or age contraindications,
+coverage exclusion, policy waiting-period violation, expired coverage, duplicate
+claim identifiers, and provider or product ineligibility. Each candidate must
+carry exception logic; if an exception cannot be resolved deterministically, the
+outcome must be `pending_evidence` or `manual_review`, not `auto_deny`.
 
 ## Input Box And Canonical Evidence Trace
 
@@ -140,7 +204,10 @@ Required rule families:
 - suspicious provider-member or referral concentration.
 
 Each rule must keep version, owner, lifecycle status, applicability scope,
-backtest result, estimated saving, false-positive history, and evidence refs.
+action class, backtest result, estimated saving, false-positive history, and
+evidence refs. Hard-deny and straight-through rules must also keep customer
+approval status, policy or clinical authority refs, exception-check logic,
+effective dates, rollback plan, and appeal or override route.
 
 ### Investigation Case Management
 
@@ -173,6 +240,11 @@ Required labels:
 - documentation_issue;
 - medical_necessity_issue;
 - policy_exclusion;
+- ineligible_service;
+- clinical_contraindication;
+- auto_deny_upheld;
+- auto_deny_overturned;
+- pending_evidence_resolved;
 - amount_prevented;
 - amount_recovered;
 - lead_disposition;

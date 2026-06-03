@@ -12,6 +12,14 @@ The planned algorithm direction is appropriate for the current product stage:
 rule-first, explainable-model-first, and governed promotion before any model can
 affect routing.
 
+Automatic claim denial or approval is outside the authority of ML, anomaly
+detection, provider graph signals, similar-case search, or Agent outputs. If the
+product supports automatic denial or straight-through approval in pre-payment
+flows, that decision must come from customer-approved deterministic adjudication
+rules with policy authority, evidence refs, exception checks, audit ids, and an
+appeal or override path. Models can prioritize, route, explain, and trigger
+review; they cannot be the sole denial authority.
+
 The current implementation is not a production machine learning model. It is a
 demo and pilot baseline that exercises the model runtime contract, scoring
 fusion, evidence refs, model registry, retraining job contract, and promotion
@@ -65,6 +73,8 @@ The demo can claim:
 - end-to-end scoring runs through a model runtime boundary;
 - risk is assembled from explainable rule, anomaly, provider, clinical, model,
   and routing layers;
+- deterministic customer-approved rules are the only valid future authority for
+  automatic denial or straight-through approval;
 - every promoted model must satisfy dataset, feature, metric, split, leakage,
   shadow, drift, label, and approval gates;
 - current model outputs are assistive risk signals and do not adjudicate,
@@ -93,7 +103,31 @@ Required language:
 - call the Python service a "demo scoring boundary" or "heuristic baseline";
 - call sub-probability metadata "baseline risk components" unless calibration
   evidence exists;
-- keep agent and ML outputs assistive-only.
+- keep agent and ML outputs assistive-only;
+- call auto-denial candidates "customer-approved deterministic adjudication
+  rules", not model decisions.
+
+### Stage 0A: Deterministic Adjudication Policy Design
+
+Before adding production automatic denial or straight-through approval, define a
+separate adjudication policy layer outside the ML model:
+
+- action classes: `hard_deny`, `straight_through`, `pending_evidence`,
+  `manual_review`, and `score_only`;
+- output fields: `decision_outcome`, `decision_authority`,
+  `decision_confidence`, `reason_code`, `appeal_or_review_required`, evidence
+  refs, and audit ids;
+- rule metadata: customer approval status, policy or clinical authority refs,
+  applicability scope, exception checks, effective dates, rollback plan, and
+  override route;
+- examples: gender or age contraindication, coverage exclusion, waiting-period
+  violation, expired coverage, duplicate claim identifier, provider
+  ineligibility, and product ineligibility;
+- fallback rule: if the exception check is unresolved or evidence is missing,
+  route to `pending_evidence` or `manual_review` instead of `auto_deny`.
+
+This layer can use model and anomaly outputs as supporting context, but they
+must not determine `auto_deny` by themselves.
 
 ### Stage 1: Pilot Label Collection
 
@@ -167,6 +201,8 @@ Before production impact, replace demo runtime assumptions with:
   score drift, segment drift, calibration drift, and reviewer disagreement;
 - rollback and previous-active-version audit evidence;
 - separate thresholds for pre-payment and post-payment review modes;
+- explicit separation between deterministic adjudication rules and model-driven
+  review routing;
 - clear SLOs for model service availability and fallback behavior.
 
 ## Open Implementation Gaps
