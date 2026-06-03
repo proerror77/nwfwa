@@ -56,6 +56,12 @@ function assertContains(value, expected, label) {
   }
 }
 
+function assertNotContains(value, unexpected, label) {
+  if (value.includes(unexpected)) {
+    throw new Error(`expected ${label} not to contain ${unexpected}`);
+  }
+}
+
 function assertMatches(value, expected, label) {
   if (!expected.test(value)) {
     throw new Error(`expected ${label} to match ${expected}`);
@@ -119,13 +125,16 @@ async function main() {
     assertContains(builtText, "7-layer engine", "web console global system map bundle");
     assertContains(builtText, "Human gate", "web console global system map bundle");
     assertContains(builtText, "Audit trail", "web console global system map bundle");
-    assertContains(builtText, "ROI proof", "web console global system map bundle");
+    assertContains(builtText, "Value proof", "web console global system map bundle");
     assertContains(builtText, "peer benchmark", "web console seven-layer visual bundle");
     assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
     assertContains(builtText, "Net value", "web console dashboard value wording bundle");
-    assertContains(builtText, "ROI pending", "web console dashboard value wording bundle");
+    assertContains(builtText, "Savings stay at 0", "web console dashboard value wording bundle");
+    assertNotContains(builtText, "ROI proof", "web console dashboard value wording bundle");
+    assertNotContains(builtText, "ROI pending", "web console dashboard value wording bundle");
+    assertNotContains(builtText, "ROI readiness", "web console dashboard value wording bundle");
     assertContains(builtText, "Next actions", "web console dashboard visual bundle");
     assertContains(builtText, "click to work", "web console dashboard visual bundle");
     assertContains(builtText, "FWA operating map", "web console dashboard topology bundle");
