@@ -4286,15 +4286,39 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["samples"],
                     "properties": {
                         "min_support": { "type": "integer", "minimum": 1 },
+                        "source_model_key": { "type": "string" },
+                        "source_model_version": { "type": "string" },
+                        "feature_importance_uri": {
+                            "type": "string",
+                            "description": "Feature importance or SHAP-style artifact URI used as candidate-rule evidence."
+                        },
+                        "min_abs_contribution": {
+                            "type": "number",
+                            "description": "Minimum absolute model explanation contribution required before proposing a rule candidate."
+                        },
+                        "model_explanations": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RuleDiscoveryModelExplanation" }
+                        },
                         "samples": {
                             "type": "array",
                             "items": { "type": "object" }
                         }
                     }
                 },
+                "RuleDiscoveryModelExplanation": {
+                    "type": "object",
+                    "required": ["feature", "direction", "contribution", "reason"],
+                    "properties": {
+                        "feature": { "type": "string" },
+                        "direction": { "type": "string", "enum": ["increases_risk", "decreases_risk"] },
+                        "contribution": { "type": "number" },
+                        "reason": { "type": "string" }
+                    }
+                },
                 "RuleDiscoveryCandidate": {
                     "type": "object",
-                    "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation"],
+                    "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation", "evidence_refs"],
                     "properties": {
                         "rule": { "$ref": "#/components/schemas/RuleDefinition" },
                         "support": { "type": "integer" },
@@ -4307,7 +4331,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         },
-                        "explanation": { "type": "string" }
+                        "explanation": { "type": "string" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
                     }
                 },
                 "RuleDiscoveryResponse": {

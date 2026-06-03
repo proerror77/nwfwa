@@ -1067,6 +1067,86 @@ async fn discovers_candidate_rules_from_labeled_samples() {
 }
 
 #[tokio::test]
+async fn discovers_rule_candidates_from_model_explanations() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/discover",
+        r#"{
+          "min_support": 1,
+          "source_model_key": "baseline_fwa",
+          "source_model_version": "0.3.0-candidate",
+          "feature_importance_uri": "data/eval/baseline_fwa/v3/feature_importance.parquet",
+          "model_explanations": [
+            {
+              "feature": "claim_amount_to_limit_ratio",
+              "direction": "increases_risk",
+              "contribution": 1.4,
+              "reason": "large positive logistic contribution"
+            }
+          ],
+          "samples": [
+            {
+              "external_claim_id": "CLM-ML-TP",
+              "claim_amount": "9000",
+              "currency": "CNY",
+              "service_date": "2026-01-05",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-ML-TP",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-ML-TN",
+              "claim_amount": "500",
+              "currency": "CNY",
+              "service_date": "2026-03-01",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-ML-TN",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            }
+          ]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let candidates = body["candidates"].as_array().unwrap();
+    let candidate = candidates
+        .iter()
+        .find(|candidate| {
+            candidate["rule"]["rule_id"] == "candidate_ml_claim_amount_to_limit_ratio"
+        })
+        .expect("missing model explanation candidate rule");
+    assert_eq!(
+        candidate["rule"]["conditions"][0]["field"],
+        "claim_amount_to_limit_ratio"
+    );
+    assert_eq!(candidate["rule"]["conditions"][0]["operator"], ">=");
+    assert_eq!(candidate["precision"], 1.0);
+    assert!(candidate["explanation"]
+        .as_str()
+        .unwrap()
+        .contains("模型解释"));
+    assert!(candidate["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_versions:baseline_fwa:0.3.0-candidate"
+        )));
+}
+
+#[tokio::test]
 async fn saves_discovered_candidate_rule_for_lifecycle() {
     let app = build_app(test_config());
 

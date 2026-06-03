@@ -148,6 +148,12 @@ impl RuleBacktestRecord {
 pub struct RuleDiscoveryRequest {
     pub min_support: Option<usize>,
     pub samples: Vec<RuleDiscoverySample>,
+    #[serde(default)]
+    pub model_explanations: Vec<RuleDiscoveryModelExplanation>,
+    pub source_model_key: Option<String>,
+    pub source_model_version: Option<String>,
+    pub feature_importance_uri: Option<String>,
+    pub min_abs_contribution: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -155,6 +161,14 @@ pub struct RuleDiscoverySample {
     #[serde(flatten)]
     pub sample: RuleBacktestSample,
     pub confirmed_fwa: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RuleDiscoveryModelExplanation {
+    pub feature: String,
+    pub direction: String,
+    pub contribution: f64,
+    pub reason: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -175,6 +189,7 @@ pub struct RuleDiscoveryCandidate {
     pub false_positive_rate: f64,
     pub matched_claim_ids: Vec<String>,
     pub explanation: String,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -802,8 +817,14 @@ pub async fn discover_rules(
         positive_count as f64 / sample_count as f64
     };
 
+    let candidate_rules = candidate_rule_templates()
+        .into_iter()
+        .chain(model_explanation_candidate_rules(&request))
+        .collect::<Vec<_>>();
+    let discovery_evidence_refs = rule_discovery_evidence_refs(&request);
+
     let mut candidates = Vec::new();
-    for rule in candidate_rule_templates() {
+    for rule in candidate_rules {
         let mut matched_claim_ids = Vec::new();
         let mut true_positive_count = 0_usize;
         let mut false_positive_count = 0_usize;
@@ -862,6 +883,7 @@ pub async fn discover_rules(
             estimated_saving: format!("{:.2}", saving.round_dp(2)),
             false_positive_rate,
             matched_claim_ids,
+            evidence_refs: discovery_evidence_refs.clone(),
         });
     }
 
@@ -1360,6 +1382,114 @@ fn candidate_rule_templates() -> Vec<Rule> {
     ]
 }
 
+fn model_explanation_candidate_rules(request: &RuleDiscoveryRequest) -> Vec<Rule> {
+    let min_abs_contribution = request.min_abs_contribution.unwrap_or(0.10);
+    let mut explanations = request
+        .model_explanations
+        .iter()
+        .filter(|explanation| {
+            explanation.direction == "increases_risk"
+                && explanation.contribution.is_finite()
+                && explanation.contribution.abs() >= min_abs_contribution
+                && !explanation.feature.trim().is_empty()
+        })
+        .collect::<Vec<_>>();
+    explanations.sort_by(|left, right| {
+        right
+            .contribution
+            .abs()
+            .partial_cmp(&left.contribution.abs())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    explanations
+        .into_iter()
+        .filter_map(|explanation| {
+            let threshold = positive_feature_threshold(request, &explanation.feature)?;
+            let feature_slug = rule_id_slug(&explanation.feature);
+            Some(Rule {
+                rule_id: format!("candidate_ml_{feature_slug}"),
+                version: 1,
+                name: format!("ML explanation candidate: {}", explanation.feature),
+                review_mode: "both".into(),
+                scheme_family: Some("high_risk_claim".into()),
+                conditions: vec![Condition {
+                    field: explanation.feature.clone(),
+                    operator: ">=".into(),
+                    value: serde_json::json!(threshold),
+                }],
+                action: RuleAction {
+                    score: explanation_score(explanation.contribution),
+                    alert_code: format!("ML_{}", feature_slug.to_uppercase()),
+                    recommended_action: RecommendedAction::ManualReview,
+                    reason: format!(
+                        "模型解释显示 {} 对风险贡献较高：{}",
+                        explanation.feature, explanation.reason
+                    ),
+                },
+            })
+        })
+        .collect()
+}
+
+fn positive_feature_threshold(request: &RuleDiscoveryRequest, feature_name: &str) -> Option<f64> {
+    let mut values = request
+        .samples
+        .iter()
+        .filter(|sample| sample.confirmed_fwa)
+        .filter_map(|sample| {
+            let context = sample_context(&sample.sample);
+            let features = calculate_features(&context);
+            features
+                .get(feature_name)
+                .and_then(|feature| feature.value.as_f64())
+                .filter(|value| value.is_finite())
+        })
+        .collect::<Vec<_>>();
+    values.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+    values.first().copied()
+}
+
+fn explanation_score(contribution: f64) -> u8 {
+    ((contribution.abs() * 20.0).round() as u8).clamp(10, 35)
+}
+
+fn rule_id_slug(value: &str) -> String {
+    let slug = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+    if slug.is_empty() {
+        "feature".into()
+    } else {
+        slug
+    }
+}
+
+fn rule_discovery_evidence_refs(request: &RuleDiscoveryRequest) -> Vec<String> {
+    let mut refs = Vec::new();
+    if let (Some(model_key), Some(model_version)) = (
+        request.source_model_key.as_deref(),
+        request.source_model_version.as_deref(),
+    ) {
+        refs.push(format!("model_versions:{model_key}:{model_version}"));
+    }
+    if let Some(feature_importance_uri) = request.feature_importance_uri.as_deref() {
+        if !feature_importance_uri.trim().is_empty() {
+            refs.push(format!("feature_importance:{feature_importance_uri}"));
+        }
+    }
+    refs
+}
+
 fn explanation_for_candidate(rule: &Rule) -> String {
     match rule.rule_id.as_str() {
         "candidate_early_high_amount" => {
@@ -1367,6 +1497,9 @@ fn explanation_for_candidate(rule: &Rule) -> String {
         }
         "candidate_high_amount_ratio" => {
             "理赔金额与保障额度比例偏高，可作为金额偏离类候选规则".into()
+        }
+        _ if rule.rule_id.starts_with("candidate_ml_") => {
+            "由模型解释贡献项提出，仍需回测、人工审阅和发布门禁".into()
         }
         _ => "基于历史标签和可解释特征生成的候选规则".into(),
     }
