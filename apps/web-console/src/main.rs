@@ -4930,49 +4930,132 @@ fn audit_samples_view(props: &AuditSamplesProps) -> Html {
                     if samples.is_empty() {
                         <p class="empty">{"No audit samples returned."}</p>
                     } else {
-                        <div class="factor-card-grid">
-                            {for samples.iter().take(10).map(|sample| html! {
-                                <div class="factor-card">
-                                    <div>
-                                        <strong>{format!("{} / {}", sample.sample_id, sample.sample_mode)}</strong>
-                                        <span>{format!("{} / {}", sample.selection_method, sample.assignment_queue)}</span>
+                        <>
+                            {audit_sampling_governance_cockpit(samples)}
+                            <div class="factor-card-grid">
+                                {for samples.iter().take(10).map(|sample| html! {
+                                    <div class="factor-card">
+                                        <div>
+                                            <strong>{format!("{} / {}", sample.sample_id, sample.sample_mode)}</strong>
+                                            <span>{format!("{} / {}", sample.selection_method, sample.assignment_queue)}</span>
+                                        </div>
+                                        <p>{&sample.population_definition}</p>
+                                        <div class="summary-grid">
+                                            <div><span>{"Requested"}</span><strong>{sample.sample_size}</strong></div>
+                                            <div><span>{"Selected"}</span><strong>{sample.selected_leads.len()}</strong></div>
+                                            <div><span>{"Reviewer"}</span><strong>{&sample.reviewer}</strong></div>
+                                            <div><span>{"Seed"}</span><strong>{sample.deterministic_seed.as_deref().unwrap_or("none")}</strong></div>
+                                            <div><span>{"Created"}</span><strong>{sample.created_at.as_deref().unwrap_or("unknown")}</strong></div>
+                                            <div><span>{"Criteria"}</span><strong>{payload_keys_label(&sample.inclusion_criteria)}</strong></div>
+                                        </div>
+                                        <small>{format!("outcome: {}", payload_keys_label(&sample.outcome_distribution))}</small>
+                                        <details>
+                                            <summary>{"Selected leads"}</summary>
+                                            if sample.selected_leads.is_empty() {
+                                                <p class="empty">{"No selected leads in this sample."}</p>
+                                            } else {
+                                                <div class="factor-card-grid">
+                                                    {for sample.selected_leads.iter().take(6).map(|lead| html! {
+                                                        <div class="metric-row">
+                                                            <span>{format!("{} / {}", lead.lead_id, lead.claim_id)}</span>
+                                                            <strong>{format!("{} / {}", lead.risk_score, lead.rag)}</strong>
+                                                            <small>{format!("{} / {} / {}", lead.scheme_family, lead.review_mode, lead.risk_band)}</small>
+                                                            <small>{format!("provider: {} / {} / {}", lead.provider_id, lead.provider_type, lead.provider_region)}</small>
+                                                            <small>{format!("policy: {} / strata: {} / prior reviewer samples: {}", lead.policy_type, lead.strata_key, lead.prior_reviewer_sample_count)}</small>
+                                                            <small>{format!("evidence: {}", refs_label(&lead.evidence_refs))}</small>
+                                                        </div>
+                                                    })}
+                                                </div>
+                                            }
+                                        </details>
                                     </div>
-                                    <p>{&sample.population_definition}</p>
-                                    <div class="summary-grid">
-                                        <div><span>{"Requested"}</span><strong>{sample.sample_size}</strong></div>
-                                        <div><span>{"Selected"}</span><strong>{sample.selected_leads.len()}</strong></div>
-                                        <div><span>{"Reviewer"}</span><strong>{&sample.reviewer}</strong></div>
-                                        <div><span>{"Seed"}</span><strong>{sample.deterministic_seed.as_deref().unwrap_or("none")}</strong></div>
-                                        <div><span>{"Created"}</span><strong>{sample.created_at.as_deref().unwrap_or("unknown")}</strong></div>
-                                        <div><span>{"Criteria"}</span><strong>{payload_keys_label(&sample.inclusion_criteria)}</strong></div>
-                                    </div>
-                                    <small>{format!("outcome: {}", payload_keys_label(&sample.outcome_distribution))}</small>
-                                    <details>
-                                        <summary>{"Selected leads"}</summary>
-                                        if sample.selected_leads.is_empty() {
-                                            <p class="empty">{"No selected leads in this sample."}</p>
-                                        } else {
-                                            <div class="factor-card-grid">
-                                                {for sample.selected_leads.iter().take(6).map(|lead| html! {
-                                                    <div class="metric-row">
-                                                        <span>{format!("{} / {}", lead.lead_id, lead.claim_id)}</span>
-                                                        <strong>{format!("{} / {}", lead.risk_score, lead.rag)}</strong>
-                                                        <small>{format!("{} / {} / {}", lead.scheme_family, lead.review_mode, lead.risk_band)}</small>
-                                                        <small>{format!("provider: {} / {} / {}", lead.provider_id, lead.provider_type, lead.provider_region)}</small>
-                                                        <small>{format!("policy: {} / strata: {} / prior reviewer samples: {}", lead.policy_type, lead.strata_key, lead.prior_reviewer_sample_count)}</small>
-                                                        <small>{format!("evidence: {}", refs_label(&lead.evidence_refs))}</small>
-                                                    </div>
-                                                })}
-                                            </div>
-                                        }
-                                    </details>
-                                </div>
-                            })}
-                        </div>
+                                })}
+                            </div>
+                        </>
                     }
                 },
             }}
         </section>
+    }
+}
+
+fn audit_sampling_governance_cockpit(samples: &[AuditSampleRecord]) -> Html {
+    let sample = &samples[0];
+    let primary_lead = sample
+        .selected_leads
+        .iter()
+        .max_by_key(|lead| lead.risk_score);
+    let lead_label = primary_lead
+        .map(|lead| format!("{} / {}", lead.claim_id, lead.rag))
+        .unwrap_or_else(|| "no selected lead".into());
+    let risk_label = primary_lead
+        .map(|lead| format!("{} / {}", lead.risk_score, lead.risk_band))
+        .unwrap_or_else(|| "pending".into());
+    let provider_label = primary_lead
+        .map(|lead| format!("{} / {}", lead.provider_id, lead.provider_region))
+        .unwrap_or_else(|| "pending".into());
+    let evidence_label = primary_lead
+        .map(|lead| refs_label(&lead.evidence_refs))
+        .unwrap_or_else(|| "none".into());
+    let seed_label = sample.deterministic_seed.as_deref().unwrap_or("none");
+    let created_at = sample.created_at.as_deref().unwrap_or("unknown");
+
+    html! {
+        <div class="audit-sampling-cockpit">
+            <div class="sampling-brief panel-soft">
+                <span class="eyebrow">{"Sampling Governance Map"}</span>
+                <strong>{format!("{} / {}", sample.sample_id, sample.sample_mode)}</strong>
+                <p>{&sample.population_definition}</p>
+                <div class="summary-grid">
+                    <div><span>{"Requested"}</span><strong>{sample.sample_size}</strong></div>
+                    <div><span>{"Selected leads"}</span><strong>{sample.selected_leads.len()}</strong></div>
+                    <div><span>{"Reviewer"}</span><strong>{&sample.reviewer}</strong></div>
+                    <div><span>{"Queue"}</span><strong>{&sample.assignment_queue}</strong></div>
+                </div>
+            </div>
+
+            <div class="sampling-governance-map">
+                <div class="sampling-map-title">
+                    <div>
+                        <span>{"QA audit sample"}</span>
+                        <strong>{"Population -> Criteria -> Seed -> Leads -> QA -> Audit trace"}</strong>
+                    </div>
+                    <span>{format!("created {}", created_at)}</span>
+                </div>
+                <div class="sampling-link"></div>
+                <div class="sampling-link diagonal-a"></div>
+                <div class="sampling-link diagonal-b"></div>
+                <div class="sampling-core">
+                    <span>{"Audit Sampling"}</span>
+                    <strong>{&sample.selection_method}</strong>
+                </div>
+                {sampling_node("Population", &sample.sample_mode, "population")}
+                {sampling_node("Inclusion Criteria", &payload_keys_label(&sample.inclusion_criteria), "criteria")}
+                {sampling_node("Deterministic seed", seed_label, "seed")}
+                {sampling_node("Selected leads", &lead_label, "leads")}
+                {sampling_node("QA queue", &sample.assignment_queue, "queue")}
+                {sampling_node("Audit trace", "audit_sample.created", "audit")}
+            </div>
+
+            <div class="sampling-trace panel-soft">
+                <span class="eyebrow">{"Controlled sample output"}</span>
+                <div class="provider-signal-stack">
+                    {provider_signal_row("Top selected risk", &risk_label, "danger")}
+                    {provider_signal_row("Provider focus", &provider_label, "warning")}
+                    {provider_signal_row("Outcome distribution", &payload_keys_label(&sample.outcome_distribution), "neutral")}
+                    {provider_signal_row("Evidence refs", &evidence_label, "strong")}
+                </div>
+            </div>
+        </div>
+    }
+}
+
+fn sampling_node(label: &str, value: &str, position: &str) -> Html {
+    html! {
+        <div class={classes!("sampling-node", position.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
     }
 }
 
