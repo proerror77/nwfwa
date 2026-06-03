@@ -799,6 +799,75 @@ pre {
   gap: 10px;
 }
 
+.mlops-action-panel {
+  background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+}
+
+.mlops-action-grid {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.9fr) minmax(190px, 0.9fr) minmax(190px, 0.9fr) minmax(260px, 1.1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.mlops-field {
+  align-content: start;
+  margin: 0;
+}
+
+.mlops-evidence-field {
+  grid-column: 1 / span 2;
+}
+
+.mlops-notes-field {
+  grid-column: 3 / span 2;
+}
+
+.mlops-notes-field textarea {
+  min-height: 88px;
+  max-height: 140px;
+  resize: vertical;
+}
+
+.mlops-boundary-card {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(110px, 0.22fr) minmax(190px, 0.32fr) minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 11px 12px;
+  color: #284768;
+  background: #eef5ff;
+  border: 1px solid #c9dcf7;
+  border-radius: 7px;
+}
+
+.mlops-boundary-card span {
+  color: #35669f;
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.mlops-boundary-card strong {
+  color: #0c315f;
+  font-size: 14px;
+}
+
+.mlops-boundary-card small {
+  color: #48617d;
+  line-height: 1.45;
+}
+
+.mlops-action-buttons {
+  margin-top: 2px;
+}
+
+.mlops-action-buttons button {
+  flex: 1 1 190px;
+}
+
 .score-hero,
 .summary-grid,
 .result-grid {
@@ -5998,6 +6067,7 @@ pre {
   .visual-board,
   .result-grid,
   .form-grid,
+  .mlops-action-grid,
   .queue-source-bar,
   .layer-summary-grid,
   .summary-grid,
@@ -6020,6 +6090,16 @@ pre {
   .split-row,
   .lineage-row,
   .lineage-flow {
+    grid-template-columns: 1fr;
+  }
+
+  .mlops-evidence-field,
+  .mlops-notes-field,
+  .mlops-boundary-card {
+    grid-column: 1;
+  }
+
+  .mlops-boundary-card {
     grid-template-columns: 1fr;
   }
 

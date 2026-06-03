@@ -4092,7 +4092,7 @@ fn mlops_workspace_page() -> Html {
                 </div>
             </section>
 
-            <section class="panel result-stack">
+            <section class="panel result-stack mlops-action-panel">
                 <div class="section-header">
                     <div>
                         <h3>{"Governed Actions"}</h3>
@@ -4100,10 +4100,32 @@ fn mlops_workspace_page() -> Html {
                     </div>
                     <span class="status-token strong">{"manual evidence required"}</span>
                 </div>
-                <div class="form-grid">
-                    {text_input("Actor", &actor)}
-                    {text_input("Reviewer", &reviewer)}
-                    <label>
+                <div class="mlops-action-grid">
+                    <label class="mlops-field">
+                        {"Actor"}
+                        <input
+                            value={(*actor).clone()}
+                            oninput={{
+                                let actor = actor.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    actor.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label class="mlops-field">
+                        {"Reviewer"}
+                        <input
+                            value={(*reviewer).clone()}
+                            oninput={{
+                                let reviewer = reviewer.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    reviewer.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label class="mlops-field">
                         {"Promotion decision"}
                         <select
                             value={(*promotion_decision).clone()}
@@ -4118,8 +4140,19 @@ fn mlops_workspace_page() -> Html {
                             <option value="rejected">{"rejected"}</option>
                         </select>
                     </label>
-                    {text_input("Evidence refs", &evidence_refs)}
-                    <label class="span-two">
+                    <label class="mlops-field mlops-evidence-field">
+                        {"Evidence refs"}
+                        <input
+                            value={(*evidence_refs).clone()}
+                            oninput={{
+                                let evidence_refs = evidence_refs.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label class="mlops-field mlops-notes-field">
                         {"Notes"}
                         <textarea
                             value={(*action_notes).clone()}
@@ -4131,9 +4164,13 @@ fn mlops_workspace_page() -> Html {
                             }}
                         />
                     </label>
+                    <div class="mlops-boundary-card">
+                        <span>{"Boundary"}</span>
+                        <strong>{"Evidence before action"}</strong>
+                        <small>{"Evidence refs must include model_versions:{model_key}:{model_version}. Public demo or Kaggle evidence can queue or review demos, but cannot replace customer production validation."}</small>
+                    </div>
                 </div>
-                <p class="empty">{"Evidence refs must include model_versions:{model_key}:{model_version}. Public demo or Kaggle evidence can queue/review demos, but cannot replace customer production validation."}</p>
-                <div class="button-row">
+                <div class="button-row mlops-action-buttons">
                     <button onclick={governed_action("queue_retraining")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Queue retraining job"}</button>
                     <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit promotion review"}</button>
                     <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
