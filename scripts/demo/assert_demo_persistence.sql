@@ -74,7 +74,20 @@ BEGIN
   JOIN claims c ON c.id = ae.claim_id
   WHERE c.external_claim_id LIKE 'CLM-INBOX-%'
     AND ae.event_type = 'scoring.completed'
-    AND ae.payload -> 'canonical_claim_context_trace' ->> 'input_mode' = 'canonical_claim_context'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'input_mode' = 'inbox_run'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'inbox_run_id' LIKE 'inbox:sha256:%'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'inbox_audit_id' LIKE 'aud_inbox_sha256_%'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'raw_payload_checksum' LIKE 'sha256:%'
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.evidence_refs) AS ref(value)
+      WHERE ref.value LIKE 'inbox_claim_runs:inbox:sha256:%'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.evidence_refs) AS ref(value)
+      WHERE ref.value LIKE 'audit_events:aud_inbox_sha256_%'
+    )
     AND EXISTS (
       SELECT 1
       FROM jsonb_array_elements_text(ae.evidence_refs) AS ref(value)
