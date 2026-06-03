@@ -235,7 +235,7 @@ struct ScoreResponse {
     #[serde(default)]
     feature_values: Vec<Value>,
     audit_id: Option<String>,
-    evidence_refs: Option<Vec<String>>,
+    evidence_refs: Option<Vec<Value>>,
     agent_investigation_prefill: Option<Value>,
 }
 
@@ -1789,7 +1789,7 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                             <div><span>{"Features"}</span><strong>{response.feature_values.len()}</strong></div>
                             <div><span>{"Similar Cases"}</span><strong>{response.similar_cases.len()}</strong></div>
                         </div>
-                        <small>{format!("evidence: {}", response.evidence_refs.as_ref().map(|refs| refs_label(refs)).unwrap_or_else(|| "none".into()))}</small>
+                        <small>{format!("evidence: {}", response.evidence_refs.as_ref().map(|refs| value_refs_label(refs)).unwrap_or_else(|| "none".into()))}</small>
                         if let Some(prefill) = &response.agent_investigation_prefill {
                             <pre>{pretty_json(prefill)}</pre>
                         }
@@ -6000,7 +6000,7 @@ fn score_result_view(props: &ScoreResultProps) -> Html {
                         </div>
                         <dl class="result-grid">
                             <div><dt>{"Audit ID"}</dt><dd>{response.audit_id.as_deref().unwrap_or("pending")}</dd></div>
-                            <div><dt>{"Evidence Refs"}</dt><dd>{response.evidence_refs.clone().unwrap_or_default().join(", ")}</dd></div>
+                            <div><dt>{"Evidence Refs"}</dt><dd>{response.evidence_refs.as_ref().map(|refs| value_refs_label(refs)).unwrap_or_else(|| "none".into())}</dd></div>
                         </dl>
                     </>
                 },
