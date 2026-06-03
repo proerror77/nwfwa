@@ -9,7 +9,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
+use fwa_auth::{authenticate_api_key, validate_api_key, AuthenticatedPrincipal};
 use fwa_core::AuditEventId;
 use serde::Serialize;
 
@@ -36,7 +36,7 @@ pub async fn create_audit_sample(
     headers: HeaderMap,
     Json(mut request): Json<CreateAuditSampleInput>,
 ) -> Result<Json<AuditSampleRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:audit-samples:create")?;
     if !matches!(
         request.sample_mode.as_str(),
         "risk_ranked" | "random_control" | "stratified" | "post_payment_audit" | "qa_calibration"
@@ -139,6 +139,79 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
     })
 }
 
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    require_permission(principal, permission)
+}
+
+fn require_permission(
+    principal: AuthenticatedPrincipal,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
+}
+
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn principal_with_permissions(permissions: Vec<&str>) -> AuthenticatedPrincipal {
+        AuthenticatedPrincipal {
+            actor: ActorContext {
+                actor_id: "ops-viewer".into(),
+                actor_role: "operations_reviewer".into(),
+                source_system: "ops-studio".into(),
+                customer_scope_id: "customer-alpha".into(),
+            },
+            permissions: permissions.into_iter().map(str::to_string).collect(),
+        }
+    }
+
+    #[test]
+    fn require_permission_rejects_audit_sample_create_without_ops_permission() {
+        let error = require_permission(
+            principal_with_permissions(vec!["ops:read", "audit:read"]),
+            "ops:audit-samples:create",
+        )
+        .unwrap_err();
+
+        assert_eq!(error.status, StatusCode::FORBIDDEN);
+        assert_eq!(error.code, "PERMISSION_DENIED");
+    }
+
+    #[test]
+    fn require_permission_accepts_ops_wildcard_for_audit_sample_create() {
+        let actor = require_permission(
+            principal_with_permissions(vec!["ops:*"]),
+            "ops:audit-samples:create",
+        )
+        .unwrap();
+
+        assert_eq!(actor.customer_scope_id, "customer-alpha");
+    }
 }

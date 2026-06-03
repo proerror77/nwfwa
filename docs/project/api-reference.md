@@ -31,7 +31,8 @@ keeping the local demo key active.
 
 Route-level permission enforcement currently guards production-impacting
 governance actions such as rule promotion review, rule approval, rule publish,
-rule rollback, model promotion review, model activation, and model rollback.
+rule rollback, audit sample creation, model promotion review, model activation,
+and model rollback.
 Read-only operations continue to require a valid API key and audit actor
 context.
 
