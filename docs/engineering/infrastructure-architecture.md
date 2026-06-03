@@ -368,6 +368,12 @@ Add production deployment and governance controls:
 - release promotion, rollback, and incident runbooks;
 - formal data retention and evidence destruction workflows.
 
+The repository now includes the staging contract for part of this phase:
+`build-governance-ops-plan` emits the backup manifest, restore-drill,
+retention-scan, legal-hold, and destruction-review job graph. Customer
+production still needs the chosen environment to execute those jobs with
+approved retention windows, legal holds, and human approval before destruction.
+
 ## Non-Goals
 
 - No Kubernetes requirement for MVP.

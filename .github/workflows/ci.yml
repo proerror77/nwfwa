@@ -49,6 +49,7 @@ jobs:
       - run: |
           test -f /tmp/nwfwa-staging-proof/object_storage_manifest.json
           test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
+          test -f /tmp/nwfwa-staging-proof/retention_legal_hold_proof.json
           test -f /tmp/nwfwa-staging-proof/observability_proof.json
           test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
           test -f /tmp/nwfwa-analytics-export/scheduled_exports.json

@@ -12,6 +12,7 @@ data:
   FWA_ANALYTICS_CLICKHOUSE_URL: http://clickhouse:8123
   FWA_CUSTOMER_SCOPE_ID: staging-customer
   FWA_RETENTION_POLICY_ID: staging-retention-v1
+  FWA_LEGAL_HOLD_POLICY_ID: staging-legal-hold-v1
   FWA_BACKUP_RESTORE_PLAN_ID: staging-backup-restore-v1
   FWA_PII_MASKING_POLICY_ID: staging-pii-masking-v1
   FWA_KEY_ROTATION_POLICY_ID: staging-key-rotation-v1

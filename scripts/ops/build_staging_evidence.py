@@ -58,6 +58,25 @@ def build_evidence(output_dir: Path, object_storage_uri: str, database_ref: str)
         ],
         "boundary": "declares and records the staging proof contract; a live restore drill must run in the chosen cluster",
     }
+    retention_legal_hold_proof = {
+        "artifact_kind": "staging_retention_legal_hold_proof",
+        "generated_at": generated_at,
+        "retention_policy_id": "staging-retention-v1",
+        "legal_hold_policy_id": "staging-legal-hold-v1",
+        "scan_tables": [
+            "audit_events",
+            "api_call_records",
+            "evidence_documents",
+            "agent_workspace_artifacts",
+        ],
+        "destruction_policy": "human_approval_required_before_destroy",
+        "checks": [
+            {"name": "retention_policy_declared", "status": "passed"},
+            {"name": "legal_hold_policy_declared", "status": "passed"},
+            {"name": "destruction_requires_approval", "status": "passed"},
+        ],
+        "boundary": "declares staging retention and legal-hold automation proof; customer production still needs approved retention windows and live destruction workflow",
+    }
     observability_proof = {
         "artifact_kind": "staging_observability_proof",
         "generated_at": generated_at,
@@ -90,6 +109,7 @@ def build_evidence(output_dir: Path, object_storage_uri: str, database_ref: str)
 
     write_json(output_dir / "object_storage_manifest.json", object_storage_manifest)
     write_json(output_dir / "backup_restore_proof.json", backup_restore_proof)
+    write_json(output_dir / "retention_legal_hold_proof.json", retention_legal_hold_proof)
     write_json(output_dir / "observability_proof.json", observability_proof)
 
     index = {
@@ -98,6 +118,7 @@ def build_evidence(output_dir: Path, object_storage_uri: str, database_ref: str)
         "artifacts": [
             "object_storage_manifest.json",
             "backup_restore_proof.json",
+            "retention_legal_hold_proof.json",
             "observability_proof.json",
         ],
         "readiness_stage": "pilot foundation",

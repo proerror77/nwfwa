@@ -486,16 +486,21 @@ grep -q "demo-seed" infra/k8s/staging/database-jobs.yaml
 grep -q "check-pilot-readiness" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "build-mlops-monitoring-plan" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "build-ai-evidence-execution-plan" infra/k8s/staging/worker-cronjobs.yaml
+grep -q "build-governance-ops-plan" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "replace-with-staging-api-key" infra/k8s/staging/secrets.example.yaml
 grep -q "K8S Staging" infra/k8s/staging/README.md
 grep -q "staging_object_storage_manifest" scripts/ops/build_staging_evidence.py
 grep -q "staging_backup_restore_proof" scripts/ops/build_staging_evidence.py
+grep -q "staging_retention_legal_hold_proof" scripts/ops/build_staging_evidence.py
 grep -q "staging_observability_proof" scripts/ops/build_staging_evidence.py
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "scheduled_ai_evidence_execution" apps/worker/src/lib.rs
 grep -q "ai_evidence_execution_plan" apps/worker/src/lib.rs
 grep -q "retrieval_ranking_evaluation" apps/worker/src/lib.rs
 grep -q "build-ai-evidence-execution-plan" apps/worker/src/main.rs
+grep -q "scheduled_governance_ops" apps/worker/src/lib.rs
+grep -q "governance_ops_plan" apps/worker/src/lib.rs
+grep -q "build-governance-ops-plan" apps/worker/src/main.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
 python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
@@ -511,6 +516,7 @@ python3 scripts/ops/run_mlops_monitoring_plan.py \
   --output-dir /tmp/nwfwa-mlops-monitoring >/tmp/nwfwa-mlops-monitoring.json
 test -f /tmp/nwfwa-staging-proof/object_storage_manifest.json
 test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
+test -f /tmp/nwfwa-staging-proof/retention_legal_hold_proof.json
 test -f /tmp/nwfwa-staging-proof/observability_proof.json
 test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
 test -f /tmp/nwfwa-analytics-export/scheduled_exports.json

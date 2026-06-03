@@ -62,7 +62,8 @@ The default runtime path is:
 Production ML and production infrastructure are not complete. Remaining work
 includes customer environment deployment, secrets and key rotation, observability
 stack selection, object storage strategy, customer holdout validation, long-term
-drift monitoring, production feature materialization, and operational runbooks.
+drift monitoring, production feature materialization, and customer-run
+operational drills.
 The public-data MVP pack can validate the data and ML engineering loop before
 customer data is available, but it does not replace customer production
 validation.
@@ -94,6 +95,14 @@ The Rust worker also emits a staging AI evidence execution plan for OCR output
 registration, chunk registration, embedding dispatch, and retrieval ranking
 evaluation. This does not replace customer production OCR workers,
 embedding/vector storage, or retrieval ranking.
+
+Governance operations now have a staging proof contract. The worker emits a
+scheduled governance ops plan for backup manifests, restore-drill validation,
+retention-policy scans, legal-hold reconciliation, and destruction-candidate
+review with a human approval gate. `scripts/ops/build_staging_evidence.py`
+also writes `retention_legal_hold_proof.json`. This does not replace a live
+customer restore drill, approved retention windows, or a production destruction
+workflow.
 
 ### Readiness Legend
 

@@ -17,6 +17,10 @@ foundation environment, not a production deployment package.
 - `mlops-monitoring-plan`: CronJob that emits the portable MLOps monitoring plan.
 - `analytics-export-plan`: CronJob that emits the portable analytics export
   plan for PostgreSQL-to-ClickHouse derived reporting.
+- `ai-evidence-execution-plan`: CronJob that emits the portable OCR, chunking,
+  embedding, and retrieval audit execution plan.
+- `governance-ops-plan`: CronJob that emits the portable backup, restore-drill,
+  retention, legal-hold, and destruction-review plan.
 
 ## Apply
 
@@ -41,7 +45,8 @@ python3 scripts/ops/validate_k8s_staging.py
 
 The validator checks that the staging manifests include the required services,
 readiness probes, database Jobs, CronJobs, object storage, ClickHouse, AI
-evidence execution-plan scheduling, and non-demo readiness settings.
+evidence execution-plan scheduling, governance ops scheduling, and non-demo
+readiness settings.
 
 The database Jobs use the `nwfwa-ops` image built from
 `infra/dockerfiles/Dockerfile.ops`, which packages the migration and seed SQL.

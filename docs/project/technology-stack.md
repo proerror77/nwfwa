@@ -191,6 +191,9 @@ It also validates the ClickHouse analytics-scale contract and generates
 planning without customer data.
 The same job validates the AI evidence foundation schema contract and generates
 `ai_evidence_foundation_manifest.json` without customer data.
+The same staging proof also generates retention/legal-hold proof metadata and
+validates the worker governance ops plan command for backup, restore-drill,
+retention, legal-hold, and destruction-review scheduling.
 
 ## Declared And Resolved Versions
 

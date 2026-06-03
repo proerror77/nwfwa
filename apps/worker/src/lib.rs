@@ -52,6 +52,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 name: "ai_evidence_execution_plan",
                 status: "ok",
             },
+            WorkerHealthCheck {
+                name: "governance_ops_plan",
+                status: "ok",
+            },
         ],
     }
 }
@@ -1177,6 +1181,94 @@ pub fn build_ai_evidence_execution_plan(
     }))
 }
 
+pub fn build_governance_ops_plan(
+    object_storage_uri: &str,
+    database_ref: &str,
+    customer_scope_id: &str,
+    retention_policy_id: &str,
+    backup_restore_plan_id: &str,
+    legal_hold_policy_id: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let object_storage_uri =
+        required_non_empty("object_storage_uri", object_storage_uri)?.trim_end_matches('/');
+    let database_ref = required_non_empty("database_ref", database_ref)?;
+    let customer_scope_id = required_non_empty("customer_scope_id", customer_scope_id)?;
+    let retention_policy_id = required_non_empty("retention_policy_id", retention_policy_id)?;
+    let backup_restore_plan_id =
+        required_non_empty("backup_restore_plan_id", backup_restore_plan_id)?;
+    let legal_hold_policy_id = required_non_empty("legal_hold_policy_id", legal_hold_policy_id)?;
+    let cron = required_non_empty("cron", cron)?;
+    let governance_root = format!("{object_storage_uri}/governance-ops/{customer_scope_id}");
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_governance_ops",
+        "plan_version": 1,
+        "customer_scope_id": customer_scope_id,
+        "policies": {
+            "retention_policy_id": retention_policy_id,
+            "backup_restore_plan_id": backup_restore_plan_id,
+            "legal_hold_policy_id": legal_hold_policy_id
+        },
+        "runtime_boundary": {
+            "raw_payloads": "customer_approved_object_storage_only",
+            "destructive_actions": "approval_required_plan_only",
+            "customer_data": "customer_scope_partitioned"
+        },
+        "schedule": {
+            "cron": cron,
+            "concurrency_policy": "forbid",
+            "idempotency_key": "customer_scope_id + policy_ids + execution_window"
+        },
+        "artifact_contract": {
+            "backup_manifest_uri": format!("{governance_root}/backup/{{window_start}}/backup_manifest.json"),
+            "restore_drill_report_uri": format!("{governance_root}/restore-drills/{{window_start}}/restore_drill_report.json"),
+            "retention_scan_report_uri": format!("{governance_root}/retention/{{window_start}}/retention_scan_report.json"),
+            "legal_hold_report_uri": format!("{governance_root}/legal-hold/{{window_start}}/legal_hold_report.json"),
+            "destruction_review_report_uri": format!("{governance_root}/destruction-review/{{window_start}}/destruction_review_report.json")
+        },
+        "jobs": [
+            {
+                "job_kind": "backup_snapshot_manifest",
+                "input": database_ref,
+                "output_ref": "backup_manifests:<backup_manifest_uri>",
+                "backup_uri": format!("{governance_root}/backup/{{window_start}}/postgres.dump"),
+                "manifest_uri": format!("{governance_root}/backup/{{window_start}}/backup_manifest.json")
+            },
+            {
+                "job_kind": "restore_drill_validation",
+                "input": "latest_backup_manifest",
+                "output_ref": "restore_drill_reports:<restore_drill_report_uri>",
+                "restore_target": "staging-restore-validation",
+                "report_uri": format!("{governance_root}/restore-drills/{{window_start}}/restore_drill_report.json")
+            },
+            {
+                "job_kind": "retention_policy_scan",
+                "input": ["audit_events", "api_call_records", "evidence_documents", "agent_workspace_artifacts"],
+                "output_ref": "retention_scan_reports:<retention_scan_report_uri>",
+                "report_uri": format!("{governance_root}/retention/{{window_start}}/retention_scan_report.json")
+            },
+            {
+                "job_kind": "legal_hold_reconciliation",
+                "input": ["investigation_cases", "audit_samples", "evidence_documents"],
+                "output_ref": "legal_hold_reports:<legal_hold_report_uri>",
+                "report_uri": format!("{governance_root}/legal-hold/{{window_start}}/legal_hold_report.json")
+            },
+            {
+                "job_kind": "destruction_candidate_review",
+                "input": "expired_retention_items_without_legal_hold",
+                "output_ref": "destruction_review_reports:<destruction_review_report_uri>",
+                "approval_gate": "human_approval_required_before_destroy",
+                "report_uri": format!("{governance_root}/destruction-review/{{window_start}}/destruction_review_report.json")
+            }
+        ],
+        "downstream_contracts": {
+            "pilot_readiness": "check-pilot-readiness",
+            "observability_alert": "database.backup.failed | retention.scan.failed | legal_hold.reconciliation.failed"
+        }
+    }))
+}
+
 fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str> {
     let value = value.trim();
     if value.is_empty() {
@@ -1956,6 +2048,54 @@ mod tests {
         assert_eq!(
             plan["downstream_contracts"]["analytics_export_plan"],
             "build-analytics-export-plan"
+        );
+    }
+
+    #[test]
+    fn builds_scheduled_governance_ops_plan() {
+        let plan = build_governance_ops_plan(
+            "s3://nwfwa-staging-artifacts",
+            "postgres://postgres:5432/fwa",
+            "staging-customer",
+            "staging-retention-v1",
+            "staging-backup-restore-v1",
+            "staging-legal-hold-v1",
+            "45 1 * * *",
+        )
+        .expect("governance ops plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_governance_ops");
+        assert_eq!(plan["plan_version"], 1);
+        assert_eq!(plan["customer_scope_id"], "staging-customer");
+        assert_eq!(
+            plan["policies"]["retention_policy_id"],
+            "staging-retention-v1"
+        );
+        assert_eq!(
+            plan["policies"]["backup_restore_plan_id"],
+            "staging-backup-restore-v1"
+        );
+        assert_eq!(
+            plan["policies"]["legal_hold_policy_id"],
+            "staging-legal-hold-v1"
+        );
+        assert_eq!(
+            plan["runtime_boundary"]["destructive_actions"],
+            "approval_required_plan_only"
+        );
+        assert_eq!(plan["schedule"]["concurrency_policy"], "forbid");
+        assert_eq!(plan["jobs"][0]["job_kind"], "backup_snapshot_manifest");
+        assert_eq!(plan["jobs"][1]["job_kind"], "restore_drill_validation");
+        assert_eq!(plan["jobs"][2]["job_kind"], "retention_policy_scan");
+        assert_eq!(plan["jobs"][3]["job_kind"], "legal_hold_reconciliation");
+        assert_eq!(plan["jobs"][4]["job_kind"], "destruction_candidate_review");
+        assert_eq!(
+            plan["jobs"][4]["approval_gate"],
+            "human_approval_required_before_destroy"
+        );
+        assert_eq!(
+            plan["artifact_contract"]["retention_scan_report_uri"],
+            "s3://nwfwa-staging-artifacts/governance-ops/staging-customer/retention/{window_start}/retention_scan_report.json"
         );
     }
 

@@ -359,7 +359,8 @@ the kustomization resources, so placeholder secrets are not applied by default.
 The directory includes API, web console, ML service, PostgreSQL,
 S3-compatible object storage, ClickHouse, database migration and seed Jobs, and
 worker CronJobs for pilot readiness, MLOps monitoring-plan generation, AI
-evidence execution-plan generation, and analytics export-plan generation.
+evidence execution-plan generation, analytics export-plan generation, and
+governance ops plan generation.
 
 Validate container packaging before building images:
 
@@ -383,8 +384,27 @@ python3 scripts/ops/build_staging_evidence.py \
 ```
 
 The evidence pack records object-storage prefixes, backup/restore proof
-metadata, and observability proof metadata. It does not replace a live restore
-drill, production dashboards, or customer-approved retention controls.
+metadata, retention/legal-hold proof metadata, and observability proof metadata.
+It does not replace a live restore drill, production dashboards, or
+customer-approved retention controls.
+
+Generate the portable governance ops plan without customer data:
+
+```bash
+cargo run --locked -p worker -- build-governance-ops-plan \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --database-ref postgres://postgres:5432/fwa \
+  --customer-scope-id staging-customer \
+  --retention-policy-id staging-retention-v1 \
+  --backup-restore-plan-id staging-backup-restore-v1 \
+  --legal-hold-policy-id staging-legal-hold-v1 \
+  --cron "45 1 * * *"
+```
+
+The plan covers backup manifest generation, restore-drill validation,
+retention-policy scans, legal-hold reconciliation, and destruction-candidate
+review. Destructive actions remain plan-only and require human approval before
+any customer environment deletes data.
 
 ## CI Gates
 
@@ -508,9 +528,9 @@ Not complete yet:
 - production observability stack
 - production ClickHouse retention, backup, and access policy
 - production alert routing
-- pilot backup and restore automation
-- pilot retention and legal hold automation
-- customer scoping enforcement
+- customer-executed backup and restore drills
+- customer-approved retention windows and legal-hold execution
+- customer scoping enforcement review in the selected environment
 - external orchestrator for executing scheduled training, shadow, drift, and
   fairness jobs. The worker can generate the portable monitoring plan contract,
   but it does not replace a production scheduler.
