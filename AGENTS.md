@@ -51,6 +51,11 @@ Use this skill when writing, reviewing, or refactoring code to reduce common LLM
 - Keep CI cold builds optimized for validation speed: Rust CI disables incremental compilation and debug info through `CARGO_INCREMENTAL=0`, `CARGO_PROFILE_DEV_DEBUG=0`, and `CARGO_PROFILE_TEST_DEBUG=0`.
 - Keep the Rust dependency and target cache in CI unless a failing cache is proven to hide a real build issue.
 - Do not add release-mode Rust builds to the default CI path unless release artifact validation is explicitly required; release builds trade correctness signal for longer feedback time.
+- Use the local Rust verification cadence B unless the user asks for stricter TDD or a release gate:
+  - During development, run only one cargo command at a time to avoid `target` build directory lock contention.
+  - For each small Rust change, prefer `cargo check --locked -p <crate>` and do not run tests by default.
+  - Before an atomic commit, run formatting, affected-crate cargo check, and the key tests for the feature group.
+  - After push, rely on GitHub CI for full validation, then fix failures with targeted local commands.
 
 # Collaboration
 
