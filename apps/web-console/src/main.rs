@@ -1823,6 +1823,11 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                                 <div><span>{"RAG Distribution"}</span><strong>{map_counts_label(&summary.rag_distribution)}</strong></div>
                                 <div><span>{"Schemes"}</span><strong>{map_counts_label(&summary.scheme_distribution)}</strong></div>
                             </div>
+                            <div class="visual-board">
+                                {distribution_bars("Risk distribution", &summary.rag_distribution)}
+                                {distribution_bars("Scheme mix", &summary.scheme_distribution)}
+                                {risk_ops_matrix(summary)}
+                            </div>
                         </section>
 
                         <section class="panel result-stack">
@@ -2114,13 +2119,14 @@ fn rules_view(props: &RulesProps) -> Html {
                                 }
                             </section>
 
-                            <section class="panel result-stack">
-                                <h3>{"Rule Performance"}</h3>
-                                if snapshot.performance.is_empty() {
-                                    <p class="empty">{"No rule performance records returned."}</p>
-                                } else {
-                                    <div class="factor-card-grid">
-                                        {for snapshot.performance.iter().take(10).map(|item| html! {
+                        <section class="panel result-stack">
+                            <h3>{"Rule Performance"}</h3>
+                            {rule_performance_visual(&snapshot.performance)}
+                            if snapshot.performance.is_empty() {
+                                <p class="empty">{"No rule performance records returned."}</p>
+                            } else {
+                                <div class="factor-card-grid">
+                                    {for snapshot.performance.iter().take(10).map(|item| html! {
                                             <div class="metric-row">
                                                 <span>{format!("{} / {}", item.rule_id, item.alert_code)}</span>
                                                 <strong>{format!("precision {}", percent_label(item.precision))}</strong>
@@ -2132,12 +2138,13 @@ fn rules_view(props: &RulesProps) -> Html {
                                 }
                             </section>
 
-                            <section class="panel result-stack">
-                                <h3>{"Rule Promotion Readiness"}</h3>
-                                <div class="score-hero">
-                                    <div><span>{"Rule"}</span><strong>{&snapshot.gates.rule_id}</strong></div>
-                                    <div><span>{"Decision"}</span><strong>{&snapshot.gates.decision}</strong></div>
-                                    <div><span>{"Passed"}</span><strong>{format!("{} / {}", snapshot.gates.passed_count, snapshot.gates.total_count)}</strong></div>
+                        <section class="panel result-stack">
+                            <h3>{"Rule Promotion Readiness"}</h3>
+                            {rule_gate_pipeline(&snapshot.gates)}
+                            <div class="score-hero">
+                                <div><span>{"Rule"}</span><strong>{&snapshot.gates.rule_id}</strong></div>
+                                <div><span>{"Decision"}</span><strong>{&snapshot.gates.decision}</strong></div>
+                                <div><span>{"Passed"}</span><strong>{format!("{} / {}", snapshot.gates.passed_count, snapshot.gates.total_count)}</strong></div>
                                 </div>
                                 <div class="summary-grid">
                                     <div><span>{"Status"}</span><strong>{&snapshot.gates.status}</strong></div>
@@ -2322,6 +2329,7 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
 
                         <section class="panel result-stack">
                             <h3>{"Model Performance"}</h3>
+                            {model_telemetry_visual(&snapshot.performance, &snapshot.gates, &snapshot.retraining)}
                             <div class="score-hero">
                                 <div><span>{"Model"}</span><strong>{&snapshot.performance.model_key}</strong></div>
                                 <div><span>{"Drift"}</span><strong>{&snapshot.performance.drift_status}</strong></div>
@@ -3385,6 +3393,7 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                 <div><span>{"Case Status"}</span><strong>{case_status_summary(&snapshot.cases)}</strong></div>
                                 <div><span>{"Schemes"}</span><strong>{lead_scheme_summary(&snapshot.leads)}</strong></div>
                             </div>
+                            {investigation_network_visual(&snapshot.leads, &snapshot.cases)}
                         </section>
 
                         <section class="panel result-stack">
@@ -6305,6 +6314,244 @@ fn risk_node(layer: &str, label: &str, value: &str, caption: &str) -> Html {
             <span>{label}</span>
             <small>{caption}</small>
         </div>
+    }
+}
+
+fn distribution_bars(title: &str, counts: &BTreeMap<String, u32>) -> Html {
+    if counts.is_empty() {
+        return html! {
+            <div class="visual-panel">
+                <h4>{title}</h4>
+                <p class="empty">{"No distribution records."}</p>
+            </div>
+        };
+    }
+    let max_count = counts.values().copied().max().unwrap_or(1);
+    html! {
+        <div class="visual-panel">
+            <h4>{title}</h4>
+            <div class="bar-stack">
+                {for counts.iter().map(|(label, count)| {
+                    let width = scaled_width(*count, max_count);
+                    html! {
+                        <div class="bar-row">
+                            <span>{label}</span>
+                            <div class="bar-track"><i style={format!("width: {width};")}></i></div>
+                            <strong>{count}</strong>
+                        </div>
+                    }
+                })}
+            </div>
+        </div>
+    }
+}
+
+fn risk_ops_matrix(summary: &DashboardSummary) -> Html {
+    html! {
+        <div class="visual-panel risk-matrix">
+            <h4>{"Risk operations matrix"}</h4>
+            <div class="matrix-grid">
+                {matrix_cell("Detect", summary.suspected_claims, "suspected", "danger")}
+                {matrix_cell("Confirm", summary.confirmed_fwa, "confirmed", "success")}
+                {matrix_cell("Investigate", summary.investigation_results, "cases", "warning")}
+                {matrix_cell("QA", summary.qa_reviews, "reviews", "strong")}
+            </div>
+        </div>
+    }
+}
+
+fn matrix_cell(label: &str, value: u32, caption: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("matrix-cell", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{caption}</small>
+        </div>
+    }
+}
+
+fn rule_performance_visual(performance: &[RulePerformance]) -> Html {
+    if performance.is_empty() {
+        return html! {};
+    }
+    let max_trigger_count = performance
+        .iter()
+        .map(|item| item.trigger_count)
+        .max()
+        .unwrap_or(1);
+    html! {
+        <div class="visual-panel wide-visual">
+            <h4>{"Rule command path"}</h4>
+            <div class="rule-bars">
+                {for performance.iter().take(6).map(|item| html! {
+                    <div class="rule-bar-row">
+                        <div>
+                            <strong>{&item.rule_id}</strong>
+                            <span>{&item.alert_code}</span>
+                        </div>
+                        <div class="bar-track">
+                            <i style={format!("width: {};", scaled_width(item.trigger_count, max_trigger_count))}></i>
+                        </div>
+                        <div class="dual-meter">
+                            <span style={format!("width: {};", percent_width(item.precision))}></span>
+                            <em style={format!("width: {};", percent_width(item.false_positive_rate))}></em>
+                        </div>
+                        <small>{format!("precision {} / FP {}", percent_label(item.precision), percent_label(item.false_positive_rate))}</small>
+                    </div>
+                })}
+            </div>
+        </div>
+    }
+}
+
+fn rule_gate_pipeline(gates: &RulePromotionGates) -> Html {
+    let nodes = gates
+        .gates
+        .iter()
+        .map(|gate| {
+            (
+                gate.label.as_str(),
+                gate.passed,
+                gate.evidence_source.as_str(),
+            )
+        })
+        .collect::<Vec<_>>();
+    gate_pipeline("Rule promotion pipeline", &nodes)
+}
+
+fn gate_pipeline(title: &str, nodes: &[(&str, bool, &str)]) -> Html {
+    if nodes.is_empty() {
+        return html! {};
+    }
+    html! {
+        <div class="visual-panel pipeline-panel">
+            <h4>{title}</h4>
+            <div class="gate-pipeline">
+                {for nodes.iter().map(|(label, passed, evidence)| html! {
+                    <div class={classes!("gate-node", if *passed { "passed" } else { "blocked" })}>
+                        <span>{if *passed { "pass" } else { "block" }}</span>
+                        <strong>{label}</strong>
+                        <small>{evidence}</small>
+                    </div>
+                })}
+            </div>
+        </div>
+    }
+}
+
+fn model_telemetry_visual(
+    performance: &ModelPerformance,
+    gates: &ModelPromotionGates,
+    retraining: &ModelRetrainingReadiness,
+) -> Html {
+    let high_risk_density = if performance.scored_runs == 0 {
+        0.0
+    } else {
+        performance.high_risk_count as f64 / performance.scored_runs as f64
+    };
+    let score_level = (performance.average_score / 100.0).clamp(0.0, 1.0);
+    let psi_level = performance.score_psi.unwrap_or(0.0).clamp(0.0, 1.0);
+    html! {
+        <div class="visual-board model-telemetry">
+            <div class="visual-panel">
+                <h4>{"Model telemetry map"}</h4>
+                <div class="telemetry-orbit">
+                    <div class="orbit-core">
+                        <strong>{format!("{:.1}", performance.average_score)}</strong>
+                        <span>{"avg score"}</span>
+                    </div>
+                    {telemetry_node("score", score_level, "Score")}
+                    {telemetry_node("density", high_risk_density, "High risk")}
+                    {telemetry_node("psi", psi_level, "PSI")}
+                    {telemetry_node("gates", ratio(gates.passed_count as u32, gates.total_count as u32), "Gates")}
+                </div>
+            </div>
+            <div class="visual-panel">
+                <h4>{"Retraining control"}</h4>
+                <div class="bar-stack">
+                    {meter_row("Approved labels", gates.approved_label_count as u32, 100)}
+                    {meter_row("Open feedback", retraining.open_model_feedback_count, 20)}
+                    {meter_row("Needs review", retraining.needs_review_label_count, 20)}
+                </div>
+                <div class="status-ribbon">
+                    <span>{format!("drift: {}", retraining.drift_status)}</span>
+                    <strong>{&retraining.recommendation}</strong>
+                </div>
+            </div>
+        </div>
+    }
+}
+
+fn telemetry_node(kind: &str, value: f64, label: &str) -> Html {
+    html! {
+        <div class={classes!("orbit-node", kind.to_string())}>
+            <span>{label}</span>
+            <strong>{percent_label(value)}</strong>
+        </div>
+    }
+}
+
+fn meter_row(label: &str, value: u32, max_value: u32) -> Html {
+    html! {
+        <div class="bar-row">
+            <span>{label}</span>
+            <div class="bar-track"><i style={format!("width: {};", scaled_width(value, max_value.max(1)))}></i></div>
+            <strong>{value}</strong>
+        </div>
+    }
+}
+
+fn investigation_network_visual(leads: &[LeadRecord], cases: &[CaseRecord]) -> Html {
+    let selected_lead = leads.first();
+    let selected_case = selected_lead
+        .and_then(|lead| cases.iter().find(|case| case.lead_id == lead.lead_id))
+        .or_else(|| cases.first());
+    html! {
+        <div class="visual-panel wide-visual investigation-network">
+            <h4>{"Investigation network"}</h4>
+            <div class="case-network">
+                {network_node("Claim", selected_lead.map(|lead| lead.claim_id.as_str()).unwrap_or("none"), "claim")}
+                {network_node("Member", selected_lead.map(|lead| lead.member_id.as_str()).unwrap_or("none"), "member")}
+                {network_node("Provider", selected_lead.map(|lead| lead.provider_id.as_str()).unwrap_or("none"), "provider")}
+                {network_node("Lead", selected_lead.map(|lead| lead.lead_id.as_str()).unwrap_or("none"), "lead")}
+                {network_node("Case", selected_case.map(|case| case.case_id.as_str()).unwrap_or("pending"), "case")}
+            </div>
+            <div class="network-caption">
+                <span>{format!("open leads {}", leads.iter().filter(|lead| lead.status != "closed").count())}</span>
+                <span>{format!("active cases {}", cases.iter().filter(|case| case.status != "closed").count())}</span>
+                <span>{format!("SLA breached {}", cases.iter().filter(|case| case.sla_status == "breached").count())}</span>
+            </div>
+        </div>
+    }
+}
+
+fn network_node(label: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("network-node", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
+    }
+}
+
+fn scaled_width(value: u32, max_value: u32) -> String {
+    let width = if max_value == 0 {
+        0.0
+    } else {
+        value as f64 / max_value as f64 * 100.0
+    };
+    format!("{:.0}%", width.clamp(4.0, 100.0))
+}
+
+fn percent_width(value: f64) -> String {
+    format!("{:.0}%", (value * 100.0).clamp(4.0, 100.0))
+}
+
+fn ratio(value: u32, total: u32) -> f64 {
+    if total == 0 {
+        0.0
+    } else {
+        value as f64 / total as f64
     }
 }
 

@@ -98,6 +98,10 @@ async function main() {
     assertContains(builtText, "12 alerts", "web console workspace bundle");
     assertContains(builtText, "peer benchmark", "web console seven-layer visual bundle");
     assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
+    assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
+    assertContains(builtText, "Rule command path", "web console rules visual bundle");
+    assertContains(builtText, "Model telemetry map", "web console models visual bundle");
+    assertContains(builtText, "Investigation network", "web console cases visual bundle");
     assertContains(builtText, "Claim Inbox", "web console bundle");
     assertContains(builtText, "Correction Review", "web console bundle");
     assertContains(builtText, "Runtime Scoring", "web console bundle");
