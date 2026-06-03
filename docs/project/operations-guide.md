@@ -387,6 +387,8 @@ python3 scripts/ops/build_staging_deployment_package.py \
   --image-tag staging \
   --commit-sha "$(git rev-parse HEAD)" \
   --environment staging
+python3 scripts/ops/validate_staging_deployment_package.py \
+  --package-dir artifacts/staging-deployment
 ```
 
 The package includes copied staging manifests, `deployment_manifest.json`,

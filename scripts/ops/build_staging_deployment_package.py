@@ -102,6 +102,7 @@ Never delete retained evidence or object-storage artifacts without the
         "validation_commands": [
             "python3 scripts/ops/validate_k8s_staging.py",
             "python3 scripts/ops/validate_container_packaging.py",
+            "python3 scripts/ops/validate_staging_deployment_package.py --package-dir artifacts/staging-deployment",
             "bash scripts/ci/check_repo.sh",
         ],
         "package_files": [

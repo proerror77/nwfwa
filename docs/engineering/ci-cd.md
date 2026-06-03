@@ -16,8 +16,8 @@ Current checks:
 
 - repository health check through `scripts/ci/check_repo.sh`
 - `staging-proof`: Kubernetes manifest validation, container packaging checks,
-  staging evidence artifacts, operational drill proof validation, and MLOps
-  monitoring-plan simulation
+  staging deployment package validation, staging evidence artifacts,
+  operational drill proof validation, and MLOps monitoring-plan simulation
 - Rust: `cargo fetch --locked`, `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, and `cargo test --locked --workspace`
 - PostgreSQL migration idempotency
 - demo seed idempotency, minimum demo-data presence, and API/ML demo smoke through `scripts/demo/seed_demo.sh` and `scripts/demo/smoke_demo.py`
@@ -71,6 +71,8 @@ staging.
 The job verifies a successful CI run for the selected commit by default,
 validates Kubernetes staging manifests and container packaging, then builds a
 deployment package with `scripts/ops/build_staging_deployment_package.py`.
+The generated package is validated by
+`scripts/ops/validate_staging_deployment_package.py` before upload.
 
 The package includes:
 

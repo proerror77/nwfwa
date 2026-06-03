@@ -61,7 +61,7 @@ expected code, document, workflow, or proof artifact is missing.
 | Dataset, feature, and label governance | Implemented with customer validation boundary | `apps/api-server/src/routes/ops_datasets.rs`, `scripts/data/build_public_data_mvp.py`, `docs/project/public-data-mvp.md` | Real customer dataset intake, source data quality, and label provenance. |
 | Knowledge, agent, and AI evidence foundation | Staging proof | `apps/api-server/src/routes/knowledge.rs`, `apps/api-server/src/routes/ops_evidence.rs`, `scripts/ops/build_ai_evidence_foundation.py` | Customer OCR, embedding/vector store, retrieval ranking, masking, and retention execution. |
 | Analytics scale | Staging proof | `analytics/clickhouse/schema.sql`, `analytics/clickhouse/dashboard_queries.sql`, `scripts/ops/build_analytics_export.py` | Live scheduler credentials, ClickHouse retention/backup/access policy, dashboard hosting. |
-| Pilot foundation and staging deployment | Staging proof | `infra/k8s/staging`, `.github/workflows/deploy-staging.yml`, `scripts/ops/build_staging_evidence.py` | Customer cluster credentials, secrets, allowlists, observability receiver, restore drill. |
+| Pilot foundation and staging deployment | Staging proof | `infra/k8s/staging`, `.github/workflows/deploy-staging.yml`, `scripts/ops/build_staging_evidence.py`, `scripts/ops/validate_staging_deployment_package.py` | Customer cluster credentials, secrets, allowlists, observability receiver, restore drill. |
 | Web console operations studio | Implemented | `apps/web-console/src/main.rs`, `apps/web-console/src/styles.css`, `scripts/demo/smoke_web_console.mjs` | Customer UAT and role-specific UX refinements. |
 
 ## Practical Reading
