@@ -1,6 +1,52 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
+  name: ai-evidence-execution-plan
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: nwfwa-staging
+spec:
+  schedule: "*/20 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: worker
+            app.kubernetes.io/part-of: nwfwa-staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: worker
+              image: ghcr.io/replace-me/nwfwa-worker:staging
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: nwfwa-staging-config
+                - secretRef:
+                    name: nwfwa-staging-secrets
+              command:
+                - worker
+                - build-ai-evidence-execution-plan
+                - --api-url
+                - http://api-server:8080
+                - --object-storage-uri
+                - s3://nwfwa-staging-artifacts
+                - --vector-store-kind
+                - pgvector
+                - --vector-store-ref
+                - postgres://evidence-vectors
+                - --customer-scope-id
+                - staging-customer
+                - --cron
+                - "*/20 * * * *"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
   name: analytics-export-plan
   labels:
     app.kubernetes.io/name: worker

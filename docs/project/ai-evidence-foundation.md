@@ -66,6 +66,34 @@ scope. Payloads intentionally carry URIs, checksums, redaction status, and
 evidence refs instead of raw document text, raw OCR text, embedding vectors, or
 raw query text.
 
+## Worker Execution Plan
+
+The Rust worker exposes a staging execution-plan command:
+
+```bash
+cargo run --locked -p worker -- build-ai-evidence-execution-plan \
+  --api-url http://api-server:8080 \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --vector-store-kind pgvector \
+  --vector-store-ref postgres://evidence-vectors \
+  --customer-scope-id staging-customer \
+  --cron "*/20 * * * *"
+```
+
+The plan defines the portable job graph:
+
+- `document_ingestion_metadata_sync`
+- `ocr_output_registration`
+- `document_chunk_registration`
+- `embedding_job_dispatch`
+- `retrieval_ranking_evaluation`
+
+The staging Kubernetes manifests include a matching
+`ai-evidence-execution-plan` CronJob. The CronJob emits the execution contract;
+customer production still needs the actual OCR engine, embedding runtime,
+vector store credentials, retention policy automation, and retrieval evaluation
+dashboard wiring.
+
 ## Proof
 
 Run:

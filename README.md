@@ -90,8 +90,10 @@ in `migrations/0001_initial.sql` and validated by
 `scripts/ops/validate_ai_evidence_foundation.py`. Runtime metadata APIs under
 `/api/v1/ops/evidence/*` now register documents, chunks, OCR output metadata,
 embedding jobs, and retrieval audit events with customer-scope audit evidence.
-This does not replace customer production OCR workers, embedding/vector storage,
-or retrieval ranking.
+The Rust worker also emits a staging AI evidence execution plan for OCR output
+registration, chunk registration, embedding dispatch, and retrieval ranking
+evaluation. This does not replace customer production OCR workers,
+embedding/vector storage, or retrieval ranking.
 
 ### Readiness Legend
 
@@ -192,7 +194,7 @@ The staging K8S shape includes:
   observability, and agent policy.
 - Secret example with placeholders only.
 - Worker CronJobs for pilot readiness proof, MLOps monitoring-plan emission,
-  and analytics export-plan emission.
+  AI evidence execution-plan emission, and analytics export-plan emission.
 
 Static validation:
 

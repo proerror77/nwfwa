@@ -48,6 +48,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 name: "analytics_export_plan",
                 status: "ok",
             },
+            WorkerHealthCheck {
+                name: "ai_evidence_execution_plan",
+                status: "ok",
+            },
         ],
     }
 }
@@ -1077,6 +1081,102 @@ pub fn build_analytics_export_plan(
     }))
 }
 
+pub fn build_ai_evidence_execution_plan(
+    api_base_url: &str,
+    object_storage_uri: &str,
+    vector_store_kind: &str,
+    vector_store_ref: &str,
+    customer_scope_id: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let api_base_url = required_non_empty("api_base_url", api_base_url)?.trim_end_matches('/');
+    let object_storage_uri =
+        required_non_empty("object_storage_uri", object_storage_uri)?.trim_end_matches('/');
+    let vector_store_kind = required_non_empty("vector_store_kind", vector_store_kind)?;
+    let vector_store_ref = required_non_empty("vector_store_ref", vector_store_ref)?;
+    let customer_scope_id = required_non_empty("customer_scope_id", customer_scope_id)?;
+    let cron = required_non_empty("cron", cron)?;
+    let evidence_root = format!("{object_storage_uri}/ai-evidence/{customer_scope_id}");
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_ai_evidence_execution",
+        "plan_version": 1,
+        "customer_scope_id": customer_scope_id,
+        "runtime_boundary": {
+            "raw_document_text": "customer_approved_object_storage_only",
+            "raw_ocr_text": "customer_approved_object_storage_only",
+            "embedding_vectors": "customer_approved_vector_store_only",
+            "retrieval_queries": "query_checksum_only"
+        },
+        "api_contract": {
+            "base_url": api_base_url,
+            "document_registry_path": "/api/v1/ops/evidence/documents",
+            "chunk_registry_path": "/api/v1/ops/evidence/documents/{document_id}/chunks",
+            "ocr_output_registry_path": "/api/v1/ops/evidence/documents/{document_id}/ocr-outputs",
+            "embedding_job_registry_path": "/api/v1/ops/evidence/embedding-jobs",
+            "retrieval_audit_path": "/api/v1/ops/evidence/retrieval-audit-events"
+        },
+        "artifact_contract": {
+            "document_manifest_uri": format!("{evidence_root}/documents/{{window_start}}/document_manifest.ndjson"),
+            "ocr_output_manifest_uri": format!("{evidence_root}/ocr/{{window_start}}/ocr_outputs.ndjson"),
+            "chunk_manifest_uri": format!("{evidence_root}/chunks/{{window_start}}/chunks.ndjson"),
+            "embedding_manifest_uri": format!("{evidence_root}/embeddings/{{window_start}}/embedding_jobs.ndjson"),
+            "retrieval_eval_report_uri": format!("{evidence_root}/retrieval-eval/{{window_start}}/retrieval_eval_report.json")
+        },
+        "vector_store": {
+            "kind": vector_store_kind,
+            "ref": vector_store_ref,
+            "write_policy": "customer_scope_partitioned_and_redacted"
+        },
+        "schedule": {
+            "cron": cron,
+            "concurrency_policy": "forbid",
+            "idempotency_key": "customer_scope_id + source_record_ref + content_checksum + execution_window"
+        },
+        "jobs": [
+            {
+                "job_kind": "document_ingestion_metadata_sync",
+                "input": "customer_approved_document_drop_or_document_management_export",
+                "api_path": "/api/v1/ops/evidence/documents",
+                "output_ref": "evidence_documents:<document_id>",
+                "manifest_uri": format!("{evidence_root}/documents/{{window_start}}/document_manifest.ndjson")
+            },
+            {
+                "job_kind": "ocr_output_registration",
+                "input": "customer_ocr_output_uri_and_checksum",
+                "api_path": "/api/v1/ops/evidence/documents/{document_id}/ocr-outputs",
+                "output_ref": "evidence_ocr_outputs:<ocr_output_id>",
+                "manifest_uri": format!("{evidence_root}/ocr/{{window_start}}/ocr_outputs.ndjson")
+            },
+            {
+                "job_kind": "document_chunk_registration",
+                "input": "redacted_ocr_output_or_redacted_document_text_uri",
+                "api_path": "/api/v1/ops/evidence/documents/{document_id}/chunks",
+                "output_ref": "evidence_chunks:<chunk_id>",
+                "manifest_uri": format!("{evidence_root}/chunks/{{window_start}}/chunks.ndjson")
+            },
+            {
+                "job_kind": "embedding_job_dispatch",
+                "input": "redacted_document_chunk_refs",
+                "api_path": "/api/v1/ops/evidence/embedding-jobs",
+                "output_ref": "evidence_embedding_jobs:<embedding_job_id>",
+                "manifest_uri": format!("{evidence_root}/embeddings/{{window_start}}/embedding_jobs.ndjson")
+            },
+            {
+                "job_kind": "retrieval_ranking_evaluation",
+                "input": "retrieval_audit_events_and_reviewer_outcomes",
+                "api_path": "/api/v1/ops/evidence/retrieval-audit-events",
+                "output_ref": "evidence_retrieval_eval_reports:<retrieval_eval_report_uri>",
+                "report_uri": format!("{evidence_root}/retrieval-eval/{{window_start}}/retrieval_eval_report.json")
+            }
+        ],
+        "downstream_contracts": {
+            "analytics_export_plan": "build-analytics-export-plan",
+            "observability_dashboard": "retrieval_audit_and_agent_workspace_artifacts"
+        }
+    }))
+}
+
 fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str> {
     let value = value.trim();
     if value.is_empty() {
@@ -1814,6 +1914,49 @@ mod tests {
             .as_array()
             .unwrap()
             .contains(&serde_json::json!("false_positive_cost")));
+    }
+
+    #[test]
+    fn builds_scheduled_ai_evidence_execution_plan() {
+        let plan = build_ai_evidence_execution_plan(
+            "http://api-server:8080",
+            "s3://nwfwa-staging-artifacts",
+            "pgvector",
+            "postgres://evidence_vectors",
+            "staging-customer",
+            "*/20 * * * *",
+        )
+        .expect("ai evidence execution plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_ai_evidence_execution");
+        assert_eq!(plan["plan_version"], 1);
+        assert_eq!(plan["customer_scope_id"], "staging-customer");
+        assert_eq!(
+            plan["runtime_boundary"]["raw_document_text"],
+            "customer_approved_object_storage_only"
+        );
+        assert_eq!(plan["vector_store"]["kind"], "pgvector");
+        assert_eq!(plan["schedule"]["concurrency_policy"], "forbid");
+        assert_eq!(
+            plan["api_contract"]["embedding_job_registry_path"],
+            "/api/v1/ops/evidence/embedding-jobs"
+        );
+        assert_eq!(
+            plan["jobs"][0]["job_kind"],
+            "document_ingestion_metadata_sync"
+        );
+        assert_eq!(plan["jobs"][1]["job_kind"], "ocr_output_registration");
+        assert_eq!(plan["jobs"][2]["job_kind"], "document_chunk_registration");
+        assert_eq!(plan["jobs"][3]["job_kind"], "embedding_job_dispatch");
+        assert_eq!(plan["jobs"][4]["job_kind"], "retrieval_ranking_evaluation");
+        assert_eq!(
+            plan["artifact_contract"]["retrieval_eval_report_uri"],
+            "s3://nwfwa-staging-artifacts/ai-evidence/staging-customer/retrieval-eval/{window_start}/retrieval_eval_report.json"
+        );
+        assert_eq!(
+            plan["downstream_contracts"]["analytics_export_plan"],
+            "build-analytics-export-plan"
+        );
     }
 
     #[test]

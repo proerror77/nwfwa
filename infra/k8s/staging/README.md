@@ -40,8 +40,8 @@ python3 scripts/ops/validate_k8s_staging.py
 ```
 
 The validator checks that the staging manifests include the required services,
-readiness probes, database Jobs, CronJobs, object storage, ClickHouse, and
-non-demo readiness settings.
+readiness probes, database Jobs, CronJobs, object storage, ClickHouse, AI
+evidence execution-plan scheduling, and non-demo readiness settings.
 
 The database Jobs use the `nwfwa-ops` image built from
 `infra/dockerfiles/Dockerfile.ops`, which packages the migration and seed SQL.

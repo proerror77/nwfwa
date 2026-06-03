@@ -85,6 +85,8 @@ REQUIRED_TEXT = {
         "--require-ready",
         "build-mlops-monitoring-plan",
         "build-analytics-export-plan",
+        "build-ai-evidence-execution-plan",
+        "--vector-store-kind",
         "http://clickhouse:8123",
         "s3://nwfwa-staging-artifacts",
     ],

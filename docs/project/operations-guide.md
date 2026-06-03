@@ -279,6 +279,25 @@ audit, and agent workspace artifact contract. This proof does not run OCR,
 create embeddings, or query a vector database; it defines the governed metadata
 and audit shape.
 
+Build the staging AI evidence execution plan emitted by the Rust worker:
+
+```bash
+cargo run --locked -p worker -- build-ai-evidence-execution-plan \
+  --api-url http://api-server:8080 \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --vector-store-kind pgvector \
+  --vector-store-ref postgres://evidence-vectors \
+  --customer-scope-id staging-customer \
+  --cron "*/20 * * * *"
+```
+
+The plan covers document metadata sync, OCR output registration, chunk
+registration, embedding job dispatch, and retrieval ranking evaluation. It
+binds those jobs to the `/api/v1/ops/evidence/*` metadata APIs and keeps raw
+document text, OCR text, vectors, and raw retrieval queries outside platform
+payloads. It is a portable execution plan, not a customer OCR or vector worker
+implementation.
+
 Frontend:
 
 ```bash
@@ -339,8 +358,8 @@ and create a real Secret from `infra/k8s/staging/secrets.example.yaml` in the
 the kustomization resources, so placeholder secrets are not applied by default.
 The directory includes API, web console, ML service, PostgreSQL,
 S3-compatible object storage, ClickHouse, database migration and seed Jobs, and
-worker CronJobs for pilot readiness, MLOps monitoring-plan generation, and
-analytics export-plan generation.
+worker CronJobs for pilot readiness, MLOps monitoring-plan generation, AI
+evidence execution-plan generation, and analytics export-plan generation.
 
 Validate container packaging before building images:
 
