@@ -144,10 +144,13 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["PilotReadiness"]["required"],
         serde_json::json!([
             "status",
+            "ready_for_customer_pilot",
             "required_check_names",
             "required_check_count",
             "ready_check_count",
             "blocking_check_count",
+            "blocking_check_names",
+            "remediation_summary",
             "ready_checks",
             "blocking_checks"
         ])
@@ -165,6 +168,21 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["PilotReadiness"]["properties"]["ready_checks"]["items"]
             ["$ref"],
         "#/components/schemas/HealthCheck"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["ready_for_customer_pilot"]
+            ["type"],
+        "boolean"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["blocking_check_names"]
+            ["items"]["type"],
+        "string"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["remediation_summary"]
+            ["items"]["type"],
+        "string"
     );
     assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["runtime_kind"]["description"],

@@ -223,6 +223,7 @@ async fn health_returns_service_metadata_and_checks() {
         "health response must not expose agent policy ids"
     );
     assert_eq!(body["pilot_readiness"]["status"], "not_ready");
+    assert_eq!(body["pilot_readiness"]["ready_for_customer_pilot"], false);
     assert_eq!(body["pilot_readiness"]["required_check_count"], 14);
     let blocking_checks = body["pilot_readiness"]["blocking_checks"]
         .as_array()
@@ -243,6 +244,16 @@ async fn health_returns_service_metadata_and_checks() {
             .as_u64()
             .unwrap() as usize
     );
+    let blocking_check_names = body["pilot_readiness"]["blocking_check_names"]
+        .as_array()
+        .expect("pilot readiness should list compact blocking check names");
+    assert_eq!(blocking_check_names.len(), blocking_checks.len());
+    assert!(blocking_check_names.contains(&serde_json::json!("api_key_configuration")));
+    let remediation_summary = body["pilot_readiness"]["remediation_summary"]
+        .as_array()
+        .expect("pilot readiness should list compact remediation hints");
+    assert_eq!(remediation_summary.len(), blocking_checks.len());
+    assert!(remediation_summary.iter().all(|item| item.is_string()));
     assert_eq!(
         blocking_check(&body, "api_key_configuration")["status"],
         "local_dev_key"
@@ -281,9 +292,18 @@ async fn health_reports_pilot_readiness_ready_when_all_pilot_configuration_is_se
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
 
     assert_eq!(body["pilot_readiness"]["status"], "ready");
+    assert_eq!(body["pilot_readiness"]["ready_for_customer_pilot"], true);
     assert_eq!(body["pilot_readiness"]["required_check_count"], 14);
     assert_eq!(body["pilot_readiness"]["ready_check_count"], 14);
     assert_eq!(body["pilot_readiness"]["blocking_check_count"], 0);
+    assert_eq!(
+        body["pilot_readiness"]["blocking_check_names"],
+        serde_json::json!([])
+    );
+    assert_eq!(
+        body["pilot_readiness"]["remediation_summary"],
+        serde_json::json!([])
+    );
     assert_eq!(
         body["pilot_readiness"]["blocking_checks"],
         serde_json::json!([])

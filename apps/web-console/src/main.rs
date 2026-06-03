@@ -1061,10 +1061,13 @@ struct HealthResponse {
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct PilotReadiness {
     status: String,
+    ready_for_customer_pilot: bool,
     required_check_names: Vec<String>,
     required_check_count: usize,
     ready_check_count: usize,
     blocking_check_count: usize,
+    blocking_check_names: Vec<String>,
+    remediation_summary: Vec<String>,
     ready_checks: Vec<HealthCheck>,
     blocking_checks: Vec<HealthCheck>,
 }
@@ -7200,6 +7203,7 @@ fn governance_view(props: &GovernanceProps) -> Html {
                             {pilot_readiness_cockpit(&snapshot.health)}
                             <div class="score-hero">
                                 <div><span>{"Pilot Gate"}</span><strong>{&snapshot.health.pilot_readiness.status}</strong></div>
+                                <div><span>{"Customer Pilot"}</span><strong>{if snapshot.health.pilot_readiness.ready_for_customer_pilot { "ready" } else { "blocked" }}</strong></div>
                                 <div><span>{"Ready Checks"}</span><strong>{format!("{} / {}", snapshot.health.pilot_readiness.ready_check_count, snapshot.health.pilot_readiness.required_check_count)}</strong></div>
                                 <div><span>{"Blocking Checks"}</span><strong>{snapshot.health.pilot_readiness.blocking_check_count}</strong></div>
                                 <div><span>{"Health Checks"}</span><strong>{snapshot.health.checks.len()}</strong></div>
@@ -7356,15 +7360,21 @@ fn pilot_readiness_cockpit(health: &HealthResponse) -> Html {
         .first()
         .map(String::as_str)
         .unwrap_or("required checks not reported");
+    let customer_pilot_label = if readiness.ready_for_customer_pilot {
+        "ready for customer pilot"
+    } else {
+        "blocked for customer pilot"
+    };
 
     html! {
         <div class="pilot-readiness-cockpit">
             <aside class="pilot-readiness-brief">
                 <span class="eyebrow">{"Pilot gate status"}</span>
-                <strong>{&readiness.status}</strong>
+                <strong>{customer_pilot_label}</strong>
                 <dl>
                     <div><dt>{"Ready"}</dt><dd>{format!("{ready_count} / {required_count}")}</dd></div>
                     <div><dt>{"Blocked"}</dt><dd>{blocked_count}</dd></div>
+                    <div><dt>{"Decision"}</dt><dd>{&readiness.status}</dd></div>
                     <div><dt>{"Health"}</dt><dd>{health.checks.len()}</dd></div>
                     <div><dt>{"Service"}</dt><dd>{format!("{} {}", health.service, health.version)}</dd></div>
                 </dl>
@@ -7376,13 +7386,21 @@ fn pilot_readiness_cockpit(health: &HealthResponse) -> Html {
                 {readiness_node("Required", &required_count.to_string(), required_label, "required")}
                 {readiness_node("Ready", &format!("{ready_pct}%"), ready_label, "ready")}
                 {readiness_node("Blocked", &blocked_count.to_string(), blocker_label, "blocked")}
-                {readiness_node("Decision", &readiness.status, "worker check-pilot-readiness", "decision")}
+                {readiness_node("Decision", customer_pilot_label, "worker check-pilot-readiness", "decision")}
             </div>
 
             <aside class="pilot-readiness-actions">
                 <span class="eyebrow">{"Next blocker"}</span>
-                <strong>{blocker_label}</strong>
-                if let Some(check) = readiness.blocking_checks.first() {
+                <strong>{
+                    readiness
+                        .blocking_check_names
+                        .first()
+                        .map(String::as_str)
+                        .unwrap_or(blocker_label)
+                }</strong>
+                if let Some(remediation) = readiness.remediation_summary.first() {
+                    <small>{remediation}</small>
+                } else if let Some(check) = readiness.blocking_checks.first() {
                     <small>{check.remediation.as_deref().unwrap_or("no remediation returned")}</small>
                 } else {
                     <small>{"Pilot readiness has no blocking configuration checks."}</small>

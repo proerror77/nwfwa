@@ -3671,12 +3671,16 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "PilotReadiness": {
                     "type": "object",
-                    "required": ["status", "required_check_names", "required_check_count", "ready_check_count", "blocking_check_count", "ready_checks", "blocking_checks"],
+                    "required": ["status", "ready_for_customer_pilot", "required_check_names", "required_check_count", "ready_check_count", "blocking_check_count", "blocking_check_names", "remediation_summary", "ready_checks", "blocking_checks"],
                     "properties": {
                         "status": {
                             "type": "string",
                             "enum": ["ready", "not_ready"],
                             "description": "Aggregate customer pilot readiness derived from non-secret configuration checks."
+                        },
+                        "ready_for_customer_pilot": {
+                            "type": "boolean",
+                            "description": "True only when no required pilot configuration checks are blocking customer pilot traffic."
                         },
                         "required_check_names": {
                             "type": "array",
@@ -3694,6 +3698,16 @@ pub async fn openapi_schema() -> Json<Value> {
                         "blocking_check_count": {
                             "type": "integer",
                             "description": "Number of required pilot configuration checks still blocking customer pilot readiness."
+                        },
+                        "blocking_check_names": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Compact list of blocking configuration check names for scripts and dashboards."
+                        },
+                        "remediation_summary": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Compact non-secret remediation hints for blocking readiness checks."
                         },
                         "ready_checks": {
                             "type": "array",

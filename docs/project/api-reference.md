@@ -96,7 +96,9 @@ The response also includes `pilot_readiness.status`. It is `ready` only when
 all customer pilot configuration checks report `configured`; otherwise it is
 `not_ready` and `pilot_readiness.blocking_checks` lists the non-secret check
 names, statuses, and remediation hints that still block customer pilot traffic.
-The readiness summary also includes `required_check_names`,
+`ready_for_customer_pilot`, `blocking_check_names`, and `remediation_summary`
+provide the compact machine-readable decision and blocker list for scripts and
+dashboards. The readiness summary also includes `required_check_names`,
 `required_check_count`, `ready_check_count`, `blocking_check_count`, and
 `ready_checks` so a demo or pilot smoke test can reconcile the full blocker set
 without inspecting environment-specific secret values.
