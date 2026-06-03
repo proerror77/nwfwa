@@ -483,6 +483,106 @@ pre {
   line-height: 1.5;
 }
 
+.inbox-pipeline {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(118px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+}
+
+.pipeline-step {
+  position: relative;
+  min-width: 118px;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.pipeline-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 26px;
+  right: -10px;
+  width: 10px;
+  height: 2px;
+  background: #9ec3f6;
+}
+
+.pipeline-step span,
+.pipeline-step strong,
+.finding-command-strip span,
+.finding-command-strip small {
+  display: block;
+  min-width: 0;
+}
+
+.pipeline-step span,
+.finding-command-strip span,
+.finding-command-strip small {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.pipeline-step strong {
+  margin-top: 6px;
+  color: #0c315f;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.pipeline-step.done {
+  border-color: #b7e4c4;
+  background: #f2fbf5;
+}
+
+.pipeline-step.warning {
+  border-color: #f1c76a;
+  background: var(--amber-soft);
+}
+
+.pipeline-step.blocked {
+  border-color: #ffc2d0;
+  background: var(--red-soft);
+}
+
+.pipeline-step.pending {
+  background: var(--surface-muted);
+}
+
+.finding-command-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.finding-command-strip > div {
+  min-width: 0;
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.finding-command-strip strong {
+  display: block;
+  margin: 5px 0;
+  color: #0c315f;
+  font-size: 22px;
+}
+
+.finding-command-strip small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.finding-list .finding-row {
+  border-left: 3px solid var(--blue);
+}
+
 .action-bar,
 .button-row {
   display: flex;
@@ -1835,12 +1935,15 @@ pre {
   .rule-bar-row,
   .bar-row,
   .matrix-grid,
+  .inbox-pipeline,
+  .finding-command-strip,
   .gate-pipeline,
   .case-network {
     grid-template-columns: 1fr;
   }
 
   .gate-node:not(:last-child)::after,
+  .pipeline-step:not(:last-child)::after,
   .network-node:not(:last-child)::after {
     display: none;
   }

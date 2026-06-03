@@ -5420,6 +5420,8 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                             <div><span>{"Scoring Ready"}</span><strong>{if response.scoring_ready { "yes" } else { "no" }}</strong></div>
                             <div><span>{"Mapping"}</span><strong>{&response.mapping_version}</strong></div>
                         </div>
+                        {inbox_pipeline_visual(response)}
+                        {validation_findings_visual(response, &props.hints)}
                         <dl class="result-grid">
                             <div><dt>{"Run ID"}</dt><dd>{&response.run_id}</dd></div>
                             <div><dt>{"Audit ID"}</dt><dd>{&response.audit_id}</dd></div>
@@ -5430,7 +5432,7 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                         if props.hints.is_empty() {
                             <p class="empty">{"No correction hints returned."}</p>
                         } else {
-                            <div class="table-list">
+                            <div class="table-list finding-list">
                                 {for props.hints.iter().map(|hint| html! {
                                     <div class="finding-row">
                                         <strong>{&hint.field_path}</strong>
@@ -6160,6 +6162,83 @@ fn display_value(value: &Value) -> String {
 
 fn readable_token(value: &str) -> String {
     value.replace(['_', '-'], " ")
+}
+
+fn inbox_pipeline_visual(response: &InboxNormalizeResponse) -> Html {
+    let has_blockers = response
+        .validation_errors
+        .iter()
+        .any(|error| blocks_direct_scoring(&error.field_path, &error.severity));
+    let finding_state = if has_blockers {
+        "blocked"
+    } else if response.validation_errors.is_empty() {
+        "done"
+    } else {
+        "warning"
+    };
+    let approval_state = if response.scoring_ready {
+        "done"
+    } else if has_blockers {
+        "blocked"
+    } else {
+        "warning"
+    };
+    html! {
+        <div class="inbox-pipeline">
+            {pipeline_step("Raw", response.external_message_id.as_deref().unwrap_or("message pending"), "done")}
+            {pipeline_step("Normalize", &response.mapping_version, "done")}
+            {pipeline_step("Findings", &format!("{} findings", response.validation_errors.len()), finding_state)}
+            {pipeline_step("Approval", if response.scoring_ready { "direct scoring" } else { "review gate" }, approval_state)}
+            {pipeline_step("Release", if response.scoring_ready { "ready" } else { "held" }, if response.scoring_ready { "done" } else { "pending" })}
+        </div>
+    }
+}
+
+fn validation_findings_visual(response: &InboxNormalizeResponse, hints: &[CorrectionHint]) -> Html {
+    let blocking_count = hints.iter().filter(|hint| hint.blocks_scoring).count();
+    let warning_count = response
+        .validation_errors
+        .iter()
+        .filter(|error| error.severity == "warning")
+        .count();
+    let error_count = response
+        .validation_errors
+        .iter()
+        .filter(|error| error.severity == "error")
+        .count();
+    html! {
+        <div class="finding-command-strip">
+            <div>
+                <span>{"Blocking"}</span>
+                <strong>{blocking_count}</strong>
+                <small>{"must resolve or reviewer approve"}</small>
+            </div>
+            <div>
+                <span>{"Warnings"}</span>
+                <strong>{warning_count}</strong>
+                <small>{"allowed with audit trail"}</small>
+            </div>
+            <div>
+                <span>{"Errors"}</span>
+                <strong>{error_count}</strong>
+                <small>{"block canonical scoring"}</small>
+            </div>
+            <div>
+                <span>{"Data Quality"}</span>
+                <strong>{response.data_quality_signals.len()}</strong>
+                <small>{refs_label(&response.data_quality_signals)}</small>
+            </div>
+        </div>
+    }
+}
+
+fn pipeline_step(label: &str, value: &str, state: &str) -> Html {
+    html! {
+        <div class={classes!("pipeline-step", state.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
+    }
 }
 
 fn optional_number(value: Option<f64>) -> String {
