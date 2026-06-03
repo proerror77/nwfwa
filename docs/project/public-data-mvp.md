@@ -93,6 +93,71 @@ current pipeline:
 `confirmed_fwa` remains a weak public-data label. It is derived only to keep
 the model-training contract executable.
 
+## Kaggle Provider Fraud MVP
+
+When the Kaggle Healthcare Provider Fraud Detection archive is available
+locally, it can be converted into a demo claim-grain dataset and inbox-compatible
+TPA claim payloads:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_kaggle_provider_fraud_mvp.py \
+  --archive /Users/proerror/Downloads/archive.zip \
+  --output-dir data/kaggle-provider-fraud \
+  --dataset-version 2026-06-kaggle-provider-fraud-demo \
+  --max-claims 5000 \
+  --max-tpa-payloads 100
+```
+
+This writes:
+
+- `data/kaggle-provider-fraud/manifest.json`;
+- `data/kaggle-provider-fraud/sources.json`;
+- `data/kaggle-provider-fraud/split=train/part-00000.parquet`;
+- `data/kaggle-provider-fraud/split=validation/part-00000.parquet`;
+- `data/kaggle-provider-fraud/split=out_of_time/part-00000.parquet`;
+- `data/kaggle-provider-fraud/tpa_claims.jsonl`;
+- `data/kaggle-provider-fraud/tpa_claim_sample.json`;
+- `data/kaggle-provider-fraud/tpa_claims_index.json`.
+
+The generated TPA JSON uses masked demo identifiers and the existing inbox
+payload shape: `systemCode`, `transNo`, `reportCase`, `policyList`,
+`productList`, `claimLiabilityList`, `invoiceList`, `feeList`, and
+`medicalRecordInfoList`.
+
+Train/export a candidate from the Kaggle manifest:
+
+```bash
+uv run --project apps/ml-service \
+  python -m app.train \
+  --manifest data/kaggle-provider-fraud/manifest.json \
+  --artifact-base-uri data/kaggle-provider-fraud-artifacts \
+  --model-key baseline_fwa \
+  --base-model-version kaggle-mvp \
+  --job-id kaggle_provider_fraud_job_1 \
+  --actor kaggle-data-builder
+```
+
+The Kaggle source label is provider-level `PotentialFraud`. The dataset builder
+maps that label into `confirmed_fwa` only as a weak claim-level pipeline label
+under
+`label_policy = weak_provider_level_label_not_claim_level_production_evidence`.
+It is useful for exercising ingestion, feature materialization, training,
+artifact export, Rust serving-artifact compatibility, monitoring report
+generation, and TPA inbox normalization.
+
+It must not be interpreted as:
+
+- customer production model effectiveness evidence;
+- claim-level fraud truth;
+- evidence for fraud accusation;
+- automatic claim denial evidence;
+- proof that a model is ready for customer pre-payment routing.
+
+Because the split is time-sorted while the Kaggle label is provider-level, the
+out-of-time split can have a skewed label distribution. Treat the result as a
+demo/research signal for pipeline behavior, not calibrated production quality.
+
 ## Run The Existing Pipeline
 
 Profile the generated manifest:

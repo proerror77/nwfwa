@@ -173,6 +173,24 @@ This path closes schema and pipeline gaps only. Customer label provenance,
 customer holdout validation, and real shadow traffic remain required before
 production model claims.
 
+If the Kaggle Healthcare Provider Fraud archive has been downloaded locally,
+build the provider-fraud demo pack:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_kaggle_provider_fraud_mvp.py \
+  --archive /Users/proerror/Downloads/archive.zip \
+  --output-dir data/kaggle-provider-fraud \
+  --dataset-version 2026-06-kaggle-provider-fraud-demo \
+  --max-claims 5000 \
+  --max-tpa-payloads 100
+```
+
+The generated manifest follows the same train/validation/out-of-time contract
+and also writes `tpa_claims.jsonl` for inbox/scoring demos. Its label policy is
+`weak_provider_level_label_not_claim_level_production_evidence`, because Kaggle
+`PotentialFraud` is provider-level and cannot prove claim-level fraud.
+
 ## Stage 5: Offline Training
 
 Purpose: create a candidate model artifact and validation evidence.

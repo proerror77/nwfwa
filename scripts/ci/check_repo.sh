@@ -19,6 +19,7 @@ required_files=(
   "scripts/demo/tpa_mock_client.py"
   "scripts/demo/smoke_demo.py"
   "scripts/demo/smoke_web_console.mjs"
+  "scripts/data/build_kaggle_provider_fraud_mvp.py"
   "scripts/data/build_public_data_mvp.py"
   "scripts/ci/assert_worker_health.py"
   "scripts/ops/validate_k8s_staging.py"
@@ -101,6 +102,7 @@ grep -q "docs/engineering/tpa-integration-contract.md" apps/api-server/tests/tpa
 grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "ErrorResponse" apps/api-server/tests/tpa_contract_docs.rs
 python3 -m unittest scripts.demo.test_tpa_mock_client
+python3 -m py_compile scripts/data/build_kaggle_provider_fraud_mvp.py scripts/data/build_public_data_mvp.py
 grep -q "/api/v1/investigations/results" scripts/demo/tpa_mock_client.py
 grep -q "/api/v1/qa/results" scripts/demo/tpa_mock_client.py
 grep -q "canonical_claim_context" scripts/demo/tpa_mock_client.py
@@ -121,6 +123,9 @@ grep -q "correction_hints" docs/product/fwa-risk-operations-prd.md
 grep -q "correction_overlay_template" docs/product/fwa-risk-operations-prd.md
 grep -q -- "--write-correction-template" docs/product/fwa-risk-operations-prd.md
 grep -q "claimValidateDate" docs/product/fwa-risk-operations-prd.md
+grep -q "weak_provider_level_label_not_claim_level_production_evidence" scripts/data/build_kaggle_provider_fraud_mvp.py
+grep -q "Kaggle Provider Fraud MVP" docs/project/public-data-mvp.md
+grep -q "data/kaggle-provider-fraud/" .gitignore
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "staging-proof" .github/workflows/ci.yml

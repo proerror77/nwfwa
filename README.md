@@ -480,6 +480,23 @@ ML commands. It validates schema, Parquet splits, weak-label training flow, Rust
 artifact export, and MLOps handoff and monitoring contracts; it is not customer
 production model evidence.
 
+When the Kaggle Healthcare Provider Fraud archive is available locally, build a
+provider-fraud demo pack and TPA inbox payloads:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_kaggle_provider_fraud_mvp.py \
+  --archive /Users/proerror/Downloads/archive.zip \
+  --output-dir data/kaggle-provider-fraud \
+  --dataset-version 2026-06-kaggle-provider-fraud-demo \
+  --max-claims 5000 \
+  --max-tpa-payloads 100
+```
+
+This uses provider-level `PotentialFraud` as a weak pipeline label only. It is
+not claim-level fraud truth and must not be used for automatic denial or
+production model evidence.
+
 ### ML Operations Commands
 
 ```bash

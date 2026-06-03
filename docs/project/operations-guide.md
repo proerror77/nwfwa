@@ -157,6 +157,23 @@ The generated manifest validates schema, Parquet splits, weak-label training,
 Rust artifact export, and MLOps handoff contracts. It is not customer
 production model evidence.
 
+Kaggle provider-fraud demo pack:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_kaggle_provider_fraud_mvp.py \
+  --archive /Users/proerror/Downloads/archive.zip \
+  --output-dir data/kaggle-provider-fraud \
+  --dataset-version 2026-06-kaggle-provider-fraud-demo \
+  --max-claims 5000 \
+  --max-tpa-payloads 100
+```
+
+This writes a Parquet manifest plus `tpa_claims.jsonl` payloads for inbox and
+scoring demos. The Kaggle label is provider-level `PotentialFraud`; the script
+maps it to `confirmed_fwa` only as
+`weak_provider_level_label_not_claim_level_production_evidence`.
+
 Artifact-backed local serving with integrity and version lock:
 
 ```bash
