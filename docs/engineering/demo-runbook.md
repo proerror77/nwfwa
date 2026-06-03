@@ -191,7 +191,9 @@ API key or customer scope as local demo configuration. Set
 `FWA_PROOF_REQUIRE_READY=1` to make unresolved pilot readiness blockers fail the
 proof after printing the JSON readiness report. Use `FWA_PROOF_SKIP_SEED=1`,
 `FWA_PROOF_SKIP_READINESS=1`, or `FWA_PROOF_SKIP_PERSISTENCE=1` only when the
-environment is managed outside the local demo database.
+environment is managed outside the local demo database. Set
+`FWA_PROOF_READINESS_REPORT_PATH=artifacts/pilot-readiness.json` when the demo
+needs a retained readiness evidence artifact.
 
 ## 6. Model Promotion Evidence
 

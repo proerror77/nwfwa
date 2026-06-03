@@ -295,7 +295,8 @@ Before a customer pilot contract test:
   proof command. Set `FWA_PROOF_REQUIRE_READY=1` when the environment should
   fail on unresolved `/api/v1/health` pilot readiness blockers; otherwise the
   proof prints the report but keeps local demo proof flow focused on identity,
-  smoke, and persistence.
+  smoke, and persistence. Set `FWA_PROOF_READINESS_REPORT_PATH` to retain the
+  readiness JSON as a pilot evidence artifact.
 - Confirm high-risk outputs remain assistive-only.
 
 Writeback contract fields:

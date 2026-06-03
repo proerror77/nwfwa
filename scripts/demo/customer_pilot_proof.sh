@@ -13,6 +13,7 @@ FWA_PROOF_SKIP_SEED="${FWA_PROOF_SKIP_SEED:-0}"
 FWA_PROOF_SKIP_PERSISTENCE="${FWA_PROOF_SKIP_PERSISTENCE:-0}"
 FWA_PROOF_SKIP_READINESS="${FWA_PROOF_SKIP_READINESS:-0}"
 FWA_PROOF_REQUIRE_READY="${FWA_PROOF_REQUIRE_READY:-0}"
+FWA_PROOF_READINESS_REPORT_PATH="${FWA_PROOF_READINESS_REPORT_PATH:-}"
 
 export DATABASE_URL
 export FWA_API_BASE_URL
@@ -41,6 +42,18 @@ run_step() {
   "$@"
 }
 
+run_readiness_report() {
+  local label="$1"
+  shift
+  echo "==> $label" >&2
+  if [[ -n "$FWA_PROOF_READINESS_REPORT_PATH" ]]; then
+    mkdir -p "$(dirname "$FWA_PROOF_READINESS_REPORT_PATH")"
+    "$@" | tee "$FWA_PROOF_READINESS_REPORT_PATH"
+  else
+    "$@"
+  fi
+}
+
 require_command python3
 
 if [[ "$FWA_PROOF_SKIP_SEED" != "1" ]]; then
@@ -67,7 +80,7 @@ if [[ "$FWA_PROOF_SKIP_READINESS" != "1" ]]; then
   if [[ "$FWA_PROOF_REQUIRE_READY" == "1" ]]; then
     readiness_args+=(--require-ready)
   fi
-  run_step "capture pilot readiness report from $FWA_API_BASE_URL" cargo "${readiness_args[@]}"
+  run_readiness_report "capture pilot readiness report from $FWA_API_BASE_URL" cargo "${readiness_args[@]}"
 else
   echo "==> skip pilot readiness report because FWA_PROOF_SKIP_READINESS=1" >&2
 fi

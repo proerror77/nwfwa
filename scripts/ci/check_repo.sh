@@ -205,13 +205,17 @@ grep -q -- "--customer-principal-smoke" scripts/demo/customer_pilot_proof.sh
 grep -q "check-pilot-readiness" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_REQUIRE_READY" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_SKIP_READINESS" scripts/demo/customer_pilot_proof.sh
+grep -q "FWA_PROOF_READINESS_REPORT_PATH" scripts/demo/customer_pilot_proof.sh
+grep -q 'tee "$FWA_PROOF_READINESS_REPORT_PATH"' scripts/demo/customer_pilot_proof.sh
 grep -q "assert_demo_persistence.sql" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_DEMO_EXPECTED_ACTOR_ROLE" scripts/demo/smoke_demo.py
 grep -q "FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID" scripts/demo/smoke_demo.py
 grep -q "customer_pilot_proof.sh" docs/engineering/demo-runbook.md
 grep -q "FWA_PROOF_REQUIRE_READY" docs/engineering/demo-runbook.md
+grep -q "FWA_PROOF_READINESS_REPORT_PATH" docs/engineering/demo-runbook.md
 grep -q "customer_pilot_proof.sh" docs/project/operations-guide.md
 grep -q "pilot readiness reporting" docs/project/operations-guide.md
+grep -q "readiness JSON as a pilot evidence artifact" docs/project/operations-guide.md
 grep -q -- "--customer-principal-smoke" docs/engineering/demo-runbook.md
 grep -q -- "--customer-principal-smoke" docs/engineering/pilot-readiness.md
 grep -q "API Call Records" apps/web-console/src/main.rs
