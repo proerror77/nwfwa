@@ -178,9 +178,12 @@ async function main() {
     assertContains(builtText, "Selected Actions", "web console leads cases action bundle");
     assertContains(builtText, "Selected lead", "web console leads cases action bundle");
     assertContains(builtText, "Selected case", "web console leads cases action bundle");
-    assertContains(builtText, "Release to risk queue", "web console claim inbox release bundle");
-    assertContains(builtText, "Risk Queue Release", "web console claim inbox release bundle");
+    assertContains(builtText, "Inbound Claim Packet", "web console claim inbox release bundle");
+    assertContains(builtText, "Correction Worklist", "web console claim inbox release bundle");
+    assertContains(builtText, "Release accepted claim", "web console claim inbox release bundle");
+    assertContains(builtText, "Queue Handoff", "web console claim inbox release bundle");
     assertContains(builtText, "Queue Ready", "web console claim inbox release bundle");
+    assertContains(builtText, "Technical payload editor", "web console claim inbox release bundle");
     assertNotContains(builtText, "Approve for scoring", "web console claim inbox release bundle");
     assertNotContains(builtText, "Scoring Release", "web console claim inbox release bundle");
     assertContains(builtText, "Runtime Scoring", "web console bundle");

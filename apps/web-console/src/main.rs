@@ -3747,7 +3747,7 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
             </div>
             <div class="pilot-runway-map">
                 <div class="runway-line"></div>
-                {pilot_runway_step("Principal", "Scoped API key", "actor + customer scope", "Claim Inbox", "source", on_navigate)}
+                {pilot_runway_step("Principal", "Configured principal", "actor + customer scope", "Claim Inbox", "source", on_navigate)}
                 {pilot_runway_step("Inbox", &summary.suspected_claims.to_string(), "normalized claims", "Claim Inbox", "intake", on_navigate)}
                 {pilot_runway_step("Risk", &signal_label, &map_counts_label(&summary.rag_distribution), "Leads & Cases", "score", on_navigate)}
                 {pilot_runway_step("Case", &summary.case_sla.open_cases.to_string(), "open investigations", "Leads & Cases", "case", on_navigate)}
@@ -8960,61 +8960,62 @@ fn claim_inbox_page() -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Claim Inbox"}</h2>
-                    <p>{"Normalize raw customer payloads, review validation findings, apply a correction overlay, and release clean canonical claims into the risk and review queue."}</p>
+                    <p>{"Review inbound TPA claim packets, resolve intake blockers, and release accepted claims into the risk and review queue."}</p>
                 </div>
-                <span class="status-pill">{"Yew"}</span>
+                <span class="status-pill">{"Intake Ops"}</span>
             </div>
 
             <div class="inbox-grid">
                 <section class="panel">
-                    <h3>{"Raw Intake"}</h3>
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Raw payload"}
-                        <textarea
-                            class="payload-editor"
-                            value={(*raw_payload).clone()}
-                            oninput={{
-                                let raw_payload = raw_payload.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    raw_payload.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
+                    <h3>{"Inbound Claim Packet"}</h3>
+                    <p class="empty">{"Use the configured intake channel to check whether the claim packet is complete enough for downstream review."}</p>
+                    <div class="summary-grid">
+                        <div><span>{"Source"}</span><strong>{"TPA intake"}</strong></div>
+                        <div><span>{"Packet"}</span><strong>{"sample loaded"}</strong></div>
+                        <div><span>{"Next step"}</span><strong>{"check intake packet"}</strong></div>
+                    </div>
+                    <details>
+                        <summary>{"Technical payload editor"}</summary>
+                        <label>
+                            {"Payload JSON"}
+                            <textarea
+                                class="payload-editor"
+                                value={(*raw_payload).clone()}
+                                oninput={{
+                                    let raw_payload = raw_payload.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        raw_payload.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                    </details>
                 </section>
 
                 <section class="panel">
-                    <h3>{"Correction Overlay"}</h3>
+                    <h3>{"Correction Worklist"}</h3>
+                    <p class="empty">{"After intake checks run, prepare only the missing or reviewer-approved fixes needed for queue release."}</p>
                     <div class="button-row">
                         <button onclick={use_template} disabled={!matches!(&*normalize_state, ApiState::Ready(_))}>
-                            {"Use suggested overlay"}
+                            {"Prepare correction draft"}
                         </button>
                     </div>
-                    <label>
-                        {"Overlay JSON"}
-                        <textarea
-                            class="payload-editor"
-                            value={(*overlay_payload).clone()}
-                            oninput={{
-                                let overlay_payload = overlay_payload.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    overlay_payload.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
+                    <details>
+                        <summary>{"Technical correction editor"}</summary>
+                        <label>
+                            {"Correction JSON"}
+                            <textarea
+                                class="payload-editor"
+                                value={(*overlay_payload).clone()}
+                                oninput={{
+                                    let overlay_payload = overlay_payload.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        overlay_payload.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                    </details>
                     if let Err(error) = &*merged_payload {
                         <p class="error">{error}</p>
                     }
@@ -9023,7 +9024,7 @@ fn claim_inbox_page() -> Html {
 
             <div class="action-bar">
                 <button onclick={normalize.clone()} disabled={matches!(&*normalize_state, ApiState::Loading)}>
-                    {if matches!(&*normalize_state, ApiState::Loading) { "Normalizing..." } else { "Normalize" }}
+                    {if matches!(&*normalize_state, ApiState::Loading) { "Checking..." } else { "Check intake packet" }}
                 </button>
                 <label class="checkbox-row">
                     <input
@@ -9036,10 +9037,10 @@ fn claim_inbox_page() -> Html {
                             })
                         }}
                     />
-                    {"Reviewer resolved blocking findings"}
+                    {"Reviewer confirms required intake fixes"}
                 </label>
                 <button onclick={score} disabled={!can_score || matches!(&*score_state, ApiState::Loading)}>
-                    {if matches!(&*score_state, ApiState::Loading) { "Releasing..." } else { "Release to risk queue" }}
+                    {if matches!(&*score_state, ApiState::Loading) { "Releasing..." } else { "Release accepted claim" }}
                 </button>
             </div>
 
@@ -9061,10 +9062,10 @@ struct NormalizeResultProps {
 fn normalize_result_view(props: &NormalizeResultProps) -> Html {
     html! {
         <section class="panel result-stack">
-            <h3>{"Validation Findings"}</h3>
+            <h3>{"Intake Findings"}</h3>
             {match &props.state {
-                ApiState::Idle => html! { <p class="empty">{"Run normalize to inspect validation, source refs, and correction hints."}</p> },
-                ApiState::Loading => html! { <p>{"Normalizing inbox payload..."}</p> },
+                ApiState::Idle => html! { <p class="empty">{"Check the intake packet to see blockers, warnings, and required fixes."}</p> },
+                ApiState::Loading => html! { <p>{"Checking intake packet..."}</p> },
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
                 ApiState::Ready(response) => html! {
                     <>
@@ -9075,13 +9076,16 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                         </div>
                         {inbox_pipeline_visual(response)}
                         {validation_findings_visual(response, &props.hints)}
-                        <dl class="result-grid">
-                            <div><dt>{"Run ID"}</dt><dd>{&response.run_id}</dd></div>
-                            <div><dt>{"Audit ID"}</dt><dd>{&response.audit_id}</dd></div>
-                            <div><dt>{"External Message"}</dt><dd>{response.external_message_id.as_deref().unwrap_or("missing")}</dd></div>
-                            <div><dt>{"Raw Payload Ref"}</dt><dd>{response.raw_payload_ref.as_deref().unwrap_or("pending")}</dd></div>
-                        </dl>
-                        <h4>{"Correction Hints"}</h4>
+                        <details>
+                            <summary>{"Audit trace"}</summary>
+                            <dl class="result-grid">
+                                <div><dt>{"Run ID"}</dt><dd>{&response.run_id}</dd></div>
+                                <div><dt>{"Audit ID"}</dt><dd>{&response.audit_id}</dd></div>
+                                <div><dt>{"External Message"}</dt><dd>{response.external_message_id.as_deref().unwrap_or("missing")}</dd></div>
+                                <div><dt>{"Payload Ref"}</dt><dd>{response.raw_payload_ref.as_deref().unwrap_or("pending")}</dd></div>
+                            </dl>
+                        </details>
+                        <h4>{"Required Fixes"}</h4>
                         if props.hints.is_empty() {
                             <p class="empty">{"No correction hints returned."}</p>
                         } else {
@@ -9096,8 +9100,10 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                                 })}
                             </div>
                         }
-                        <h4>{"Canonical Context Preview"}</h4>
-                        <pre>{pretty_json(&response.canonical_claim_context)}</pre>
+                        <details>
+                            <summary>{"Canonical context preview"}</summary>
+                            <pre>{pretty_json(&response.canonical_claim_context)}</pre>
+                        </details>
                     </>
                 },
             }}
@@ -9114,23 +9120,25 @@ struct ScoreResultProps {
 fn score_result_view(props: &ScoreResultProps) -> Html {
     html! {
         <section class="panel result-stack">
-            <h3>{"Risk Queue Release"}</h3>
+            <h3>{"Queue Handoff"}</h3>
             {match &props.state {
-                ApiState::Idle => html! { <p class="empty">{"Release the normalized canonical context into the risk service so downstream leads and review queues can be created."}</p> },
-                ApiState::Loading => html! { <p>{"Releasing canonical context..."}</p> },
+                ApiState::Idle => html! { <p class="empty">{"Accepted claims enter Leads & Cases or review queues after release."}</p> },
+                ApiState::Loading => html! { <p>{"Releasing accepted claim..."}</p> },
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
                 ApiState::Ready(response) => html! {
                     <>
                         <div class="score-hero compact-metrics">
                             <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
                             <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
-                            <div><span>{"Action"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
-                            <div><span>{"Decision"}</span><strong>{response.decision_outcome.as_deref().unwrap_or("manual_review")}</strong></div>
+                            <div><span>{"Queue Route"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
                         </div>
-                        <dl class="result-grid">
-                            <div><dt>{"Audit ID"}</dt><dd>{response.audit_id.as_deref().unwrap_or("pending")}</dd></div>
-                            <div><dt>{"Evidence Refs"}</dt><dd>{response.evidence_refs.as_ref().map(|refs| value_refs_label(refs)).unwrap_or_else(|| "none".into())}</dd></div>
-                        </dl>
+                        <details>
+                            <summary>{"Release trace"}</summary>
+                            <dl class="result-grid">
+                                <div><dt>{"Audit ID"}</dt><dd>{response.audit_id.as_deref().unwrap_or("pending")}</dd></div>
+                                <div><dt>{"Evidence Refs"}</dt><dd>{response.evidence_refs.as_ref().map(|refs| value_refs_label(refs)).unwrap_or_else(|| "none".into())}</dd></div>
+                            </dl>
+                        </details>
                     </>
                 },
             }}
@@ -9955,7 +9963,8 @@ fn blocks_direct_scoring(field_path: &str, severity: &str) -> bool {
 
 fn next_action_for_validation_error(error: &InboxValidationError) -> String {
     if error.field_path == "systemCode" {
-        return "use an API key/source-system config that matches the payload systemCode".into();
+        return "use source-system/customer-scope config that matches the payload systemCode"
+            .into();
     }
     if error.field_path.ends_with(".coverageLimit") {
         return "map the policy or liability coverage limit before risk queue release".into();
