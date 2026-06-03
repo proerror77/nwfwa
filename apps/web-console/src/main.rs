@@ -2995,6 +2995,7 @@ fn rules_view(props: &RulesProps) -> Html {
                     let selected_rule = snapshot.rules.iter().find(|rule| rule.rule_id == snapshot.gates.rule_id);
                     html! {
                         <>
+                            {rule_pack_matrix(snapshot)}
                             <section class="panel result-stack">
                                 <h3>{"Rule Library"}</h3>
                                 if snapshot.rules.is_empty() {
@@ -8666,6 +8667,145 @@ fn rule_performance_visual(performance: &[RulePerformance]) -> Html {
             </div>
         </div>
     }
+}
+
+fn rule_pack_matrix(snapshot: &RuleOpsSnapshot) -> Html {
+    let total_rules = snapshot.rules.len();
+    let active_rules = snapshot
+        .rules
+        .iter()
+        .filter(|rule| rule.status == "active")
+        .count();
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"FWA Rule Pack Matrix"}</h3>
+                    <p>{"Productized rule families for the pilot demo: each family shows current coverage from the live rule library and operational performance."}</p>
+                </div>
+                <span class="status-token strong">{"rule pack"}</span>
+            </div>
+            <div class="rule-pack-cockpit">
+                <aside class="rule-pack-brief">
+                    <span class="eyebrow">{"PRD rule coverage"}</span>
+                    <strong>{format!("{} active / {} listed", active_rules, total_rules)}</strong>
+                    <small>{"Deterministic rules stay explainable, versioned, backtested, and human-approved before production routing."}</small>
+                    <div class="rule-pack-meter">
+                        <i style={format!("width: {};", percent_width(rule_pack_coverage_ratio(snapshot))) }></i>
+                    </div>
+                    <small>{format!("covered families: {} / 5", covered_rule_pack_count(snapshot))}</small>
+                </aside>
+                <div class="rule-pack-map">
+                    <div class="rule-pack-link"></div>
+                    <div class="rule-pack-core">
+                        <span>{"L2"}</span>
+                        <strong>{"Rule engine"}</strong>
+                    </div>
+                    {rule_pack_family_node(snapshot, "duplicate billing", "same service / amount", "duplicate", "top")}
+                    {rule_pack_family_node(snapshot, "early high-value claim", "new policy + high amount", "early", "right")}
+                    {rule_pack_family_node(snapshot, "provider peer outlier", "provider cohort deviation", "provider", "bottom")}
+                    {rule_pack_family_node(snapshot, "diagnosis-procedure mismatch", "coding consistency", "diagnosis", "left")}
+                    {rule_pack_family_node(snapshot, "medical necessity evidence gap", "chart support required", "medical", "lower-right")}
+                </div>
+                <aside class="rule-pack-legend">
+                    <span class="eyebrow">{"Human-safe lifecycle"}</span>
+                    {rule_pack_lifecycle_row("Draft", "sandbox / backtest", "neutral")}
+                    {rule_pack_lifecycle_row("Review", "QA + false positives", "warning")}
+                    {rule_pack_lifecycle_row("Approve", "owner sign-off", "strong")}
+                    {rule_pack_lifecycle_row("Route", "recommend review only", "danger")}
+                </aside>
+            </div>
+        </section>
+    }
+}
+
+fn rule_pack_family_node(
+    snapshot: &RuleOpsSnapshot,
+    label: &'static str,
+    caption: &'static str,
+    family_key: &'static str,
+    position: &'static str,
+) -> Html {
+    let rules = snapshot
+        .rules
+        .iter()
+        .filter(|rule| rule_matches_family(rule, family_key))
+        .collect::<Vec<_>>();
+    let rule_count = rules.len();
+    let trigger_count = rules
+        .iter()
+        .filter_map(|rule| rule_performance_for(&snapshot.performance, &rule.rule_id))
+        .map(|performance| performance.trigger_count)
+        .sum::<u32>();
+    let precision = rules
+        .iter()
+        .filter_map(|rule| rule_performance_for(&snapshot.performance, &rule.rule_id))
+        .map(|performance| performance.precision)
+        .next();
+    let tone = if rule_count > 0 { "covered" } else { "gap" };
+    html! {
+        <div class={classes!("rule-pack-node", position, tone)}>
+            <span>{label}</span>
+            <strong>{if rule_count > 0 { format!("{rule_count} rules") } else { "gap".into() }}</strong>
+            <small>{caption}</small>
+            <em>{format!("triggers {} / precision {}", trigger_count, precision.map(percent_label).unwrap_or_else(|| "n/a".into()))}</em>
+        </div>
+    }
+}
+
+fn rule_pack_lifecycle_row(label: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("provider-signal-row", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
+    }
+}
+
+fn covered_rule_pack_count(snapshot: &RuleOpsSnapshot) -> usize {
+    ["duplicate", "early", "provider", "diagnosis", "medical"]
+        .iter()
+        .filter(|family| {
+            snapshot
+                .rules
+                .iter()
+                .any(|rule| rule_matches_family(rule, family))
+        })
+        .count()
+}
+
+fn rule_pack_coverage_ratio(snapshot: &RuleOpsSnapshot) -> f64 {
+    covered_rule_pack_count(snapshot) as f64 / 5.0
+}
+
+fn rule_matches_family(rule: &RuleSummary, family_key: &str) -> bool {
+    let haystack = format!(
+        "{} {} {} {} {}",
+        rule.rule_id,
+        rule.name,
+        rule.scheme_family,
+        rule.alert_code,
+        rule.applicability_scope.scheme_family
+    )
+    .to_lowercase();
+    match family_key {
+        "duplicate" => contains_any(&haystack, &["duplicate", "repeat", "same_service"]),
+        "early" => contains_any(
+            &haystack,
+            &["early", "high_amount", "high_value", "short_term"],
+        ),
+        "provider" => contains_any(&haystack, &["provider", "peer", "outlier", "cohort"]),
+        "diagnosis" => contains_any(&haystack, &["diagnosis", "procedure", "mismatch", "coding"]),
+        "medical" => contains_any(
+            &haystack,
+            &["medical", "necessity", "evidence_gap", "documentation"],
+        ),
+        _ => false,
+    }
+}
+
+fn contains_any(value: &str, needles: &[&str]) -> bool {
+    needles.iter().any(|needle| value.contains(needle))
 }
 
 fn rule_gate_pipeline(gates: &RulePromotionGates) -> Html {

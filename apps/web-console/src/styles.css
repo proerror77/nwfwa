@@ -2550,6 +2550,191 @@ pre {
   border-top: 4px solid var(--teal);
 }
 
+.rule-pack-cockpit {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.72fr) minmax(440px, 1.54fr) minmax(220px, 0.82fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.rule-pack-brief,
+.rule-pack-legend {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.rule-pack-brief strong {
+  color: #0c315f;
+  font-size: 20px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rule-pack-brief small {
+  color: var(--muted);
+  line-height: 1.4;
+}
+
+.rule-pack-meter {
+  height: 10px;
+  overflow: hidden;
+  background: #e3edf8;
+  border-radius: 999px;
+}
+
+.rule-pack-meter i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, var(--blue), #1f8f54);
+  border-radius: inherit;
+}
+
+.rule-pack-map {
+  position: relative;
+  min-height: 372px;
+  overflow: hidden;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(23, 105, 224, 0.12) 0 18%, transparent 19%),
+    repeating-linear-gradient(0deg, rgba(23, 105, 224, 0.06) 0 1px, transparent 1px 30px),
+    repeating-linear-gradient(90deg, rgba(23, 105, 224, 0.06) 0 1px, transparent 1px 30px),
+    #f8fbff;
+  border: 1px solid #c7d9f1;
+  border-radius: 8px;
+}
+
+.rule-pack-link {
+  position: absolute;
+  left: 11%;
+  right: 11%;
+  top: 51%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #9ec3f6, transparent);
+}
+
+.rule-pack-link::before,
+.rule-pack-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: inherit;
+}
+
+.rule-pack-link::before {
+  transform: rotate(36deg);
+}
+
+.rule-pack-link::after {
+  transform: rotate(-36deg);
+}
+
+.rule-pack-core,
+.rule-pack-node {
+  position: absolute;
+  z-index: 2;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.rule-pack-core {
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  padding: 14px;
+  text-align: center;
+  background: linear-gradient(180deg, #1769e0 0%, #063865 100%);
+  border: 6px solid #dceaff;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.rule-pack-core span,
+.rule-pack-core strong {
+  color: #ffffff;
+}
+
+.rule-pack-core strong {
+  line-height: 1.15;
+}
+
+.rule-pack-node {
+  display: grid;
+  gap: 5px;
+  width: 166px;
+  min-height: 104px;
+  padding: 11px;
+  border-top: 4px solid var(--amber);
+}
+
+.rule-pack-node.covered {
+  border-top-color: #1f8f54;
+}
+
+.rule-pack-node.gap {
+  border-top-color: var(--red);
+  background: #fff8fa;
+}
+
+.rule-pack-node span,
+.rule-pack-node small,
+.rule-pack-node em {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.24;
+}
+
+.rule-pack-node strong {
+  color: #0c315f;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.rule-pack-node em {
+  font-style: normal;
+  font-weight: 750;
+  overflow-wrap: anywhere;
+}
+
+.rule-pack-node.top {
+  left: 50%;
+  top: 8%;
+  transform: translateX(-50%);
+}
+
+.rule-pack-node.right {
+  right: 7%;
+  top: 30%;
+}
+
+.rule-pack-node.bottom {
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+}
+
+.rule-pack-node.left {
+  left: 7%;
+  top: 30%;
+}
+
+.rule-pack-node.lower-right {
+  right: 10%;
+  bottom: 15%;
+}
+
 .rule-bars {
   display: grid;
   gap: 10px;
@@ -5508,6 +5693,7 @@ pre {
   .data-lineage-proof-grid,
   .member-profile-cockpit,
   .provider-risk-cockpit,
+  .rule-pack-cockpit,
   .model-telemetry {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -5522,6 +5708,7 @@ pre {
   .pilot-runway-proof,
   .member-profile-cockpit,
   .provider-risk-cockpit,
+  .rule-pack-cockpit,
   .audit-sampling-cockpit,
   .routing-cockpit,
   .agent-run-cockpit,
@@ -5693,6 +5880,7 @@ pre {
   .data-lineage-proof-grid,
   .member-profile-cockpit,
   .provider-risk-cockpit,
+  .rule-pack-cockpit,
   .clinical-cockpit,
   .clinical-outcome-grid,
   .agent-cockpit,
@@ -5717,7 +5905,8 @@ pre {
   .runtime-signal-map::before,
   .runtime-signal-map::after,
   .evidence-pipeline-rail::before,
-  .evidence-runtime-map::before {
+  .evidence-runtime-map::before,
+  .rule-pack-link {
     display: none;
   }
 

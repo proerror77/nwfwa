@@ -119,6 +119,9 @@ async function main() {
     assertContains(builtText, "Review rules", "web console detection workbench bundle");
     assertContains(builtText, "Search evidence", "web console evidence workbench bundle");
     assertContains(builtText, "Rule command path", "web console rules visual bundle");
+    assertContains(builtText, "FWA Rule Pack Matrix", "web console rule pack visual bundle");
+    assertContains(builtText, "duplicate billing", "web console rule pack visual bundle");
+    assertContains(builtText, "medical necessity evidence gap", "web console rule pack visual bundle");
     assertContains(builtText, "Model telemetry map", "web console models visual bundle");
     assertContains(builtText, "Queue Source", "web console leads cases queue bundle");
     assertContains(builtText, "Generated Leads", "web console leads cases queue bundle");
