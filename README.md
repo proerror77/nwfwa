@@ -59,11 +59,14 @@ The default runtime path is:
 4. The Yew web console provides the operator experience.
 5. CI runs Rust, Python, frontend, migration, seed, OpenAPI, and smoke checks.
 
-Production ML and production infrastructure are not complete. Remaining work
-includes customer environment deployment, secrets and key rotation, observability
-stack selection, object storage strategy, customer holdout validation, long-term
-drift monitoring, production feature materialization, and customer-run
-operational drills.
+The repository-owned demo and pilot-contract surfaces are now implemented for
+the parts that can be completed without customer data: scoring, rules, model
+governance, Rust artifact serving, external training handoff, MLOps monitoring
+plans, AI evidence metadata, ClickHouse analytics proof, staging manifests, and
+GitHub Environment packaging. Remaining production work is customer-side
+execution and validation: real customer labels, customer holdout validation,
+live shadow traffic, customer-approved secrets, observability, retention,
+OCR/vector workers, analytics execution, and operational drills.
 The public-data MVP pack can validate the data and ML engineering loop before
 customer data is available, but it does not replace customer production
 validation.
@@ -568,6 +571,7 @@ Do not use local demo credentials outside local development.
 ## Project Documentation
 
 - [Detailed Project Handbook](docs/project/README.md)
+- [PRD Coverage](docs/project/prd-coverage.md)
 - [Product PRD](docs/product/fwa-risk-operations-prd.md)
 - [Infrastructure Architecture](docs/engineering/infrastructure-architecture.md)
 - [TPA Integration Contract](docs/engineering/tpa-integration-contract.md)

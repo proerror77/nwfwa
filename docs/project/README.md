@@ -13,6 +13,8 @@ the technical stack fits together, and what is ready for demo or pilot use.
   Docker, Kubernetes staging, CI, and development tooling.
 - [API Reference](api-reference.md): every API route, method, purpose, auth
   requirement, main inputs, outputs, and side effects.
+- [PRD Coverage](prd-coverage.md): PRD capability matrix, repository evidence,
+  and customer-data/customer-environment boundaries.
 - [Data Model](data-model.md): PostgreSQL schema groups, relationships, and
   table responsibilities.
 - [ML Algorithm Strategy](ml-algorithm-strategy.md): researched model plan,

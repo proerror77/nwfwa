@@ -29,6 +29,7 @@ required_files=(
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
   "scripts/ops/build_staging_deployment_package.py"
+  "scripts/ops/build_prd_coverage.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
   "scripts/ops/sample_mlops_monitoring_plan.json"
   "infra/docker-compose.yml"
@@ -43,6 +44,7 @@ required_files=(
   "infra/k8s/staging/README.md"
   "apps/api-server/tests/tpa_contract_docs.rs"
   "docs/project/public-data-mvp.md"
+  "docs/project/prd-coverage.md"
 )
 
 workspace_files=(
@@ -133,6 +135,7 @@ grep -q "validate_analytics_scale.py" .github/workflows/ci.yml
 grep -q "build_analytics_export.py" .github/workflows/ci.yml
 grep -q "validate_ai_evidence_foundation.py" .github/workflows/ci.yml
 grep -q "build_ai_evidence_foundation.py" .github/workflows/ci.yml
+grep -q "build_prd_coverage.py" .github/workflows/ci.yml
 grep -q "run_mlops_monitoring_plan.py" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- run-retraining-job" .github/workflows/ci.yml
@@ -148,6 +151,12 @@ grep -q "check-pilot-readiness" apps/worker/src/main.rs
 grep -q "build-analytics-export-plan" apps/worker/src/main.rs
 grep -q "scheduled_analytics_export" apps/worker/src/lib.rs
 grep -q "analytics_provider_graph_snapshots" apps/worker/src/lib.rs
+grep -q "prd_coverage_summary" scripts/ops/build_prd_coverage.py
+grep -q "customer_data_or_environment_required" scripts/ops/build_prd_coverage.py
+grep -q "PRD Coverage" README.md
+grep -q "PRD Coverage" docs/project/README.md
+grep -q "Coverage Matrix" docs/project/prd-coverage.md
+grep -q "customer holdout validation and live shadow traffic" docs/project/prd-coverage.md
 grep -q -- "--require-ready" apps/worker/src/main.rs
 grep -q "check_pilot_readiness" apps/worker/src/lib.rs
 grep -q "ready_for_customer_pilot" apps/worker/src/lib.rs

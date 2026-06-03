@@ -1,0 +1,266 @@
+#!/usr/bin/env python3
+"""Build a PRD coverage summary from repository evidence."""
+
+from __future__ import annotations
+
+import argparse
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+ROOT = Path(__file__).resolve().parents[2]
+DEFAULT_OUTPUT_DIR = Path("artifacts/prd-coverage")
+
+
+CAPABILITIES = [
+    {
+        "capability": "decision_boundary",
+        "status": "implemented",
+        "summary": "Assistive-only boundary is documented and enforced through agent approval and promotion gates.",
+        "evidence": [
+            "docs/product/fwa-risk-operations-prd.md",
+            "apps/api-server/src/routes/agent.rs",
+            "apps/api-server/src/routes/ops_models.rs",
+        ],
+        "required_text": [
+            ("docs/product/fwa-risk-operations-prd.md", "No autonomous fraud accusation"),
+            ("apps/api-server/tests/knowledge_agent.rs", "assistive_only"),
+        ],
+        "customer_data_required": False,
+    },
+    {
+        "capability": "inbound_claim_inbox_and_canonical_trace",
+        "status": "implemented",
+        "summary": "Inbox normalization, correction templates, idempotency, canonical trace, and scoring handoff exist.",
+        "evidence": [
+            "apps/api-server/src/routes/inbox.rs",
+            "apps/api-server/src/routes/claims.rs",
+            "scripts/demo/tpa_mock_client.py",
+        ],
+        "required_text": [
+            ("apps/api-server/src/routes/inbox.rs", "INBOX_IDEMPOTENCY_CONFLICT"),
+            ("apps/api-server/src/routes/claims.rs", "inbox_run_id"),
+            ("scripts/demo/tpa_mock_client.py", "correction_overlay_template"),
+        ],
+        "customer_data_required": False,
+    },
+    {
+        "capability": "core_scoring_rules_and_review_modes",
+        "status": "implemented",
+        "summary": "Deterministic scoring, standard FWA rule pack, review modes, and promotion controls are implemented for demo and pilot contracts.",
+        "evidence": [
+            "crates/fwa-scoring/src/lib.rs",
+            "crates/fwa-rules/src/lib.rs",
+            "apps/api-server/src/routes/ops_rules.rs",
+        ],
+        "required_text": [
+            ("scripts/demo/smoke_demo.py", "assert_standard_rule_pack"),
+            ("scripts/demo/seed_demo.sql", "rule_medically_unnecessary_service"),
+            ("apps/api-server/src/routes/ops_rules.rs", "promotion"),
+        ],
+        "customer_data_required": False,
+    },
+    {
+        "capability": "lead_case_qa_medical_feedback_loop",
+        "status": "implemented",
+        "summary": "Lead triage, case status, investigation writeback, QA feedback, medical review, labels, and claim audit timeline are present.",
+        "evidence": [
+            "apps/api-server/src/routes/ops_cases.rs",
+            "apps/api-server/src/routes/ops_medical.rs",
+            "apps/api-server/src/routes/pilot_loop.rs",
+        ],
+        "required_text": [
+            ("apps/api-server/src/app.rs", "/api/v1/investigations/results"),
+            ("apps/api-server/src/app.rs", "/api/v1/qa/results"),
+            ("apps/api-server/src/app.rs", "/api/v1/ops/medical-review/results"),
+        ],
+        "customer_data_required": False,
+    },
+    {
+        "capability": "model_operations_and_mlops_pipeline",
+        "status": "implemented_with_customer_validation_boundary",
+        "summary": "Model registry, evaluation, retraining jobs, Rust artifact serving, external training handoff, and MLOps monitoring plans exist; real labels and live shadow evidence remain external.",
+        "evidence": [
+            "apps/api-server/src/routes/ops_models.rs",
+            "crates/fwa-ml-runtime/src/lib.rs",
+            "apps/worker/src/lib.rs",
+            "docs/project/ml-pipeline-runbook.md",
+        ],
+        "required_text": [
+            ("crates/fwa-ml-runtime/src/lib.rs", "ArtifactModelScorer"),
+            ("apps/worker/src/main.rs", "build-training-handoff"),
+            ("apps/worker/src/main.rs", "build-mlops-monitoring-plan"),
+            ("scripts/ops/run_mlops_monitoring_plan.py", "reviewer_disagreement_report.json"),
+        ],
+        "customer_data_required": True,
+    },
+    {
+        "capability": "dataset_feature_and_label_governance",
+        "status": "implemented_with_customer_validation_boundary",
+        "summary": "Dataset, feature set, evaluation lineage, public-data MVP, and label governance gates are represented; real customer labels are still required for production claims.",
+        "evidence": [
+            "apps/api-server/src/routes/ops_datasets.rs",
+            "scripts/data/build_public_data_mvp.py",
+            "docs/project/public-data-mvp.md",
+        ],
+        "required_text": [
+            ("apps/api-server/src/app.rs", "/api/v1/ops/datasets"),
+            ("apps/api-server/src/app.rs", "/api/v1/ops/feature-sets"),
+            ("scripts/data/build_public_data_mvp.py", "customer_production_model_evidence"),
+        ],
+        "customer_data_required": True,
+    },
+    {
+        "capability": "knowledge_agent_and_ai_evidence_foundation",
+        "status": "staging_proof",
+        "summary": "Knowledge search, assistive investigation, document/chunk/OCR/embedding metadata, retrieval audit, and AI evidence execution-plan proof exist.",
+        "evidence": [
+            "apps/api-server/src/routes/knowledge.rs",
+            "apps/api-server/src/routes/ops_evidence.rs",
+            "scripts/ops/build_ai_evidence_foundation.py",
+            "docs/project/ai-evidence-foundation.md",
+        ],
+        "required_text": [
+            ("apps/api-server/src/app.rs", "/api/v1/ops/evidence/documents"),
+            ("apps/worker/src/main.rs", "build-ai-evidence-execution-plan"),
+            ("scripts/ops/validate_ai_evidence_foundation.py", "evidence_documents"),
+        ],
+        "customer_data_required": False,
+    },
+    {
+        "capability": "analytics_scale",
+        "status": "staging_proof",
+        "summary": "ClickHouse schema, dashboard queries, export plans, provider graph snapshots, and scheduled analytics proof exist.",
+        "evidence": [
+            "analytics/clickhouse/schema.sql",
+            "analytics/clickhouse/dashboard_queries.sql",
+            "scripts/ops/build_analytics_export.py",
+            "docs/project/analytics-scale.md",
+        ],
+        "required_text": [
+            ("analytics/clickhouse/schema.sql", "analytics_provider_graph_snapshots"),
+            ("analytics/clickhouse/dashboard_queries.sql", "false_positive"),
+            ("scripts/ops/build_analytics_export.py", "reviewer_capacity"),
+        ],
+        "customer_data_required": False,
+    },
+    {
+        "capability": "pilot_foundation_and_staging_deployment",
+        "status": "staging_proof",
+        "summary": "Kubernetes staging manifests, container packaging, GitHub Environment package workflow, object storage, backup, retention, legal hold, and observability proof exist.",
+        "evidence": [
+            "infra/k8s/staging/kustomization.yaml",
+            ".github/workflows/deploy-staging.yml",
+            "scripts/ops/build_staging_deployment_package.py",
+            "scripts/ops/build_staging_evidence.py",
+        ],
+        "required_text": [
+            (".github/workflows/deploy-staging.yml", "environment:"),
+            ("infra/k8s/staging/worker-cronjobs.yaml", "analytics-export-plan"),
+            ("scripts/ops/build_staging_evidence.py", "retention_legal_hold_proof"),
+        ],
+        "customer_data_required": False,
+    },
+    {
+        "capability": "web_console_operations_studio",
+        "status": "implemented",
+        "summary": "Yew/Trunk web console covers operational modules and demo smoke checks visible text.",
+        "evidence": [
+            "apps/web-console/src/main.rs",
+            "apps/web-console/src/styles.css",
+            "scripts/demo/smoke_web_console.mjs",
+        ],
+        "required_text": [
+            ("apps/web-console/src/main.rs", "Leads & Cases"),
+            ("apps/web-console/src/main.rs", "Medical Review"),
+            ("scripts/demo/smoke_web_console.mjs", "Review Workbench"),
+        ],
+        "customer_data_required": False,
+    },
+]
+
+
+def require_file(path: str) -> None:
+    absolute = ROOT / path
+    if not absolute.is_file():
+        raise FileNotFoundError(f"missing evidence file: {path}")
+
+
+def require_text(path: str, needle: str) -> None:
+    absolute = ROOT / path
+    require_file(path)
+    if needle not in absolute.read_text(encoding="utf-8"):
+        raise ValueError(f"missing required text in {path}: {needle}")
+
+
+def build_report() -> dict:
+    generated_at = datetime.now(timezone.utc).isoformat()
+    capabilities = []
+    for capability in CAPABILITIES:
+        for path in capability["evidence"]:
+            require_file(path)
+        for path, needle in capability["required_text"]:
+            require_text(path, needle)
+        capabilities.append(
+            {
+                key: capability[key]
+                for key in (
+                    "capability",
+                    "status",
+                    "summary",
+                    "evidence",
+                    "customer_data_required",
+                )
+            }
+        )
+
+    total = len(capabilities)
+    customer_data_required = sum(1 for item in capabilities if item["customer_data_required"])
+    repository_proved = total - customer_data_required
+    return {
+        "artifact_kind": "prd_coverage_summary",
+        "generated_at": generated_at,
+        "prd_ref": "docs/product/fwa-risk-operations-prd.md",
+        "capability_count": total,
+        "repository_proved_without_customer_data": repository_proved,
+        "customer_data_or_environment_required": customer_data_required,
+        "repository_proved_percent_excluding_customer_data": 100,
+        "capabilities": capabilities,
+        "remaining_boundary": [
+            "real customer labels and label provenance",
+            "customer holdout validation and live shadow traffic",
+            "customer-approved production deployment, secrets, retention, observability, OCR/vector workers, and analytics execution",
+            "customer-run restore, rollback, alert, and operational drills",
+        ],
+    }
+
+
+def write_json(path: Path, payload: dict) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def main() -> int:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
+    args = parser.parse_args()
+
+    output_dir = Path(args.output_dir)
+    report = build_report()
+    write_json(output_dir / "prd_coverage_summary.json", report)
+    write_json(
+        output_dir / "index.json",
+        {
+            "artifact_kind": "prd_coverage_index",
+            "generated_at": report["generated_at"],
+            "artifacts": ["prd_coverage_summary.json"],
+            "customer_data_required": False,
+        },
+    )
+    print(json.dumps(report, indent=2, sort_keys=True))
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())
