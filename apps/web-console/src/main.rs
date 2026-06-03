@@ -2,11 +2,13 @@ use gloo_net::http::Request;
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 use std::collections::BTreeMap;
+use wasm_bindgen::{closure::Closure, JsCast};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
 const API_KEY_DEFAULT: &str = "dev-secret";
+const DEFAULT_MODULE: &str = "Dashboard";
 
 const NAV_SECTIONS: &[(&str, &[&str])] = &[
     (
@@ -24,6 +26,32 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
         &["Detection Controls", "Evidence Hub", "Governance"],
     ),
     ("MLOps", &["MLOps Workspace"]),
+];
+
+const ALL_MODULES: &[&str] = &[
+    "Claim Inbox",
+    "Dashboard",
+    "Runtime Scoring",
+    "Review Workbench",
+    "Bootstrap Ops",
+    "Detection Controls",
+    "Evidence Hub",
+    "MLOps Workspace",
+    "Evidence Runtime",
+    "Rules",
+    "Models",
+    "Routing Policies",
+    "Data Sources",
+    "Factor Factory",
+    "Leads & Cases",
+    "Member Profile",
+    "Provider Risk",
+    "Medical Review",
+    "Audit Sampling",
+    "Knowledge Base",
+    "Agent Investigator",
+    "QA Review",
+    "Governance",
 ];
 
 const CONTRACT_PANELS: &[&str] = &[
@@ -1682,11 +1710,44 @@ enum ApiState<T> {
 
 #[function_component(App)]
 fn app() -> Html {
-    let active = use_state(|| "Dashboard".to_string());
+    let active = use_state(active_module_from_location);
     let select_module = {
         let active = active.clone();
-        Callback::from(move |module: String| active.set(module))
+        Callback::from(move |module: String| {
+            if is_known_module(&module) {
+                set_module_hash(&module);
+                active.set(module);
+            }
+        })
     };
+
+    {
+        let active = active.clone();
+        use_effect_with((), move |_| {
+            let listener = web_sys::window().and_then(|window| {
+                let active = active.clone();
+                let callback =
+                    Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_| {
+                        active.set(active_module_from_location());
+                    }));
+                window
+                    .add_event_listener_with_callback(
+                        "hashchange",
+                        callback.as_ref().unchecked_ref(),
+                    )
+                    .ok()?;
+                Some((window, callback))
+            });
+            move || {
+                if let Some((window, callback)) = listener {
+                    let _ = window.remove_event_listener_with_callback(
+                        "hashchange",
+                        callback.as_ref().unchecked_ref(),
+                    );
+                }
+            }
+        });
+    }
 
     html! {
         <div class="app">
@@ -1801,6 +1862,71 @@ fn workspace_system_map(active: &str, on_navigate: Callback<String>) -> Html {
             {system_map_stage("Govern", "Audit trail", "Policy + approval", "pilot ready", "Governance", "govern", active, &on_navigate)}
             {system_map_stage("Value", "Value proof", "Savings evidence", "dashboard", "Dashboard", "value", active, &on_navigate)}
         </section>
+    }
+}
+
+fn active_module_from_location() -> String {
+    web_sys::window()
+        .and_then(|window| window.location().hash().ok())
+        .and_then(|hash| module_from_hash(&hash))
+        .unwrap_or_else(|| DEFAULT_MODULE.to_string())
+}
+
+fn set_module_hash(module: &str) {
+    let Some(window) = web_sys::window() else {
+        return;
+    };
+    let slug = module_slug(module);
+    if window
+        .location()
+        .hash()
+        .map(|hash| hash == format!("#{slug}"))
+        .unwrap_or(false)
+    {
+        return;
+    }
+    let _ = window.location().set_hash(slug);
+}
+
+fn module_from_hash(hash: &str) -> Option<String> {
+    let slug = hash.trim_start_matches('#');
+    ALL_MODULES
+        .iter()
+        .copied()
+        .find(|module| module_slug(module) == slug)
+        .map(str::to_string)
+}
+
+fn is_known_module(module: &str) -> bool {
+    ALL_MODULES.contains(&module)
+}
+
+fn module_slug(module: &str) -> &'static str {
+    match module {
+        "Claim Inbox" => "claim-inbox",
+        "Dashboard" => "dashboard",
+        "Runtime Scoring" => "runtime-scoring",
+        "Review Workbench" => "review-workbench",
+        "Bootstrap Ops" => "bootstrap-ops",
+        "Detection Controls" => "detection-controls",
+        "Evidence Hub" => "evidence-hub",
+        "MLOps Workspace" => "mlops-workspace",
+        "Evidence Runtime" => "evidence-runtime",
+        "Rules" => "rules",
+        "Models" => "models",
+        "Routing Policies" => "routing-policies",
+        "Data Sources" => "data-sources",
+        "Factor Factory" => "factor-factory",
+        "Leads & Cases" => "leads-cases",
+        "Member Profile" => "member-profile",
+        "Provider Risk" => "provider-risk",
+        "Medical Review" => "medical-review",
+        "Audit Sampling" => "audit-sampling",
+        "Knowledge Base" => "knowledge-base",
+        "Agent Investigator" => "agent-investigator",
+        "QA Review" => "qa-review",
+        "Governance" => "governance",
+        _ => "dashboard",
     }
 }
 

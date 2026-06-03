@@ -98,6 +98,8 @@ async function main() {
     assertContains(builtText, "Daily Work", "web console navigation bundle");
     assertContains(builtText, "Control Rooms", "web console navigation bundle");
     assertContains(builtText, "MLOps Workspace", "web console navigation bundle");
+    assertContains(builtText, "hashchange", "web console browser history bundle");
+    assertContains(builtText, "leads-cases", "web console browser history bundle");
     assertContains(builtText, "Bootstrap Ops", "web console navigation bundle");
     assertContains(builtText, "Historical Replay", "web console bootstrap ops bundle");
     assertContains(builtText, "Evidence Requests", "web console bootstrap ops bundle");
