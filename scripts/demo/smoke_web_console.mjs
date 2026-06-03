@@ -124,12 +124,12 @@ async function main() {
     assertContains(builtText, "Detection Controls", "web console navigation bundle");
     assertContains(builtText, "Evidence Hub", "web console navigation bundle");
     assertContains(builtText, "Real-time operations", "web console workspace bundle");
-    assertContains(builtText, "7-layer engine", "web console global system map bundle");
+    assertContains(builtText, "Scored leads", "web console global system map bundle");
     assertContains(builtText, "Human gate", "web console global system map bundle");
     assertContains(builtText, "Audit trail", "web console global system map bundle");
     assertContains(builtText, "Value proof", "web console global system map bundle");
-    assertContains(builtText, "peer benchmark", "web console seven-layer visual bundle");
-    assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
+    assertContains(builtText, "Risk Signal Breakdown", "web console risk signal visual bundle");
+    assertContains(builtText, "downstream human queue", "web console risk signal visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
     assertContains(builtText, "Value status", "web console dashboard value wording bundle");
@@ -144,11 +144,14 @@ async function main() {
     assertContains(builtText, "click to work", "web console dashboard visual bundle");
     assertContains(builtText, "FWA operating map", "web console dashboard topology bundle");
     assertContains(builtText, "PRD runtime topology", "web console dashboard topology bundle");
-    assertContains(builtText, "Risk Fusion", "web console dashboard topology bundle");
-    assertContains(builtText, "Claim packet", "web console runtime illustration bundle");
-    assertContains(builtText, "Illustrated Signal Map", "web console runtime signal illustration bundle");
-    assertContains(builtText, "Assistive boundary", "web console human gate illustration bundle");
-    assertContains(builtText, "Score", "web console dashboard queue bundle");
+    assertContains(builtText, "Risk scoring service", "web console dashboard topology bundle");
+    assertContains(builtText, "rules + risk mix", "web console dashboard topology bundle");
+    assertContains(builtText, "human queue", "web console dashboard topology bundle");
+    assertNotContains(builtText, "L2 rule hit", "web console dashboard topology bundle");
+    assertContains(builtText, "Input Contract", "web console runtime illustration bundle");
+    assertContains(builtText, "Signal Contract Map", "web console runtime signal illustration bundle");
+    assertContains(builtText, "This page validates runtime output", "web console human gate illustration bundle");
+    assertContains(builtText, "Triage", "web console dashboard queue bundle");
     assertContains(builtText, "Investigate", "web console dashboard queue bundle");
     assertContains(builtText, "Review", "web console dashboard queue bundle");
     assertContains(builtText, "Govern", "web console dashboard queue bundle");
@@ -202,10 +205,10 @@ async function main() {
     for (const expectedPanel of [
       "Management Dashboard",
       "Executive KPIs",
-      "Claim Scoring API",
+      "Integration Tool",
       "Scoring Request",
-      "Scoring Decision",
-      "Seven-Layer Runtime Scores",
+      "Scoring Response",
+      "Risk Signal Breakdown",
       "Alerts And Top Reasons",
       "Model Output",
       "Evidence And Agent Prefill",

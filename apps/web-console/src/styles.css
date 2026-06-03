@@ -1165,6 +1165,10 @@ pre {
   border-radius: 8px;
 }
 
+.blueprint-layer-rail.contract-flow {
+  grid-template-columns: repeat(5, minmax(126px, 1fr));
+}
+
 .blueprint-layer-rail::before {
   content: "";
   position: absolute;
@@ -1676,6 +1680,14 @@ pre {
   padding: 4px 2px 8px;
 }
 
+.signal-score-grid {
+  grid-template-columns: repeat(4, minmax(132px, 1fr));
+}
+
+.signal-score-grid .risk-node:not(:last-child)::after {
+  display: none;
+}
+
 .dashboard-risk-flow {
   grid-template-columns: repeat(7, minmax(112px, 1fr));
 }
@@ -1977,7 +1989,7 @@ pre {
 .ops-system-map {
   position: relative;
   display: grid;
-  grid-template-columns: repeat(7, minmax(0, 1fr));
+  grid-template-columns: 1fr 1.35fr 1fr 1fr 1fr 1fr;
   gap: 10px;
   overflow: hidden;
   padding: 16px;

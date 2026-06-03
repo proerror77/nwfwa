@@ -14,8 +14,8 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
     (
         "Daily Work",
         &[
+            "Claim Inbox",
             "Dashboard",
-            "Runtime Scoring",
             "Leads & Cases",
             "Review Workbench",
             "Bootstrap Ops",
@@ -23,7 +23,12 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
     ),
     (
         "Control Rooms",
-        &["Detection Controls", "Evidence Hub", "Governance"],
+        &[
+            "Detection Controls",
+            "Runtime Scoring",
+            "Evidence Hub",
+            "Governance",
+        ],
     ),
     ("MLOps", &["MLOps Workspace"]),
 ];
@@ -1856,7 +1861,7 @@ fn workspace_system_map(active: &str, on_navigate: Callback<String>) -> Html {
             <div class="system-map-rail"></div>
             <div class="system-map-pulse"></div>
             {system_map_stage("Intake", "Claim Inbox", "TPA packet", "canonical claim", "Claim Inbox", "intake", active, &on_navigate)}
-            {system_map_stage("Detect", "7-layer engine", "Rules + ML + graph", "risk score", "Runtime Scoring", "detect", active, &on_navigate)}
+            {system_map_stage("Detect", "Scored leads", "Rules + model + policy", "human queue", "Leads & Cases", "detect", active, &on_navigate)}
             {system_map_stage("Review", "Human gate", "Medical + QA", "no auto denial", "Review Workbench", "review", active, &on_navigate)}
             {system_map_stage("Evidence", "Case context", "Member / provider / KB", "trace refs", "Evidence Hub", "evidence", active, &on_navigate)}
             {system_map_stage("Govern", "Audit trail", "Policy + approval", "pilot ready", "Governance", "govern", active, &on_navigate)}
@@ -1971,7 +1976,9 @@ fn module_context(module: &str) -> &'static str {
     match module {
         "Claim Inbox" => "Normalize TPA claim payloads into governed canonical intake.",
         "Dashboard" => "Choose the next operational action from live risk and review queues.",
-        "Runtime Scoring" => "Score a claim and route the result into case or review workflow.",
+        "Runtime Scoring" => {
+            "Validate the scoring API contract, routing policy, evidence refs, and audit IDs."
+        }
         "Review Workbench" => "Resolve clinical and QA review queues from one place.",
         "Bootstrap Ops" => {
             "Replay historical leads, request missing evidence, and govern bootstrap labels."
@@ -2010,7 +2017,7 @@ fn module_description(module: &str) -> &'static str {
     match module {
         "Claim Inbox" => "TPA intake",
         "Dashboard" => "next action",
-        "Runtime Scoring" => "score & route",
+        "Runtime Scoring" => "contract check",
         "Review Workbench" => "medical + QA",
         "Bootstrap Ops" => "labels + evidence",
         "Detection Controls" => "rules + models",
@@ -3301,9 +3308,9 @@ fn runtime_scoring_page() -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Runtime Scoring"}</h2>
-                    <p>{"Run a claim through the seven-layer FWA engine and inspect routing, evidence, alerts, model output, and Agent prefill."}</p>
+                    <p>{"Validate the claim scoring contract and inspect audit-backed routing output. Business reviewers should work from Claim Inbox, Leads & Cases, or Review Workbench."}</p>
                 </div>
-                <span class="status-pill">{"Claim Scoring API"}</span>
+                <span class="status-pill">{"Integration Tool"}</span>
             </div>
 
             {runtime_scoring_blueprint()}
@@ -3312,7 +3319,7 @@ fn runtime_scoring_page() -> Html {
                 <section class="panel result-stack">
                     <h3>{"Scoring Request"}</h3>
                     <label>
-                        {"API key"}
+                        {"Dev API key"}
                         <input
                             value={(*api_key).clone()}
                             oninput={{
@@ -3342,7 +3349,7 @@ fn runtime_scoring_page() -> Html {
                     </label>
                     <div class="button-row">
                         <button onclick={score} disabled={matches!(&*score_state, ApiState::Loading)}>
-                            {if matches!(&*score_state, ApiState::Loading) { "Scoring..." } else { "Score claim" }}
+                            {if matches!(&*score_state, ApiState::Loading) { "Validating..." } else { "Validate scoring contract" }}
                         </button>
                     </div>
                 </section>
@@ -3362,10 +3369,10 @@ struct RuntimeScoreProps {
 fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
     html! {
         <section class="panel result-stack">
-            <h3>{"Scoring Decision"}</h3>
+            <h3>{"Scoring Response"}</h3>
             {match &props.state {
-                ApiState::Idle => html! { <p class="empty">{"Score a stored claim or full payload to inspect runtime output."}</p> },
-                ApiState::Loading => html! { <p>{"Scoring claim..."}</p> },
+                ApiState::Idle => html! { <p class="empty">{"Submit a stored claim or full payload to validate response shape, route, audit trace, and evidence references."}</p> },
+                ApiState::Loading => html! { <p>{"Validating scoring contract..."}</p> },
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
                 ApiState::Ready(response) => html! {
                     <>
@@ -3386,12 +3393,12 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                         </div>
                         <p class="empty">{response.routing_reason.as_deref().unwrap_or("No routing reason returned.")}</p>
 
-                        <h4>{"Seven-Layer Runtime Scores"}</h4>
+                        <h4>{"Risk Signal Breakdown"}</h4>
                         {runtime_score_breakdown(response)}
                         <div class="factor-card-grid">
                             {for response.layers.iter().map(|layer| html! {
                                 <div class="metric-row">
-                                    <span>{format!("{} / {}", layer.layer_id, layer.name)}</span>
+                                    <span>{runtime_layer_business_label(layer)}</span>
                                     <strong>{format!("{} / {}", layer.score, layer.status)}</strong>
                                     <small>{&layer.reason}</small>
                                     <small>{format!("evidence: {}", value_refs_label(&layer.evidence_refs))}</small>
@@ -3451,8 +3458,8 @@ fn runtime_scoring_blueprint() -> Html {
     html! {
         <section class="panel scoring-blueprint-shell">
             <div class="blueprint-claim-card">
-                <span>{"Claim packet"}</span>
-                <strong>{"TPA payload + evidence refs"}</strong>
+                <span>{"Input Contract"}</span>
+                <strong>{"Stored claim ID or canonical claim payload"}</strong>
                 <div class="blueprint-document">
                     <i class="wide"></i>
                     <i></i>
@@ -3460,19 +3467,17 @@ fn runtime_scoring_blueprint() -> Html {
                     <b></b>
                 </div>
             </div>
-            <div class="blueprint-layer-rail" aria-label="Seven-layer FWA runtime illustration">
-                {blueprint_layer("L1", "Peer", "amount / stay / frequency", "peer")}
-                {blueprint_layer("L2", "Rules", "deterministic controls", "rules")}
-                {blueprint_layer("L3", "Anomaly", "rare pattern", "anomaly")}
-                {blueprint_layer("L4", "ML", "baseline classifier", "ml")}
-                {blueprint_layer("L5", "Medical", "necessity check", "medical")}
-                {blueprint_layer("L6", "Graph", "provider network", "graph")}
-                {blueprint_layer("L7", "Route", "human gate", "route")}
+            <div class="blueprint-layer-rail contract-flow" aria-label="Scoring contract validation flow">
+                {blueprint_layer("Request", "Contract", "required IDs, payload shape, tenant scope", "peer")}
+                {blueprint_layer("Signals", "Risk context", "rules, model, provider, clinical evidence", "rules")}
+                {blueprint_layer("Policy", "Routing", "manual review, case creation, or watchlist", "ml")}
+                {blueprint_layer("Audit", "Trace", "run_id, audit_id, evidence_refs", "medical")}
+                {blueprint_layer("Queue", "Human work", "reviewers decide; system never denies alone", "route")}
             </div>
             <div class="blueprint-human-card">
-                <span>{"Assistive boundary"}</span>
-                <strong>{"Agent prepares evidence, humans decide"}</strong>
-                <small>{"Every score keeps run_id, audit_id, route, reason, and evidence_refs."}</small>
+                <span>{"Boundary"}</span>
+                <strong>{"This page validates runtime output; it is not the claim adjudication desk."}</strong>
+                <small>{"Every response must carry route, reason, run_id, audit_id, and evidence_refs."}</small>
             </div>
         </section>
     }
@@ -3510,17 +3515,17 @@ fn runtime_decision_visual(response: &ScoreResponse) -> Html {
                     </div>
                 </div>
                 <div class="risk-gauge-meta">
-                    <span>{"L7 route"}</span>
+                    <span>{"Routing outcome"}</span>
                     <strong>{response.recommended_action.as_deref().unwrap_or("MANUAL_REVIEW")}</strong>
                     <small>{format!("{} / {}", rag, response.confidence.as_deref().unwrap_or("confidence pending"))}</small>
                 </div>
             </div>
             <div class="runtime-path-card">
-                {runtime_path_node("Input", "claim payload", &response.claim_id)}
-                {runtime_path_node("Detect", "7 layers", &format!("{} layer outputs", response.layers.len()))}
+                {runtime_path_node("Request", "claim contract", &response.claim_id)}
+                {runtime_path_node("Signals", "risk outputs", &format!("{} signals", response.layers.len()))}
                 {runtime_path_node("Explain", "alerts + reasons", &format!("{} alerts", response.alerts.len()))}
-                {runtime_path_node("Evidence", "trace refs", &format!("{evidence_count} refs"))}
-                {runtime_path_node("Human", "bounded action", response.review_mode.as_deref().unwrap_or("review"))}
+                {runtime_path_node("Audit", "trace refs", &format!("{evidence_count} refs"))}
+                {runtime_path_node("Queue", "human action", response.review_mode.as_deref().unwrap_or("review"))}
             </div>
         </div>
     }
@@ -3549,11 +3554,11 @@ fn runtime_signal_map(response: &ScoreResponse) -> Html {
     html! {
         <div class="runtime-signal-map">
             <div class="signal-map-core">
-                <span>{"Illustrated Signal Map"}</span>
+                <span>{"Signal Contract Map"}</span>
                 <strong>{&response.claim_id}</strong>
-                <small>{response.routing_reason.as_deref().unwrap_or("route after L7 fusion")}</small>
+                <small>{response.routing_reason.as_deref().unwrap_or("policy route pending")}</small>
             </div>
-            {runtime_signal_node("Peer + rules", &format!("{} alerts", response.alerts.len()), "controls")}
+            {runtime_signal_node("Controls", &format!("{} alerts", response.alerts.len()), "controls")}
             {runtime_signal_node("Model", &model_label, "model")}
             {runtime_signal_node("Clinical", &clinical_signal, "clinical")}
             {runtime_signal_node("Provider graph", &provider_signal, "graph")}
@@ -3569,6 +3574,19 @@ fn runtime_signal_node(label: &str, value: &str, tone: &str) -> Html {
             <span>{label}</span>
             <strong>{value}</strong>
         </div>
+    }
+}
+
+fn runtime_layer_business_label(layer: &RuntimeLayerScore) -> String {
+    match layer.layer_id.as_str() {
+        "L1" => format!("Peer benchmark signal / {}", layer.name),
+        "L2" => format!("Deterministic control signal / {}", layer.name),
+        "L3" => format!("Anomaly signal / {}", layer.name),
+        "L4" => format!("Model signal / {}", layer.name),
+        "L5" => format!("Clinical reasonableness signal / {}", layer.name),
+        "L6" => format!("Provider network signal / {}", layer.name),
+        "L7" => format!("Routing policy output / {}", layer.name),
+        _ => layer.name.clone(),
     }
 }
 
@@ -3706,10 +3724,10 @@ fn dashboard_view(props: &DashboardProps) -> Html {
 }
 
 fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<String>) -> Html {
-    let layer_label = if summary.layer_scores.is_empty() {
-        "no layer evidence".into()
+    let signal_label = if summary.layer_scores.is_empty() {
+        "no signal evidence".into()
     } else {
-        format!("{} layers active", summary.layer_scores.len())
+        format!("{} risk signals", summary.layer_scores.len())
     };
     let qa_work = summary.qa_queue.open_cases + summary.qa_queue.unresolved_feedback_count;
     let audit_label = percent_label(summary.audit_coverage.canonical_trace_coverage);
@@ -3726,7 +3744,7 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
                 <div class="runway-line"></div>
                 {pilot_runway_step("Principal", "Scoped API key", "actor + customer scope", "Claim Inbox", "source", on_navigate)}
                 {pilot_runway_step("Inbox", &summary.suspected_claims.to_string(), "normalized claims", "Claim Inbox", "intake", on_navigate)}
-                {pilot_runway_step("Score", &layer_label, &map_counts_label(&summary.rag_distribution), "Runtime Scoring", "score", on_navigate)}
+                {pilot_runway_step("Risk", &signal_label, &map_counts_label(&summary.rag_distribution), "Leads & Cases", "score", on_navigate)}
                 {pilot_runway_step("Case", &summary.case_sla.open_cases.to_string(), "open investigations", "Leads & Cases", "case", on_navigate)}
                 {pilot_runway_step("QA", &qa_work.to_string(), "open QA + feedback", "Review Workbench", "qa", on_navigate)}
                 {pilot_runway_step("Audit", &audit_label, "canonical trace coverage", "Governance", "audit", on_navigate)}
@@ -10321,15 +10339,15 @@ fn value_refs_label(refs: &[Value]) -> String {
 fn runtime_score_breakdown(response: &ScoreResponse) -> Html {
     if let Some(scores) = &response.scores {
         html! {
-            <div class="risk-flow">
-                {risk_node("L1", "Peer", &scores.peer_deviation_score.to_string(), "peer benchmark")}
-                {risk_node("L2", "Rules", &scores.rule_score.to_string(), "deterministic controls")}
-                {risk_node("L3", "Anomaly", &scores.anomaly_score.to_string(), "unsupervised signal")}
-                {risk_node("L4", "ML", &scores.ml_score.to_string(), "baseline classifier")}
-                {risk_node("L5", "Medical", &scores.medical_reasonableness_score.to_string(), "clinical necessity")}
-                {risk_node("L6", "Provider", &scores.provider_network_score.to_string(), "network risk")}
-                {risk_node("KB", "Similar", &scores.similar_case_score.to_string(), "case memory")}
-                {risk_node("L7", "Final", &scores.final_score.to_string(), "fusion route")}
+            <div class="risk-flow signal-score-grid">
+                {risk_node("Peer", "Deviation", &scores.peer_deviation_score.to_string(), "claim amount / stay / frequency")}
+                {risk_node("Rules", "Controls", &scores.rule_score.to_string(), "deterministic policy checks")}
+                {risk_node("Anomaly", "Pattern", &scores.anomaly_score.to_string(), "rare utilization behavior")}
+                {risk_node("Model", "Classifier", &scores.ml_score.to_string(), "trained runtime score")}
+                {risk_node("Clinical", "Necessity", &scores.medical_reasonableness_score.to_string(), "medical reasonableness")}
+                {risk_node("Provider", "Network", &scores.provider_network_score.to_string(), "relationship and graph risk")}
+                {risk_node("Knowledge", "Similar cases", &scores.similar_case_score.to_string(), "confirmed case memory")}
+                {risk_node("Route", "Policy score", &scores.final_score.to_string(), "downstream human queue")}
             </div>
         }
     } else {
@@ -10355,7 +10373,7 @@ fn operator_queue_snapshot(summary: &DashboardSummary, on_navigate: &Callback<St
                 <span class="status-token strong">{"click to work"}</span>
             </div>
             <div class="operator-queue">
-                {operator_queue_card("Score", &summary.suspected_claims.to_string(), "suspected claims", "Runtime Scoring", "danger", on_navigate)}
+                {operator_queue_card("Triage", &summary.suspected_claims.to_string(), "suspected leads", "Leads & Cases", "danger", on_navigate)}
                 {operator_queue_card("Investigate", &summary.case_sla.open_cases.to_string(), "open cases", "Leads & Cases", "warning", on_navigate)}
                 {operator_queue_card("Review", &summary.qa_queue.open_cases.to_string(), "open QA samples", "Review Workbench", "strong", on_navigate)}
                 {operator_queue_card("Govern", &percent_label(summary.audit_coverage.canonical_trace_coverage), "trace coverage", "Governance", "success", on_navigate)}
@@ -10390,6 +10408,15 @@ fn operator_queue_card(
 }
 
 fn dashboard_operations_map(summary: &DashboardSummary) -> Html {
+    let review_label = format!(
+        "{} cases / {} QA",
+        summary.case_sla.open_cases, summary.qa_queue.open_cases
+    );
+    let engine_label = format!(
+        "rules + risk mix: {} / {}",
+        summary.rule_hits,
+        map_counts_label(&summary.rag_distribution)
+    );
     html! {
         <div class="ops-system-map-shell">
             <div class="panel-heading-row compact-heading-row">
@@ -10398,15 +10425,14 @@ fn dashboard_operations_map(summary: &DashboardSummary) -> Html {
             </div>
             <div class="ops-system-map">
                 {ops_map_node("TPA", "claim intake", &summary.suspected_claims.to_string(), "source")}
-                {ops_map_node("Rules", "L2 rule hit", &summary.rule_hits.to_string(), "layer")}
                 <div class="ops-map-core">
-                    <span>{"L7"}</span>
-                    <strong>{"Risk Fusion"}</strong>
-                    <small>{map_counts_label(&summary.rag_distribution)}</small>
+                    <span>{"Detect"}</span>
+                    <strong>{"Risk scoring service"}</strong>
+                    <small>{engine_label}</small>
                 </div>
-                {ops_map_node("Agent", "evidence pack", &format!("{} runs", summary.agent_governance.total_runs), "agent")}
-                {ops_map_node("QA", "feedback loop", &format!("{} open", summary.qa_queue.open_cases), "qa")}
-                {ops_map_node("Audit", "trace coverage", &percent_label(summary.audit_coverage.canonical_trace_coverage), "audit")}
+                {ops_map_node("Review", "human queue", &review_label, "qa")}
+                {ops_map_node("Evidence", "assistive pack", &format!("{} runs", summary.agent_governance.total_runs), "agent")}
+                {ops_map_node("Audit", "trace + approval", &percent_label(summary.audit_coverage.canonical_trace_coverage), "audit")}
                 {ops_map_node("Savings", "confirmation gate", &summary.saving_amount, "roi")}
             </div>
         </div>
