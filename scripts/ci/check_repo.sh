@@ -515,6 +515,9 @@ grep -q "CARGO_INCREMENTAL=0" apps/web-console/Dockerfile
 grep -q "NO_COLOR=false trunk build --locked" apps/web-console/Dockerfile
 grep -q "COPY apps/web-console/nginx.conf /etc/nginx/conf.d/default.conf" apps/web-console/Dockerfile
 grep -q "listen 8081;" apps/web-console/nginx.conf
+grep -q "location = /" apps/web-console/nginx.conf
+grep -q "try_files /index.html =404;" apps/web-console/nginx.conf
+grep -q 'try_files $uri /index.html;' apps/web-console/nginx.conf
 grep -q "proxy_pass http://api-server:8080/api/;" apps/web-console/nginx.conf
 grep -q "migrate-seed:" infra/docker-compose.yml
 grep -q "api-server:" infra/docker-compose.yml

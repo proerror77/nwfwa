@@ -44,7 +44,9 @@ REQUIRED_FILES = {
     ],
     "apps/web-console/nginx.conf": [
         "listen 8081;",
-        "try_files $uri $uri/ /index.html;",
+        "location = /",
+        "try_files /index.html =404;",
+        "try_files $uri /index.html;",
         "proxy_pass http://api-server:8080/api/;",
     ],
     "infra/docker-compose.yml": [
