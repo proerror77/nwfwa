@@ -931,7 +931,7 @@ pub fn build_mlops_monitoring_plan(
 
     Ok(serde_json::json!({
         "plan_kind": "scheduled_mlops_monitoring",
-        "plan_version": 1,
+        "plan_version": 2,
         "data_contract": {
             "source": "same_parquet_dataset_manifest",
             "manifest_uri": manifest_uri
@@ -962,6 +962,18 @@ pub fn build_mlops_monitoring_plan(
                 "input": "customer_approved_segments",
                 "output_ref": "model_fairness_reports:<fairness_report_uri>",
                 "fairness_report_uri": format!("{artifact_dir}/fairness_report.json")
+            },
+            {
+                "job_kind": "reviewer_disagreement_review",
+                "input": "qa_reviews_and_investigation_outcomes",
+                "output_ref": "model_reviewer_disagreement_reports:<reviewer_disagreement_report_uri>",
+                "reviewer_disagreement_report_uri": format!("{artifact_dir}/reviewer_disagreement_report.json")
+            },
+            {
+                "job_kind": "label_delay_review",
+                "input": "scoring_runs_and_outcome_label_timestamps",
+                "output_ref": "model_label_delay_reports:<label_delay_report_uri>",
+                "label_delay_report_uri": format!("{artifact_dir}/label_delay_report.json")
             }
         ]
     }))
@@ -1632,6 +1644,7 @@ mod tests {
         .expect("mlops monitoring plan");
 
         assert_eq!(plan["plan_kind"], "scheduled_mlops_monitoring");
+        assert_eq!(plan["plan_version"], 2);
         assert_eq!(plan["model"]["model_key"], "baseline_fwa");
         assert_eq!(plan["model"]["model_version"], "0.2.0");
         assert_eq!(plan["schedule"]["cron"], "0 2 * * *");
@@ -1642,9 +1655,19 @@ mod tests {
         assert_eq!(plan["jobs"][0]["job_kind"], "shadow_traffic_evaluation");
         assert_eq!(plan["jobs"][1]["job_kind"], "drift_monitoring");
         assert_eq!(plan["jobs"][2]["job_kind"], "segment_fairness_review");
+        assert_eq!(plan["jobs"][3]["job_kind"], "reviewer_disagreement_review");
+        assert_eq!(plan["jobs"][4]["job_kind"], "label_delay_review");
         assert_eq!(
             plan["jobs"][1]["drift_report_uri"],
             "s3://fwa-models/baseline_fwa/0.2.0/drift_report.json"
+        );
+        assert_eq!(
+            plan["jobs"][3]["reviewer_disagreement_report_uri"],
+            "s3://fwa-models/baseline_fwa/0.2.0/reviewer_disagreement_report.json"
+        );
+        assert_eq!(
+            plan["jobs"][4]["label_delay_report_uri"],
+            "s3://fwa-models/baseline_fwa/0.2.0/label_delay_report.json"
         );
     }
 

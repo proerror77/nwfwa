@@ -195,8 +195,12 @@ grep -q "build-training-handoff" apps/worker/src/main.rs
 grep -q "build-mlops-monitoring-plan" apps/worker/src/main.rs
 grep -q "scheduled_mlops_monitoring" apps/worker/src/lib.rs
 grep -q "shadow_traffic_evaluation" apps/worker/src/lib.rs
+grep -q "reviewer_disagreement_review" apps/worker/src/lib.rs
+grep -q "label_delay_review" apps/worker/src/lib.rs
 grep -q "build-training-handoff" docs/project/ml-pipeline-runbook.md
 grep -q "build-mlops-monitoring-plan" docs/project/ml-pipeline-runbook.md
+grep -q "reviewer_disagreement_review" docs/project/ml-pipeline-runbook.md
+grep -q "label_delay_review" docs/project/ml-pipeline-runbook.md
 grep -q "FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND" scripts/demo/smoke_demo.py
 grep -q "Rust serving exports should use rust_serving_artifact.json" apps/api-server/src/routes/openapi.rs
 grep -q "Public Data MVP Pack" docs/project/public-data-mvp.md

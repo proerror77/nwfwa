@@ -380,8 +380,8 @@ uv run --project apps/ml-service \
 
 The generated manifest can be profiled and trained by the existing worker and
 ML commands. It validates schema, Parquet splits, weak-label training flow, Rust
-artifact export, and MLOps handoff contracts; it is not customer production
-model evidence.
+artifact export, and MLOps handoff and monitoring contracts; it is not customer
+production model evidence.
 
 ### ML Operations Commands
 

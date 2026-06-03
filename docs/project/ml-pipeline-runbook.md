@@ -297,9 +297,10 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
   --cron "0 2 * * *"
 ```
 
-The output is a `scheduled_mlops_monitoring` plan with three jobs:
+The output is a `scheduled_mlops_monitoring` plan with five jobs:
 `shadow_traffic_evaluation`, `drift_monitoring`, and
-`segment_fairness_review`. It is intentionally a plan document, not a built-in
+`segment_fairness_review`, `reviewer_disagreement_review`, and
+`label_delay_review`. It is intentionally a plan document, not a built-in
 scheduler, so customer or platform schedulers can run it without giving the
 application direct control over production ML infrastructure.
 
@@ -457,11 +458,12 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
   --cron "0 2 * * *"
 ```
 
-The generated plan contains shadow traffic evaluation, drift monitoring, and
-segment fairness review jobs. It uses the same governed Parquet dataset
-manifest and derives the expected report URIs from the active serving artifact
-location. A production scheduler should execute the plan and publish the
-resulting reports back into the model governance evidence set.
+The generated plan contains shadow traffic evaluation, drift monitoring,
+segment fairness review, reviewer disagreement review, and label delay review
+jobs. It uses the same governed Parquet dataset manifest and derives the
+expected report URIs from the active serving artifact location. A production
+scheduler should execute the plan and publish the resulting reports back into
+the model governance evidence set.
 
 ## Stage 12: Retraining Or Rollback
 

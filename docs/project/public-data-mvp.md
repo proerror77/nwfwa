@@ -139,6 +139,11 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
   --cron "0 2 * * *"
 ```
 
+The monitoring plan remains a contract for an external scheduler. For public
+data it proves the report URI and job-shape contract only; reviewer
+disagreement and label delay need customer QA and outcome timestamps before
+their metrics are meaningful.
+
 ## Production Interpretation
 
 The public-data MVP pack closes the engineering loop. It proves the data shape,

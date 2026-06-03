@@ -211,6 +211,9 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
   --cron "0 2 * * *"
 ```
 
+The generated plan covers shadow traffic evaluation, score and feature drift,
+segment fairness review, reviewer disagreement review, and label delay review.
+
 Frontend:
 
 ```bash
