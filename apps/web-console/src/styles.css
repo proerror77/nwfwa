@@ -864,7 +864,7 @@ pre {
 .field-table-head,
 .field-row {
   display: grid;
-  grid-template-columns: minmax(220px, 1.35fr) minmax(200px, 1fr) 112px minmax(160px, 0.85fr);
+  grid-template-columns: minmax(150px, 1.4fr) minmax(130px, 1fr) 96px minmax(96px, 0.85fr);
   gap: 10px;
   align-items: center;
 }
@@ -1032,13 +1032,33 @@ pre {
   }
 
   .sidebar {
-    position: relative;
-    height: auto;
-    max-height: none;
+    position: sticky;
+    top: 0;
+    z-index: 4;
+    height: 42vh;
+    max-height: 380px;
+    min-height: 280px;
+    overflow: auto;
+    padding: 12px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.14);
+  }
+
+  .brand-block {
+    padding: 8px 8px 12px;
+  }
+
+  .brand-block h1 {
+    font-size: 20px;
   }
 
   .module-nav {
     grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .module-nav button {
+    min-height: 42px;
+    padding: 7px 9px;
   }
 
   .workspace {
