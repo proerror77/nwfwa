@@ -3966,6 +3966,173 @@ pre {
   margin: 0;
 }
 
+.agent-blueprint-cockpit {
+  display: grid;
+  grid-template-columns: minmax(210px, 0.78fr) minmax(500px, 1.62fr) minmax(220px, 0.82fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.agent-blueprint-brief,
+.agent-blueprint-guardrail {
+  padding: 16px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+}
+
+.agent-blueprint-brief > span,
+.agent-blueprint-guardrail > span,
+.agent-blueprint-node span,
+.agent-blueprint-core span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-blueprint-brief > strong {
+  display: block;
+  margin-top: 8px;
+  color: #102f58;
+  font-size: 18px;
+  line-height: 1.18;
+}
+
+.agent-blueprint-brief dl {
+  margin: 16px 0 0;
+}
+
+.agent-blueprint-guardrail p {
+  margin: 14px 0 0;
+  color: #4f6280;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.agent-blueprint-map {
+  position: relative;
+  min-height: 330px;
+  overflow: hidden;
+  padding: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(242, 247, 255, 0.98)),
+    radial-gradient(circle at 50% 48%, rgba(20, 111, 207, 0.13), transparent 52%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: var(--shadow-soft);
+}
+
+.agent-blueprint-rail {
+  position: absolute;
+  inset: 92px 78px 92px;
+  border: 1px solid #c9d9ef;
+  border-radius: 999px;
+}
+
+.agent-blueprint-rail::before,
+.agent-blueprint-rail::after {
+  position: absolute;
+  left: 50%;
+  width: 2px;
+  height: 100%;
+  background: #c9d9ef;
+  content: "";
+  transform: translateX(-50%);
+}
+
+.agent-blueprint-rail::after {
+  width: 100%;
+  height: 2px;
+  top: 50%;
+  left: 0;
+  transform: translateY(-50%);
+}
+
+.agent-blueprint-node,
+.agent-blueprint-core {
+  position: absolute;
+  z-index: 2;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.agent-blueprint-node {
+  width: 158px;
+  min-height: 82px;
+  padding: 11px;
+  border-top: 4px solid var(--blue);
+}
+
+.agent-blueprint-node strong,
+.agent-blueprint-core strong {
+  display: block;
+  margin-top: 6px;
+  color: #0c315f;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.agent-blueprint-node small {
+  display: block;
+  margin-top: 7px;
+  color: #627391;
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.agent-blueprint-node.risk {
+  left: 5%;
+  top: 18%;
+  border-top-color: var(--red);
+}
+
+.agent-blueprint-node.evidence {
+  right: 5%;
+  top: 18%;
+  border-top-color: var(--blue);
+}
+
+.agent-blueprint-node.kb {
+  left: 5%;
+  bottom: 13%;
+  border-top-color: #1f8f54;
+}
+
+.agent-blueprint-node.qa {
+  right: 5%;
+  bottom: 13%;
+  border-top-color: #6f5bd5;
+}
+
+.agent-blueprint-node.gate {
+  left: 50%;
+  bottom: 5%;
+  border-top-color: var(--amber);
+  transform: translateX(-50%);
+}
+
+.agent-blueprint-core {
+  left: 50%;
+  top: 45%;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  padding: 14px;
+  text-align: center;
+  background: linear-gradient(180deg, #102f58 0%, #0b2344 100%);
+  border: 6px solid #dceaff;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.agent-blueprint-core span,
+.agent-blueprint-core strong {
+  color: #ffffff;
+}
+
 .agent-cockpit {
   display: grid;
   grid-template-columns: minmax(190px, 0.74fr) minmax(440px, 1.52fr) minmax(220px, 0.86fr);
@@ -5912,6 +6079,7 @@ pre {
   .model-monitoring-cockpit,
   .audit-sampling-cockpit,
   .routing-cockpit,
+  .agent-blueprint-cockpit,
   .agent-run-cockpit,
   .pilot-readiness-cockpit,
   .data-lineage-proof-grid,
@@ -6085,6 +6253,7 @@ pre {
   .model-monitoring-cockpit,
   .clinical-cockpit,
   .clinical-outcome-grid,
+  .agent-blueprint-cockpit,
   .agent-cockpit,
   .agent-run-cockpit,
   .knowledge-cockpit,
@@ -6108,6 +6277,7 @@ pre {
   .runtime-signal-map::after,
   .evidence-pipeline-rail::before,
   .evidence-runtime-map::before,
+  .agent-blueprint-rail,
   .rule-pack-link,
   .model-monitoring-link {
     display: none;
@@ -6189,6 +6359,36 @@ pre {
 
   .agent-evidence-map {
     min-height: 600px;
+  }
+
+  .agent-blueprint-map {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 10px;
+    min-height: auto;
+  }
+
+  .agent-blueprint-node,
+  .agent-blueprint-core,
+  .agent-blueprint-node.risk,
+  .agent-blueprint-node.evidence,
+  .agent-blueprint-node.kb,
+  .agent-blueprint-node.qa,
+  .agent-blueprint-node.gate {
+    position: relative;
+    left: auto;
+    right: auto;
+    top: auto;
+    bottom: auto;
+    width: auto;
+    height: auto;
+    min-height: 86px;
+    transform: none;
+  }
+
+  .agent-blueprint-core {
+    min-height: 104px;
+    border-radius: 8px;
   }
 
   .agent-run-map {

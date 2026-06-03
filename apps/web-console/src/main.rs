@@ -6314,6 +6314,8 @@ fn agent_investigator_page() -> Html {
                 <span class="status-pill">{"Assistive Investigation"}</span>
             </div>
 
+            {agent_investigator_blueprint()}
+
             <section class="panel result-stack">
                 <h3>{"Investigation Request"}</h3>
                 <div class="form-grid">
@@ -6353,6 +6355,67 @@ fn agent_investigator_page() -> Html {
 
             <AgentInvestigationView state={(*investigation_state).clone()} />
             <AgentRunsView state={(*runs_state).clone()} />
+        </section>
+    }
+}
+
+fn agent_investigator_blueprint() -> Html {
+    html! {
+        <section class="agent-blueprint-cockpit" aria-label="Agent investigation blueprint">
+            <aside class="agent-blueprint-brief">
+                <span>{"Agent investigation blueprint"}</span>
+                <strong>{"assistive, evidence-bound, human-gated"}</strong>
+                <dl>
+                    <div><dt>{"Input"}</dt><dd>{"7-layer score + top reasons"}</dd></div>
+                    <div><dt>{"Tools"}</dt><dd>{"claims, rules, models, KB, documents"}</dd></div>
+                    <div><dt>{"Output"}</dt><dd>{"risk summary + checklist + QA draft"}</dd></div>
+                    <div><dt>{"Boundary"}</dt><dd>{"no auto denial"}</dd></div>
+                </dl>
+            </aside>
+            <div class="agent-blueprint-map">
+                <div class="agent-blueprint-rail"></div>
+                <div class="agent-blueprint-node risk">
+                    <span>{"Risk context"}</span>
+                    <strong>{"L1-L7 findings"}</strong>
+                    <small>{"score, RAG, reasons"}</small>
+                </div>
+                <div class="agent-blueprint-node evidence">
+                    <span>{"Evidence collector"}</span>
+                    <strong>{"source refs"}</strong>
+                    <small>{"claim, rule, model, document"}</small>
+                </div>
+                <div class="agent-blueprint-core">
+                    <span>{"Agent"}</span>
+                    <strong>{"case package"}</strong>
+                </div>
+                <div class="agent-blueprint-node kb">
+                    <span>{"Knowledge base"}</span>
+                    <strong>{"similar cases"}</strong>
+                    <small>{"provenance required"}</small>
+                </div>
+                <div class="agent-blueprint-node qa">
+                    <span>{"QA draft"}</span>
+                    <strong>{"review opinion"}</strong>
+                    <small>{"human editable"}</small>
+                </div>
+                <div class="agent-blueprint-node gate">
+                    <span>{"Human gate"}</span>
+                    <strong>{"review only"}</strong>
+                    <small>{"decision stays outside Agent"}</small>
+                </div>
+            </div>
+            <aside class="agent-blueprint-guardrail">
+                <span>{"Governance locks"}</span>
+                <div class="tag-grid compact-tags">
+                    <span>{"Tool allowlist"}</span>
+                    <span>{"PII masking"}</span>
+                    <span>{"Evidence refs"}</span>
+                    <span>{"Audit events"}</span>
+                    <span>{"Timeouts"}</span>
+                    <span>{"Human approval"}</span>
+                </div>
+                <p>{"The Agent prepares investigation material. It cannot deny, approve, publish rules, or bypass audit."}</p>
+            </aside>
         </section>
     }
 }

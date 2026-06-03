@@ -125,6 +125,9 @@ async function main() {
     assertContains(builtText, "Model Monitoring Cockpit", "web console model monitoring visual bundle");
     assertContains(builtText, "Shadow evidence", "web console model monitoring visual bundle");
     assertContains(builtText, "Label readiness", "web console model monitoring visual bundle");
+    assertContains(builtText, "Agent investigation blueprint", "web console agent blueprint bundle");
+    assertContains(builtText, "Governance locks", "web console agent blueprint bundle");
+    assertContains(builtText, "no auto denial", "web console agent blueprint bundle");
     assertContains(builtText, "Model telemetry map", "web console models visual bundle");
     assertContains(builtText, "Queue Source", "web console leads cases queue bundle");
     assertContains(builtText, "Generated Leads", "web console leads cases queue bundle");
