@@ -263,6 +263,22 @@ ROI, reviewer capacity, false-positive cost, and provider graph snapshot
 reporting. This proof does not move customer data; it defines the production
 contract and staging scheduler shape.
 
+AI evidence foundation proof:
+
+```bash
+python3 scripts/ops/validate_ai_evidence_foundation.py
+python3 scripts/ops/build_ai_evidence_foundation.py \
+  --output-dir artifacts/ai-evidence-foundation \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --customer-scope-id staging-customer
+```
+
+The generated `ai_evidence_foundation_manifest.json` records the document
+registry, chunk registry, OCR output, redaction review, embedding job, retrieval
+audit, and agent workspace artifact contract. This proof does not run OCR,
+create embeddings, or query a vector database; it defines the governed metadata
+and audit shape.
+
 Frontend:
 
 ```bash
@@ -469,6 +485,7 @@ Not complete yet:
 - production secrets manager
 - production key rotation automation
 - production object storage wiring
+- production OCR, embedding, vector-search, and retrieval workers
 - production observability stack
 - production ClickHouse retention, backup, and access policy
 - production alert routing
@@ -485,6 +502,7 @@ Not complete yet:
 - production serving image/version registry
 - customer holdout validation process
 - production observability dashboards for long-running drift and fairness review
+- production observability dashboards for retrieval audit and agent workspace artifacts
 - full rollback runbook for customer environments
 
 ## Troubleshooting

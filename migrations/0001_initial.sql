@@ -279,6 +279,109 @@ CREATE TABLE IF NOT EXISTS knowledge_cases (
 ALTER TABLE knowledge_cases
   ADD COLUMN IF NOT EXISTS scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim';
 
+CREATE TABLE IF NOT EXISTS evidence_documents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL,
+  source_system TEXT NOT NULL,
+  source_record_ref TEXT NOT NULL,
+  claim_id UUID REFERENCES claims(id),
+  external_document_id TEXT,
+  document_type TEXT NOT NULL,
+  storage_uri TEXT NOT NULL,
+  content_checksum TEXT NOT NULL,
+  ingestion_status TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  retention_policy_id TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS evidence_document_chunks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  chunk_id TEXT NOT NULL UNIQUE,
+  document_id TEXT NOT NULL REFERENCES evidence_documents(document_id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  chunking_version TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  text_checksum TEXT NOT NULL,
+  token_count INTEGER NOT NULL,
+  storage_uri TEXT NOT NULL,
+  source_offsets_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(document_id, chunk_index, chunking_version)
+);
+
+CREATE TABLE IF NOT EXISTS evidence_ocr_outputs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ocr_output_id TEXT NOT NULL UNIQUE,
+  document_id TEXT NOT NULL REFERENCES evidence_documents(document_id) ON DELETE CASCADE,
+  ocr_engine TEXT NOT NULL,
+  ocr_engine_version TEXT NOT NULL,
+  output_uri TEXT NOT NULL,
+  output_checksum TEXT NOT NULL,
+  confidence_score NUMERIC,
+  quality_status TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS evidence_redaction_reviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  redaction_review_id TEXT NOT NULL UNIQUE,
+  document_id TEXT REFERENCES evidence_documents(document_id) ON DELETE CASCADE,
+  chunk_id TEXT REFERENCES evidence_document_chunks(chunk_id) ON DELETE CASCADE,
+  redaction_policy_id TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  reviewer TEXT NOT NULL,
+  review_notes TEXT NOT NULL,
+  before_checksum TEXT,
+  after_checksum TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (document_id IS NOT NULL OR chunk_id IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS evidence_embedding_jobs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  embedding_job_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL,
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('document', 'document_chunk', 'knowledge_case')),
+  target_ref TEXT NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_model_version TEXT NOT NULL,
+  chunking_version TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  vector_store_kind TEXT NOT NULL,
+  vector_store_ref TEXT NOT NULL,
+  embedding_checksum TEXT NOT NULL,
+  status TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS evidence_retrieval_audit_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  retrieval_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_role TEXT NOT NULL,
+  query_kind TEXT NOT NULL,
+  query_checksum TEXT NOT NULL,
+  retrieval_method TEXT NOT NULL,
+  embedding_model_version TEXT,
+  top_k INTEGER NOT NULL,
+  source_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  result_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  redaction_status TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS agent_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_run_id TEXT NOT NULL UNIQUE,
@@ -359,6 +462,34 @@ CREATE TABLE IF NOT EXISTS agent_approvals (
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE TABLE IF NOT EXISTS agent_workspace_artifacts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_artifact_id TEXT NOT NULL UNIQUE,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  artifact_kind TEXT NOT NULL,
+  artifact_uri TEXT NOT NULL,
+  artifact_checksum TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  retention_policy_id TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_documents_customer_scope
+  ON evidence_documents(customer_scope_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_documents_claim_id
+  ON evidence_documents(claim_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_document_chunks_document_id
+  ON evidence_document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_ocr_outputs_document_id
+  ON evidence_ocr_outputs(document_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_embedding_jobs_target
+  ON evidence_embedding_jobs(target_kind, target_ref);
+CREATE INDEX IF NOT EXISTS idx_evidence_retrieval_audit_customer_scope
+  ON evidence_retrieval_audit_events(customer_scope_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_workspace_artifacts_run
+  ON agent_workspace_artifacts(agent_run_id);
 
 CREATE TABLE IF NOT EXISTS fwa_leads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

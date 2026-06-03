@@ -138,6 +138,10 @@ belong in object storage or a data lake for real pilots.
 ClickHouse is optional for runtime scoring and remains a derived store. Its
 schema and dashboard queries live in `analytics/clickhouse/schema.sql` and
 `analytics/clickhouse/dashboard_queries.sql`.
+AI evidence foundation metadata also lives in PostgreSQL: document registry,
+chunks, OCR output metadata, redaction reviews, embedding jobs, retrieval audit,
+and agent workspace artifacts. Raw document text and raw payloads stay in
+customer-approved object storage, not in free-text database fields.
 
 ## Worker And Data Artifacts
 
@@ -185,6 +189,8 @@ without customer data.
 It also validates the ClickHouse analytics-scale contract and generates
 `analytics_export_manifest.json` for scheduled PostgreSQL-to-ClickHouse export
 planning without customer data.
+The same job validates the AI evidence foundation schema contract and generates
+`ai_evidence_foundation_manifest.json` without customer data.
 
 ## Declared And Resolved Versions
 
@@ -225,6 +231,7 @@ Prefer locked commands when documenting reproducible verification.
 - Production object storage wiring beyond staging proof manifests.
 - Production observability stack.
 - Production ClickHouse retention, backup, and access policy.
+- Production OCR, embedding, vector-search, and retrieval workers.
 - GPU inference runtime.
 - Real model training pipeline.
 - Dioxus replacement for the current Yew web console.

@@ -331,6 +331,15 @@ Add retrieval and agent infrastructure only after evidence workflows are active:
 - agent run, step, context snapshot, workspace artifact, and approval tables;
 - human approval gates for case, rule, model, and export actions.
 
+The repository now includes the PostgreSQL metadata contract for this phase:
+`evidence_documents`, `evidence_document_chunks`, `evidence_ocr_outputs`,
+`evidence_redaction_reviews`, `evidence_embedding_jobs`,
+`evidence_retrieval_audit_events`, and `agent_workspace_artifacts`. The
+contract is validated by `scripts/ops/validate_ai_evidence_foundation.py` and
+documented in `docs/project/ai-evidence-foundation.md`. Production still needs
+customer-approved OCR workers, embedding/vector storage, retrieval ranking, and
+retention/access controls.
+
 ### Phase 3: Analytics Scale
 
 Add analytical infrastructure when operational volume proves the need:

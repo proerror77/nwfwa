@@ -34,12 +34,14 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/run_mlops_monitoring_plan.py
+      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
       - run: python3 scripts/ops/validate_k8s_staging.py
       - run: python3 scripts/ops/validate_container_packaging.py
       - run: python3 scripts/ops/validate_analytics_scale.py
+      - run: python3 scripts/ops/validate_ai_evidence_foundation.py
       - run: python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof
       - run: python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export
+      - run: python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation
       - run: |
           python3 scripts/ops/run_mlops_monitoring_plan.py \
             --plan scripts/ops/sample_mlops_monitoring_plan.json \
@@ -52,6 +54,8 @@ jobs:
           test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
           test -f /tmp/nwfwa-analytics-export/schema.sql
           test -f /tmp/nwfwa-analytics-export/dashboard_queries.sql
+          test -f /tmp/nwfwa-ai-evidence-foundation/ai_evidence_foundation_manifest.json
+          test -f /tmp/nwfwa-ai-evidence-foundation/index.json
           test -f /tmp/nwfwa-mlops-monitoring/shadow_report.json
           test -f /tmp/nwfwa-mlops-monitoring/drift_report.json
           test -f /tmp/nwfwa-mlops-monitoring/fairness_report.json

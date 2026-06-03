@@ -23,6 +23,8 @@ required_files=(
   "scripts/ops/validate_k8s_staging.py"
   "scripts/ops/validate_container_packaging.py"
   "scripts/ops/validate_analytics_scale.py"
+  "scripts/ops/validate_ai_evidence_foundation.py"
+  "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
@@ -122,6 +124,8 @@ grep -q "validate_k8s_staging.py" .github/workflows/ci.yml
 grep -q "validate_container_packaging.py" .github/workflows/ci.yml
 grep -q "validate_analytics_scale.py" .github/workflows/ci.yml
 grep -q "build_analytics_export.py" .github/workflows/ci.yml
+grep -q "validate_ai_evidence_foundation.py" .github/workflows/ci.yml
+grep -q "build_ai_evidence_foundation.py" .github/workflows/ci.yml
 grep -q "run_mlops_monitoring_plan.py" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- run-retraining-job" .github/workflows/ci.yml
@@ -374,6 +378,16 @@ grep -q "roi_reporting_daily" analytics/clickhouse/dashboard_queries.sql
 grep -q "reviewer_capacity_daily" analytics/clickhouse/dashboard_queries.sql
 grep -q "false_positive_cost_daily" analytics/clickhouse/dashboard_queries.sql
 grep -q "provider_graph_snapshots" analytics/clickhouse/dashboard_queries.sql
+grep -q "evidence_documents" migrations/0001_initial.sql
+grep -q "evidence_document_chunks" migrations/0001_initial.sql
+grep -q "evidence_ocr_outputs" migrations/0001_initial.sql
+grep -q "evidence_redaction_reviews" migrations/0001_initial.sql
+grep -q "evidence_embedding_jobs" migrations/0001_initial.sql
+grep -q "evidence_retrieval_audit_events" migrations/0001_initial.sql
+grep -q "agent_workspace_artifacts" migrations/0001_initial.sql
+grep -q "ai_evidence_foundation_manifest.json" docs/project/operations-guide.md
+grep -q "AI Evidence Foundation" docs/project/README.md
+grep -q "Document registry" docs/project/data-model.md
 grep -q "customer_scope_configuration" docs/project/api-reference.md
 grep -q "customer_scope_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_CUSTOMER_SCOPE_ID" docs/project/technology-stack.md
@@ -468,12 +482,14 @@ grep -q "staging_observability_proof" scripts/ops/build_staging_evidence.py
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
 python3 scripts/ops/validate_analytics_scale.py
+python3 scripts/ops/validate_ai_evidence_foundation.py
 python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof >/tmp/nwfwa-staging-proof.json
 python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
+python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation >/tmp/nwfwa-ai-evidence-foundation.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
   --plan scripts/ops/sample_mlops_monitoring_plan.json \
   --output-dir /tmp/nwfwa-mlops-monitoring >/tmp/nwfwa-mlops-monitoring.json
@@ -484,6 +500,8 @@ test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
 test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
 test -f /tmp/nwfwa-analytics-export/schema.sql
 test -f /tmp/nwfwa-analytics-export/dashboard_queries.sql
+test -f /tmp/nwfwa-ai-evidence-foundation/ai_evidence_foundation_manifest.json
+test -f /tmp/nwfwa-ai-evidence-foundation/index.json
 test -f /tmp/nwfwa-mlops-monitoring/shadow_report.json
 test -f /tmp/nwfwa-mlops-monitoring/drift_report.json
 test -f /tmp/nwfwa-mlops-monitoring/fairness_report.json

@@ -83,6 +83,14 @@ and the staging worker CronJob emits the scheduled analytics export plan. This
 does not replace customer production data movement, ClickHouse retention, or
 dashboard deployment.
 
+AI Evidence Foundation now has a PostgreSQL metadata contract and proof
+artifact. Document registry, chunks, OCR output metadata, redaction reviews,
+embedding jobs, retrieval audit, and agent workspace artifacts are represented
+in `migrations/0001_initial.sql` and validated by
+`scripts/ops/validate_ai_evidence_foundation.py`. This does not replace
+customer production OCR workers, embedding/vector storage, or retrieval
+ranking.
+
 ### Readiness Legend
 
 - `demo`: implemented for deterministic local demonstration with seeded data,
@@ -93,8 +101,8 @@ dashboard deployment.
   legal hold, customer scoping, key rotation, allowlists, and observability need
   environment-specific setup before customer data is used.
 - `future`: production training, production deployment, SSO/RBAC,
-  vector/document registries, customer-managed analytics execution, and
-  long-running drift operations.
+  customer-managed OCR/vector/retrieval execution, customer-managed analytics
+  execution, and long-running drift operations.
 
 ## Architecture
 
@@ -566,6 +574,9 @@ See [AGENTS.md](AGENTS.md) for project-local agent working instructions.
 - The public-data MVP pack validates the engineering loop only; customer
   labels, customer holdout validation, and live shadow outcomes are still
   required before production model claims.
+- AI evidence metadata exists for documents, chunks, OCR, redaction, embedding,
+  retrieval audit, and agent workspace artifacts; production OCR/vector workers
+  and retrieval ranking still need environment decisions.
 - Production deployment, observability, secrets management, object storage,
   customer data onboarding, and model training operations still need environment
   decisions.

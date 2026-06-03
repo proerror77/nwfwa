@@ -19,6 +19,9 @@ the technical stack fits together, and what is ready for demo or pilot use.
   current baseline boundaries, validation gates, and production ML roadmap.
 - [Public Data MVP Pack](public-data-mvp.md): CMS/OIG public-data boundary,
   manifest generation commands, and production interpretation.
+- [AI Evidence Foundation](ai-evidence-foundation.md): document registry,
+  chunks, OCR/redaction metadata, embedding jobs, retrieval audit, and agent
+  workspace artifacts.
 - [ML Pipeline Runbook](ml-pipeline-runbook.md): operating workflow for dataset
   intake, training, registration, review, promotion, serving, monitoring, and
   rollback.
