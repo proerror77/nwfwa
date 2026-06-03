@@ -1,0 +1,390 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>nwfwa FWA Platform Intro</title>
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
+    <style>
+      :root {
+        --bg: #061326;
+        --bg-2: #0a1f3a;
+        --fg: #f4f8ff;
+        --muted: #9eb6d8;
+        --accent: #58a6ff;
+        --signal: #bfd7ff;
+        --line: rgba(191, 215, 255, 0.18);
+      }
+
+      html,
+      body {
+        width: 1920px;
+        height: 1080px;
+        margin: 0;
+        padding: 0;
+        overflow: hidden;
+        background: var(--bg);
+        color: var(--fg);
+        font-family: system-ui, sans-serif;
+      }
+
+      #nwfwa-root {
+        position: relative;
+        width: 1920px;
+        height: 1080px;
+        overflow: hidden;
+        background:
+          radial-gradient(circle at 82% 12%, rgba(88, 166, 255, 0.22), transparent 28%),
+          radial-gradient(circle at 18% 88%, rgba(191, 215, 255, 0.14), transparent 30%),
+          linear-gradient(135deg, #061326 0%, #081b34 52%, #061326 100%);
+      }
+
+      .grid {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+        opacity: 0.32;
+        background-image:
+          linear-gradient(var(--line) 1px, transparent 1px),
+          linear-gradient(90deg, var(--line) 1px, transparent 1px);
+        background-size: 80px 80px;
+      }
+
+      .rule-top,
+      .rule-bottom {
+        position: absolute;
+        left: 96px;
+        right: 96px;
+        z-index: 1;
+        height: 1px;
+        background: linear-gradient(90deg, transparent, rgba(244, 248, 255, 0.42), transparent);
+      }
+
+      .rule-top {
+        top: 82px;
+      }
+
+      .rule-bottom {
+        bottom: 82px;
+      }
+
+      .watermark {
+        position: absolute;
+        right: 88px;
+        bottom: 62px;
+        z-index: 1;
+        color: #6f85a8;
+        font-family: serif;
+        font-size: 168px;
+        line-height: 1;
+        letter-spacing: 0;
+      }
+
+      .clip {
+        position: absolute;
+        inset: 0;
+        z-index: 2;
+      }
+
+      .scene-content {
+        width: 100%;
+        height: 100%;
+        padding: 132px 144px;
+        box-sizing: border-box;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        gap: 34px;
+      }
+
+      .kicker {
+        width: max-content;
+        max-width: 100%;
+        min-height: 48px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid rgba(88, 166, 255, 0.62);
+        color: var(--signal);
+        font-size: 24px;
+        font-weight: 600;
+        line-height: 1.2;
+        text-transform: uppercase;
+        letter-spacing: 0;
+      }
+
+      h1,
+      h2 {
+        margin: 0;
+        font-family: serif;
+        font-weight: 500;
+        letter-spacing: 0;
+      }
+
+      h1 {
+        max-width: 1300px;
+        font-size: 116px;
+        line-height: 1.02;
+      }
+
+      h2 {
+        max-width: 1180px;
+        font-size: 84px;
+        line-height: 1.08;
+      }
+
+      .body {
+        max-width: 980px;
+        margin: 0;
+        color: var(--muted);
+        font-size: 34px;
+        line-height: 1.42;
+        font-weight: 400;
+      }
+
+      .report-row {
+        display: grid;
+        grid-template-columns: 1.1fr 1fr;
+        gap: 52px;
+        align-items: center;
+      }
+
+      .panel {
+        border: 1px solid rgba(191, 215, 255, 0.22);
+        background: rgba(10, 31, 58, 0.62);
+        box-shadow: 0 30px 90px rgba(0, 0, 0, 0.28);
+        padding: 44px;
+      }
+
+      .metric-grid {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 20px;
+      }
+
+      .metric {
+        min-height: 136px;
+        border-top: 1px solid rgba(88, 166, 255, 0.46);
+        padding-top: 20px;
+      }
+
+      .metric strong {
+        display: block;
+        color: var(--fg);
+        font-family: serif;
+        font-size: 50px;
+        font-weight: 500;
+        line-height: 1;
+      }
+
+      .metric span {
+        display: block;
+        margin-top: 16px;
+        color: var(--muted);
+        font-size: 22px;
+        line-height: 1.28;
+      }
+
+      .flow {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 18px;
+      }
+
+      .flow-step {
+        min-height: 112px;
+        border: 1px solid rgba(191, 215, 255, 0.22);
+        background: rgba(10, 31, 58, 0.58);
+        padding: 20px 18px;
+        box-sizing: border-box;
+      }
+
+      .flow-step .code {
+        color: var(--accent);
+        font-size: 20px;
+        font-weight: 700;
+      }
+
+      .flow-step .label {
+        margin-top: 16px;
+        color: var(--fg);
+        font-size: 24px;
+        line-height: 1.18;
+        font-weight: 600;
+      }
+
+      .layer-stack {
+        width: 780px;
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+      }
+
+      .layer {
+        display: grid;
+        grid-template-columns: 70px 1fr 92px;
+        gap: 22px;
+        align-items: center;
+        border-bottom: 1px solid rgba(191, 215, 255, 0.18);
+        padding: 14px 0;
+      }
+
+      .layer .idx {
+        color: var(--accent);
+        font-size: 22px;
+        font-weight: 800;
+      }
+
+      .layer .name {
+        color: var(--fg);
+        font-size: 26px;
+        font-weight: 600;
+      }
+
+      .layer .score {
+        color: var(--signal);
+        font-family: serif;
+        font-size: 32px;
+        text-align: right;
+      }
+
+      .closing {
+        align-items: center;
+        text-align: center;
+      }
+
+      .closing h2 {
+        max-width: 1220px;
+      }
+
+      .boundary {
+        max-width: 1020px;
+        border-top: 1px solid rgba(88, 166, 255, 0.6);
+        padding-top: 26px;
+        color: var(--muted);
+        font-size: 32px;
+        line-height: 1.42;
+      }
+    </style>
+  </head>
+  <body>
+    <main
+      id="nwfwa-root"
+      data-composition-id="nwfwa-intro"
+      data-width="1920"
+      data-height="1080"
+      data-start="0"
+      data-duration="54"
+    >
+      <div class="grid" data-layout-ignore></div>
+      <div class="rule-top" data-layout-ignore></div>
+      <div class="rule-bottom" data-layout-ignore></div>
+      <div class="watermark" data-layout-ignore aria-hidden="true">FWA</div>
+
+      <section id="scene-1" class="clip" data-start="0" data-duration="9" data-track-index="1">
+        <div class="scene-content">
+          <div class="kicker">Agentic Risk Operations</div>
+          <h1>nwfwa</h1>
+          <p class="body">
+            面向医保与商保理赔的 FWA 风险运营平台：把评分、证据、案件、复核与治理放进同一个可审计工作台。
+          </p>
+        </div>
+      </section>
+
+      <section id="scene-2" class="clip" data-start="9" data-duration="10" data-track-index="1">
+        <div class="scene-content report-row">
+          <div>
+            <div class="kicker">Why It Matters</div>
+            <h2>风险不是一个分数，而是一条证据链。</h2>
+            <p class="body">
+              理赔运营需要知道为什么可疑、谁来复核、证据来自哪里，以及每一步是否能被回放。
+            </p>
+          </div>
+          <div class="panel metric-grid">
+            <div class="metric"><strong>TPA</strong><span>claim-system intake and writeback</span></div>
+            <div class="metric"><strong>7L</strong><span>feature, rule, anomaly, clinical, provider, model, confidence</span></div>
+            <div class="metric"><strong>QA</strong><span>human feedback labels for governance</span></div>
+            <div class="metric"><strong>Audit</strong><span>evidence refs, run ids, timelines</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-3" class="clip" data-start="19" data-duration="12" data-track-index="1">
+        <div class="scene-content report-row">
+          <div>
+            <div class="kicker">Scoring Engine</div>
+            <h2>七层风险信号，输出可解释评分。</h2>
+            <p class="body">
+              每次评分都会写入 run、audit、evidence_refs，并把命中的规则、模型解释、医学必要性和相似案例绑定到同一条运营记录。
+            </p>
+          </div>
+          <div class="panel layer-stack">
+            <div class="layer"><span class="idx">L1</span><span class="name">Claim Features</span><span class="score">82</span></div>
+            <div class="layer"><span class="idx">L2</span><span class="name">Rule Signals</span><span class="score">91</span></div>
+            <div class="layer"><span class="idx">L3</span><span class="name">Anomaly Patterns</span><span class="score">76</span></div>
+            <div class="layer"><span class="idx">L4</span><span class="name">Model Score</span><span class="score">83</span></div>
+            <div class="layer"><span class="idx">L5</span><span class="name">Clinical Evidence</span><span class="score">68</span></div>
+            <div class="layer"><span class="idx">L6</span><span class="name">Provider Risk</span><span class="score">88</span></div>
+            <div class="layer"><span class="idx">L7</span><span class="name">Routing Policy</span><span class="score">Red</span></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-4" class="clip" data-start="31" data-duration="12" data-track-index="1">
+        <div class="scene-content">
+          <div class="kicker">Operating Model</div>
+          <h2>从理赔进入，到反馈回流。</h2>
+          <p class="body">
+            高风险评分进入线索和案件；医学复核、QA、知识库和 Agent Investigator 共同沉淀证据，但不替代客户裁决流程。
+          </p>
+          <div class="flow">
+            <div class="flow-step"><div class="code">01</div><div class="label">Claim Inbox</div></div>
+            <div class="flow-step"><div class="code">02</div><div class="label">Runtime Scoring</div></div>
+            <div class="flow-step"><div class="code">03</div><div class="label">Leads & Cases</div></div>
+            <div class="flow-step"><div class="code">04</div><div class="label">Medical Review</div></div>
+            <div class="flow-step"><div class="code">05</div><div class="label">QA Feedback</div></div>
+            <div class="flow-step"><div class="code">06</div><div class="label">Governance</div></div>
+          </div>
+        </div>
+      </section>
+
+      <section id="scene-5" class="clip" data-start="43" data-duration="11" data-track-index="1">
+        <div class="scene-content closing">
+          <div class="kicker">Assistive Only</div>
+          <h2>让风险运营可解释、可复核、可治理。</h2>
+          <p class="boundary">
+            nwfwa 可以发现可疑模式、准备证据包、路由案件和记录审计轨迹；最终拒赔、通过或欺诈认定，必须由客户控制的人工流程完成。
+          </p>
+        </div>
+      </section>
+
+      <script>
+        window.__timelines = window.__timelines || {};
+
+        const tl = gsap.timeline({ paused: true });
+        const sceneStarts = [0, 9, 19, 31, 43];
+
+        function fromIfPresent(selector, vars, position) {
+          const targets = gsap.utils.toArray(selector);
+          if (targets.length > 0) {
+            tl.from(targets, vars, position);
+          }
+        }
+
+        sceneStarts.forEach((start, index) => {
+          const scene = `#scene-${index + 1}`;
+          fromIfPresent(`${scene} .kicker`, { y: 26, opacity: 0, duration: 0.55, ease: "power3.out" }, start + 0.2);
+          fromIfPresent(`${scene} h1, ${scene} h2`, { y: 44, opacity: 0, duration: 0.75, ease: "power3.out" }, start + 0.45);
+          fromIfPresent(`${scene} .body, ${scene} .boundary`, { y: 30, opacity: 0, duration: 0.65, ease: "power2.out" }, start + 0.95);
+          fromIfPresent(`${scene} .panel, ${scene} .flow-step`, { y: 36, opacity: 0, duration: 0.65, stagger: 0.08, ease: "power2.out" }, start + 1.25);
+          fromIfPresent(`${scene} .layer`, { x: 34, opacity: 0, duration: 0.48, stagger: 0.07, ease: "power2.out" }, start + 1.25);
+          tl.to(scene, { opacity: 0, duration: 0.6, ease: "power2.inOut" }, start + (index === 4 ? 10.4 : sceneStarts[index + 1] - start - 0.6));
+        });
+
+        tl.to(".grid", { x: -80, y: -80, duration: 54, ease: "none" }, 0);
+        tl.to(".watermark", { y: -18, opacity: 0.16, duration: 54, ease: "none" }, 0);
+
+        window.__timelines["nwfwa-intro"] = tl;
+      </script>
+    </main>
+  </body>
+</html>
