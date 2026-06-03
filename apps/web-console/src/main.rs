@@ -6588,31 +6588,109 @@ fn investigation_network_visual(leads: &[LeadRecord], cases: &[CaseRecord]) -> H
     let selected_case = selected_lead
         .and_then(|lead| cases.iter().find(|case| case.lead_id == lead.lead_id))
         .or_else(|| cases.first());
+    let risk_score = selected_lead
+        .map(|lead| lead.risk_score.to_string())
+        .unwrap_or_else(|| "n/a".into());
+    let risk_band = selected_lead
+        .map(|lead| lead.rag.as_str())
+        .unwrap_or("no lead");
+    let case_status = selected_case
+        .map(|case| case.status.as_str())
+        .unwrap_or("not opened");
+    let case_priority = selected_case
+        .map(|case| case.priority.as_str())
+        .unwrap_or("none");
     html! {
         <div class="visual-panel wide-visual investigation-network">
-            <h4>{"Investigation network"}</h4>
-            <div class="case-network">
-                {network_node("Claim", selected_lead.map(|lead| lead.claim_id.as_str()).unwrap_or("none"), "claim")}
-                {network_node("Member", selected_lead.map(|lead| lead.member_id.as_str()).unwrap_or("none"), "member")}
-                {network_node("Provider", selected_lead.map(|lead| lead.provider_id.as_str()).unwrap_or("none"), "provider")}
-                {network_node("Lead", selected_lead.map(|lead| lead.lead_id.as_str()).unwrap_or("none"), "lead")}
-                {network_node("Case", selected_case.map(|case| case.case_id.as_str()).unwrap_or("pending"), "case")}
+            <div class="section-header">
+                <div>
+                    <h4>{"Case relationship archive"}</h4>
+                    <p>{"Entity graph, timeline, and governed next actions for the selected FWA lead."}</p>
+                </div>
+                <span class={classes!("status-token", risk_tone(risk_band))}>{risk_band}</span>
             </div>
-            <div class="network-caption">
-                <span>{format!("open leads {}", leads.iter().filter(|lead| lead.status != "closed").count())}</span>
-                <span>{format!("active cases {}", cases.iter().filter(|case| case.status != "closed").count())}</span>
-                <span>{format!("SLA breached {}", cases.iter().filter(|case| case.sla_status == "breached").count())}</span>
+            <div class="case-investigation-board">
+                <aside class="case-brief">
+                    <span>{"Selected case"}</span>
+                    <strong>{selected_case.map(|case| case.case_id.as_str()).unwrap_or("pending")}</strong>
+                    <dl>
+                        <div><dt>{"Claim"}</dt><dd>{selected_lead.map(|lead| lead.claim_id.as_str()).unwrap_or("none")}</dd></div>
+                        <div><dt>{"Risk"}</dt><dd>{risk_score}</dd></div>
+                        <div><dt>{"Status"}</dt><dd>{case_status}</dd></div>
+                        <div><dt>{"Priority"}</dt><dd>{case_priority}</dd></div>
+                        <div><dt>{"Scheme"}</dt><dd>{selected_lead.map(|lead| lead.scheme_family.as_str()).unwrap_or("none")}</dd></div>
+                    </dl>
+                    <div class="tag-grid compact-tags">
+                        <span>{format!("open leads {}", leads.iter().filter(|lead| lead.status != "closed").count())}</span>
+                        <span>{format!("active cases {}", cases.iter().filter(|case| case.status != "closed").count())}</span>
+                        <span>{format!("SLA breached {}", cases.iter().filter(|case| case.sla_status == "breached").count())}</span>
+                    </div>
+                </aside>
+                <div class="relationship-graph">
+                    <div class="graph-ring outer"></div>
+                    <div class="graph-ring inner"></div>
+                    <div class="graph-center">
+                        <span>{"Member"}</span>
+                        <strong>{selected_lead.map(|lead| lead.member_id.as_str()).unwrap_or("none")}</strong>
+                    </div>
+                    {graph_entity("Claim", selected_lead.map(|lead| lead.claim_id.as_str()).unwrap_or("none"), "claim", "top")}
+                    {graph_entity("Provider", selected_lead.map(|lead| lead.provider_id.as_str()).unwrap_or("none"), "provider", "right")}
+                    {graph_entity("Lead", selected_lead.map(|lead| lead.lead_id.as_str()).unwrap_or("none"), "lead", "bottom")}
+                    {graph_entity("Case", selected_case.map(|case| case.case_id.as_str()).unwrap_or("pending"), "case", "left")}
+                    {graph_entity("Reviewer", selected_case.map(|case| case.reviewer.as_str()).unwrap_or("unassigned"), "reviewer", "lower-right")}
+                    {graph_entity("Assignee", selected_case.map(|case| case.assignee.as_str()).unwrap_or("unassigned"), "assignee", "lower-left")}
+                </div>
+                <aside class="case-timeline">
+                    <h4>{"Evidence timeline"}</h4>
+                    {timeline_item("Lead generated", selected_lead.map(|lead| lead.lead_source.as_str()).unwrap_or("pending"), "done")}
+                    {timeline_item("Triage", selected_case.map(|case| case.routing_reason.as_str()).unwrap_or("awaiting case"), "done")}
+                    {timeline_item("SLA", selected_case.map(|case| case.sla_status.as_str()).unwrap_or("not started"), selected_case.map(|case| case.sla_status.as_str()).unwrap_or("pending"))}
+                    {timeline_item("Outcome", selected_case.and_then(|case| case.final_outcome.as_deref()).unwrap_or("pending"), "pending")}
+                </aside>
+            </div>
+            <div class="case-action-grid">
+                {case_action("Escalate review", "Manual review gate", "warning")}
+                {case_action("Open investigation", "Human investigator", "strong")}
+                {case_action("Request evidence", "Supplement material", "neutral")}
+                {case_action("Close false positive", "Requires audit note", "danger")}
             </div>
         </div>
     }
 }
 
-fn network_node(label: &str, value: &str, tone: &str) -> Html {
+fn graph_entity(label: &str, value: &str, tone: &str, position: &str) -> Html {
     html! {
-        <div class={classes!("network-node", tone.to_string())}>
+        <div class={classes!("graph-entity", tone.to_string(), position.to_string())}>
             <span>{label}</span>
             <strong>{value}</strong>
         </div>
+    }
+}
+
+fn timeline_item(label: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("timeline-item", status_tone(tone))}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
+    }
+}
+
+fn case_action(label: &str, caption: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("case-action", tone.to_string())}>
+            <strong>{label}</strong>
+            <span>{caption}</span>
+        </div>
+    }
+}
+
+fn risk_tone(rag: &str) -> &'static str {
+    match rag.to_ascii_lowercase().as_str() {
+        "red" | "critical" | "high" => "danger",
+        "amber" | "yellow" | "medium" => "warning",
+        "green" | "low" => "success",
+        _ => "neutral",
     }
 }
 

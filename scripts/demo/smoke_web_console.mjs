@@ -101,7 +101,9 @@ async function main() {
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
     assertContains(builtText, "Rule command path", "web console rules visual bundle");
     assertContains(builtText, "Model telemetry map", "web console models visual bundle");
-    assertContains(builtText, "Investigation network", "web console cases visual bundle");
+    assertContains(builtText, "Case relationship archive", "web console case graph bundle");
+    assertContains(builtText, "Evidence timeline", "web console case graph bundle");
+    assertContains(builtText, "Escalate review", "web console case action bundle");
     assertContains(builtText, "review gate", "web console inbox pipeline bundle");
     assertContains(builtText, "Data Quality", "web console inbox findings bundle");
     assertContains(builtText, "Claim Inbox", "web console bundle");
