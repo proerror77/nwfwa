@@ -575,6 +575,7 @@ pre {
 
 .action-bar button,
 .button-row button,
+.queue-source-bar button,
 .panel > button {
   min-height: 38px;
   padding: 9px 12px;
@@ -587,6 +588,7 @@ pre {
 }
 
 .button-row button,
+.queue-source-bar button,
 .panel > button {
   color: #17436f;
   background: #f8fbff;
@@ -595,7 +597,8 @@ pre {
 }
 
 .action-bar button:disabled,
-.button-row button:disabled {
+.button-row button:disabled,
+.queue-source-bar button:disabled {
   cursor: not-allowed;
   color: var(--faint);
   background: #ebe7dd;
@@ -3362,15 +3365,23 @@ pre {
   text-overflow: ellipsis;
 }
 
-.compact-source-grid {
-  grid-template-columns: minmax(240px, 420px);
-}
-
 .queue-source-panel p,
 .lead-case-queue-grid p,
 .case-action-panel p {
   margin: 4px 0 0;
   color: var(--muted);
+}
+
+.queue-source-bar {
+  display: grid;
+  grid-template-columns: auto minmax(240px, 420px) auto;
+  gap: 14px;
+  align-items: end;
+}
+
+.queue-source-bar h3,
+.queue-source-bar label {
+  margin: 0;
 }
 
 .ops-table {
@@ -3952,7 +3963,7 @@ pre {
   .visual-board,
   .result-grid,
   .form-grid,
-  .compact-source-grid,
+  .queue-source-bar,
   .layer-summary-grid,
   .summary-grid,
   .compact-list,

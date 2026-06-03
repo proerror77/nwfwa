@@ -3955,30 +3955,23 @@ fn leads_cases_page() -> Html {
             </div>
 
             <section class="panel queue-source-panel">
-                <div class="section-header">
-                    <div>
-                        <h3>{"Queue Source"}</h3>
-                        <p>{"Refresh the live investigation queue, then select a lead or case below to act on it."}</p>
-                    </div>
-                    <div class="button-row">
-                        <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
-                            {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh queue" }}
-                        </button>
-                    </div>
-                </div>
-                <div class="form-grid compact-source-grid">
+                <div class="queue-source-bar">
+                    <h3>{"Queue Source"}</h3>
                     <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
+                            {"API key"}
+                            <input
+                                value={(*api_key).clone()}
+                                oninput={{
+                                    let api_key = api_key.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh queue" }}
+                    </button>
                 </div>
             </section>
 
