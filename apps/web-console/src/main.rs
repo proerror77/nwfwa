@@ -2167,6 +2167,8 @@ fn runtime_scoring_page() -> Html {
                 <span class="status-pill">{"Claim Scoring API"}</span>
             </div>
 
+            {runtime_scoring_blueprint()}
+
             <div class="inbox-grid">
                 <section class="panel result-stack">
                     <h3>{"Scoring Request"}</h3>
@@ -2234,6 +2236,7 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                             <div><span>{"RAG"}</span><strong>{response.rag.as_ref().map(display_value).unwrap_or_else(|| "none".into())}</strong></div>
                         </div>
                         {runtime_decision_visual(response)}
+                        {runtime_signal_map(response)}
                         <div class="summary-grid">
                             <div><span>{"Action"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
                             <div><span>{"Risk Level"}</span><strong>{response.risk_level.as_deref().unwrap_or("unknown")}</strong></div>
@@ -2305,6 +2308,47 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
     }
 }
 
+fn runtime_scoring_blueprint() -> Html {
+    html! {
+        <section class="panel scoring-blueprint-shell">
+            <div class="blueprint-claim-card">
+                <span>{"Claim packet"}</span>
+                <strong>{"TPA payload + evidence refs"}</strong>
+                <div class="blueprint-document">
+                    <i class="wide"></i>
+                    <i></i>
+                    <i class="short"></i>
+                    <b></b>
+                </div>
+            </div>
+            <div class="blueprint-layer-rail" aria-label="Seven-layer FWA runtime illustration">
+                {blueprint_layer("L1", "Peer", "amount / stay / frequency", "peer")}
+                {blueprint_layer("L2", "Rules", "deterministic controls", "rules")}
+                {blueprint_layer("L3", "Anomaly", "rare pattern", "anomaly")}
+                {blueprint_layer("L4", "ML", "baseline classifier", "ml")}
+                {blueprint_layer("L5", "Medical", "necessity check", "medical")}
+                {blueprint_layer("L6", "Graph", "provider network", "graph")}
+                {blueprint_layer("L7", "Route", "human gate", "route")}
+            </div>
+            <div class="blueprint-human-card">
+                <span>{"Assistive boundary"}</span>
+                <strong>{"Agent prepares evidence, humans decide"}</strong>
+                <small>{"Every score keeps run_id, audit_id, route, reason, and evidence_refs."}</small>
+            </div>
+        </section>
+    }
+}
+
+fn blueprint_layer(layer: &str, label: &str, caption: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("blueprint-layer", tone.to_string())}>
+            <span>{layer}</span>
+            <strong>{label}</strong>
+            <small>{caption}</small>
+        </div>
+    }
+}
+
 fn runtime_decision_visual(response: &ScoreResponse) -> Html {
     let risk_score = numeric_value(&response.risk_score).clamp(0.0, 100.0);
     let risk_style = format!(
@@ -2339,6 +2383,52 @@ fn runtime_decision_visual(response: &ScoreResponse) -> Html {
                 {runtime_path_node("Evidence", "trace refs", &format!("{evidence_count} refs"))}
                 {runtime_path_node("Human", "bounded action", response.review_mode.as_deref().unwrap_or("review"))}
             </div>
+        </div>
+    }
+}
+
+fn runtime_signal_map(response: &ScoreResponse) -> Html {
+    let model_label = response
+        .model_score
+        .as_ref()
+        .map(|model| format!("{} {}", model.model_key, model.model_version))
+        .unwrap_or_else(|| "model pending".into());
+    let provider_signal = response
+        .provider_profile
+        .as_ref()
+        .and_then(|profile| profile.get("provider_id"))
+        .map(display_value)
+        .unwrap_or_else(|| "provider context".into());
+    let clinical_signal = response
+        .clinical_evidence
+        .as_ref()
+        .and_then(|clinical| clinical.get("clinical_signal_count"))
+        .map(display_value)
+        .unwrap_or_else(|| format!("{} layers", response.layers.len()));
+    let evidence_count = response.evidence_refs.as_ref().map(Vec::len).unwrap_or(0);
+
+    html! {
+        <div class="runtime-signal-map">
+            <div class="signal-map-core">
+                <span>{"Illustrated Signal Map"}</span>
+                <strong>{&response.claim_id}</strong>
+                <small>{response.routing_reason.as_deref().unwrap_or("route after L7 fusion")}</small>
+            </div>
+            {runtime_signal_node("Peer + rules", &format!("{} alerts", response.alerts.len()), "controls")}
+            {runtime_signal_node("Model", &model_label, "model")}
+            {runtime_signal_node("Clinical", &clinical_signal, "clinical")}
+            {runtime_signal_node("Provider graph", &provider_signal, "graph")}
+            {runtime_signal_node("Knowledge", &format!("{} similar cases", response.similar_cases.len()), "knowledge")}
+            {runtime_signal_node("Evidence", &format!("{evidence_count} refs"), "evidence")}
+        </div>
+    }
+}
+
+fn runtime_signal_node(label: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("signal-map-node", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
         </div>
     }
 }
