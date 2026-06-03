@@ -137,6 +137,42 @@ Approval checks:
 - public research data is not treated as customer/pilot validation evidence;
 - training data usage is compatible with the customer or pilot contract.
 
+## Public Data MVP Path
+
+When customer training data is not available, use the public-data MVP pack to
+exercise the data and ML engineering loop without claiming production model
+effectiveness.
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_public_data_mvp.py \
+  --synthetic-fixture \
+  --output-dir data/public-mvp \
+  --dataset-version 2026-06-public-mvp
+```
+
+The generated `data/public-mvp/manifest.json` uses CMS/OIG-style public-data
+features and weak labels only for pipeline execution. It can then be used with
+the same profiling, training, Rust artifact export, handoff, and scheduled
+monitoring commands as customer manifests.
+
+For downloaded public extracts, provide local source files instead:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_public_data_mvp.py \
+  --synpuf-claims-csv /path/to/synpuf_claims.csv \
+  --provider-summary-csv /path/to/cms_provider_summary.csv \
+  --leie-csv /path/to/leie.csv \
+  --policy-corpus-dir /path/to/policy_texts \
+  --output-dir data/public-mvp \
+  --dataset-version 2026-06-public-mvp
+```
+
+This path closes schema and pipeline gaps only. Customer label provenance,
+customer holdout validation, and real shadow traffic remain required before
+production model claims.
+
 ## Stage 5: Offline Training
 
 Purpose: create a candidate model artifact and validation evidence.

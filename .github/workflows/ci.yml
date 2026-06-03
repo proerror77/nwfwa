@@ -201,6 +201,19 @@ jobs:
           cache-dependency-path: apps/ml-service/pyproject.toml
       - run: python -m pip install -e ".[dev]"
       - run: pytest
+      - run: |
+          python ../../scripts/data/build_public_data_mvp.py \
+            --synthetic-fixture \
+            --output-dir /tmp/fwa-public-mvp \
+            --dataset-version 2026-06-public-mvp
+      - run: |
+          python -m app.train \
+            --manifest /tmp/fwa-public-mvp/manifest.json \
+            --artifact-base-uri /tmp/fwa-public-mvp-artifacts \
+            --model-key baseline_fwa \
+            --base-model-version public-mvp \
+            --job-id public_data_mvp_job_1 \
+            --actor public-data-builder
 
   frontend:
     runs-on: ubuntu-latest

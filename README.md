@@ -63,6 +63,9 @@ Production ML and production infrastructure are not complete. Remaining work
 includes customer environment deployment, secrets and key rotation, observability
 stack selection, object storage strategy, customer holdout validation, long-term
 drift monitoring, production feature materialization, and operational runbooks.
+The public-data MVP pack can validate the data and ML engineering loop before
+customer data is available, but it does not replace customer production
+validation.
 
 ### Readiness Legend
 
@@ -365,6 +368,21 @@ python -m pip install -e '.[dev]'
 pytest
 ```
 
+### Public Data MVP Pack
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_public_data_mvp.py \
+  --synthetic-fixture \
+  --output-dir data/public-mvp \
+  --dataset-version 2026-06-public-mvp
+```
+
+The generated manifest can be profiled and trained by the existing worker and
+ML commands. It validates schema, Parquet splits, weak-label training flow, Rust
+artifact export, and MLOps handoff contracts; it is not customer production
+model evidence.
+
 ### ML Operations Commands
 
 ```bash
@@ -473,9 +491,11 @@ See [AGENTS.md](AGENTS.md) for project-local agent working instructions.
 - Rust artifact scoring now supports local JSON logistic-regression artifacts
   with model identity checks, checksum validation, optional HMAC signature
   verification, version lock metadata, explanations, and latency metadata.
-- Python training still emits `.joblib` artifacts for the compatibility service;
-  exporting trained candidates into the Rust JSON artifact format is the next
-  production pipeline step.
+- Python training emits both `.joblib` artifacts for compatibility and
+  `rust_serving_artifact.json` for the Rust serving path.
+- The public-data MVP pack validates the engineering loop only; customer
+  labels, customer holdout validation, and live shadow outcomes are still
+  required before production model claims.
 - Production deployment, observability, secrets management, object storage,
   customer data onboarding, and model training operations still need environment
   decisions.

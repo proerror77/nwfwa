@@ -18,8 +18,10 @@ required_files=(
   "scripts/demo/tpa_mock_client.py"
   "scripts/demo/smoke_demo.py"
   "scripts/demo/smoke_web_console.mjs"
+  "scripts/data/build_public_data_mvp.py"
   "scripts/ci/assert_worker_health.py"
   "apps/api-server/tests/tpa_contract_docs.rs"
+  "docs/project/public-data-mvp.md"
 )
 
 workspace_files=(
@@ -197,6 +199,20 @@ grep -q "build-training-handoff" docs/project/ml-pipeline-runbook.md
 grep -q "build-mlops-monitoring-plan" docs/project/ml-pipeline-runbook.md
 grep -q "FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND" scripts/demo/smoke_demo.py
 grep -q "Rust serving exports should use rust_serving_artifact.json" apps/api-server/src/routes/openapi.rs
+grep -q "Public Data MVP Pack" docs/project/public-data-mvp.md
+grep -q "CMS Medicare Claims Synthetic Public Use Files" docs/project/public-data-mvp.md
+grep -q "CMS Medicare Physician & Other Practitioners by Provider" docs/project/public-data-mvp.md
+grep -q "HHS-OIG List of Excluded Individuals/Entities" docs/project/public-data-mvp.md
+grep -q "CMS Medicare Coverage Database" docs/project/public-data-mvp.md
+grep -q "weak_public_data_pipeline_label_not_production_evidence" docs/project/public-data-mvp.md
+grep -q "weak_public_data_pipeline_label_not_production_evidence" scripts/data/build_public_data_mvp.py
+grep -q "public_data_mvp_claims" scripts/data/build_public_data_mvp.py
+grep -q "build_public_data_mvp.py" README.md
+grep -q "build_public_data_mvp.py" docs/project/ml-pipeline-runbook.md
+grep -q "build_public_data_mvp.py" docs/project/operations-guide.md
+grep -q "Public Data MVP Pack" docs/project/README.md
+grep -q "build_public_data_mvp.py" .github/workflows/ci.yml
+grep -q "public_data_mvp_job_1" .github/workflows/ci.yml
 grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py

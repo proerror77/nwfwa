@@ -125,6 +125,20 @@ manifest, artifact checksum/signature, feature-store materialization manifest,
 shadow comparison report, drift report, and segment fairness report next to the
 model artifact.
 
+Public-data MVP manifest:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_public_data_mvp.py \
+  --synthetic-fixture \
+  --output-dir data/public-mvp \
+  --dataset-version 2026-06-public-mvp
+```
+
+The generated manifest validates schema, Parquet splits, weak-label training,
+Rust artifact export, and MLOps handoff contracts. It is not customer
+production model evidence.
+
 Artifact-backed local serving with integrity and version lock:
 
 ```bash
