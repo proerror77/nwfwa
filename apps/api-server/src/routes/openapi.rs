@@ -588,6 +588,128 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/evidence/documents": {
+                "get": {
+                    "summary": "List governed evidence document metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": { "200": { "description": "Evidence documents scoped to the authenticated customer" } }
+                },
+                "post": {
+                    "summary": "Register governed evidence document metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceDocumentRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered evidence document metadata" } }
+                }
+            },
+            "/api/v1/ops/evidence/documents/{document_id}": {
+                "get": {
+                    "summary": "Get governed evidence document metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "Evidence document metadata" }, "404": { "description": "Document not found in customer scope" } }
+                }
+            },
+            "/api/v1/ops/evidence/documents/{document_id}/chunks": {
+                "get": {
+                    "summary": "List governed document chunk metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "Document chunk metadata" } }
+                },
+                "post": {
+                    "summary": "Register governed document chunk metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceDocumentChunkRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered document chunk metadata" }, "404": { "description": "Document not found in customer scope" } }
+                }
+            },
+            "/api/v1/ops/evidence/documents/{document_id}/ocr-outputs": {
+                "get": {
+                    "summary": "List governed OCR output metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "OCR output metadata" } }
+                },
+                "post": {
+                    "summary": "Register governed OCR output metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceOcrOutputRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered OCR output metadata" }, "404": { "description": "Document not found in customer scope" } }
+                }
+            },
+            "/api/v1/ops/evidence/embedding-jobs": {
+                "get": {
+                    "summary": "List governed evidence embedding jobs",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": { "200": { "description": "Embedding jobs scoped to the authenticated customer" } }
+                },
+                "post": {
+                    "summary": "Register governed evidence embedding job metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceEmbeddingJobRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered evidence embedding job metadata" } }
+                }
+            },
+            "/api/v1/ops/evidence/retrieval-audit-events": {
+                "get": {
+                    "summary": "List governed evidence retrieval audit events",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": { "200": { "description": "Retrieval audit events scoped to the authenticated customer" } }
+                },
+                "post": {
+                    "summary": "Record governed evidence retrieval audit metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceRetrievalAuditRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Recorded retrieval audit metadata" } }
+                }
+            },
             "/api/v1/ops/dashboard/summary": {
                 "get": {
                     "summary": "Get management dashboard summary metrics",
@@ -4563,6 +4685,90 @@ pub async fn openapi_schema() -> Json<Value> {
                             "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, serving_version_lock_status, artifact_integrity_status, feature_store_materialization_status, segment_fairness_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         }
                     }
+                },
+                "EvidenceDocumentRegistrationRequest": {
+                    "type": "object",
+                    "required": ["document_id", "source_record_ref", "document_type", "storage_uri", "content_checksum", "ingestion_status", "redaction_status"],
+                    "properties": {
+                        "document_id": { "type": "string", "minLength": 1 },
+                        "source_record_ref": { "type": "string", "minLength": 1 },
+                        "claim_id": { "type": ["string", "null"] },
+                        "external_document_id": { "type": ["string", "null"] },
+                        "document_type": { "type": "string", "minLength": 1 },
+                        "storage_uri": { "type": "string", "minLength": 1 },
+                        "content_checksum": { "type": "string", "minLength": 1 },
+                        "ingestion_status": { "type": "string", "minLength": 1 },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "retention_policy_id": { "type": ["string", "null"] },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "metadata_json": { "type": "object", "additionalProperties": true }
+                    },
+                    "description": "Evidence document metadata only. Raw document text and payloads remain in customer-approved object storage."
+                },
+                "EvidenceDocumentChunkRegistrationRequest": {
+                    "type": "object",
+                    "required": ["chunk_id", "chunk_index", "chunking_version", "redaction_status", "text_checksum", "token_count", "storage_uri"],
+                    "properties": {
+                        "chunk_id": { "type": "string", "minLength": 1 },
+                        "chunk_index": { "type": "integer", "minimum": 0 },
+                        "chunking_version": { "type": "string", "minLength": 1 },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "text_checksum": { "type": "string", "minLength": 1 },
+                        "token_count": { "type": "integer", "minimum": 0 },
+                        "storage_uri": { "type": "string", "minLength": 1 },
+                        "source_offsets_json": { "type": "object", "additionalProperties": true },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    }
+                },
+                "EvidenceOcrOutputRegistrationRequest": {
+                    "type": "object",
+                    "required": ["ocr_output_id", "ocr_engine", "ocr_engine_version", "output_uri", "output_checksum", "quality_status"],
+                    "properties": {
+                        "ocr_output_id": { "type": "string", "minLength": 1 },
+                        "ocr_engine": { "type": "string", "minLength": 1 },
+                        "ocr_engine_version": { "type": "string", "minLength": 1 },
+                        "output_uri": { "type": "string", "minLength": 1 },
+                        "output_checksum": { "type": "string", "minLength": 1 },
+                        "confidence_score": { "type": ["string", "null"] },
+                        "quality_status": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    },
+                    "description": "OCR output metadata only; OCR text is addressed by output_uri and checksum."
+                },
+                "EvidenceEmbeddingJobRegistrationRequest": {
+                    "type": "object",
+                    "required": ["embedding_job_id", "target_kind", "target_ref", "embedding_model", "embedding_model_version", "chunking_version", "redaction_status", "vector_store_kind", "vector_store_ref", "embedding_checksum", "status"],
+                    "properties": {
+                        "embedding_job_id": { "type": "string", "minLength": 1 },
+                        "target_kind": { "type": "string", "enum": ["document", "document_chunk", "knowledge_case"] },
+                        "target_ref": { "type": "string", "minLength": 1 },
+                        "embedding_model": { "type": "string", "minLength": 1 },
+                        "embedding_model_version": { "type": "string", "minLength": 1 },
+                        "chunking_version": { "type": "string", "minLength": 1 },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "vector_store_kind": { "type": "string", "minLength": 1 },
+                        "vector_store_ref": { "type": "string", "minLength": 1 },
+                        "embedding_checksum": { "type": "string", "minLength": 1 },
+                        "status": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    }
+                },
+                "EvidenceRetrievalAuditRegistrationRequest": {
+                    "type": "object",
+                    "required": ["retrieval_id", "query_kind", "query_checksum", "retrieval_method", "top_k", "redaction_status"],
+                    "properties": {
+                        "retrieval_id": { "type": "string", "minLength": 1 },
+                        "query_kind": { "type": "string", "minLength": 1 },
+                        "query_checksum": { "type": "string", "minLength": 1 },
+                        "retrieval_method": { "type": "string", "minLength": 1 },
+                        "embedding_model_version": { "type": ["string", "null"] },
+                        "top_k": { "type": "integer", "minimum": 1 },
+                        "source_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "result_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    },
+                    "description": "Retrieval audit metadata uses query_checksum instead of raw query text."
                 },
                 "ModelEvaluationLineage": {
                     "type": "object",

@@ -3,8 +3,8 @@ use crate::{
     repository::{InMemoryScoringRepository, SharedRepository},
     routes::{
         agent, claims, dashboard, health, inbox, knowledge, openapi, ops_agents, ops_audit,
-        ops_cases, ops_datasets, ops_medical, ops_models, ops_providers, ops_routing_policies,
-        ops_rules, ops_sampling, ops_schemes, pilot_loop,
+        ops_cases, ops_datasets, ops_evidence, ops_medical, ops_models, ops_providers,
+        ops_routing_policies, ops_rules, ops_sampling, ops_schemes, pilot_loop,
     },
 };
 use axum::{
@@ -191,6 +191,31 @@ pub fn build_app_with_parts(
         .route(
             "/api/v1/ops/model-evaluations/:evaluation_run_id",
             get(ops_datasets::get_model_evaluation),
+        )
+        .route(
+            "/api/v1/ops/evidence/documents",
+            get(ops_evidence::list_documents).post(ops_evidence::create_document),
+        )
+        .route(
+            "/api/v1/ops/evidence/documents/:document_id",
+            get(ops_evidence::get_document),
+        )
+        .route(
+            "/api/v1/ops/evidence/documents/:document_id/chunks",
+            get(ops_evidence::list_document_chunks).post(ops_evidence::create_document_chunk),
+        )
+        .route(
+            "/api/v1/ops/evidence/documents/:document_id/ocr-outputs",
+            get(ops_evidence::list_ocr_outputs).post(ops_evidence::create_ocr_output),
+        )
+        .route(
+            "/api/v1/ops/evidence/embedding-jobs",
+            get(ops_evidence::list_embedding_jobs).post(ops_evidence::create_embedding_job),
+        )
+        .route(
+            "/api/v1/ops/evidence/retrieval-audit-events",
+            get(ops_evidence::list_retrieval_audit_events)
+                .post(ops_evidence::create_retrieval_audit_event),
         )
         .route("/api/v1/ops/models", get(ops_models::list_models))
         .route(

@@ -87,9 +87,11 @@ AI Evidence Foundation now has a PostgreSQL metadata contract and proof
 artifact. Document registry, chunks, OCR output metadata, redaction reviews,
 embedding jobs, retrieval audit, and agent workspace artifacts are represented
 in `migrations/0001_initial.sql` and validated by
-`scripts/ops/validate_ai_evidence_foundation.py`. This does not replace
-customer production OCR workers, embedding/vector storage, or retrieval
-ranking.
+`scripts/ops/validate_ai_evidence_foundation.py`. Runtime metadata APIs under
+`/api/v1/ops/evidence/*` now register documents, chunks, OCR output metadata,
+embedding jobs, and retrieval audit events with customer-scope audit evidence.
+This does not replace customer production OCR workers, embedding/vector storage,
+or retrieval ranking.
 
 ### Readiness Legend
 

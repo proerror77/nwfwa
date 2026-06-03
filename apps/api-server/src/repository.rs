@@ -129,6 +129,171 @@ pub struct AuditEventListFilter {
     pub customer_scope_id: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceDocumentRecord {
+    pub document_id: String,
+    pub customer_scope_id: String,
+    pub source_system: String,
+    pub source_record_ref: String,
+    pub claim_id: Option<String>,
+    pub external_document_id: Option<String>,
+    pub document_type: String,
+    pub storage_uri: String,
+    pub content_checksum: String,
+    pub ingestion_status: String,
+    pub redaction_status: String,
+    pub retention_policy_id: String,
+    pub evidence_refs: Vec<String>,
+    pub metadata_json: Value,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceDocumentInput {
+    pub document_id: String,
+    pub customer_scope_id: String,
+    pub source_system: String,
+    pub source_record_ref: String,
+    pub claim_id: Option<String>,
+    pub external_document_id: Option<String>,
+    pub document_type: String,
+    pub storage_uri: String,
+    pub content_checksum: String,
+    pub ingestion_status: String,
+    pub redaction_status: String,
+    pub retention_policy_id: String,
+    pub evidence_refs: Vec<String>,
+    pub metadata_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceDocumentChunkRecord {
+    pub chunk_id: String,
+    pub document_id: String,
+    pub chunk_index: i32,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub text_checksum: String,
+    pub token_count: i32,
+    pub storage_uri: String,
+    pub source_offsets_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceDocumentChunkInput {
+    pub chunk_id: String,
+    pub document_id: String,
+    pub chunk_index: i32,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub text_checksum: String,
+    pub token_count: i32,
+    pub storage_uri: String,
+    pub source_offsets_json: Value,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceOcrOutputRecord {
+    pub ocr_output_id: String,
+    pub document_id: String,
+    pub ocr_engine: String,
+    pub ocr_engine_version: String,
+    pub output_uri: String,
+    pub output_checksum: String,
+    pub confidence_score: Option<Decimal>,
+    pub quality_status: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceOcrOutputInput {
+    pub ocr_output_id: String,
+    pub document_id: String,
+    pub ocr_engine: String,
+    pub ocr_engine_version: String,
+    pub output_uri: String,
+    pub output_checksum: String,
+    pub confidence_score: Option<Decimal>,
+    pub quality_status: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceEmbeddingJobRecord {
+    pub embedding_job_id: String,
+    pub customer_scope_id: String,
+    pub target_kind: String,
+    pub target_ref: String,
+    pub embedding_model: String,
+    pub embedding_model_version: String,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub vector_store_kind: String,
+    pub vector_store_ref: String,
+    pub embedding_checksum: String,
+    pub status: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceEmbeddingJobInput {
+    pub embedding_job_id: String,
+    pub customer_scope_id: String,
+    pub target_kind: String,
+    pub target_ref: String,
+    pub embedding_model: String,
+    pub embedding_model_version: String,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub vector_store_kind: String,
+    pub vector_store_ref: String,
+    pub embedding_checksum: String,
+    pub status: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceRetrievalAuditEventRecord {
+    pub retrieval_id: String,
+    pub customer_scope_id: String,
+    pub actor_id: String,
+    pub actor_role: String,
+    pub query_kind: String,
+    pub query_checksum: String,
+    pub retrieval_method: String,
+    pub embedding_model_version: Option<String>,
+    pub top_k: i32,
+    pub source_refs: Vec<String>,
+    pub result_refs: Vec<String>,
+    pub redaction_status: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceRetrievalAuditEventInput {
+    pub retrieval_id: String,
+    pub customer_scope_id: String,
+    pub actor_id: String,
+    pub actor_role: String,
+    pub query_kind: String,
+    pub query_checksum: String,
+    pub retrieval_method: String,
+    pub embedding_model_version: Option<String>,
+    pub top_k: i32,
+    pub source_refs: Vec<String>,
+    pub result_refs: Vec<String>,
+    pub redaction_status: String,
+    pub evidence_refs: Vec<String>,
+}
+
 const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "dataset.registered",
     "dataset.field_mapping.added",
@@ -149,6 +314,11 @@ const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "routing_policy.status.changed",
     "routing_policy.activation.completed",
     "routing_policy.rollback.completed",
+    "evidence.document.registered",
+    "evidence.document_chunk.registered",
+    "evidence.ocr_output.registered",
+    "evidence.embedding_job.registered",
+    "evidence.retrieval_audit.recorded",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -1715,6 +1885,66 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<Option<ModelEvaluationRecord>>;
 
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>>;
+
+    async fn save_evidence_document(
+        &self,
+        input: CreateEvidenceDocumentInput,
+    ) -> anyhow::Result<EvidenceDocumentRecord>;
+
+    async fn list_evidence_documents(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentRecord>>;
+
+    async fn get_evidence_document(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentRecord>>;
+
+    async fn save_evidence_document_chunk(
+        &self,
+        input: CreateEvidenceDocumentChunkInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentChunkRecord>>;
+
+    async fn list_evidence_document_chunks(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentChunkRecord>>;
+
+    async fn save_evidence_ocr_output(
+        &self,
+        input: CreateEvidenceOcrOutputInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceOcrOutputRecord>>;
+
+    async fn list_evidence_ocr_outputs(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceOcrOutputRecord>>;
+
+    async fn save_evidence_embedding_job(
+        &self,
+        input: CreateEvidenceEmbeddingJobInput,
+    ) -> anyhow::Result<EvidenceEmbeddingJobRecord>;
+
+    async fn list_evidence_embedding_jobs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceEmbeddingJobRecord>>;
+
+    async fn save_evidence_retrieval_audit_event(
+        &self,
+        input: CreateEvidenceRetrievalAuditEventInput,
+    ) -> anyhow::Result<EvidenceRetrievalAuditEventRecord>;
+
+    async fn list_evidence_retrieval_audit_events(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -1752,6 +1982,11 @@ pub struct InMemoryScoringRepository {
     routing_policies: Mutex<Vec<RoutingPolicyRecord>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
+    evidence_documents: Mutex<HashMap<String, EvidenceDocumentRecord>>,
+    evidence_document_chunks: Mutex<HashMap<String, EvidenceDocumentChunkRecord>>,
+    evidence_ocr_outputs: Mutex<HashMap<String, EvidenceOcrOutputRecord>>,
+    evidence_embedding_jobs: Mutex<HashMap<String, EvidenceEmbeddingJobRecord>>,
+    evidence_retrieval_audit_events: Mutex<HashMap<String, EvidenceRetrievalAuditEventRecord>>,
 }
 
 async fn upsert_pilot_audit_event(
@@ -3758,6 +3993,271 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect::<Vec<_>>();
         evaluations.sort_by(|left, right| left.evaluation_run_id.cmp(&right.evaluation_run_id));
         Ok(evaluations)
+    }
+
+    async fn save_evidence_document(
+        &self,
+        input: CreateEvidenceDocumentInput,
+    ) -> anyhow::Result<EvidenceDocumentRecord> {
+        let record = EvidenceDocumentRecord {
+            document_id: input.document_id,
+            customer_scope_id: input.customer_scope_id,
+            source_system: input.source_system,
+            source_record_ref: input.source_record_ref,
+            claim_id: input.claim_id,
+            external_document_id: input.external_document_id,
+            document_type: input.document_type,
+            storage_uri: input.storage_uri,
+            content_checksum: input.content_checksum,
+            ingestion_status: input.ingestion_status,
+            redaction_status: input.redaction_status,
+            retention_policy_id: input.retention_policy_id,
+            evidence_refs: input.evidence_refs,
+            metadata_json: input.metadata_json,
+            created_at: None,
+            updated_at: None,
+        };
+        self.evidence_documents
+            .lock()
+            .await
+            .insert(record.document_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn list_evidence_documents(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentRecord>> {
+        let mut records = self
+            .evidence_documents
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.document_id.cmp(&right.document_id));
+        Ok(records)
+    }
+
+    async fn get_evidence_document(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentRecord>> {
+        Ok(self
+            .evidence_documents
+            .lock()
+            .await
+            .get(document_id)
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned())
+    }
+
+    async fn save_evidence_document_chunk(
+        &self,
+        input: CreateEvidenceDocumentChunkInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let record = EvidenceDocumentChunkRecord {
+            chunk_id: input.chunk_id,
+            document_id: input.document_id,
+            chunk_index: input.chunk_index,
+            chunking_version: input.chunking_version,
+            redaction_status: input.redaction_status,
+            text_checksum: input.text_checksum,
+            token_count: input.token_count,
+            storage_uri: input.storage_uri,
+            source_offsets_json: input.source_offsets_json,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+        };
+        self.evidence_document_chunks
+            .lock()
+            .await
+            .insert(record.chunk_id.clone(), record.clone());
+        Ok(Some(record))
+    }
+
+    async fn list_evidence_document_chunks(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let mut records = self
+            .evidence_document_chunks
+            .lock()
+            .await
+            .values()
+            .filter(|record| record.document_id == document_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by_key(|record| record.chunk_index);
+        Ok(records)
+    }
+
+    async fn save_evidence_ocr_output(
+        &self,
+        input: CreateEvidenceOcrOutputInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let record = EvidenceOcrOutputRecord {
+            ocr_output_id: input.ocr_output_id,
+            document_id: input.document_id,
+            ocr_engine: input.ocr_engine,
+            ocr_engine_version: input.ocr_engine_version,
+            output_uri: input.output_uri,
+            output_checksum: input.output_checksum,
+            confidence_score: input.confidence_score,
+            quality_status: input.quality_status,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+        };
+        self.evidence_ocr_outputs
+            .lock()
+            .await
+            .insert(record.ocr_output_id.clone(), record.clone());
+        Ok(Some(record))
+    }
+
+    async fn list_evidence_ocr_outputs(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let mut records = self
+            .evidence_ocr_outputs
+            .lock()
+            .await
+            .values()
+            .filter(|record| record.document_id == document_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.ocr_output_id.cmp(&right.ocr_output_id));
+        Ok(records)
+    }
+
+    async fn save_evidence_embedding_job(
+        &self,
+        input: CreateEvidenceEmbeddingJobInput,
+    ) -> anyhow::Result<EvidenceEmbeddingJobRecord> {
+        let record = EvidenceEmbeddingJobRecord {
+            embedding_job_id: input.embedding_job_id,
+            customer_scope_id: input.customer_scope_id,
+            target_kind: input.target_kind,
+            target_ref: input.target_ref,
+            embedding_model: input.embedding_model,
+            embedding_model_version: input.embedding_model_version,
+            chunking_version: input.chunking_version,
+            redaction_status: input.redaction_status,
+            vector_store_kind: input.vector_store_kind,
+            vector_store_ref: input.vector_store_ref,
+            embedding_checksum: input.embedding_checksum,
+            status: input.status,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+            completed_at: None,
+        };
+        self.evidence_embedding_jobs
+            .lock()
+            .await
+            .insert(record.embedding_job_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn list_evidence_embedding_jobs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceEmbeddingJobRecord>> {
+        let mut records = self
+            .evidence_embedding_jobs
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.embedding_job_id.cmp(&right.embedding_job_id));
+        Ok(records)
+    }
+
+    async fn save_evidence_retrieval_audit_event(
+        &self,
+        input: CreateEvidenceRetrievalAuditEventInput,
+    ) -> anyhow::Result<EvidenceRetrievalAuditEventRecord> {
+        let record = EvidenceRetrievalAuditEventRecord {
+            retrieval_id: input.retrieval_id,
+            customer_scope_id: input.customer_scope_id,
+            actor_id: input.actor_id,
+            actor_role: input.actor_role,
+            query_kind: input.query_kind,
+            query_checksum: input.query_checksum,
+            retrieval_method: input.retrieval_method,
+            embedding_model_version: input.embedding_model_version,
+            top_k: input.top_k,
+            source_refs: input.source_refs,
+            result_refs: input.result_refs,
+            redaction_status: input.redaction_status,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+        };
+        self.evidence_retrieval_audit_events
+            .lock()
+            .await
+            .insert(record.retrieval_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn list_evidence_retrieval_audit_events(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>> {
+        let mut records = self
+            .evidence_retrieval_audit_events
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.retrieval_id.cmp(&right.retrieval_id));
+        Ok(records)
     }
 }
 
@@ -8103,6 +8603,444 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .collect())
     }
+
+    async fn save_evidence_document(
+        &self,
+        input: CreateEvidenceDocumentInput,
+    ) -> anyhow::Result<EvidenceDocumentRecord> {
+        let row = sqlx::query(
+            "WITH input_claim AS (
+               SELECT id FROM claims WHERE external_claim_id = $5 LIMIT 1
+             )
+             INSERT INTO evidence_documents
+             (document_id, customer_scope_id, source_system, source_record_ref, claim_id, external_document_id, document_type, storage_uri, content_checksum, ingestion_status, redaction_status, retention_policy_id, evidence_refs, metadata_json)
+             VALUES ($1, $2, $3, $4, (SELECT id FROM input_claim), $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             ON CONFLICT (document_id) DO UPDATE SET
+               customer_scope_id = EXCLUDED.customer_scope_id,
+               source_system = EXCLUDED.source_system,
+               source_record_ref = EXCLUDED.source_record_ref,
+               claim_id = EXCLUDED.claim_id,
+               external_document_id = EXCLUDED.external_document_id,
+               document_type = EXCLUDED.document_type,
+               storage_uri = EXCLUDED.storage_uri,
+               content_checksum = EXCLUDED.content_checksum,
+               ingestion_status = EXCLUDED.ingestion_status,
+               redaction_status = EXCLUDED.redaction_status,
+               retention_policy_id = EXCLUDED.retention_policy_id,
+               evidence_refs = EXCLUDED.evidence_refs,
+               metadata_json = EXCLUDED.metadata_json,
+               updated_at = now()
+             RETURNING document_id, customer_scope_id, source_system, source_record_ref,
+               (SELECT external_claim_id FROM claims WHERE id = evidence_documents.claim_id) AS claim_id,
+               external_document_id, document_type, storage_uri, content_checksum, ingestion_status,
+               redaction_status, retention_policy_id, evidence_refs, metadata_json, created_at, updated_at",
+        )
+        .bind(&input.document_id)
+        .bind(&input.customer_scope_id)
+        .bind(&input.source_system)
+        .bind(&input.source_record_ref)
+        .bind(&input.claim_id)
+        .bind(&input.external_document_id)
+        .bind(&input.document_type)
+        .bind(&input.storage_uri)
+        .bind(&input.content_checksum)
+        .bind(&input.ingestion_status)
+        .bind(&input.redaction_status)
+        .bind(&input.retention_policy_id)
+        .bind(string_values(&input.evidence_refs))
+        .bind(&input.metadata_json)
+        .fetch_one(&self.pool)
+        .await?;
+        evidence_document_from_row(row)
+    }
+
+    async fn list_evidence_documents(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentRecord>> {
+        let rows = sqlx::query(
+            "SELECT d.document_id, d.customer_scope_id, d.source_system, d.source_record_ref,
+                    c.external_claim_id AS claim_id, d.external_document_id, d.document_type,
+                    d.storage_uri, d.content_checksum, d.ingestion_status, d.redaction_status,
+                    d.retention_policy_id, d.evidence_refs, d.metadata_json, d.created_at, d.updated_at
+             FROM evidence_documents d
+             LEFT JOIN claims c ON c.id = d.claim_id
+             WHERE ($1::text IS NULL OR d.customer_scope_id = $1)
+             ORDER BY d.document_id",
+        )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(evidence_document_from_row).collect()
+    }
+
+    async fn get_evidence_document(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentRecord>> {
+        let row = sqlx::query(
+            "SELECT d.document_id, d.customer_scope_id, d.source_system, d.source_record_ref,
+                    c.external_claim_id AS claim_id, d.external_document_id, d.document_type,
+                    d.storage_uri, d.content_checksum, d.ingestion_status, d.redaction_status,
+                    d.retention_policy_id, d.evidence_refs, d.metadata_json, d.created_at, d.updated_at
+             FROM evidence_documents d
+             LEFT JOIN claims c ON c.id = d.claim_id
+             WHERE d.document_id = $1
+               AND ($2::text IS NULL OR d.customer_scope_id = $2)",
+        )
+        .bind(document_id)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(evidence_document_from_row).transpose()
+    }
+
+    async fn save_evidence_document_chunk(
+        &self,
+        input: CreateEvidenceDocumentChunkInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let row = sqlx::query(
+            "INSERT INTO evidence_document_chunks
+             (chunk_id, document_id, chunk_index, chunking_version, redaction_status, text_checksum, token_count, storage_uri, source_offsets_json, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (document_id, chunk_index, chunking_version) DO UPDATE SET
+               redaction_status = EXCLUDED.redaction_status,
+               text_checksum = EXCLUDED.text_checksum,
+               token_count = EXCLUDED.token_count,
+               storage_uri = EXCLUDED.storage_uri,
+               source_offsets_json = EXCLUDED.source_offsets_json,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING chunk_id, document_id, chunk_index, chunking_version, redaction_status, text_checksum, token_count, storage_uri, source_offsets_json, evidence_refs, created_at",
+        )
+        .bind(&input.chunk_id)
+        .bind(&input.document_id)
+        .bind(input.chunk_index)
+        .bind(&input.chunking_version)
+        .bind(&input.redaction_status)
+        .bind(&input.text_checksum)
+        .bind(input.token_count)
+        .bind(&input.storage_uri)
+        .bind(&input.source_offsets_json)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(Some(evidence_document_chunk_from_row(row)?))
+    }
+
+    async fn list_evidence_document_chunks(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            "SELECT chunk_id, document_id, chunk_index, chunking_version, redaction_status, text_checksum, token_count, storage_uri, source_offsets_json, evidence_refs, created_at
+             FROM evidence_document_chunks
+             WHERE document_id = $1
+             ORDER BY chunk_index, chunk_id",
+        )
+        .bind(document_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(evidence_document_chunk_from_row)
+            .collect()
+    }
+
+    async fn save_evidence_ocr_output(
+        &self,
+        input: CreateEvidenceOcrOutputInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let row = sqlx::query(
+            "INSERT INTO evidence_ocr_outputs
+             (ocr_output_id, document_id, ocr_engine, ocr_engine_version, output_uri, output_checksum, confidence_score, quality_status, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (ocr_output_id) DO UPDATE SET
+               ocr_engine = EXCLUDED.ocr_engine,
+               ocr_engine_version = EXCLUDED.ocr_engine_version,
+               output_uri = EXCLUDED.output_uri,
+               output_checksum = EXCLUDED.output_checksum,
+               confidence_score = EXCLUDED.confidence_score,
+               quality_status = EXCLUDED.quality_status,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING ocr_output_id, document_id, ocr_engine, ocr_engine_version, output_uri, output_checksum, confidence_score, quality_status, evidence_refs, created_at",
+        )
+        .bind(&input.ocr_output_id)
+        .bind(&input.document_id)
+        .bind(&input.ocr_engine)
+        .bind(&input.ocr_engine_version)
+        .bind(&input.output_uri)
+        .bind(&input.output_checksum)
+        .bind(input.confidence_score)
+        .bind(&input.quality_status)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(Some(evidence_ocr_output_from_row(row)?))
+    }
+
+    async fn list_evidence_ocr_outputs(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            "SELECT ocr_output_id, document_id, ocr_engine, ocr_engine_version, output_uri, output_checksum, confidence_score, quality_status, evidence_refs, created_at
+             FROM evidence_ocr_outputs
+             WHERE document_id = $1
+             ORDER BY ocr_output_id",
+        )
+        .bind(document_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(evidence_ocr_output_from_row).collect()
+    }
+
+    async fn save_evidence_embedding_job(
+        &self,
+        input: CreateEvidenceEmbeddingJobInput,
+    ) -> anyhow::Result<EvidenceEmbeddingJobRecord> {
+        let row = sqlx::query(
+            "INSERT INTO evidence_embedding_jobs
+             (embedding_job_id, customer_scope_id, target_kind, target_ref, embedding_model, embedding_model_version, chunking_version, redaction_status, vector_store_kind, vector_store_ref, embedding_checksum, status, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (embedding_job_id) DO UPDATE SET
+               customer_scope_id = EXCLUDED.customer_scope_id,
+               target_kind = EXCLUDED.target_kind,
+               target_ref = EXCLUDED.target_ref,
+               embedding_model = EXCLUDED.embedding_model,
+               embedding_model_version = EXCLUDED.embedding_model_version,
+               chunking_version = EXCLUDED.chunking_version,
+               redaction_status = EXCLUDED.redaction_status,
+               vector_store_kind = EXCLUDED.vector_store_kind,
+               vector_store_ref = EXCLUDED.vector_store_ref,
+               embedding_checksum = EXCLUDED.embedding_checksum,
+               status = EXCLUDED.status,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING embedding_job_id, customer_scope_id, target_kind, target_ref, embedding_model, embedding_model_version, chunking_version, redaction_status, vector_store_kind, vector_store_ref, embedding_checksum, status, evidence_refs, created_at, completed_at",
+        )
+        .bind(&input.embedding_job_id)
+        .bind(&input.customer_scope_id)
+        .bind(&input.target_kind)
+        .bind(&input.target_ref)
+        .bind(&input.embedding_model)
+        .bind(&input.embedding_model_version)
+        .bind(&input.chunking_version)
+        .bind(&input.redaction_status)
+        .bind(&input.vector_store_kind)
+        .bind(&input.vector_store_ref)
+        .bind(&input.embedding_checksum)
+        .bind(&input.status)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        evidence_embedding_job_from_row(row)
+    }
+
+    async fn list_evidence_embedding_jobs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceEmbeddingJobRecord>> {
+        let rows = sqlx::query(
+            "SELECT embedding_job_id, customer_scope_id, target_kind, target_ref, embedding_model, embedding_model_version, chunking_version, redaction_status, vector_store_kind, vector_store_ref, embedding_checksum, status, evidence_refs, created_at, completed_at
+             FROM evidence_embedding_jobs
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+             ORDER BY embedding_job_id",
+        )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(evidence_embedding_job_from_row)
+            .collect()
+    }
+
+    async fn save_evidence_retrieval_audit_event(
+        &self,
+        input: CreateEvidenceRetrievalAuditEventInput,
+    ) -> anyhow::Result<EvidenceRetrievalAuditEventRecord> {
+        let row = sqlx::query(
+            "INSERT INTO evidence_retrieval_audit_events
+             (retrieval_id, customer_scope_id, actor_id, actor_role, query_kind, query_checksum, retrieval_method, embedding_model_version, top_k, source_refs, result_refs, redaction_status, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (retrieval_id) DO UPDATE SET
+               customer_scope_id = EXCLUDED.customer_scope_id,
+               actor_id = EXCLUDED.actor_id,
+               actor_role = EXCLUDED.actor_role,
+               query_kind = EXCLUDED.query_kind,
+               query_checksum = EXCLUDED.query_checksum,
+               retrieval_method = EXCLUDED.retrieval_method,
+               embedding_model_version = EXCLUDED.embedding_model_version,
+               top_k = EXCLUDED.top_k,
+               source_refs = EXCLUDED.source_refs,
+               result_refs = EXCLUDED.result_refs,
+               redaction_status = EXCLUDED.redaction_status,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING retrieval_id, customer_scope_id, actor_id, actor_role, query_kind, query_checksum, retrieval_method, embedding_model_version, top_k, source_refs, result_refs, redaction_status, evidence_refs, created_at",
+        )
+        .bind(&input.retrieval_id)
+        .bind(&input.customer_scope_id)
+        .bind(&input.actor_id)
+        .bind(&input.actor_role)
+        .bind(&input.query_kind)
+        .bind(&input.query_checksum)
+        .bind(&input.retrieval_method)
+        .bind(&input.embedding_model_version)
+        .bind(input.top_k)
+        .bind(string_values(&input.source_refs))
+        .bind(string_values(&input.result_refs))
+        .bind(&input.redaction_status)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        evidence_retrieval_audit_event_from_row(row)
+    }
+
+    async fn list_evidence_retrieval_audit_events(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>> {
+        let rows = sqlx::query(
+            "SELECT retrieval_id, customer_scope_id, actor_id, actor_role, query_kind, query_checksum, retrieval_method, embedding_model_version, top_k, source_refs, result_refs, redaction_status, evidence_refs, created_at
+             FROM evidence_retrieval_audit_events
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+             ORDER BY created_at DESC, retrieval_id",
+        )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(evidence_retrieval_audit_event_from_row)
+            .collect()
+    }
+}
+
+fn evidence_document_from_row(row: PgRow) -> anyhow::Result<EvidenceDocumentRecord> {
+    Ok(EvidenceDocumentRecord {
+        document_id: row.try_get("document_id")?,
+        customer_scope_id: row.try_get("customer_scope_id")?,
+        source_system: row.try_get("source_system")?,
+        source_record_ref: row.try_get("source_record_ref")?,
+        claim_id: row.try_get("claim_id")?,
+        external_document_id: row.try_get("external_document_id")?,
+        document_type: row.try_get("document_type")?,
+        storage_uri: row.try_get("storage_uri")?,
+        content_checksum: row.try_get("content_checksum")?,
+        ingestion_status: row.try_get("ingestion_status")?,
+        redaction_status: row.try_get("redaction_status")?,
+        retention_policy_id: row.try_get("retention_policy_id")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        metadata_json: row.try_get("metadata_json")?,
+        created_at: timestamp_from_row(&row, "created_at")?,
+        updated_at: timestamp_from_row(&row, "updated_at")?,
+    })
+}
+
+fn evidence_document_chunk_from_row(row: PgRow) -> anyhow::Result<EvidenceDocumentChunkRecord> {
+    Ok(EvidenceDocumentChunkRecord {
+        chunk_id: row.try_get("chunk_id")?,
+        document_id: row.try_get("document_id")?,
+        chunk_index: row.try_get("chunk_index")?,
+        chunking_version: row.try_get("chunking_version")?,
+        redaction_status: row.try_get("redaction_status")?,
+        text_checksum: row.try_get("text_checksum")?,
+        token_count: row.try_get("token_count")?,
+        storage_uri: row.try_get("storage_uri")?,
+        source_offsets_json: row.try_get("source_offsets_json")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+    })
+}
+
+fn evidence_ocr_output_from_row(row: PgRow) -> anyhow::Result<EvidenceOcrOutputRecord> {
+    Ok(EvidenceOcrOutputRecord {
+        ocr_output_id: row.try_get("ocr_output_id")?,
+        document_id: row.try_get("document_id")?,
+        ocr_engine: row.try_get("ocr_engine")?,
+        ocr_engine_version: row.try_get("ocr_engine_version")?,
+        output_uri: row.try_get("output_uri")?,
+        output_checksum: row.try_get("output_checksum")?,
+        confidence_score: row.try_get("confidence_score")?,
+        quality_status: row.try_get("quality_status")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+    })
+}
+
+fn evidence_embedding_job_from_row(row: PgRow) -> anyhow::Result<EvidenceEmbeddingJobRecord> {
+    Ok(EvidenceEmbeddingJobRecord {
+        embedding_job_id: row.try_get("embedding_job_id")?,
+        customer_scope_id: row.try_get("customer_scope_id")?,
+        target_kind: row.try_get("target_kind")?,
+        target_ref: row.try_get("target_ref")?,
+        embedding_model: row.try_get("embedding_model")?,
+        embedding_model_version: row.try_get("embedding_model_version")?,
+        chunking_version: row.try_get("chunking_version")?,
+        redaction_status: row.try_get("redaction_status")?,
+        vector_store_kind: row.try_get("vector_store_kind")?,
+        vector_store_ref: row.try_get("vector_store_ref")?,
+        embedding_checksum: row.try_get("embedding_checksum")?,
+        status: row.try_get("status")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+        completed_at: timestamp_from_row(&row, "completed_at")?,
+    })
+}
+
+fn evidence_retrieval_audit_event_from_row(
+    row: PgRow,
+) -> anyhow::Result<EvidenceRetrievalAuditEventRecord> {
+    Ok(EvidenceRetrievalAuditEventRecord {
+        retrieval_id: row.try_get("retrieval_id")?,
+        customer_scope_id: row.try_get("customer_scope_id")?,
+        actor_id: row.try_get("actor_id")?,
+        actor_role: row.try_get("actor_role")?,
+        query_kind: row.try_get("query_kind")?,
+        query_checksum: row.try_get("query_checksum")?,
+        retrieval_method: row.try_get("retrieval_method")?,
+        embedding_model_version: row.try_get("embedding_model_version")?,
+        top_k: row.try_get("top_k")?,
+        source_refs: json_array_to_strings(row.try_get("source_refs")?),
+        result_refs: json_array_to_strings(row.try_get("result_refs")?),
+        redaction_status: row.try_get("redaction_status")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+    })
+}
+
+fn timestamp_from_row(row: &PgRow, column: &str) -> anyhow::Result<Option<String>> {
+    let value: Option<chrono::DateTime<chrono::Utc>> = row.try_get(column)?;
+    Ok(value.map(|timestamp| timestamp.to_rfc3339()))
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}

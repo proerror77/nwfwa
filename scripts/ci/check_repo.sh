@@ -390,6 +390,12 @@ grep -q "evidence_redaction_reviews" migrations/0001_initial.sql
 grep -q "evidence_embedding_jobs" migrations/0001_initial.sql
 grep -q "evidence_retrieval_audit_events" migrations/0001_initial.sql
 grep -q "agent_workspace_artifacts" migrations/0001_initial.sql
+grep -q "ops_evidence" apps/api-server/src/app.rs
+grep -q "/api/v1/ops/evidence/documents" apps/api-server/src/routes/openapi.rs
+grep -q "evidence.document.registered" apps/api-server/src/routes/ops_evidence.rs
+grep -q "evidence.retrieval_audit.recorded" apps/api-server/src/routes/ops_evidence.rs
+grep -q "/api/v1/ops/evidence/embedding-jobs" docs/project/api-reference.md
+grep -q "/api/v1/ops/evidence/retrieval-audit-events" docs/project/ai-evidence-foundation.md
 grep -q "ai_evidence_foundation_manifest.json" docs/project/operations-guide.md
 grep -q "AI Evidence Foundation" docs/project/README.md
 grep -q "Document registry" docs/project/data-model.md

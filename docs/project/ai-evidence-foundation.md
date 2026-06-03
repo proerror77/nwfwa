@@ -47,6 +47,25 @@ Existing agent tables complete the approval boundary:
 - `agent_policy_checks`
 - `agent_approvals`
 
+## Runtime API
+
+The governed metadata API is implemented under `/api/v1/ops/evidence/*`:
+
+| Method | Path | Purpose |
+| --- | --- | --- |
+| GET/POST | `/api/v1/ops/evidence/documents` | List or register document metadata, storage URI, checksum, redaction status, and retention policy |
+| GET | `/api/v1/ops/evidence/documents/{document_id}` | Read one document metadata record within the authenticated customer scope |
+| GET/POST | `/api/v1/ops/evidence/documents/{document_id}/chunks` | List or register chunk metadata, offsets, checksum, token count, and redaction status |
+| GET/POST | `/api/v1/ops/evidence/documents/{document_id}/ocr-outputs` | List or register OCR output metadata, engine version, output URI, checksum, confidence, and quality status |
+| GET/POST | `/api/v1/ops/evidence/embedding-jobs` | List or register embedding job metadata, target refs, vector store refs, checksum, and status |
+| GET/POST | `/api/v1/ops/evidence/retrieval-audit-events` | List or record retrieval audit metadata with query checksum, source refs, result refs, and redaction status |
+
+The API derives `customer_scope_id`, `actor_id`, `actor_role`, and
+`source_system` from the authenticated API key. Callers do not supply tenant
+scope. Payloads intentionally carry URIs, checksums, redaction status, and
+evidence refs instead of raw document text, raw OCR text, embedding vectors, or
+raw query text.
+
 ## Proof
 
 Run:

@@ -457,6 +457,30 @@ Promotion gates should be read as the policy checklist for activation. They
 cover data quality, label provenance, drift, promotion review evidence, feature
 reproducibility, explanation artifacts, and validation quality.
 
+## AI Evidence Runtime Metadata
+
+| Method | Path | Purpose | Auth | Side effects |
+| --- | --- | --- | --- | --- |
+| GET | `/api/v1/ops/evidence/documents` | List governed document metadata for the authenticated customer scope. | Yes | None |
+| POST | `/api/v1/ops/evidence/documents` | Register evidence document metadata, storage URI, checksum, redaction status, and retention policy. | Yes | Persists metadata and `evidence.document.registered` audit event. |
+| GET | `/api/v1/ops/evidence/documents/{document_id}` | Read one governed evidence document metadata record. | Yes | None |
+| GET | `/api/v1/ops/evidence/documents/{document_id}/chunks` | List chunk metadata for a governed document. | Yes | None |
+| POST | `/api/v1/ops/evidence/documents/{document_id}/chunks` | Register chunk metadata, checksum, offsets, token count, and redaction status. | Yes | Persists metadata and `evidence.document_chunk.registered` audit event. |
+| GET | `/api/v1/ops/evidence/documents/{document_id}/ocr-outputs` | List OCR output metadata for a governed document. | Yes | None |
+| POST | `/api/v1/ops/evidence/documents/{document_id}/ocr-outputs` | Register OCR engine/version, output URI, checksum, confidence, and quality status. | Yes | Persists metadata and `evidence.ocr_output.registered` audit event. |
+| GET | `/api/v1/ops/evidence/embedding-jobs` | List embedding job metadata for the authenticated customer scope. | Yes | None |
+| POST | `/api/v1/ops/evidence/embedding-jobs` | Register embedding job metadata, vector store refs, checksum, status, and target ref. | Yes | Persists metadata and `evidence.embedding_job.registered` audit event. |
+| GET | `/api/v1/ops/evidence/retrieval-audit-events` | List retrieval audit metadata for the authenticated customer scope. | Yes | None |
+| POST | `/api/v1/ops/evidence/retrieval-audit-events` | Record retrieval audit metadata using query checksum, source refs, result refs, and redaction status. | Yes | Persists metadata and `evidence.retrieval_audit.recorded` audit event. |
+
+These APIs are the runtime metadata surface for the AI evidence foundation.
+`customer_scope_id`, `actor_id`, `actor_role`, and `source_system` are derived
+from the authenticated API key; callers do not supply tenant scope. The payloads
+intentionally do not accept raw document text, OCR text, embedding vectors, or
+raw query text. Raw documents, OCR outputs, and vector materialization remain in
+customer-approved object storage or vector stores referenced by URI, checksum,
+and evidence refs.
+
 ## Provider, Member, And Scheme Intelligence
 
 | Method | Path | Purpose | Auth | Side effects |
