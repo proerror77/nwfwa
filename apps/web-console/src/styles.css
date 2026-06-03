@@ -4404,6 +4404,164 @@ pre {
   text-overflow: ellipsis;
 }
 
+.data-lineage-cockpit {
+  overflow: hidden;
+}
+
+.data-lineage-map {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-rows: repeat(3, minmax(92px, auto));
+  gap: 12px;
+  min-height: 368px;
+  margin-top: 14px;
+  padding: 16px;
+  overflow: hidden;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(247, 250, 255, 0.98)),
+    repeating-linear-gradient(90deg, rgba(23, 105, 224, 0.075) 0 1px, transparent 1px 34px),
+    repeating-linear-gradient(0deg, rgba(15, 123, 140, 0.06) 0 1px, transparent 1px 34px);
+  border: 1px solid #c9dbf3;
+  border-radius: 8px;
+}
+
+.lineage-rail {
+  position: absolute;
+  z-index: 0;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #88b6ee 14%, #1769e0 50%, #88b6ee 86%, transparent);
+}
+
+.lineage-rail.rail-a {
+  left: 10%;
+  right: 10%;
+  top: 50%;
+}
+
+.lineage-rail.rail-b {
+  left: 18%;
+  right: 18%;
+  top: 30%;
+  transform: rotate(14deg);
+}
+
+.lineage-rail.rail-c {
+  left: 18%;
+  right: 18%;
+  top: 68%;
+  transform: rotate(-14deg);
+}
+
+.data-lineage-node {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  align-content: start;
+  gap: 5px;
+  min-width: 0;
+  min-height: 96px;
+  padding: 12px;
+  background: rgba(255, 255, 255, 0.96);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--blue);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.data-lineage-node span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 850;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.data-lineage-node strong {
+  color: #0c315f;
+  font-size: 24px;
+  line-height: 1.05;
+  overflow-wrap: anywhere;
+}
+
+.data-lineage-node small {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.data-lineage-node.source {
+  grid-column: 1;
+  grid-row: 2;
+  border-top-color: var(--teal);
+}
+
+.data-lineage-node.contract {
+  grid-column: 2;
+  grid-row: 1;
+  border-top-color: #1769e0;
+}
+
+.data-lineage-node.canonical {
+  grid-column: 2;
+  grid-row: 3;
+  border-top-color: #17436f;
+}
+
+.data-lineage-node.feature {
+  grid-column: 3;
+  grid-row: 2;
+  border-top-color: #1f8f54;
+}
+
+.data-lineage-node.model {
+  grid-column: 4;
+  grid-row: 1;
+  border-top-color: #6f5bd5;
+}
+
+.data-lineage-node.runtime {
+  grid-column: 4;
+  grid-row: 2;
+  border-top-color: var(--blue);
+}
+
+.data-lineage-node.audit {
+  grid-column: 4;
+  grid-row: 3;
+  border-top-color: var(--amber);
+}
+
+.data-lineage-proof-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 12px;
+}
+
+.data-lineage-proof-grid > div {
+  min-width: 0;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.data-lineage-proof-grid span,
+.data-lineage-proof-grid small {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.data-lineage-proof-grid strong {
+  display: block;
+  margin: 5px 0;
+  color: #0c315f;
+  overflow-wrap: anywhere;
+}
+
 .queue-source-panel p,
 .lead-case-queue-grid p,
 .case-action-panel p {
@@ -4889,6 +5047,7 @@ pre {
   .evidence-runtime-map,
   .evidence-runtime-grid,
   .runtime-path-card,
+  .data-lineage-proof-grid,
   .member-profile-cockpit,
   .provider-risk-cockpit,
   .model-telemetry {
@@ -4907,6 +5066,7 @@ pre {
   .audit-sampling-cockpit,
   .routing-cockpit,
   .agent-run-cockpit,
+  .data-lineage-proof-grid,
   .leads-cases-workflow {
     grid-template-columns: 1fr;
   }
@@ -5024,6 +5184,8 @@ pre {
   .metric-row,
   .ops-stat-strip,
   .health-card dl,
+  .data-lineage-map,
+  .data-lineage-proof-grid,
   .split-row,
   .lineage-row,
   .lineage-flow {
@@ -5062,6 +5224,7 @@ pre {
   .inbox-pipeline,
   .finding-command-strip,
   .case-investigation-board,
+  .data-lineage-proof-grid,
   .member-profile-cockpit,
   .provider-risk-cockpit,
   .clinical-cockpit,
@@ -5089,6 +5252,22 @@ pre {
   .evidence-pipeline-rail::before,
   .evidence-runtime-map::before {
     display: none;
+  }
+
+  .data-lineage-map {
+    grid-template-rows: none;
+    min-height: auto;
+  }
+
+  .data-lineage-node.source,
+  .data-lineage-node.contract,
+  .data-lineage-node.canonical,
+  .data-lineage-node.feature,
+  .data-lineage-node.model,
+  .data-lineage-node.runtime,
+  .data-lineage-node.audit {
+    grid-column: auto;
+    grid-row: auto;
   }
 
   .mission-board,
