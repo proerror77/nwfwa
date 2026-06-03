@@ -82,6 +82,8 @@ Minimum pilot monitoring:
   scoring, feature, rule, model, audit, case, QA, investigation, and ROI tables.
   This is the preferred single command for local customer demo hardening after
   PostgreSQL, ML service, and API server are already running.
+  Set `FWA_PROOF_SUMMARY_PATH` to write a non-secret
+  `customer_pilot_proof_summary` artifact after the chain passes.
   `scripts/demo/pilot_ready_env.example` lists the environment variables needed
   for strict proof mode and should be copied into the pilot shell or secret
   manager with real customer-approved values before `FWA_PROOF_REQUIRE_READY=1`

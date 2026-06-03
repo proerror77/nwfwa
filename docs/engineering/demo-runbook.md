@@ -199,7 +199,9 @@ proof after printing the JSON readiness report. Use `FWA_PROOF_SKIP_SEED=1`,
 `FWA_PROOF_SKIP_READINESS=1`, or `FWA_PROOF_SKIP_PERSISTENCE=1` only when the
 environment is managed outside the local demo database. Set
 `FWA_PROOF_READINESS_REPORT_PATH=artifacts/pilot-readiness.json` when the demo
-needs a retained readiness evidence artifact.
+needs a retained readiness evidence artifact, and set
+`FWA_PROOF_SUMMARY_PATH=artifacts/customer-pilot-proof-summary.json` to retain a
+non-secret proof summary after the full chain passes.
 
 ## 6. Model Promotion Evidence
 

@@ -317,8 +317,11 @@ grep -q "check-pilot-readiness" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_REQUIRE_READY" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_SKIP_READINESS" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_READINESS_REPORT_PATH" scripts/demo/customer_pilot_proof.sh
+grep -q "FWA_PROOF_SUMMARY_PATH" scripts/demo/customer_pilot_proof.sh
 grep -q 'tee "$FWA_PROOF_READINESS_REPORT_PATH"' scripts/demo/customer_pilot_proof.sh
+grep -q "customer_pilot_proof_summary" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_REQUIRE_READY=1" scripts/demo/pilot_ready_env.example
+grep -q "FWA_PROOF_SUMMARY_PATH=artifacts/customer-pilot-proof-summary.json" scripts/demo/pilot_ready_env.example
 grep -q "FWA_API_KEY_PRINCIPALS" scripts/demo/pilot_ready_env.example
 grep -q "FWA_OBJECT_STORAGE_URI" scripts/demo/pilot_ready_env.example
 grep -q "FWA_OBSERVABILITY_EXPORTER_ENDPOINT" scripts/demo/pilot_ready_env.example
@@ -328,12 +331,16 @@ grep -q "pilot_ready_env.example" docs/project/operations-guide.md
 grep -q "assert_demo_persistence.sql" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_DEMO_EXPECTED_ACTOR_ROLE" scripts/demo/smoke_demo.py
 grep -q "FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID" scripts/demo/smoke_demo.py
+bash -n scripts/demo/customer_pilot_proof.sh
 grep -q "customer_pilot_proof.sh" docs/engineering/demo-runbook.md
 grep -q "FWA_PROOF_REQUIRE_READY" docs/engineering/demo-runbook.md
 grep -q "FWA_PROOF_READINESS_REPORT_PATH" docs/engineering/demo-runbook.md
+grep -q "FWA_PROOF_SUMMARY_PATH" docs/engineering/demo-runbook.md
+grep -q "FWA_PROOF_SUMMARY_PATH" docs/engineering/pilot-readiness.md
 grep -q "customer_pilot_proof.sh" docs/project/operations-guide.md
 grep -q "pilot readiness reporting" docs/project/operations-guide.md
 grep -q "readiness JSON as a pilot evidence artifact" docs/project/operations-guide.md
+grep -q "customer_pilot_proof_summary" docs/project/operations-guide.md
 grep -q -- "--customer-principal-smoke" docs/engineering/demo-runbook.md
 grep -q -- "--customer-principal-smoke" docs/engineering/pilot-readiness.md
 grep -q "API Call Records" apps/web-console/src/main.rs

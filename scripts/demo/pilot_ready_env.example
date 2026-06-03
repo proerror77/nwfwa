@@ -35,3 +35,4 @@ FWA_AGENT_POLICY_ID=agent-policy-customer-alpha-v1
 # Strict proof mode.
 FWA_PROOF_REQUIRE_READY=1
 FWA_PROOF_READINESS_REPORT_PATH=artifacts/pilot-readiness.json
+FWA_PROOF_SUMMARY_PATH=artifacts/customer-pilot-proof-summary.json

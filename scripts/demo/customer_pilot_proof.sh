@@ -14,6 +14,7 @@ FWA_PROOF_SKIP_PERSISTENCE="${FWA_PROOF_SKIP_PERSISTENCE:-0}"
 FWA_PROOF_SKIP_READINESS="${FWA_PROOF_SKIP_READINESS:-0}"
 FWA_PROOF_REQUIRE_READY="${FWA_PROOF_REQUIRE_READY:-0}"
 FWA_PROOF_READINESS_REPORT_PATH="${FWA_PROOF_READINESS_REPORT_PATH:-}"
+FWA_PROOF_SUMMARY_PATH="${FWA_PROOF_SUMMARY_PATH:-}"
 
 export DATABASE_URL
 export FWA_API_BASE_URL
@@ -21,6 +22,12 @@ export FWA_API_KEY
 export FWA_SOURCE_SYSTEM
 export FWA_DEMO_EXPECTED_ACTOR_ROLE
 export FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID
+export FWA_PROOF_SKIP_SEED
+export FWA_PROOF_SKIP_PERSISTENCE
+export FWA_PROOF_SKIP_READINESS
+export FWA_PROOF_REQUIRE_READY
+export FWA_PROOF_READINESS_REPORT_PATH
+export FWA_PROOF_SUMMARY_PATH
 
 if [[ "$FWA_API_KEY" == "dev-secret" ]]; then
   echo "customer pilot proof refuses to use local dev FWA_API_KEY=dev-secret" >&2
@@ -52,6 +59,52 @@ run_readiness_report() {
   else
     "$@"
   fi
+}
+
+write_proof_summary() {
+  if [[ -z "$FWA_PROOF_SUMMARY_PATH" ]]; then
+    return
+  fi
+  mkdir -p "$(dirname "$FWA_PROOF_SUMMARY_PATH")"
+  python3 - "$FWA_PROOF_SUMMARY_PATH" <<'PY'
+import json
+import os
+import sys
+from datetime import datetime, timezone
+
+summary_path = sys.argv[1]
+payload = {
+    "artifact_kind": "customer_pilot_proof_summary",
+    "generated_at": datetime.now(timezone.utc).isoformat(),
+    "status": "passed",
+    "api_base_url": os.environ["FWA_API_BASE_URL"],
+    "source_system": os.environ["FWA_SOURCE_SYSTEM"],
+    "actor_role": os.environ["FWA_DEMO_EXPECTED_ACTOR_ROLE"],
+    "customer_scope_id": os.environ["FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID"],
+    "api_key_boundary": "configured_non_dev_key_not_recorded",
+    "steps": {
+        "seed_applied": os.environ["FWA_PROOF_SKIP_SEED"] != "1",
+        "readiness_report_captured": os.environ["FWA_PROOF_SKIP_READINESS"] != "1",
+        "readiness_required": os.environ["FWA_PROOF_REQUIRE_READY"] == "1",
+        "customer_principal_smoke": True,
+        "persistence_assertions": os.environ["FWA_PROOF_SKIP_PERSISTENCE"] != "1",
+    },
+    "artifacts": {
+        "readiness_report_path": os.environ["FWA_PROOF_READINESS_REPORT_PATH"] or None,
+        "summary_path": summary_path,
+    },
+    "evidence_refs": [
+        "scripts/demo/customer_pilot_proof.sh",
+        "scripts/demo/smoke_demo.py:--customer-principal-smoke",
+        "scripts/demo/assert_demo_persistence.sql",
+        "worker:check-pilot-readiness",
+    ],
+}
+with open(summary_path, "w", encoding="utf-8") as handle:
+    json.dump(payload, handle, indent=2, sort_keys=True)
+    handle.write("\n")
+PY
+  echo "==> wrote customer pilot proof summary to $FWA_PROOF_SUMMARY_PATH" >&2
 }
 
 require_command python3
@@ -99,4 +152,5 @@ else
   echo "==> skip persistence SQL because FWA_PROOF_SKIP_PERSISTENCE=1" >&2
 fi
 
+write_proof_summary
 echo "customer pilot proof passed" >&2

@@ -514,7 +514,9 @@ Before a customer pilot contract test:
   fail on unresolved `/api/v1/health` pilot readiness blockers; otherwise the
   proof prints the report but keeps local demo proof flow focused on identity,
   smoke, and persistence. Set `FWA_PROOF_READINESS_REPORT_PATH` to retain the
-  readiness JSON as a pilot evidence artifact. Use
+  readiness JSON as a pilot evidence artifact, and set
+  `FWA_PROOF_SUMMARY_PATH` to retain a non-secret
+  `customer_pilot_proof_summary` artifact. Use
   `scripts/demo/pilot_ready_env.example` as the strict-mode checklist before
   enabling `FWA_PROOF_REQUIRE_READY=1`.
 - Confirm high-risk outputs remain assistive-only.
