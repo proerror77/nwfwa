@@ -6820,6 +6820,7 @@ fn operator_queue_snapshot(summary: &DashboardSummary) -> Html {
                 {operator_queue_card("Review", &summary.qa_queue.open_cases.to_string(), "open QA samples", "QA Review", "strong")}
                 {operator_queue_card("Govern", &percent_label(summary.audit_coverage.canonical_trace_coverage), "trace coverage", "Audit Sampling", "success")}
             </div>
+            {dashboard_operations_map(summary)}
         </div>
     }
 }
@@ -6831,6 +6832,40 @@ fn operator_queue_card(action: &str, value: &str, metric: &str, module: &str, to
             <strong>{value}</strong>
             <small>{metric}</small>
             <em>{module}</em>
+        </div>
+    }
+}
+
+fn dashboard_operations_map(summary: &DashboardSummary) -> Html {
+    html! {
+        <div class="ops-system-map-shell">
+            <div class="panel-heading-row compact-heading-row">
+                <h4>{"FWA operating map"}</h4>
+                <span class="status-token strong">{"PRD runtime topology"}</span>
+            </div>
+            <div class="ops-system-map">
+                {ops_map_node("TPA", "claim intake", &summary.suspected_claims.to_string(), "source")}
+                {ops_map_node("Rules", "L2 rule hit", &summary.rule_hits.to_string(), "layer")}
+                <div class="ops-map-core">
+                    <span>{"L7"}</span>
+                    <strong>{"Risk Fusion"}</strong>
+                    <small>{map_counts_label(&summary.rag_distribution)}</small>
+                </div>
+                {ops_map_node("Agent", "evidence pack", &format!("{} runs", summary.agent_governance.total_runs), "agent")}
+                {ops_map_node("QA", "feedback loop", &format!("{} open", summary.qa_queue.open_cases), "qa")}
+                {ops_map_node("Audit", "trace coverage", &percent_label(summary.audit_coverage.canonical_trace_coverage), "audit")}
+                {ops_map_node("ROI", "value attribution", &summary.value_measurement.net_value, "roi")}
+            </div>
+        </div>
+    }
+}
+
+fn ops_map_node(label: &str, caption: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("ops-map-node", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{caption}</small>
         </div>
     }
 }

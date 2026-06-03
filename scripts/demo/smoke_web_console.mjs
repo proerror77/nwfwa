@@ -102,6 +102,9 @@ async function main() {
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
     assertContains(builtText, "Operator queue", "web console dashboard visual bundle");
+    assertContains(builtText, "FWA operating map", "web console dashboard topology bundle");
+    assertContains(builtText, "PRD runtime topology", "web console dashboard topology bundle");
+    assertContains(builtText, "Risk Fusion", "web console dashboard topology bundle");
     assertContains(builtText, "Score", "web console dashboard queue bundle");
     assertContains(builtText, "Investigate", "web console dashboard queue bundle");
     assertContains(builtText, "Review", "web console dashboard queue bundle");
