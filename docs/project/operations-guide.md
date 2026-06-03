@@ -291,7 +291,11 @@ Before a customer pilot contract test:
   and claim audit history.
 - For the local customer pilot demo database, prefer
   `scripts/demo/customer_pilot_proof.sh` because it combines seed, customer
-  principal smoke, and persistence assertions in one proof command.
+  principal smoke, pilot readiness reporting, and persistence assertions in one
+  proof command. Set `FWA_PROOF_REQUIRE_READY=1` when the environment should
+  fail on unresolved `/api/v1/health` pilot readiness blockers; otherwise the
+  proof prints the report but keeps local demo proof flow focused on identity,
+  smoke, and persistence.
 - Confirm high-risk outputs remain assistive-only.
 
 Writeback contract fields:

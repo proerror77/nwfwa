@@ -11,6 +11,8 @@ FWA_DEMO_EXPECTED_ACTOR_ROLE="${FWA_DEMO_EXPECTED_ACTOR_ROLE:-fwa_operator}"
 FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID="${FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID:-customer-alpha-pilot}"
 FWA_PROOF_SKIP_SEED="${FWA_PROOF_SKIP_SEED:-0}"
 FWA_PROOF_SKIP_PERSISTENCE="${FWA_PROOF_SKIP_PERSISTENCE:-0}"
+FWA_PROOF_SKIP_READINESS="${FWA_PROOF_SKIP_READINESS:-0}"
+FWA_PROOF_REQUIRE_READY="${FWA_PROOF_REQUIRE_READY:-0}"
 
 export DATABASE_URL
 export FWA_API_BASE_URL
@@ -46,6 +48,28 @@ if [[ "$FWA_PROOF_SKIP_SEED" != "1" ]]; then
   run_step "apply migrations and deterministic demo seed" "$ROOT_DIR/scripts/demo/seed_demo.sh"
 else
   echo "==> skip demo seed because FWA_PROOF_SKIP_SEED=1" >&2
+fi
+
+if [[ "$FWA_PROOF_SKIP_READINESS" != "1" ]]; then
+  require_command cargo
+  readiness_args=(
+    run
+    --locked
+    -p
+    worker
+    --
+    check-pilot-readiness
+    --api-url
+    "$FWA_API_BASE_URL"
+    --api-key
+    "$FWA_API_KEY"
+  )
+  if [[ "$FWA_PROOF_REQUIRE_READY" == "1" ]]; then
+    readiness_args+=(--require-ready)
+  fi
+  run_step "capture pilot readiness report from $FWA_API_BASE_URL" cargo "${readiness_args[@]}"
+else
+  echo "==> skip pilot readiness report because FWA_PROOF_SKIP_READINESS=1" >&2
 fi
 
 run_step \

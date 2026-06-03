@@ -185,9 +185,12 @@ end-to-end path as the local demo with `--customer-principal-smoke`, and then
 executes the SQL persistence assertions. It additionally asserts that API call
 records and claim audit history carry the expected `actor_role` and
 `customer_scope_id` for scoring, investigation writeback, QA writeback, and
-medical review. It also verifies that health readiness no longer classifies
-the API key or customer scope as local demo configuration. Use
-`FWA_PROOF_SKIP_SEED=1` or `FWA_PROOF_SKIP_PERSISTENCE=1` only when the
+medical review. It also captures the worker pilot readiness report from
+`/api/v1/health`, and verifies that health readiness no longer classifies the
+API key or customer scope as local demo configuration. Set
+`FWA_PROOF_REQUIRE_READY=1` to make unresolved pilot readiness blockers fail the
+proof after printing the JSON readiness report. Use `FWA_PROOF_SKIP_SEED=1`,
+`FWA_PROOF_SKIP_READINESS=1`, or `FWA_PROOF_SKIP_PERSISTENCE=1` only when the
 environment is managed outside the local demo database.
 
 ## 6. Model Promotion Evidence
