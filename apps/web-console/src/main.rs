@@ -1374,8 +1374,8 @@ fn app() -> Html {
             <aside class="sidebar">
                 <div class="brand-block">
                     <span>{"NOVA FWA"}</span>
-                    <h1>{"Operations Console"}</h1>
-                    <p>{"Claim fraud, waste, and abuse workflow control."}</p>
+                    <h1>{"FWA Platform"}</h1>
+                    <p>{"Risk control desk for claim scoring, alert handling, and pilot governance."}</p>
                 </div>
                 <nav class="module-nav" aria-label="FWA operations modules">
                     {for NAV_SECTIONS.iter().map(|(section, modules)| html! {
@@ -1401,11 +1401,18 @@ fn app() -> Html {
             </aside>
             <main class="workspace">
                 <div class="workspace-topbar">
-                    <div>
-                        <span class="eyebrow">{"FWA operations console"}</span>
+                    <div class="topbar-context">
+                        <span class="eyebrow">{"Real-time operations"}</span>
                         <strong>{module_context(&active)}</strong>
                     </div>
-                    <span class="api-chip">{"pilot workspace / api proxy :8080"}</span>
+                    <div class="topbar-search" aria-label="Global search placeholder">
+                        <span>{"Search claim / provider / member / rule"}</span>
+                    </div>
+                    <div class="topbar-actions">
+                        <span class="api-chip status-live">{"live"}</span>
+                        <span class="alert-chip">{"12 alerts"}</span>
+                        <span class="user-chip">{"Pilot Ops"}</span>
+                    </div>
                 </div>
                 <div class="workspace-content">
                     if *active == "Claim Inbox" {

@@ -87,13 +87,14 @@ async function main() {
     const builtText = await collectBuiltText(distDir);
     assertContains(builtText, "FWA Studio", "web console bundle");
     assertContains(builtText, "NOVA FWA", "web console bundle");
-    assertContains(builtText, "Operations Console", "web console bundle");
+    assertContains(builtText, "FWA Platform", "web console bundle");
     assertContains(builtText, "Intake & Scoring", "web console navigation bundle");
     assertContains(builtText, "Detection Cockpit", "web console navigation bundle");
     assertContains(builtText, "Case Operations", "web console navigation bundle");
     assertContains(builtText, "Data Foundation", "web console navigation bundle");
-    assertContains(builtText, "FWA operations console", "web console workspace bundle");
-    assertContains(builtText, "pilot workspace / api proxy :8080", "web console workspace bundle");
+    assertContains(builtText, "Real-time operations", "web console workspace bundle");
+    assertContains(builtText, "Search claim / provider / member / rule", "web console workspace bundle");
+    assertContains(builtText, "12 alerts", "web console workspace bundle");
     assertContains(builtText, "Claim Inbox", "web console bundle");
     assertContains(builtText, "Correction Review", "web console bundle");
     assertContains(builtText, "Runtime Scoring", "web console bundle");
