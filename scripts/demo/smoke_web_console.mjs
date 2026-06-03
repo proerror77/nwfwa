@@ -88,6 +88,7 @@ async function main() {
     assertContains(builtText, "FWA Studio", "web console bundle");
     assertContains(builtText, "NOVA FWA", "web console bundle");
     assertContains(builtText, "FWA Platform", "web console bundle");
+    assertContains(builtText, "Risk control desk", "web console visual shell bundle");
     assertContains(builtText, "Intake & Scoring", "web console navigation bundle");
     assertContains(builtText, "Detection Cockpit", "web console navigation bundle");
     assertContains(builtText, "Case Operations", "web console navigation bundle");
@@ -95,6 +96,8 @@ async function main() {
     assertContains(builtText, "Real-time operations", "web console workspace bundle");
     assertContains(builtText, "Search claim / provider / member / rule", "web console workspace bundle");
     assertContains(builtText, "12 alerts", "web console workspace bundle");
+    assertContains(builtText, "peer benchmark", "web console seven-layer visual bundle");
+    assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
     assertContains(builtText, "Claim Inbox", "web console bundle");
     assertContains(builtText, "Correction Review", "web console bundle");
     assertContains(builtText, "Runtime Scoring", "web console bundle");

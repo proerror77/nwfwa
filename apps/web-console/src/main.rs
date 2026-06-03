@@ -1390,8 +1390,11 @@ fn app() -> Html {
                                         class={classes!(is_active.then_some("active"))}
                                         onclick={Callback::from(move |_| active.set(module_name.clone()))}
                                     >
-                                        <span class="nav-label">{module}</span>
-                                        <span class="nav-description">{module_description(module)}</span>
+                                        <span class={classes!("nav-icon", module_icon_class(module))}></span>
+                                        <span class="nav-copy">
+                                            <span class="nav-label">{module}</span>
+                                            <span class="nav-description">{module_description(module)}</span>
+                                        </span>
                                     </button>
                                 }
                             })}
@@ -1501,6 +1504,29 @@ fn module_description(module: &str) -> &'static str {
         "QA Review" => "feedback closure",
         "Governance" => "audit boundary",
         _ => "module",
+    }
+}
+
+fn module_icon_class(module: &str) -> &'static str {
+    match module {
+        "Claim Inbox" => "icon-inbox",
+        "Dashboard" => "icon-dashboard",
+        "Runtime Scoring" => "icon-scoring",
+        "Rules" => "icon-rules",
+        "Models" => "icon-models",
+        "Routing Policies" => "icon-routing",
+        "Factor Factory" => "icon-factors",
+        "Data Sources" => "icon-data",
+        "Leads & Cases" => "icon-cases",
+        "Member Profile" => "icon-member",
+        "Provider Risk" => "icon-provider",
+        "Medical Review" => "icon-medical",
+        "Audit Sampling" => "icon-audit",
+        "Knowledge Base" => "icon-knowledge",
+        "Agent Investigator" => "icon-agent",
+        "QA Review" => "icon-qa",
+        "Governance" => "icon-governance",
+        _ => "icon-default",
     }
 }
 
@@ -1784,16 +1810,16 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                     <>
                         <section class="panel result-stack">
                             <h3>{"Executive KPIs"}</h3>
-                            <div class="score-hero">
-                                <div><span>{"Suspected FWA"}</span><strong>{summary.suspected_claims}</strong></div>
-                                <div><span>{"Confirmed FWA"}</span><strong>{summary.confirmed_fwa}</strong></div>
-                                <div><span>{"Risk Amount"}</span><strong>{&summary.risk_amount}</strong></div>
+                            <div class="score-hero visual-kpis">
+                                {kpi_card("Suspected FWA", &summary.suspected_claims.to_string(), "risk")}
+                                {kpi_card("Confirmed FWA", &summary.confirmed_fwa.to_string(), "confirmed")}
+                                {kpi_card("Risk Amount", &summary.risk_amount, "amount")}
                             </div>
                             <div class="summary-grid">
-                                <div><span>{"Savings"}</span><strong>{&summary.saving_amount}</strong></div>
-                                <div><span>{"Rule Hits"}</span><strong>{summary.rule_hits}</strong></div>
-                                <div><span>{"Investigations"}</span><strong>{summary.investigation_results}</strong></div>
-                                <div><span>{"QA Reviews"}</span><strong>{summary.qa_reviews}</strong></div>
+                                {kpi_card("Savings", &summary.saving_amount, "saving")}
+                                {kpi_card("Rule Hits", &summary.rule_hits.to_string(), "rule")}
+                                {kpi_card("Investigations", &summary.investigation_results.to_string(), "case")}
+                                {kpi_card("QA Reviews", &summary.qa_reviews.to_string(), "qa")}
                                 <div><span>{"RAG Distribution"}</span><strong>{map_counts_label(&summary.rag_distribution)}</strong></div>
                                 <div><span>{"Schemes"}</span><strong>{map_counts_label(&summary.scheme_distribution)}</strong></div>
                             </div>
@@ -1801,10 +1827,10 @@ fn dashboard_view(props: &DashboardProps) -> Html {
 
                         <section class="panel result-stack">
                             <h3>{"Value Measurement"}</h3>
-                            <div class="score-hero">
-                                <div><span>{"Estimated Impact"}</span><strong>{&summary.value_measurement.estimated_impact}</strong></div>
-                                <div><span>{"Net Value"}</span><strong>{&summary.value_measurement.net_value}</strong></div>
-                                <div><span>{"Currency"}</span><strong>{&summary.value_measurement.currency}</strong></div>
+                            <div class="score-hero visual-kpis">
+                                {kpi_card("Estimated Impact", &summary.value_measurement.estimated_impact, "amount")}
+                                {kpi_card("Net Value", &summary.value_measurement.net_value, "saving")}
+                                {kpi_card("Currency", &summary.value_measurement.currency, "currency")}
                             </div>
                             <div class="summary-grid">
                                 <div><span>{"Prevented Payment"}</span><strong>{&summary.value_measurement.prevented_payment}</strong></div>
@@ -1859,6 +1885,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
 
                         <section class="panel result-stack">
                             <h3>{"Seven-Layer Coverage"}</h3>
+                            {dashboard_layer_flow(&summary.layer_scores)}
                             if summary.layer_scores.is_empty() {
                                 <p class="empty">{"No layer score records returned."}</p>
                             } else {
@@ -6211,19 +6238,87 @@ fn value_refs_label(refs: &[Value]) -> String {
 fn runtime_score_breakdown(response: &ScoreResponse) -> Html {
     if let Some(scores) = &response.scores {
         html! {
-            <div class="summary-grid">
-                <div><span>{"L1 Peer"}</span><strong>{scores.peer_deviation_score}</strong></div>
-                <div><span>{"L2 Rules"}</span><strong>{scores.rule_score}</strong></div>
-                <div><span>{"L3 Anomaly"}</span><strong>{scores.anomaly_score}</strong></div>
-                <div><span>{"L4 ML"}</span><strong>{scores.ml_score}</strong></div>
-                <div><span>{"L5 Medical"}</span><strong>{scores.medical_reasonableness_score}</strong></div>
-                <div><span>{"L6 Provider"}</span><strong>{scores.provider_network_score}</strong></div>
-                <div><span>{"Similar Cases"}</span><strong>{scores.similar_case_score}</strong></div>
-                <div><span>{"L7 Final"}</span><strong>{scores.final_score}</strong></div>
+            <div class="risk-flow">
+                {risk_node("L1", "Peer", &scores.peer_deviation_score.to_string(), "peer benchmark")}
+                {risk_node("L2", "Rules", &scores.rule_score.to_string(), "deterministic controls")}
+                {risk_node("L3", "Anomaly", &scores.anomaly_score.to_string(), "unsupervised signal")}
+                {risk_node("L4", "ML", &scores.ml_score.to_string(), "baseline classifier")}
+                {risk_node("L5", "Medical", &scores.medical_reasonableness_score.to_string(), "clinical necessity")}
+                {risk_node("L6", "Provider", &scores.provider_network_score.to_string(), "network risk")}
+                {risk_node("KB", "Similar", &scores.similar_case_score.to_string(), "case memory")}
+                {risk_node("L7", "Final", &scores.final_score.to_string(), "fusion route")}
             </div>
         }
     } else {
         html! { <p class="empty">{"No score breakdown returned."}</p> }
+    }
+}
+
+fn kpi_card(label: &str, value: &str, icon: &str) -> Html {
+    html! {
+        <div class="visual-kpi">
+            <span class={classes!("visual-icon", icon_class(icon))}></span>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
+    }
+}
+
+fn dashboard_layer_flow(layers: &BTreeMap<String, DashboardLayerScore>) -> Html {
+    if layers.is_empty() {
+        return html! {};
+    }
+    let layer_specs = [
+        ("L1", "Peer", "peer benchmark"),
+        ("L2", "Rules", "rule detection"),
+        ("L3", "Anomaly", "unsupervised"),
+        ("L4", "ML", "classification"),
+        ("L5", "Medical", "necessity"),
+        ("L6", "Provider", "graph risk"),
+        ("L7", "Fusion", "routing"),
+    ];
+    html! {
+        <div class="risk-flow dashboard-risk-flow">
+            {for layer_specs.iter().map(|(layer_id, label, caption)| {
+                let value = layer_score_label(layers, layer_id);
+                risk_node(layer_id, label, &value, caption)
+            })}
+        </div>
+    }
+}
+
+fn layer_score_label(layers: &BTreeMap<String, DashboardLayerScore>, layer_id: &str) -> String {
+    layers
+        .iter()
+        .find(|(key, layer)| {
+            key.eq_ignore_ascii_case(layer_id) || layer.name.to_ascii_uppercase().contains(layer_id)
+        })
+        .map(|(_, layer)| format!("{:.1}", layer.average_score))
+        .unwrap_or_else(|| "n/a".into())
+}
+
+fn risk_node(layer: &str, label: &str, value: &str, caption: &str) -> Html {
+    html! {
+        <div class="risk-node">
+            <span class="risk-node-badge">{layer}</span>
+            <strong>{value}</strong>
+            <span>{label}</span>
+            <small>{caption}</small>
+        </div>
+    }
+}
+
+fn icon_class(icon: &str) -> &'static str {
+    match icon {
+        "risk" => "icon-risk",
+        "confirmed" => "icon-confirmed",
+        "amount" => "icon-amount",
+        "saving" => "icon-saving",
+        "rule" => "icon-rule",
+        "case" => "icon-case",
+        "qa" => "icon-qa-card",
+        "currency" => "icon-currency",
+        _ => "icon-default",
     }
 }
 

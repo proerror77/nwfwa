@@ -119,6 +119,8 @@ button {
 
 .module-nav button {
   display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
   gap: 2px;
   width: 100%;
   min-height: 44px;
@@ -128,6 +130,83 @@ button {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 8px;
+}
+
+.nav-icon,
+.visual-icon {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  width: 24px;
+  height: 24px;
+  border-radius: 7px;
+}
+
+.nav-icon {
+  background: rgba(131, 183, 241, 0.14);
+  border: 1px solid rgba(185, 214, 247, 0.24);
+}
+
+.module-nav button.active .nav-icon {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+}
+
+.nav-icon::before,
+.nav-icon::after,
+.visual-icon::before,
+.visual-icon::after {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.nav-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.nav-icon::before {
+  width: 11px;
+  height: 11px;
+  border: 2px solid #7fd6ff;
+  border-radius: 3px;
+}
+
+.icon-dashboard::before,
+.icon-scoring::before,
+.icon-models::before,
+.icon-routing::before,
+.icon-provider::before {
+  border-radius: 999px;
+}
+
+.icon-rules::before,
+.icon-factors::before,
+.icon-data::before,
+.icon-audit::before {
+  border-radius: 2px;
+}
+
+.icon-cases::after,
+.icon-member::after,
+.icon-medical::after,
+.icon-agent::after,
+.icon-governance::after {
+  width: 5px;
+  height: 5px;
+  right: 5px;
+  bottom: 5px;
+  background: #7fd6ff;
+  border-radius: 999px;
+}
+
+.icon-knowledge::before,
+.icon-qa::before {
+  transform: rotate(45deg);
 }
 
 .module-nav button:hover {
@@ -522,6 +601,145 @@ pre {
   color: #0c315f;
   font-size: 24px;
   overflow-wrap: anywhere;
+}
+
+.visual-kpis {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.visual-kpi {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  grid-template-rows: auto auto;
+  gap: 2px 10px;
+  align-items: center;
+}
+
+.visual-kpi .visual-icon {
+  grid-row: 1 / span 2;
+}
+
+.visual-icon {
+  width: 34px;
+  height: 34px;
+  background: var(--blue-soft);
+  border: 1px solid #bad4fb;
+}
+
+.visual-icon::before {
+  width: 15px;
+  height: 15px;
+  border: 2px solid var(--blue);
+  border-radius: 4px;
+}
+
+.visual-icon::after {
+  width: 6px;
+  height: 6px;
+  right: 8px;
+  bottom: 8px;
+  background: var(--blue);
+  border-radius: 999px;
+}
+
+.visual-icon.icon-risk {
+  background: var(--red-soft);
+  border-color: #ffc2d0;
+}
+
+.visual-icon.icon-risk::before {
+  border-color: var(--red);
+  transform: rotate(45deg);
+}
+
+.visual-icon.icon-risk::after {
+  background: var(--red);
+}
+
+.visual-icon.icon-confirmed,
+.visual-icon.icon-saving {
+  background: #e8f8ee;
+  border-color: #b7e4c4;
+}
+
+.visual-icon.icon-confirmed::before,
+.visual-icon.icon-saving::before {
+  border-color: #1f8f54;
+  border-radius: 999px;
+}
+
+.visual-icon.icon-confirmed::after,
+.visual-icon.icon-saving::after {
+  background: #1f8f54;
+}
+
+.visual-icon.icon-rule::before,
+.visual-icon.icon-case::before,
+.visual-icon.icon-qa-card::before,
+.visual-icon.icon-currency::before {
+  border-radius: 2px;
+}
+
+.risk-flow {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(104px, 1fr));
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 2px 8px;
+}
+
+.dashboard-risk-flow {
+  grid-template-columns: repeat(7, minmax(112px, 1fr));
+}
+
+.risk-node {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-width: 104px;
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f4f8ff 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 7px 18px rgba(15, 46, 89, 0.05);
+}
+
+.risk-node:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  top: 27px;
+  right: -10px;
+  width: 10px;
+  height: 2px;
+  background: #9ec3f6;
+}
+
+.risk-node-badge {
+  width: fit-content;
+  padding: 4px 7px;
+  color: #ffffff;
+  background: var(--blue);
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 850;
+}
+
+.risk-node strong {
+  color: #0c315f;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.risk-node > span:not(.risk-node-badge) {
+  color: #314861;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.risk-node small {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.3;
 }
 
 .summary-grid strong,
@@ -1092,7 +1310,8 @@ pre {
   }
 
   .ops-stat-strip,
-  .dashboard-kpis {
+  .dashboard-kpis,
+  .visual-kpis {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -1184,6 +1403,7 @@ pre {
   }
 
   .score-hero,
+  .visual-kpis,
   .result-grid,
   .form-grid,
   .summary-grid,
@@ -1196,5 +1416,14 @@ pre {
   .lineage-row,
   .lineage-flow {
     grid-template-columns: 1fr;
+  }
+
+  .risk-flow,
+  .dashboard-risk-flow {
+    grid-template-columns: repeat(2, minmax(130px, 1fr));
+  }
+
+  .risk-node:not(:last-child)::after {
+    display: none;
   }
 }
