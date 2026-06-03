@@ -8,24 +8,30 @@ use yew::prelude::*;
 
 const API_KEY_DEFAULT: &str = "dev-secret";
 
-const MODULES: &[&str] = &[
-    "Claim Inbox",
-    "Dashboard",
-    "Runtime Scoring",
-    "Rules",
-    "Models",
-    "Routing Policies",
-    "Data Sources",
-    "Factor Factory",
-    "Leads & Cases",
-    "Member Profile",
-    "Provider Risk",
-    "Medical Review",
-    "Audit Sampling",
-    "Knowledge Base",
-    "Agent Investigator",
-    "QA Review",
-    "Governance",
+const NAV_SECTIONS: &[(&str, &[&str])] = &[
+    (
+        "Intake & Scoring",
+        &["Claim Inbox", "Dashboard", "Runtime Scoring"],
+    ),
+    (
+        "Detection Cockpit",
+        &["Rules", "Models", "Routing Policies", "Factor Factory"],
+    ),
+    (
+        "Case Operations",
+        &[
+            "Leads & Cases",
+            "Member Profile",
+            "Provider Risk",
+            "Medical Review",
+            "QA Review",
+        ],
+    ),
+    (
+        "Data Foundation",
+        &["Data Sources", "Knowledge Base", "Audit Sampling"],
+    ),
+    ("Governance", &["Agent Investigator", "Governance"]),
 ];
 
 const CONTRACT_PANELS: &[&str] = &[
@@ -1365,62 +1371,129 @@ fn app() -> Html {
 
     html! {
         <div class="app">
-            <aside>
-                <h1>{"FWA Studio"}</h1>
-                {for MODULES.iter().map(|module| {
-                    let active = active.clone();
-                    let module_name = (*module).to_string();
-                    let is_active = *active == module_name;
-                    html! {
-                        <button
-                            class={classes!(is_active.then_some("active"))}
-                            onclick={Callback::from(move |_| active.set(module_name.clone()))}
-                        >
-                            {module}
-                        </button>
-                    }
-                })}
+            <aside class="sidebar">
+                <div class="brand-block">
+                    <span>{"NOVA FWA"}</span>
+                    <h1>{"Operations Console"}</h1>
+                    <p>{"Claim fraud, waste, and abuse workflow control."}</p>
+                </div>
+                <nav class="module-nav" aria-label="FWA operations modules">
+                    {for NAV_SECTIONS.iter().map(|(section, modules)| html! {
+                        <div class="nav-section">
+                            <p class="nav-section-title">{section}</p>
+                            {for modules.iter().map(|module| {
+                                let active = active.clone();
+                                let module_name = (*module).to_string();
+                                let is_active = *active == module_name;
+                                html! {
+                                    <button
+                                        class={classes!(is_active.then_some("active"))}
+                                        onclick={Callback::from(move |_| active.set(module_name.clone()))}
+                                    >
+                                        <span class="nav-label">{module}</span>
+                                        <span class="nav-description">{module_description(module)}</span>
+                                    </button>
+                                }
+                            })}
+                        </div>
+                    })}
+                </nav>
             </aside>
-            <main>
-                if *active == "Claim Inbox" {
-                    <ClaimInboxPage />
-                } else if *active == "Dashboard" {
-                    <DashboardPage />
-                } else if *active == "Runtime Scoring" {
-                    <RuntimeScoringPage />
-                } else if *active == "Rules" {
-                    <RulesPage />
-                } else if *active == "Models" {
-                    <ModelsPage />
-                } else if *active == "Routing Policies" {
-                    <RoutingPoliciesPage />
-                } else if *active == "Data Sources" {
-                    <DataSourcesPage />
-                } else if *active == "Factor Factory" {
-                    <FactorFactoryPage />
-                } else if *active == "Leads & Cases" {
-                    <LeadsCasesPage />
-                } else if *active == "Member Profile" {
-                    <MemberProfilePage />
-                } else if *active == "Provider Risk" {
-                    <ProviderRiskPage />
-                } else if *active == "Medical Review" {
-                    <MedicalReviewPage />
-                } else if *active == "Audit Sampling" {
-                    <AuditSamplingPage />
-                } else if *active == "Knowledge Base" {
-                    <KnowledgeBasePage />
-                } else if *active == "Agent Investigator" {
-                    <AgentInvestigatorPage />
-                } else if *active == "QA Review" {
-                    <QaReviewPage />
-                } else if *active == "Governance" {
-                    <GovernancePage />
-                } else {
-                    <ModuleStatusPage title={(*active).clone()} />
-                }
+            <main class="workspace">
+                <div class="workspace-topbar">
+                    <div>
+                        <span class="eyebrow">{"FWA operations console"}</span>
+                        <strong>{module_context(&active)}</strong>
+                    </div>
+                    <span class="api-chip">{"pilot workspace / api proxy :8080"}</span>
+                </div>
+                <div class="workspace-content">
+                    if *active == "Claim Inbox" {
+                        <ClaimInboxPage />
+                    } else if *active == "Dashboard" {
+                        <DashboardPage />
+                    } else if *active == "Runtime Scoring" {
+                        <RuntimeScoringPage />
+                    } else if *active == "Rules" {
+                        <RulesPage />
+                    } else if *active == "Models" {
+                        <ModelsPage />
+                    } else if *active == "Routing Policies" {
+                        <RoutingPoliciesPage />
+                    } else if *active == "Data Sources" {
+                        <DataSourcesPage />
+                    } else if *active == "Factor Factory" {
+                        <FactorFactoryPage />
+                    } else if *active == "Leads & Cases" {
+                        <LeadsCasesPage />
+                    } else if *active == "Member Profile" {
+                        <MemberProfilePage />
+                    } else if *active == "Provider Risk" {
+                        <ProviderRiskPage />
+                    } else if *active == "Medical Review" {
+                        <MedicalReviewPage />
+                    } else if *active == "Audit Sampling" {
+                        <AuditSamplingPage />
+                    } else if *active == "Knowledge Base" {
+                        <KnowledgeBasePage />
+                    } else if *active == "Agent Investigator" {
+                        <AgentInvestigatorPage />
+                    } else if *active == "QA Review" {
+                        <QaReviewPage />
+                    } else if *active == "Governance" {
+                        <GovernancePage />
+                    } else {
+                        <ModuleStatusPage title={(*active).clone()} />
+                    }
+                </div>
             </main>
         </div>
+    }
+}
+
+fn module_context(module: &str) -> &'static str {
+    match module {
+        "Claim Inbox" => "Normalize TPA claim payloads into governed canonical intake.",
+        "Dashboard" => "Track claim risk value, governance coverage, and operating load.",
+        "Runtime Scoring" => "Score claims with deterministic evidence and review mode controls.",
+        "Rules" => "Operate deterministic FWA controls and promotion gates.",
+        "Models" => "Review model readiness, thresholds, and production evidence.",
+        "Routing Policies" => "Inspect routing boundaries for model and policy execution.",
+        "Factor Factory" => "Govern feature readiness, ownership, and online availability.",
+        "Data Sources" => "Control datasets, schema mappings, and model evaluation lineage.",
+        "Leads & Cases" => "Move scored leads into investigation and case workflows.",
+        "Member Profile" => "Inspect member-level risk evidence and utilization context.",
+        "Provider Risk" => "Review provider graph signals and suspicious practice patterns.",
+        "Medical Review" => "Route clinical evidence to human review with traceable outcomes.",
+        "Audit Sampling" => "Sample decisions for QA, compliance, and model governance.",
+        "Knowledge Base" => "Search confirmed evidence without crossing adjudication boundaries.",
+        "Agent Investigator" => "Run assistive investigation with human decision gates.",
+        "QA Review" => "Close feedback loops for findings, calibration, and reviewer quality.",
+        "Governance" => "Audit API calls, agent boundaries, and evidence trace coverage.",
+        _ => "Operate the FWA pilot workspace.",
+    }
+}
+
+fn module_description(module: &str) -> &'static str {
+    match module {
+        "Claim Inbox" => "TPA intake",
+        "Dashboard" => "risk value",
+        "Runtime Scoring" => "claim scoring",
+        "Rules" => "deterministic controls",
+        "Models" => "threshold evidence",
+        "Routing Policies" => "execution routing",
+        "Factor Factory" => "feature readiness",
+        "Data Sources" => "catalog & lineage",
+        "Leads & Cases" => "investigation queue",
+        "Member Profile" => "member context",
+        "Provider Risk" => "provider signals",
+        "Medical Review" => "clinical review",
+        "Audit Sampling" => "sample governance",
+        "Knowledge Base" => "confirmed evidence",
+        "Agent Investigator" => "assistive agent",
+        "QA Review" => "feedback closure",
+        "Governance" => "audit boundary",
+        _ => "module",
     }
 }
 
@@ -2753,34 +2826,51 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <>
+                        <section class="panel data-command-center">
+                            <div class="section-header">
+                                <div>
+                                    <h3>{"Data Foundation Control"}</h3>
+                                    <p>{"External claim, policy, provider, and medical datasets must stay traceable before rules, models, and agents can rely on them."}</p>
+                                </div>
+                            </div>
+                            <div class="ops-stat-strip">
+                                <div><span>{"Datasets"}</span><strong>{snapshot.datasets.len()}</strong><small>{"registered sources"}</small></div>
+                                <div><span>{"Rows"}</span><strong>{total_dataset_rows(&snapshot.datasets)}</strong><small>{"available records"}</small></div>
+                                <div><span>{"Fields"}</span><strong>{total_schema_fields(&snapshot.datasets)}</strong><small>{"profiled columns"}</small></div>
+                                <div><span>{"Mappings"}</span><strong>{total_field_mappings(&snapshot.datasets)}</strong><small>{"canonical links"}</small></div>
+                                <div><span>{"Evaluations"}</span><strong>{snapshot.evaluations.len()}</strong><small>{"model runs"}</small></div>
+                            </div>
+                        </section>
+
                         <section class="panel result-stack">
-                            <h3>{"Dataset Catalog"}</h3>
-                            <div class="score-hero">
-                                <div><span>{"Datasets"}</span><strong>{snapshot.datasets.len()}</strong></div>
-                                <div><span>{"Rows"}</span><strong>{total_dataset_rows(&snapshot.datasets)}</strong></div>
-                                <div><span>{"Evaluations"}</span><strong>{snapshot.evaluations.len()}</strong></div>
+                            <div class="section-header">
+                                <div>
+                                    <h3>{"Dataset Catalog"}</h3>
+                                    <p>{"Which governed datasets can feed scoring, feature creation, and medical review workflows."}</p>
+                                </div>
                             </div>
                             if snapshot.datasets.is_empty() {
                                 <p class="empty">{"No datasets registered."}</p>
                             } else {
-                                <div class="factor-card-grid">
+                                <div class="ops-table dataset-catalog-table">
+                                    <div class="ops-table-head">
+                                        <span>{"Dataset"}</span>
+                                        <span>{"Domain"}</span>
+                                        <span>{"Rows"}</span>
+                                        <span>{"Grain"}</span>
+                                        <span>{"Status"}</span>
+                                    </div>
                                     {for snapshot.datasets.iter().take(8).map(|dataset| html! {
-                                        <div class="factor-card">
-                                            <div>
+                                        <div class="ops-table-row">
+                                            <div class="primary-cell">
                                                 <strong>{&dataset.display_name}</strong>
-                                                <span>{format!("{}:{} / {}", dataset.dataset_key, dataset.dataset_version, dataset.status)}</span>
+                                                <span>{format!("{}:{} / {}", dataset.dataset_key, dataset.dataset_version, dataset.storage_format)}</span>
                                             </div>
-                                            <div class="summary-grid">
-                                                <div><span>{"Domain"}</span><strong>{&dataset.business_domain}</strong></div>
-                                                <div><span>{"Rows"}</span><strong>{dataset.row_count}</strong></div>
-                                                <div><span>{"Fields"}</span><strong>{dataset.fields.len()}</strong></div>
-                                                <div><span>{"Splits"}</span><strong>{dataset.splits.len()}</strong></div>
-                                                <div><span>{"Mappings"}</span><strong>{dataset.mappings.len()}</strong></div>
-                                                <div><span>{"Format"}</span><strong>{&dataset.storage_format}</strong></div>
-                                            </div>
-                                            <small>{format!("source: {} / grain: {} / label: {}", dataset.source_key, dataset.sample_grain, empty_label(&dataset.label_column))}</small>
-                                            <small>{format!("entity keys: {}", refs_label(&dataset.entity_keys))}</small>
-                                            <small>{format!("manifest: {}", dataset.manifest_uri)}</small>
+                                            <span>{&dataset.business_domain}</span>
+                                            <strong>{dataset.row_count}</strong>
+                                            <span>{&dataset.sample_grain}</span>
+                                            <span class={classes!("status-token", status_tone(&dataset.status))}>{&dataset.status}</span>
+                                            <small class="row-detail">{format!("source {} / label {} / keys {} / manifest {}", dataset.source_key, empty_label(&dataset.label_column), refs_label(&dataset.entity_keys), dataset.manifest_uri)}</small>
                                         </div>
                                     })}
                                 </div>
@@ -2788,17 +2878,31 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                         </section>
 
                         <section class="panel result-stack">
-                            <h3>{"Dataset Health"}</h3>
+                            <div class="section-header">
+                                <div>
+                                    <h3>{"Dataset Health"}</h3>
+                                    <p>{"Operational readiness signals used before a dataset is trusted for scoring or training."}</p>
+                                </div>
+                            </div>
                             if snapshot.health.is_empty() {
                                 <p class="empty">{"No dataset health records returned."}</p>
                             } else {
-                                <div class="factor-card-grid">
+                                <div class="health-grid">
                                     {for snapshot.health.iter().map(|health| html! {
-                                        <div class="metric-row">
-                                            <span>{format!("{}:{}", health.dataset_key, health.dataset_version)}</span>
-                                            <strong>{format!("{} / {:.2}", health.data_quality_status, health.data_quality_score)}</strong>
-                                            <small>{format!("fields {} / labels {} / keys {}", health.field_count, health.label_count, health.entity_key_count)}</small>
-                                            <small>{format!("issues {} / missing {} / unstable {} / unowned {} / online {}", health.issue_count, health.high_missing_count, health.unstable_field_count, health.unowned_field_count, health.online_ready_count)}</small>
+                                        <div class="health-card">
+                                            <div>
+                                                <strong>{format!("{}:{}", health.dataset_key, health.dataset_version)}</strong>
+                                                <span class={classes!("status-token", status_tone(&health.data_quality_status))}>{format!("{} / {:.2}", health.data_quality_status, health.data_quality_score)}</span>
+                                            </div>
+                                            <dl>
+                                                <div><dt>{"Fields"}</dt><dd>{health.field_count}</dd></div>
+                                                <div><dt>{"Labels"}</dt><dd>{health.label_count}</dd></div>
+                                                <div><dt>{"Keys"}</dt><dd>{health.entity_key_count}</dd></div>
+                                                <div><dt>{"Online"}</dt><dd>{health.online_ready_count}</dd></div>
+                                                <div><dt>{"Issues"}</dt><dd>{health.issue_count}</dd></div>
+                                                <div><dt>{"Missing"}</dt><dd>{health.high_missing_count}</dd></div>
+                                            </dl>
+                                            <small>{format!("unstable {} / unowned {}", health.unstable_field_count, health.unowned_field_count)}</small>
                                         </div>
                                     })}
                                 </div>
@@ -2806,63 +2910,103 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                         </section>
 
                         <section class="panel result-stack">
-                            <h3>{"Split And Schema Coverage"}</h3>
+                            <div class="section-header">
+                                <div>
+                                    <h3>{"Split And Schema Coverage"}</h3>
+                                    <p>{"Train/validation/test splits and schema fields that determine what can become features, labels, or review evidence."}</p>
+                                </div>
+                            </div>
                             if snapshot.datasets.is_empty() {
                                 <p class="empty">{"No split or schema coverage available."}</p>
                             } else {
-                                <div class="factor-card-grid">
+                                <div class="dataset-workbench-list">
                                     {for snapshot.datasets.iter().take(6).map(|dataset| html! {
-                                        <div class="factor-card">
-                                            <div>
-                                                <strong>{format!("{}:{}", dataset.dataset_key, dataset.dataset_version)}</strong>
-                                                <span>{format!("schema hash: {}", dataset.schema_hash)}</span>
-                                            </div>
-                                            <h4>{"Splits"}</h4>
-                                            if dataset.splits.is_empty() {
-                                                <p class="empty">{"No split records."}</p>
-                                            } else {
-                                                <div class="table-list">
-                                                    {for dataset.splits.iter().map(|split| html! {
-                                                        <div class="metric-row compact-metric-row">
-                                                            <span>{format!("{} / {}", split.split_name, split.data_uri)}</span>
-                                                            <strong>{format!("rows {}", split.row_count)}</strong>
-                                                            <small>{format!("positive {} / negative {}", optional_u64(split.positive_count), optional_u64(split.negative_count))}</small>
-                                                            <small>{format!("labels: {}", payload_keys_label(&split.label_distribution_json))}</small>
-                                                        </div>
-                                                    })}
+                                        <article class="dataset-workbench">
+                                            <div class="workbench-title">
+                                                <div>
+                                                    <strong>{format!("{}:{}", dataset.dataset_key, dataset.dataset_version)}</strong>
+                                                    <span>{format!("schema hash: {}", dataset.schema_hash)}</span>
                                                 </div>
-                                            }
-                                            <h4>{"Schema Fields"}</h4>
-                                            <div class="table-list">
-                                                {for dataset.fields.iter().take(8).map(|field| html! {
-                                                    <div class="metric-row">
-                                                        <span>{&field.field_name}</span>
-                                                        <strong>{format!("{} / {}", field.logical_type, field.semantic_role)}</strong>
-                                                        <small>{if field.nullable { "nullable" } else { "required" }}</small>
-                                                        <small>{format!("profile: {}", payload_keys_label(&field.profile_json))}</small>
-                                                    </div>
-                                                })}
+                                                <span class="status-token neutral">{format!("{} fields", dataset.fields.len())}</span>
                                             </div>
-                                        </div>
+                                            <div class="workbench-grid">
+                                                <div>
+                                                    <h4>{"Splits"}</h4>
+                                                    if dataset.splits.is_empty() {
+                                                        <p class="empty">{"No split records."}</p>
+                                                    } else {
+                                                        <div class="split-list">
+                                                            {for dataset.splits.iter().map(|split| html! {
+                                                                <div class="split-row">
+                                                                    <div>
+                                                                        <strong>{&split.split_name}</strong>
+                                                                        <span>{&split.data_uri}</span>
+                                                                    </div>
+                                                                    <div><span>{"Rows"}</span><strong>{split.row_count}</strong></div>
+                                                                    <div><span>{"Labels"}</span><strong>{format!("+{} / -{}", optional_u64(split.positive_count), optional_u64(split.negative_count))}</strong></div>
+                                                                    <small>{format!("distribution: {}", payload_keys_label(&split.label_distribution_json))}</small>
+                                                                </div>
+                                                            })}
+                                                        </div>
+                                                    }
+                                                </div>
+                                                <div>
+                                                    <h4>{"Schema Fields"}</h4>
+                                                    <div class="field-table">
+                                                        <div class="field-table-head">
+                                                            <span>{"Field"}</span>
+                                                            <span>{"Type / Role"}</span>
+                                                            <span>{"Nullability"}</span>
+                                                            <span>{"Profile"}</span>
+                                                        </div>
+                                                        {for dataset.fields.iter().take(10).map(|field| html! {
+                                                            <div class="field-row">
+                                                                <div class="primary-cell">
+                                                                    <strong>{&field.field_name}</strong>
+                                                                    <span>{empty_label(&field.description)}</span>
+                                                                </div>
+                                                                <div class="chip-row">
+                                                                    <span class="type-chip">{&field.logical_type}</span>
+                                                                    <span class="role-chip">{&field.semantic_role}</span>
+                                                                </div>
+                                                                <span class={classes!("status-token", if field.nullable { "neutral" } else { "strong" })}>
+                                                                    {if field.nullable { "nullable" } else { "required" }}
+                                                                </span>
+                                                                <small>{payload_keys_label(&field.profile_json)}</small>
+                                                            </div>
+                                                        })}
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </article>
                                     })}
                                 </div>
                             }
                         </section>
 
                         <section class="panel result-stack">
-                            <h3>{"Field Mapping Lineage"}</h3>
+                            <div class="section-header">
+                                <div>
+                                    <h3>{"Field Mapping Lineage"}</h3>
+                                    <p>{"How external fields become canonical claims, policy, provider, member, or feature entities."}</p>
+                                </div>
+                            </div>
                             if !snapshot.datasets.iter().any(|dataset| !dataset.mappings.is_empty()) {
                                 <p class="empty">{"No field mappings registered."}</p>
                             } else {
-                                <div class="factor-card-grid">
+                                <div class="lineage-list">
                                     {for snapshot.datasets.iter().flat_map(|dataset| {
                                         dataset.mappings.iter().map(move |mapping| (dataset, mapping))
                                     }).take(12).map(|(dataset, mapping)| html! {
-                                        <div class="metric-row">
-                                            <span>{format!("{} -> {}", mapping.external_field, mapping.canonical_target)}</span>
-                                            <strong>{mapping.feature_name.as_deref().unwrap_or("no feature")}</strong>
-                                            <small>{format!("{} / {}", mapping.transform_kind, mapping.status)}</small>
-                                            <small>{format!("dataset {}:{} / transform {}", dataset.dataset_key, dataset.dataset_version, payload_keys_label(&mapping.transform_json))}</small>
+                                        <div class="lineage-row">
+                                            <div class="lineage-flow">
+                                                <strong>{&mapping.external_field}</strong>
+                                                <span>{"->"}</span>
+                                                <strong>{&mapping.canonical_target}</strong>
+                                            </div>
+                                            <span>{mapping.feature_name.as_deref().unwrap_or("no feature")}</span>
+                                            <span class={classes!("status-token", status_tone(&mapping.status))}>{&mapping.status}</span>
+                                            <small>{format!("{}:{} / {} / transform {}", dataset.dataset_key, dataset.dataset_version, mapping.transform_kind, payload_keys_label(&mapping.transform_json))}</small>
                                         </div>
                                     })}
                                 </div>
@@ -2870,32 +3014,38 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                         </section>
 
                         <section class="panel result-stack">
-                            <h3>{"Model Evaluation Lineage"}</h3>
+                            <div class="section-header">
+                                <div>
+                                    <h3>{"Model Evaluation Lineage"}</h3>
+                                    <p>{"Which dataset version and data quality state produced each model evaluation result."}</p>
+                                </div>
+                            </div>
                             if snapshot.evaluations.is_empty() {
                                 <p class="empty">{"No model evaluations registered."}</p>
                             } else {
-                                <div class="factor-card-grid">
+                                <div class="ops-table evaluation-table">
+                                    <div class="ops-table-head">
+                                        <span>{"Model"}</span>
+                                        <span>{"Run"}</span>
+                                        <span>{"AUC"}</span>
+                                        <span>{"Precision"}</span>
+                                        <span>{"Recall"}</span>
+                                        <span>{"Data Quality"}</span>
+                                    </div>
                                     {for snapshot.evaluations.iter().take(8).map(|evaluation| {
                                         let lineage = lineage_for(&snapshot.lineage, &evaluation.evaluation_run_id);
                                         html! {
-                                            <div class="factor-card">
-                                                <div>
+                                            <div class="ops-table-row">
+                                                <div class="primary-cell">
                                                     <strong>{format!("{} / {}", evaluation.model_key, evaluation.model_version)}</strong>
-                                                    <span>{format!("{} / {}", evaluation.evaluation_run_id, evaluation.scheme_family)}</span>
+                                                    <span>{format!("dataset {}", evaluation.model_dataset_id)}</span>
                                                 </div>
-                                                <div class="summary-grid">
-                                                    <div><span>{"AUC"}</span><strong>{optional_metric(&evaluation.auc)}</strong></div>
-                                                    <div><span>{"Precision"}</span><strong>{optional_metric(&evaluation.precision)}</strong></div>
-                                                    <div><span>{"Recall"}</span><strong>{optional_metric(&evaluation.recall)}</strong></div>
-                                                    <div><span>{"F1"}</span><strong>{optional_metric(&evaluation.f1)}</strong></div>
-                                                    <div><span>{"Threshold"}</span><strong>{optional_metric(&evaluation.threshold)}</strong></div>
-                                                    <div><span>{"Data Quality"}</span><strong>{lineage_data_quality_label(lineage)}</strong></div>
-                                                </div>
-                                                <small>{format!("model dataset: {}", evaluation.model_dataset_id)}</small>
-                                                <small>{format!("source dataset: {}", lineage_source_label(lineage))}</small>
-                                                <small>{format!("metrics: {}", payload_keys_label(&evaluation.metrics_json))}</small>
-                                                <small>{format!("confusion matrix: {}", payload_keys_label(&evaluation.confusion_matrix_json))}</small>
-                                                <small>{format!("feature importance: {}", evaluation.feature_importance_uri.as_deref().unwrap_or("none"))}</small>
+                                                <span>{format!("{} / {}", evaluation.evaluation_run_id, evaluation.scheme_family)}</span>
+                                                <strong>{optional_metric(&evaluation.auc)}</strong>
+                                                <strong>{optional_metric(&evaluation.precision)}</strong>
+                                                <strong>{optional_metric(&evaluation.recall)}</strong>
+                                                <span>{lineage_data_quality_label(lineage)}</span>
+                                                <small class="row-detail">{format!("source {} / f1 {} / threshold {} / metrics {} / confusion {} / feature importance {}", lineage_source_label(lineage), optional_metric(&evaluation.f1), optional_metric(&evaluation.threshold), payload_keys_label(&evaluation.metrics_json), payload_keys_label(&evaluation.confusion_matrix_json), evaluation.feature_importance_uri.as_deref().unwrap_or("none"))}</small>
                                             </div>
                                         }
                                     })}
@@ -6279,6 +6429,41 @@ fn total_dataset_rows(datasets: &[DatasetRecord]) -> String {
         .map(|dataset| dataset.row_count)
         .sum::<u64>()
         .to_string()
+}
+
+fn total_schema_fields(datasets: &[DatasetRecord]) -> usize {
+    datasets.iter().map(|dataset| dataset.fields.len()).sum()
+}
+
+fn total_field_mappings(datasets: &[DatasetRecord]) -> usize {
+    datasets.iter().map(|dataset| dataset.mappings.len()).sum()
+}
+
+fn status_tone(status: &str) -> &'static str {
+    let normalized = status.to_ascii_lowercase();
+    if normalized.contains("fail")
+        || normalized.contains("error")
+        || normalized.contains("breach")
+        || normalized.contains("blocked")
+        || normalized.contains("high")
+    {
+        "danger"
+    } else if normalized.contains("warn")
+        || normalized.contains("pending")
+        || normalized.contains("review")
+        || normalized.contains("medium")
+    {
+        "warning"
+    } else if normalized.contains("ready")
+        || normalized.contains("active")
+        || normalized.contains("ok")
+        || normalized.contains("pass")
+        || normalized.contains("good")
+    {
+        "success"
+    } else {
+        "neutral"
+    }
 }
 
 fn lineage_for<'a>(

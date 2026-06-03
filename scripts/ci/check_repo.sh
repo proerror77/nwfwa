@@ -169,6 +169,11 @@ grep -q "SLA Breached" scripts/demo/smoke_web_console.mjs
 grep -q "Calibration Signal" scripts/demo/smoke_web_console.mjs
 grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
 grep -q "Pilot Security Readiness" scripts/demo/smoke_web_console.mjs
+grep -q "NOVA FWA" scripts/demo/smoke_web_console.mjs
+grep -q "Intake & Scoring" scripts/demo/smoke_web_console.mjs
+grep -q "module_context" apps/web-console/src/main.rs
+grep -q "workspace-topbar" apps/web-console/src/styles.css
+grep -q "module-nav" apps/web-console/src/styles.css
 grep -q "/api/v1/health" apps/web-console/src/main.rs
 grep -q "remediation" apps/api-server/src/routes/health.rs
 grep -q "Non-secret remediation hint" apps/api-server/src/routes/openapi.rs
