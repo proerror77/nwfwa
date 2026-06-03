@@ -1635,6 +1635,147 @@ pre {
   margin: 0;
 }
 
+.agent-cockpit {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.74fr) minmax(440px, 1.52fr) minmax(220px, 0.86fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.agent-brief strong {
+  color: #102f58;
+}
+
+.agent-evidence-map {
+  position: relative;
+  min-height: 380px;
+  overflow: hidden;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.94), rgba(244, 248, 255, 0.96)),
+    radial-gradient(circle at 50% 50%, rgba(111, 91, 213, 0.12), transparent 52%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.agent-map-title {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.agent-map-title span,
+.agent-node span,
+.agent-core span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.agent-map-title strong {
+  color: #0c315f;
+}
+
+.agent-map-link {
+  position: absolute;
+  left: 13%;
+  right: 13%;
+  top: 52%;
+  height: 2px;
+  background: #c7d8f2;
+}
+
+.agent-map-link.diagonal-a {
+  transform: rotate(25deg);
+}
+
+.agent-map-link.diagonal-b {
+  transform: rotate(-25deg);
+}
+
+.agent-node,
+.agent-core {
+  position: absolute;
+  z-index: 2;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.agent-node {
+  width: 154px;
+  min-height: 82px;
+  padding: 11px;
+  border-top: 4px solid var(--blue);
+}
+
+.agent-node strong,
+.agent-core strong {
+  display: block;
+  margin-top: 6px;
+  color: #0c315f;
+  overflow-wrap: anywhere;
+  line-height: 1.18;
+}
+
+.agent-node.risk {
+  left: 8%;
+  top: 22%;
+  border-top-color: var(--red);
+}
+
+.agent-node.evidence {
+  right: 8%;
+  top: 22%;
+  border-top-color: var(--blue);
+}
+
+.agent-node.kb {
+  left: 11%;
+  bottom: 13%;
+  border-top-color: #1f8f54;
+}
+
+.agent-node.qa {
+  right: 11%;
+  bottom: 13%;
+  border-top-color: #6f5bd5;
+}
+
+.agent-node.human {
+  left: 50%;
+  bottom: 5%;
+  transform: translateX(-50%);
+  border-top-color: var(--amber);
+}
+
+.agent-core {
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 126px;
+  height: 126px;
+  padding: 13px;
+  text-align: center;
+  background: linear-gradient(180deg, #102f58 0%, #0b2344 100%);
+  border: 6px solid #dceaff;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.agent-core span,
+.agent-core strong {
+  color: #ffffff;
+}
+
+.agent-guardrail {
+  background: #ffffff;
+}
+
 .summary-grid strong,
 .result-list strong {
   display: block;
@@ -2335,6 +2476,7 @@ pre {
   .case-investigation-board,
   .clinical-cockpit,
   .clinical-outcome-grid,
+  .agent-cockpit,
   .case-action-grid,
   .gate-pipeline,
   .case-grid {
@@ -2352,6 +2494,10 @@ pre {
 
   .clinical-evidence-map {
     min-height: 560px;
+  }
+
+  .agent-evidence-map {
+    min-height: 600px;
   }
 
   .graph-entity {

@@ -4851,6 +4851,7 @@ fn agent_investigation_view(props: &AgentInvestigationProps) -> Html {
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
                 ApiState::Ready(response) => html! {
                     <>
+                        {agent_investigation_cockpit(response)}
                         <div class="score-hero">
                             <div><span>{"Agent Run"}</span><strong>{&response.agent_run_id}</strong></div>
                             <div><span>{"Boundary"}</span><strong>{&response.decision_boundary}</strong></div>
@@ -4913,6 +4914,91 @@ fn agent_investigation_view(props: &AgentInvestigationProps) -> Html {
                 },
             }}
         </section>
+    }
+}
+
+fn agent_investigation_cockpit(response: &AgentInvestigationResponse) -> Html {
+    let top_finding = response
+        .findings
+        .first()
+        .map(|finding| finding.finding.as_str())
+        .unwrap_or("finding pending");
+    let similar_case = response
+        .similar_cases
+        .first()
+        .map(|case| case.case_id.as_str())
+        .unwrap_or("no similar case");
+    let missing_evidence = response
+        .evidence_sufficiency
+        .missing_evidence
+        .first()
+        .map(String::as_str)
+        .unwrap_or("none");
+    html! {
+        <div class="agent-cockpit">
+            <aside class="case-brief agent-brief">
+                <span>{"Agent investigation command"}</span>
+                <strong>{&response.agent_run_id}</strong>
+                <dl>
+                    <div><dt>{"Boundary"}</dt><dd>{&response.decision_boundary}</dd></div>
+                    <div><dt>{"Scheme"}</dt><dd>{&response.evidence_sufficiency.scheme_family}</dd></div>
+                    <div><dt>{"Evidence"}</dt><dd>{response.evidence_refs.len()}</dd></div>
+                    <div><dt>{"Status"}</dt><dd>{&response.evidence_sufficiency.status}</dd></div>
+                </dl>
+                <div class="tag-grid compact-tags">
+                    <span>{format!("findings {}", response.findings.len())}</span>
+                    <span>{format!("checklist {}", response.investigation_checklist.len())}</span>
+                    <span>{format!("similar {}", response.similar_cases.len())}</span>
+                </div>
+            </aside>
+
+            <div class="agent-evidence-map">
+                <div class="agent-map-title">
+                    <span>{"Agent evidence orchestration"}</span>
+                    <strong>{"assistive package only"}</strong>
+                </div>
+                <div class="agent-map-link horizontal"></div>
+                <div class="agent-map-link diagonal-a"></div>
+                <div class="agent-map-link diagonal-b"></div>
+                <div class="agent-node risk">
+                    <span>{"7-layer risk"}</span>
+                    <strong>{top_finding}</strong>
+                </div>
+                <div class="agent-node evidence">
+                    <span>{"Evidence buckets"}</span>
+                    <strong>{format!(
+                        "claim {} / rule {} / model {}",
+                        response.evidence_refs_by_type.claim.len(),
+                        response.evidence_refs_by_type.rule.len(),
+                        response.evidence_refs_by_type.model.len()
+                    )}</strong>
+                </div>
+                <div class="agent-node kb">
+                    <span>{"Knowledge memory"}</span>
+                    <strong>{similar_case}</strong>
+                </div>
+                <div class="agent-node qa">
+                    <span>{"QA draft"}</span>
+                    <strong>{&response.qa_opinion_draft}</strong>
+                </div>
+                <div class="agent-node human">
+                    <span>{"Human gate"}</span>
+                    <strong>{missing_evidence}</strong>
+                </div>
+                <div class="agent-core">
+                    <span>{"Agent"}</span>
+                    <strong>{"evidence pack"}</strong>
+                </div>
+            </div>
+
+            <aside class="case-timeline agent-guardrail">
+                <h4>{"Guardrail path"}</h4>
+                {timeline_item("Input", "risk output + evidence refs", "done")}
+                {timeline_item("Tools", "allowlisted retrieval", "done")}
+                {timeline_item("Output", "structured summary", "ready")}
+                {timeline_item("Action", "human approval required", "review")}
+            </aside>
+        </div>
     }
 }
 
