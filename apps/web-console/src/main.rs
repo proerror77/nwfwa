@@ -1586,6 +1586,7 @@ fn evidence_hub_page(on_navigate: Callback<String>) -> Html {
                 </div>
                 <span class="status-pill">{"Context lookup"}</span>
             </div>
+            {evidence_hub_visual()}
             <div class="workflow-card-grid">
                 {workflow_action_card("Provider Risk", "Open provider graph signals, suspicious patterns, and network flags.", "Review provider", "Provider Risk", "danger", &on_navigate)}
                 {workflow_action_card("Member Profile", "Inspect member-level utilization, policy, and claim history context.", "Review member", "Member Profile", "neutral", &on_navigate)}
@@ -1593,6 +1594,54 @@ fn evidence_hub_page(on_navigate: Callback<String>) -> Html {
                 {workflow_action_card("Data Sources", "Check dataset lineage, schema mapping, and evaluation inputs.", "Review data", "Data Sources", "success", &on_navigate)}
             </div>
         </section>
+    }
+}
+
+fn evidence_hub_visual() -> Html {
+    html! {
+        <section class="panel evidence-visual-shell">
+            <div class="evidence-visual-board">
+                <div class="evidence-specimen">
+                    <div class="specimen-top">
+                        <span>{"Document packet"}</span>
+                        <strong>{"redacted + traceable"}</strong>
+                    </div>
+                    <div class="specimen-lines">
+                        <i class="wide"></i>
+                        <i></i>
+                        <i class="short"></i>
+                        <i class="wide warning"></i>
+                    </div>
+                    <div class="specimen-tags">
+                        <span>{"checksum"}</span>
+                        <span>{"URI"}</span>
+                        <span>{"evidence_refs"}</span>
+                    </div>
+                </div>
+                <div class="evidence-pipeline-rail">
+                    {evidence_pipeline_node("01", "Register", "document metadata")}
+                    {evidence_pipeline_node("02", "OCR", "redacted output")}
+                    {evidence_pipeline_node("03", "Chunk", "source spans")}
+                    {evidence_pipeline_node("04", "Embed", "job state")}
+                    {evidence_pipeline_node("05", "Audit", "retrieval trail")}
+                </div>
+                <div class="evidence-loop-note">
+                    <span>{"Evidence boundary"}</span>
+                    <strong>{"LLM sees references, not raw claims text"}</strong>
+                    <small>{"The runtime stores provenance, redaction state, retrieval purpose, and actor scope before Agent or QA views consume the packet."}</small>
+                </div>
+            </div>
+        </section>
+    }
+}
+
+fn evidence_pipeline_node(step: &str, label: &str, caption: &str) -> Html {
+    html! {
+        <div class="evidence-pipeline-node">
+            <span>{step}</span>
+            <strong>{label}</strong>
+            <small>{caption}</small>
+        </div>
     }
 }
 
@@ -1738,6 +1787,7 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                             <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
                             <div><span>{"RAG"}</span><strong>{response.rag.as_ref().map(display_value).unwrap_or_else(|| "none".into())}</strong></div>
                         </div>
+                        {runtime_decision_visual(response)}
                         <div class="summary-grid">
                             <div><span>{"Action"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
                             <div><span>{"Risk Level"}</span><strong>{response.risk_level.as_deref().unwrap_or("unknown")}</strong></div>
@@ -1806,6 +1856,54 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                 },
             }}
         </section>
+    }
+}
+
+fn runtime_decision_visual(response: &ScoreResponse) -> Html {
+    let risk_score = numeric_value(&response.risk_score).clamp(0.0, 100.0);
+    let risk_style = format!(
+        "background: conic-gradient(var(--red) 0 {:.0}%, #dbe8f8 {:.0}% 100%);",
+        risk_score, risk_score
+    );
+    let rag = response
+        .rag
+        .as_ref()
+        .map(display_value)
+        .unwrap_or_else(|| "none".into());
+    let evidence_count = response.evidence_refs.as_ref().map(Vec::len).unwrap_or(0);
+    html! {
+        <div class="runtime-visual-cockpit">
+            <div class="risk-gauge-card">
+                <div class="risk-gauge" style={risk_style}>
+                    <div>
+                        <span>{"risk"}</span>
+                        <strong>{format!("{:.0}", risk_score)}</strong>
+                    </div>
+                </div>
+                <div class="risk-gauge-meta">
+                    <span>{"L7 route"}</span>
+                    <strong>{response.recommended_action.as_deref().unwrap_or("MANUAL_REVIEW")}</strong>
+                    <small>{format!("{} / {}", rag, response.confidence.as_deref().unwrap_or("confidence pending"))}</small>
+                </div>
+            </div>
+            <div class="runtime-path-card">
+                {runtime_path_node("Input", "claim payload", &response.claim_id)}
+                {runtime_path_node("Detect", "7 layers", &format!("{} layer outputs", response.layers.len()))}
+                {runtime_path_node("Explain", "alerts + reasons", &format!("{} alerts", response.alerts.len()))}
+                {runtime_path_node("Evidence", "trace refs", &format!("{evidence_count} refs"))}
+                {runtime_path_node("Human", "bounded action", response.review_mode.as_deref().unwrap_or("review"))}
+            </div>
+        </div>
+    }
+}
+
+fn runtime_path_node(label: &str, caption: &str, value: &str) -> Html {
+    html! {
+        <div class="runtime-path-node">
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{caption}</small>
+        </div>
     }
 }
 
@@ -1902,6 +2000,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(summary) => html! {
                     <>
+                        {dashboard_mission_visual(summary)}
                         <section class="panel result-stack">
                             <h3>{"Executive KPIs"}</h3>
                             <div class="score-hero visual-kpis">
@@ -2076,6 +2175,78 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn dashboard_mission_visual(summary: &DashboardSummary) -> Html {
+    html! {
+        <section class="panel mission-visual-shell">
+            <div class="mission-board">
+                <div class="mission-lane claim-lane">
+                    <span>{"TPA claim stream"}</span>
+                    <strong>{format!("{} suspected", summary.suspected_claims)}</strong>
+                    <small>{format!("{} risk amount", summary.risk_amount)}</small>
+                    <div class="claim-strip-stack">
+                        {claim_strip("new", "claim intake", "active")}
+                        {claim_strip("score", "multi-layer detection", "warning")}
+                        {claim_strip("route", "human review gate", "danger")}
+                    </div>
+                </div>
+                <div class="mission-radar">
+                    <div class="radar-ring outer"></div>
+                    <div class="radar-ring middle"></div>
+                    <div class="radar-ring inner"></div>
+                    <div class="radar-core">
+                        <span>{"FWA"}</span>
+                        <strong>{"7-layer engine"}</strong>
+                    </div>
+                    {radar_node("L1", "Peer", "top")}
+                    {radar_node("L2", "Rules", "upper-right")}
+                    {radar_node("L3", "Anomaly", "lower-right")}
+                    {radar_node("L4", "ML", "bottom")}
+                    {radar_node("L5", "Medical", "lower-left")}
+                    {radar_node("L6", "Graph", "upper-left")}
+                    {radar_node("L7", "Route", "center-right")}
+                </div>
+                <div class="mission-lane outcome-lane">
+                    <span>{"Human loop + value"}</span>
+                    <strong>{summary.value_measurement.net_value.clone()}</strong>
+                    <small>{format!("audit coverage {}", percent_label(summary.audit_coverage.canonical_trace_coverage))}</small>
+                    <div class="outcome-stack">
+                        {outcome_chip("Agent", &format!("{} runs", summary.agent_governance.total_runs), "strong")}
+                        {outcome_chip("QA", &format!("{} open", summary.qa_queue.open_cases), "warning")}
+                        {outcome_chip("ROI", &summary.saving_amount, "success")}
+                    </div>
+                </div>
+            </div>
+        </section>
+    }
+}
+
+fn claim_strip(stage: &str, label: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("claim-strip", tone.to_string())}>
+            <span>{stage}</span>
+            <strong>{label}</strong>
+        </div>
+    }
+}
+
+fn radar_node(layer: &str, label: &str, position: &str) -> Html {
+    html! {
+        <div class={classes!("radar-node", position.to_string())}>
+            <span>{layer}</span>
+            <strong>{label}</strong>
+        </div>
+    }
+}
+
+fn outcome_chip(label: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("outcome-chip", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
     }
 }
 
@@ -6683,6 +6854,13 @@ fn display_value(value: &Value) -> String {
         .map(|number| format!("{number:.1}"))
         .or_else(|| value.as_str().map(str::to_string))
         .unwrap_or_else(|| value.to_string())
+}
+
+fn numeric_value(value: &Value) -> f64 {
+    value
+        .as_f64()
+        .or_else(|| value.as_str().and_then(|text| text.parse::<f64>().ok()))
+        .unwrap_or(0.0)
 }
 
 fn readable_token(value: &str) -> String {
