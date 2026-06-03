@@ -322,6 +322,190 @@ button {
   border: 1px solid #bad4fb;
 }
 
+.workspace-system-map {
+  position: relative;
+  display: grid;
+  grid-template-columns: repeat(6, minmax(120px, 1fr));
+  gap: 10px;
+  margin: 0 0 16px;
+  padding: 12px;
+  overflow: hidden;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.94), rgba(248, 252, 255, 0.94)),
+    repeating-linear-gradient(90deg, rgba(23, 105, 224, 0.06) 0 1px, transparent 1px 26px);
+  border: 1px solid rgba(199, 217, 241, 0.94);
+  border-radius: 8px;
+  box-shadow: 0 12px 28px rgba(15, 46, 89, 0.07);
+}
+
+.system-map-rail,
+.system-map-pulse {
+  position: absolute;
+  left: 5%;
+  right: 5%;
+  top: 54px;
+  height: 2px;
+  pointer-events: none;
+}
+
+.system-map-rail {
+  background: linear-gradient(90deg, transparent, #9bbbe4 10%, #9bbbe4 90%, transparent);
+}
+
+.system-map-pulse {
+  width: 120px;
+  right: auto;
+  background: linear-gradient(90deg, transparent, #0f7b8c, transparent);
+  animation: system-pulse 5.5s linear infinite;
+}
+
+@keyframes system-pulse {
+  0% {
+    transform: translateX(-80px);
+  }
+  100% {
+    transform: translateX(calc(90vw - 300px));
+  }
+}
+
+.system-map-stage {
+  position: relative;
+  z-index: 1;
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+  min-height: 118px;
+  padding: 10px;
+  text-align: left;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--blue);
+  border-radius: 8px;
+  box-shadow: 0 9px 18px rgba(15, 46, 89, 0.06);
+  transition:
+    transform 160ms ease,
+    border-color 160ms ease,
+    box-shadow 160ms ease;
+}
+
+.system-map-stage:hover,
+.system-map-stage.active {
+  transform: translateY(-2px);
+  border-color: #8ab8f4;
+  box-shadow: 0 14px 26px rgba(15, 46, 89, 0.12);
+}
+
+.system-stage-step,
+.system-map-stage small,
+.system-map-stage em {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.25;
+}
+
+.system-stage-step {
+  font-weight: 850;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.system-stage-glyph {
+  position: relative;
+  display: block;
+  width: 28px;
+  height: 28px;
+  background: #eef6ff;
+  border: 1px solid #c8dcf7;
+  border-radius: 999px;
+}
+
+.system-stage-glyph::before,
+.system-stage-glyph::after {
+  content: "";
+  position: absolute;
+  box-sizing: border-box;
+}
+
+.system-stage-glyph::before {
+  left: 8px;
+  top: 8px;
+  width: 10px;
+  height: 10px;
+  border: 2px solid var(--blue);
+  border-radius: 3px;
+}
+
+.system-stage-glyph::after {
+  right: -3px;
+  bottom: 4px;
+  width: 8px;
+  height: 8px;
+  background: var(--teal);
+  border: 2px solid #ffffff;
+  border-radius: 999px;
+}
+
+.system-map-stage strong {
+  color: #12345a;
+  font-size: 14px;
+  line-height: 1.18;
+  overflow-wrap: anywhere;
+}
+
+.system-map-stage small,
+.system-map-stage em {
+  display: block;
+  overflow-wrap: anywhere;
+}
+
+.system-map-stage em {
+  font-style: normal;
+  font-weight: 750;
+}
+
+.system-map-stage.detect {
+  border-top-color: #6f5bd5;
+}
+
+.system-map-stage.detect .system-stage-glyph::before {
+  border-color: #6f5bd5;
+  border-radius: 999px;
+}
+
+.system-map-stage.review {
+  border-top-color: var(--amber);
+}
+
+.system-map-stage.review .system-stage-glyph::before {
+  border-color: var(--amber);
+  transform: rotate(45deg);
+}
+
+.system-map-stage.evidence {
+  border-top-color: var(--teal);
+}
+
+.system-map-stage.evidence .system-stage-glyph::before {
+  border-color: var(--teal);
+}
+
+.system-map-stage.govern {
+  border-top-color: var(--red);
+}
+
+.system-map-stage.govern .system-stage-glyph::after {
+  background: var(--red);
+}
+
+.system-map-stage.value {
+  border-top-color: #1f8f54;
+}
+
+.system-map-stage.value .system-stage-glyph::after {
+  background: #1f8f54;
+}
+
 .workspace-content,
 .dashboard,
 .claim-inbox,
@@ -5309,6 +5493,7 @@ pre {
   .visual-board,
   .operator-queue,
   .ops-system-map,
+  .workspace-system-map,
   .workflow-card-grid,
   .scoring-blueprint-shell,
   .blueprint-layer-rail,
@@ -5459,6 +5644,7 @@ pre {
   .metric-row,
   .ops-stat-strip,
   .health-card dl,
+  .workspace-system-map,
   .pilot-runway-map,
   .pilot-runway-proof,
   .pilot-readiness-cockpit,

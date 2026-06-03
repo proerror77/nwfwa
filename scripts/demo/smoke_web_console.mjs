@@ -95,6 +95,10 @@ async function main() {
     assertContains(builtText, "Detection Controls", "web console navigation bundle");
     assertContains(builtText, "Evidence Hub", "web console navigation bundle");
     assertContains(builtText, "Real-time operations", "web console workspace bundle");
+    assertContains(builtText, "7-layer engine", "web console global system map bundle");
+    assertContains(builtText, "Human gate", "web console global system map bundle");
+    assertContains(builtText, "Audit trail", "web console global system map bundle");
+    assertContains(builtText, "ROI proof", "web console global system map bundle");
     assertContains(builtText, "peer benchmark", "web console seven-layer visual bundle");
     assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");

@@ -1532,6 +1532,7 @@ fn app() -> Html {
                         <span class="user-chip">{"Pilot Ops"}</span>
                     </div>
                 </div>
+                {workspace_system_map(active.as_str(), select_module.clone())}
                 <div class="workspace-content">
                     if *active == "Claim Inbox" {
                         <ClaimInboxPage />
@@ -1581,6 +1582,58 @@ fn app() -> Html {
                 </div>
             </main>
         </div>
+    }
+}
+
+fn workspace_system_map(active: &str, on_navigate: Callback<String>) -> Html {
+    html! {
+        <section class="workspace-system-map" aria-label="FWA platform system map">
+            <div class="system-map-rail"></div>
+            <div class="system-map-pulse"></div>
+            {system_map_stage("Intake", "Claim Inbox", "TPA packet", "canonical claim", "Claim Inbox", "intake", active, &on_navigate)}
+            {system_map_stage("Detect", "7-layer engine", "Rules + ML + graph", "risk score", "Runtime Scoring", "detect", active, &on_navigate)}
+            {system_map_stage("Review", "Human gate", "Medical + QA", "no auto denial", "Review Workbench", "review", active, &on_navigate)}
+            {system_map_stage("Evidence", "Case context", "Member / provider / KB", "trace refs", "Evidence Hub", "evidence", active, &on_navigate)}
+            {system_map_stage("Govern", "Audit trail", "Policy + approval", "pilot ready", "Governance", "govern", active, &on_navigate)}
+            {system_map_stage("Value", "ROI proof", "Savings attribution", "dashboard", "Dashboard", "value", active, &on_navigate)}
+        </section>
+    }
+}
+
+fn system_map_stage(
+    step: &'static str,
+    title: &'static str,
+    detail: &'static str,
+    outcome: &'static str,
+    target: &'static str,
+    tone: &'static str,
+    active: &str,
+    on_navigate: &Callback<String>,
+) -> Html {
+    let target_name = target.to_string();
+    let on_navigate = on_navigate.clone();
+    let is_active = active == target
+        || (target == "Review Workbench" && matches!(active, "Medical Review" | "QA Review"))
+        || (target == "Evidence Hub"
+            && matches!(
+                active,
+                "Evidence Runtime"
+                    | "Provider Risk"
+                    | "Member Profile"
+                    | "Knowledge Base"
+                    | "Data Sources"
+            ));
+    html! {
+        <button
+            class={classes!("system-map-stage", tone, is_active.then_some("active"))}
+            onclick={Callback::from(move |_| on_navigate.emit(target_name.clone()))}
+        >
+            <span class="system-stage-step">{step}</span>
+            <span class="system-stage-glyph"></span>
+            <strong>{title}</strong>
+            <small>{detail}</small>
+            <em>{outcome}</em>
+        </button>
     }
 }
 
