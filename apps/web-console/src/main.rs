@@ -3482,7 +3482,14 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
 fn mlops_workspace_page() -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
     let model_key = use_state(|| "baseline_fwa".to_string());
+    let actor = use_state(|| "mlops-operator".to_string());
+    let reviewer = use_state(|| "risk-model-owner".to_string());
+    let promotion_decision = use_state(|| "approved".to_string());
+    let action_notes =
+        use_state(|| "non-PII governed MLOps lifecycle review for demo evidence".to_string());
+    let evidence_refs = use_state(|| "model_versions:baseline_fwa:v1".to_string());
     let snapshot_state = use_state(|| ApiState::<MlopsWorkspaceSnapshot>::Idle);
+    let action_state = use_state(|| ApiState::<Value>::Idle);
 
     let load_workspace = {
         let api_key = api_key.clone();
@@ -3507,6 +3514,50 @@ fn mlops_workspace_page() -> Html {
     let refresh = {
         let load_workspace = load_workspace.clone();
         Callback::from(move |_| load_workspace.emit(()))
+    };
+
+    let governed_action = |action: &'static str| {
+        let api_key = api_key.clone();
+        let model_key = model_key.clone();
+        let actor = actor.clone();
+        let reviewer = reviewer.clone();
+        let promotion_decision = promotion_decision.clone();
+        let action_notes = action_notes.clone();
+        let evidence_refs = evidence_refs.clone();
+        let action_state = action_state.clone();
+        let load_workspace = load_workspace.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let model_key = (*model_key).clone();
+            let actor = (*actor).clone();
+            let reviewer = (*reviewer).clone();
+            let promotion_decision = (*promotion_decision).clone();
+            let action_notes = (*action_notes).clone();
+            let evidence_refs = parse_tags(&evidence_refs);
+            let action_state = action_state.clone();
+            let load_workspace = load_workspace.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                let result = execute_mlops_governed_action(
+                    api_key,
+                    model_key,
+                    action,
+                    actor,
+                    reviewer,
+                    promotion_decision,
+                    action_notes,
+                    evidence_refs,
+                )
+                .await;
+                match result {
+                    Ok(response) => {
+                        action_state.set(ApiState::Ready(response));
+                        load_workspace.emit(());
+                    }
+                    Err(error) => action_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
     };
 
     {
@@ -3560,6 +3611,56 @@ fn mlops_workspace_page() -> Html {
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh MLOps workspace" }}
                     </button>
                 </div>
+            </section>
+
+            <section class="panel result-stack">
+                <div class="section-header">
+                    <div>
+                        <h3>{"Governed Actions"}</h3>
+                        <p>{"Controlled MLOps actions write lifecycle evidence through existing APIs. Gates, permissions, human review, and non-PII evidence remain enforced by the backend."}</p>
+                    </div>
+                    <span class="status-token strong">{"manual evidence required"}</span>
+                </div>
+                <div class="form-grid">
+                    {text_input("Actor", &actor)}
+                    {text_input("Reviewer", &reviewer)}
+                    <label>
+                        {"Promotion decision"}
+                        <select
+                            value={(*promotion_decision).clone()}
+                            onchange={{
+                                let promotion_decision = promotion_decision.clone();
+                                Callback::from(move |event: Event| {
+                                    promotion_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                })
+                            }}
+                        >
+                            <option value="approved">{"approved"}</option>
+                            <option value="rejected">{"rejected"}</option>
+                        </select>
+                    </label>
+                    {text_input("Evidence refs", &evidence_refs)}
+                    <label class="span-two">
+                        {"Notes"}
+                        <textarea
+                            value={(*action_notes).clone()}
+                            oninput={{
+                                let action_notes = action_notes.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    action_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <p class="empty">{"Evidence refs must include model_versions:{model_key}:{model_version}. Public demo or Kaggle evidence can queue/review demos, but cannot replace customer production validation."}</p>
+                <div class="button-row">
+                    <button onclick={governed_action("queue_retraining")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Queue retraining job"}</button>
+                    <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit promotion review"}</button>
+                    <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
+                    <button onclick={governed_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback active model"}</button>
+                </div>
+                <MlopsActionView state={(*action_state).clone()} />
             </section>
 
             <MlopsWorkspaceView state={(*snapshot_state).clone()} />
@@ -3835,6 +3936,28 @@ fn mlops_monitoring_summary(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 </ul>
             }
         </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct MlopsActionProps {
+    state: ApiState<Value>,
+}
+
+#[function_component(MlopsActionView)]
+fn mlops_action_view(props: &MlopsActionProps) -> Html {
+    match &props.state {
+        ApiState::Idle => {
+            html! { <p class="empty">{"Choose an action only after evidence and reviewer context are ready."}</p> }
+        }
+        ApiState::Loading => html! { <p>{"Submitting governed MLOps action..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(response) => html! {
+            <>
+                <p class="empty">{"Action accepted by API. Workspace refresh has been requested."}</p>
+                <pre>{pretty_json(response)}</pre>
+            </>
+        },
     }
 }
 
@@ -8063,6 +8186,60 @@ async fn get_mlops_workspace_snapshot(
         model_ops,
         retraining_jobs,
     })
+}
+
+async fn execute_mlops_governed_action(
+    api_key: String,
+    model_key: String,
+    action: &str,
+    actor: String,
+    reviewer: String,
+    promotion_decision: String,
+    notes: String,
+    evidence_refs: Vec<String>,
+) -> Result<Value, String> {
+    let model_key = model_key.trim();
+    match action {
+        "queue_retraining" => {
+            request_json(
+                &format!("/api/v1/ops/models/{model_key}/retraining-jobs"),
+                api_key,
+                json!({
+                    "requested_by": actor.trim(),
+                    "notes": notes.trim(),
+                }),
+            )
+            .await
+        }
+        "promotion_review" => {
+            if evidence_refs.is_empty() {
+                return Err("model promotion review requires evidence refs".into());
+            }
+            request_json(
+                &format!("/api/v1/ops/models/{model_key}/promotion-reviews"),
+                api_key,
+                json!({
+                    "decision": promotion_decision.trim(),
+                    "reviewer": reviewer.trim(),
+                    "notes": notes.trim(),
+                    "evidence_refs": evidence_refs,
+                }),
+            )
+            .await
+        }
+        "activate" | "rollback" => {
+            if evidence_refs.is_empty() {
+                return Err("model lifecycle actions require evidence refs".into());
+            }
+            request_json(
+                &format!("/api/v1/ops/models/{model_key}/{action}"),
+                api_key,
+                json!({ "evidence_refs": evidence_refs }),
+            )
+            .await
+        }
+        _ => Err(format!("unknown MLOps action: {action}")),
+    }
 }
 
 async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse, String> {

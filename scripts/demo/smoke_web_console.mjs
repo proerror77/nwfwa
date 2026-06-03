@@ -95,6 +95,11 @@ async function main() {
     assertContains(builtText, "Offline ML Governance", "web console mlops workspace bundle");
     assertContains(builtText, "MLOps Control Plane", "web console mlops workspace bundle");
     assertContains(builtText, "Offline Training Handoff", "web console mlops workspace bundle");
+    assertContains(builtText, "Governed Actions", "web console mlops workspace bundle");
+    assertContains(builtText, "Queue retraining job", "web console mlops action bundle");
+    assertContains(builtText, "Submit promotion review", "web console mlops action bundle");
+    assertContains(builtText, "Activate approved candidate", "web console mlops action bundle");
+    assertContains(builtText, "Rollback active model", "web console mlops action bundle");
     assertContains(builtText, "Model Candidates", "web console mlops workspace bundle");
     assertContains(builtText, "Training Jobs", "web console mlops workspace bundle");
     assertContains(builtText, "Review Workbench", "web console navigation bundle");
@@ -195,6 +200,7 @@ async function main() {
       "Threshold Integrity",
       "Model Governance",
       "MLOps Workspace",
+      "Governed Actions",
       "Offline Training Handoff",
       "Model Candidates",
       "Training Jobs",
