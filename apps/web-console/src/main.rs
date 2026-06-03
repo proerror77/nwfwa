@@ -10,28 +10,27 @@ const API_KEY_DEFAULT: &str = "dev-secret";
 
 const NAV_SECTIONS: &[(&str, &[&str])] = &[
     (
-        "Intake & Scoring",
-        &["Claim Inbox", "Dashboard", "Runtime Scoring"],
+        "Risk Operations",
+        &["Dashboard", "Runtime Scoring", "Leads & Cases"],
     ),
+    ("Review Queues", &["Medical Review", "QA Review"]),
     (
-        "Detection Cockpit",
+        "Detection Controls",
         &["Rules", "Models", "Routing Policies", "Factor Factory"],
     ),
     (
-        "Case Operations",
+        "Evidence & Context",
         &[
-            "Leads & Cases",
-            "Member Profile",
             "Provider Risk",
-            "Medical Review",
-            "QA Review",
+            "Member Profile",
+            "Knowledge Base",
+            "Data Sources",
         ],
     ),
     (
-        "Data Foundation",
-        &["Data Sources", "Knowledge Base", "Audit Sampling"],
+        "Pilot Governance",
+        &["Audit Sampling", "Agent Investigator", "Governance"],
     ),
-    ("Governance", &["Agent Investigator", "Governance"]),
 ];
 
 const CONTRACT_PANELS: &[&str] = &[
@@ -1366,7 +1365,7 @@ enum ApiState<T> {
 
 #[function_component(App)]
 fn app() -> Html {
-    let active = use_state(|| "Claim Inbox".to_string());
+    let active = use_state(|| "Dashboard".to_string());
 
     html! {
         <div class="app">
@@ -1374,7 +1373,7 @@ fn app() -> Html {
                 <div class="brand-block">
                     <span>{"NOVA FWA"}</span>
                     <h1>{"FWA Platform"}</h1>
-                    <p>{"Risk control desk for claim scoring, alert handling, and pilot governance."}</p>
+                    <p>{"Operations desk for claim scoring, case triage, reviewer queues, and pilot governance."}</p>
                 </div>
                 <nav class="module-nav" aria-label="FWA operations modules">
                     {for NAV_SECTIONS.iter().map(|(section, modules)| html! {
@@ -1408,7 +1407,7 @@ fn app() -> Html {
                         <strong>{module_context(&active)}</strong>
                     </div>
                     <div class="topbar-search" aria-label="Global search placeholder">
-                        <span>{"Search claim / provider / member / rule"}</span>
+                        <span>{"Search claim / case / provider / evidence"}</span>
                     </div>
                     <div class="topbar-actions">
                         <span class="api-chip status-live">{"live"}</span>
@@ -1757,11 +1756,11 @@ fn dashboard_page() -> Html {
     html! {
         <section class="dashboard">
             <div class="dashboard-header">
-                <div>
-                    <h2>{"Dashboard"}</h2>
-                    <p>{"Track suspected and confirmed FWA, value realization, seven-layer risk coverage, QA feedback, and governance readiness."}</p>
+                    <div>
+                        <h2>{"Dashboard"}</h2>
+                    <p>{"Watch the operating queue, risk value, review load, and governance health without exposing low-frequency integration tools."}</p>
                 </div>
-                <span class="status-pill">{"Management Dashboard"}</span>
+                <span class="status-pill">{"Pilot Operations"}</span>
             </div>
 
             <section class="panel">
@@ -1827,6 +1826,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                                 {distribution_bars("Scheme mix", &summary.scheme_distribution)}
                                 {risk_ops_matrix(summary)}
                             </div>
+                            {operator_queue_snapshot(summary)}
                         </section>
 
                         <section class="panel result-stack">
@@ -5642,7 +5642,7 @@ fn module_status_page(props: &ModuleStatusProps) -> Html {
             </div>
             <div class="panel">
                 <h3>{"Migration Contract"}</h3>
-                <p>{"Existing API, audit, QA, model, rule, and governance contracts stay in place. Claim Inbox is the first Yew-native operator workflow."}</p>
+                <p>{"Existing API, audit, QA, model, rule, and governance contracts stay in place while the console prioritizes the active operator workflow."}</p>
                 <div class="tag-grid">
                     {for CONTRACT_PANELS.iter().map(|panel| html! { <span>{panel}</span> })}
                 </div>
@@ -6803,6 +6803,34 @@ fn dashboard_layer_flow(layers: &BTreeMap<String, DashboardLayerScore>) -> Html 
                 let value = layer_score_label(layers, layer_id);
                 risk_node(layer_id, label, &value, caption)
             })}
+        </div>
+    }
+}
+
+fn operator_queue_snapshot(summary: &DashboardSummary) -> Html {
+    html! {
+        <div class="visual-panel wide-visual operator-queue-panel">
+            <div class="panel-heading-row">
+                <h4>{"Operator queue"}</h4>
+                <span class="status-token strong">{"action view"}</span>
+            </div>
+            <div class="operator-queue">
+                {operator_queue_card("Score", &summary.suspected_claims.to_string(), "suspected claims", "Runtime Scoring", "danger")}
+                {operator_queue_card("Investigate", &summary.case_sla.open_cases.to_string(), "open cases", "Leads & Cases", "warning")}
+                {operator_queue_card("Review", &summary.qa_queue.open_cases.to_string(), "open QA samples", "QA Review", "strong")}
+                {operator_queue_card("Govern", &percent_label(summary.audit_coverage.canonical_trace_coverage), "trace coverage", "Audit Sampling", "success")}
+            </div>
+        </div>
+    }
+}
+
+fn operator_queue_card(action: &str, value: &str, metric: &str, module: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("operator-queue-card", tone.to_string())}>
+            <span>{action}</span>
+            <strong>{value}</strong>
+            <small>{metric}</small>
+            <em>{module}</em>
         </div>
     }
 }

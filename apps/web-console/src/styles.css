@@ -978,6 +978,87 @@ pre {
   background: var(--blue-soft);
 }
 
+.panel-heading-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+}
+
+.panel-heading-row h4 {
+  margin: 0;
+}
+
+.operator-queue-panel {
+  margin-top: 12px;
+}
+
+.operator-queue {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.operator-queue-card {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+  min-height: 116px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.94);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+  box-shadow: 0 9px 20px rgba(15, 46, 89, 0.06);
+}
+
+.operator-queue-card span,
+.operator-queue-card small,
+.operator-queue-card em {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+  font-style: normal;
+}
+
+.operator-queue-card span {
+  color: #17436f;
+  font-weight: 850;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.operator-queue-card strong {
+  display: block;
+  color: #0c315f;
+  font-size: 25px;
+  line-height: 1.08;
+  overflow-wrap: anywhere;
+}
+
+.operator-queue-card em {
+  margin-top: auto;
+  color: #31587f;
+  font-weight: 750;
+}
+
+.operator-queue-card.danger {
+  border-left-color: var(--red);
+}
+
+.operator-queue-card.warning {
+  border-left-color: var(--amber);
+}
+
+.operator-queue-card.strong {
+  border-left-color: var(--blue);
+}
+
+.operator-queue-card.success {
+  border-left-color: #1f8f54;
+}
+
 .rule-bars {
   display: grid;
   gap: 10px;
@@ -2766,6 +2847,7 @@ pre {
   .dashboard-kpis,
   .visual-kpis,
   .visual-board,
+  .operator-queue,
   .model-telemetry {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -2890,6 +2972,7 @@ pre {
   .rule-bar-row,
   .bar-row,
   .matrix-grid,
+  .operator-queue,
   .inbox-pipeline,
   .finding-command-strip,
   .case-investigation-board,
