@@ -4057,127 +4057,134 @@ fn mlops_workspace_page() -> Html {
                 <span class="status-pill">{"Offline ML Governance"}</span>
             </div>
 
-            <section class="panel">
-                <h3>{"MLOps Source"}</h3>
-                <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
-                        {"Model key"}
-                        <input
-                            value={(*model_key).clone()}
-                            oninput={{
-                                let model_key = model_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    model_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                </div>
-                <div class="button-row">
-                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
-                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh MLOps workspace" }}
-                    </button>
-                </div>
-            </section>
+            <div class="mlops-cockpit">
+                <section class="panel mlops-source-panel">
+                    <div class="section-header compact">
+                        <div>
+                            <h3>{"MLOps Source"}</h3>
+                            <p>{"Select the governed model workspace."}</p>
+                        </div>
+                    </div>
+                    <div class="form-grid">
+                        <label>
+                            {"API key"}
+                            <input
+                                value={(*api_key).clone()}
+                                oninput={{
+                                    let api_key = api_key.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label>
+                            {"Model key"}
+                            <input
+                                value={(*model_key).clone()}
+                                oninput={{
+                                    let model_key = model_key.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        model_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                    </div>
+                    <div class="button-row">
+                        <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                            {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh workspace" }}
+                        </button>
+                    </div>
+                </section>
 
-            <section class="panel result-stack mlops-action-panel">
-                <div class="section-header">
-                    <div>
-                        <h3>{"Governed Actions"}</h3>
-                        <p>{"Controlled MLOps actions write lifecycle evidence through existing APIs. Gates, permissions, human review, and non-PII evidence remain enforced by the backend."}</p>
+                <section class="panel result-stack mlops-action-panel">
+                    <div class="section-header compact">
+                        <div>
+                            <h3>{"Governed Actions"}</h3>
+                            <p>{"Lifecycle actions require reviewer context and evidence refs before backend gates accept them."}</p>
+                        </div>
+                        <span class="status-token strong">{"manual evidence required"}</span>
                     </div>
-                    <span class="status-token strong">{"manual evidence required"}</span>
-                </div>
-                <div class="mlops-action-grid">
-                    <label class="mlops-field">
-                        {"Actor"}
-                        <input
-                            value={(*actor).clone()}
-                            oninput={{
-                                let actor = actor.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    actor.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label class="mlops-field">
-                        {"Reviewer"}
-                        <input
-                            value={(*reviewer).clone()}
-                            oninput={{
-                                let reviewer = reviewer.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    reviewer.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label class="mlops-field">
-                        {"Promotion decision"}
-                        <select
-                            value={(*promotion_decision).clone()}
-                            onchange={{
-                                let promotion_decision = promotion_decision.clone();
-                                Callback::from(move |event: Event| {
-                                    promotion_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                })
-                            }}
-                        >
-                            <option value="approved">{"approved"}</option>
-                            <option value="rejected">{"rejected"}</option>
-                        </select>
-                    </label>
-                    <label class="mlops-field mlops-evidence-field">
-                        {"Evidence refs"}
-                        <input
-                            value={(*evidence_refs).clone()}
-                            oninput={{
-                                let evidence_refs = evidence_refs.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label class="mlops-field mlops-notes-field">
-                        {"Notes"}
-                        <textarea
-                            value={(*action_notes).clone()}
-                            oninput={{
-                                let action_notes = action_notes.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    action_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <div class="mlops-boundary-card">
-                        <span>{"Boundary"}</span>
-                        <strong>{"Evidence before action"}</strong>
-                        <small>{"Evidence refs must include model_versions:{model_key}:{model_version}. Public demo or Kaggle evidence can queue or review demos, but cannot replace customer production validation."}</small>
+                    <div class="mlops-action-grid">
+                        <label class="mlops-field">
+                            {"Actor"}
+                            <input
+                                value={(*actor).clone()}
+                                oninput={{
+                                    let actor = actor.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        actor.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Reviewer"}
+                            <input
+                                value={(*reviewer).clone()}
+                                oninput={{
+                                    let reviewer = reviewer.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        reviewer.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Promotion decision"}
+                            <select
+                                value={(*promotion_decision).clone()}
+                                onchange={{
+                                    let promotion_decision = promotion_decision.clone();
+                                    Callback::from(move |event: Event| {
+                                        promotion_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="approved">{"approved"}</option>
+                                <option value="rejected">{"rejected"}</option>
+                            </select>
+                        </label>
+                        <label class="mlops-field mlops-evidence-field">
+                            {"Evidence refs"}
+                            <input
+                                value={(*evidence_refs).clone()}
+                                oninput={{
+                                    let evidence_refs = evidence_refs.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field mlops-notes-field">
+                            {"Notes"}
+                            <textarea
+                                value={(*action_notes).clone()}
+                                oninput={{
+                                    let action_notes = action_notes.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        action_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <div class="mlops-boundary-card">
+                            <span>{"Boundary"}</span>
+                            <strong>{"Evidence before action"}</strong>
+                            <small>{"model_versions:{model_key}:{model_version} is required for production promotion; public demo evidence cannot replace customer validation."}</small>
+                        </div>
                     </div>
-                </div>
-                <div class="button-row mlops-action-buttons">
-                    <button onclick={governed_action("queue_retraining")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Queue retraining job"}</button>
-                    <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit promotion review"}</button>
-                    <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
-                    <button onclick={governed_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback active model"}</button>
-                </div>
-                <MlopsActionView state={(*action_state).clone()} />
-            </section>
+                    <div class="button-row mlops-action-buttons">
+                        <button onclick={governed_action("queue_retraining")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Queue retraining job"}</button>
+                        <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit promotion review"}</button>
+                        <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
+                        <button onclick={governed_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback active model"}</button>
+                    </div>
+                    <MlopsActionView state={(*action_state).clone()} />
+                </section>
+            </div>
 
             <MlopsWorkspaceView state={(*snapshot_state).clone()} />
         </section>
@@ -4198,7 +4205,7 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
                 ApiState::Loading => html! { <section class="panel"><p>{"Loading MLOps workspace..."}</p></section> },
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
-                    <>
+                    <div class="mlops-workspace-grid">
                         {mlops_command_center(snapshot)}
                         {mlops_training_handoff(snapshot)}
                         {mlops_dataset_readiness(snapshot)}
@@ -4206,7 +4213,7 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
                         {mlops_model_candidates(snapshot)}
                         {mlops_promotion_gates(snapshot)}
                         {mlops_monitoring_summary(snapshot)}
-                    </>
+                    </div>
                 },
             }}
         </>
@@ -4239,7 +4246,7 @@ fn mlops_training_handoff(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     let dataset = latest_dataset(&snapshot.data_sources.datasets);
     let active_model = active_model_version(&snapshot.model_ops);
     html! {
-        <section class="panel result-stack">
+        <section class="panel result-stack mlops-handoff-panel">
             <div class="section-header">
                 <div>
                     <h3>{"Offline Training Handoff"}</h3>
@@ -4255,7 +4262,7 @@ fn mlops_training_handoff(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 <div><span>{"Expected output"}</span><strong>{"/api/v1/ops/model-retraining-jobs/{job_id}/output"}</strong></div>
                 <div><span>{"Artifact boundary"}</span><strong>{active_model.and_then(|model| model.artifact_uri.as_deref()).unwrap_or("candidate artifact pending")}</strong></div>
             </div>
-            <div class="factor-card-grid">
+            <div class="factor-card-grid mlops-stage-grid">
                 {mlops_handoff_step("1", "Dataset approval", "Use a governed Parquet manifest with time and group split evidence.")}
                 {mlops_handoff_step("2", "Offline training", "External platform writes model, validation, feature, shadow, drift, and fairness artifacts.")}
                 {mlops_handoff_step("3", "Candidate registration", "Training output creates a candidate model and evaluation through the API.")}
@@ -4277,7 +4284,7 @@ fn mlops_handoff_step(step: &str, label: &str, detail: &str) -> Html {
 
 fn mlops_dataset_readiness(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     html! {
-        <section class="panel result-stack">
+        <section class="panel result-stack mlops-datasets-panel">
             <div class="section-header">
                 <div>
                     <h3>{"Datasets"}</h3>
@@ -4316,7 +4323,7 @@ fn mlops_dataset_readiness(snapshot: &MlopsWorkspaceSnapshot) -> Html {
 
 fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     html! {
-        <section class="panel result-stack">
+        <section class="panel result-stack mlops-training-panel">
             <div class="section-header">
                 <div>
                     <h3>{"Training Jobs"}</h3>
@@ -4356,7 +4363,7 @@ fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
 
 fn mlops_model_candidates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     html! {
-        <section class="panel result-stack">
+        <section class="panel result-stack mlops-candidates-panel">
             <div class="section-header">
                 <div>
                     <h3>{"Model Candidates"}</h3>
@@ -4389,7 +4396,7 @@ fn mlops_model_candidates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
 
 fn mlops_promotion_gates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     html! {
-        <section class="panel result-stack">
+        <section class="panel result-stack mlops-promotion-panel">
             <div class="section-header">
                 <div>
                     <h3>{"Promotion Gates"}</h3>
@@ -4425,7 +4432,7 @@ fn mlops_promotion_gates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
 
 fn mlops_monitoring_summary(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     html! {
-        <section class="panel result-stack">
+        <section class="panel result-stack mlops-monitoring-panel">
             <div class="section-header">
                 <div>
                     <h3>{"Monitoring"}</h3>
