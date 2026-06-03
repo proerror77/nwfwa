@@ -3532,6 +3532,10 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["python_http", "heuristic", "rust_artifact"],
                             "description": "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
+                        },
+                        "remediation": {
+                            "type": "string",
+                            "description": "Non-secret remediation hint returned for configuration checks that are not yet customer-pilot ready. Secret values and internal endpoint values are intentionally not exposed."
                         }
                     }
                 },

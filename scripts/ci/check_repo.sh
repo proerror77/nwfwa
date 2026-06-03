@@ -171,6 +171,9 @@ grep -q "API Call Records" scripts/demo/smoke_web_console.mjs
 grep -q "Pilot Security Readiness" scripts/demo/smoke_web_console.mjs
 grep -q "/api/v1/health" apps/web-console/src/main.rs
 grep -q "remediation" apps/api-server/src/routes/health.rs
+grep -q "Non-secret remediation hint" apps/api-server/src/routes/openapi.rs
+grep -Fq 'properties"]["remediation"]' apps/api-server/tests/ops_openapi.rs
+grep -q "Non-secret remediation hint" apps/api-server/tests/ops_openapi.rs
 grep -q "remediation" apps/web-console/src/main.rs
 grep -q "remediation hints" docs/engineering/pilot-readiness.md
 grep -q "remediation hints" docs/project/api-reference.md
