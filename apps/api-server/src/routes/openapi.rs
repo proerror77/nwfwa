@@ -1801,6 +1801,14 @@ pub async fn openapi_schema() -> Json<Value> {
                                     "schema": { "$ref": "#/components/schemas/ErrorResponse" }
                                 }
                             }
+                        },
+                        "403": {
+                            "description": "Principal lacks tpa:knowledge:read",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
                         }
                     }
                 }

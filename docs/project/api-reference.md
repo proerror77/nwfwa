@@ -474,7 +474,7 @@ be routed.
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/ops/knowledge/cases` | List confirmed knowledge cases. | Yes | None |
 | POST | `/api/v1/ops/knowledge/cases` | Publish a confirmed knowledge case. | Yes | Persists case and audit evidence. |
-| POST | `/api/v1/knowledge/search-similar` | Search similar FWA knowledge cases. | Yes | Records retrieval evidence where applicable. |
+| POST | `/api/v1/knowledge/search-similar` | Search similar FWA knowledge cases. Requires `tpa:knowledge:read` or `tpa:*`. | Yes | Records retrieval evidence where applicable. |
 | POST | `/api/v1/agent/cases/investigate` | Generate assistive investigation package. | Yes | Persists agent run and audit evidence. |
 
 Agent responses must include `decision_boundary: assistive_only`. They are

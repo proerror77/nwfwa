@@ -13,7 +13,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
+use fwa_auth::{authenticate_api_key, validate_api_key};
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -264,7 +264,7 @@ pub async fn search_similar(
     headers: HeaderMap,
     Json(request): Json<SimilarCaseSearchRequest>,
 ) -> Result<Json<SimilarCaseSearchResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    authorize_permission(&state, &headers, "tpa:knowledge:read")?;
     validate_similar_case_search(&request)?;
     let results = state
         .repository
@@ -308,6 +308,32 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
             "invalid api key",
         )
     })
+}
+
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "FORBIDDEN",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
 
 fn internal_error(

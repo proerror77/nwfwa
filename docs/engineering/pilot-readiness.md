@@ -107,9 +107,10 @@ Minimum pilot monitoring:
   pilot-ready.
 - Permission readiness: TPA pilot endpoints require `tpa:*` or matching
   fine-grained permissions such as `tpa:claims:score`,
-  `tpa:inbox:normalize`, `tpa:investigations:write`, `tpa:qa:write`, and
-  `tpa:audit:read`. Production-impacting rule and model governance actions
-  require matching `ops:*` permissions, for example `ops:rules:publish`,
+  `tpa:inbox:normalize`, `tpa:members:read`, `tpa:knowledge:read`,
+  `tpa:investigations:write`, `tpa:qa:write`, and `tpa:audit:read`.
+  Production-impacting rule and model governance actions require matching
+  `ops:*` permissions, for example `ops:rules:publish`,
   `ops:audit-samples:create`, or `ops:models:activate`. Missing permissions
   return `PERMISSION_DENIED`.
 - Source-system readiness: `/api/v1/health` check

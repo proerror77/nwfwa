@@ -168,7 +168,7 @@ The demo principal includes `tpa:*` because the customer proof exercises TPA
 inbox normalization, claim scoring, member profile lookup, investigation
 writeback, QA writeback, and claim audit history. For production separation,
 split those into fine-grained permissions such as `tpa:claims:score`,
-`tpa:qa:write`, and `tpa:audit:read`.
+`tpa:knowledge:read`, `tpa:qa:write`, and `tpa:audit:read`.
 
 Then run:
 

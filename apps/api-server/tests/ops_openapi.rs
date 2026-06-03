@@ -2950,7 +2950,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             Some("#/components/schemas/SimilarCaseSearchRequest"),
             "#/components/schemas/SimilarCaseSearchResponse",
             None,
-            &["400", "401"][..],
+            &["400", "401", "403"][..],
         ),
         (
             "/api/v1/investigations/results",

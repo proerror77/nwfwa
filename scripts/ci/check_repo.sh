@@ -260,6 +260,9 @@ grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/api-calls" scripts/demo/smoke_demo.py
 grep -q -- "--customer-principal-smoke" scripts/demo/smoke_demo.py
 grep -q -- "--customer-principal-smoke" scripts/demo/customer_pilot_proof.sh
+grep -q "tpa:knowledge:read" docs/engineering/tpa-integration-contract.md
+grep -q "tpa:knowledge:read" docs/engineering/pilot-readiness.md
+grep -q "tpa:knowledge:read" docs/project/api-reference.md
 grep -q "check-pilot-readiness" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_REQUIRE_READY" scripts/demo/customer_pilot_proof.sh
 grep -q "FWA_PROOF_SKIP_READINESS" scripts/demo/customer_pilot_proof.sh

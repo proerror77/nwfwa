@@ -14,7 +14,8 @@ The Operations Studio and internal ops APIs are separate surfaces.
   route-level authorization. TPA pilot endpoints require `tpa:*` or the
   matching fine-grained permission: `tpa:claims:score`,
   `tpa:inbox:normalize`, `tpa:members:read`,
-  `tpa:investigations:write`, `tpa:qa:write`, or `tpa:audit:read`.
+  `tpa:knowledge:read`, `tpa:investigations:write`, `tpa:qa:write`, or
+  `tpa:audit:read`.
 - Content type: JSON request bodies must use `content-type: application/json`.
 - OpenAPI: `GET /api/openapi.json`.
 - Error shape: all documented errors return:
@@ -409,6 +410,7 @@ Documented errors:
 
 - `400` invalid query, including blank diagnosis, region, or tags.
 - `401` missing or invalid API key.
+- `403` principal lacks `tpa:knowledge:read`.
 
 Similarity results return the saved knowledge case evidence refs. If the case
 was published with `source_claim_id` and that claim has a prior
