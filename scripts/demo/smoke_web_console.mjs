@@ -130,8 +130,11 @@ async function main() {
     assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
-    assertContains(builtText, "Net value", "web console dashboard value wording bundle");
-    assertContains(builtText, "Savings stay at 0", "web console dashboard value wording bundle");
+    assertContains(builtText, "Value status", "web console dashboard value wording bundle");
+    assertContains(builtText, "Pending confirmation", "web console dashboard value wording bundle");
+    assertContains(builtText, "Savings / review cost", "web console dashboard value wording bundle");
+    assertContains(builtText, "Costs are tracked as pilot investment", "web console dashboard value wording bundle");
+    assertNotContains(builtText, "Net value", "web console dashboard value wording bundle");
     assertNotContains(builtText, "ROI proof", "web console dashboard value wording bundle");
     assertNotContains(builtText, "ROI pending", "web console dashboard value wording bundle");
     assertNotContains(builtText, "ROI readiness", "web console dashboard value wording bundle");
