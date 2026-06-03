@@ -66,6 +66,13 @@ grep -q "POST /api/v1/investigations/results" docs/engineering/tpa-integration-c
 grep -q "POST /api/v1/qa/results" docs/engineering/tpa-integration-contract.md
 grep -q "GET /api/v1/audit/claims/{claim_id}" docs/engineering/tpa-integration-contract.md
 grep -q "idempotency_key" docs/engineering/tpa-integration-contract.md
+grep -q "INBOX_IDEMPOTENCY_CONFLICT" apps/api-server/src/routes/inbox.rs
+grep -q "inbox_claim_runs" migrations/0001_initial.sql
+grep -q "raw_payload_checksum" apps/api-server/src/routes/inbox.rs
+grep -q "inbox_run_id" apps/api-server/src/routes/claims.rs
+grep -q "InboxHandoffScoreClaimRequest" apps/api-server/src/routes/openapi.rs
+grep -q "inbox handoff" docs/project/api-reference.md
+grep -q "inbox_run_id" docs/engineering/tpa-integration-contract.md
 grep -q "Error shape" docs/engineering/tpa-integration-contract.md
 grep -q "docs/engineering/tpa-integration-contract.md" apps/api-server/tests/tpa_contract_docs.rs
 grep -q "scripts/demo/tpa_mock_client.py" apps/api-server/tests/tpa_contract_docs.rs

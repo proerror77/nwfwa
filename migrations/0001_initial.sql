@@ -51,6 +51,53 @@ CREATE TABLE IF NOT EXISTS claims (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS inbox_claim_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  run_id TEXT NOT NULL UNIQUE,
+  audit_id TEXT NOT NULL UNIQUE,
+  external_message_id TEXT,
+  idempotency_key TEXT,
+  external_message_fingerprint TEXT,
+  raw_payload_checksum TEXT NOT NULL,
+  raw_payload_ref TEXT,
+  mapping_version TEXT NOT NULL,
+  validation_result TEXT NOT NULL,
+  scoring_ready BOOLEAN NOT NULL,
+  claim_id TEXT NOT NULL,
+  source_system TEXT NOT NULL,
+  customer_scope_id TEXT NOT NULL,
+  canonical_claim_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+  validation_errors JSONB NOT NULL DEFAULT '[]'::jsonb,
+  data_quality_signals JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS external_message_id TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS external_message_fingerprint TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS raw_payload_checksum TEXT NOT NULL DEFAULT '';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS raw_payload_ref TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS mapping_version TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS validation_result TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS scoring_ready BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS claim_id TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS source_system TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS customer_scope_id TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS canonical_claim_context JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS validation_errors JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS data_quality_signals JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE UNIQUE INDEX IF NOT EXISTS inbox_claim_runs_run_id_idx
+  ON inbox_claim_runs(run_id);
+CREATE UNIQUE INDEX IF NOT EXISTS inbox_claim_runs_audit_id_idx
+  ON inbox_claim_runs(audit_id);
+CREATE UNIQUE INDEX IF NOT EXISTS inbox_claim_runs_idempotency_key_idx
+  ON inbox_claim_runs(idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS claim_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   claim_id UUID NOT NULL REFERENCES claims(id) ON DELETE CASCADE,

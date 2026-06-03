@@ -44,6 +44,8 @@ pub struct ScoreClaimRequest {
     pub provider_profile: Option<ProviderProfilePayload>,
     pub provider_relationships: Option<ProviderRelationshipGraphPayload>,
     pub canonical_claim_context: Option<serde_json::Value>,
+    pub inbox_run_id: Option<String>,
+    pub inbox_idempotency_key: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -240,22 +242,26 @@ pub async fn score_claim(
         || request.documents.is_some()
         || request.provider_profile.is_some()
         || request.provider_relationships.is_some();
-    if request.claim_id.is_some() && (has_full_payload || request.canonical_claim_context.is_some())
+    let has_inbox_locator =
+        request.inbox_run_id.is_some() || request.inbox_idempotency_key.is_some();
+    if request.claim_id.is_some()
+        && (has_full_payload || request.canonical_claim_context.is_some() || has_inbox_locator)
     {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "AMBIGUOUS_SCORE_REQUEST",
-            "claim_id, full claim payload, and canonical_claim_context are mutually exclusive",
+            "claim_id, full claim payload, canonical_claim_context, and inbox handoff locators are mutually exclusive",
         ));
     }
     if request.claim_id.is_none()
         && request.claim.is_none()
         && request.canonical_claim_context.is_none()
+        && !has_inbox_locator
     {
         return Err(ApiError::new(
             axum::http::StatusCode::BAD_REQUEST,
             "INVALID_SCORE_REQUEST",
-            "claim_id, claim payload, or canonical_claim_context is required",
+            "claim_id, claim payload, canonical_claim_context, or inbox handoff locator is required",
         ));
     }
     let review_mode = normalize_review_mode(request.review_mode.as_deref())?;
@@ -281,6 +287,48 @@ pub async fn score_claim(
                 )
             })?;
         (context, Vec::new(), None, None, Vec::new(), None)
+    } else if has_inbox_locator {
+        if has_full_payload || request.canonical_claim_context.is_some() {
+            return Err(ApiError::new(
+                axum::http::StatusCode::BAD_REQUEST,
+                "AMBIGUOUS_SCORE_REQUEST",
+                "inbox handoff locators cannot be combined with full claim payload fields or canonical_claim_context",
+            ));
+        }
+        let inbox_run = load_scoring_ready_inbox_run(&state, &request, &actor).await?;
+        let canonical = canonical_score_input(&inbox_run.canonical_claim_context)?;
+        state
+            .repository
+            .upsert_claim_context(
+                canonical.context.clone(),
+                serde_json::to_value(&canonical.context).unwrap_or_else(|_| serde_json::json!({})),
+            )
+            .await
+            .map_err(internal_error("CLAIM_PERSISTENCE_FAILED"))?;
+        let mut evidence_refs = canonical.evidence_refs;
+        evidence_refs.push(serde_json::Value::String(format!(
+            "inbox_claim_runs:{}",
+            inbox_run.run_id
+        )));
+        evidence_refs.push(serde_json::Value::String(format!(
+            "audit_events:{}",
+            inbox_run.audit_id
+        )));
+        evidence_refs.extend(
+            json_string_values(&inbox_run.evidence_refs)
+                .into_iter()
+                .map(serde_json::Value::String),
+        );
+        evidence_refs.sort_by_key(|value| value.to_string());
+        evidence_refs.dedup();
+        (
+            canonical.context,
+            canonical.clinical_documents,
+            None,
+            None,
+            evidence_refs,
+            Some(inbox_claim_context_trace(canonical.trace, &inbox_run)),
+        )
     } else if let Some(canonical_claim_context) = request.canonical_claim_context.clone() {
         if has_full_payload {
             return Err(ApiError::new(
@@ -701,6 +749,19 @@ fn validate_score_request_contract(request: &ScoreClaimRequest) -> Result<(), Ap
     if let Some(claim_id) = &request.claim_id {
         require_nonblank(claim_id, "claim_id")?;
     }
+    if let Some(inbox_run_id) = &request.inbox_run_id {
+        require_nonblank(inbox_run_id, "inbox_run_id")?;
+    }
+    if let Some(inbox_idempotency_key) = &request.inbox_idempotency_key {
+        require_nonblank(inbox_idempotency_key, "inbox_idempotency_key")?;
+    }
+    if request.inbox_run_id.is_some() && request.inbox_idempotency_key.is_some() {
+        return Err(ApiError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "AMBIGUOUS_SCORE_REQUEST",
+            "only one inbox handoff locator is allowed",
+        ));
+    }
     if let Some(claim) = &request.claim {
         validate_full_claim_payload(claim)?;
     }
@@ -730,6 +791,51 @@ fn validate_score_request_contract(request: &ScoreClaimRequest) -> Result<(), Ap
         validate_provider_relationship_graph_payload(provider_relationships)?;
     }
     Ok(())
+}
+
+async fn load_scoring_ready_inbox_run(
+    state: &AppState,
+    request: &ScoreClaimRequest,
+    actor: &ActorContext,
+) -> Result<crate::repository::PersistedInboxClaimRun, ApiError> {
+    let inbox_run = if let Some(run_id) = request.inbox_run_id.as_deref() {
+        state
+            .repository
+            .get_inbox_claim_run_by_run_id(run_id, Some(&actor.customer_scope_id))
+            .await
+            .map_err(internal_error("INBOX_RECORD_LOAD_FAILED"))?
+    } else if let Some(idempotency_key) = request.inbox_idempotency_key.as_deref() {
+        state
+            .repository
+            .get_inbox_claim_run_by_idempotency_key(idempotency_key, Some(&actor.customer_scope_id))
+            .await
+            .map_err(internal_error("INBOX_RECORD_LOAD_FAILED"))?
+    } else {
+        None
+    }
+    .ok_or_else(|| {
+        ApiError::new(
+            axum::http::StatusCode::NOT_FOUND,
+            "INBOX_RECORD_NOT_FOUND",
+            "inbox handoff record was not found",
+        )
+    })?;
+
+    if !inbox_run.scoring_ready {
+        return Err(ApiError::new(
+            axum::http::StatusCode::CONFLICT,
+            "INBOX_NOT_SCORING_READY",
+            "inbox handoff record is not scoring_ready",
+        ));
+    }
+    if inbox_run.source_system != request.source_system {
+        return Err(ApiError::new(
+            axum::http::StatusCode::BAD_REQUEST,
+            "SOURCE_SYSTEM_MISMATCH",
+            "inbox handoff source system must match score request source_system",
+        ));
+    }
+    Ok(inbox_run)
 }
 
 fn validate_source_system_matches_actor(
@@ -1455,6 +1561,39 @@ fn canonical_claim_context_trace(
         "evidence_refs": evidence_refs,
         "source_refs": source_refs
     })
+}
+
+fn inbox_claim_context_trace(
+    mut trace: serde_json::Value,
+    inbox_run: &crate::repository::PersistedInboxClaimRun,
+) -> serde_json::Value {
+    if let Some(trace) = trace.as_object_mut() {
+        trace.insert("input_mode".into(), serde_json::json!("inbox_run"));
+        trace.insert("inbox_run_id".into(), serde_json::json!(inbox_run.run_id));
+        trace.insert(
+            "inbox_audit_id".into(),
+            serde_json::json!(inbox_run.audit_id),
+        );
+        trace.insert(
+            "inbox_idempotency_key".into(),
+            serde_json::json!(inbox_run.idempotency_key),
+        );
+        trace.insert(
+            "raw_payload_checksum".into(),
+            serde_json::json!(inbox_run.raw_payload_checksum),
+        );
+    }
+    trace
+}
+
+fn json_string_values(value: &serde_json::Value) -> Vec<String> {
+    value
+        .as_array()
+        .into_iter()
+        .flatten()
+        .filter_map(serde_json::Value::as_str)
+        .map(ToOwned::to_owned)
+        .collect()
 }
 
 fn provider_risk_tier_from_str(value: &str) -> Option<ProviderRiskTier> {

@@ -2427,6 +2427,10 @@ async fn repeated_inbox_payload_upserts_same_audit_trace() {
     assert_eq!(first["idempotency_key"], second["idempotency_key"]);
     assert_eq!(first["run_id"], second["run_id"]);
     assert_eq!(first["audit_id"], second["audit_id"]);
+    assert_eq!(
+        first["raw_payload_checksum"],
+        second["raw_payload_checksum"]
+    );
 
     let (status, audit_events) = json_request(
         app.clone(),
@@ -2454,4 +2458,48 @@ async fn repeated_inbox_payload_upserts_same_audit_trace() {
         .filter(|call| call["audit_id"] == first["audit_id"])
         .count();
     assert_eq!(matching_calls, 1);
+}
+
+#[tokio::test]
+async fn rejects_same_inbox_idempotency_key_with_different_payload_checksum() {
+    let app = build_app(test_config());
+    let payload = r#"{
+      "systemCode": "AiClaim Core",
+      "transNo": "duplicate-message-conflict-001",
+      "reportCase": {
+        "reportNo": "SAAS-DUPLICATE-CONFLICT-001",
+        "claimReceiveDate": 1779811200000,
+        "calculateRisk": "Y",
+        "policyList": [
+          {
+            "policyNo": "POL-DUP-CONFLICT",
+            "insuredName": "LEE, Peter",
+            "coverageLimit": 20000,
+            "validateDate": 1735689600000,
+            "expireDate": 1798675200000,
+            "invoiceList": [
+              {
+                "invoiceNo": "INV-DUP-CONFLICT",
+                "feeAmount": 100.00,
+                "startDate": 1766678400000,
+                "hospitalName": "南京同仁医院",
+                "feeList": []
+              }
+            ]
+          }
+        ]
+      }
+    }"#;
+    let changed_payload = payload.replace("\"feeAmount\": 100.00", "\"feeAmount\": 101.00");
+
+    let (first_status, first) = post_inbox(app.clone(), payload).await;
+    let (second_status, second) = post_inbox(app, &changed_payload).await;
+
+    assert_eq!(first_status, StatusCode::OK);
+    assert_eq!(second_status, StatusCode::CONFLICT);
+    assert!(first["raw_payload_checksum"]
+        .as_str()
+        .unwrap()
+        .starts_with("sha256:"));
+    assert_eq!(second["code"], "INBOX_IDEMPOTENCY_CONFLICT");
 }

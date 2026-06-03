@@ -283,16 +283,26 @@ Normalized inbox context request:
 }
 ```
 
-Use this mode after `POST /api/v1/inbox/claims/normalize` returns
-`scoring_ready = true` or a reviewer resolves blocking validation findings.
-`claim_id`, full claim payload fields, and `canonical_claim_context` are
-mutually exclusive request modes. Canonical source paths and evidence refs from
-bill lines and document evidence are preserved in the scoring response and
-audit event. For normalized inbox scoring, the `scoring.completed` audit
-payload includes `canonical_claim_context_trace` with `input_mode`,
-`evidence_refs`, and `source_refs` so QA and Agent summaries can trace the
-score back to normalized bill-line and document sources without exposing raw
-PII.
+Use inbox handoff mode after `POST /api/v1/inbox/claims/normalize` returns
+`scoring_ready = true` or a reviewer resolves blocking validation findings:
+
+```json
+{
+  "source_system": "tpa-demo",
+  "inbox_run_id": "inbox:sha256:..."
+}
+```
+
+`inbox_idempotency_key` may be used instead of `inbox_run_id`. `claim_id`, full
+claim payload fields, `canonical_claim_context`, `inbox_run_id`, and
+`inbox_idempotency_key` are mutually exclusive request modes. Canonical source
+paths and evidence refs from bill lines and document evidence are preserved in
+the scoring response and audit event. For normalized inbox scoring, the
+`scoring.completed` audit payload includes `canonical_claim_context_trace` with
+`input_mode = inbox_run`, inbox run/audit/idempotency linkage, `evidence_refs`,
+and `source_refs` so QA and Agent summaries can trace the score back to
+normalized bill-line and document sources without exposing raw PII. Direct
+`canonical_claim_context` scoring remains available as a compatibility mode.
 
 The response is audit-backed and must be treated as assistive risk routing, not an automatic denial:
 

@@ -2155,6 +2155,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "run_id",
                         "audit_id",
                         "mapping_version",
+                        "raw_payload_checksum",
                         "validation_result",
                         "scoring_ready",
                         "validation_errors",
@@ -2167,6 +2168,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "audit_id": { "type": "string" },
                         "external_message_id": { "type": ["string", "null"] },
                         "idempotency_key": { "type": ["string", "null"] },
+                        "raw_payload_checksum": { "type": "string" },
                         "mapping_version": { "type": "string" },
                         "validation_result": {
                             "type": "string",
@@ -2424,6 +2426,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         {
                             "$ref": "#/components/schemas/CanonicalContextScoreClaimRequest"
+                        },
+                        {
+                            "$ref": "#/components/schemas/InboxHandoffScoreClaimRequest"
                         }
                     ]
                 },
@@ -2459,7 +2464,9 @@ pub async fn openapi_schema() -> Json<Value> {
                             { "required": ["documents"] },
                             { "required": ["provider_profile"] },
                             { "required": ["provider_relationships"] },
-                            { "required": ["canonical_claim_context"] }
+                            { "required": ["canonical_claim_context"] },
+                            { "required": ["inbox_run_id"] },
+                            { "required": ["inbox_idempotency_key"] }
                         ]
                     }
                 },
@@ -2493,7 +2500,55 @@ pub async fn openapi_schema() -> Json<Value> {
                             { "required": ["provider"] },
                             { "required": ["documents"] },
                             { "required": ["provider_profile"] },
-                            { "required": ["provider_relationships"] }
+                            { "required": ["provider_relationships"] },
+                            { "required": ["inbox_run_id"] },
+                            { "required": ["inbox_idempotency_key"] }
+                        ]
+                    }
+                },
+                "InboxHandoffScoreClaimRequest": {
+                    "type": "object",
+                    "required": ["source_system"],
+                    "properties": {
+                        "source_system": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Must match the source system bound to the authenticated API key.",
+                            "examples": ["tpa-demo"]
+                        },
+                        "review_mode": {
+                            "type": "string",
+                            "enum": ["pre_payment", "post_payment"],
+                            "default": "pre_payment",
+                            "description": "Runtime scoring context for pre-payment or post-payment review."
+                        },
+                        "inbox_run_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Scoring-ready inbox normalization run id returned by /api/v1/inbox/claims/normalize."
+                        },
+                        "inbox_idempotency_key": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Stable scoring-ready inbox normalization idempotency key returned by /api/v1/inbox/claims/normalize."
+                        }
+                    },
+                    "oneOf": [
+                        { "required": ["inbox_run_id"] },
+                        { "required": ["inbox_idempotency_key"] }
+                    ],
+                    "not": {
+                        "anyOf": [
+                            { "required": ["claim_id"] },
+                            { "required": ["claim"] },
+                            { "required": ["items"] },
+                            { "required": ["member"] },
+                            { "required": ["policy"] },
+                            { "required": ["provider"] },
+                            { "required": ["documents"] },
+                            { "required": ["provider_profile"] },
+                            { "required": ["provider_relationships"] },
+                            { "required": ["canonical_claim_context"] }
                         ]
                     }
                 },
@@ -2549,7 +2604,9 @@ pub async fn openapi_schema() -> Json<Value> {
                     "not": {
                         "anyOf": [
                             { "required": ["claim_id"] },
-                            { "required": ["canonical_claim_context"] }
+                            { "required": ["canonical_claim_context"] },
+                            { "required": ["inbox_run_id"] },
+                            { "required": ["inbox_idempotency_key"] }
                         ]
                     }
                 },

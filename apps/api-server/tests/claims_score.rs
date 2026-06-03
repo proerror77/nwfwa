@@ -620,6 +620,159 @@ async fn scores_inbox_canonical_claim_context() {
 }
 
 #[tokio::test]
+async fn scores_scoring_ready_inbox_run_handoff() {
+    let app = build_app(test_config());
+
+    let normalize_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/inbox/claims/normalize")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "systemCode": "tpa-demo",
+              "transNo": "score-handoff-001",
+              "reportCase": {
+                "reportNo": "CLM-INBOX-HANDOFF",
+                "accidentDate": 1767225600000,
+                "claimReceiveDate": 1767312000000,
+                "calculateRisk": "Y",
+                "medicalRecordInfoList": [
+                  {
+                    "id": 88001,
+                    "hospitalName": "Inbox Hospital",
+                    "departmentName": "内科",
+                    "diagnosisName": "流感",
+                    "medicalType": "门诊",
+                    "visitDate": 1767225600000,
+                    "medicalRecordInformation": "诊断：流感"
+                  }
+                ],
+                "policyList": [
+                  {
+                    "policyNo": "POL-INBOX-HANDOFF",
+                    "insuredName": "LEE, Peter",
+                    "coverageLimit": 10000,
+                    "validateDate": 1735689600000,
+                    "expireDate": 1798675200000,
+                    "invoiceList": [
+                      {
+                        "invoiceNo": "INV-INBOX-HANDOFF",
+                        "feeAmount": 8800,
+                        "startDate": 1767225600000,
+                        "hospitalCode": "PRV-INBOX-HANDOFF",
+                        "hospitalName": "Inbox Hospital",
+                        "diagnosisList": [
+                          {
+                            "detailCode": "J10",
+                            "detailName": "流感",
+                            "primary": true
+                          }
+                        ],
+                        "feeList": [
+                          {
+                            "feeCategory": "inspectionFee",
+                            "feeDetailList": [
+                              {
+                                "id": 88001,
+                                "name": "High cost imaging",
+                                "amount": 8800,
+                                "medicalCategory": "procedure"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+    let normalize_response = app.clone().oneshot(normalize_request).await.unwrap();
+    assert_eq!(normalize_response.status(), StatusCode::OK);
+    let normalize_body = to_bytes(normalize_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let normalize_body: serde_json::Value = serde_json::from_slice(&normalize_body).unwrap();
+    assert_eq!(normalize_body["scoring_ready"], true);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(format!(
+            r#"{{
+              "source_system": "tpa-demo",
+              "inbox_run_id": {}
+            }}"#,
+            serde_json::to_string(&normalize_body["run_id"]).unwrap()
+        )))
+        .unwrap();
+    let score_response = app.clone().oneshot(score_request).await.unwrap();
+    assert_eq!(score_response.status(), StatusCode::OK);
+    let score_body = to_bytes(score_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let score_body: serde_json::Value = serde_json::from_slice(&score_body).unwrap();
+
+    assert_eq!(score_body["claim_id"], "CLM-INBOX-HANDOFF");
+    assert!(score_body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!(
+            "inbox_claim_runs:{}",
+            normalize_body["run_id"].as_str().unwrap()
+        ))));
+    assert!(score_body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!(
+            "audit_events:{}",
+            normalize_body["audit_id"].as_str().unwrap()
+        ))));
+    assert!(score_body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:INV-INBOX-HANDOFF:fee_detail:88001"
+        )));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-INBOX-HANDOFF")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    let trace = &scoring_event["payload"]["canonical_claim_context_trace"];
+    assert_eq!(trace["input_mode"], "inbox_run");
+    assert_eq!(trace["inbox_run_id"], normalize_body["run_id"]);
+    assert_eq!(trace["inbox_audit_id"], normalize_body["audit_id"]);
+    assert_eq!(
+        trace["inbox_idempotency_key"],
+        normalize_body["idempotency_key"]
+    );
+    assert_eq!(
+        trace["raw_payload_checksum"],
+        normalize_body["raw_payload_checksum"]
+    );
+}
+
+#[tokio::test]
 async fn scores_claim_with_review_mode_and_audits_routing_policy() {
     let app = build_app(test_config());
 
@@ -1946,13 +2099,16 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     let one_of = schema["components"]["schemas"]["ScoreClaimRequest"]["oneOf"]
         .as_array()
         .expect("request schema oneOf");
-    assert_eq!(one_of.len(), 3);
+    assert_eq!(one_of.len(), 4);
     assert!(
         one_of
             .iter()
             .any(|variant| variant["$ref"]
                 == "#/components/schemas/CanonicalContextScoreClaimRequest")
     );
+    assert!(one_of
+        .iter()
+        .any(|variant| variant["$ref"] == "#/components/schemas/InboxHandoffScoreClaimRequest"));
     let claim_id_mode = &schema["components"]["schemas"]["ClaimIdScoreClaimRequest"];
     assert_eq!(
         claim_id_mode["properties"]["review_mode"]["enum"],
@@ -1974,6 +2130,8 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "provider_profile",
         "provider_relationships",
         "canonical_claim_context",
+        "inbox_run_id",
+        "inbox_idempotency_key",
     ] {
         assert!(
             claim_id_mode["not"]["anyOf"]
@@ -2004,6 +2162,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .expect("full payload mode forbidden fields")
         .iter()
         .any(|schema| schema["required"][0] == "canonical_claim_context"));
+    assert!(full_payload_mode["not"]["anyOf"]
+        .as_array()
+        .expect("full payload mode forbidden fields")
+        .iter()
+        .any(|schema| schema["required"][0] == "inbox_run_id"));
     let canonical_mode = &schema["components"]["schemas"]["CanonicalContextScoreClaimRequest"];
     assert_eq!(
         canonical_mode["properties"]["canonical_claim_context"]["$ref"],
@@ -2014,6 +2177,22 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .expect("canonical mode forbidden fields")
         .iter()
         .any(|schema| schema["required"][0] == "claim"));
+    let inbox_mode = &schema["components"]["schemas"]["InboxHandoffScoreClaimRequest"];
+    assert_eq!(inbox_mode["properties"]["inbox_run_id"]["minLength"], 1);
+    assert_eq!(
+        inbox_mode["properties"]["inbox_idempotency_key"]["minLength"],
+        1
+    );
+    assert!(inbox_mode["oneOf"]
+        .as_array()
+        .expect("inbox handoff mode locator oneOf")
+        .iter()
+        .any(|schema| schema["required"][0] == "inbox_run_id"));
+    assert!(inbox_mode["not"]["anyOf"]
+        .as_array()
+        .expect("inbox handoff mode forbidden fields")
+        .iter()
+        .any(|schema| schema["required"][0] == "canonical_claim_context"));
     for (schema_name, fields) in [
         (
             "FullClaimPayload",

@@ -197,13 +197,16 @@ Main request modes:
 - stored demo claim by `source_system` and `claim_id`
 - submitted claim payload with member, policy, provider, diagnosis, procedure,
   amount, dates, and context fields
-- normalized inbox context by `source_system` and `canonical_claim_context`,
-  using the `canonical_claim_context` returned from
+- normalized inbox handoff by `source_system` and `inbox_run_id` or
+  `inbox_idempotency_key`, using a `scoring_ready = true` record returned from
   `/api/v1/inbox/claims/normalize`
+- direct normalized inbox context by `source_system` and
+  `canonical_claim_context`, retained as a compatibility mode for demos and
+  adapter tests
 
 These request modes are mutually exclusive. Callers should not combine
-`claim_id`, full payload fields, and `canonical_claim_context` in the same
-scoring request.
+`claim_id`, full payload fields, `canonical_claim_context`, `inbox_run_id`, or
+`inbox_idempotency_key` in the same scoring request.
 
 Request fields that affect policy selection:
 
@@ -218,6 +221,11 @@ Request fields that affect policy selection:
   runtime scoring.
   Scoring audit events persist `canonical_claim_context_trace` with normalized
   evidence refs and source refs for QA, Agent summaries, and audit review.
+- `inbox_run_id` / `inbox_idempotency_key`: preferred handoff handles from
+  `/api/v1/inbox/claims/normalize`. Scoring loads the persisted normalized
+  context only when `scoring_ready = true`, adds `inbox_claim_runs:{run_id}` and
+  `audit_events:{audit_id}` evidence refs, and records inbox linkage in
+  `canonical_claim_context_trace`.
 
 `review_mode` participates in routing policy, active model, and threshold
 selection. It does not change the assistive-only decision boundary.

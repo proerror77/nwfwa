@@ -81,6 +81,27 @@ pub struct PersistedAuditEvent {
     pub evidence_refs: Vec<Value>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PersistedInboxClaimRun {
+    pub run_id: String,
+    pub audit_id: String,
+    pub external_message_id: Option<String>,
+    pub idempotency_key: Option<String>,
+    pub external_message_fingerprint: Option<String>,
+    pub raw_payload_checksum: String,
+    pub raw_payload_ref: Option<String>,
+    pub mapping_version: String,
+    pub validation_result: String,
+    pub scoring_ready: bool,
+    pub claim_id: String,
+    pub source_system: String,
+    pub customer_scope_id: String,
+    pub canonical_claim_context: Value,
+    pub validation_errors: Value,
+    pub data_quality_signals: Value,
+    pub evidence_refs: Value,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct AuditEventListFilter {
     pub limit: u32,
@@ -1323,6 +1344,44 @@ fn provider_risk_tier_from_text(value: &str) -> ProviderRiskTier {
     }
 }
 
+fn inbox_claim_run_from_row(row: PgRow) -> PersistedInboxClaimRun {
+    PersistedInboxClaimRun {
+        run_id: row.try_get("run_id").unwrap_or_default(),
+        audit_id: row.try_get("audit_id").unwrap_or_default(),
+        external_message_id: row
+            .try_get::<Option<String>, _>("external_message_id")
+            .unwrap_or(None),
+        idempotency_key: row
+            .try_get::<Option<String>, _>("idempotency_key")
+            .unwrap_or(None),
+        external_message_fingerprint: row
+            .try_get::<Option<String>, _>("external_message_fingerprint")
+            .unwrap_or(None),
+        raw_payload_checksum: row.try_get("raw_payload_checksum").unwrap_or_default(),
+        raw_payload_ref: row
+            .try_get::<Option<String>, _>("raw_payload_ref")
+            .unwrap_or(None),
+        mapping_version: row.try_get("mapping_version").unwrap_or_default(),
+        validation_result: row.try_get("validation_result").unwrap_or_default(),
+        scoring_ready: row.try_get("scoring_ready").unwrap_or(false),
+        claim_id: row.try_get("claim_id").unwrap_or_default(),
+        source_system: row.try_get("source_system").unwrap_or_default(),
+        customer_scope_id: row.try_get("customer_scope_id").unwrap_or_default(),
+        canonical_claim_context: row
+            .try_get("canonical_claim_context")
+            .unwrap_or_else(|_| serde_json::json!({})),
+        validation_errors: row
+            .try_get("validation_errors")
+            .unwrap_or_else(|_| serde_json::json!([])),
+        data_quality_signals: row
+            .try_get("data_quality_signals")
+            .unwrap_or_else(|_| serde_json::json!([])),
+        evidence_refs: row
+            .try_get("evidence_refs")
+            .unwrap_or_else(|_| serde_json::json!([])),
+    }
+}
+
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
     async fn upsert_claim_context(
@@ -1346,6 +1405,20 @@ pub trait ScoringRepository: Send + Sync {
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()>;
 
     async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()>;
+
+    async fn save_inbox_claim_run(&self, run: PersistedInboxClaimRun) -> anyhow::Result<()>;
+
+    async fn get_inbox_claim_run_by_idempotency_key(
+        &self,
+        idempotency_key: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>>;
+
+    async fn get_inbox_claim_run_by_run_id(
+        &self,
+        run_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>>;
 
     async fn active_routing_policy(
         &self,
@@ -1643,6 +1716,7 @@ pub type SharedRepository = Arc<dyn ScoringRepository>;
 #[derive(Debug, Default)]
 pub struct InMemoryScoringRepository {
     claims: Mutex<HashMap<String, ClaimContext>>,
+    inbox_claim_runs: Mutex<HashMap<String, PersistedInboxClaimRun>>,
     runs: Mutex<Vec<PersistedScoringRun>>,
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
@@ -1824,6 +1898,45 @@ impl ScoringRepository for InMemoryScoringRepository {
             audit_events.push(event);
         }
         Ok(())
+    }
+
+    async fn save_inbox_claim_run(&self, run: PersistedInboxClaimRun) -> anyhow::Result<()> {
+        self.inbox_claim_runs
+            .lock()
+            .await
+            .insert(run.run_id.clone(), run);
+        Ok(())
+    }
+
+    async fn get_inbox_claim_run_by_idempotency_key(
+        &self,
+        idempotency_key: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        Ok(self
+            .inbox_claim_runs
+            .lock()
+            .await
+            .values()
+            .find(|run| {
+                run.idempotency_key.as_deref() == Some(idempotency_key)
+                    && customer_scope_id.is_none_or(|scope| run.customer_scope_id == scope)
+            })
+            .cloned())
+    }
+
+    async fn get_inbox_claim_run_by_run_id(
+        &self,
+        run_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        Ok(self
+            .inbox_claim_runs
+            .lock()
+            .await
+            .get(run_id)
+            .filter(|run| customer_scope_id.is_none_or(|scope| run.customer_scope_id == scope))
+            .cloned())
     }
 
     async fn active_routing_policy(
@@ -4269,6 +4382,99 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
         tx.commit().await?;
         Ok(())
+    }
+
+    async fn save_inbox_claim_run(&self, run: PersistedInboxClaimRun) -> anyhow::Result<()> {
+        sqlx::query(
+            "INSERT INTO inbox_claim_runs
+             (run_id, audit_id, external_message_id, idempotency_key, external_message_fingerprint,
+              raw_payload_checksum, raw_payload_ref, mapping_version, validation_result, scoring_ready,
+              claim_id, source_system, customer_scope_id, canonical_claim_context, validation_errors,
+              data_quality_signals, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+             ON CONFLICT (run_id) DO UPDATE
+             SET audit_id = EXCLUDED.audit_id,
+                 external_message_id = EXCLUDED.external_message_id,
+                 idempotency_key = EXCLUDED.idempotency_key,
+                 external_message_fingerprint = EXCLUDED.external_message_fingerprint,
+                 raw_payload_checksum = EXCLUDED.raw_payload_checksum,
+                 raw_payload_ref = EXCLUDED.raw_payload_ref,
+                 mapping_version = EXCLUDED.mapping_version,
+                 validation_result = EXCLUDED.validation_result,
+                 scoring_ready = EXCLUDED.scoring_ready,
+                 claim_id = EXCLUDED.claim_id,
+                 source_system = EXCLUDED.source_system,
+                 customer_scope_id = EXCLUDED.customer_scope_id,
+                 canonical_claim_context = EXCLUDED.canonical_claim_context,
+                 validation_errors = EXCLUDED.validation_errors,
+                 data_quality_signals = EXCLUDED.data_quality_signals,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 updated_at = now()",
+        )
+        .bind(&run.run_id)
+        .bind(&run.audit_id)
+        .bind(&run.external_message_id)
+        .bind(&run.idempotency_key)
+        .bind(&run.external_message_fingerprint)
+        .bind(&run.raw_payload_checksum)
+        .bind(&run.raw_payload_ref)
+        .bind(&run.mapping_version)
+        .bind(&run.validation_result)
+        .bind(run.scoring_ready)
+        .bind(&run.claim_id)
+        .bind(&run.source_system)
+        .bind(&run.customer_scope_id)
+        .bind(&run.canonical_claim_context)
+        .bind(&run.validation_errors)
+        .bind(&run.data_quality_signals)
+        .bind(&run.evidence_refs)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_inbox_claim_run_by_idempotency_key(
+        &self,
+        idempotency_key: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        let row = sqlx::query(
+            "SELECT run_id, audit_id, external_message_id, idempotency_key,
+                    external_message_fingerprint, raw_payload_checksum, raw_payload_ref,
+                    mapping_version, validation_result, scoring_ready, claim_id,
+                    source_system, customer_scope_id, canonical_claim_context,
+                    validation_errors, data_quality_signals, evidence_refs
+             FROM inbox_claim_runs
+             WHERE idempotency_key = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)",
+        )
+        .bind(idempotency_key)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(inbox_claim_run_from_row))
+    }
+
+    async fn get_inbox_claim_run_by_run_id(
+        &self,
+        run_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        let row = sqlx::query(
+            "SELECT run_id, audit_id, external_message_id, idempotency_key,
+                    external_message_fingerprint, raw_payload_checksum, raw_payload_ref,
+                    mapping_version, validation_result, scoring_ready, claim_id,
+                    source_system, customer_scope_id, canonical_claim_context,
+                    validation_errors, data_quality_signals, evidence_refs
+             FROM inbox_claim_runs
+             WHERE run_id = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)",
+        )
+        .bind(run_id)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(inbox_claim_run_from_row))
     }
 
     async fn active_routing_policy(

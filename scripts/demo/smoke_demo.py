@@ -2003,25 +2003,30 @@ def score_normalized_inbox_context():
     assert_true(inbox.get("scoring_ready") is True, f"inbox context not scoring ready: {inbox}")
     canonical_claim_context = inbox.get("canonical_claim_context")
     assert_true(canonical_claim_context, "inbox normalize missing canonical_claim_context")
+    assert_true(inbox.get("run_id"), "inbox normalize missing run_id")
 
     score = request(
         "POST",
         "/api/v1/claims/score",
         {
             "source_system": SOURCE_SYSTEM,
-            "canonical_claim_context": canonical_claim_context,
+            "inbox_run_id": inbox.get("run_id"),
         },
     )
-    assert_true(score.get("claim_id") == claim_id, "canonical context score claim_id mismatch")
-    assert_true(score.get("audit_id"), "canonical context score missing audit_id")
-    assert_true(len(score.get("layers", [])) == 7, "canonical context score missing 7 layers")
+    assert_true(score.get("claim_id") == claim_id, "inbox handoff score claim_id mismatch")
+    assert_true(score.get("audit_id"), "inbox handoff score missing audit_id")
+    assert_true(len(score.get("layers", [])) == 7, "inbox handoff score missing 7 layers")
     assert_true(
         all(layer.get("evidence_refs") for layer in score.get("layers", [])),
-        "canonical context score layers missing evidence refs",
+        "inbox handoff score layers missing evidence refs",
     )
     assert_true(
         f"invoice:{invoice_id}:fee_detail:{line_id}" in score.get("evidence_refs", []),
-        "canonical context score did not preserve inbox bill-line evidence ref",
+        "inbox handoff score did not preserve inbox bill-line evidence ref",
+    )
+    assert_true(
+        f"inbox_claim_runs:{inbox.get('run_id')}" in score.get("evidence_refs", []),
+        "inbox handoff score missing inbox run evidence ref",
     )
     audit = request("GET", f"/api/v1/audit/claims/{claim_id}")
     assert_true(

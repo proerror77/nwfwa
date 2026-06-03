@@ -1,11 +1,14 @@
 use crate::{
-    app::AppState, error::ApiError, repository::PersistedAuditEvent, routes::pii::redact_text,
+    app::AppState,
+    error::ApiError,
+    repository::{PersistedAuditEvent, PersistedInboxClaimRun},
+    routes::pii::redact_text,
 };
 use axum::{extract::State, http::HeaderMap, http::StatusCode, Json};
 use chrono::{DateTime, FixedOffset, NaiveDate};
 use fwa_auth::authenticate_api_key;
 use fwa_core::AuditEventId;
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 
@@ -19,6 +22,7 @@ pub struct InboxNormalizeResponse {
     pub audit_id: String,
     pub external_message_id: Option<String>,
     pub idempotency_key: Option<String>,
+    pub raw_payload_checksum: String,
     pub mapping_version: &'static str,
     pub validation_result: String,
     pub scoring_ready: bool,
@@ -29,10 +33,10 @@ pub struct InboxNormalizeResponse {
     pub evidence_refs: Vec<String>,
 }
 
-#[derive(Debug, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct InboxValidationError {
     pub field_path: String,
-    pub severity: &'static str,
+    pub severity: String,
     pub remediation: String,
 }
 
@@ -76,6 +80,7 @@ pub async fn normalize_claim_inbox(
         ));
     }
     let actor = principal.actor;
+    let raw_payload_checksum = raw_payload_checksum(&payload);
 
     let mut validation_errors = Vec::new();
     let system_code = required_string(
@@ -104,7 +109,7 @@ pub async fn normalize_claim_inbox(
         if system_code != actor.source_system {
             validation_errors.push(InboxValidationError {
                 field_path: "systemCode".into(),
-                severity: "error",
+                severity: "error".into(),
                 remediation: "systemCode must match the authenticated API key source system".into(),
             });
         }
@@ -138,7 +143,7 @@ pub async fn normalize_claim_inbox(
     {
         validation_errors.push(InboxValidationError {
             field_path: "reportCase.calculateRisk".into(),
-            severity: "warning",
+            severity: "warning".into(),
             remediation:
                 "treat calculateRisk=N as a source hint; do not bypass FWA scoring without customer config"
                     .into(),
@@ -181,6 +186,25 @@ pub async fn normalize_claim_inbox(
     let idempotency_key = external_message_fingerprint
         .as_ref()
         .map(|fingerprint| format!("inbox.claim.normalize:{fingerprint}"));
+
+    if let Some(idempotency_key) = idempotency_key.as_deref() {
+        if let Some(existing) = state
+            .repository
+            .get_inbox_claim_run_by_idempotency_key(idempotency_key, Some(&actor.customer_scope_id))
+            .await
+            .map_err(internal_error("INBOX_RECORD_LOAD_FAILED"))?
+        {
+            if existing.raw_payload_checksum != raw_payload_checksum {
+                return Err(ApiError::new(
+                    StatusCode::CONFLICT,
+                    "INBOX_IDEMPOTENCY_CONFLICT",
+                    "same inbox idempotency key was received with a different raw payload checksum",
+                ));
+            }
+            return Ok(inbox_response_from_record(existing));
+        }
+    }
+
     let evidence_refs = [
         raw_payload_ref.clone(),
         Some(format!("inbox_mappings:{MAPPING_VERSION}")),
@@ -208,6 +232,7 @@ pub async fn normalize_claim_inbox(
                 "customer_scope_id": actor.customer_scope_id,
                 "external_message_fingerprint": external_message_fingerprint,
                 "idempotency_key": idempotency_key,
+                "raw_payload_checksum": raw_payload_checksum,
                 "mapping_version": MAPPING_VERSION,
                 "validation_result": validation_result,
                 "scoring_ready": scoring_ready,
@@ -225,6 +250,30 @@ pub async fn normalize_claim_inbox(
         })
         .await
         .map_err(internal_error("INBOX_AUDIT_PERSISTENCE_FAILED"))?;
+    state
+        .repository
+        .save_inbox_claim_run(PersistedInboxClaimRun {
+            run_id: run_id.clone(),
+            audit_id: audit_id.clone(),
+            external_message_id: external_message_id.clone(),
+            idempotency_key: idempotency_key.clone(),
+            external_message_fingerprint: external_message_fingerprint.clone(),
+            raw_payload_checksum: raw_payload_checksum.clone(),
+            raw_payload_ref: raw_payload_ref.clone(),
+            mapping_version: MAPPING_VERSION.into(),
+            validation_result: validation_result.clone(),
+            scoring_ready,
+            claim_id: claim_id.clone(),
+            source_system: system_code.clone().unwrap_or(actor.source_system.clone()),
+            customer_scope_id: actor.customer_scope_id.clone(),
+            canonical_claim_context: canonical_claim_context.clone(),
+            validation_errors: serde_json::to_value(&validation_errors)
+                .unwrap_or_else(|_| serde_json::json!([])),
+            data_quality_signals: serde_json::json!(data_quality_signals.clone()),
+            evidence_refs: serde_json::json!(evidence_refs.clone()),
+        })
+        .await
+        .map_err(internal_error("INBOX_RECORD_PERSISTENCE_FAILED"))?;
 
     Ok((
         status,
@@ -233,6 +282,7 @@ pub async fn normalize_claim_inbox(
             audit_id,
             raw_payload_ref,
             idempotency_key,
+            raw_payload_checksum,
             external_message_id,
             mapping_version: MAPPING_VERSION,
             validation_result,
@@ -245,6 +295,41 @@ pub async fn normalize_claim_inbox(
     ))
 }
 
+fn inbox_response_from_record(
+    record: PersistedInboxClaimRun,
+) -> (StatusCode, Json<InboxNormalizeResponse>) {
+    let validation_errors = serde_json::from_value(record.validation_errors).unwrap_or_default();
+    let data_quality_signals =
+        serde_json::from_value(record.data_quality_signals).unwrap_or_default();
+    let evidence_refs = serde_json::from_value(record.evidence_refs).unwrap_or_default();
+    (
+        status_for_validation_result(&record.validation_result),
+        Json(InboxNormalizeResponse {
+            run_id: record.run_id,
+            audit_id: record.audit_id,
+            external_message_id: record.external_message_id,
+            idempotency_key: record.idempotency_key,
+            raw_payload_checksum: record.raw_payload_checksum,
+            mapping_version: MAPPING_VERSION,
+            validation_result: record.validation_result,
+            scoring_ready: record.scoring_ready,
+            raw_payload_ref: record.raw_payload_ref,
+            validation_errors,
+            canonical_claim_context: record.canonical_claim_context,
+            data_quality_signals,
+            evidence_refs,
+        }),
+    )
+}
+
+fn status_for_validation_result(validation_result: &str) -> StatusCode {
+    if validation_result == "rejected" {
+        StatusCode::BAD_REQUEST
+    } else {
+        StatusCode::OK
+    }
+}
+
 fn internal_error(
     code: &'static str,
 ) -> impl FnOnce(anyhow::Error) -> ApiError + Send + Sync + 'static {
@@ -255,6 +340,13 @@ fn internal_error(
             format!("{code}: {error}"),
         )
     }
+}
+
+fn raw_payload_checksum(payload: &Value) -> String {
+    let mut hasher = Sha256::new();
+    let bytes = serde_json::to_vec(payload).unwrap_or_default();
+    hasher.update(bytes);
+    format!("sha256:{:x}", hasher.finalize())
 }
 
 fn blocks_direct_scoring(error: &InboxValidationError) -> bool {
@@ -382,14 +474,14 @@ fn build_canonical_claim_context(
     if policy.is_none() {
         validation_errors.push(InboxValidationError {
             field_path: "reportCase.policyList".into(),
-            severity: "error",
+            severity: "error".into(),
             remediation: "include at least one policy for coverage mapping".into(),
         });
     }
     if invoice.is_none() {
         validation_errors.push(InboxValidationError {
             field_path: "reportCase.policyList[0].invoiceList".into(),
-            severity: "error",
+            severity: "error".into(),
             remediation: "include at least one invoice for bill-line mapping".into(),
         });
     }
@@ -438,7 +530,7 @@ fn build_canonical_claim_context(
         if receive_date < service_date {
             validation_errors.push(InboxValidationError {
                 field_path: "reportCase.claimReceiveDate".into(),
-                severity: "warning",
+                severity: "warning".into(),
                 remediation: "claim receive date should not be earlier than service date".into(),
             });
             push_signal(data_quality_signals, "date_inconsistency");
@@ -448,7 +540,7 @@ fn build_canonical_claim_context(
         if receive_date < accident_date {
             validation_errors.push(InboxValidationError {
                 field_path: "reportCase.accidentDate".into(),
-                severity: "warning",
+                severity: "warning".into(),
                 remediation: "accident date should not be later than claim receive date".into(),
             });
             push_signal(data_quality_signals, "date_inconsistency");
@@ -497,7 +589,7 @@ fn build_canonical_claim_context(
     {
         validation_errors.push(InboxValidationError {
             field_path: "reportCase.claimAmount".into(),
-            severity: "warning",
+            severity: "warning".into(),
             remediation: "claim amount missing; derive canonical total from source invoice totals"
                 .into(),
         });
@@ -719,7 +811,7 @@ fn validate_policy_coverage_limits(
 
         validation_errors.push(InboxValidationError {
             field_path: format!("reportCase.policyList[{policy_index}].coverageLimit"),
-            severity: "warning",
+            severity: "warning".into(),
             remediation: "map policy or liability coverage limit before direct scoring".into(),
         });
         push_signal(data_quality_signals, "missing_coverage_limit");
@@ -800,7 +892,7 @@ fn validate_diagnosis_consistency(
 
             validation_errors.push(InboxValidationError {
                 field_path: invoice.field_path("diagnosisList"),
-                severity: "warning",
+                severity: "warning".into(),
                 remediation: "invoice diagnosis should align with medical record diagnosis".into(),
             });
             push_signal(data_quality_signals, "document_invoice_mismatch");
@@ -822,7 +914,7 @@ fn validate_diagnosis_item_support(
 
         validation_errors.push(InboxValidationError {
             field_path: invoice.field_path("feeList"),
-            severity: "warning",
+            severity: "warning".into(),
             remediation:
                 "bill lines should include diagnosis context before medical reasonableness scoring"
                     .into(),
@@ -855,7 +947,7 @@ fn validate_invoice_dates(
             if end_date < start_date {
                 validation_errors.push(InboxValidationError {
                     field_path: invoice.field_path("endDate"),
-                    severity: "warning",
+                    severity: "warning".into(),
                     remediation: "invoice end date must not be earlier than invoice start date"
                         .into(),
                 });
@@ -867,7 +959,7 @@ fn validate_invoice_dates(
             if start_date.is_some_and(|start_date| receive_date < start_date) {
                 validation_errors.push(InboxValidationError {
                     field_path: invoice.field_path("startDate"),
-                    severity: "warning",
+                    severity: "warning".into(),
                     remediation: "claim receive date should not be earlier than invoice start date"
                         .into(),
                 });
@@ -900,7 +992,7 @@ fn validate_medical_record_receive_dates(
                     field_path: format!(
                         "reportCase.medicalRecordInfoList[{record_index}].{field_name}"
                     ),
-                    severity: "warning",
+                    severity: "warning".into(),
                     remediation: format!(
                         "claim receive date should not be earlier than {field_label}"
                     ),
@@ -965,7 +1057,7 @@ fn validate_service_window(
         if end_date < start_date {
             validation_errors.push(InboxValidationError {
                 field_path: format!("{field_prefix}.expireDate"),
-                severity: "warning",
+                severity: "warning".into(),
                 remediation: format!("{window_label} end date must not be earlier than start date"),
             });
             push_signal(data_quality_signals, "date_inconsistency");
@@ -979,14 +1071,14 @@ fn validate_service_window(
     if start_date.is_some_and(|start_date| service_date < start_date) {
         validation_errors.push(InboxValidationError {
             field_path: format!("{field_prefix}.validateDate"),
-            severity: "warning",
+            severity: "warning".into(),
             remediation: format!("service date must fall within the {window_label} window"),
         });
         push_signal(data_quality_signals, "coverage_window_mismatch");
     } else if end_date.is_some_and(|end_date| service_date > end_date) {
         validation_errors.push(InboxValidationError {
             field_path: format!("{field_prefix}.expireDate"),
-            severity: "warning",
+            severity: "warning".into(),
             remediation: format!("service date must fall within the {window_label} window"),
         });
         push_signal(data_quality_signals, "coverage_window_mismatch");
@@ -1006,7 +1098,7 @@ fn validate_liability_claim_eligibility(
         if service_date < liability_claim_start_date {
             validation_errors.push(InboxValidationError {
                 field_path: format!("{field_prefix}.claimValidateDate"),
-                severity: "warning",
+                severity: "warning".into(),
                 remediation:
                     "service date must not be earlier than liability claim eligibility date".into(),
             });
@@ -1212,7 +1304,7 @@ fn required_string(
     } else {
         validation_errors.push(InboxValidationError {
             field_path: field_path.into(),
-            severity: "error",
+            severity: "error".into(),
             remediation: format!("include {label}"),
         });
         None

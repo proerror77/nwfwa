@@ -318,6 +318,14 @@ async fn openapi_includes_operations_paths() {
                 == "#/components/schemas/CanonicalContextScoreClaimRequest"),
         "ScoreClaimRequest should accept normalized inbox canonical context"
     );
+    assert!(
+        schema["components"]["schemas"]["ScoreClaimRequest"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|variant| variant["$ref"] == "#/components/schemas/InboxHandoffScoreClaimRequest"),
+        "ScoreClaimRequest should accept persisted inbox handoff"
+    );
     assert_eq!(
         schema["components"]["schemas"]["CanonicalContextScoreClaimRequest"]["properties"]
             ["canonical_claim_context"]["$ref"],
@@ -328,6 +336,7 @@ async fn openapi_includes_operations_paths() {
         "run_id",
         "audit_id",
         "mapping_version",
+        "raw_payload_checksum",
         "validation_result",
         "scoring_ready",
         "canonical_claim_context",
