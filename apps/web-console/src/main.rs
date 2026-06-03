@@ -2209,7 +2209,9 @@ fn bootstrap_ops_view(props: &BootstrapOpsProps) -> Html {
 
 fn bootstrap_action_state(state: &UseStateHandle<ApiState<String>>) -> Html {
     match &**state {
-        ApiState::Idle => html! { <p class="empty">{"Actions write audit events; suspicious leads and missing evidence are not training labels until reviewed."}</p> },
+        ApiState::Idle => {
+            html! { <p class="empty">{"Actions write audit events; suspicious leads and missing evidence are not training labels until reviewed."}</p> }
+        }
         ApiState::Loading => html! { <p>{"Submitting bootstrap action..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(message) => html! { <p class="success-note">{message}</p> },
@@ -8915,10 +8917,12 @@ async fn get_qa_review_snapshot(api_key: String) -> Result<QaReviewSnapshot, Str
 }
 
 async fn get_bootstrap_ops_snapshot(api_key: String) -> Result<BootstrapOpsSnapshot, String> {
-    let backfills =
-        request_get_json::<HistoricalBackfillListResponse>("/api/v1/ops/backfills", api_key.clone())
-            .await?
-            .jobs;
+    let backfills = request_get_json::<HistoricalBackfillListResponse>(
+        "/api/v1/ops/backfills",
+        api_key.clone(),
+    )
+    .await?
+    .jobs;
     let evidence_requests = request_get_json::<EvidenceRequestListResponse>(
         "/api/v1/ops/evidence-requests",
         api_key.clone(),
@@ -8938,9 +8942,7 @@ async fn get_bootstrap_ops_snapshot(api_key: String) -> Result<BootstrapOpsSnaps
     })
 }
 
-async fn create_bootstrap_backfill(
-    api_key: String,
-) -> Result<HistoricalBackfillResponse, String> {
+async fn create_bootstrap_backfill(api_key: String) -> Result<HistoricalBackfillResponse, String> {
     request_json(
         "/api/v1/ops/backfills",
         api_key,
