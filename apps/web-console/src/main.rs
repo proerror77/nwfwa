@@ -22,6 +22,7 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
         "Control Rooms",
         &["Detection Controls", "Evidence Hub", "Governance"],
     ),
+    ("MLOps", &["MLOps Workspace"]),
 ];
 
 const CONTRACT_PANELS: &[&str] = &[
@@ -31,6 +32,10 @@ const CONTRACT_PANELS: &[&str] = &[
     "Candidate Source",
     "Threshold Integrity",
     "Model Governance",
+    "MLOps Workspace",
+    "Training Jobs",
+    "Model Candidates",
+    "Offline Training Handoff",
     "Deployment Boundary",
     "Profile Evidence",
     "Candidate Governance",
@@ -656,6 +661,44 @@ struct ModelOpsSnapshot {
     performance: ModelPerformance,
     gates: ModelPromotionGates,
     retraining: ModelRetrainingReadiness,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelRetrainingJobListResponse {
+    jobs: Vec<ModelRetrainingJobRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelRetrainingJobRecord {
+    job_id: String,
+    model_key: String,
+    model_version: String,
+    status: String,
+    requested_by: String,
+    request_notes: String,
+    status_note: String,
+    updated_by: String,
+    readiness_recommendation: String,
+    latest_evaluation_id: String,
+    source_dataset_id: String,
+    source_data_quality_score: Option<f64>,
+    source_data_quality_status: String,
+    trigger_summary: Vec<String>,
+    blocker_summary: Vec<String>,
+    candidate_model_version: Option<String>,
+    candidate_artifact_uri: Option<String>,
+    candidate_endpoint_url: Option<String>,
+    validation_report_uri: Option<String>,
+    output_evaluation_id: Option<String>,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct MlopsWorkspaceSnapshot {
+    data_sources: DataSourcesSnapshot,
+    model_ops: ModelOpsSnapshot,
+    retraining_jobs: Vec<ModelRetrainingJobRecord>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -1591,6 +1634,8 @@ fn app() -> Html {
                         {detection_controls_page(select_module.clone())}
                     } else if *active == "Evidence Hub" {
                         {evidence_hub_page(select_module.clone())}
+                    } else if *active == "MLOps Workspace" {
+                        <MlopsWorkspacePage />
                     } else if *active == "Evidence Runtime" {
                         <EvidenceRuntimePage />
                     } else if *active == "Rules" {
@@ -1694,6 +1739,9 @@ fn module_context(module: &str) -> &'static str {
         "Evidence Hub" => {
             "Open member, provider, knowledge, and dataset context from one evidence hub."
         }
+        "MLOps Workspace" => {
+            "Govern offline training, model candidates, promotion gates, and monitoring evidence."
+        }
         "Evidence Runtime" => {
             "Register document, OCR, chunk, embedding, and retrieval metadata with audit trace."
         }
@@ -1723,6 +1771,7 @@ fn module_description(module: &str) -> &'static str {
         "Review Workbench" => "medical + QA",
         "Detection Controls" => "rules + models",
         "Evidence Hub" => "context lookup",
+        "MLOps Workspace" => "model lifecycle",
         "Evidence Runtime" => "document evidence",
         "Rules" => "deterministic controls",
         "Models" => "threshold evidence",
@@ -1750,6 +1799,7 @@ fn module_icon_class(module: &str) -> &'static str {
         "Review Workbench" => "icon-qa",
         "Detection Controls" => "icon-rules",
         "Evidence Hub" => "icon-knowledge",
+        "MLOps Workspace" => "icon-models",
         "Evidence Runtime" => "icon-audit",
         "Rules" => "icon-rules",
         "Models" => "icon-models",
@@ -2639,8 +2689,6 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(summary) => html! {
                     <>
-                        {dashboard_mission_visual(summary)}
-                        {dashboard_detection_console(summary)}
                         {dashboard_pilot_runway(summary, &props.on_navigate)}
                         <section class="panel result-stack">
                             <h3>{"Executive KPIs"}</h3>
@@ -2664,247 +2712,10 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                             </div>
                             {operator_queue_snapshot(summary, &props.on_navigate)}
                         </section>
-
-                        <section class="panel result-stack">
-                            <h3>{"Value Measurement"}</h3>
-                            <div class="score-hero visual-kpis">
-                                {kpi_card("Estimated Impact", &summary.value_measurement.estimated_impact, "amount")}
-                                {kpi_card("Net Value", &summary.value_measurement.net_value, "saving")}
-                                {kpi_card("Currency", &summary.value_measurement.currency, "currency")}
-                            </div>
-                            <div class="summary-grid">
-                                <div><span>{"Prevented Payment"}</span><strong>{&summary.value_measurement.prevented_payment}</strong></div>
-                                <div><span>{"Recovered"}</span><strong>{&summary.value_measurement.recovered_amount}</strong></div>
-                                <div><span>{"Future Exposure"}</span><strong>{&summary.value_measurement.avoided_future_exposure}</strong></div>
-                                <div><span>{"Deterrence"}</span><strong>{&summary.value_measurement.deterrence_estimate}</strong></div>
-                                <div><span>{"Review Cost"}</span><strong>{&summary.value_measurement.review_cost}</strong></div>
-                                <div><span>{"FP Cost"}</span><strong>{&summary.value_measurement.false_positive_operational_cost}</strong></div>
-                                <div><span>{"Reviewer Capacity"}</span><strong>{&summary.value_measurement.reviewer_capacity_hours}</strong></div>
-                                <div><span>{"Audit Coverage"}</span><strong>{percent_label(summary.audit_coverage.canonical_trace_coverage)}</strong></div>
-                                <div><span>{"Canonical Runs"}</span><strong>{format!("{} / {}", summary.audit_coverage.canonical_trace_runs, summary.audit_coverage.scoring_runs)}</strong></div>
-                            </div>
-                            <small>{&summary.value_measurement.evidence_caveat}</small>
-                        </section>
-
-                        <section class="panel result-stack">
-                            <h3>{"ROI Attribution"}</h3>
-                            if summary.saving_attributions.is_empty() {
-                                <p class="empty">{"No saving attribution records returned."}</p>
-                            } else {
-                                <div class="factor-card-grid">
-                                    {for summary.saving_attributions.iter().take(8).map(|item| html! {
-                                        <div class="factor-card">
-                                            <div>
-                                                <strong>{format!("{} / {}", item.source_type, item.source_id)}</strong>
-                                                <span>{format!("{} / {} / {}", item.financial_impact_type, item.action, item.currency)}</span>
-                                            </div>
-                                            <div class="summary-grid">
-                                                <div><span>{"Saving"}</span><strong>{&item.saving_amount}</strong></div>
-                                                <div><span>{"Claims"}</span><strong>{item.claim_count}</strong></div>
-                                                <div><span>{"Evidence"}</span><strong>{refs_label(&item.evidence_refs)}</strong></div>
-                                            </div>
-                                        </div>
-                                    })}
-                                </div>
-                            }
-                            <h4>{"Saving Segments"}</h4>
-                            if summary.saving_segments.is_empty() {
-                                <p class="empty">{"No saving segment records returned."}</p>
-                            } else {
-                                <div class="summary-grid">
-                                    {for summary.saving_segments.iter().take(6).map(|segment| html! {
-                                        <div>
-                                            <span>{format!("{} / {}", segment.segment_type, segment.segment_id)}</span>
-                                            <strong>{format!("{} {} / ROI {:.2}", segment.saving_amount, segment.currency, segment.roi)}</strong>
-                                            <small>{format!("claims {} / attributions {}", segment.claim_count, segment.attribution_count)}</small>
-                                        </div>
-                                    })}
-                                </div>
-                            }
-                        </section>
-
-                        <section class="panel result-stack">
-                            <h3>{"Seven-Layer Coverage"}</h3>
-                            if summary.layer_scores.is_empty() {
-                                <p class="empty">{"No layer score records returned."}</p>
-                            } else {
-                                {dashboard_layer_flow(&summary.layer_scores)}
-                                {layer_coverage_summary(&summary.layer_scores, &summary.model_scores)}
-                            }
-                        </section>
-
-                        <section class="panel result-stack">
-                            <h3>{"QA And Case SLA"}</h3>
-                            <div class="summary-grid">
-                                <div><span>{"Sampled Cases"}</span><strong>{summary.qa_queue.sampled_cases}</strong></div>
-                                <div><span>{"Open QA"}</span><strong>{summary.qa_queue.open_cases}</strong></div>
-                                <div><span>{"Reviewed QA"}</span><strong>{summary.qa_queue.reviewed_cases}</strong></div>
-                                <div><span>{"Disagreements"}</span><strong>{format!("{} / {}", summary.qa_queue.disagreement_cases, percent_label(summary.qa_queue.disagreement_rate))}</strong></div>
-                                <div><span>{"Feedback Open"}</span><strong>{summary.qa_queue.feedback_open_count}</strong></div>
-                                <div><span>{"Feedback In Progress"}</span><strong>{summary.qa_queue.feedback_in_progress_count}</strong></div>
-                                <div><span>{"Feedback Resolved"}</span><strong>{summary.qa_queue.feedback_resolved_count}</strong></div>
-                                <div><span>{"Feedback Dismissed"}</span><strong>{summary.qa_queue.feedback_dismissed_count}</strong></div>
-                                <div><span>{"Unresolved Feedback"}</span><strong>{summary.qa_queue.unresolved_feedback_count}</strong></div>
-                                <div><span>{"Rule / Model Feedback"}</span><strong>{format!("{} / {}", summary.qa_queue.rules_unresolved_feedback_count, summary.qa_queue.models_unresolved_feedback_count)}</strong></div>
-                                <div><span>{"Feature / Provider Feedback"}</span><strong>{format!("{} / {}", summary.qa_queue.features_unresolved_feedback_count, summary.qa_queue.provider_profile_unresolved_feedback_count)}</strong></div>
-                                <div><span>{"Workflow / TPA Feedback"}</span><strong>{format!("{} / {}", summary.qa_queue.workflow_unresolved_feedback_count, summary.qa_queue.tpa_unresolved_feedback_count)}</strong></div>
-                            </div>
-                            <div class="summary-grid">
-                                <div><span>{"Total Cases"}</span><strong>{summary.case_sla.total_cases}</strong></div>
-                                <div><span>{"Open Cases"}</span><strong>{summary.case_sla.open_cases}</strong></div>
-                                <div><span>{"Closed Cases"}</span><strong>{summary.case_sla.closed_cases}</strong></div>
-                                <div><span>{"Breached Cases"}</span><strong>{summary.case_sla.breached_cases}</strong></div>
-                                <div><span>{"SLA Breach Rate"}</span><strong>{percent_label(summary.case_sla.sla_breach_rate)}</strong></div>
-                                <div><span>{"Triage / Closure Hours"}</span><strong>{format!("{:.1} / {:.1}", summary.case_sla.average_time_to_triage_hours, summary.case_sla.average_time_to_closure_hours)}</strong></div>
-                            </div>
-                        </section>
-
-                        <section class="panel result-stack">
-                            <h3>{"Governance Rollups"}</h3>
-                            <div class="summary-grid">
-                                <div><span>{"Labels"}</span><strong>{summary.label_pool.total_labels}</strong></div>
-                                <div><span>{"Approved Training"}</span><strong>{summary.label_pool.approved_for_training}</strong></div>
-                                <div><span>{"Needs Review"}</span><strong>{summary.label_pool.needs_review}</strong></div>
-                                <div><span>{"Rule / Model Feedback"}</span><strong>{format!("{} / {}", summary.label_pool.rule_feedback, summary.label_pool.model_feedback)}</strong></div>
-                                <div><span>{"Feature / Provider Feedback"}</span><strong>{format!("{} / {}", summary.label_pool.features_feedback, summary.label_pool.provider_profile_feedback)}</strong></div>
-                                <div><span>{"Workflow Feedback"}</span><strong>{summary.label_pool.workflow_feedback}</strong></div>
-                                <div><span>{"Case Status Labels"}</span><strong>{summary.label_pool.case_status_labels}</strong></div>
-                                <div><span>{"Medical Labels"}</span><strong>{summary.label_pool.medical_review_labels}</strong></div>
-                                <div><span>{"False Positive Labels"}</span><strong>{summary.label_pool.false_positive_labels}</strong></div>
-                                <div><span>{"Evidence Labels"}</span><strong>{summary.label_pool.evidence_backed_labels}</strong></div>
-                                <div><span>{"Agent Runs"}</span><strong>{format!("{} / {}", summary.agent_governance.successful_runs, summary.agent_governance.total_runs)}</strong></div>
-                                <div><span>{"Agent Evidence"}</span><strong>{summary.agent_governance.evidence_backed_runs}</strong></div>
-                                <div><span>{"Tool Calls"}</span><strong>{summary.agent_governance.tool_call_count}</strong></div>
-                                <div><span>{"Policy Checks"}</span><strong>{format!("{} / denied {}", summary.agent_governance.policy_check_count, summary.agent_governance.denied_policy_check_count)}</strong></div>
-                                <div><span>{"Failed Tool Calls"}</span><strong>{summary.agent_governance.failed_tool_call_count}</strong></div>
-                                <div><span>{"Approvals"}</span><strong>{format!("pending {} / approved {} / rejected {}", summary.agent_governance.pending_approvals, summary.agent_governance.approved_approvals, summary.agent_governance.rejected_approvals)}</strong></div>
-                                <div><span>{"Models"}</span><strong>{format!("{} / evaluated {}", summary.model_governance.total_models, summary.model_governance.evaluated_models)}</strong></div>
-                                <div><span>{"Drift"}</span><strong>{format!("watch {} / detected {}", summary.model_governance.drift_watch_count, summary.model_governance.drift_detected_count)}</strong></div>
-                                <div><span>{"Precision / Recall"}</span><strong>{format!("{} / {}", optional_number(summary.model_governance.average_precision), optional_number(summary.model_governance.average_recall))}</strong></div>
-                                <div><span>{"Rules"}</span><strong>{format!("{} / active {}", summary.rule_governance.total_rules, summary.rule_governance.active_rules)}</strong></div>
-                                <div><span>{"Rule Triggers"}</span><strong>{format!("{} / hits {}", summary.rule_governance.total_trigger_count, summary.rule_governance.triggered_rules)}</strong></div>
-                                <div><span>{"Rule Outcomes"}</span><strong>{format!("reviewed {} / confirmed {} / fp {}", summary.rule_governance.reviewed_count, summary.rule_governance.confirmed_fwa_count, summary.rule_governance.false_positive_count)}</strong></div>
-                                <div><span>{"Rule Precision"}</span><strong>{format!("{} / FP {}", percent_label(summary.rule_governance.precision), percent_label(summary.rule_governance.false_positive_rate))}</strong></div>
-                                <div><span>{"Rule ROI"}</span><strong>{format!("{} / {:.2}", summary.rule_governance.saving_amount, summary.rule_governance.roi)}</strong></div>
-                            </div>
-                        </section>
                     </>
                 },
             }}
         </>
-    }
-}
-
-fn dashboard_detection_console(summary: &DashboardSummary) -> Html {
-    let layer_specs = [
-        ("L1", "Peer benchmark", "peer deviation", "peer"),
-        ("L2", "Rule detection", "deterministic hits", "rules"),
-        ("L3", "Anomaly", "rare pattern", "anomaly"),
-        ("L4", "ML classifier", "baseline probability", "ml"),
-        ("L5", "Medical", "necessity", "medical"),
-        ("L6", "Provider graph", "network risk", "graph"),
-        ("L7", "Fusion route", "RAG + action", "route"),
-    ];
-    html! {
-        <section class="panel detection-console-shell">
-            <div class="section-header">
-                <div>
-                    <h3>{"Seven-Layer Detection Console"}</h3>
-                    <p>{"The PRD risk engine as an operating diagram: intake context, seven scored layers, fusion, human gates, and value proof."}</p>
-                </div>
-                <span class="status-token strong">{map_counts_label(&summary.rag_distribution)}</span>
-            </div>
-            <div class="detection-console">
-                <div class="console-intake-stack">
-                    {console_context_card("Claims", &summary.suspected_claims.to_string(), "suspected queue", "claims")}
-                    {console_context_card("Rules", &summary.rule_hits.to_string(), "rule hits", "rules")}
-                    {console_context_card("Cases", &summary.case_sla.open_cases.to_string(), "open investigation", "cases")}
-                </div>
-                <div class="console-engine-board">
-                    <div class="console-engine-core">
-                        <span>{"FWA"}</span>
-                        <strong>{"Risk Fusion"}</strong>
-                        <small>{format!("audit {}", percent_label(summary.audit_coverage.canonical_trace_coverage))}</small>
-                    </div>
-                    <div class="console-layer-grid">
-                        {for layer_specs.iter().map(|(layer_id, label, caption, tone)| {
-                            console_layer_tile(layer_id, label, &layer_score_label(&summary.layer_scores, layer_id), caption, tone)
-                        })}
-                    </div>
-                </div>
-                <div class="console-output-stack">
-                    {console_context_card("Human gate", &summary.qa_queue.open_cases.to_string(), "QA open", "human")}
-                    {console_context_card("Agent assist", &summary.agent_governance.evidence_backed_runs.to_string(), "evidence-backed", "agent")}
-                    {console_context_card("Net value", &summary.value_measurement.net_value, "ROI proof", "value")}
-                </div>
-            </div>
-        </section>
-    }
-}
-
-fn console_context_card(label: &str, value: &str, caption: &str, tone: &str) -> Html {
-    html! {
-        <div class={classes!("console-context-card", tone.to_string())}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <small>{caption}</small>
-        </div>
-    }
-}
-
-fn console_layer_tile(layer_id: &str, label: &str, value: &str, caption: &str, tone: &str) -> Html {
-    html! {
-        <div class={classes!("console-layer-tile", tone.to_string())}>
-            <span>{layer_id}</span>
-            <strong>{value}</strong>
-            <em>{label}</em>
-            <small>{caption}</small>
-        </div>
-    }
-}
-
-fn dashboard_mission_visual(summary: &DashboardSummary) -> Html {
-    html! {
-        <section class="panel mission-visual-shell">
-            <div class="mission-board">
-                <div class="mission-lane claim-lane">
-                    <span>{"TPA claim stream"}</span>
-                    <strong>{format!("{} suspected", summary.suspected_claims)}</strong>
-                    <small>{format!("{} risk amount", summary.risk_amount)}</small>
-                    <div class="claim-strip-stack">
-                        {claim_strip("new", "claim intake", "active")}
-                        {claim_strip("score", "multi-layer detection", "warning")}
-                        {claim_strip("route", "human review gate", "danger")}
-                    </div>
-                </div>
-                <div class="mission-radar">
-                    <div class="radar-ring outer"></div>
-                    <div class="radar-ring middle"></div>
-                    <div class="radar-ring inner"></div>
-                    <div class="radar-core">
-                        <span>{"FWA"}</span>
-                        <strong>{"7-layer engine"}</strong>
-                    </div>
-                    {radar_node("L1", "Peer", "top")}
-                    {radar_node("L2", "Rules", "upper-right")}
-                    {radar_node("L3", "Anomaly", "lower-right")}
-                    {radar_node("L4", "ML", "bottom")}
-                    {radar_node("L5", "Medical", "lower-left")}
-                    {radar_node("L6", "Graph", "upper-left")}
-                    {radar_node("L7", "Route", "center-right")}
-                </div>
-                <div class="mission-lane outcome-lane">
-                    <span>{"Human loop + value"}</span>
-                    <strong>{summary.value_measurement.net_value.clone()}</strong>
-                    <small>{format!("audit coverage {}", percent_label(summary.audit_coverage.canonical_trace_coverage))}</small>
-                    <div class="outcome-stack">
-                        {outcome_chip("Agent", &format!("{} runs", summary.agent_governance.total_runs), "strong")}
-                        {outcome_chip("QA", &format!("{} open", summary.qa_queue.open_cases), "warning")}
-                        {outcome_chip("ROI", &summary.saving_amount, "success")}
-                    </div>
-                </div>
-            </div>
-        </section>
     }
 }
 
@@ -2975,33 +2786,6 @@ fn pilot_runway_step(
             <strong>{value}</strong>
             <small>{detail}</small>
         </button>
-    }
-}
-
-fn claim_strip(stage: &str, label: &str, tone: &str) -> Html {
-    html! {
-        <div class={classes!("claim-strip", tone.to_string())}>
-            <span>{stage}</span>
-            <strong>{label}</strong>
-        </div>
-    }
-}
-
-fn radar_node(layer: &str, label: &str, position: &str) -> Html {
-    html! {
-        <div class={classes!("radar-node", position.to_string())}>
-            <span>{layer}</span>
-            <strong>{label}</strong>
-        </div>
-    }
-}
-
-fn outcome_chip(label: &str, value: &str, tone: &str) -> Html {
-    html! {
-        <div class={classes!("outcome-chip", tone.to_string())}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-        </div>
     }
 }
 
@@ -3691,6 +3475,366 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+#[function_component(MlopsWorkspacePage)]
+fn mlops_workspace_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let model_key = use_state(|| "baseline_fwa".to_string());
+    let snapshot_state = use_state(|| ApiState::<MlopsWorkspaceSnapshot>::Idle);
+
+    let load_workspace = {
+        let api_key = api_key.clone();
+        let model_key = model_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let model_key = (*model_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(
+                    match get_mlops_workspace_snapshot(api_key, model_key).await {
+                        Ok(snapshot) => ApiState::Ready(snapshot),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
+            });
+        })
+    };
+
+    let refresh = {
+        let load_workspace = load_workspace.clone();
+        Callback::from(move |_| load_workspace.emit(()))
+    };
+
+    {
+        let load_workspace = load_workspace.clone();
+        use_effect_with((), move |_| {
+            load_workspace.emit(());
+            || ()
+        });
+    }
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"MLOps Workspace"}</h2>
+                    <p>{"A separate model governance workspace for datasets, offline training jobs, candidates, promotion gates, and monitoring evidence."}</p>
+                </div>
+                <span class="status-pill">{"Offline ML Governance"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"MLOps Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Model key"}
+                        <input
+                            value={(*model_key).clone()}
+                            oninput={{
+                                let model_key = model_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    model_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh MLOps workspace" }}
+                    </button>
+                </div>
+            </section>
+
+            <MlopsWorkspaceView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct MlopsWorkspaceProps {
+    state: ApiState<MlopsWorkspaceSnapshot>,
+}
+
+#[function_component(MlopsWorkspaceView)]
+fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load the MLOps workspace to inspect model lifecycle evidence."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading MLOps workspace..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => html! {
+                    <>
+                        {mlops_command_center(snapshot)}
+                        {mlops_training_handoff(snapshot)}
+                        {mlops_dataset_readiness(snapshot)}
+                        {mlops_training_jobs(snapshot)}
+                        {mlops_model_candidates(snapshot)}
+                        {mlops_promotion_gates(snapshot)}
+                        {mlops_monitoring_summary(snapshot)}
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
+fn mlops_command_center(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    let active_model = active_model_version(&snapshot.model_ops);
+    html! {
+        <section class="panel data-command-center">
+            <div class="section-header">
+                <div>
+                    <h3>{"MLOps Control Plane"}</h3>
+                    <p>{"Model lifecycle evidence stays separate from claim review work: data readiness, offline training, candidate review, human promotion, and serving monitoring."}</p>
+                </div>
+                <span class={classes!("status-token", status_tone(&snapshot.model_ops.gates.decision))}>{&snapshot.model_ops.gates.decision}</span>
+            </div>
+            <div class="ops-stat-strip">
+                <div><span>{"Datasets"}</span><strong>{snapshot.data_sources.datasets.len()}</strong><small>{"registered manifests"}</small></div>
+                <div><span>{"Evaluations"}</span><strong>{snapshot.data_sources.evaluations.len()}</strong><small>{"candidate evidence"}</small></div>
+                <div><span>{"Training Jobs"}</span><strong>{snapshot.retraining_jobs.len()}</strong><small>{"offline queue"}</small></div>
+                <div><span>{"Active Version"}</span><strong>{active_model.map(|model| model.version.as_str()).unwrap_or("none")}</strong><small>{"serving lock target"}</small></div>
+                <div><span>{"Drift"}</span><strong>{&snapshot.model_ops.performance.drift_status}</strong><small>{"monitoring signal"}</small></div>
+            </div>
+        </section>
+    }
+}
+
+fn mlops_training_handoff(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    let dataset = latest_dataset(&snapshot.data_sources.datasets);
+    let active_model = active_model_version(&snapshot.model_ops);
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Offline Training Handoff"}</h3>
+                    <p>{"The UI exposes the contract that an external training platform must consume and return. Training remains offline; promotion remains human-governed."}</p>
+                </div>
+                <span class="status-token strong">{"human review required"}</span>
+            </div>
+            <div class="summary-grid">
+                <div><span>{"Dataset manifest"}</span><strong>{dataset.map(|item| item.manifest_uri.as_str()).unwrap_or("missing")}</strong></div>
+                <div><span>{"Dataset version"}</span><strong>{dataset.map(dataset_version_label).unwrap_or_else(|| "missing".into())}</strong></div>
+                <div><span>{"Model key"}</span><strong>{&snapshot.model_ops.performance.model_key}</strong></div>
+                <div><span>{"Base version"}</span><strong>{active_model.map(|model| model.version.as_str()).unwrap_or("none")}</strong></div>
+                <div><span>{"Expected output"}</span><strong>{"/api/v1/ops/model-retraining-jobs/{job_id}/output"}</strong></div>
+                <div><span>{"Artifact boundary"}</span><strong>{active_model.and_then(|model| model.artifact_uri.as_deref()).unwrap_or("candidate artifact pending")}</strong></div>
+            </div>
+            <div class="factor-card-grid">
+                {mlops_handoff_step("1", "Dataset approval", "Use a governed Parquet manifest with time and group split evidence.")}
+                {mlops_handoff_step("2", "Offline training", "External platform writes model, validation, feature, shadow, drift, and fairness artifacts.")}
+                {mlops_handoff_step("3", "Candidate registration", "Training output creates a candidate model and evaluation through the API.")}
+                {mlops_handoff_step("4", "Human promotion", "Promotion gates and reviewer decision decide shadow, activation, or rejection.")}
+            </div>
+        </section>
+    }
+}
+
+fn mlops_handoff_step(step: &str, label: &str, detail: &str) -> Html {
+    html! {
+        <div class="metric-row">
+            <span>{format!("Step {step}")}</span>
+            <strong>{label}</strong>
+            <small>{detail}</small>
+        </div>
+    }
+}
+
+fn mlops_dataset_readiness(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Datasets"}</h3>
+                    <p>{"Training data must show source scope, label policy, split quality, schema health, and production-evidence boundary before promotion."}</p>
+                </div>
+            </div>
+            if snapshot.data_sources.datasets.is_empty() {
+                <p class="empty">{"No datasets registered for MLOps review."}</p>
+            } else {
+                <div class="factor-card-grid">
+                    {for snapshot.data_sources.datasets.iter().take(6).map(|dataset| {
+                        let health = health_for_dataset(&snapshot.data_sources.health, &dataset.dataset_id);
+                        html! {
+                            <div class="factor-card">
+                                <div>
+                                    <strong>{dataset_version_label(dataset)}</strong>
+                                    <span>{format!("{} / {} / {}", dataset.business_domain, dataset.sample_grain, dataset.storage_format)}</span>
+                                </div>
+                                <div class="summary-grid">
+                                    <div><span>{"Rows"}</span><strong>{dataset.row_count}</strong></div>
+                                    <div><span>{"Splits"}</span><strong>{dataset.splits.len()}</strong></div>
+                                    <div><span>{"Fields"}</span><strong>{dataset.fields.len()}</strong></div>
+                                    <div><span>{"Mappings"}</span><strong>{dataset.mappings.len()}</strong></div>
+                                    <div><span>{"Label"}</span><strong>{empty_label(&dataset.label_column)}</strong></div>
+                                    <div><span>{"Quality"}</span><strong>{health.map(|item| item.data_quality_status.as_str()).unwrap_or("missing")}</strong></div>
+                                </div>
+                                <small>{format!("manifest: {}", dataset.manifest_uri)}</small>
+                            </div>
+                        }
+                    })}
+                </div>
+            }
+        </section>
+    }
+}
+
+fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Training Jobs"}</h3>
+                    <p>{"Offline retraining jobs prove dispatch, validation output, artifact identity, and registration status without automatic promotion."}</p>
+                </div>
+                <span class="status-token neutral">{format!("{} jobs", snapshot.retraining_jobs.len())}</span>
+            </div>
+            if snapshot.retraining_jobs.is_empty() {
+                <p class="empty">{"No retraining jobs returned for this model."}</p>
+            } else {
+                <div class="ops-table">
+                    <div class="ops-table-head">
+                        <span>{"Job"}</span>
+                        <span>{"Status"}</span>
+                        <span>{"Dataset"}</span>
+                        <span>{"Candidate"}</span>
+                        <span>{"Updated"}</span>
+                    </div>
+                    {for snapshot.retraining_jobs.iter().take(8).map(|job| html! {
+                        <div class="ops-table-row">
+                            <div class="primary-cell">
+                                <strong>{&job.job_id}</strong>
+                                <span>{format!("{} {} / requested by {}", job.model_key, job.model_version, job.requested_by)}</span>
+                            </div>
+                            <span class={classes!("status-token", status_tone(&job.status))}>{&job.status}</span>
+                            <span>{format!("{} / {}", job.source_dataset_id, job.source_data_quality_status)}</span>
+                            <span>{job.candidate_model_version.as_deref().unwrap_or("pending")}</span>
+                            <span>{job.updated_at.as_deref().unwrap_or("missing")}</span>
+                            <small class="row-detail">{format!("trigger {} / blocker {} / output {}", refs_label(&job.trigger_summary), refs_label(&job.blocker_summary), job.output_evaluation_id.as_deref().unwrap_or("none"))}</small>
+                        </div>
+                    })}
+                </div>
+            }
+        </section>
+    }
+}
+
+fn mlops_model_candidates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Model Candidates"}</h3>
+                    <p>{"Active and candidate versions are inspected through runtime kind, artifact URI, evaluation lineage, and deployment status."}</p>
+                </div>
+            </div>
+            if snapshot.model_ops.models.is_empty() {
+                <p class="empty">{"No model versions returned."}</p>
+            } else {
+                <div class="factor-card-grid">
+                    {for snapshot.model_ops.models.iter().map(|model| html! {
+                        <div class="factor-card">
+                            <div>
+                                <strong>{format!("{} {}", model.model_key, model.version)}</strong>
+                                <span>{format!("{} / {} / {}", model.status, model.runtime_kind, model.execution_provider)}</span>
+                            </div>
+                            <div class="summary-grid">
+                                <div><span>{"Type"}</span><strong>{&model.model_type}</strong></div>
+                                <div><span>{"Review Mode"}</span><strong>{&model.review_mode}</strong></div>
+                                <div><span>{"Endpoint"}</span><strong>{model.endpoint_url.as_deref().unwrap_or("none")}</strong></div>
+                            </div>
+                            <small>{format!("artifact: {}", model.artifact_uri.as_deref().unwrap_or("none"))}</small>
+                        </div>
+                    })}
+                </div>
+            }
+        </section>
+    }
+}
+
+fn mlops_promotion_gates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Promotion Gates"}</h3>
+                    <p>{"Promotion gates keep data quality, label provenance, shadow evidence, drift, fairness, and approval requirements visible before activation."}</p>
+                </div>
+                <span class={classes!("status-token", status_tone(&snapshot.model_ops.gates.decision))}>{&snapshot.model_ops.gates.decision}</span>
+            </div>
+            <div class="score-hero">
+                <div><span>{"Passed"}</span><strong>{format!("{} / {}", snapshot.model_ops.gates.passed_count, snapshot.model_ops.gates.total_count)}</strong></div>
+                <div><span>{"Evaluation"}</span><strong>{&snapshot.model_ops.gates.latest_evaluation_id}</strong></div>
+                <div><span>{"Approved Labels"}</span><strong>{snapshot.model_ops.gates.approved_label_count}</strong></div>
+            </div>
+            if snapshot.model_ops.gates.blockers.is_empty() {
+                <p class="empty">{"No promotion blockers returned."}</p>
+            } else {
+                <ul class="result-list compact-list">
+                    {for snapshot.model_ops.gates.blockers.iter().map(|blocker| html! { <li>{blocker}</li> })}
+                </ul>
+            }
+            <div class="factor-card-grid">
+                {for snapshot.model_ops.gates.gates.iter().map(|gate| html! {
+                    <div class="metric-row">
+                        <span>{&gate.label}</span>
+                        <strong>{if gate.passed { "passed" } else { "blocked" }}</strong>
+                        <small>{&gate.evidence_source}</small>
+                        <small>{&gate.blocker}</small>
+                    </div>
+                })}
+            </div>
+        </section>
+    }
+}
+
+fn mlops_monitoring_summary(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Monitoring"}</h3>
+                    <p>{"Monitoring should trigger retraining readiness, shadow review, or rollback review. It must not automatically promote a model."}</p>
+                </div>
+                <span class={classes!("status-token", status_tone(&snapshot.model_ops.retraining.recommendation))}>{&snapshot.model_ops.retraining.recommendation}</span>
+            </div>
+            <div class="summary-grid">
+                <div><span>{"Scored Runs"}</span><strong>{snapshot.model_ops.performance.scored_runs}</strong></div>
+                <div><span>{"Average Score"}</span><strong>{format!("{:.1}", snapshot.model_ops.performance.average_score)}</strong></div>
+                <div><span>{"High Risk"}</span><strong>{snapshot.model_ops.performance.high_risk_count}</strong></div>
+                <div><span>{"Score PSI"}</span><strong>{optional_number(snapshot.model_ops.performance.score_psi)}</strong></div>
+                <div><span>{"Drift"}</span><strong>{&snapshot.model_ops.performance.drift_status}</strong></div>
+                <div><span>{"Open Feedback"}</span><strong>{snapshot.model_ops.retraining.open_model_feedback_count}</strong></div>
+                <div><span>{"Needs Review"}</span><strong>{snapshot.model_ops.retraining.needs_review_label_count}</strong></div>
+                <div><span>{"Data Quality"}</span><strong>{&snapshot.model_ops.retraining.source_data_quality_status}</strong></div>
+            </div>
+            <h4>{"Retraining Triggers"}</h4>
+            if snapshot.model_ops.retraining.retraining_triggers.is_empty() {
+                <p class="empty">{"No retraining triggers."}</p>
+            } else {
+                <ul class="result-list compact-list">
+                    {for snapshot.model_ops.retraining.retraining_triggers.iter().map(|trigger| html! { <li>{trigger}</li> })}
+                </ul>
+            }
+        </section>
     }
 }
 
@@ -7899,6 +8043,28 @@ async fn get_model_ops_snapshot(
     })
 }
 
+async fn get_mlops_workspace_snapshot(
+    api_key: String,
+    model_key: String,
+) -> Result<MlopsWorkspaceSnapshot, String> {
+    let data_sources = get_data_sources_snapshot(api_key.clone()).await?;
+    let model_ops = get_model_ops_snapshot(api_key.clone(), model_key).await?;
+    let retraining_jobs = request_get_json::<ModelRetrainingJobListResponse>(
+        &format!(
+            "/api/v1/ops/models/{}/retraining-jobs",
+            model_ops.performance.model_key
+        ),
+        api_key,
+    )
+    .await?
+    .jobs;
+    Ok(MlopsWorkspaceSnapshot {
+        data_sources,
+        model_ops,
+        retraining_jobs,
+    })
+}
+
 async fn get_factor_readiness(api_key: String) -> Result<FactorReadinessResponse, String> {
     request_get_json("/api/v1/ops/factors/readiness", api_key).await
 }
@@ -8872,69 +9038,6 @@ fn kpi_card(label: &str, value: &str, icon: &str) -> Html {
     }
 }
 
-fn dashboard_layer_flow(layers: &BTreeMap<String, DashboardLayerScore>) -> Html {
-    if layers.is_empty() {
-        return html! {};
-    }
-    let layer_specs = [
-        ("L1", "Peer", "peer benchmark"),
-        ("L2", "Rules", "rule detection"),
-        ("L3", "Anomaly", "unsupervised"),
-        ("L4", "ML", "classification"),
-        ("L5", "Medical", "necessity"),
-        ("L6", "Provider", "graph risk"),
-        ("L7", "Fusion", "routing"),
-    ];
-    html! {
-        <div class="risk-flow dashboard-risk-flow">
-            {for layer_specs.iter().map(|(layer_id, label, caption)| {
-                let value = layer_score_label(layers, layer_id);
-                risk_node(layer_id, label, &value, caption)
-            })}
-        </div>
-    }
-}
-
-fn layer_coverage_summary(
-    layers: &BTreeMap<String, DashboardLayerScore>,
-    models: &BTreeMap<String, DashboardModelScore>,
-) -> Html {
-    let layer_count = layers.len() as f64;
-    let average_layer_score = layers
-        .values()
-        .map(|layer| layer.average_score)
-        .sum::<f64>()
-        / layer_count.max(1.0);
-    let scored_runs = layers
-        .values()
-        .map(|layer| layer.scored_runs)
-        .max()
-        .unwrap_or(0);
-    let high_risk_layers = layers
-        .values()
-        .filter(|layer| layer.high_risk_count > 0)
-        .count();
-    let model_summary = models
-        .iter()
-        .next()
-        .map(|(model_key, model)| {
-            format!(
-                "{} {:.1} / runs {}",
-                model_key, model.average_score, model.scored_runs
-            )
-        })
-        .unwrap_or_else(|| "no model scores".into());
-
-    html! {
-        <div class="layer-summary-grid">
-            <div><span>{"Layer average"}</span><strong>{format!("{average_layer_score:.1}")}</strong></div>
-            <div><span>{"Scored runs"}</span><strong>{scored_runs}</strong></div>
-            <div><span>{"High-risk layers"}</span><strong>{format!("{} / {}", high_risk_layers, layers.len())}</strong></div>
-            <div><span>{"Model signal"}</span><strong>{model_summary}</strong></div>
-        </div>
-    }
-}
-
 fn operator_queue_snapshot(summary: &DashboardSummary, on_navigate: &Callback<String>) -> Html {
     html! {
         <div class="visual-panel wide-visual operator-queue-panel">
@@ -9009,20 +9112,6 @@ fn ops_map_node(label: &str, caption: &str, value: &str, tone: &str) -> Html {
             <small>{caption}</small>
         </div>
     }
-}
-
-fn layer_score_label(layers: &BTreeMap<String, DashboardLayerScore>, layer_id: &str) -> String {
-    layers
-        .iter()
-        .find(|(key, layer)| {
-            key.eq_ignore_ascii_case(layer_id)
-                || key
-                    .to_ascii_uppercase()
-                    .starts_with(&layer_id.to_ascii_uppercase())
-                || layer.name.to_ascii_uppercase().contains(layer_id)
-        })
-        .map(|(_, layer)| format!("{:.1}", layer.average_score))
-        .unwrap_or_else(|| "n/a".into())
 }
 
 fn risk_node(layer: &str, label: &str, value: &str, caption: &str) -> Html {
@@ -9977,6 +10066,31 @@ fn total_schema_fields(datasets: &[DatasetRecord]) -> usize {
 
 fn total_field_mappings(datasets: &[DatasetRecord]) -> usize {
     datasets.iter().map(|dataset| dataset.mappings.len()).sum()
+}
+
+fn active_model_version(snapshot: &ModelOpsSnapshot) -> Option<&ModelVersion> {
+    snapshot
+        .models
+        .iter()
+        .find(|model| model.status == "active")
+        .or_else(|| snapshot.models.first())
+}
+
+fn latest_dataset(datasets: &[DatasetRecord]) -> Option<&DatasetRecord> {
+    datasets
+        .iter()
+        .max_by_key(|dataset| (&dataset.dataset_key, &dataset.dataset_version))
+}
+
+fn dataset_version_label(dataset: &DatasetRecord) -> String {
+    format!("{}:{}", dataset.dataset_key, dataset.dataset_version)
+}
+
+fn health_for_dataset<'a>(
+    health: &'a [DatasetHealthRecord],
+    dataset_id: &str,
+) -> Option<&'a DatasetHealthRecord> {
+    health.iter().find(|item| item.dataset_id == dataset_id)
 }
 
 fn status_tone(status: &str) -> &'static str {

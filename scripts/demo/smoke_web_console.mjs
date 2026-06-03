@@ -91,6 +91,12 @@ async function main() {
     assertContains(builtText, "Operations desk", "web console visual shell bundle");
     assertContains(builtText, "Daily Work", "web console navigation bundle");
     assertContains(builtText, "Control Rooms", "web console navigation bundle");
+    assertContains(builtText, "MLOps Workspace", "web console navigation bundle");
+    assertContains(builtText, "Offline ML Governance", "web console mlops workspace bundle");
+    assertContains(builtText, "MLOps Control Plane", "web console mlops workspace bundle");
+    assertContains(builtText, "Offline Training Handoff", "web console mlops workspace bundle");
+    assertContains(builtText, "Model Candidates", "web console mlops workspace bundle");
+    assertContains(builtText, "Training Jobs", "web console mlops workspace bundle");
     assertContains(builtText, "Review Workbench", "web console navigation bundle");
     assertContains(builtText, "Detection Controls", "web console navigation bundle");
     assertContains(builtText, "Evidence Hub", "web console navigation bundle");
@@ -102,9 +108,6 @@ async function main() {
     assertContains(builtText, "peer benchmark", "web console seven-layer visual bundle");
     assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
-    assertContains(builtText, "Seven-Layer Detection Console", "web console dashboard detection console bundle");
-    assertContains(builtText, "Risk Fusion", "web console dashboard detection console bundle");
-    assertContains(builtText, "Agent assist", "web console dashboard detection console bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
     assertContains(builtText, "Next actions", "web console dashboard visual bundle");
     assertContains(builtText, "click to work", "web console dashboard visual bundle");
@@ -168,9 +171,6 @@ async function main() {
     for (const expectedPanel of [
       "Management Dashboard",
       "Executive KPIs",
-      "Value Measurement",
-      "ROI Attribution",
-      "Seven-Layer Coverage",
       "Claim Scoring API",
       "Scoring Request",
       "Scoring Decision",
@@ -194,6 +194,10 @@ async function main() {
       "Candidate Source",
       "Threshold Integrity",
       "Model Governance",
+      "MLOps Workspace",
+      "Offline Training Handoff",
+      "Model Candidates",
+      "Training Jobs",
       "Deployment Boundary",
       "Profile Evidence",
       "Candidate Governance",
