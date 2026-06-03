@@ -283,6 +283,25 @@ mixing them into one source total.
 Lead triage is the bridge from scoring to case workflow. Case evidence packages
 preserve claim, rule, model, anomaly, document, and similar-case references.
 
+## Bootstrap Evidence And Labels
+
+| Method | Path | Purpose | Auth | Side effects |
+| --- | --- | --- | --- | --- |
+| GET | `/api/v1/ops/backfills` | List governed historical replay jobs. | Yes | None |
+| POST | `/api/v1/ops/backfills` | Create a historical replay backfill from existing generated leads. | Yes | Records replay job, candidate lead evidence, and audit event. |
+| GET | `/api/v1/ops/backfills/{job_id}/leads` | List candidate leads captured by a backfill job. | Yes | None |
+| GET | `/api/v1/ops/evidence-requests` | List generated clinical evidence requests. | Yes | None |
+| POST | `/api/v1/ops/evidence-requests/generate` | Generate evidence requests from scoring runs with missing clinical evidence. | Yes | Creates evidence request audit events. |
+| POST | `/api/v1/ops/evidence-requests/{request_id}/status` | Update evidence request collection status. | Yes | Appends status audit event and evidence refs. |
+| GET | `/api/v1/ops/label-bootstrap/queue` | List label candidates derived from governed evidence requests. | Yes | None |
+| POST | `/api/v1/ops/label-bootstrap/items/{item_id}/review` | Record human review for a bootstrap label candidate. | Yes | Appends label review audit event and can expose an approved training label. |
+
+Bootstrap APIs support demo and pilot data closure before customer production
+labels exist. They do not adjudicate claims and do not make generated labels
+training-eligible by default. A label candidate enters `/api/v1/ops/labels` only
+after reviewer notes, evidence refs, and governance status are recorded through
+the label review endpoint. Notes and evidence refs must remain non-PII.
+
 ## Investigation And QA Writeback
 
 | Method | Path | Purpose | Auth | Side effects |

@@ -3672,6 +3672,22 @@ impl ScoringRepository for InMemoryScoringRepository {
                     })
                 }),
         );
+        labels.extend(
+            self.audit_events
+                .lock()
+                .await
+                .iter()
+                .filter(|event| {
+                    event.event_type == "label.bootstrap.reviewed"
+                        && event.event_status == "succeeded"
+                        && customer_scope_id.is_none_or(|scope| {
+                            audit_event_payload_matches_customer_scope(&event.payload, scope)
+                        })
+                })
+                .filter_map(|event| {
+                    label_from_bootstrap_review_event(&audit_history_from_persisted(event))
+                }),
+        );
         let lead_triage_events = self
             .audit_events
             .lock()
@@ -7906,6 +7922,17 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
+        let label_bootstrap_rows: Vec<(String, String, String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, run_id, actor_role, payload, evidence_refs
+             FROM audit_events
+             WHERE event_type = 'label.bootstrap.reviewed'
+               AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)
+             ORDER BY created_at, audit_id",
+        )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
 
         let mut labels = investigation_rows
             .into_iter()
@@ -7987,6 +8014,21 @@ impl ScoringRepository for PostgresScoringRepository {
                         run_id: String::new(),
                         actor_role,
                         event_type: "medical.review.recorded".into(),
+                        event_status: "succeeded".into(),
+                        summary: String::new(),
+                        payload,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                        created_at: None,
+                    })
+                },
+            ))
+            .chain(label_bootstrap_rows.into_iter().filter_map(
+                |(audit_id, run_id, actor_role, payload, evidence_refs)| {
+                    label_from_bootstrap_review_event(&AuditHistoryEventRecord {
+                        audit_id,
+                        run_id,
+                        actor_role,
+                        event_type: "label.bootstrap.reviewed".into(),
                         event_status: "succeeded".into(),
                         summary: String::new(),
                         payload,
@@ -10757,6 +10799,31 @@ fn label_from_lead_triage_event(event: &AuditHistoryEventRecord) -> Option<Outco
         source_id: lead_id,
         governance_status: "needs_review".into(),
         feedback_target: "workflow".into(),
+        currency: None,
+        evidence_refs: event.evidence_refs.clone(),
+    })
+}
+
+fn label_from_bootstrap_review_event(
+    event: &AuditHistoryEventRecord,
+) -> Option<OutcomeLabelRecord> {
+    let item_id = event.payload["item_id"].as_str()?.to_string();
+    Some(OutcomeLabelRecord {
+        label_id: format!(
+            "label_bootstrap_{}_{}",
+            item_id,
+            event.payload["label_name"].as_str()?
+        ),
+        claim_id: event.payload["claim_id"].as_str()?.to_string(),
+        label_name: event.payload["label_name"].as_str()?.to_string(),
+        label_value: event.payload["label_value"].as_str()?.to_string(),
+        source_type: "label_bootstrap".into(),
+        source_id: item_id,
+        governance_status: event.payload["governance_status"].as_str()?.to_string(),
+        feedback_target: event.payload["feedback_target"]
+            .as_str()
+            .unwrap_or("workflow")
+            .to_string(),
         currency: None,
         evidence_refs: event.evidence_refs.clone(),
     })

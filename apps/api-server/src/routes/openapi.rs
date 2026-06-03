@@ -149,6 +149,188 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/backfills": {
+                "get": {
+                    "summary": "List historical replay backfill jobs",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Historical replay jobs",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                },
+                "post": {
+                    "summary": "Create a historical replay backfill job from governed candidates",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Created historical replay job",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/backfills/{job_id}/leads": {
+                "get": {
+                    "summary": "List candidate leads captured by a historical replay job",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "job_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Backfill candidate leads",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/evidence-requests": {
+                "get": {
+                    "summary": "List generated evidence requests",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Evidence request queue",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/evidence-requests/generate": {
+                "post": {
+                    "summary": "Generate evidence requests from missing clinical evidence",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Generated evidence requests",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/evidence-requests/{request_id}/status": {
+                "post": {
+                    "summary": "Update evidence request collection status",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "request_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Updated evidence request",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/label-bootstrap/queue": {
+                "get": {
+                    "summary": "List label bootstrap items awaiting governance review",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Label bootstrap queue",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/label-bootstrap/items/{item_id}/review": {
+                "post": {
+                    "summary": "Record a governed review for a bootstrap label candidate",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "item_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded label bootstrap review",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules": {
                 "get": {
                     "summary": "List rule library",

@@ -16,6 +16,7 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
             "Runtime Scoring",
             "Leads & Cases",
             "Review Workbench",
+            "Bootstrap Ops",
         ],
     ),
     (
@@ -39,6 +40,10 @@ const CONTRACT_PANELS: &[&str] = &[
     "Deployment Boundary",
     "Profile Evidence",
     "Candidate Governance",
+    "Bootstrap Ops",
+    "Historical Replay",
+    "Evidence Requests",
+    "Label Bootstrap",
     "promotion_review_ready",
     "Factor Cards",
     "AUC Gain",
@@ -919,6 +924,113 @@ struct QaReviewSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+struct HistoricalBackfillListResponse {
+    jobs: Vec<HistoricalBackfillJob>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct HistoricalBackfillResponse {
+    job: HistoricalBackfillJob,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct HistoricalBackfillJob {
+    job_id: String,
+    status: String,
+    dataset_refs: Vec<String>,
+    rule_refs: Vec<String>,
+    candidate_count: u32,
+    leads: Vec<HistoricalBackfillLead>,
+    reviewer: Option<String>,
+    notes: Option<String>,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct HistoricalBackfillLead {
+    lead_id: String,
+    claim_id: String,
+    scheme_family: String,
+    risk_score: u8,
+    rag: String,
+    status: String,
+    reason: String,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceRequestListResponse {
+    requests: Vec<EvidenceRequestRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceRequestGenerateResponse {
+    requests: Vec<EvidenceRequestRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceRequestRecord {
+    request_id: String,
+    claim_id: String,
+    scoring_audit_id: String,
+    status: String,
+    request_reason: String,
+    missing_evidence: Vec<String>,
+    items: Vec<EvidenceRequestItem>,
+    reviewer_queue: String,
+    requested_by: String,
+    notes: Option<String>,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceRequestItem {
+    item_id: String,
+    document_type: String,
+    status: String,
+    reason: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct LabelBootstrapQueueResponse {
+    items: Vec<LabelBootstrapItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct LabelBootstrapReviewResponse {
+    item: LabelBootstrapItem,
+    audit_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct LabelBootstrapItem {
+    item_id: String,
+    claim_id: String,
+    source_type: String,
+    source_id: String,
+    suggested_label_name: String,
+    suggested_label_value: String,
+    governance_status: String,
+    training_eligible: bool,
+    review_status: String,
+    review_audit_id: Option<String>,
+    reviewer: Option<String>,
+    feedback_target: String,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct BootstrapOpsSnapshot {
+    backfills: Vec<HistoricalBackfillJob>,
+    evidence_requests: Vec<EvidenceRequestRecord>,
+    label_items: Vec<LabelBootstrapItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 struct KnowledgeCaseListResponse {
     cases: Vec<KnowledgeCase>,
 }
@@ -1630,6 +1742,8 @@ fn app() -> Html {
                         <RuntimeScoringPage />
                     } else if *active == "Review Workbench" {
                         {review_workbench_page(select_module.clone())}
+                    } else if *active == "Bootstrap Ops" {
+                        <BootstrapOpsPage />
                     } else if *active == "Detection Controls" {
                         {detection_controls_page(select_module.clone())}
                     } else if *active == "Evidence Hub" {
@@ -1733,6 +1847,9 @@ fn module_context(module: &str) -> &'static str {
         "Dashboard" => "Choose the next operational action from live risk and review queues.",
         "Runtime Scoring" => "Score a claim and route the result into case or review workflow.",
         "Review Workbench" => "Resolve clinical and QA review queues from one place.",
+        "Bootstrap Ops" => {
+            "Replay historical leads, request missing evidence, and govern bootstrap labels."
+        }
         "Detection Controls" => {
             "Promote rules, models, routing, and features through one control room."
         }
@@ -1769,6 +1886,7 @@ fn module_description(module: &str) -> &'static str {
         "Dashboard" => "next action",
         "Runtime Scoring" => "score & route",
         "Review Workbench" => "medical + QA",
+        "Bootstrap Ops" => "labels + evidence",
         "Detection Controls" => "rules + models",
         "Evidence Hub" => "context lookup",
         "MLOps Workspace" => "model lifecycle",
@@ -1797,6 +1915,7 @@ fn module_icon_class(module: &str) -> &'static str {
         "Dashboard" => "icon-dashboard",
         "Runtime Scoring" => "icon-scoring",
         "Review Workbench" => "icon-qa",
+        "Bootstrap Ops" => "icon-audit",
         "Detection Controls" => "icon-rules",
         "Evidence Hub" => "icon-knowledge",
         "MLOps Workspace" => "icon-models",
@@ -1835,6 +1954,364 @@ fn review_workbench_page(on_navigate: Callback<String>) -> Html {
             </div>
         </section>
     }
+}
+
+#[function_component(BootstrapOpsPage)]
+fn bootstrap_ops_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let snapshot_state = use_state(|| ApiState::<BootstrapOpsSnapshot>::Idle);
+    let action_state = use_state(|| ApiState::<String>::Idle);
+
+    let refresh = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(match get_bootstrap_ops_snapshot(api_key).await {
+                    Ok(snapshot) => ApiState::Ready(snapshot),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let create_backfill = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            let action_state = action_state.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match create_bootstrap_backfill(api_key.clone()).await {
+                    Ok(response) => {
+                        action_state.set(ApiState::Ready(format!(
+                            "Backfill {} captured {} candidate leads.",
+                            response.job.job_id, response.job.candidate_count
+                        )));
+                        snapshot_state.set(match get_bootstrap_ops_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => action_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let generate_requests = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            let action_state = action_state.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match generate_bootstrap_evidence_requests(api_key.clone()).await {
+                    Ok(response) => {
+                        action_state.set(ApiState::Ready(format!(
+                            "Generated {} evidence requests from scoring audits.",
+                            response.requests.len()
+                        )));
+                        snapshot_state.set(match get_bootstrap_ops_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => action_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let mark_received = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let request_id = match first_open_evidence_request(&snapshot_state) {
+                Some(request_id) => request_id,
+                None => {
+                    action_state.set(ApiState::Failed(
+                        "no open evidence request is available to mark received".into(),
+                    ));
+                    return;
+                }
+            };
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            let action_state = action_state.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match mark_bootstrap_evidence_received(api_key.clone(), request_id).await {
+                    Ok(request) => {
+                        action_state.set(ApiState::Ready(format!(
+                            "Evidence request {} is now {}.",
+                            request.request_id, request.status
+                        )));
+                        snapshot_state.set(match get_bootstrap_ops_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => action_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let approve_label = {
+        let api_key = api_key.clone();
+        let snapshot_state = snapshot_state.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let (item_id, evidence_refs) = match first_open_label_item(&snapshot_state) {
+                Some(item) => item,
+                None => {
+                    action_state.set(ApiState::Failed(
+                        "no open label bootstrap item is available to approve".into(),
+                    ));
+                    return;
+                }
+            };
+            let api_key = (*api_key).clone();
+            let snapshot_state = snapshot_state.clone();
+            let action_state = action_state.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match approve_bootstrap_label(api_key.clone(), item_id, evidence_refs).await {
+                    Ok(response) => {
+                        action_state.set(ApiState::Ready(format!(
+                            "Label {} approved with audit {}.",
+                            response.item.item_id, response.audit_id
+                        )));
+                        snapshot_state.set(match get_bootstrap_ops_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => action_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    {
+        let refresh = refresh.clone();
+        use_effect_with((), move |_| {
+            refresh.emit(());
+            || ()
+        });
+    }
+
+    let refresh_click = {
+        let refresh = refresh.clone();
+        Callback::from(move |_| refresh.emit(()))
+    };
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Bootstrap Ops"}</h2>
+                    <p>{"Operate historical replay, missing-evidence requests, and label governance as one controlled path before MLOps consumes training labels."}</p>
+                </div>
+                <span class="status-pill">{"Label Bootstrap"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Bootstrap Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="action-bar">
+                    <button onclick={refresh_click} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh queues" }}
+                    </button>
+                    <button onclick={create_backfill} disabled={matches!(&*action_state, ApiState::Loading)}>
+                        {"Create backfill"}
+                    </button>
+                    <button onclick={generate_requests} disabled={matches!(&*action_state, ApiState::Loading)}>
+                        {"Generate evidence requests"}
+                    </button>
+                    <button onclick={mark_received} disabled={matches!(&*action_state, ApiState::Loading)}>
+                        {"Mark evidence received"}
+                    </button>
+                    <button onclick={approve_label} disabled={matches!(&*action_state, ApiState::Loading)}>
+                        {"Approve bootstrap label"}
+                    </button>
+                </div>
+                {bootstrap_action_state(&action_state)}
+            </section>
+
+            <BootstrapOpsView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct BootstrapOpsProps {
+    state: ApiState<BootstrapOpsSnapshot>,
+}
+
+#[function_component(BootstrapOpsView)]
+fn bootstrap_ops_view(props: &BootstrapOpsProps) -> Html {
+    html! {
+        {match &props.state {
+            ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load bootstrap queues to inspect replay, evidence, and labels."}</p></section> },
+            ApiState::Loading => html! { <section class="panel"><p>{"Loading bootstrap queues..."}</p></section> },
+            ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+            ApiState::Ready(snapshot) => html! {
+                <>
+                    <section class="summary-grid">
+                        <div>
+                            <span>{"Backfills"}</span>
+                            <strong>{snapshot.backfills.len()}</strong>
+                        </div>
+                        <div>
+                            <span>{"Evidence requests"}</span>
+                            <strong>{snapshot.evidence_requests.len()}</strong>
+                        </div>
+                        <div>
+                            <span>{"Open labels"}</span>
+                            <strong>{snapshot.label_items.iter().filter(|item| item.review_status != "reviewed").count()}</strong>
+                        </div>
+                    </section>
+                    <section class="workflow-card-grid">
+                        {bootstrap_backfill_panel(&snapshot.backfills)}
+                        {bootstrap_evidence_panel(&snapshot.evidence_requests)}
+                        {bootstrap_label_panel(&snapshot.label_items)}
+                    </section>
+                </>
+            },
+        }}
+    }
+}
+
+fn bootstrap_action_state(state: &UseStateHandle<ApiState<String>>) -> Html {
+    match &**state {
+        ApiState::Idle => html! { <p class="empty">{"Actions write audit events; suspicious leads and missing evidence are not training labels until reviewed."}</p> },
+        ApiState::Loading => html! { <p>{"Submitting bootstrap action..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(message) => html! { <p class="success-note">{message}</p> },
+    }
+}
+
+fn bootstrap_backfill_panel(backfills: &[HistoricalBackfillJob]) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="panel-heading-row">
+                <h3>{"Historical Replay"}</h3>
+                <span class="status-pill">{backfills.first().map(|job| job.status.as_str()).unwrap_or("empty")}</span>
+            </div>
+            if backfills.is_empty() {
+                <p class="empty">{"No backfill jobs yet."}</p>
+            } else {
+                <div class="finding-list">
+                    {for backfills.iter().take(5).map(|job| html! {
+                        <div class="finding-row">
+                            <strong>{&job.job_id}</strong>
+                            <span>{format!("{} candidates / datasets {}", job.candidate_count, refs_label(&job.dataset_refs))}</span>
+                            <small>{format!("rules {} / evidence {}", refs_label(&job.rule_refs), refs_label(&job.evidence_refs))}</small>
+                        </div>
+                    })}
+                </div>
+            }
+        </section>
+    }
+}
+
+fn bootstrap_evidence_panel(requests: &[EvidenceRequestRecord]) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="panel-heading-row">
+                <h3>{"Evidence Requests"}</h3>
+                <span class="status-pill">{requests.iter().filter(|request| request.status == "open").count()}</span>
+            </div>
+            if requests.is_empty() {
+                <p class="empty">{"No generated evidence requests yet."}</p>
+            } else {
+                <div class="finding-list">
+                    {for requests.iter().take(8).map(|request| html! {
+                        <div class="finding-row">
+                            <strong>{&request.claim_id}</strong>
+                            <span>{format!("{} / {}", request.status, request.request_reason)}</span>
+                            <small>{format!("missing {} / queue {}", refs_label(&request.missing_evidence), request.reviewer_queue)}</small>
+                        </div>
+                    })}
+                </div>
+            }
+        </section>
+    }
+}
+
+fn bootstrap_label_panel(items: &[LabelBootstrapItem]) -> Html {
+    html! {
+        <section class="panel result-stack">
+            <div class="panel-heading-row">
+                <h3>{"Label Bootstrap"}</h3>
+                <span class="status-pill">{items.iter().filter(|item| item.training_eligible).count()}</span>
+            </div>
+            if items.is_empty() {
+                <p class="empty">{"No label bootstrap candidates yet."}</p>
+            } else {
+                <div class="finding-list">
+                    {for items.iter().take(8).map(|item| html! {
+                        <div class="finding-row">
+                            <strong>{&item.suggested_label_name}</strong>
+                            <span>{format!("{} / {}", item.review_status, item.governance_status)}</span>
+                            <small>{format!("claim {} / training {}", item.claim_id, item.training_eligible)}</small>
+                        </div>
+                    })}
+                </div>
+            }
+        </section>
+    }
+}
+
+fn first_open_evidence_request(
+    snapshot_state: &UseStateHandle<ApiState<BootstrapOpsSnapshot>>,
+) -> Option<String> {
+    let ApiState::Ready(snapshot) = &**snapshot_state else {
+        return None;
+    };
+    snapshot
+        .evidence_requests
+        .iter()
+        .find(|request| request.status == "open" || request.status == "requested")
+        .map(|request| request.request_id.clone())
+}
+
+fn first_open_label_item(
+    snapshot_state: &UseStateHandle<ApiState<BootstrapOpsSnapshot>>,
+) -> Option<(String, Vec<String>)> {
+    let ApiState::Ready(snapshot) = &**snapshot_state else {
+        return None;
+    };
+    snapshot
+        .label_items
+        .iter()
+        .find(|item| item.review_status != "reviewed")
+        .map(|item| (item.item_id.clone(), item.evidence_refs.clone()))
 }
 
 fn detection_controls_page(on_navigate: Callback<String>) -> Html {
@@ -8435,6 +8912,105 @@ async fn get_qa_review_snapshot(api_key: String) -> Result<QaReviewSnapshot, Str
         summary,
         feedback_items,
     })
+}
+
+async fn get_bootstrap_ops_snapshot(api_key: String) -> Result<BootstrapOpsSnapshot, String> {
+    let backfills =
+        request_get_json::<HistoricalBackfillListResponse>("/api/v1/ops/backfills", api_key.clone())
+            .await?
+            .jobs;
+    let evidence_requests = request_get_json::<EvidenceRequestListResponse>(
+        "/api/v1/ops/evidence-requests",
+        api_key.clone(),
+    )
+    .await?
+    .requests;
+    let label_items = request_get_json::<LabelBootstrapQueueResponse>(
+        "/api/v1/ops/label-bootstrap/queue",
+        api_key,
+    )
+    .await?
+    .items;
+    Ok(BootstrapOpsSnapshot {
+        backfills,
+        evidence_requests,
+        label_items,
+    })
+}
+
+async fn create_bootstrap_backfill(
+    api_key: String,
+) -> Result<HistoricalBackfillResponse, String> {
+    request_json(
+        "/api/v1/ops/backfills",
+        api_key,
+        json!({
+            "dataset_refs": ["ops:current_scoring_audit"],
+            "rule_refs": ["ops:active_rule_library"],
+            "reviewer": "ops-lead",
+            "notes": "Create a governed replay snapshot for label bootstrap.",
+            "limit": 25,
+        }),
+    )
+    .await
+}
+
+async fn generate_bootstrap_evidence_requests(
+    api_key: String,
+) -> Result<EvidenceRequestGenerateResponse, String> {
+    request_json(
+        "/api/v1/ops/evidence-requests/generate",
+        api_key,
+        json!({
+            "requested_by": "clinical-ops",
+            "reviewer_queue": "clinical-evidence",
+            "notes": "Generate missing-evidence requests from scoring audits.",
+            "limit": 50,
+        }),
+    )
+    .await
+}
+
+async fn mark_bootstrap_evidence_received(
+    api_key: String,
+    request_id: String,
+) -> Result<EvidenceRequestRecord, String> {
+    request_json(
+        &format!("/api/v1/ops/evidence-requests/{request_id}/status"),
+        api_key,
+        json!({
+            "status": "received",
+            "actor_id": "clinical-ops",
+            "notes": "Evidence packet received and linked for bootstrap review.",
+            "evidence_refs": [format!("evidence_requests:{request_id}")],
+        }),
+    )
+    .await
+}
+
+async fn approve_bootstrap_label(
+    api_key: String,
+    item_id: String,
+    evidence_refs: Vec<String>,
+) -> Result<LabelBootstrapReviewResponse, String> {
+    request_json(
+        &format!("/api/v1/ops/label-bootstrap/items/{item_id}/review"),
+        api_key,
+        json!({
+            "reviewer": "label-governance",
+            "label_name": "clinical_evidence_sufficient",
+            "label_value": "true",
+            "governance_status": "approved_for_training",
+            "feedback_target": "model",
+            "notes": "Bootstrap label approved after evidence review.",
+            "evidence_refs": if evidence_refs.is_empty() {
+                vec![format!("label_bootstrap:{item_id}")]
+            } else {
+                evidence_refs
+            },
+        }),
+    )
+    .await
 }
 
 async fn get_knowledge_snapshot(

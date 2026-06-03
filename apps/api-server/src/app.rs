@@ -3,8 +3,8 @@ use crate::{
     repository::{InMemoryScoringRepository, SharedRepository},
     routes::{
         agent, claims, dashboard, health, inbox, knowledge, openapi, ops_agents, ops_audit,
-        ops_cases, ops_datasets, ops_evidence, ops_medical, ops_models, ops_providers,
-        ops_routing_policies, ops_rules, ops_sampling, ops_schemes, pilot_loop,
+        ops_bootstrap, ops_cases, ops_datasets, ops_evidence, ops_medical, ops_models,
+        ops_providers, ops_routing_policies, ops_rules, ops_sampling, ops_schemes, pilot_loop,
     },
 };
 use axum::{
@@ -83,6 +83,35 @@ pub fn build_app_with_parts(
         .route(
             "/api/v1/ops/cases/:case_id/status",
             post(ops_cases::update_case_status),
+        )
+        .route(
+            "/api/v1/ops/backfills",
+            get(ops_bootstrap::list_historical_backfills)
+                .post(ops_bootstrap::create_historical_backfill),
+        )
+        .route(
+            "/api/v1/ops/backfills/:job_id/leads",
+            get(ops_bootstrap::list_historical_backfill_leads),
+        )
+        .route(
+            "/api/v1/ops/evidence-requests",
+            get(ops_bootstrap::list_evidence_requests),
+        )
+        .route(
+            "/api/v1/ops/evidence-requests/generate",
+            post(ops_bootstrap::generate_evidence_requests),
+        )
+        .route(
+            "/api/v1/ops/evidence-requests/:request_id/status",
+            post(ops_bootstrap::update_evidence_request_status),
+        )
+        .route(
+            "/api/v1/ops/label-bootstrap/queue",
+            get(ops_bootstrap::label_bootstrap_queue),
+        )
+        .route(
+            "/api/v1/ops/label-bootstrap/items/:item_id/review",
+            post(ops_bootstrap::review_label_bootstrap_item),
         )
         .route(
             "/api/v1/ops/audit-samples",

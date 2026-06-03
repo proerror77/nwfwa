@@ -7,6 +7,7 @@ pub mod knowledge;
 pub mod openapi;
 pub mod ops_agents;
 pub mod ops_audit;
+pub mod ops_bootstrap;
 pub mod ops_cases;
 pub mod ops_datasets;
 pub mod ops_evidence;
