@@ -794,13 +794,13 @@ fn validate_parquet_artifact_uri(value: &str, code: &'static str) -> Result<(), 
 }
 
 fn validate_model_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
-    if has_supported_uri_suffix(value, &[".onnx", ".pkl", ".joblib"]) {
+    if has_supported_uri_suffix(value, &[".onnx", ".pkl", ".joblib", ".json"]) {
         Ok(())
     } else {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             code,
-            "model retraining artifact_uri must use a supported model artifact format: .onnx, .pkl, or .joblib",
+            "model retraining artifact_uri must use a supported model artifact format: .onnx, .pkl, .joblib, or .json",
         ))
     }
 }

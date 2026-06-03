@@ -72,11 +72,13 @@ def build_serving_manifest(
     feature_columns: list[str],
     threshold: float,
     output_path: str | Path,
+    runtime_kind: str = "sklearn_logistic_regression",
+    training_artifact_uri: str | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "model_key": model_key,
         "model_version": model_version,
-        "runtime_kind": "sklearn_logistic_regression",
+        "runtime_kind": runtime_kind,
         "artifact_uri": artifact_uri,
         "artifact_sha256": artifact_sha256,
         "artifact_signature": artifact_signature_value,
@@ -85,6 +87,8 @@ def build_serving_manifest(
         "feature_columns": feature_columns,
         "threshold": threshold,
     }
+    if training_artifact_uri:
+        manifest["training_artifact_uri"] = training_artifact_uri
     write_json(output_path, manifest)
     return manifest
 

@@ -708,6 +708,114 @@ fn build_training_command(
     }
 }
 
+pub fn build_training_handoff(
+    manifest_path: impl AsRef<Path>,
+    artifact_base_uri: &str,
+    model_key: &str,
+    base_model_version: &str,
+    job_id: &str,
+    actor: &str,
+) -> anyhow::Result<serde_json::Value> {
+    if artifact_base_uri.trim().is_empty() {
+        bail!("artifact_base_uri is required");
+    }
+    let manifest_path = manifest_path.as_ref();
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read training manifest {}", manifest_path.display()))?;
+    let manifest: serde_json::Value =
+        serde_json::from_str(&manifest_json).context("parse training manifest")?;
+    let dataset_key = required_manifest_str(&manifest, "dataset_key")?;
+    let dataset_version = required_manifest_str(&manifest, "dataset_version")?;
+    let label_column = required_manifest_str(&manifest, "label_column")?;
+    let time_split_field = required_manifest_str(&manifest, "time_split_field")?;
+    let entity_keys = manifest
+        .get("entity_keys")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let group_split_fields = manifest
+        .get("group_split_fields")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let splits = manifest
+        .get("splits")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    if splits.is_empty() {
+        bail!("training manifest must include splits");
+    }
+
+    let candidate_model_version = format!(
+        "{}-candidate-{}",
+        safe_path_segment(base_model_version),
+        safe_path_segment(job_id)
+    );
+    let artifact_root = artifact_base_uri.trim().trim_end_matches('/');
+    let safe_model_key = safe_path_segment(model_key);
+    let artifact_dir = format!("{artifact_root}/{safe_model_key}/{candidate_model_version}");
+
+    Ok(serde_json::json!({
+        "handoff_kind": "external_training_platform",
+        "handoff_version": 1,
+        "data_contract": {
+            "source": "same_parquet_dataset_manifest",
+            "manifest_uri": manifest_path.to_string_lossy(),
+            "forbidden_sources": ["application_tables", "ad_hoc_feature_definitions"]
+        },
+        "dataset": {
+            "dataset_key": dataset_key,
+            "dataset_version": dataset_version,
+            "manifest_uri": manifest_path.to_string_lossy(),
+            "label_column": label_column,
+            "entity_keys": entity_keys,
+            "time_split_field": time_split_field,
+            "group_split_fields": group_split_fields,
+            "splits": splits
+        },
+        "training_job": {
+            "model_key": model_key,
+            "base_model_version": base_model_version,
+            "candidate_model_version": candidate_model_version,
+            "job_id": job_id,
+            "actor": actor
+        },
+        "artifact_contract": {
+            "artifact_dir": artifact_dir,
+            "rust_serving_artifact_uri": format!("{artifact_dir}/rust_serving_artifact.json"),
+            "training_artifact_uri": format!("{artifact_dir}/model.joblib"),
+            "serving_manifest_uri": format!("{artifact_dir}/serving_manifest.json"),
+            "validation_report_uri": format!("{artifact_dir}/validation.json"),
+            "feature_store_manifest_uri": format!("{artifact_dir}/feature_store_manifest.json"),
+            "shadow_report_uri": format!("{artifact_dir}/shadow_report.json"),
+            "drift_report_uri": format!("{artifact_dir}/drift_report.json"),
+            "fairness_report_uri": format!("{artifact_dir}/fairness_report.json")
+        },
+        "output_contract": {
+            "submit_path": retraining_job_output_path(job_id),
+            "artifact_uri": "artifact_contract.rust_serving_artifact_uri",
+            "required_evidence_refs": [
+                "model_retraining_jobs:<job_id>",
+                "model_artifacts:<rust_serving_artifact_uri>",
+                "model_validation_reports:<validation_report_uri>",
+                "model_evaluations:<evaluation_run_id>"
+            ]
+        }
+    }))
+}
+
+fn required_manifest_str<'a>(
+    manifest: &'a serde_json::Value,
+    key: &str,
+) -> anyhow::Result<&'a str> {
+    manifest
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow!("training manifest missing {key}"))
+}
+
 fn build_training_retraining_output(
     job: &ClaimedRetrainingJob,
     actor: &str,
@@ -1186,6 +1294,67 @@ mod tests {
                 "--actor",
                 "trainer-worker",
             ]
+        );
+    }
+
+    #[test]
+    fn builds_external_training_handoff_from_manifest() {
+        let root = temp_root("training-handoff");
+        let manifest_path = root.join("manifest.json");
+        fs::write(
+            &manifest_path,
+            serde_json::json!({
+                "dataset_key": "claims_model",
+                "dataset_version": "2026-06-02",
+                "business_domain": "health_fwa",
+                "sample_grain": "claim",
+                "label_column": "confirmed_fwa",
+                "entity_keys": ["claim_id", "member_id", "policy_id", "provider_id"],
+                "time_split_field": "service_date",
+                "group_split_fields": ["member_id", "policy_id", "provider_id"],
+                "splits": [
+                    {"split_name": "train", "data_uri": "train.parquet"},
+                    {"split_name": "validation", "data_uri": "validation.parquet"},
+                    {"split_name": "out_of_time", "data_uri": "out_of_time.parquet"}
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let handoff = build_training_handoff(
+            &manifest_path,
+            "s3://fwa-models",
+            "baseline_fwa",
+            "0.1.0",
+            "model_retraining_job_1",
+            "trainer-worker",
+        )
+        .expect("training handoff");
+
+        assert_eq!(handoff["handoff_kind"], "external_training_platform");
+        assert_eq!(handoff["dataset"]["dataset_key"], "claims_model");
+        assert_eq!(handoff["dataset"]["dataset_version"], "2026-06-02");
+        assert_eq!(
+            handoff["dataset"]["manifest_uri"],
+            serde_json::json!(manifest_path.to_string_lossy())
+        );
+        assert_eq!(handoff["training_job"]["model_key"], "baseline_fwa");
+        assert_eq!(
+            handoff["training_job"]["candidate_model_version"],
+            "0.1.0-candidate-model_retraining_job_1"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["rust_serving_artifact_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rust_serving_artifact.json"
+        );
+        assert_eq!(
+            handoff["output_contract"]["submit_path"],
+            "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
+        );
+        assert_eq!(
+            handoff["data_contract"]["source"],
+            "same_parquet_dataset_manifest"
         );
     }
 

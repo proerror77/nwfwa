@@ -1725,6 +1725,26 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
 
+    let mut rust_json_model_artifact = valid_request.clone();
+    rust_json_model_artifact["artifact_uri"] = serde_json::json!(
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json"
+    );
+    rust_json_model_artifact["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = rust_json_model_artifact.to_string();
+    let (status, _body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_ne!(status, StatusCode::BAD_REQUEST);
+
     let mut unsupported_model_artifact = valid_request.clone();
     unsupported_model_artifact["artifact_uri"] =
         serde_json::json!("s3://fwa-models/baseline_fwa/model.txt");

@@ -85,6 +85,7 @@ def train_from_manifest(
     artifact_root = Path(artifact_base_uri) / safe_path_segment(model_key) / candidate_model_version
     artifact_root.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_root / "model.joblib"
+    rust_artifact_path = artifact_root / "rust_serving_artifact.json"
     validation_report_path = artifact_root / "validation.json"
     feature_importance_path = artifact_root / "feature_importance.parquet"
     serving_manifest_path = artifact_root / "serving_manifest.json"
@@ -104,10 +105,22 @@ def train_from_manifest(
         "pipeline": pipeline,
     }
     joblib.dump(model_bundle, artifact_path)
+    rust_artifact = build_rust_serving_artifact(
+        pipeline=pipeline,
+        model_key=model_key,
+        model_version=candidate_model_version,
+        feature_columns=feature_columns,
+        threshold=DEFAULT_THRESHOLD,
+    )
+    rust_artifact_path.write_text(
+        json.dumps(rust_artifact, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
     feature_importance = build_feature_importance(pipeline, feature_columns)
     feature_importance.to_parquet(feature_importance_path, index=False)
-    artifact_sha256 = file_sha256(artifact_path)
+    training_artifact_sha256 = file_sha256(artifact_path)
+    artifact_sha256 = file_sha256(rust_artifact_path)
     artifact_signature_value = artifact_signature(
         model_key,
         candidate_model_version,
@@ -117,12 +130,14 @@ def train_from_manifest(
     build_serving_manifest(
         model_key=model_key,
         model_version=candidate_model_version,
-        artifact_uri=str(artifact_path),
+        artifact_uri=str(rust_artifact_path),
         artifact_sha256=artifact_sha256,
         artifact_signature_value=artifact_signature_value,
         feature_columns=feature_columns,
         threshold=DEFAULT_THRESHOLD,
         output_path=serving_manifest_path,
+        runtime_kind="rust_logistic_regression",
+        training_artifact_uri=str(artifact_path),
     )
     build_feature_store_manifest(
         splits=splits,
@@ -167,6 +182,9 @@ def train_from_manifest(
         "review_capacity_threshold_status": "passed",
         "serving_version_lock_status": "passed",
         "artifact_integrity_status": "passed",
+        "runtime_kind": "rust_logistic_regression",
+        "training_artifact_uri": str(artifact_path),
+        "training_artifact_sha256": training_artifact_sha256,
         "feature_store_materialization_status": "passed",
         "segment_fairness_status": fairness_report["status"],
         "score_psi": drift_report["score_psi"],
@@ -202,7 +220,9 @@ def train_from_manifest(
         "actor": actor,
         "notes": "Candidate model and validation report registered by production training pipeline.",
         "candidate_model_version": candidate_model_version,
-        "artifact_uri": str(artifact_path),
+        "artifact_uri": str(rust_artifact_path),
+        "training_artifact_uri": str(artifact_path),
+        "training_artifact_sha256": training_artifact_sha256,
         "artifact_sha256": artifact_sha256,
         "artifact_signature": artifact_signature_value,
         "endpoint_url": None,
@@ -225,7 +245,8 @@ def train_from_manifest(
         "metrics_json": metrics_json,
         "evidence_refs": [
             f"model_retraining_jobs:{job_id}",
-            f"model_artifacts:{artifact_path}",
+            f"model_artifacts:{rust_artifact_path}",
+            f"model_training_artifacts:{artifact_path}",
             f"model_serving_manifests:{serving_manifest_path}",
             f"feature_store_manifests:{feature_store_manifest_path}",
             f"model_shadow_reports:{shadow_report_path}",
@@ -234,6 +255,44 @@ def train_from_manifest(
             f"model_validation_reports:{validation_report_path}",
             f"model_evaluations:{evaluation_run_id}",
         ],
+    }
+
+
+def build_rust_serving_artifact(
+    pipeline: Pipeline,
+    model_key: str,
+    model_version: str,
+    feature_columns: list[str],
+    threshold: float,
+) -> dict[str, Any]:
+    scaler = pipeline.named_steps["scale"]
+    model = pipeline.named_steps["model"]
+    if not isinstance(scaler, StandardScaler):
+        raise TypeError("rust serving export requires StandardScaler preprocessing")
+    if not isinstance(model, LogisticRegression):
+        raise TypeError("rust serving export requires LogisticRegression model")
+    coefficients = model.coef_[0]
+    scale = scaler.scale_
+    mean = scaler.mean_
+    raw_coefficients = {
+        feature: float(coefficient / scale_value)
+        for feature, coefficient, scale_value in zip(
+            feature_columns,
+            coefficients,
+            scale,
+            strict=True,
+        )
+    }
+    intercept = float(model.intercept_[0] - sum(coefficients * mean / scale))
+    return {
+        "model_key": model_key,
+        "model_version": model_version,
+        "runtime_kind": "rust_logistic_regression",
+        "execution_provider": "cpu",
+        "threshold": threshold,
+        "feature_columns": feature_columns,
+        "intercept": intercept,
+        "coefficients": raw_coefficients,
     }
 
 

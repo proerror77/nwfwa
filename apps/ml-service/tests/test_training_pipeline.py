@@ -100,7 +100,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     )
 
     assert payload["candidate_model_version"] == "0.1.0-candidate-model_retraining_job_1"
-    assert payload["artifact_uri"].endswith("/model.joblib")
+    assert payload["artifact_uri"].endswith("/rust_serving_artifact.json")
+    assert payload["training_artifact_uri"].endswith("/model.joblib")
     assert payload["validation_report_uri"].endswith("/validation.json")
     assert payload["feature_importance_uri"].endswith("/feature_importance.parquet")
     assert payload["serving_manifest_uri"].endswith("/serving_manifest.json")
@@ -109,6 +110,7 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["drift_report_uri"].endswith("/drift_report.json")
     assert payload["fairness_report_uri"].endswith("/fairness_report.json")
     assert Path(payload["artifact_uri"]).exists()
+    assert Path(payload["training_artifact_uri"]).exists()
     assert Path(payload["validation_report_uri"]).exists()
     assert Path(payload["feature_importance_uri"]).exists()
     assert Path(payload["serving_manifest_uri"]).exists()
@@ -118,6 +120,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert Path(payload["fairness_report_uri"]).exists()
     assert payload["artifact_sha256"].startswith("sha256:")
     assert payload["artifact_signature"].startswith("hmac-sha256:")
+    assert payload["metrics_json"]["runtime_kind"] == "rust_logistic_regression"
+    assert payload["metrics_json"]["training_artifact_uri"].endswith("/model.joblib")
     assert payload["metrics_json"]["time_group_split_status"] == "passed"
     assert payload["metrics_json"]["leakage_check_status"] == "passed"
     assert payload["metrics_json"]["shadow_comparison_status"] == "passed"
@@ -135,10 +139,25 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     serving_manifest = json.loads(
         Path(payload["serving_manifest_uri"]).read_text(encoding="utf-8")
     )
+    rust_artifact = json.loads(Path(payload["artifact_uri"]).read_text(encoding="utf-8"))
+    assert rust_artifact["runtime_kind"] == "rust_logistic_regression"
+    assert rust_artifact["model_key"] == "baseline_fwa"
+    assert rust_artifact["model_version"] == payload["candidate_model_version"]
+    assert rust_artifact["feature_columns"] == [
+        "service_date_ord",
+        "claim_amount_to_limit_ratio",
+        "provider_profile_score",
+        "high_cost_item_ratio",
+    ]
+    assert isinstance(rust_artifact["intercept"], float)
+    assert set(rust_artifact["coefficients"]) == set(rust_artifact["feature_columns"])
     assert serving_manifest["model_version"] == payload["candidate_model_version"]
     assert serving_manifest["artifact_sha256"] == payload["artifact_sha256"]
     assert serving_manifest["artifact_signature"] == payload["artifact_signature"]
     assert serving_manifest["version_lock"] == payload["candidate_model_version"]
+    assert serving_manifest["runtime_kind"] == "rust_logistic_regression"
+    assert serving_manifest["artifact_uri"] == payload["artifact_uri"]
+    assert serving_manifest["training_artifact_uri"] == payload["training_artifact_uri"]
 
     feature_store_manifest = json.loads(
         Path(payload["feature_store_manifest_uri"]).read_text(encoding="utf-8")
