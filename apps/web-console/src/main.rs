@@ -4547,6 +4547,7 @@ fn provider_risk_view(props: &ProviderRiskProps) -> Html {
                                 <div><span>{"Review Required"}</span><strong>{summary.review_required_count}</strong></div>
                                 <div><span>{"High Risk"}</span><strong>{summary.high_risk_count}</strong></div>
                             </div>
+                            {provider_graph_cockpit(summary)}
                         </section>
 
                         <section class="panel result-stack">
@@ -4584,6 +4585,82 @@ fn provider_risk_view(props: &ProviderRiskProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn provider_graph_cockpit(summary: &ProviderRiskSummary) -> Html {
+    let primary = summary
+        .providers
+        .iter()
+        .max_by_key(|provider| provider.risk_score);
+
+    if let Some(provider) = primary {
+        let network_score = provider
+            .network_risk_score
+            .map(|score| score.to_string())
+            .unwrap_or_else(|| "n/a".into());
+        let outlier_label = provider
+            .outlier_flags
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "no outlier flag".into());
+        let graph_reason = provider
+            .graph_reasons
+            .first()
+            .cloned()
+            .unwrap_or_else(|| "graph reason pending".into());
+        html! {
+            <div class="provider-risk-cockpit">
+                <div class="relationship-graph provider-relationship-graph">
+                    <div class="graph-ring"></div>
+                    <div class="graph-ring inner"></div>
+                    <div class="graph-center provider-risk-center">
+                        <span>{"L6 Provider"}</span>
+                        <strong>{&provider.provider_id}</strong>
+                    </div>
+                    {provider_graph_entity("Risk tier", &provider.risk_tier, "top", "lead")}
+                    {provider_graph_entity("Network risk", &network_score, "right", "provider")}
+                    {provider_graph_entity("Review route", &provider.review_route, "bottom", "case")}
+                    {provider_graph_entity("Latest claim", provider.latest_claim_id.as_deref().unwrap_or("none"), "left", "claim")}
+                    {provider_graph_entity("Outlier flag", &outlier_label, "lower-right", "lead")}
+                    {provider_graph_entity("Evidence refs", &provider.evidence_refs.len().to_string(), "lower-left", "reviewer")}
+                </div>
+                <div class="provider-graph-panel">
+                    <div>
+                        <span>{"Graph Risk Focus"}</span>
+                        <strong>{format!("score {} / claims {}", provider.risk_score, provider.claim_count)}</strong>
+                        <small>{graph_reason}</small>
+                    </div>
+                    <div class="provider-signal-stack">
+                        {provider_signal_row("Confirmed FWA", &provider.confirmed_fwa_count.to_string(), "danger")}
+                        {provider_signal_row("Review failures", &provider.review_failure_count.to_string(), "warning")}
+                        {provider_signal_row("False positives", &provider.false_positive_count.to_string(), "neutral")}
+                        {provider_signal_row("Network status", provider.network_status.as_deref().unwrap_or("unknown"), "strong")}
+                    </div>
+                    <small>{format!("evidence: {}", refs_label(&provider.evidence_refs))}</small>
+                </div>
+            </div>
+        }
+    } else {
+        html! { <p class="empty">{"No provider graph cockpit available until provider risk profiles are returned."}</p> }
+    }
+}
+
+fn provider_graph_entity(label: &str, value: &str, position: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("graph-entity", position.to_string(), tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
+    }
+}
+
+fn provider_signal_row(label: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("provider-signal-row", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
     }
 }
 
