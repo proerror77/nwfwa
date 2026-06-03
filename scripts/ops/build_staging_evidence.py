@@ -106,11 +106,80 @@ def build_evidence(output_dir: Path, object_storage_uri: str, database_ref: str)
         ],
         "boundary": "local proof of observability contract; production dashboards and alert receivers remain environment-specific",
     }
+    operational_drill_proof = {
+        "artifact_kind": "staging_operational_drill_proof",
+        "generated_at": generated_at,
+        "drills": [
+            {
+                "name": "pilot_readiness_gate_drill",
+                "trigger": "/api/v1/health pilot_readiness.not_ready",
+                "expected_evidence": [
+                    "pilot_readiness.ready_for_customer_pilot",
+                    "pilot_readiness.blocking_check_names",
+                    "pilot_readiness.remediation_summary",
+                ],
+                "pass_criteria": "operator can identify blockers without inspecting secret values",
+            },
+            {
+                "name": "restore_drill",
+                "trigger": "backup manifest points to declared restore target",
+                "expected_evidence": [
+                    "backup_restore_proof.json",
+                    "restore_target",
+                    "database_ref",
+                ],
+                "pass_criteria": "restore target and scope are declared before any customer restore",
+            },
+            {
+                "name": "rollback_drill",
+                "trigger": "staging deployment package rollback requested",
+                "expected_evidence": [
+                    "rollback.md",
+                    "previous approved deployment package",
+                    "human approval record",
+                ],
+                "pass_criteria": "rollback stays manual, scoped, and tied to approved package evidence",
+            },
+            {
+                "name": "alert_route_drill",
+                "trigger": "pilot_readiness.not_ready or api.health.failed",
+                "expected_evidence": [
+                    "observability_proof.json",
+                    "alert_routes",
+                    "actor_role",
+                    "customer_scope_id",
+                ],
+                "pass_criteria": "alert payload carries route, role, scope, and non-secret remediation context",
+            },
+            {
+                "name": "incident_tabletop_drill",
+                "trigger": "customer pilot cutover rehearsal",
+                "expected_evidence": [
+                    "api call record",
+                    "audit event",
+                    "readiness report",
+                    "rollback decision note",
+                ],
+                "pass_criteria": "operator can trace intake, score, QA, audit, alert, and rollback decision path",
+            },
+        ],
+        "checks": [
+            {"name": "restore_drill_contract_declared", "status": "passed"},
+            {"name": "rollback_drill_contract_declared", "status": "passed"},
+            {"name": "alert_route_drill_contract_declared", "status": "passed"},
+            {"name": "incident_tabletop_contract_declared", "status": "passed"},
+            {"name": "destructive_actions_plan_only", "status": "passed"},
+        ],
+        "destructive_actions": "plan_only",
+        "human_approval_required": True,
+        "boundary": "staging proof of operational drill contracts; customer environments must execute and sign off live restore, rollback, alert, and incident drills",
+    }
 
     write_json(output_dir / "object_storage_manifest.json", object_storage_manifest)
     write_json(output_dir / "backup_restore_proof.json", backup_restore_proof)
     write_json(output_dir / "retention_legal_hold_proof.json", retention_legal_hold_proof)
     write_json(output_dir / "observability_proof.json", observability_proof)
+    write_json(output_dir / "operational_drill_proof.json", operational_drill_proof)
 
     index = {
         "artifact_kind": "staging_foundation_evidence_index",
@@ -120,6 +189,7 @@ def build_evidence(output_dir: Path, object_storage_uri: str, database_ref: str)
             "backup_restore_proof.json",
             "retention_legal_hold_proof.json",
             "observability_proof.json",
+            "operational_drill_proof.json",
         ],
         "readiness_stage": "pilot foundation",
         "customer_data_required": False,

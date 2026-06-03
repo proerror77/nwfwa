@@ -231,7 +231,7 @@ def build_report() -> dict:
             "real customer labels and label provenance",
             "customer holdout validation and live shadow traffic",
             "customer-approved production deployment, secrets, retention, observability, OCR/vector workers, and analytics execution",
-            "customer-run restore, rollback, alert, and operational drills",
+            "customer-executed live restore, rollback, alert, and operational drills beyond the staging drill contract",
         ],
     }
 

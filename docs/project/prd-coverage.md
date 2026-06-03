@@ -30,7 +30,8 @@ validation and environment execution:
 - customer holdout validation and live shadow traffic;
 - customer-approved production deployment, secrets, retention, observability,
   OCR/vector workers, analytics execution, and network controls;
-- customer-run restore, rollback, alert, and operational drills.
+- customer-executed live restore, rollback, alert, and operational drills beyond
+  the staging `operational_drill_proof.json` contract.
 
 ## Machine-Checkable Proof
 

@@ -373,6 +373,9 @@ The repository now includes the staging contract for part of this phase:
 retention-scan, legal-hold, and destruction-review job graph. Customer
 production still needs the chosen environment to execute those jobs with
 approved retention windows, legal holds, and human approval before destruction.
+The staging evidence pack also emits `operational_drill_proof.json` so restore,
+rollback, alert-route, pilot readiness, and incident tabletop drills have a
+machine-checkable evidence contract before live customer execution.
 
 ## Non-Goals
 

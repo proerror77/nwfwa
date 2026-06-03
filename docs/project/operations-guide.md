@@ -418,9 +418,11 @@ python3 scripts/ops/build_staging_evidence.py \
 ```
 
 The evidence pack records object-storage prefixes, backup/restore proof
-metadata, retention/legal-hold proof metadata, and observability proof metadata.
-It does not replace a live restore drill, production dashboards, or
-customer-approved retention controls.
+metadata, retention/legal-hold proof metadata, observability proof metadata, and
+`operational_drill_proof.json` for restore, rollback, alert-route, and incident
+tabletop drill contracts. It does not replace live restore execution,
+production dashboards, customer alert receivers, or customer-approved retention
+controls.
 
 Generate the portable governance ops plan without customer data:
 

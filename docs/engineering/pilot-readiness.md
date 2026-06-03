@@ -95,8 +95,11 @@ Minimum pilot monitoring:
   used by database migration and seed Jobs.
 - Pilot foundation evidence pack:
   `python3 scripts/ops/build_staging_evidence.py --output-dir artifacts/staging-proof`
-  writes object-storage, backup/restore, and observability proof metadata
-  without requiring customer data.
+  writes object-storage, backup/restore, observability, and
+  `operational_drill_proof.json` metadata without requiring customer data. The
+  operational drill proof declares restore, rollback, alert-route, pilot
+  readiness, and incident tabletop evidence expected before customer pilot
+  sign-off.
 - MLOps monitoring-plan simulation:
   `python3 scripts/ops/run_mlops_monitoring_plan.py --plan scripts/ops/sample_mlops_monitoring_plan.json --output-dir artifacts/mlops-monitoring`
   writes staging shadow, drift, fairness, reviewer-disagreement, and label-delay

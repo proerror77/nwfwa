@@ -446,6 +446,9 @@ grep -q "FWA_NETWORK_ALLOWLIST_ID" docs/project/technology-stack.md
 grep -q "alert_routing_configuration" docs/project/api-reference.md
 grep -q "alert_routing_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_ALERT_ROUTING_POLICY_ID" docs/project/technology-stack.md
+grep -q "operational_drill_proof" scripts/ops/build_staging_evidence.py
+grep -q "operational_drill_proof" .github/workflows/ci.yml
+grep -q "operational_drill_proof" docs/project/operations-guide.md
 grep -q "observability_exporter_configuration" docs/project/api-reference.md
 grep -q "observability_exporter_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_OBSERVABILITY_EXPORTER_ENDPOINT" docs/project/technology-stack.md

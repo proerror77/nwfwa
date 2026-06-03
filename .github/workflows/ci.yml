@@ -53,6 +53,7 @@ jobs:
           test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
           test -f /tmp/nwfwa-staging-proof/retention_legal_hold_proof.json
           test -f /tmp/nwfwa-staging-proof/observability_proof.json
+          test -f /tmp/nwfwa-staging-proof/operational_drill_proof.json
           test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
           test -f /tmp/nwfwa-staging-deployment/apply.sh
           test -f /tmp/nwfwa-staging-deployment/rollback.md
