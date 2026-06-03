@@ -113,9 +113,12 @@ async function main() {
     assertContains(builtText, "Search evidence", "web console evidence workbench bundle");
     assertContains(builtText, "Rule command path", "web console rules visual bundle");
     assertContains(builtText, "Model telemetry map", "web console models visual bundle");
-    assertContains(builtText, "Case relationship archive", "web console case graph bundle");
-    assertContains(builtText, "Evidence timeline", "web console case graph bundle");
-    assertContains(builtText, "Escalate review", "web console case action bundle");
+    assertContains(builtText, "Queue Source", "web console leads cases queue bundle");
+    assertContains(builtText, "Generated Leads", "web console leads cases queue bundle");
+    assertContains(builtText, "Investigation Cases", "web console leads cases queue bundle");
+    assertContains(builtText, "Selected Actions", "web console leads cases action bundle");
+    assertContains(builtText, "Selected lead", "web console leads cases action bundle");
+    assertContains(builtText, "Selected case", "web console leads cases action bundle");
     assertContains(builtText, "Runtime Scoring", "web console bundle");
     assertContains(builtText, "Model Performance", "web console bundle");
     assertContains(builtText, "Promotion Gates", "web console bundle");
@@ -190,6 +193,7 @@ async function main() {
       "Field Governance",
       "Leakage Candidates",
       "Case Workflow",
+      "Queue Source",
       "Lead Triage",
       "Case Status Update",
       "Profile Summary API",
