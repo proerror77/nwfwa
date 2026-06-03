@@ -1,6 +1,48 @@
 apiVersion: batch/v1
 kind: CronJob
 metadata:
+  name: analytics-export-plan
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: nwfwa-staging
+spec:
+  schedule: "15 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: worker
+            app.kubernetes.io/part-of: nwfwa-staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: worker
+              image: ghcr.io/replace-me/nwfwa-worker:staging
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: nwfwa-staging-config
+                - secretRef:
+                    name: nwfwa-staging-secrets
+              command:
+                - worker
+                - build-analytics-export-plan
+                - --object-storage-uri
+                - s3://nwfwa-staging-artifacts
+                - --clickhouse-url
+                - http://clickhouse:8123
+                - --customer-scope-id
+                - staging-customer
+                - --cron
+                - "15 * * * *"
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
   name: pilot-readiness-proof
   labels:
     app.kubernetes.io/name: worker

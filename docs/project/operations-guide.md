@@ -29,11 +29,11 @@ The Web Console container proxies `/api/` to the `api-server` service, and the
 `migrate-seed` one-shot service applies migrations plus deterministic demo data
 before the API server starts.
 
-Start only PostgreSQL, the ML service, and object storage when you are running
-the Rust API and Trunk dev server directly from the host:
+Start only PostgreSQL, the ML service, object storage, and ClickHouse when you
+are running the Rust API and Trunk dev server directly from the host:
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d postgres ml-service object-storage
+docker compose -f infra/docker-compose.yml up -d postgres ml-service object-storage clickhouse
 ```
 
 Seed deterministic demo data:
@@ -244,6 +244,25 @@ The simulator writes shadow, drift, segment fairness, reviewer disagreement, and
 label delay report artifacts. These are staging proof artifacts only; they are
 not live customer shadow or drift evidence.
 
+Analytics-scale export proof:
+
+```bash
+python3 scripts/ops/validate_analytics_scale.py
+python3 scripts/ops/build_analytics_export.py \
+  --output-dir artifacts/analytics-export \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --clickhouse-url http://clickhouse:8123 \
+  --customer-scope-id staging-customer
+```
+
+The generated `analytics_export_manifest.json` records the scheduled exports
+from PostgreSQL operational tables into the derived ClickHouse analytical event
+store. The proof also copies `analytics/clickhouse/schema.sql` and
+`analytics/clickhouse/dashboard_queries.sql`, which cover rule/model drift, SLA,
+ROI, reviewer capacity, false-positive cost, and provider graph snapshot
+reporting. This proof does not move customer data; it defines the production
+contract and staging scheduler shape.
+
 Frontend:
 
 ```bash
@@ -302,9 +321,10 @@ Before applying to a real staging cluster, replace the placeholder image names
 and create a real Secret from `infra/k8s/staging/secrets.example.yaml` in the
 `nwfwa-staging` namespace. The example Secret is intentionally not included in
 the kustomization resources, so placeholder secrets are not applied by default.
-The directory includes API, web console, ML service, PostgreSQL, S3-compatible
-object storage, database migration and seed Jobs, and worker CronJobs for pilot
-readiness and MLOps monitoring-plan generation.
+The directory includes API, web console, ML service, PostgreSQL,
+S3-compatible object storage, ClickHouse, database migration and seed Jobs, and
+worker CronJobs for pilot readiness, MLOps monitoring-plan generation, and
+analytics export-plan generation.
 
 Validate container packaging before building images:
 
@@ -450,6 +470,7 @@ Not complete yet:
 - production key rotation automation
 - production object storage wiring
 - production observability stack
+- production ClickHouse retention, backup, and access policy
 - production alert routing
 - pilot backup and restore automation
 - pilot retention and legal hold automation
@@ -457,6 +478,9 @@ Not complete yet:
 - external orchestrator for executing scheduled training, shadow, drift, and
   fairness jobs. The worker can generate the portable monitoring plan contract,
   but it does not replace a production scheduler.
+- external orchestrator or managed job runner for executing PostgreSQL to
+  ClickHouse analytics exports. The worker and ops script generate the portable
+  export contract, but do not replace customer environment data movement.
 - production artifact signing key management
 - production serving image/version registry
 - customer holdout validation process

@@ -128,12 +128,16 @@ The active web-console entrypoint is `src/main.rs`.
 | Technology | Where | Purpose |
 | --- | --- | --- |
 | PostgreSQL 16 | Docker Compose and CI | Operational store |
+| ClickHouse 24.8 | Docker Compose and Kubernetes staging | Derived analytical event store for high-volume reporting proof |
 | JSONB | multiple tables | Evidence packages, metrics, payloads |
 | UUID extension | schema | Stable primary keys |
 | Idempotent SQL | `migrations/0001_initial.sql` | Repeatable local and CI schema setup |
 
 PostgreSQL stores operational records and metadata. Large Parquet data rows
 belong in object storage or a data lake for real pilots.
+ClickHouse is optional for runtime scoring and remains a derived store. Its
+schema and dashboard queries live in `analytics/clickhouse/schema.sql` and
+`analytics/clickhouse/dashboard_queries.sql`.
 
 ## Worker And Data Artifacts
 
@@ -147,13 +151,13 @@ belong in object storage or a data lake for real pilots.
 
 | Technology | Where | Purpose |
 | --- | --- | --- |
-| Docker Compose | `infra/docker-compose.yml` | Local full-stack demo runtime for PostgreSQL, ML service, API server, Web Console, seed job, and MinIO |
+| Docker Compose | `infra/docker-compose.yml` | Local full-stack demo runtime for PostgreSQL, ML service, API server, Web Console, seed job, MinIO, and ClickHouse |
 | Dockerfiles | `apps/*/Dockerfile`, `infra/dockerfiles/Dockerfile.ops` | API, worker, web console, and database ops image packaging |
 | MinIO | `infra/docker-compose.yml`, `infra/k8s/staging` | S3-compatible staging artifact storage proof |
 | Kubernetes / Kustomize | `infra/k8s/staging` | Staging deployment architecture for pilot foundation proof |
 | GitHub Actions | `.github/workflows/ci.yml` | CI validation |
 | GitHub Releases | `.github/workflows/release.yml` | Tag-based release publication |
-| Shell and Python scripts | `scripts/ci`, `scripts/demo`, `scripts/ops` | Health, seed, smoke, persistence, staging, and MLOps proof checks |
+| Shell and Python scripts | `scripts/ci`, `scripts/demo`, `scripts/ops` | Health, seed, smoke, persistence, staging, analytics, and MLOps proof checks |
 | GitHub CLI | release workflow | `gh release create` publication |
 
 ## CI Jobs
@@ -178,6 +182,9 @@ Kubernetes staging is validated by the `staging-proof` job. That job statically
 checks `infra/k8s/staging`, validates container packaging, generates local pilot
 foundation evidence, and simulates the scheduled MLOps monitoring-plan reports
 without customer data.
+It also validates the ClickHouse analytics-scale contract and generates
+`analytics_export_manifest.json` for scheduled PostgreSQL-to-ClickHouse export
+planning without customer data.
 
 ## Declared And Resolved Versions
 
@@ -200,6 +207,7 @@ Prefer locked commands when documenting reproducible verification.
 | `FWA_API_BASE_URL` | `http://127.0.0.1:8080` | Smoke and worker API base |
 | `FWA_SOURCE_SYSTEM` | `tpa-demo` | Demo source system |
 | `FWA_OBJECT_STORAGE_URI` | `local://demo-artifacts` | Local artifact storage URI |
+| `FWA_ANALYTICS_CLICKHOUSE_URL` | `http://clickhouse:8123` | Optional ClickHouse analytics store URL for staging export plans |
 | `FWA_CUSTOMER_SCOPE_ID` | `demo-customer` | Local customer scope id |
 | `FWA_RETENTION_POLICY_ID` | `demo-retention-policy` | Local retention policy id |
 | `FWA_BACKUP_RESTORE_PLAN_ID` | `demo-backup-restore-plan` | Local backup and restore plan id |
@@ -216,6 +224,7 @@ Prefer locked commands when documenting reproducible verification.
 - Production secrets management.
 - Production object storage wiring beyond staging proof manifests.
 - Production observability stack.
+- Production ClickHouse retention, backup, and access policy.
 - GPU inference runtime.
 - Real model training pipeline.
 - Dioxus replacement for the current Yew web console.

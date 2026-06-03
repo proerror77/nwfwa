@@ -83,6 +83,23 @@ services:
     volumes:
       - fwa_object_storage_data:/data
 
+  clickhouse:
+    image: clickhouse/clickhouse-server:24.8
+    environment:
+      CLICKHOUSE_DB: fwa_analytics
+    ports:
+      - "8123:8123"
+      - "9002:9000"
+    healthcheck:
+      test: ["CMD-SHELL", "clickhouse-client --query 'SELECT 1' >/dev/null"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    volumes:
+      - fwa_clickhouse_data:/var/lib/clickhouse
+      - ../analytics/clickhouse/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro
+
 volumes:
   fwa_postgres_data:
   fwa_object_storage_data:
+  fwa_clickhouse_data:

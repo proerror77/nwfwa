@@ -56,6 +56,9 @@ REQUIRED_FILES = {
         "dockerfile: apps/web-console/Dockerfile",
         '"5173:8081"',
         "object-storage:",
+        "clickhouse:",
+        "clickhouse/clickhouse-server:24.8",
+        "../analytics/clickhouse/schema.sql:/docker-entrypoint-initdb.d/001_schema.sql:ro",
     ],
     "infra/dockerfiles/Dockerfile.ops": [
         "FROM postgres:16",

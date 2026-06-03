@@ -44,6 +44,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 name: "pilot_readiness_checker",
                 status: "ok",
             },
+            WorkerHealthCheck {
+                name: "analytics_export_plan",
+                status: "ok",
+            },
         ],
     }
 }
@@ -986,6 +990,93 @@ pub fn build_mlops_monitoring_plan(
     }))
 }
 
+pub fn build_analytics_export_plan(
+    object_storage_uri: &str,
+    clickhouse_url: &str,
+    customer_scope_id: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let object_storage_uri =
+        required_non_empty("object_storage_uri", object_storage_uri)?.trim_end_matches('/');
+    let clickhouse_url = required_non_empty("clickhouse_url", clickhouse_url)?;
+    let customer_scope_id = required_non_empty("customer_scope_id", customer_scope_id)?;
+    let cron = required_non_empty("cron", cron)?;
+    let export_root = format!("{object_storage_uri}/analytics-exports/{customer_scope_id}");
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_analytics_export",
+        "plan_version": 1,
+        "customer_scope_id": customer_scope_id,
+        "data_contract": {
+            "source_of_truth": "postgresql_operational_tables",
+            "derived_store": "clickhouse",
+            "clickhouse_url": clickhouse_url,
+            "schema_ref": "analytics/clickhouse/schema.sql",
+            "dashboard_queries_ref": "analytics/clickhouse/dashboard_queries.sql",
+            "pii_policy": "masked_ids_and_evidence_refs_only"
+        },
+        "schedule": {
+            "cron": cron,
+            "concurrency_policy": "forbid",
+            "idempotency_key": "customer_scope_id + export_window_start + sink_table"
+        },
+        "export_root_uri": export_root,
+        "jobs": [
+            {
+                "job_kind": "scoring_events_export",
+                "source_tables": ["scoring_runs", "claims"],
+                "sink_table": "fwa_analytics.analytics_scoring_events",
+                "output_uri": format!("{export_root}/scoring_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "rule_events_export",
+                "source_tables": ["rule_runs", "scoring_runs", "qa_reviews"],
+                "sink_table": "fwa_analytics.analytics_rule_events",
+                "output_uri": format!("{export_root}/rule_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "model_events_export",
+                "source_tables": ["model_scores", "model_evaluation_runs", "scoring_runs"],
+                "sink_table": "fwa_analytics.analytics_model_events",
+                "output_uri": format!("{export_root}/model_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "case_sla_events_export",
+                "source_tables": ["investigation_cases", "audit_events"],
+                "sink_table": "fwa_analytics.analytics_case_sla_events",
+                "output_uri": format!("{export_root}/case_sla_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "value_events_export",
+                "source_tables": ["saving_attributions", "investigation_cases", "qa_reviews"],
+                "sink_table": "fwa_analytics.analytics_value_events",
+                "output_uri": format!("{export_root}/value_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "reviewer_capacity_events_export",
+                "source_tables": ["investigation_cases", "qa_reviews"],
+                "sink_table": "fwa_analytics.analytics_reviewer_capacity_events",
+                "output_uri": format!("{export_root}/reviewer_capacity_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "provider_graph_snapshots_export",
+                "source_tables": ["providers", "claims", "rule_runs"],
+                "sink_table": "fwa_analytics.analytics_provider_graph_snapshots",
+                "output_uri": format!("{export_root}/provider_graph_snapshots/{{window_start}}.ndjson")
+            }
+        ],
+        "dashboard_coverage": [
+            "rule_drift",
+            "model_drift",
+            "sla_reporting",
+            "roi_reporting",
+            "reviewer_capacity",
+            "false_positive_cost",
+            "provider_graph_snapshots"
+        ]
+    }))
+}
+
 fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str> {
     let value = value.trim();
     if value.is_empty() {
@@ -1681,6 +1772,48 @@ mod tests {
             plan["jobs"][4]["label_delay_report_uri"],
             "s3://fwa-models/baseline_fwa/0.2.0/label_delay_report.json"
         );
+    }
+
+    #[test]
+    fn builds_scheduled_analytics_export_plan() {
+        let plan = build_analytics_export_plan(
+            "s3://nwfwa-staging-artifacts",
+            "http://clickhouse:8123",
+            "staging-customer",
+            "15 * * * *",
+        )
+        .expect("analytics export plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_analytics_export");
+        assert_eq!(plan["plan_version"], 1);
+        assert_eq!(plan["customer_scope_id"], "staging-customer");
+        assert_eq!(plan["data_contract"]["derived_store"], "clickhouse");
+        assert_eq!(
+            plan["data_contract"]["pii_policy"],
+            "masked_ids_and_evidence_refs_only"
+        );
+        assert_eq!(plan["schedule"]["cron"], "15 * * * *");
+        assert_eq!(plan["jobs"][0]["job_kind"], "scoring_events_export");
+        assert_eq!(plan["jobs"][1]["job_kind"], "rule_events_export");
+        assert_eq!(plan["jobs"][2]["job_kind"], "model_events_export");
+        assert_eq!(plan["jobs"][3]["job_kind"], "case_sla_events_export");
+        assert_eq!(plan["jobs"][4]["job_kind"], "value_events_export");
+        assert_eq!(
+            plan["jobs"][5]["job_kind"],
+            "reviewer_capacity_events_export"
+        );
+        assert_eq!(
+            plan["jobs"][6]["job_kind"],
+            "provider_graph_snapshots_export"
+        );
+        assert_eq!(
+            plan["jobs"][6]["sink_table"],
+            "fwa_analytics.analytics_provider_graph_snapshots"
+        );
+        assert!(plan["dashboard_coverage"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("false_positive_cost")));
     }
 
     #[test]

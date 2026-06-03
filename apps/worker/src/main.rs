@@ -85,6 +85,22 @@ async fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&plan)?);
         }
+        "build-analytics-export-plan" => {
+            let object_storage_uri = take_flag_value(&mut args, "--object-storage-uri")?;
+            let clickhouse_url = take_flag_value(&mut args, "--clickhouse-url")?;
+            let customer_scope_id = take_flag_value(&mut args, "--customer-scope-id")?;
+            let cron = take_flag_value(&mut args, "--cron")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let plan = worker::build_analytics_export_plan(
+                &object_storage_uri,
+                &clickhouse_url,
+                &customer_scope_id,
+                &cron,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&plan)?);
+        }
         "claim-retraining-job" => {
             let api_url = take_flag_value(&mut args, "--api-url")?;
             let api_key = take_flag_value(&mut args, "--api-key")?;

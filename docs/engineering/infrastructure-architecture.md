@@ -166,6 +166,15 @@ Until volume proves the need, PostgreSQL materialized views and exports are
 enough. If ClickHouse is introduced, PostgreSQL remains the operational source
 of truth and ClickHouse is a derived analytical store.
 
+The repository now includes a derived analytical event store contract under
+`analytics/clickhouse`. It defines ClickHouse tables for scoring, rule, model,
+case SLA, value, reviewer capacity, and provider graph snapshot events, plus
+dashboard queries for rule/model drift, SLA, ROI, capacity, false-positive cost,
+and graph risk reporting. The staging shape includes a ClickHouse service and a
+worker CronJob that emits the scheduled analytics export plan. This is a
+staging proof contract; customer production still needs live scheduler
+credentials, retention settings, and data movement approvals.
+
 ## Job And Agent Plane
 
 ### Job Execution
@@ -326,11 +335,16 @@ Add retrieval and agent infrastructure only after evidence workflows are active:
 
 Add analytical infrastructure when operational volume proves the need:
 
-- derived analytical event tables or ClickHouse;
-- scheduled exports from PostgreSQL to object storage and analytics store;
-- rule/model drift dashboards;
-- SLA, ROI, reviewer capacity, and false-positive cost reporting;
-- graph metrics snapshots for provider and relationship risk.
+- derived analytical event store or ClickHouse: implemented as
+  `analytics/clickhouse/schema.sql`;
+- scheduled exports from PostgreSQL to object storage and analytics store:
+  implemented as worker/export-plan contracts and
+  `scripts/ops/build_analytics_export.py`;
+- rule/model drift dashboards: implemented as ClickHouse dashboard queries;
+- SLA, ROI, reviewer capacity, and false-positive cost reporting: implemented
+  as ClickHouse dashboard queries;
+- graph metrics snapshots for provider and relationship risk: implemented as
+  `analytics_provider_graph_snapshots`.
 
 ### Phase 4: Production Hardening
 

@@ -26,6 +26,7 @@ def main() -> None:
         "parquet_profiler",
         "retraining_job_runner",
         "pilot_readiness_checker",
+        "analytics_export_plan",
     ]:
         require(check_status.get(name) == "ok", f"worker health check {name} must be ok")
 

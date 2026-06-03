@@ -22,6 +22,8 @@ the technical stack fits together, and what is ready for demo or pilot use.
 - [ML Pipeline Runbook](ml-pipeline-runbook.md): operating workflow for dataset
   intake, training, registration, review, promotion, serving, monitoring, and
   rollback.
+- [Analytics Scale](analytics-scale.md): ClickHouse derived event store,
+  scheduled export contract, dashboard queries, and production boundary.
 - [Operations Guide](operations-guide.md): local demo, Kubernetes staging,
   verification gates, CI, pilot readiness, and known production boundaries.
 

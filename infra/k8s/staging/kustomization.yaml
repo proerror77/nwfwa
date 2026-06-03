@@ -6,6 +6,7 @@ resources:
   - configmap.yaml
   - postgres.yaml
   - object-storage.yaml
+  - clickhouse.yaml
   - database-jobs.yaml
   - ml-service.yaml
   - api-server.yaml

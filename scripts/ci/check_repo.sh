@@ -22,13 +22,18 @@ required_files=(
   "scripts/ci/assert_worker_health.py"
   "scripts/ops/validate_k8s_staging.py"
   "scripts/ops/validate_container_packaging.py"
+  "scripts/ops/validate_analytics_scale.py"
+  "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
   "scripts/ops/sample_mlops_monitoring_plan.json"
   "infra/docker-compose.yml"
+  "analytics/clickhouse/schema.sql"
+  "analytics/clickhouse/dashboard_queries.sql"
   "infra/k8s/staging/kustomization.yaml"
   "infra/k8s/staging/api-server.yaml"
   "infra/k8s/staging/object-storage.yaml"
+  "infra/k8s/staging/clickhouse.yaml"
   "infra/k8s/staging/database-jobs.yaml"
   "infra/k8s/staging/worker-cronjobs.yaml"
   "infra/k8s/staging/README.md"
@@ -115,6 +120,8 @@ grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "staging-proof" .github/workflows/ci.yml
 grep -q "validate_k8s_staging.py" .github/workflows/ci.yml
 grep -q "validate_container_packaging.py" .github/workflows/ci.yml
+grep -q "validate_analytics_scale.py" .github/workflows/ci.yml
+grep -q "build_analytics_export.py" .github/workflows/ci.yml
 grep -q "run_mlops_monitoring_plan.py" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- run-retraining-job" .github/workflows/ci.yml
@@ -125,7 +132,11 @@ grep -q "release tag must point to a commit reachable from origin/main" .github/
 grep -q "Do not push from a dirty worktree" docs/engineering/git-flow.md
 grep -q "scripts/ci/assert_worker_health.py" .github/workflows/ci.yml
 grep -q "pilot_readiness_checker" scripts/ci/assert_worker_health.py
+grep -q "analytics_export_plan" scripts/ci/assert_worker_health.py
 grep -q "check-pilot-readiness" apps/worker/src/main.rs
+grep -q "build-analytics-export-plan" apps/worker/src/main.rs
+grep -q "scheduled_analytics_export" apps/worker/src/lib.rs
+grep -q "analytics_provider_graph_snapshots" apps/worker/src/lib.rs
 grep -q -- "--require-ready" apps/worker/src/main.rs
 grep -q "check_pilot_readiness" apps/worker/src/lib.rs
 grep -q "ready_for_customer_pilot" apps/worker/src/lib.rs
@@ -343,6 +354,24 @@ grep -q "model_service_configuration" docs/engineering/pilot-readiness.md
 grep -q "object_storage_configuration" docs/project/api-reference.md
 grep -q "object_storage_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_OBJECT_STORAGE_URI" docs/project/technology-stack.md
+grep -q "ClickHouse" docs/project/technology-stack.md
+grep -q "analytics/clickhouse/schema.sql" docs/project/technology-stack.md
+grep -q "analytics_export_manifest.json" docs/project/operations-guide.md
+grep -q "derived analytical event store" docs/engineering/infrastructure-architecture.md
+grep -q "analytics_scoring_events" analytics/clickhouse/schema.sql
+grep -q "analytics_rule_events" analytics/clickhouse/schema.sql
+grep -q "analytics_model_events" analytics/clickhouse/schema.sql
+grep -q "analytics_case_sla_events" analytics/clickhouse/schema.sql
+grep -q "analytics_value_events" analytics/clickhouse/schema.sql
+grep -q "analytics_reviewer_capacity_events" analytics/clickhouse/schema.sql
+grep -q "analytics_provider_graph_snapshots" analytics/clickhouse/schema.sql
+grep -q "scoring_volume_daily" analytics/clickhouse/dashboard_queries.sql
+grep -q "rule_drift_daily" analytics/clickhouse/dashboard_queries.sql
+grep -q "model_drift_daily" analytics/clickhouse/dashboard_queries.sql
+grep -q "roi_reporting_daily" analytics/clickhouse/dashboard_queries.sql
+grep -q "reviewer_capacity_daily" analytics/clickhouse/dashboard_queries.sql
+grep -q "false_positive_cost_daily" analytics/clickhouse/dashboard_queries.sql
+grep -q "provider_graph_snapshots" analytics/clickhouse/dashboard_queries.sql
 grep -q "customer_scope_configuration" docs/project/api-reference.md
 grep -q "customer_scope_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_CUSTOMER_SCOPE_ID" docs/project/technology-stack.md
@@ -437,16 +466,22 @@ grep -q "staging_observability_proof" scripts/ops/build_staging_evidence.py
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/build_staging_evidence.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/run_mlops_monitoring_plan.py
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
+python3 scripts/ops/validate_analytics_scale.py
 python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof >/tmp/nwfwa-staging-proof.json
+python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
   --plan scripts/ops/sample_mlops_monitoring_plan.json \
   --output-dir /tmp/nwfwa-mlops-monitoring >/tmp/nwfwa-mlops-monitoring.json
 test -f /tmp/nwfwa-staging-proof/object_storage_manifest.json
 test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
 test -f /tmp/nwfwa-staging-proof/observability_proof.json
+test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
+test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
+test -f /tmp/nwfwa-analytics-export/schema.sql
+test -f /tmp/nwfwa-analytics-export/dashboard_queries.sql
 test -f /tmp/nwfwa-mlops-monitoring/shadow_report.json
 test -f /tmp/nwfwa-mlops-monitoring/drift_report.json
 test -f /tmp/nwfwa-mlops-monitoring/fairness_report.json
