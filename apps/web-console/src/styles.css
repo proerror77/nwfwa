@@ -3022,6 +3022,205 @@ pre {
   font-size: 11px;
 }
 
+.model-monitoring-cockpit {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.72fr) minmax(440px, 1.54fr) minmax(230px, 0.84fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.model-monitoring-brief,
+.model-monitoring-actions {
+  display: grid;
+  align-content: start;
+  gap: 12px;
+  min-width: 0;
+  padding: 14px;
+  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.model-monitoring-brief strong {
+  color: #0c315f;
+  font-size: 20px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.model-monitoring-brief dl {
+  display: grid;
+  gap: 7px;
+  margin: 0;
+}
+
+.model-monitoring-brief dl div {
+  display: grid;
+  grid-template-columns: 92px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.model-monitoring-brief dt,
+.model-monitoring-brief dd,
+.model-monitoring-node span,
+.model-monitoring-meter span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.model-monitoring-brief dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.model-monitoring-map {
+  position: relative;
+  min-height: 380px;
+  overflow: hidden;
+  padding: 16px;
+  background:
+    radial-gradient(circle at 50% 50%, rgba(111, 91, 213, 0.13) 0 18%, transparent 19%),
+    repeating-linear-gradient(0deg, rgba(111, 91, 213, 0.06) 0 1px, transparent 1px 30px),
+    repeating-linear-gradient(90deg, rgba(23, 105, 224, 0.055) 0 1px, transparent 1px 30px),
+    #f8fbff;
+  border: 1px solid #c7d9f1;
+  border-radius: 8px;
+}
+
+.model-monitoring-link {
+  position: absolute;
+  left: 11%;
+  right: 11%;
+  top: 51%;
+  height: 2px;
+  background: linear-gradient(90deg, transparent, #a9b9f2, transparent);
+}
+
+.model-monitoring-link.diagonal-a {
+  transform: rotate(34deg);
+}
+
+.model-monitoring-link.diagonal-b {
+  transform: rotate(-34deg);
+}
+
+.model-monitoring-core,
+.model-monitoring-node {
+  position: absolute;
+  z-index: 2;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.model-monitoring-core {
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 132px;
+  height: 132px;
+  padding: 14px;
+  text-align: center;
+  background: linear-gradient(180deg, #6f5bd5 0%, #243269 100%);
+  border: 6px solid #e8e5ff;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.model-monitoring-core span,
+.model-monitoring-core strong {
+  color: #ffffff;
+}
+
+.model-monitoring-core strong {
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.model-monitoring-node {
+  display: grid;
+  gap: 6px;
+  width: 168px;
+  min-height: 96px;
+  padding: 11px;
+  border-top: 4px solid #6f5bd5;
+}
+
+.model-monitoring-node strong {
+  color: #0c315f;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
+}
+
+.model-monitoring-node.top {
+  left: 50%;
+  top: 8%;
+  transform: translateX(-50%);
+}
+
+.model-monitoring-node.right {
+  right: 7%;
+  top: 31%;
+}
+
+.model-monitoring-node.bottom {
+  left: 50%;
+  bottom: 7%;
+  transform: translateX(-50%);
+}
+
+.model-monitoring-node.left {
+  left: 7%;
+  top: 31%;
+}
+
+.model-monitoring-node.lower-right {
+  right: 10%;
+  bottom: 15%;
+}
+
+.model-monitoring-node.drift {
+  border-top-color: var(--amber);
+}
+
+.model-monitoring-node.shadow {
+  border-top-color: var(--blue);
+}
+
+.model-monitoring-node.labels,
+.model-monitoring-node.train {
+  border-top-color: #1f8f54;
+}
+
+.model-monitoring-meter {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 84px auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.model-monitoring-meter div {
+  height: 9px;
+  overflow: hidden;
+  background: #e3edf8;
+  border-radius: 999px;
+}
+
+.model-monitoring-meter i {
+  display: block;
+  height: 100%;
+  background: linear-gradient(90deg, #6f5bd5, var(--blue));
+  border-radius: inherit;
+}
+
+.model-monitoring-meter strong {
+  color: #0c315f;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
 .model-telemetry {
   grid-template-columns: 1.1fr 0.9fr;
 }
@@ -5694,6 +5893,7 @@ pre {
   .member-profile-cockpit,
   .provider-risk-cockpit,
   .rule-pack-cockpit,
+  .model-monitoring-cockpit,
   .model-telemetry {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
@@ -5709,6 +5909,7 @@ pre {
   .member-profile-cockpit,
   .provider-risk-cockpit,
   .rule-pack-cockpit,
+  .model-monitoring-cockpit,
   .audit-sampling-cockpit,
   .routing-cockpit,
   .agent-run-cockpit,
@@ -5881,6 +6082,7 @@ pre {
   .member-profile-cockpit,
   .provider-risk-cockpit,
   .rule-pack-cockpit,
+  .model-monitoring-cockpit,
   .clinical-cockpit,
   .clinical-outcome-grid,
   .agent-cockpit,
@@ -5906,7 +6108,8 @@ pre {
   .runtime-signal-map::after,
   .evidence-pipeline-rail::before,
   .evidence-runtime-map::before,
-  .rule-pack-link {
+  .rule-pack-link,
+  .model-monitoring-link {
     display: none;
   }
 

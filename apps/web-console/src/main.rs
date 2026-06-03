@@ -3215,6 +3215,7 @@ fn model_ops_view(props: &ModelOpsProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <>
+                        {model_monitoring_cockpit(snapshot)}
                         <section class="panel result-stack">
                             <h3>{"Model Inventory"}</h3>
                             <div class="factor-card-grid">
@@ -8882,6 +8883,98 @@ fn model_telemetry_visual(
                     <strong>{&retraining.recommendation}</strong>
                 </div>
             </div>
+        </div>
+    }
+}
+
+fn model_monitoring_cockpit(snapshot: &ModelOpsSnapshot) -> Html {
+    let active_model = snapshot
+        .models
+        .iter()
+        .find(|model| model.status == "active")
+        .or_else(|| snapshot.models.first());
+    let model_label = active_model
+        .map(|model| format!("{} {}", model.model_key, model.version))
+        .unwrap_or_else(|| snapshot.performance.model_key.clone());
+    let gate_ratio = ratio(
+        snapshot.gates.passed_count as u32,
+        snapshot.gates.total_count as u32,
+    );
+    let label_ratio = ratio(snapshot.gates.approved_label_count, 100);
+    let psi_label = optional_number(snapshot.performance.score_psi);
+    let first_blocker = snapshot
+        .gates
+        .blockers
+        .first()
+        .map(String::as_str)
+        .or_else(|| snapshot.retraining.blockers.first().map(String::as_str))
+        .unwrap_or("no blocker");
+
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Model Monitoring Cockpit"}</h3>
+                    <p>{"A pilot-facing view of model version, drift, shadow evidence, promotion gates, QA labels, and retraining readiness before any model affects routing."}</p>
+                </div>
+                <span class={classes!("status-token", status_tone(&snapshot.gates.decision))}>{&snapshot.gates.decision}</span>
+            </div>
+            <div class="model-monitoring-cockpit">
+                <aside class="model-monitoring-brief">
+                    <span class="eyebrow">{"Active candidate"}</span>
+                    <strong>{model_label}</strong>
+                    <dl>
+                        <div><dt>{"Runtime"}</dt><dd>{active_model.map(|model| model.runtime_kind.as_str()).unwrap_or("runtime pending")}</dd></div>
+                        <div><dt>{"Provider"}</dt><dd>{active_model.map(|model| model.execution_provider.as_str()).unwrap_or("provider pending")}</dd></div>
+                        <div><dt>{"Review mode"}</dt><dd>{active_model.map(|model| model.review_mode.as_str()).unwrap_or("review pending")}</dd></div>
+                        <div><dt>{"Latest eval"}</dt><dd>{&snapshot.gates.latest_evaluation_id}</dd></div>
+                    </dl>
+                </aside>
+
+                <div class="model-monitoring-map">
+                    <div class="model-monitoring-link horizontal"></div>
+                    <div class="model-monitoring-link diagonal-a"></div>
+                    <div class="model-monitoring-link diagonal-b"></div>
+                    <div class="model-monitoring-core">
+                        <span>{"MLOps"}</span>
+                        <strong>{&snapshot.performance.model_key}</strong>
+                    </div>
+                    {model_monitoring_node("Version lock", active_model.map(|model| model.version.as_str()).unwrap_or("pending"), "top", "version")}
+                    {model_monitoring_node("Drift watch", &format!("{} / PSI {}", snapshot.performance.drift_status, psi_label), "right", "drift")}
+                    {model_monitoring_node("Shadow evidence", &snapshot.gates.latest_evaluation_id, "bottom", "shadow")}
+                    {model_monitoring_node("QA labels", &format!("{} approved", snapshot.gates.approved_label_count), "left", "labels")}
+                    {model_monitoring_node("Retraining", &snapshot.retraining.recommendation, "lower-right", "train")}
+                </div>
+
+                <aside class="model-monitoring-actions">
+                    <span class="eyebrow">{"Promotion readiness"}</span>
+                    <div class="model-monitoring-meter">
+                        <span>{"Gate pass"}</span>
+                        <div><i style={format!("width: {};", percent_width(gate_ratio))}></i></div>
+                        <strong>{percent_label(gate_ratio)}</strong>
+                    </div>
+                    <div class="model-monitoring-meter">
+                        <span>{"Label readiness"}</span>
+                        <div><i style={format!("width: {};", percent_width(label_ratio))}></i></div>
+                        <strong>{snapshot.gates.approved_label_count}</strong>
+                    </div>
+                    <div class="provider-signal-stack">
+                        {provider_signal_row("Data quality", &snapshot.gates.source_data_quality_status, "strong")}
+                        {provider_signal_row("Drift", &snapshot.retraining.drift_status, "warning")}
+                        {provider_signal_row("Open feedback", &snapshot.retraining.open_model_feedback_count.to_string(), "neutral")}
+                        {provider_signal_row("Blocker", first_blocker, "danger")}
+                    </div>
+                </aside>
+            </div>
+        </section>
+    }
+}
+
+fn model_monitoring_node(label: &str, value: &str, position: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("model-monitoring-node", position.to_string(), tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
         </div>
     }
 }
