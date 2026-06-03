@@ -71,6 +71,9 @@ Kubernetes staging manifests now live under `infra/k8s/staging`. They define
 the pilot foundation deployment shape for API, web console, ML service,
 PostgreSQL, S3-compatible object storage, and worker CronJobs. They are staging
 manifests with placeholder images and secrets, not a production package.
+Container packaging is defined for API server, worker, web console, and the
+database ops image, but GitHub Environment based deployment is intentionally
+left for the deployment phase.
 
 ### Readiness Legend
 
@@ -162,6 +165,8 @@ Path: `infra/k8s/staging`
 The staging K8S shape includes:
 
 - API server, ML service, web console, PostgreSQL, and MinIO object storage.
+- Database migration and deterministic demo seed Jobs using the staging ops
+  image.
 - ConfigMap-backed pilot readiness settings for source system, object storage,
   retention, backup/restore, masking, key rotation, allowlist, alert routing,
   observability, and agent policy.
@@ -172,6 +177,7 @@ Static validation:
 
 ```bash
 python3 scripts/ops/validate_k8s_staging.py
+python3 scripts/ops/validate_container_packaging.py
 ```
 
 Local staging evidence artifacts:

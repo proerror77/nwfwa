@@ -17,6 +17,7 @@ REQUIRED_FILES = [
     "secrets.example.yaml",
     "postgres.yaml",
     "object-storage.yaml",
+    "database-jobs.yaml",
     "ml-service.yaml",
     "api-server.yaml",
     "worker-cronjobs.yaml",
@@ -58,6 +59,14 @@ REQUIRED_TEXT = {
         "quay.io/minio/minio",
         "/minio/health/ready",
         "PersistentVolumeClaim",
+    ],
+    "database-jobs.yaml": [
+        "kind: Job",
+        "name: database-migrate",
+        "name: demo-seed",
+        "nwfwa-ops:staging",
+        "/app/migrations/0001_initial.sql",
+        "/app/scripts/demo/seed_demo.sql",
     ],
     "worker-cronjobs.yaml": [
         "kind: CronJob",

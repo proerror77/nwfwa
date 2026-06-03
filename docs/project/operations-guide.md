@@ -285,8 +285,18 @@ and create a real Secret from `infra/k8s/staging/secrets.example.yaml` in the
 `nwfwa-staging` namespace. The example Secret is intentionally not included in
 the kustomization resources, so placeholder secrets are not applied by default.
 The directory includes API, web console, ML service, PostgreSQL, S3-compatible
-object storage, and worker CronJobs for pilot readiness and MLOps
-monitoring-plan generation.
+object storage, database migration and seed Jobs, and worker CronJobs for pilot
+readiness and MLOps monitoring-plan generation.
+
+Validate container packaging before building images:
+
+```bash
+python3 scripts/ops/validate_container_packaging.py
+```
+
+The packaging check verifies Dockerfiles for API server, worker, web console,
+and the ops image that carries migration and seed SQL. It does not push images
+or deploy to a cluster.
 
 Generate local pilot foundation evidence without customer data:
 

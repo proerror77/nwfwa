@@ -10,6 +10,8 @@ foundation environment, not a production deployment package.
 - `ml-service`: Python FastAPI scorer/training boundary on port `8001`.
 - `postgres`: transactional store for claims, audit, governance, labels, and jobs.
 - `object-storage`: S3-compatible MinIO endpoint for staging artifacts.
+- `database-migrate`: Job that applies `migrations/0001_initial.sql`.
+- `demo-seed`: optional Job that loads deterministic demo data for staging demos.
 - `pilot-readiness-proof`: CronJob that runs the worker readiness gate.
 - `mlops-monitoring-plan`: CronJob that emits the portable MLOps monitoring plan.
 
@@ -35,4 +37,8 @@ python3 scripts/ops/validate_k8s_staging.py
 ```
 
 The validator checks that the staging manifests include the required services,
-readiness probes, CronJobs, object storage, and non-demo readiness settings.
+readiness probes, database Jobs, CronJobs, object storage, and non-demo
+readiness settings.
+
+The database Jobs use the `nwfwa-ops` image built from
+`infra/dockerfiles/Dockerfile.ops`, which packages the migration and seed SQL.

@@ -87,6 +87,9 @@ Minimum pilot monitoring:
   shape for API, web console, ML service, PostgreSQL, S3-compatible object
   storage, and worker CronJobs. Run
   `python3 scripts/ops/validate_k8s_staging.py` before applying manifests.
+- Container packaging proof: `python3 scripts/ops/validate_container_packaging.py`
+  validates Dockerfiles for API server, worker, web console, and the ops image
+  used by database migration and seed Jobs.
 - Pilot foundation evidence pack:
   `python3 scripts/ops/build_staging_evidence.py --output-dir artifacts/staging-proof`
   writes object-storage, backup/restore, and observability proof metadata

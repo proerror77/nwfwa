@@ -148,6 +148,7 @@ belong in object storage or a data lake for real pilots.
 | Technology | Where | Purpose |
 | --- | --- | --- |
 | Docker Compose | `infra/docker-compose.yml` | Local PostgreSQL and ML service |
+| Dockerfiles | `apps/*/Dockerfile`, `infra/dockerfiles/Dockerfile.ops` | API, worker, web console, and database ops image packaging |
 | MinIO | `infra/docker-compose.yml`, `infra/k8s/staging` | S3-compatible staging artifact storage proof |
 | Kubernetes / Kustomize | `infra/k8s/staging` | Staging deployment architecture for pilot foundation proof |
 | GitHub Actions | `.github/workflows/ci.yml` | CI validation |
@@ -174,8 +175,9 @@ jobs. Actions include `actions/checkout@v6`, `actions/setup-python@v6`,
 `Swatinem/rust-cache@v2`.
 
 Kubernetes staging is validated by the `staging-proof` job. That job statically
-checks `infra/k8s/staging`, generates local pilot foundation evidence, and
-simulates the scheduled MLOps monitoring-plan reports without customer data.
+checks `infra/k8s/staging`, validates container packaging, generates local pilot
+foundation evidence, and simulates the scheduled MLOps monitoring-plan reports
+without customer data.
 
 ## Declared And Resolved Versions
 

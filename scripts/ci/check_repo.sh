@@ -21,6 +21,7 @@ required_files=(
   "scripts/data/build_public_data_mvp.py"
   "scripts/ci/assert_worker_health.py"
   "scripts/ops/validate_k8s_staging.py"
+  "scripts/ops/validate_container_packaging.py"
   "scripts/ops/build_staging_evidence.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
   "scripts/ops/sample_mlops_monitoring_plan.json"
@@ -28,6 +29,7 @@ required_files=(
   "infra/k8s/staging/kustomization.yaml"
   "infra/k8s/staging/api-server.yaml"
   "infra/k8s/staging/object-storage.yaml"
+  "infra/k8s/staging/database-jobs.yaml"
   "infra/k8s/staging/worker-cronjobs.yaml"
   "infra/k8s/staging/README.md"
   "apps/api-server/tests/tpa_contract_docs.rs"
@@ -112,6 +114,7 @@ grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "staging-proof" .github/workflows/ci.yml
 grep -q "validate_k8s_staging.py" .github/workflows/ci.yml
+grep -q "validate_container_packaging.py" .github/workflows/ci.yml
 grep -q "run_mlops_monitoring_plan.py" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- run-retraining-job" .github/workflows/ci.yml
@@ -359,17 +362,23 @@ grep -q "required_check_count" docs/project/api-reference.md
 grep -q "blocking_check_count" docs/engineering/pilot-readiness.md
 grep -q "FWA_AGENT_POLICY_ID" docs/project/technology-stack.md
 grep -q "Kubernetes staging" docs/project/technology-stack.md
+grep -q "Dockerfiles" docs/project/technology-stack.md
 grep -q "MinIO" docs/project/technology-stack.md
 grep -q "staging-proof" docs/engineering/ci-cd.md
+grep -q "container packaging checks" docs/engineering/ci-cd.md
+grep -q "GitHub Environment based deployment" docs/engineering/ci-cd.md
 grep -q "Kubernetes staging manifests now exist" docs/engineering/ci-cd.md
 grep -q "Kubernetes staging proof" docs/engineering/pilot-readiness.md
+grep -q "Container packaging proof" docs/engineering/pilot-readiness.md
 grep -q "build_staging_evidence.py" docs/engineering/pilot-readiness.md
 grep -q "run_mlops_monitoring_plan.py" docs/engineering/pilot-readiness.md
 grep -q "Kubernetes Staging" docs/project/operations-guide.md
+grep -q "validate_container_packaging.py" docs/project/operations-guide.md
 grep -q "build_staging_evidence.py" docs/project/operations-guide.md
 grep -q "run_mlops_monitoring_plan.py" docs/project/operations-guide.md
 grep -q "infra/k8s/staging" README.md
 grep -q "validate_k8s_staging.py" README.md
+grep -q "validate_container_packaging.py" README.md
 grep -q "Kubernetes staging" docs/project/README.md
 grep -q "node ../../scripts/demo/smoke_web_console.mjs" .github/workflows/ci.yml
 grep -q "Swatinem/rust-cache@v2" .github/workflows/ci.yml
@@ -379,8 +388,20 @@ grep -q "UPDATE investigation_cases" migrations/0001_initial.sql
 grep -q "SET review_mode = l.review_mode" migrations/0001_initial.sql
 grep -q "object-storage" infra/docker-compose.yml
 grep -q "quay.io/minio/minio" infra/docker-compose.yml
+grep -q "cargo build --release --locked -p api-server" apps/api-server/Dockerfile
+grep -q "cargo build --release --locked -p worker" apps/worker/Dockerfile
+grep -q "COPY apps ./apps" apps/api-server/Dockerfile
+grep -q "COPY apps ./apps" apps/worker/Dockerfile
+grep -q "NO_COLOR=false trunk build --release --locked" apps/web-console/Dockerfile
+grep -q "COPY apps/web-console/nginx.conf /etc/nginx/conf.d/default.conf" apps/web-console/Dockerfile
+grep -q "listen 8081;" apps/web-console/nginx.conf
+grep -q "COPY migrations ./migrations" infra/dockerfiles/Dockerfile.ops
+grep -q "target" .dockerignore
 grep -q "nwfwa-staging" infra/k8s/staging/kustomization.yaml
+grep -q "database-jobs.yaml" infra/k8s/staging/kustomization.yaml
 grep -q "FWA_OBJECT_STORAGE_URI: s3://nwfwa-staging-artifacts" infra/k8s/staging/configmap.yaml
+grep -q "database-migrate" infra/k8s/staging/database-jobs.yaml
+grep -q "demo-seed" infra/k8s/staging/database-jobs.yaml
 grep -q "check-pilot-readiness" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "build-mlops-monitoring-plan" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "replace-with-staging-api-key" infra/k8s/staging/secrets.example.yaml
@@ -391,8 +412,9 @@ grep -q "staging_observability_proof" scripts/ops/build_staging_evidence.py
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/build_staging_evidence.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/build_staging_evidence.py scripts/ops/run_mlops_monitoring_plan.py
 python3 scripts/ops/validate_k8s_staging.py
+python3 scripts/ops/validate_container_packaging.py
 python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof >/tmp/nwfwa-staging-proof.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
   --plan scripts/ops/sample_mlops_monitoring_plan.json \

@@ -15,8 +15,8 @@ CI runs on:
 Current checks:
 
 - repository health check through `scripts/ci/check_repo.sh`
-- `staging-proof`: Kubernetes manifest validation, staging evidence artifacts,
-  and MLOps monitoring-plan simulation
+- `staging-proof`: Kubernetes manifest validation, container packaging checks,
+  staging evidence artifacts, and MLOps monitoring-plan simulation
 - Rust: `cargo fetch --locked`, `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, and `cargo test --locked --workspace`
 - PostgreSQL migration idempotency
 - demo seed idempotency, minimum demo-data presence, and API/ML demo smoke through `scripts/demo/seed_demo.sh` and `scripts/demo/smoke_demo.py`
@@ -73,3 +73,5 @@ Kubernetes staging manifests now exist under `infra/k8s/staging`, but production
 deployment remains intentionally unconfigured until image registry, managed
 secrets, network controls, observability, and customer environment ownership are
 selected.
+GitHub Environment based deployment should be added in the deployment phase, not
+as part of the current packaging proof.
