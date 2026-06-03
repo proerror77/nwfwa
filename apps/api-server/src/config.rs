@@ -64,7 +64,7 @@ impl AppConfig {
 
     pub fn model_service_configuration_status(&self) -> &'static str {
         if self.model_artifact_uri().is_some() {
-            "rust_artifact_model_scorer"
+            "configured"
         } else if self.model_service_url == "heuristic"
             || self.model_service_url.starts_with("heuristic://")
         {
@@ -402,6 +402,40 @@ mod tests {
 
         assert_eq!(api_key_config.key, "");
         assert_eq!(api_key_config.principals.len(), 1);
+    }
+
+    #[test]
+    fn rust_artifact_model_runtime_counts_as_configured_model_service() {
+        let previous_artifact_uri = std::env::var_os("FWA_MODEL_ARTIFACT_URI");
+        std::env::set_var(
+            "FWA_MODEL_ARTIFACT_URI",
+            "s3://customer-models/baseline_fwa/model.json",
+        );
+        let config = AppConfig {
+            api_key: "dev-secret".into(),
+            source_system: "tpa-demo".into(),
+            database_url: "postgres://postgres:postgres@localhost:5432/fwa".into(),
+            model_service_url: "http://127.0.0.1:8001".into(),
+            object_storage_uri: "local://demo-artifacts".into(),
+            customer_scope_id: "demo-customer".into(),
+            retention_policy_id: "demo-retention-policy".into(),
+            backup_restore_plan_id: "demo-backup-restore-plan".into(),
+            pii_masking_policy_id: "demo-pii-masking-policy".into(),
+            key_rotation_policy_id: "demo-key-rotation-policy".into(),
+            network_allowlist_id: "demo-network-allowlist".into(),
+            alert_routing_policy_id: "demo-alert-routing-policy".into(),
+            observability_exporter_endpoint: "local://demo-observability".into(),
+            agent_policy_id: "demo-agent-policy".into(),
+        };
+
+        assert_eq!(config.model_runtime_kind(), "rust_artifact");
+        assert_eq!(config.model_service_configuration_status(), "configured");
+
+        if let Some(previous_artifact_uri) = previous_artifact_uri {
+            std::env::set_var("FWA_MODEL_ARTIFACT_URI", previous_artifact_uri);
+        } else {
+            std::env::remove_var("FWA_MODEL_ARTIFACT_URI");
+        }
     }
 
     #[test]

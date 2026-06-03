@@ -213,6 +213,18 @@ Worker health:
 cargo run --locked -p worker -- health | python3 scripts/ci/assert_worker_health.py
 ```
 
+Pilot readiness report:
+
+```bash
+cargo run --locked -p worker -- check-pilot-readiness \
+  --api-url http://127.0.0.1:8080 \
+  --api-key "$FWA_API_KEY"
+```
+
+The report reads `GET /api/v1/health`, returns the aggregate
+`ready_for_customer_pilot` decision, lists blocking configuration checks, and
+keeps evidence refs pointing back to the API health readiness contract.
+
 ## CI Gates
 
 GitHub Actions runs:

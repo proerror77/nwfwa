@@ -40,7 +40,117 @@ pub fn worker_health() -> WorkerHealthResponse {
                 name: "retraining_job_runner",
                 status: "ok",
             },
+            WorkerHealthCheck {
+                name: "pilot_readiness_checker",
+                status: "ok",
+            },
         ],
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ApiHealthResponse {
+    pub status: String,
+    pub service: String,
+    pub version: String,
+    pub pilot_readiness: ApiPilotReadiness,
+    pub checks: Vec<ApiHealthCheck>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ApiPilotReadiness {
+    pub status: String,
+    #[serde(default)]
+    pub required_check_names: Vec<String>,
+    #[serde(default)]
+    pub required_check_count: usize,
+    #[serde(default)]
+    pub ready_check_count: usize,
+    #[serde(default)]
+    pub blocking_check_count: usize,
+    #[serde(default)]
+    pub ready_checks: Vec<ApiHealthCheck>,
+    #[serde(default)]
+    pub blocking_checks: Vec<ApiHealthCheck>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ApiHealthCheck {
+    pub name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_kind: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct PilotReadinessReport {
+    pub status: String,
+    pub ready_for_customer_pilot: bool,
+    pub api_status: String,
+    pub api_service: String,
+    pub api_version: String,
+    pub required_check_count: usize,
+    pub ready_check_count: usize,
+    pub blocking_check_count: usize,
+    pub model_runtime_kind: Option<String>,
+    pub ready_checks: Vec<ApiHealthCheck>,
+    pub blocking_checks: Vec<ApiHealthCheck>,
+    pub remediation_summary: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub async fn check_pilot_readiness(
+    api_base_url: &str,
+    api_key: Option<&str>,
+) -> anyhow::Result<PilotReadinessReport> {
+    let mut request = reqwest::Client::new().get(api_url(api_base_url, "/api/v1/health"));
+    if let Some(api_key) = api_key {
+        request = request.header("x-api-key", api_key);
+    }
+    let response = request.send().await.context("fetch API health")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("fetch API health failed with {status}: {body}");
+    }
+    let health = response
+        .json::<ApiHealthResponse>()
+        .await
+        .context("parse API health response")?;
+    Ok(build_pilot_readiness_report(health))
+}
+
+pub fn build_pilot_readiness_report(health: ApiHealthResponse) -> PilotReadinessReport {
+    let model_runtime_kind = health
+        .checks
+        .iter()
+        .find(|check| check.name == "model_scorer")
+        .and_then(|check| check.runtime_kind.clone());
+    let remediation_summary = health
+        .pilot_readiness
+        .blocking_checks
+        .iter()
+        .map(|check| format!("{}={}", check.name, check.status))
+        .collect::<Vec<_>>();
+    let evidence_refs = vec![
+        "api_health:/api/v1/health".to_string(),
+        "pilot_readiness:/api/v1/health#pilot_readiness".to_string(),
+    ];
+    PilotReadinessReport {
+        status: health.pilot_readiness.status.clone(),
+        ready_for_customer_pilot: health.pilot_readiness.status == "ready"
+            && health.pilot_readiness.blocking_checks.is_empty(),
+        api_status: health.status,
+        api_service: health.service,
+        api_version: health.version,
+        required_check_count: health.pilot_readiness.required_check_count,
+        ready_check_count: health.pilot_readiness.ready_check_count,
+        blocking_check_count: health.pilot_readiness.blocking_check_count,
+        model_runtime_kind,
+        ready_checks: health.pilot_readiness.ready_checks,
+        blocking_checks: health.pilot_readiness.blocking_checks,
+        remediation_summary,
+        evidence_refs,
     }
 }
 
@@ -1244,6 +1354,59 @@ mod tests {
             name: "retraining_job_runner",
             status: "ok"
         }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "pilot_readiness_checker",
+            status: "ok"
+        }));
+    }
+
+    #[test]
+    fn builds_pilot_readiness_report_from_api_health() {
+        let report = build_pilot_readiness_report(ApiHealthResponse {
+            status: "ok".into(),
+            service: "api-server".into(),
+            version: "0.1.0".into(),
+            checks: vec![ApiHealthCheck {
+                name: "model_scorer".into(),
+                status: "ok".into(),
+                runtime_kind: Some("rust_artifact".into()),
+            }],
+            pilot_readiness: ApiPilotReadiness {
+                status: "not_ready".into(),
+                required_check_names: vec![
+                    "api_key_configuration".into(),
+                    "object_storage_configuration".into(),
+                ],
+                required_check_count: 2,
+                ready_check_count: 1,
+                blocking_check_count: 1,
+                ready_checks: vec![ApiHealthCheck {
+                    name: "api_key_configuration".into(),
+                    status: "configured".into(),
+                    runtime_kind: None,
+                }],
+                blocking_checks: vec![ApiHealthCheck {
+                    name: "object_storage_configuration".into(),
+                    status: "local_demo_object_storage".into(),
+                    runtime_kind: None,
+                }],
+            },
+        });
+
+        assert_eq!(report.status, "not_ready");
+        assert!(!report.ready_for_customer_pilot);
+        assert_eq!(report.api_service, "api-server");
+        assert_eq!(report.required_check_count, 2);
+        assert_eq!(report.ready_check_count, 1);
+        assert_eq!(report.blocking_check_count, 1);
+        assert_eq!(report.model_runtime_kind.as_deref(), Some("rust_artifact"));
+        assert_eq!(
+            report.remediation_summary,
+            vec!["object_storage_configuration=local_demo_object_storage"]
+        );
+        assert!(report
+            .evidence_refs
+            .contains(&"api_health:/api/v1/health".to_string()));
     }
 
     #[test]

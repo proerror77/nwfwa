@@ -3473,19 +3473,41 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "runtime_kind": {
                             "type": "string",
-                            "enum": ["python_http", "heuristic"],
+                            "enum": ["python_http", "heuristic", "rust_artifact"],
                             "description": "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
                         }
                     }
                 },
                 "PilotReadiness": {
                     "type": "object",
-                    "required": ["status", "blocking_checks"],
+                    "required": ["status", "required_check_names", "required_check_count", "ready_check_count", "blocking_check_count", "ready_checks", "blocking_checks"],
                     "properties": {
                         "status": {
                             "type": "string",
                             "enum": ["ready", "not_ready"],
                             "description": "Aggregate customer pilot readiness derived from non-secret configuration checks."
+                        },
+                        "required_check_names": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Configuration check names that must be configured before customer pilot traffic."
+                        },
+                        "required_check_count": {
+                            "type": "integer",
+                            "description": "Total number of required pilot configuration checks."
+                        },
+                        "ready_check_count": {
+                            "type": "integer",
+                            "description": "Number of required pilot configuration checks already configured."
+                        },
+                        "blocking_check_count": {
+                            "type": "integer",
+                            "description": "Number of required pilot configuration checks still blocking customer pilot readiness."
+                        },
+                        "ready_checks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/HealthCheck" },
+                            "description": "Configuration checks that are ready for customer pilot traffic."
                         },
                         "blocking_checks": {
                             "type": "array",

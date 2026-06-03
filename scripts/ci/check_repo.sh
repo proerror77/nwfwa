@@ -98,6 +98,12 @@ grep -q "Verify tag is on main" .github/workflows/release.yml
 grep -q "release tag must point to a commit reachable from origin/main" .github/workflows/release.yml
 grep -q "Do not push from a dirty worktree" docs/engineering/git-flow.md
 grep -q "scripts/ci/assert_worker_health.py" .github/workflows/ci.yml
+grep -q "pilot_readiness_checker" scripts/ci/assert_worker_health.py
+grep -q "check-pilot-readiness" apps/worker/src/main.rs
+grep -q "check_pilot_readiness" apps/worker/src/lib.rs
+grep -q "ready_for_customer_pilot" apps/worker/src/lib.rs
+grep -q "check-pilot-readiness" docs/project/operations-guide.md
+grep -q "check-pilot-readiness" docs/engineering/pilot-readiness.md
 grep -q "scripts/demo/seed_demo.sh" .github/workflows/ci.yml
 grep -q "scripts/demo/smoke_demo.py" .github/workflows/ci.yml
 grep -q "wasm32-unknown-unknown" .github/workflows/ci.yml

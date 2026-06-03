@@ -17,6 +17,15 @@ async fn main() -> anyhow::Result<()> {
                 serde_json::to_string_pretty(&worker::worker_health())?
             );
         }
+        "check-pilot-readiness" => {
+            let api_url = take_flag_value(&mut args, "--api-url")?;
+            let api_key = take_optional_flag_value(&mut args, "--api-key")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::check_pilot_readiness(&api_url, api_key.as_deref()).await?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "profile-parquet" => {
             let manifest = take_flag_value(&mut args, "--manifest")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;

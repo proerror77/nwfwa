@@ -136,7 +136,15 @@ async fn openapi_includes_operations_paths() {
     );
     assert_eq!(
         schema["components"]["schemas"]["PilotReadiness"]["required"],
-        serde_json::json!(["status", "blocking_checks"])
+        serde_json::json!([
+            "status",
+            "required_check_names",
+            "required_check_count",
+            "ready_check_count",
+            "blocking_check_count",
+            "ready_checks",
+            "blocking_checks"
+        ])
     );
     assert_eq!(
         schema["components"]["schemas"]["PilotReadiness"]["properties"]["status"]["enum"],
@@ -148,8 +156,17 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/HealthCheck"
     );
     assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["ready_checks"]["items"]
+            ["$ref"],
+        "#/components/schemas/HealthCheck"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["runtime_kind"]["description"],
         "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["runtime_kind"]["enum"],
+        serde_json::json!(["python_http", "heuristic", "rust_artifact"])
     );
     assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["enum"],
