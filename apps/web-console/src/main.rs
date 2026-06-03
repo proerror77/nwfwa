@@ -2530,35 +2530,11 @@ fn dashboard_view(props: &DashboardProps) -> Html {
 
                         <section class="panel result-stack">
                             <h3>{"Seven-Layer Coverage"}</h3>
-                            {dashboard_layer_flow(&summary.layer_scores)}
                             if summary.layer_scores.is_empty() {
                                 <p class="empty">{"No layer score records returned."}</p>
                             } else {
-                                <div class="factor-card-grid">
-                                    {for summary.layer_scores.iter().map(|(layer_key, layer)| html! {
-                                        <div class="metric-row">
-                                            <span>{format!("{} / {}", layer_key, layer.name)}</span>
-                                            <strong>{format!("{:.1}", layer.average_score)}</strong>
-                                            <small>{format!("runs {}", layer.scored_runs)}</small>
-                                            <small>{format!("high risk {}", layer.high_risk_count)}</small>
-                                        </div>
-                                    })}
-                                </div>
-                            }
-                            <h4>{"Model Score Distribution"}</h4>
-                            if summary.model_scores.is_empty() {
-                                <p class="empty">{"No model score records returned."}</p>
-                            } else {
-                                <div class="factor-card-grid">
-                                    {for summary.model_scores.iter().map(|(model_key, model)| html! {
-                                        <div class="metric-row">
-                                            <span>{model_key}</span>
-                                            <strong>{format!("{:.1}", model.average_score)}</strong>
-                                            <small>{format!("runs {}", model.scored_runs)}</small>
-                                            <small>{format!("high risk {}", model.high_risk_count)}</small>
-                                        </div>
-                                    })}
-                                </div>
+                                {dashboard_layer_flow(&summary.layer_scores)}
+                                {layer_coverage_summary(&summary.layer_scores, &summary.model_scores)}
                             }
                         </section>
 
@@ -7704,6 +7680,46 @@ fn dashboard_layer_flow(layers: &BTreeMap<String, DashboardLayerScore>) -> Html 
     }
 }
 
+fn layer_coverage_summary(
+    layers: &BTreeMap<String, DashboardLayerScore>,
+    models: &BTreeMap<String, DashboardModelScore>,
+) -> Html {
+    let layer_count = layers.len() as f64;
+    let average_layer_score = layers
+        .values()
+        .map(|layer| layer.average_score)
+        .sum::<f64>()
+        / layer_count.max(1.0);
+    let scored_runs = layers
+        .values()
+        .map(|layer| layer.scored_runs)
+        .max()
+        .unwrap_or(0);
+    let high_risk_layers = layers
+        .values()
+        .filter(|layer| layer.high_risk_count > 0)
+        .count();
+    let model_summary = models
+        .iter()
+        .next()
+        .map(|(model_key, model)| {
+            format!(
+                "{} {:.1} / runs {}",
+                model_key, model.average_score, model.scored_runs
+            )
+        })
+        .unwrap_or_else(|| "no model scores".into());
+
+    html! {
+        <div class="layer-summary-grid">
+            <div><span>{"Layer average"}</span><strong>{format!("{average_layer_score:.1}")}</strong></div>
+            <div><span>{"Scored runs"}</span><strong>{scored_runs}</strong></div>
+            <div><span>{"High-risk layers"}</span><strong>{format!("{} / {}", high_risk_layers, layers.len())}</strong></div>
+            <div><span>{"Model signal"}</span><strong>{model_summary}</strong></div>
+        </div>
+    }
+}
+
 fn operator_queue_snapshot(summary: &DashboardSummary, on_navigate: &Callback<String>) -> Html {
     html! {
         <div class="visual-panel wide-visual operator-queue-panel">
@@ -7784,7 +7800,11 @@ fn layer_score_label(layers: &BTreeMap<String, DashboardLayerScore>, layer_id: &
     layers
         .iter()
         .find(|(key, layer)| {
-            key.eq_ignore_ascii_case(layer_id) || layer.name.to_ascii_uppercase().contains(layer_id)
+            key.eq_ignore_ascii_case(layer_id)
+                || key
+                    .to_ascii_uppercase()
+                    .starts_with(&layer_id.to_ascii_uppercase())
+                || layer.name.to_ascii_uppercase().contains(layer_id)
         })
         .map(|(_, layer)| format!("{:.1}", layer.average_score))
         .unwrap_or_else(|| "n/a".into())

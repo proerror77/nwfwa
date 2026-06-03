@@ -1133,6 +1133,10 @@ pre {
   grid-template-columns: repeat(7, minmax(112px, 1fr));
 }
 
+.dashboard-risk-flow .risk-node:not(:last-child)::after {
+  display: none;
+}
+
 .risk-node {
   position: relative;
   display: grid;
@@ -1181,6 +1185,36 @@ pre {
   color: var(--muted);
   font-size: 11px;
   line-height: 1.3;
+}
+
+.layer-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.layer-summary-grid > div {
+  min-width: 0;
+  padding: 12px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-left: 3px solid var(--blue);
+  border-radius: 8px;
+}
+
+.layer-summary-grid span {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.layer-summary-grid strong {
+  display: block;
+  margin-top: 5px;
+  color: #0c315f;
+  font-size: 18px;
+  line-height: 1.15;
+  overflow-wrap: anywhere;
 }
 
 .visual-board {
@@ -3784,6 +3818,7 @@ pre {
   .visual-board,
   .result-grid,
   .form-grid,
+  .layer-summary-grid,
   .summary-grid,
   .compact-list,
   .case-grid,
