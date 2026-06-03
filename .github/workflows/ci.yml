@@ -34,12 +34,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/build_prd_coverage.py scripts/ops/run_mlops_monitoring_plan.py
+      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/build_prd_coverage.py scripts/ops/run_mlops_monitoring_plan.py
       - run: python3 scripts/ops/validate_k8s_staging.py
       - run: python3 scripts/ops/validate_container_packaging.py
       - run: python3 scripts/ops/validate_analytics_scale.py
       - run: python3 scripts/ops/validate_ai_evidence_foundation.py
       - run: python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof
+      - run: python3 scripts/ops/validate_operational_drill_proof.py --proof-dir /tmp/nwfwa-staging-proof
       - run: python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment --commit-sha "$GITHUB_SHA"
       - run: python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export
       - run: python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation

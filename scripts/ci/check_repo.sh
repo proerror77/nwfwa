@@ -26,6 +26,7 @@ required_files=(
   "scripts/ops/validate_container_packaging.py"
   "scripts/ops/validate_analytics_scale.py"
   "scripts/ops/validate_ai_evidence_foundation.py"
+  "scripts/ops/validate_operational_drill_proof.py"
   "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
@@ -447,6 +448,7 @@ grep -q "alert_routing_configuration" docs/project/api-reference.md
 grep -q "alert_routing_configuration" docs/engineering/pilot-readiness.md
 grep -q "FWA_ALERT_ROUTING_POLICY_ID" docs/project/technology-stack.md
 grep -q "operational_drill_proof" scripts/ops/build_staging_evidence.py
+grep -q "operational drill proof validation passed" scripts/ops/validate_operational_drill_proof.py
 grep -q "operational_drill_proof" .github/workflows/ci.yml
 grep -q "operational_drill_proof" docs/project/operations-guide.md
 grep -q "observability_exporter_configuration" docs/project/api-reference.md
@@ -537,12 +539,13 @@ grep -q "governance_ops_plan" apps/worker/src/lib.rs
 grep -q "build-governance-ops-plan" apps/worker/src/main.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
 python3 scripts/ops/validate_analytics_scale.py
 python3 scripts/ops/validate_ai_evidence_foundation.py
 python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof >/tmp/nwfwa-staging-proof.json
+python3 scripts/ops/validate_operational_drill_proof.py --proof-dir /tmp/nwfwa-staging-proof
 python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment >/tmp/nwfwa-staging-deployment.json
 python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
 python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation >/tmp/nwfwa-ai-evidence-foundation.json
@@ -553,6 +556,7 @@ test -f /tmp/nwfwa-staging-proof/object_storage_manifest.json
 test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
 test -f /tmp/nwfwa-staging-proof/retention_legal_hold_proof.json
 test -f /tmp/nwfwa-staging-proof/observability_proof.json
+test -f /tmp/nwfwa-staging-proof/operational_drill_proof.json
 test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
 test -f /tmp/nwfwa-staging-deployment/apply.sh
 test -f /tmp/nwfwa-staging-deployment/rollback.md

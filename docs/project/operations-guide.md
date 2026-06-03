@@ -415,6 +415,8 @@ Generate local pilot foundation evidence without customer data:
 python3 scripts/ops/build_staging_evidence.py \
   --output-dir artifacts/staging-proof \
   --object-storage-uri s3://nwfwa-staging-artifacts
+python3 scripts/ops/validate_operational_drill_proof.py \
+  --proof-dir artifacts/staging-proof
 ```
 
 The evidence pack records object-storage prefixes, backup/restore proof

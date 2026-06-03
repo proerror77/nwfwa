@@ -100,6 +100,8 @@ Minimum pilot monitoring:
   operational drill proof declares restore, rollback, alert-route, pilot
   readiness, and incident tabletop evidence expected before customer pilot
   sign-off.
+  Validate that contract with
+  `python3 scripts/ops/validate_operational_drill_proof.py --proof-dir artifacts/staging-proof`.
 - MLOps monitoring-plan simulation:
   `python3 scripts/ops/run_mlops_monitoring_plan.py --plan scripts/ops/sample_mlops_monitoring_plan.json --output-dir artifacts/mlops-monitoring`
   writes staging shadow, drift, fairness, reviewer-disagreement, and label-delay
