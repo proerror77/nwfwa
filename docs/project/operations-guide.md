@@ -15,7 +15,7 @@ cargo install trunk --version 0.21.14 --locked
 Start PostgreSQL and the ML service:
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d postgres ml-service
+docker compose -f infra/docker-compose.yml up -d postgres ml-service object-storage
 ```
 
 Seed deterministic demo data:
@@ -214,6 +214,18 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
 The generated plan covers shadow traffic evaluation, score and feature drift,
 segment fairness review, reviewer disagreement review, and label delay review.
 
+Run the local staging MLOps monitoring-plan simulator:
+
+```bash
+python3 scripts/ops/run_mlops_monitoring_plan.py \
+  --plan scripts/ops/sample_mlops_monitoring_plan.json \
+  --output-dir artifacts/mlops-monitoring
+```
+
+The simulator writes shadow, drift, segment fairness, reviewer disagreement, and
+label delay report artifacts. These are staging proof artifacts only; they are
+not live customer shadow or drift evidence.
+
 Frontend:
 
 ```bash
@@ -257,6 +269,36 @@ scripts/demo/customer_pilot_proof.sh
 Replace every placeholder in `scripts/demo/pilot_ready_env.example` before using
 it. The same environment should be applied to the API server process so
 `/api/v1/health` evaluates the configured pilot contracts, not local defaults.
+
+## Kubernetes Staging
+
+Staging manifests live in `infra/k8s/staging` and can be rendered or applied with
+Kustomize:
+
+```bash
+python3 scripts/ops/validate_k8s_staging.py
+kubectl kustomize infra/k8s/staging
+```
+
+Before applying to a real staging cluster, replace the placeholder image names
+and create a real Secret from `infra/k8s/staging/secrets.example.yaml` in the
+`nwfwa-staging` namespace. The example Secret is intentionally not included in
+the kustomization resources, so placeholder secrets are not applied by default.
+The directory includes API, web console, ML service, PostgreSQL, S3-compatible
+object storage, and worker CronJobs for pilot readiness and MLOps
+monitoring-plan generation.
+
+Generate local pilot foundation evidence without customer data:
+
+```bash
+python3 scripts/ops/build_staging_evidence.py \
+  --output-dir artifacts/staging-proof \
+  --object-storage-uri s3://nwfwa-staging-artifacts
+```
+
+The evidence pack records object-storage prefixes, backup/restore proof
+metadata, and observability proof metadata. It does not replace a live restore
+drill, production dashboards, or customer-approved retention controls.
 
 ## CI Gates
 

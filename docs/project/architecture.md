@@ -154,13 +154,17 @@ backup, retention, or production monitoring setup is complete.
 The current repository supports a local modular monolith path:
 
 - PostgreSQL 16 through Docker Compose.
+- S3-compatible MinIO object storage through Docker Compose for staging proof.
 - Python FastAPI ML service through Docker Compose or local uvicorn.
 - Rust API server through `cargo run --locked -p api-server`.
 - Yew web console through `NO_COLOR=false trunk serve`.
+- Kubernetes staging manifests under `infra/k8s/staging` for API server, web
+  console, ML service, PostgreSQL, object storage, and worker CronJobs.
 
-Production deployment is not configured yet. Environment-specific deployment,
-secrets, key rotation, observability, object storage, and customer network
-controls must be selected before production use.
+Production deployment is not configured yet. The Kubernetes manifests are a
+staging architecture and proof surface; environment-specific production
+deployment, managed secrets, key rotation, observability, object storage, and
+customer network controls must still be selected before production use.
 
 Pilot foundation work is also still required before customer data is used:
 object storage health, backup and restore, retention and legal hold, tenant or

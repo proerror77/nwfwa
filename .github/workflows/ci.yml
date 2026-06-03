@@ -29,6 +29,28 @@ jobs:
       - uses: actions/checkout@v6
       - run: bash scripts/ci/check_repo.sh
 
+  staging-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/build_staging_evidence.py scripts/ops/run_mlops_monitoring_plan.py
+      - run: python3 scripts/ops/validate_k8s_staging.py
+      - run: python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof
+      - run: |
+          python3 scripts/ops/run_mlops_monitoring_plan.py \
+            --plan scripts/ops/sample_mlops_monitoring_plan.json \
+            --output-dir /tmp/nwfwa-mlops-monitoring
+      - run: |
+          test -f /tmp/nwfwa-staging-proof/object_storage_manifest.json
+          test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
+          test -f /tmp/nwfwa-staging-proof/observability_proof.json
+          test -f /tmp/nwfwa-mlops-monitoring/shadow_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/drift_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/fairness_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/reviewer_disagreement_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/label_delay_report.json
+
   rust:
     runs-on: ubuntu-latest
     timeout-minutes: 20

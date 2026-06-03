@@ -67,6 +67,11 @@ The public-data MVP pack can validate the data and ML engineering loop before
 customer data is available, but it does not replace customer production
 validation.
 
+Kubernetes staging manifests now live under `infra/k8s/staging`. They define
+the pilot foundation deployment shape for API, web console, ML service,
+PostgreSQL, S3-compatible object storage, and worker CronJobs. They are staging
+manifests with placeholder images and secrets, not a production package.
+
 ### Readiness Legend
 
 - `demo`: implemented for deterministic local demonstration with seeded data,
@@ -149,6 +154,34 @@ The worker provides the operational batch surface for health checks, Parquet
 profiling, retraining handoff generation, worker-driven candidate registration,
 and scheduled MLOps monitoring plan generation. Pilot readiness uses it as part
 of the minimum runtime health and model-operations surface.
+
+### Staging Infrastructure
+
+Path: `infra/k8s/staging`
+
+The staging K8S shape includes:
+
+- API server, ML service, web console, PostgreSQL, and MinIO object storage.
+- ConfigMap-backed pilot readiness settings for source system, object storage,
+  retention, backup/restore, masking, key rotation, allowlist, alert routing,
+  observability, and agent policy.
+- Secret example with placeholders only.
+- Worker CronJobs for pilot readiness proof and MLOps monitoring-plan emission.
+
+Static validation:
+
+```bash
+python3 scripts/ops/validate_k8s_staging.py
+```
+
+Local staging evidence artifacts:
+
+```bash
+python3 scripts/ops/build_staging_evidence.py --output-dir artifacts/staging-proof
+python3 scripts/ops/run_mlops_monitoring_plan.py \
+  --plan scripts/ops/sample_mlops_monitoring_plan.json \
+  --output-dir artifacts/mlops-monitoring
+```
 
 ### Rust Crates
 

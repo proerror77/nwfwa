@@ -83,6 +83,19 @@ Minimum pilot monitoring:
   for strict proof mode and should be copied into the pilot shell or secret
   manager with real customer-approved values before `FWA_PROOF_REQUIRE_READY=1`
   is used.
+- Kubernetes staging proof: `infra/k8s/staging` defines the staging deployment
+  shape for API, web console, ML service, PostgreSQL, S3-compatible object
+  storage, and worker CronJobs. Run
+  `python3 scripts/ops/validate_k8s_staging.py` before applying manifests.
+- Pilot foundation evidence pack:
+  `python3 scripts/ops/build_staging_evidence.py --output-dir artifacts/staging-proof`
+  writes object-storage, backup/restore, and observability proof metadata
+  without requiring customer data.
+- MLOps monitoring-plan simulation:
+  `python3 scripts/ops/run_mlops_monitoring_plan.py --plan scripts/ops/sample_mlops_monitoring_plan.json --output-dir artifacts/mlops-monitoring`
+  writes staging shadow, drift, fairness, reviewer-disagreement, and label-delay
+  report artifacts. These artifacts prove the execution contract only; they are
+  not live customer shadow or drift evidence.
 - Standard FWA rule pack readiness: the deterministic seed and customer smoke
   must expose the active 16-rule FWA rule pack for early high-value claim,
   duplicate billing, upcoding, unbundling, excessive utilization, provider peer
@@ -149,7 +162,7 @@ Minimum pilot monitoring:
   decision. With `--require-ready`, unresolved blockers make the command fail
   after printing the JSON report.
 - ML service health: `GET /health`
-- CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
+- CI health: GitHub Actions `repository-health`, `staging-proof`, `migrations`, `rust`, `python`, `frontend`
 - Runtime logs: request path, status, run id, audit id, event type, source
   system, actor role
 - API call records: audit-backed scoring, investigation, and QA writeback calls

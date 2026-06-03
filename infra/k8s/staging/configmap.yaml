@@ -1,0 +1,21 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: nwfwa-staging-config
+  labels:
+    app.kubernetes.io/name: nwfwa
+    environment: staging
+data:
+  FWA_SOURCE_SYSTEM: staging-tpa
+  FWA_MODEL_SERVICE_URL: http://ml-service:8001
+  FWA_OBJECT_STORAGE_URI: s3://nwfwa-staging-artifacts
+  FWA_CUSTOMER_SCOPE_ID: staging-customer
+  FWA_RETENTION_POLICY_ID: staging-retention-v1
+  FWA_BACKUP_RESTORE_PLAN_ID: staging-backup-restore-v1
+  FWA_PII_MASKING_POLICY_ID: staging-pii-masking-v1
+  FWA_KEY_ROTATION_POLICY_ID: staging-key-rotation-v1
+  FWA_NETWORK_ALLOWLIST_ID: staging-network-allowlist-v1
+  FWA_ALERT_ROUTING_POLICY_ID: staging-alert-routing-v1
+  FWA_OBSERVABILITY_EXPORTER_ENDPOINT: http://otel-collector:4318
+  FWA_AGENT_POLICY_ID: staging-agent-policy-v1
+  RUST_LOG: info

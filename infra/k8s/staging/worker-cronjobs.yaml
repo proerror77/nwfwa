@@ -1,0 +1,80 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pilot-readiness-proof
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: nwfwa-staging
+spec:
+  schedule: "*/30 * * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: worker
+            app.kubernetes.io/part-of: nwfwa-staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: worker
+              image: ghcr.io/replace-me/nwfwa-worker:staging
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: nwfwa-staging-config
+                - secretRef:
+                    name: nwfwa-staging-secrets
+              command:
+                - worker
+                - check-pilot-readiness
+                - --api-url
+                - http://api-server:8080
+                - --require-ready
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: mlops-monitoring-plan
+  labels:
+    app.kubernetes.io/name: worker
+    app.kubernetes.io/part-of: nwfwa-staging
+spec:
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 7
+  failedJobsHistoryLimit: 7
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: worker
+            app.kubernetes.io/part-of: nwfwa-staging
+        spec:
+          restartPolicy: OnFailure
+          containers:
+            - name: worker
+              image: ghcr.io/replace-me/nwfwa-worker:staging
+              imagePullPolicy: IfNotPresent
+              envFrom:
+                - configMapRef:
+                    name: nwfwa-staging-config
+                - secretRef:
+                    name: nwfwa-staging-secrets
+              command:
+                - worker
+                - build-mlops-monitoring-plan
+                - --manifest-uri
+                - s3://nwfwa-staging-artifacts/datasets/public-mvp/manifest.json
+                - --artifact-uri
+                - s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/rust_serving_artifact.json
+                - --model-key
+                - baseline_fwa
+                - --model-version
+                - staging
+                - --cron
+                - "0 2 * * *"

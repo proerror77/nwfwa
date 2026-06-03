@@ -148,9 +148,11 @@ belong in object storage or a data lake for real pilots.
 | Technology | Where | Purpose |
 | --- | --- | --- |
 | Docker Compose | `infra/docker-compose.yml` | Local PostgreSQL and ML service |
+| MinIO | `infra/docker-compose.yml`, `infra/k8s/staging` | S3-compatible staging artifact storage proof |
+| Kubernetes / Kustomize | `infra/k8s/staging` | Staging deployment architecture for pilot foundation proof |
 | GitHub Actions | `.github/workflows/ci.yml` | CI validation |
 | GitHub Releases | `.github/workflows/release.yml` | Tag-based release publication |
-| Shell scripts | `scripts/ci`, `scripts/demo` | Health, seed, smoke, and persistence checks |
+| Shell and Python scripts | `scripts/ci`, `scripts/demo`, `scripts/ops` | Health, seed, smoke, persistence, staging, and MLOps proof checks |
 | GitHub CLI | release workflow | `gh release create` publication |
 
 ## CI Jobs
@@ -170,6 +172,10 @@ CI uses Rust WASM tooling plus Node 22 for the static smoke runner and Python 3.
 jobs. Actions include `actions/checkout@v6`, `actions/setup-python@v6`,
 `actions/setup-node@v6`, `dtolnay/rust-toolchain@stable`, and
 `Swatinem/rust-cache@v2`.
+
+Kubernetes staging is validated by the `staging-proof` job. That job statically
+checks `infra/k8s/staging`, generates local pilot foundation evidence, and
+simulates the scheduled MLOps monitoring-plan reports without customer data.
 
 ## Declared And Resolved Versions
 
@@ -204,9 +210,9 @@ Prefer locked commands when documenting reproducible verification.
 
 ## Current Non-Goals
 
-- Kubernetes deployment manifests.
+- Production Kubernetes deployment package.
 - Production secrets management.
-- Production object storage wiring.
+- Production object storage wiring beyond staging proof manifests.
 - Production observability stack.
 - GPU inference runtime.
 - Real model training pipeline.

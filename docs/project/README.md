@@ -10,7 +10,7 @@ the technical stack fits together, and what is ready for demo or pilot use.
 - [Architecture](architecture.md): product boundary, runtime topology, modules,
   workflow map, and deployment shape.
 - [Technology Stack](technology-stack.md): Rust, Python, Yew, PostgreSQL,
-  Docker, CI, and development tooling.
+  Docker, Kubernetes staging, CI, and development tooling.
 - [API Reference](api-reference.md): every API route, method, purpose, auth
   requirement, main inputs, outputs, and side effects.
 - [Data Model](data-model.md): PostgreSQL schema groups, relationships, and
@@ -22,8 +22,8 @@ the technical stack fits together, and what is ready for demo or pilot use.
 - [ML Pipeline Runbook](ml-pipeline-runbook.md): operating workflow for dataset
   intake, training, registration, review, promotion, serving, monitoring, and
   rollback.
-- [Operations Guide](operations-guide.md): local demo, verification gates, CI,
-  pilot readiness, and known production boundaries.
+- [Operations Guide](operations-guide.md): local demo, Kubernetes staging,
+  verification gates, CI, pilot readiness, and known production boundaries.
 
 ## Source Of Truth
 
