@@ -68,7 +68,7 @@ const CONTRACT_PANELS: &[&str] = &[
 ];
 
 const SAMPLE_INBOX_PAYLOAD: &str = r#"{
-  "systemCode": "AiClaim Core",
+  "systemCode": "tpa-demo",
   "transDate": "2026-05-27 21:22:31",
   "transNo": "f8d0e88391ac4685929d0ca1cb411e7a",
   "reportCase": {
@@ -5950,7 +5950,7 @@ fn source_system_from_context(context: &Value) -> String {
     context
         .pointer("/claim_header/source_system")
         .and_then(Value::as_str)
-        .unwrap_or("AiClaim Core")
+        .unwrap_or("tpa-demo")
         .to_string()
 }
 
