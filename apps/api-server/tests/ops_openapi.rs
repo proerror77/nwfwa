@@ -11,6 +11,16 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 
@@ -68,6 +78,12 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/model-datasets",
         "/api/v1/ops/model-evaluations",
         "/api/v1/ops/model-evaluations/{evaluation_run_id}",
+        "/api/v1/ops/evidence/documents",
+        "/api/v1/ops/evidence/documents/{document_id}",
+        "/api/v1/ops/evidence/documents/{document_id}/chunks",
+        "/api/v1/ops/evidence/documents/{document_id}/ocr-outputs",
+        "/api/v1/ops/evidence/embedding-jobs",
+        "/api/v1/ops/evidence/retrieval-audit-events",
         "/api/v1/ops/dashboard/summary",
         "/api/v1/ops/providers/risk-summary",
         "/api/v1/ops/webhook-events",
@@ -77,6 +93,13 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/leads/{lead_id}/triage",
         "/api/v1/ops/cases",
         "/api/v1/ops/cases/{case_id}/status",
+        "/api/v1/ops/backfills",
+        "/api/v1/ops/backfills/{job_id}/leads",
+        "/api/v1/ops/evidence-requests",
+        "/api/v1/ops/evidence-requests/generate",
+        "/api/v1/ops/evidence-requests/{request_id}/status",
+        "/api/v1/ops/label-bootstrap/queue",
+        "/api/v1/ops/label-bootstrap/items/{item_id}/review",
         "/api/v1/ops/audit-samples",
         "/api/v1/ops/audit-events",
         "/api/v1/ops/api-calls",
@@ -106,7 +129,7 @@ async fn openapi_includes_operations_paths() {
             ["schema"]["$ref"],
         "#/components/schemas/HealthResponse"
     );
-    for field in ["status", "service", "version", "checks"] {
+    for field in ["status", "service", "version", "pilot_readiness", "checks"] {
         assert!(
             schema["components"]["schemas"]["HealthResponse"]["required"]
                 .as_array()
@@ -121,8 +144,71 @@ async fn openapi_includes_operations_paths() {
         "#/components/schemas/HealthCheck"
     );
     assert_eq!(
+        schema["components"]["schemas"]["HealthResponse"]["properties"]["pilot_readiness"]["$ref"],
+        "#/components/schemas/PilotReadiness"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["required"],
+        serde_json::json!([
+            "status",
+            "ready_for_customer_pilot",
+            "required_check_names",
+            "required_check_count",
+            "ready_check_count",
+            "blocking_check_count",
+            "blocking_check_names",
+            "remediation_summary",
+            "ready_checks",
+            "blocking_checks"
+        ])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["status"]["enum"],
+        serde_json::json!(["ready", "not_ready"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["blocking_checks"]["items"]
+            ["$ref"],
+        "#/components/schemas/HealthCheck"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["ready_checks"]["items"]
+            ["$ref"],
+        "#/components/schemas/HealthCheck"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["ready_for_customer_pilot"]
+            ["type"],
+        "boolean"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["blocking_check_names"]
+            ["items"]["type"],
+        "string"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["PilotReadiness"]["properties"]["remediation_summary"]
+            ["items"]["type"],
+        "string"
+    );
+    assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["runtime_kind"]["description"],
         "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["runtime_kind"]["enum"],
+        serde_json::json!(["python_http", "heuristic", "rust_artifact"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["remediation"]["type"],
+        "string"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["remediation"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Non-secret remediation hint"),
+        "missing health remediation description"
     );
     assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["enum"],
@@ -133,7 +219,17 @@ async fn openapi_includes_operations_paths() {
             "local_demo_source",
             "local_dev_database",
             "local_dev_model_service",
-            "heuristic_model_scorer"
+            "heuristic_model_scorer",
+            "local_demo_object_storage",
+            "local_demo_customer_scope",
+            "local_demo_retention_policy",
+            "local_demo_backup_restore",
+            "local_demo_pii_masking",
+            "local_demo_key_rotation",
+            "local_demo_network_allowlist",
+            "local_demo_alert_routing",
+            "local_demo_observability_exporter",
+            "local_demo_agent_policy"
         ])
     );
     assert!(
@@ -171,6 +267,76 @@ async fn openapi_includes_operations_paths() {
             .contains("heuristic_model_scorer"),
         "missing health status heuristic-scorer-readiness description"
     );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_object_storage"),
+        "missing health status object-storage-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_customer_scope"),
+        "missing health status customer-scope-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_retention_policy"),
+        "missing health status retention-policy-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_backup_restore"),
+        "missing health status backup-restore-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_pii_masking"),
+        "missing health status pii-masking-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_key_rotation"),
+        "missing health status key-rotation-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_network_allowlist"),
+        "missing health status network-allowlist-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_alert_routing"),
+        "missing health status alert-routing-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_observability_exporter"),
+        "missing health status observability-exporter-readiness description"
+    );
+    assert!(
+        schema["components"]["schemas"]["HealthCheck"]["properties"]["status"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("local_demo_agent_policy"),
+        "missing health status agent-policy-readiness description"
+    );
     assert!(schema["components"]["schemas"]["RuleDiscoveryResponse"].is_object());
     assert!(schema["components"]["schemas"]["RulePerformanceResponse"].is_object());
     assert!(
@@ -194,6 +360,14 @@ async fn openapi_includes_operations_paths() {
                 == "#/components/schemas/CanonicalContextScoreClaimRequest"),
         "ScoreClaimRequest should accept normalized inbox canonical context"
     );
+    assert!(
+        schema["components"]["schemas"]["ScoreClaimRequest"]["oneOf"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|variant| variant["$ref"] == "#/components/schemas/InboxHandoffScoreClaimRequest"),
+        "ScoreClaimRequest should accept persisted inbox handoff"
+    );
     assert_eq!(
         schema["components"]["schemas"]["CanonicalContextScoreClaimRequest"]["properties"]
             ["canonical_claim_context"]["$ref"],
@@ -204,6 +378,7 @@ async fn openapi_includes_operations_paths() {
         "run_id",
         "audit_id",
         "mapping_version",
+        "raw_payload_checksum",
         "validation_result",
         "scoring_ready",
         "canonical_claim_context",
@@ -798,6 +973,7 @@ async fn openapi_includes_operations_paths() {
             "leakage_check_status",
             "shadow_comparison_status",
             "label_provenance_status",
+            "pilot_validation_status",
         ] {
             assert!(
                 description.contains(required_hint),
@@ -920,6 +1096,9 @@ async fn openapi_includes_operations_paths() {
                 "notes",
                 "candidate_model_version",
                 "artifact_uri",
+                "artifact_sha256",
+                "training_artifact_uri",
+                "training_artifact_sha256",
                 "endpoint_url",
                 "validation_report_uri",
                 "evaluation_run_id",
@@ -1009,8 +1188,40 @@ async fn openapi_includes_operations_paths() {
             ["artifact_uri"]["description"]
             .as_str()
             .unwrap_or_default()
-            .contains("Supported model artifact formats"),
+            .contains("Rust serving exports"),
         "missing CompleteModelRetrainingJobRequest.artifact_uri format contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["training_artifact_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Python training artifact"),
+        "missing CompleteModelRetrainingJobRequest.training_artifact_uri contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["artifact_sha256"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("sha256"),
+        "missing CompleteModelRetrainingJobRequest.artifact_sha256 contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["training_artifact_sha256"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("sha256"),
+        "missing CompleteModelRetrainingJobRequest.training_artifact_sha256 contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("model_training_artifacts"),
+        "missing CompleteModelRetrainingJobRequest training artifact evidence contract"
     );
     assert!(
         schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
@@ -1537,6 +1748,13 @@ async fn openapi_includes_operations_paths() {
             ["$ref"],
         "#/components/schemas/AuditHistoryEvent"
     );
+    assert!(
+        schema["components"]["schemas"]["AuditHistoryEvent"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "actor_role")
+    );
     assert_eq!(
         schema["paths"]["/api/v1/ops/api-calls"]["get"]["responses"]["200"]["content"]
             ["application/json"]["schema"]["$ref"],
@@ -1557,6 +1775,8 @@ async fn openapi_includes_operations_paths() {
         "method",
         "status_code",
         "source_system",
+        "actor_role",
+        "customer_scope_id",
         "audit_id",
         "idempotency_key",
     ] {
@@ -1940,6 +2160,25 @@ async fn openapi_includes_operations_paths() {
     assert!(schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"].is_object());
     assert!(schema["components"]["schemas"]["MedicalReviewResultResponse"].is_object());
     assert!(schema["components"]["schemas"]["MedicalReviewQueueResponse"].is_object());
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitMedicalReviewResultRequest"]["properties"]
+            ["clinical_outcomes"]["items"]["enum"],
+        serde_json::json!([
+            "documentation_issue",
+            "medical_necessity_review_required",
+            "insufficient_evidence",
+            "medical_necessity_issue",
+            "clinical_evidence_sufficient",
+            "false_positive"
+        ])
+    );
+    assert!(
+        schema["components"]["schemas"]["MedicalReviewResultResponse"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "clinical_outcomes")
+    );
     assert!(
         schema["components"]["schemas"]["MedicalReviewQueueItem"]["required"]
             .as_array()
@@ -2119,6 +2358,11 @@ async fn openapi_includes_operations_paths() {
         .unwrap()
         .iter()
         .any(|field| field == "idempotency_key"));
+    assert!(schema["components"]["schemas"]["WebhookEvent"]["required"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|field| field == "customer_scope_id"));
     assert_eq!(
         schema["components"]["schemas"]["WebhookEvent"]["properties"]["delivery_status"]["enum"][1],
         "retry_wait"
@@ -2525,6 +2769,20 @@ async fn openapi_includes_operations_paths() {
     assert!(saving_attribution_required
         .iter()
         .any(|field| field == "evidence_refs"));
+    assert!(saving_attribution_required
+        .iter()
+        .any(|field| field == "financial_impact_type"));
+    assert_eq!(
+        schema["components"]["schemas"]["SavingAttributionSummary"]["properties"]
+            ["financial_impact_type"]["enum"],
+        serde_json::json!([
+            "prevented_payment",
+            "recovered_amount",
+            "avoided_future_exposure",
+            "deterrence_estimate",
+            "estimated_impact"
+        ])
+    );
     assert_eq!(
         schema["components"]["schemas"]["SavingAttributionSummary"]["properties"]["evidence_refs"]
             ["items"]["minLength"],
@@ -2534,6 +2792,18 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]
             ["saving_attributions"]["items"]["$ref"],
         "#/components/schemas/SavingAttributionSummary"
+    );
+    let value_measurement_required = schema["components"]["schemas"]["DashboardValueMeasurement"]
+        ["required"]
+        .as_array()
+        .unwrap();
+    assert!(value_measurement_required
+        .iter()
+        .any(|field| field == "deterrence_estimate"));
+    assert_eq!(
+        schema["components"]["schemas"]["DashboardValueMeasurement"]["properties"]
+            ["deterrence_estimate"]["format"],
+        "decimal"
     );
     assert_eq!(
         schema["components"]["schemas"]["DashboardSummaryResponse"]["properties"]["layer_scores"]
@@ -2711,7 +2981,7 @@ async fn openapi_defines_core_tpa_integration_contract() {
             Some("#/components/schemas/SimilarCaseSearchRequest"),
             "#/components/schemas/SimilarCaseSearchResponse",
             None,
-            &["400", "401"][..],
+            &["400", "401", "403"][..],
         ),
         (
             "/api/v1/investigations/results",

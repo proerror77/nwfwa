@@ -1,8 +1,14 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::HeuristicModelScorer;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -11,7 +17,23 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
+}
+
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
 }
 
 async fn json_request(
@@ -414,6 +436,10 @@ async fn publishes_confirmed_knowledge_case_for_similarity_and_audit() {
         publish_event["payload"]["scheme_family"],
         "laboratory_testing_abuse"
     );
+    assert_eq!(
+        publish_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
 }
 
 #[tokio::test]
@@ -565,6 +591,168 @@ async fn publish_knowledge_case_preserves_canonical_evidence_refs_from_scoring_a
         .contains(&serde_json::json!(
             "invoice:INV-KB-CANONICAL:fee_detail:LINE-1"
         )));
+}
+
+#[tokio::test]
+async fn publish_knowledge_case_does_not_merge_cross_customer_canonical_evidence_refs() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _body) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-KB-CROSS-SCOPE",
+              "total_amount": 9300,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-alpha",
+              "masked_certificate_id": "masked-cert-alpha",
+              "member_birth_date": "1988-03-12",
+              "member_gender": "F",
+              "policy_id": "POL-KB-CROSS-SCOPE",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-KB-CROSS-SCOPE",
+              "name": "Cross Scope Hospital",
+              "provider_type": "hospital",
+              "region": "Guangzhou",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "Alpha-only invoice line",
+                "fee_category": "lab",
+                "amount": 9300,
+                "diagnosis_list": [
+                  { "code": "E11", "name": "Type 2 diabetes mellitus" }
+                ],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:ALPHA-ONLY:fee_detail:LINE-1"]
+              }
+            ],
+            "document_evidence": [
+              {
+                "document_id": "MR-ALPHA-ONLY",
+                "medical_record_type": "outpatient_record",
+                "source_refs": ["medical_record:MR-ALPHA-ONLY"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = json_request(
+        beta_app,
+        "POST",
+        "/api/v1/ops/knowledge/cases",
+        r#"{
+          "case_id": "KC-CROSS-SCOPE",
+          "title": "Published beta scope case",
+          "fwa_type": "Waste",
+          "scheme_family": "lab_overuse",
+          "diagnosis_code": "E11",
+          "provider_region": "Guangzhou",
+          "provider_type": "lab",
+          "summary": "Confirmed repeated lab testing overuse pattern.",
+          "outcome": "Confirmed waste; provider education opened.",
+          "tags": ["lab_overuse", "provider_pattern"],
+          "evidence_refs": ["investigation_results:INV-BETA-SCOPE"],
+          "source_claim_id": "CLM-KB-CROSS-SCOPE"
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(!body["case"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("invoice:ALPHA-ONLY:fee_detail:LINE-1")));
+}
+
+#[tokio::test]
+async fn agent_run_logs_and_approvals_are_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, body) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-SCOPE",
+          "risk_score": 93,
+          "rag": "RED",
+          "top_reasons": ["Agent run should remain scoped to alpha"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) =
+        json_request(beta_app.clone(), "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(!body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|run| run["agent_run_id"] == agent_run_id));
+
+    let (status, body) = json_request(
+        beta_app,
+        "POST",
+        &format!("/api/v1/ops/agent-runs/{agent_run_id}/approvals"),
+        &format!(
+            r#"{{
+          "decision": "approved",
+          "approver": "beta-reviewer",
+          "reason": "Cross-customer approval attempt must be rejected.",
+          "evidence_refs": ["agent_run:{agent_run_id}", "agent_approval:manual_review_required"]
+        }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "AGENT_RUN_NOT_FOUND");
 }
 
 #[tokio::test]
@@ -1055,9 +1243,12 @@ async fn lists_agent_run_logs_for_governance_review() {
         .find(|check| check["tool_name"] == "knowledge.search_similar")
         .expect("tool policy check should be audited before tool activity");
     assert_eq!(policy_check["decision"], "allowed");
-    assert_eq!(policy_check["policy_name"], "agent_tool_allowlist");
+    assert_eq!(policy_check["policy_name"], "demo-agent-policy");
     assert_eq!(policy_check["tool_call_id"], tool_call["tool_call_id"]);
-    assert!(!policy_check["evidence_refs"].as_array().unwrap().is_empty());
+    assert!(policy_check["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
     let tool_result = run["tool_results"]
         .as_array()
         .unwrap()
@@ -1082,6 +1273,124 @@ async fn lists_agent_run_logs_for_governance_review() {
     assert!(!run["evidence_refs"].as_array().unwrap().is_empty());
     assert!(run["output_json"]["evidence_sufficiency"].is_object());
     assert!(!run["output_json"].to_string().contains("CLM-AGENT-LOGS"));
+}
+
+#[tokio::test]
+async fn agent_policy_check_uses_configured_policy_id_for_governance_trace() {
+    let mut config = test_config();
+    config.agent_policy_id = "customer-alpha-agent-policy-v1".into();
+    let app = build_app(config);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-POLICY-CONFIG",
+          "risk_score": 90,
+          "rag": "RED",
+          "top_reasons": ["Configured policy should govern Agent tool access"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/agent-runs", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let run = body["runs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|run| run["agent_run_id"] == agent_run_id)
+        .expect("agent run should be listed for governance review");
+    let policy_check = run["policy_checks"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|check| check["tool_name"] == "knowledge.search_similar")
+        .expect("tool policy check should be audited before tool activity");
+
+    assert_eq!(
+        policy_check["policy_name"],
+        "customer-alpha-agent-policy-v1"
+    );
+    assert!(policy_check["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:customer-alpha-agent-policy-v1")));
+}
+
+#[tokio::test]
+async fn agent_investigation_audit_payload_traces_governance_controls() {
+    let mut config = test_config();
+    config.agent_policy_id = "customer-beta-agent-policy-v2".into();
+    let app = build_app(config);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/agent/cases/investigate",
+        r#"{
+          "claim_id": "CLM-AGENT-AUDIT-GOVERNANCE",
+          "risk_score": 93,
+          "rag": "RED",
+          "top_reasons": ["Agent audit should expose governance controls"],
+          "similar_case_query": {
+            "diagnosis_code": "J10",
+            "provider_region": "Shanghai",
+            "tags": ["provider_outlier"]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let investigation: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let agent_run_id = investigation["agent_run_id"].as_str().unwrap();
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        &format!("/api/v1/ops/audit-events?agent_run_id={agent_run_id}&limit=10"),
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let event = body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "agent.investigation.completed")
+        .expect("agent investigation completion should be audited");
+
+    assert_eq!(event["payload"]["agent_run_id"], agent_run_id);
+    assert_eq!(event["payload"]["decision_boundary"], "assistive_only");
+    assert_eq!(
+        event["payload"]["agent_policy_id"],
+        "customer-beta-agent-policy-v2"
+    );
+    assert_eq!(event["payload"]["customer_scope_id"], "demo-customer");
+    assert_eq!(event["payload"]["tool_name"], "knowledge.search_similar");
+    assert!(event["payload"]["policy_check_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("policy_check_masked:claim:"));
+    assert!(event["payload"]["tool_call_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("tool_call_masked:claim:"));
+    assert!(event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:customer-beta-agent-policy-v2")));
 }
 
 #[tokio::test]
@@ -1248,10 +1557,15 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(body["approval"]["agent_run_id"], agent_run_id);
     assert_eq!(body["approval"]["decision"], "approved");
     assert_eq!(body["approval"]["approver"], "qa-lead");
+    let approval_evidence_refs = body["approval"]["evidence_refs"].clone();
     assert!(body["approval"]["evidence_refs"]
         .as_array()
         .unwrap()
         .contains(&serde_json::json!(format!("agent_run:{agent_run_id}"))));
+    assert!(body["approval"]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
     assert!(body["audit_id"].as_str().unwrap().starts_with("aud_"));
 
     let (status, body) = json_request(app.clone(), "GET", "/api/v1/ops/agent-runs", "{}").await;
@@ -1302,6 +1616,16 @@ async fn submits_agent_approval_decision_for_governance_review() {
     assert_eq!(events.len(), 1);
     assert_eq!(events[0]["event_type"], "agent.approval.decided");
     assert_eq!(events[0]["payload"]["agent_run_id"], agent_run_id);
+    assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
+    assert_eq!(events[0]["payload"]["agent_policy_id"], "demo-agent-policy");
+    assert_eq!(
+        events[0]["payload"]["evidence_refs"],
+        approval_evidence_refs
+    );
+    assert!(events[0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("policy:demo-agent-policy")));
 
     let (status, body) = json_request(
         app.clone(),

@@ -24,11 +24,16 @@ erDiagram
     model_versions ||--o{ model_scores : scores
     fwa_leads ||--o{ investigation_cases : opens
     fwa_leads ||--o{ audit_samples : sampled
+    claims ||--o{ evidence_documents : references
+    evidence_documents ||--o{ evidence_document_chunks : chunks
+    evidence_documents ||--o{ evidence_ocr_outputs : extracts
+    evidence_documents ||--o{ evidence_redaction_reviews : reviews
     agent_runs ||--o{ agent_steps : contains
     agent_runs ||--o{ agent_context_snapshots : captures
     agent_runs ||--o{ tool_calls : invokes
     agent_runs ||--o{ agent_policy_checks : checks
     agent_runs ||--o{ agent_approvals : approves
+    agent_runs ||--o{ agent_workspace_artifacts : produces
     tool_calls ||--o{ tool_results : returns
     external_dataset_versions ||--o{ external_dataset_splits : has
     external_dataset_versions ||--o{ external_schema_fields : profiles
@@ -82,6 +87,12 @@ persistence checks.
 | Table | Purpose |
 | --- | --- |
 | `knowledge_cases` | Confirmed FWA cases used for similar-case retrieval. |
+| `evidence_documents` | Document registry with source refs, storage URI, checksum, redaction, and retention status. |
+| `evidence_document_chunks` | Versioned chunk registry for retrieval and evidence traceability. |
+| `evidence_ocr_outputs` | OCR output metadata, engine version, checksum, and quality status. |
+| `evidence_redaction_reviews` | Redaction policy review records for documents or chunks. |
+| `evidence_embedding_jobs` | Embedding job registry for documents, chunks, and knowledge cases. |
+| `evidence_retrieval_audit_events` | Retrieval audit trail with masked query checksum, source refs, and result refs. |
 | `agent_runs` | Agent investigation run headers. |
 | `agent_steps` | Step-level agent reasoning and checklist records. |
 | `agent_context_snapshots` | Context captured for agent governance. |
@@ -89,12 +100,11 @@ persistence checks.
 | `tool_results` | Tool result records associated with agent runs. |
 | `agent_policy_checks` | Agent guardrail and policy check records. |
 | `agent_approvals` | Human approval or rejection for agent outputs. |
+| `agent_workspace_artifacts` | Object-storage-backed artifacts produced by agent runs. |
 
-Agent data is auditable and assistive-only.
-
-Current agent persistence stores run headers, steps, context snapshots, tool
-calls, tool results, policy checks, and human approvals. Object-storage-backed
-agent workspace artifacts are a future infrastructure item, not a current table.
+Knowledge and agent data is auditable and assistive-only. Raw document text and
+raw payloads stay in customer-approved storage; PostgreSQL stores metadata,
+checksums, redaction status, retention policy, and evidence refs.
 
 ### Lead, Case, And Review Workflow
 
@@ -102,12 +112,17 @@ agent workspace artifacts are a future infrastructure item, not a current table.
 | --- | --- |
 | `fwa_leads` | Generated leads from scoring or operational signals. |
 | `investigation_cases` | Case workflow, SLA, assignment, reviewer, and evidence package. |
-| `audit_samples` | QA and audit sampling records. |
+| `audit_samples` | Customer-scoped QA and audit sampling records. |
 | `investigation_results` | Investigation writeback outcomes. |
-| `saving_attributions` | Prevented, recovered, and attribution amounts. |
+| `saving_attributions` | Prevented, recovered, estimated, and source-attributed amounts with financial impact type. |
 | `qa_reviews` | QA review writebacks and feedback targets. |
 
 These tables connect scoring to human workflow and feedback labels.
+
+Medical review results are persisted as `medical.review.recorded` audit events.
+Their payload carries controlled `clinical_outcomes`, which are converted into
+medical-review outcome labels for model training, rule tuning, and workflow
+feedback.
 
 Audit samples should preserve sampling mode, population definition, inclusion
 criteria, seed or selection method, sample size, reviewer assignment, assignment
@@ -173,10 +188,18 @@ identifiers are also unique:
 - `scoring_runs.run_id`
 - `audit_events.audit_id`
 - `knowledge_cases.case_id`
+- `evidence_documents.document_id`
+- `evidence_document_chunks.chunk_id`
+- `evidence_ocr_outputs.ocr_output_id`
+- `evidence_redaction_reviews.redaction_review_id`
+- `evidence_embedding_jobs.embedding_job_id`
+- `evidence_retrieval_audit_events.retrieval_id`
 - `agent_runs.agent_run_id`
+- `agent_workspace_artifacts.workspace_artifact_id`
 - `fwa_leads.lead_id`
 - `investigation_cases.case_id`
 - `audit_samples.sample_id`
+- `audit_samples.customer_scope_id`
 - `investigation_results.investigation_id`
 - `saving_attributions.attribution_id`
 - `qa_reviews.qa_case_id`
@@ -200,10 +223,11 @@ Important checks:
   'completed', 'failed', 'cancelled')`
 - `rule_promotion_reviews.decision in ('approved', 'rejected')`
 
-The current schema has no explicit `CREATE INDEX` statements beyond indexes
-created implicitly by primary keys and unique constraints. High-volume pilot
-queries over `run_id`, `claim_id`, `scheme_family`, `created_at`, and audit
-filters should be reviewed before production-scale use.
+The schema includes targeted indexes for audit sampling and AI evidence
+foundation lookups such as customer scope, claim id, document id, embedding
+target, retrieval audit time, and agent workspace artifacts. Other high-volume
+pilot queries over `run_id`, `scheme_family`, `created_at`, and audit filters
+should still be reviewed before production-scale use.
 
 ## Compatibility ALTERs
 

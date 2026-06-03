@@ -4,6 +4,7 @@ use fwa_features::FeatureMap;
 use fwa_ml_runtime::ModelScore;
 use fwa_rules::RuleMatch;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DetectionLayerScore {
@@ -12,6 +13,7 @@ pub struct DetectionLayerScore {
     pub score: u8,
     pub status: String,
     pub reason: String,
+    pub evidence_refs: Vec<Value>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
@@ -144,6 +146,14 @@ pub fn aggregate_with_routing_policy(
             peer_deviation_score,
             "active",
             "统计偏离检测：同类金额、频次或费用结构偏离",
+            feature_evidence_refs(
+                features,
+                &[
+                    "claim_amount_peer_percentile",
+                    "claim_amount_to_limit_ratio",
+                    "claim_item_count",
+                ],
+            ),
         ),
         layer(
             "L2_RULE_DETECTION",
@@ -151,6 +161,7 @@ pub fn aggregate_with_routing_policy(
             rule_score,
             "active",
             "规则命中检测：确定性业务规则和规则版本贡献",
+            rule_layer_evidence_refs(rule_matches),
         ),
         layer(
             "L3_UNSUPERVISED_ANOMALY",
@@ -158,6 +169,7 @@ pub fn aggregate_with_routing_policy(
             anomaly_score.score,
             "baseline",
             "无监督异常检测：当前使用可解释启发式异常信号",
+            anomaly_layer_evidence_refs(features, anomaly_score),
         ),
         layer(
             "L4_SUPERVISED_ML",
@@ -165,6 +177,7 @@ pub fn aggregate_with_routing_policy(
             model_score.score,
             "active",
             "监督式 ML 分类：模型运行时返回的风险分",
+            model_layer_evidence_refs(features, model_score),
         ),
         layer(
             "L5_MEDICAL_REASONABLENESS",
@@ -172,6 +185,16 @@ pub fn aggregate_with_routing_policy(
             medical_reasonableness_score,
             "baseline",
             "医疗合理性检测：诊断、项目和证据支持度",
+            feature_evidence_refs(
+                features,
+                &[
+                    "diagnosis_procedure_match_score",
+                    "high_cost_item_ratio",
+                    "clinical_missing_evidence_count",
+                    "clinical_item_finding_count",
+                    "clinical_review_required",
+                ],
+            ),
         ),
         layer(
             "L6_PROVIDER_GRAPH_RISK",
@@ -179,6 +202,16 @@ pub fn aggregate_with_routing_policy(
             provider_network_score,
             "baseline",
             "Provider / 图谱风险：Provider 画像和关系风险基线",
+            feature_evidence_refs(
+                features,
+                &[
+                    "provider_risk_tier",
+                    "provider_profile_score",
+                    "provider_peer_amount_percentile",
+                    "provider_graph_risk_score",
+                    "provider_high_risk_neighbor_signal",
+                ],
+            ),
         ),
         layer(
             "L7_RISK_FUSION_ROUTING",
@@ -186,6 +219,10 @@ pub fn aggregate_with_routing_policy(
             risk_score.value(),
             "active",
             &routing_reason,
+            vec![Value::String(format!(
+                "routing_policies:{}:v{}:{}",
+                routing_policy.policy_id, routing_policy.version, routing_policy.review_mode
+            ))],
         ),
     ];
     let mut top_reasons: Vec<String> = rule_matches
@@ -239,14 +276,94 @@ pub fn aggregate_with_routing_policy(
     }
 }
 
-fn layer(layer_id: &str, name: &str, score: u8, status: &str, reason: &str) -> DetectionLayerScore {
+fn layer(
+    layer_id: &str,
+    name: &str,
+    score: u8,
+    status: &str,
+    reason: &str,
+    evidence_refs: Vec<Value>,
+) -> DetectionLayerScore {
     DetectionLayerScore {
         layer_id: layer_id.into(),
         name: name.into(),
         score,
         status: status.into(),
         reason: reason.into(),
+        evidence_refs: unique_evidence_refs(evidence_refs),
     }
+}
+
+fn feature_evidence_refs(features: &FeatureMap, names: &[&str]) -> Vec<Value> {
+    let mut evidence_refs = Vec::new();
+    for name in names {
+        if let Some(feature) = features.get(*name) {
+            evidence_refs.push(Value::String(format!(
+                "feature_values:{}:v{}",
+                feature.name, feature.version
+            )));
+            evidence_refs.extend(
+                feature
+                    .evidence_refs
+                    .iter()
+                    .filter_map(|evidence| serde_json::to_value(evidence).ok()),
+            );
+        }
+    }
+    unique_evidence_refs(evidence_refs)
+}
+
+fn rule_layer_evidence_refs(rule_matches: &[RuleMatch]) -> Vec<Value> {
+    if rule_matches.is_empty() {
+        return vec![Value::String("rules:evaluated:no_match".into())];
+    }
+    unique_evidence_refs(
+        rule_matches
+            .iter()
+            .flat_map(|rule_match| rule_match.evidence_refs.clone())
+            .collect(),
+    )
+}
+
+fn anomaly_layer_evidence_refs(
+    features: &FeatureMap,
+    anomaly_score: &fwa_anomaly::AnomalyScore,
+) -> Vec<Value> {
+    let mut evidence_refs = vec![Value::String(format!(
+        "anomaly_scores:{}",
+        anomaly_score.anomaly_type
+    ))];
+    for explanation in &anomaly_score.explanations {
+        evidence_refs.extend(feature_evidence_refs(
+            features,
+            &[explanation.signal.as_str()],
+        ));
+    }
+    unique_evidence_refs(evidence_refs)
+}
+
+fn model_layer_evidence_refs(features: &FeatureMap, model_score: &ModelScore) -> Vec<Value> {
+    let mut evidence_refs = vec![Value::String(format!(
+        "model_versions:{}:{}",
+        model_score.model_key, model_score.model_version
+    ))];
+    for explanation in &model_score.explanations {
+        evidence_refs.extend(feature_evidence_refs(
+            features,
+            &[explanation.feature.as_str()],
+        ));
+    }
+    unique_evidence_refs(evidence_refs)
+}
+
+fn unique_evidence_refs(evidence_refs: Vec<Value>) -> Vec<Value> {
+    let mut unique = Vec::new();
+    for evidence_ref in evidence_refs {
+        if !unique.iter().any(|existing| existing == &evidence_ref) {
+            unique.push(evidence_ref);
+        }
+    }
+    unique
 }
 
 fn risk_level_for_policy(score: u8, policy: &RoutingPolicy) -> &'static str {
@@ -454,6 +571,19 @@ mod tests {
         }
     }
 
+    fn feature_with_source(name: &str, value: serde_json::Value, field: &str) -> FeatureValue {
+        FeatureValue {
+            name: name.into(),
+            version: 1,
+            value,
+            evidence_refs: vec![fwa_features::EvidenceRef {
+                entity_type: "claim".into(),
+                entity_id: "CLM-LAYER-EVIDENCE".into(),
+                field: field.into(),
+            }],
+        }
+    }
+
     fn model(score: u8) -> ModelScore {
         ModelScore {
             model_key: "baseline".into(),
@@ -636,6 +766,99 @@ mod tests {
             decision.recommended_action,
             RecommendedAction::EscalateInvestigation
         );
+    }
+
+    #[test]
+    fn every_detection_layer_carries_evidence_refs() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount_peer_percentile".into(),
+            feature_with_source(
+                "claim_amount_peer_percentile",
+                serde_json::json!(95),
+                "claim_amount",
+            ),
+        );
+        features.insert(
+            "diagnosis_procedure_match_score".into(),
+            feature_with_source(
+                "diagnosis_procedure_match_score",
+                serde_json::json!(0.35),
+                "diagnosis_code",
+            ),
+        );
+        features.insert(
+            "provider_graph_risk_score".into(),
+            feature_with_source(
+                "provider_graph_risk_score",
+                serde_json::json!(90),
+                "provider_graph_risk_score",
+            ),
+        );
+        let rules = vec![RuleMatch {
+            rule_id: "rule_layer_evidence".into(),
+            rule_version: 2,
+            score_contribution: 40,
+            alert_code: "LAYER_EVIDENCE".into(),
+            reason: "layer evidence test".into(),
+            recommended_action: RecommendedAction::ManualReview,
+            evidence_refs: vec![serde_json::json!("rules:rule_layer_evidence:v2")],
+        }];
+        let model = ModelScore {
+            model_key: "baseline_fwa".into(),
+            model_version: "0.1.0".into(),
+            runtime_kind: "heuristic".into(),
+            execution_provider: "cpu".into(),
+            score: 70,
+            label: "HIGH_RISK".into(),
+            explanations: vec![ModelExplanation {
+                feature: "claim_amount_peer_percentile".into(),
+                direction: "increases_risk".into(),
+                contribution: 0.40,
+                reason: "peer percentile contributes to model score".into(),
+            }],
+            metadata: serde_json::json!({}),
+            latency_ms: 0,
+        };
+        let anomaly = AnomalyScore {
+            score: 60,
+            anomaly_type: "rare_claim_pattern".into(),
+            explanations: vec![AnomalyExplanation {
+                signal: "diagnosis_procedure_match_score".into(),
+                contribution: 0.25,
+                reason: "medical mismatch signal contributes to anomaly score".into(),
+            }],
+        };
+
+        let decision = aggregate(&features, &rules, &model, &anomaly, 80);
+        let layers = serde_json::to_value(&decision.layers).unwrap();
+        let layers = layers.as_array().unwrap();
+
+        assert!(layers.iter().all(|layer| {
+            layer["evidence_refs"]
+                .as_array()
+                .is_some_and(|refs| !refs.is_empty())
+        }));
+        assert!(layers[0]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "feature_values:claim_amount_peer_percentile:v1"
+            )));
+        assert!(layers[1]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("rules:rule_layer_evidence:v2")));
+        assert!(layers[3]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0")));
+        assert!(layers[6]["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "routing_policies:fwa_risk_fusion_routing:v1:pre_payment"
+            )));
     }
 
     #[test]

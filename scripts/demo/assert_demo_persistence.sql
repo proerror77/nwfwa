@@ -74,7 +74,20 @@ BEGIN
   JOIN claims c ON c.id = ae.claim_id
   WHERE c.external_claim_id LIKE 'CLM-INBOX-%'
     AND ae.event_type = 'scoring.completed'
-    AND ae.payload -> 'canonical_claim_context_trace' ->> 'input_mode' = 'canonical_claim_context'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'input_mode' = 'inbox_run'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'inbox_run_id' LIKE 'inbox:sha256:%'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'inbox_audit_id' LIKE 'aud_inbox_sha256_%'
+    AND ae.payload -> 'canonical_claim_context_trace' ->> 'raw_payload_checksum' LIKE 'sha256:%'
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.evidence_refs) AS ref(value)
+      WHERE ref.value LIKE 'inbox_claim_runs:inbox:sha256:%'
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(ae.evidence_refs) AS ref(value)
+      WHERE ref.value LIKE 'audit_events:aud_inbox_sha256_%'
+    )
     AND EXISTS (
       SELECT 1
       FROM jsonb_array_elements_text(ae.evidence_refs) AS ref(value)
@@ -331,9 +344,9 @@ BEGIN
     AND tc.tool_name = 'knowledge.search_similar'
     AND tc.status = 'succeeded'
     AND tc.evidence_refs <> '[]'::jsonb
-    AND apc.policy_name = 'agent_tool_allowlist'
+    AND apc.policy_name = 'demo-agent-policy'
     AND apc.decision = 'allowed'
-    AND apc.evidence_refs <> '[]'::jsonb
+    AND apc.evidence_refs ? 'policy:demo-agent-policy'
     AND tr.status = 'succeeded'
     AND (tr.output_json ->> 'result_count')::integer > 0
     AND tr.evidence_refs <> '[]'::jsonb;
@@ -353,6 +366,11 @@ BEGIN
       SELECT 1
       FROM jsonb_array_elements_text(aa.evidence_refs) AS ref(value)
       WHERE ref.value = 'agent_run:' || ar.agent_run_id
+    )
+    AND EXISTS (
+      SELECT 1
+      FROM jsonb_array_elements_text(aa.evidence_refs) AS ref(value)
+      WHERE ref.value = 'policy:demo-agent-policy'
     );
   IF row_count < 1 THEN
     RAISE EXCEPTION 'expected approved human agent approval for %', demo_claim_id;
@@ -549,7 +567,12 @@ BEGIN
     AND mer.metrics_json ->> 'review_capacity_threshold_status' = 'passed'
     AND mer.metrics_json ->> 'leakage_check_status' = 'passed'
     AND mer.metrics_json ->> 'shadow_comparison_status' = 'passed'
+    AND mer.metrics_json ->> 'serving_version_lock_status' = 'passed'
+    AND mer.metrics_json ->> 'artifact_integrity_status' = 'passed'
+    AND mer.metrics_json ->> 'feature_store_materialization_status' = 'passed'
+    AND mer.metrics_json ->> 'segment_fairness_status' = 'passed'
     AND mer.metrics_json ->> 'label_provenance_status' = 'passed'
+    AND mer.metrics_json ->> 'pilot_validation_status' = 'passed'
     AND mer.metrics_json ->> 'approval_status' = 'approved'
     AND mer.metrics_json ->> 'feature_reproducibility_hash' = 'sha256:demo-baseline-feature-reproducibility'
     AND mer.metrics_json ? 'out_of_time_auc';

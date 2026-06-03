@@ -10,7 +10,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use fwa_scoring::RoutingPolicy;
 use serde::{Deserialize, Serialize};
@@ -486,14 +486,7 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",
@@ -516,6 +509,7 @@ async fn record_routing_policy_audit(
     input: RoutingPolicyAuditInput<'_>,
 ) -> anyhow::Result<()> {
     let payload = serde_json::json!({
+        "customer_scope_id": actor.customer_scope_id,
         "policy_id": &input.record.policy_id,
         "version": input.record.version,
         "review_mode": &input.record.review_mode,

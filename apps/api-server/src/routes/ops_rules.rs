@@ -14,7 +14,7 @@ use axum::{
 };
 use chrono::NaiveDate;
 use fwa_audit::ActorContext;
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_auth::{authenticate_api_key, validate_api_key};
 use fwa_core::{
     canonical_scheme_family, AuditEventId, Claim, ClaimContext, ClaimId, Member, MemberId, Money,
     Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction, ScoringRunId,
@@ -148,6 +148,12 @@ impl RuleBacktestRecord {
 pub struct RuleDiscoveryRequest {
     pub min_support: Option<usize>,
     pub samples: Vec<RuleDiscoverySample>,
+    #[serde(default)]
+    pub model_explanations: Vec<RuleDiscoveryModelExplanation>,
+    pub source_model_key: Option<String>,
+    pub source_model_version: Option<String>,
+    pub feature_importance_uri: Option<String>,
+    pub min_abs_contribution: Option<f64>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -155,6 +161,14 @@ pub struct RuleDiscoverySample {
     #[serde(flatten)]
     pub sample: RuleBacktestSample,
     pub confirmed_fwa: bool,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct RuleDiscoveryModelExplanation {
+    pub feature: String,
+    pub direction: String,
+    pub contribution: f64,
+    pub reason: String,
 }
 
 #[derive(Debug, Serialize)]
@@ -175,6 +189,7 @@ pub struct RuleDiscoveryCandidate {
     pub false_positive_rate: f64,
     pub matched_claim_ids: Vec<String>,
     pub explanation: String,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -257,12 +272,12 @@ async fn load_rule_promotion_gates(
         .map_err(internal_error("RULE_BACKTEST_LOAD_FAILED"))?;
     let outcome_labels = state
         .repository
-        .list_outcome_labels()
+        .list_outcome_labels(None)
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
     let feedback_items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(None)
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
 
@@ -282,7 +297,7 @@ pub async fn submit_rule_promotion_review(
     Path(rule_id): Path<String>,
     Json(request): Json<SubmitRulePromotionReviewRequest>,
 ) -> Result<Json<RulePromotionReviewRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:rules:review")?;
     if !matches!(request.decision.as_str(), "approved" | "rejected") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -802,8 +817,14 @@ pub async fn discover_rules(
         positive_count as f64 / sample_count as f64
     };
 
+    let candidate_rules = candidate_rule_templates()
+        .into_iter()
+        .chain(model_explanation_candidate_rules(&request))
+        .collect::<Vec<_>>();
+    let discovery_evidence_refs = rule_discovery_evidence_refs(&request);
+
     let mut candidates = Vec::new();
-    for rule in candidate_rule_templates() {
+    for rule in candidate_rules {
         let mut matched_claim_ids = Vec::new();
         let mut true_positive_count = 0_usize;
         let mut false_positive_count = 0_usize;
@@ -862,6 +883,7 @@ pub async fn discover_rules(
             estimated_saving: format!("{:.2}", saving.round_dp(2)),
             false_positive_rate,
             matched_claim_ids,
+            evidence_refs: discovery_evidence_refs.clone(),
         });
     }
 
@@ -927,7 +949,16 @@ pub async fn approve_rule(
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    update_status(state, headers, rule_id, "approved", request.evidence_refs).await
+    authorize_permission(&state, &headers, "ops:rules:approve")?;
+    update_status_with_required_previous(
+        state,
+        headers,
+        rule_id,
+        "approved",
+        Some("submitted"),
+        request.evidence_refs,
+    )
+    .await
 }
 
 pub async fn publish_rule(
@@ -937,7 +968,7 @@ pub async fn publish_rule(
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:rules:publish")?;
     let previous = state
         .repository
         .get_rule(&rule_id)
@@ -998,7 +1029,7 @@ pub async fn rollback_rule(
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:rules:rollback")?;
     let previous = state
         .repository
         .get_rule(&rule_id)
@@ -1071,8 +1102,8 @@ async fn update_status_with_required_previous(
         if previous.status != required_status {
             return Err(ApiError::new(
                 StatusCode::CONFLICT,
-                "RULE_APPROVAL_REQUIRED",
-                format!("rule must be {required_status} before publish"),
+                "RULE_STATUS_REQUIRED",
+                format!("rule must be {required_status} before {status}"),
             ));
         }
     }
@@ -1149,20 +1180,39 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",
             "invalid api key",
         )
     })
+}
+
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
 
 struct RuleAuditInput<'a> {
@@ -1180,6 +1230,7 @@ async fn record_rule_audit(
     input: RuleAuditInput<'_>,
 ) -> anyhow::Result<()> {
     let payload = serde_json::json!({
+        "customer_scope_id": actor.customer_scope_id,
         "rule_id": input.rule.rule_id,
         "rule_version": input.rule.latest_version,
         "from_status": input.from_status,
@@ -1219,7 +1270,13 @@ async fn record_rule_backtest_audit(
     actor: &ActorContext,
     record: &RuleBacktestRecord,
 ) -> anyhow::Result<()> {
-    let payload = serde_json::to_value(record)?;
+    let mut payload = serde_json::to_value(record)?;
+    if let Some(payload) = payload.as_object_mut() {
+        payload.insert(
+            "customer_scope_id".into(),
+            serde_json::json!(actor.customer_scope_id),
+        );
+    }
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -1260,6 +1317,7 @@ async fn record_rule_promotion_audit(
             event_status: "succeeded".into(),
             summary: format!("Rule promotion review: {}", review.decision),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "rule_id": review.rule_id,
                 "rule_version": review.rule_version,
                 "decision": review.decision,
@@ -1324,6 +1382,114 @@ fn candidate_rule_templates() -> Vec<Rule> {
     ]
 }
 
+fn model_explanation_candidate_rules(request: &RuleDiscoveryRequest) -> Vec<Rule> {
+    let min_abs_contribution = request.min_abs_contribution.unwrap_or(0.10);
+    let mut explanations = request
+        .model_explanations
+        .iter()
+        .filter(|explanation| {
+            explanation.direction == "increases_risk"
+                && explanation.contribution.is_finite()
+                && explanation.contribution.abs() >= min_abs_contribution
+                && !explanation.feature.trim().is_empty()
+        })
+        .collect::<Vec<_>>();
+    explanations.sort_by(|left, right| {
+        right
+            .contribution
+            .abs()
+            .partial_cmp(&left.contribution.abs())
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+
+    explanations
+        .into_iter()
+        .filter_map(|explanation| {
+            let threshold = positive_feature_threshold(request, &explanation.feature)?;
+            let feature_slug = rule_id_slug(&explanation.feature);
+            Some(Rule {
+                rule_id: format!("candidate_ml_{feature_slug}"),
+                version: 1,
+                name: format!("ML explanation candidate: {}", explanation.feature),
+                review_mode: "both".into(),
+                scheme_family: Some("high_risk_claim".into()),
+                conditions: vec![Condition {
+                    field: explanation.feature.clone(),
+                    operator: ">=".into(),
+                    value: serde_json::json!(threshold),
+                }],
+                action: RuleAction {
+                    score: explanation_score(explanation.contribution),
+                    alert_code: format!("ML_{}", feature_slug.to_uppercase()),
+                    recommended_action: RecommendedAction::ManualReview,
+                    reason: format!(
+                        "模型解释显示 {} 对风险贡献较高：{}",
+                        explanation.feature, explanation.reason
+                    ),
+                },
+            })
+        })
+        .collect()
+}
+
+fn positive_feature_threshold(request: &RuleDiscoveryRequest, feature_name: &str) -> Option<f64> {
+    let mut values = request
+        .samples
+        .iter()
+        .filter(|sample| sample.confirmed_fwa)
+        .filter_map(|sample| {
+            let context = sample_context(&sample.sample);
+            let features = calculate_features(&context);
+            features
+                .get(feature_name)
+                .and_then(|feature| feature.value.as_f64())
+                .filter(|value| value.is_finite())
+        })
+        .collect::<Vec<_>>();
+    values.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+    values.first().copied()
+}
+
+fn explanation_score(contribution: f64) -> u8 {
+    ((contribution.abs() * 20.0).round() as u8).clamp(10, 35)
+}
+
+fn rule_id_slug(value: &str) -> String {
+    let slug = value
+        .chars()
+        .map(|character| {
+            if character.is_ascii_alphanumeric() {
+                character.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>()
+        .trim_matches('_')
+        .to_string();
+    if slug.is_empty() {
+        "feature".into()
+    } else {
+        slug
+    }
+}
+
+fn rule_discovery_evidence_refs(request: &RuleDiscoveryRequest) -> Vec<String> {
+    let mut refs = Vec::new();
+    if let (Some(model_key), Some(model_version)) = (
+        request.source_model_key.as_deref(),
+        request.source_model_version.as_deref(),
+    ) {
+        refs.push(format!("model_versions:{model_key}:{model_version}"));
+    }
+    if let Some(feature_importance_uri) = request.feature_importance_uri.as_deref() {
+        if !feature_importance_uri.trim().is_empty() {
+            refs.push(format!("feature_importance:{feature_importance_uri}"));
+        }
+    }
+    refs
+}
+
 fn explanation_for_candidate(rule: &Rule) -> String {
     match rule.rule_id.as_str() {
         "candidate_early_high_amount" => {
@@ -1331,6 +1497,9 @@ fn explanation_for_candidate(rule: &Rule) -> String {
         }
         "candidate_high_amount_ratio" => {
             "理赔金额与保障额度比例偏高，可作为金额偏离类候选规则".into()
+        }
+        _ if rule.rule_id.starts_with("candidate_ml_") => {
+            "由模型解释贡献项提出，仍需回测、人工审阅和发布门禁".into()
         }
         _ => "基于历史标签和可解释特征生成的候选规则".into(),
     }

@@ -15,7 +15,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_auth::{authenticate_api_key, validate_api_key};
 use fwa_core::{AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -126,6 +126,9 @@ pub struct CompleteModelRetrainingJobRequest {
     pub notes: String,
     pub candidate_model_version: String,
     pub artifact_uri: String,
+    pub artifact_sha256: Option<String>,
+    pub training_artifact_uri: Option<String>,
+    pub training_artifact_sha256: Option<String>,
     pub endpoint_url: Option<String>,
     pub validation_report_uri: String,
     pub evaluation_run_id: String,
@@ -452,6 +455,7 @@ pub async fn complete_model_retraining_job(
         })
         .await
         .map_err(internal_error("MODEL_VERSION_SAVE_FAILED"))?;
+    let metrics_json = retraining_metrics_with_artifacts(&request);
     let evaluation = state
         .repository
         .register_model_evaluation(RegisterModelEvaluationInput {
@@ -469,7 +473,7 @@ pub async fn complete_model_retraining_job(
             threshold: request.threshold,
             confusion_matrix_json: request.confusion_matrix_json,
             feature_importance_uri: request.feature_importance_uri,
-            metrics_json: request.metrics_json,
+            metrics_json,
         })
         .await
         .map_err(internal_error(
@@ -566,12 +570,12 @@ async fn load_model_retraining_readiness(
     };
     let outcome_labels = state
         .repository
-        .list_outcome_labels()
+        .list_outcome_labels(None)
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
     let feedback_items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(None)
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
 
@@ -661,6 +665,37 @@ fn validate_retraining_output_request(
         }
     }
     validate_model_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
+    if let Some(artifact_sha256) = &request.artifact_sha256 {
+        validate_sha256_digest(
+            artifact_sha256,
+            "INVALID_MODEL_ARTIFACT_SHA256",
+            "artifact_sha256 must start with sha256:",
+        )?;
+    }
+    if let Some(training_artifact_uri) = &request.training_artifact_uri {
+        if training_artifact_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_TRAINING_ARTIFACT_URI",
+                "training_artifact_uri must not be blank when provided",
+            ));
+        }
+        validate_training_artifact_uri(training_artifact_uri, "INVALID_TRAINING_ARTIFACT_URI")?;
+    }
+    if let Some(training_artifact_sha256) = &request.training_artifact_sha256 {
+        if request.training_artifact_uri.is_none() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_TRAINING_ARTIFACT_URI",
+                "training_artifact_sha256 requires training_artifact_uri",
+            ));
+        }
+        validate_sha256_digest(
+            training_artifact_sha256,
+            "INVALID_TRAINING_ARTIFACT_SHA256",
+            "training_artifact_sha256 must start with sha256:",
+        )?;
+    }
     validate_json_report_uri(
         &request.validation_report_uri,
         "INVALID_VALIDATION_REPORT_URI",
@@ -751,7 +786,47 @@ fn validate_retraining_output_evidence_refs(
             ));
         }
     }
+    if let Some(training_artifact_uri) = &request.training_artifact_uri {
+        let expected_ref = format!("model_training_artifacts:{training_artifact_uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!("model retraining output evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
     Ok(())
+}
+
+fn retraining_metrics_with_artifacts(request: &CompleteModelRetrainingJobRequest) -> Value {
+    let mut metrics_json = request.metrics_json.clone();
+    let Some(metrics) = metrics_json.as_object_mut() else {
+        return metrics_json;
+    };
+    if let Some(artifact_sha256) = &request.artifact_sha256 {
+        metrics.insert(
+            "artifact_sha256".into(),
+            Value::String(artifact_sha256.clone()),
+        );
+    }
+    if let Some(training_artifact_uri) = &request.training_artifact_uri {
+        metrics.insert(
+            "training_artifact_uri".into(),
+            Value::String(training_artifact_uri.clone()),
+        );
+    }
+    if let Some(training_artifact_sha256) = &request.training_artifact_sha256 {
+        metrics.insert(
+            "training_artifact_sha256".into(),
+            Value::String(training_artifact_sha256.clone()),
+        );
+    }
+    metrics_json
 }
 
 fn validate_retraining_notes_without_pii(notes: &str) -> Result<(), ApiError> {
@@ -794,14 +869,38 @@ fn validate_parquet_artifact_uri(value: &str, code: &'static str) -> Result<(), 
 }
 
 fn validate_model_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
-    if has_supported_uri_suffix(value, &[".onnx", ".pkl", ".joblib"]) {
+    if has_supported_uri_suffix(value, &[".onnx", ".pkl", ".joblib", ".json"]) {
         Ok(())
     } else {
         Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             code,
-            "model retraining artifact_uri must use a supported model artifact format: .onnx, .pkl, or .joblib",
+            "model retraining artifact_uri must use a supported model artifact format: .onnx, .pkl, .joblib, or .json",
         ))
+    }
+}
+
+fn validate_training_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    if has_supported_uri_suffix(value, &[".pkl", ".joblib"]) {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "training_artifact_uri must use a supported training artifact format: .pkl or .joblib",
+        ))
+    }
+}
+
+fn validate_sha256_digest(
+    value: &str,
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if value.starts_with("sha256:") && value.len() > "sha256:".len() {
+        Ok(())
+    } else {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
     }
 }
 
@@ -833,7 +932,7 @@ pub async fn submit_model_promotion_review(
     Path(model_key): Path<String>,
     Json(request): Json<SubmitModelPromotionReviewRequest>,
 ) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
     if !matches!(request.decision.as_str(), "approved" | "rejected") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -919,7 +1018,7 @@ pub async fn activate_model(
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:models:activate")?;
     let (candidate, gates) = load_model_promotion_gates(&state, &model_key).await?;
     if candidate.status == "active" {
         return Err(ApiError::new(
@@ -1008,7 +1107,7 @@ pub async fn rollback_model(
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "ops:models:rollback")?;
     let models = state
         .repository
         .list_models()
@@ -1231,12 +1330,12 @@ async fn load_model_promotion_gates(
         .map_err(internal_error("MODEL_PROMOTION_REVIEW_LOAD_FAILED"))?;
     let outcome_labels = state
         .repository
-        .list_outcome_labels()
+        .list_outcome_labels(None)
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
     let feedback_items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(None)
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     let gates = build_model_promotion_gates(
@@ -1309,6 +1408,22 @@ fn build_model_promotion_gates(
         .get("shadow_comparison_status")
         .and_then(|value| value.as_str())
         == Some("passed");
+    let serving_version_lock = metrics
+        .get("serving_version_lock_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let artifact_integrity = metrics
+        .get("artifact_integrity_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let feature_store_materialization = metrics
+        .get("feature_store_materialization_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let segment_fairness = metrics
+        .get("segment_fairness_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
     let source_data_quality = source_data_quality_gate(metrics, source_dataset);
     let feature_reproducibility = metrics
         .get("feature_reproducibility_hash")
@@ -1324,6 +1439,7 @@ fn build_model_promotion_gates(
             .and_then(|value| value.as_str())
             .map(|source| !source.trim().is_empty())
             .unwrap_or(false);
+    let pilot_customer_validation = pilot_customer_validation_gate(metrics);
     let approval = latest_review
         .map(|review| review.decision == "approved")
         .unwrap_or_else(|| {
@@ -1418,6 +1534,30 @@ fn build_model_promotion_gates(
             evidence_source(shadow_comparison, "evaluation"),
         ),
         gate(
+            "Serving version lock",
+            serving_version_lock,
+            "serving version lock missing",
+            evidence_source(serving_version_lock, "evaluation"),
+        ),
+        gate(
+            "Artifact integrity",
+            artifact_integrity,
+            "artifact integrity missing",
+            evidence_source(artifact_integrity, "evaluation"),
+        ),
+        gate(
+            "Feature materialization",
+            feature_store_materialization,
+            "feature-store materialization missing",
+            evidence_source(feature_store_materialization, "evaluation"),
+        ),
+        gate(
+            "Segment fairness",
+            segment_fairness,
+            "segment fairness review missing",
+            evidence_source(segment_fairness, "evaluation"),
+        ),
+        gate(
             "Source data quality",
             source_data_quality.passed,
             source_data_quality.blocker,
@@ -1434,6 +1574,12 @@ fn build_model_promotion_gates(
             label_provenance,
             label_provenance_blocker(metrics),
             evidence_source(label_provenance, "evaluation"),
+        ),
+        gate(
+            "Pilot/customer validation",
+            pilot_customer_validation,
+            "pilot/customer validation missing",
+            pilot_customer_validation_evidence_source(metrics, pilot_customer_validation),
         ),
         gate(
             "Drift status",
@@ -1663,6 +1809,40 @@ fn time_group_split_strategy_gate(metrics: &serde_json::Value) -> bool {
     status_passed && has_time_field && has_group_field
 }
 
+fn pilot_customer_validation_gate(metrics: &serde_json::Value) -> bool {
+    let validation_status_passed = ["pilot_validation_status", "customer_validation_status"]
+        .into_iter()
+        .any(|field| metrics.get(field).and_then(|value| value.as_str()) == Some("passed"));
+    let usage_scope_validated = metrics
+        .get("dataset_usage_scope")
+        .and_then(|value| value.as_str())
+        .is_some_and(|scope| {
+            matches!(
+                scope,
+                "customer_pilot_validated"
+                    | "customer_production_validated"
+                    | "customer_validated"
+                    | "pilot_validated"
+            )
+        });
+    validation_status_passed || usage_scope_validated
+}
+
+fn pilot_customer_validation_evidence_source(
+    metrics: &serde_json::Value,
+    passed: bool,
+) -> &'static str {
+    if passed
+        || metrics.get("dataset_usage_scope").is_some()
+        || metrics.get("pilot_validation_status").is_some()
+        || metrics.get("customer_validation_status").is_some()
+    {
+        "evaluation"
+    } else {
+        "missing"
+    }
+}
+
 fn source_data_quality_gate(
     metrics: &serde_json::Value,
     source_dataset: Option<&DatasetRecord>,
@@ -1763,6 +1943,7 @@ async fn record_model_promotion_audit(
             event_status: "succeeded".into(),
             summary: format!("Model promotion review: {}", review.decision),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "model_key": review.model_key,
                 "model_version": review.model_version,
                 "decision": review.decision,
@@ -1809,6 +1990,7 @@ async fn record_model_retraining_audit(
             event_status: "succeeded".into(),
             summary: format!("Model retraining job {} is {}", job.job_id, job.status),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "job_id": job.job_id,
                 "model_key": job.model_key,
                 "model_version": job.model_version,
@@ -1847,6 +2029,7 @@ async fn record_model_activation_audit(
             event_status: "succeeded".into(),
             summary: "Model activation completed".into(),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "model_key": model.model_key,
                 "model_version": model.version,
                 "from_status": from_status,
@@ -1884,11 +2067,12 @@ async fn record_model_rollback_audit(
             event_status: "succeeded".into(),
             summary: "Model rollback completed".into(),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "model_key": restored.model_key,
                 "model_version": restored.version,
                 "from_status": restored_from_status,
                 "to_status": restored.status,
-                "previous_active_version": replaced_active.version,
+                "previous_active_version": restored.version,
                 "replaced_active_version": replaced_active.version,
                 "replaced_active_to_status": "approved",
                 "runtime_kind": restored.runtime_kind,
@@ -1906,20 +2090,39 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",
             "invalid api key",
         )
     })
+}
+
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {

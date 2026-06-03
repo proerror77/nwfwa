@@ -10,13 +10,30 @@ the technical stack fits together, and what is ready for demo or pilot use.
 - [Architecture](architecture.md): product boundary, runtime topology, modules,
   workflow map, and deployment shape.
 - [Technology Stack](technology-stack.md): Rust, Python, Yew, PostgreSQL,
-  Docker, CI, and development tooling.
+  Docker, Kubernetes staging, CI, and development tooling.
 - [API Reference](api-reference.md): every API route, method, purpose, auth
   requirement, main inputs, outputs, and side effects.
+- [PRD Coverage](prd-coverage.md): PRD capability matrix, repository evidence,
+  and customer-data/customer-environment boundaries.
 - [Data Model](data-model.md): PostgreSQL schema groups, relationships, and
   table responsibilities.
-- [Operations Guide](operations-guide.md): local demo, verification gates, CI,
-  pilot readiness, and known production boundaries.
+- [ML Algorithm Strategy](ml-algorithm-strategy.md): researched model plan,
+  current baseline boundaries, validation gates, and production ML roadmap.
+- [Public Data MVP Pack](public-data-mvp.md): CMS/OIG public-data boundary,
+  manifest generation commands, and production interpretation.
+- [AI Evidence Foundation](ai-evidence-foundation.md): document registry,
+  chunks, OCR/redaction metadata, embedding jobs, retrieval audit, and agent
+  workspace artifacts.
+- [ML Pipeline Runbook](ml-pipeline-runbook.md): operating workflow for dataset
+  intake, training, registration, review, promotion, serving, monitoring, and
+  rollback.
+- [MLOps UI Design](mlops-ui-design.md): separate model governance UI boundary,
+  pages, API contracts, offline training handoff, promotion gates, and
+  monitoring workflow.
+- [Analytics Scale](analytics-scale.md): ClickHouse derived event store,
+  scheduled export contract, dashboard queries, and production boundary.
+- [Operations Guide](operations-guide.md): local demo, Kubernetes staging,
+  verification gates, CI, pilot readiness, and known production boundaries.
 
 ## Source Of Truth
 

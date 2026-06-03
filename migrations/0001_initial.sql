@@ -51,6 +51,53 @@ CREATE TABLE IF NOT EXISTS claims (
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS inbox_claim_runs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  run_id TEXT NOT NULL UNIQUE,
+  audit_id TEXT NOT NULL UNIQUE,
+  external_message_id TEXT,
+  idempotency_key TEXT,
+  external_message_fingerprint TEXT,
+  raw_payload_checksum TEXT NOT NULL,
+  raw_payload_ref TEXT,
+  mapping_version TEXT NOT NULL,
+  validation_result TEXT NOT NULL,
+  scoring_ready BOOLEAN NOT NULL,
+  claim_id TEXT NOT NULL,
+  source_system TEXT NOT NULL,
+  customer_scope_id TEXT NOT NULL,
+  canonical_claim_context JSONB NOT NULL DEFAULT '{}'::jsonb,
+  validation_errors JSONB NOT NULL DEFAULT '[]'::jsonb,
+  data_quality_signals JSONB NOT NULL DEFAULT '[]'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS external_message_id TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS idempotency_key TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS external_message_fingerprint TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS raw_payload_checksum TEXT NOT NULL DEFAULT '';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS raw_payload_ref TEXT;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS mapping_version TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS validation_result TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS scoring_ready BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS claim_id TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS source_system TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS customer_scope_id TEXT NOT NULL DEFAULT 'unknown';
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS canonical_claim_context JSONB NOT NULL DEFAULT '{}'::jsonb;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS validation_errors JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS data_quality_signals JSONB NOT NULL DEFAULT '[]'::jsonb;
+ALTER TABLE inbox_claim_runs ADD COLUMN IF NOT EXISTS evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb;
+
+CREATE UNIQUE INDEX IF NOT EXISTS inbox_claim_runs_run_id_idx
+  ON inbox_claim_runs(run_id);
+CREATE UNIQUE INDEX IF NOT EXISTS inbox_claim_runs_audit_id_idx
+  ON inbox_claim_runs(audit_id);
+CREATE UNIQUE INDEX IF NOT EXISTS inbox_claim_runs_idempotency_key_idx
+  ON inbox_claim_runs(idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
 CREATE TABLE IF NOT EXISTS claim_items (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   claim_id UUID NOT NULL REFERENCES claims(id) ON DELETE CASCADE,
@@ -232,6 +279,109 @@ CREATE TABLE IF NOT EXISTS knowledge_cases (
 ALTER TABLE knowledge_cases
   ADD COLUMN IF NOT EXISTS scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim';
 
+CREATE TABLE IF NOT EXISTS evidence_documents (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  document_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL,
+  source_system TEXT NOT NULL,
+  source_record_ref TEXT NOT NULL,
+  claim_id UUID REFERENCES claims(id),
+  external_document_id TEXT,
+  document_type TEXT NOT NULL,
+  storage_uri TEXT NOT NULL,
+  content_checksum TEXT NOT NULL,
+  ingestion_status TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  retention_policy_id TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  metadata_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS evidence_document_chunks (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  chunk_id TEXT NOT NULL UNIQUE,
+  document_id TEXT NOT NULL REFERENCES evidence_documents(document_id) ON DELETE CASCADE,
+  chunk_index INTEGER NOT NULL,
+  chunking_version TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  text_checksum TEXT NOT NULL,
+  token_count INTEGER NOT NULL,
+  storage_uri TEXT NOT NULL,
+  source_offsets_json JSONB NOT NULL DEFAULT '{}'::jsonb,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(document_id, chunk_index, chunking_version)
+);
+
+CREATE TABLE IF NOT EXISTS evidence_ocr_outputs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  ocr_output_id TEXT NOT NULL UNIQUE,
+  document_id TEXT NOT NULL REFERENCES evidence_documents(document_id) ON DELETE CASCADE,
+  ocr_engine TEXT NOT NULL,
+  ocr_engine_version TEXT NOT NULL,
+  output_uri TEXT NOT NULL,
+  output_checksum TEXT NOT NULL,
+  confidence_score NUMERIC,
+  quality_status TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS evidence_redaction_reviews (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  redaction_review_id TEXT NOT NULL UNIQUE,
+  document_id TEXT REFERENCES evidence_documents(document_id) ON DELETE CASCADE,
+  chunk_id TEXT REFERENCES evidence_document_chunks(chunk_id) ON DELETE CASCADE,
+  redaction_policy_id TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  reviewer TEXT NOT NULL,
+  review_notes TEXT NOT NULL,
+  before_checksum TEXT,
+  after_checksum TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CHECK (document_id IS NOT NULL OR chunk_id IS NOT NULL)
+);
+
+CREATE TABLE IF NOT EXISTS evidence_embedding_jobs (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  embedding_job_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL,
+  target_kind TEXT NOT NULL CHECK (target_kind IN ('document', 'document_chunk', 'knowledge_case')),
+  target_ref TEXT NOT NULL,
+  embedding_model TEXT NOT NULL,
+  embedding_model_version TEXT NOT NULL,
+  chunking_version TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  vector_store_kind TEXT NOT NULL,
+  vector_store_ref TEXT NOT NULL,
+  embedding_checksum TEXT NOT NULL,
+  status TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at TIMESTAMPTZ
+);
+
+CREATE TABLE IF NOT EXISTS evidence_retrieval_audit_events (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  retrieval_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL,
+  actor_id TEXT NOT NULL,
+  actor_role TEXT NOT NULL,
+  query_kind TEXT NOT NULL,
+  query_checksum TEXT NOT NULL,
+  retrieval_method TEXT NOT NULL,
+  embedding_model_version TEXT,
+  top_k INTEGER NOT NULL,
+  source_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  result_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  redaction_status TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS agent_runs (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   agent_run_id TEXT NOT NULL UNIQUE,
@@ -313,6 +463,34 @@ CREATE TABLE IF NOT EXISTS agent_approvals (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS agent_workspace_artifacts (
+  id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+  workspace_artifact_id TEXT NOT NULL UNIQUE,
+  agent_run_id TEXT NOT NULL REFERENCES agent_runs(agent_run_id) ON DELETE CASCADE,
+  artifact_kind TEXT NOT NULL,
+  artifact_uri TEXT NOT NULL,
+  artifact_checksum TEXT NOT NULL,
+  redaction_status TEXT NOT NULL,
+  retention_policy_id TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE INDEX IF NOT EXISTS idx_evidence_documents_customer_scope
+  ON evidence_documents(customer_scope_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_documents_claim_id
+  ON evidence_documents(claim_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_document_chunks_document_id
+  ON evidence_document_chunks(document_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_ocr_outputs_document_id
+  ON evidence_ocr_outputs(document_id);
+CREATE INDEX IF NOT EXISTS idx_evidence_embedding_jobs_target
+  ON evidence_embedding_jobs(target_kind, target_ref);
+CREATE INDEX IF NOT EXISTS idx_evidence_retrieval_audit_customer_scope
+  ON evidence_retrieval_audit_events(customer_scope_id, created_at);
+CREATE INDEX IF NOT EXISTS idx_agent_workspace_artifacts_run
+  ON agent_workspace_artifacts(agent_run_id);
+
 CREATE TABLE IF NOT EXISTS fwa_leads (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   lead_id TEXT NOT NULL UNIQUE,
@@ -376,6 +554,7 @@ WHERE c.lead_id = l.lead_id
 CREATE TABLE IF NOT EXISTS audit_samples (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   sample_id TEXT NOT NULL UNIQUE,
+  customer_scope_id TEXT NOT NULL DEFAULT 'demo-customer',
   sample_mode TEXT NOT NULL,
   population_definition TEXT NOT NULL,
   inclusion_criteria_json JSONB NOT NULL DEFAULT '{}'::jsonb,
@@ -389,6 +568,12 @@ CREATE TABLE IF NOT EXISTS audit_samples (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE audit_samples
+  ADD COLUMN IF NOT EXISTS customer_scope_id TEXT NOT NULL DEFAULT 'demo-customer';
+
+CREATE INDEX IF NOT EXISTS idx_audit_samples_customer_scope
+  ON audit_samples(customer_scope_id);
 
 CREATE TABLE IF NOT EXISTS external_data_sources (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
@@ -628,12 +813,16 @@ CREATE TABLE IF NOT EXISTS saving_attributions (
   investigation_id TEXT NOT NULL,
   source_type TEXT NOT NULL,
   source_id TEXT NOT NULL,
+  financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment',
   action TEXT NOT NULL,
   saving_amount NUMERIC NOT NULL,
   currency TEXT NOT NULL,
   evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+ALTER TABLE saving_attributions
+  ADD COLUMN IF NOT EXISTS financial_impact_type TEXT NOT NULL DEFAULT 'prevented_payment';
 
 CREATE TABLE IF NOT EXISTS qa_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),

@@ -166,6 +166,15 @@ Until volume proves the need, PostgreSQL materialized views and exports are
 enough. If ClickHouse is introduced, PostgreSQL remains the operational source
 of truth and ClickHouse is a derived analytical store.
 
+The repository now includes a derived analytical event store contract under
+`analytics/clickhouse`. It defines ClickHouse tables for scoring, rule, model,
+case SLA, value, reviewer capacity, and provider graph snapshot events, plus
+dashboard queries for rule/model drift, SLA, ROI, capacity, false-positive cost,
+and graph risk reporting. The staging shape includes a ClickHouse service and a
+worker CronJob that emits the scheduled analytics export plan. This is a
+staging proof contract; customer production still needs live scheduler
+credentials, retention settings, and data movement approvals.
+
 ## Job And Agent Plane
 
 ### Job Execution
@@ -322,15 +331,29 @@ Add retrieval and agent infrastructure only after evidence workflows are active:
 - agent run, step, context snapshot, workspace artifact, and approval tables;
 - human approval gates for case, rule, model, and export actions.
 
+The repository now includes the PostgreSQL metadata contract for this phase:
+`evidence_documents`, `evidence_document_chunks`, `evidence_ocr_outputs`,
+`evidence_redaction_reviews`, `evidence_embedding_jobs`,
+`evidence_retrieval_audit_events`, and `agent_workspace_artifacts`. The
+contract is validated by `scripts/ops/validate_ai_evidence_foundation.py` and
+documented in `docs/project/ai-evidence-foundation.md`. Production still needs
+customer-approved OCR workers, embedding/vector storage, retrieval ranking, and
+retention/access controls.
+
 ### Phase 3: Analytics Scale
 
 Add analytical infrastructure when operational volume proves the need:
 
-- derived analytical event tables or ClickHouse;
-- scheduled exports from PostgreSQL to object storage and analytics store;
-- rule/model drift dashboards;
-- SLA, ROI, reviewer capacity, and false-positive cost reporting;
-- graph metrics snapshots for provider and relationship risk.
+- derived analytical event store or ClickHouse: implemented as
+  `analytics/clickhouse/schema.sql`;
+- scheduled exports from PostgreSQL to object storage and analytics store:
+  implemented as worker/export-plan contracts and
+  `scripts/ops/build_analytics_export.py`;
+- rule/model drift dashboards: implemented as ClickHouse dashboard queries;
+- SLA, ROI, reviewer capacity, and false-positive cost reporting: implemented
+  as ClickHouse dashboard queries;
+- graph metrics snapshots for provider and relationship risk: implemented as
+  `analytics_provider_graph_snapshots`.
 
 ### Phase 4: Production Hardening
 
@@ -344,6 +367,15 @@ Add production deployment and governance controls:
 - disaster recovery drills;
 - release promotion, rollback, and incident runbooks;
 - formal data retention and evidence destruction workflows.
+
+The repository now includes the staging contract for part of this phase:
+`build-governance-ops-plan` emits the backup manifest, restore-drill,
+retention-scan, legal-hold, and destruction-review job graph. Customer
+production still needs the chosen environment to execute those jobs with
+approved retention windows, legal holds, and human approval before destruction.
+The staging evidence pack also emits `operational_drill_proof.json` so restore,
+rollback, alert-route, pilot readiness, and incident tabletop drills have a
+machine-checkable evidence contract before live customer execution.
 
 ## Non-Goals
 

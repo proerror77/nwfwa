@@ -8,7 +8,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_audit::ActorContext;
+use fwa_auth::validate_api_key;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -55,6 +56,8 @@ pub struct ApiCallRecord {
     pub status_code: u16,
     pub result: String,
     pub source_system: String,
+    pub actor_role: String,
+    pub customer_scope_id: String,
     pub claim_id: String,
     pub run_id: String,
     pub audit_id: String,
@@ -74,7 +77,7 @@ pub async fn list_audit_events(
     headers: HeaderMap,
     Query(query): Query<AuditEventListQuery>,
 ) -> Result<Json<AuditEventListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let filter = AuditEventListFilter {
         limit: query.limit.unwrap_or(50).clamp(1, 200),
         event_group: normalize_filter(query.event_group),
@@ -98,6 +101,7 @@ pub async fn list_audit_events(
         model_dataset_id: normalize_filter(query.model_dataset_id),
         evaluation_run_id: normalize_filter(query.evaluation_run_id),
         has_canonical_trace: query.has_canonical_trace,
+        customer_scope_id: Some(actor.customer_scope_id),
     };
     let events = state
         .repository
@@ -112,12 +116,13 @@ pub async fn list_api_calls(
     headers: HeaderMap,
     Query(query): Query<ApiCallListQuery>,
 ) -> Result<Json<ApiCallListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let events = state
         .repository
         .list_audit_events(AuditEventListFilter {
             limit: 200,
+            customer_scope_id: Some(actor.customer_scope_id),
             ..Default::default()
         })
         .await
@@ -147,6 +152,12 @@ fn api_call_from_audit_event(
         .and_then(serde_json::Value::as_str)
         .unwrap_or(default_source_system)
         .to_string();
+    let customer_scope_id = event
+        .payload
+        .get("customer_scope_id")
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let status_code = event
         .payload
         .get("status_code")
@@ -172,6 +183,8 @@ fn api_call_from_audit_event(
         status_code,
         result: event.event_status.clone(),
         source_system,
+        actor_role: event.actor_role.clone(),
+        customer_scope_id,
         claim_id,
         run_id: event.run_id.clone(),
         audit_id: event.audit_id,
@@ -203,19 +216,11 @@ fn normalize_filter(value: Option<String>) -> Option<String> {
     })
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map(|_| ())
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",

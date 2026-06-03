@@ -9,7 +9,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_audit::ActorContext;
+use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -31,6 +32,8 @@ pub struct SubmitMedicalReviewResultRequest {
     pub scoring_audit_id: String,
     pub reviewer: String,
     pub decision: String,
+    #[serde(default)]
+    pub clinical_outcomes: Vec<String>,
     pub notes: String,
     pub evidence_refs: Vec<String>,
 }
@@ -43,6 +46,7 @@ pub struct MedicalReviewResultResponse {
     pub audit_id: String,
     pub run_id: String,
     pub review_status: String,
+    pub clinical_outcomes: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -74,12 +78,13 @@ pub async fn medical_review_queue(
     headers: HeaderMap,
     Query(query): Query<MedicalReviewQueueQuery>,
 ) -> Result<Json<MedicalReviewQueueResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_audit_events(AuditEventListFilter {
             limit: query.limit.unwrap_or(100).clamp(1, 200),
             event_type: Some("scoring.completed".into()),
+            customer_scope_id: Some(actor.customer_scope_id.clone()),
             ..Default::default()
         })
         .await
@@ -89,6 +94,7 @@ pub async fn medical_review_queue(
         .list_audit_events(AuditEventListFilter {
             limit: 10_000,
             event_type: Some("medical.review.recorded".into()),
+            customer_scope_id: Some(actor.customer_scope_id),
             ..Default::default()
         })
         .await
@@ -106,12 +112,18 @@ pub async fn submit_medical_review_result(
     headers: HeaderMap,
     Json(mut request): Json<SubmitMedicalReviewResultRequest>,
 ) -> Result<Json<MedicalReviewResultResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_medical_review_result(&request)?;
-    merge_canonical_evidence_refs_for_medical_review(&state, &mut request).await?;
+    merge_canonical_evidence_refs_for_medical_review(
+        &state,
+        &mut request,
+        &actor.customer_scope_id,
+    )
+    .await?;
     let audit_id = AuditEventId::new().to_string();
     let run_id = ScoringRunId::new().to_string();
     let review_status = medical_review_status(&request.decision).to_string();
+    let clinical_outcomes = controlled_clinical_outcomes(&request);
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -119,17 +131,21 @@ pub async fn submit_medical_review_result(
             run_id: run_id.clone(),
             claim_id: request.claim_id.clone(),
             source_system: "ops-studio".into(),
-            actor_id: request.reviewer.clone(),
-            actor_role: "medical_reviewer".into(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
             event_type: "medical.review.recorded".into(),
             event_status: "succeeded".into(),
             summary: format!("Medical review recorded: {}", request.decision),
             payload: json!({
+                "customer_scope_id": actor.customer_scope_id.clone(),
+                "actor_id": actor.actor_id.clone(),
+                "actor_role": actor.actor_role.clone(),
                 "claim_id": request.claim_id,
                 "scoring_audit_id": request.scoring_audit_id,
                 "reviewer": request.reviewer,
                 "decision": request.decision,
                 "review_status": review_status,
+                "clinical_outcomes": clinical_outcomes.clone(),
                 "notes": request.notes,
             }),
             evidence_refs: request
@@ -147,6 +163,7 @@ pub async fn submit_medical_review_result(
         audit_id,
         run_id,
         review_status,
+        clinical_outcomes,
         evidence_refs: request.evidence_refs,
     }))
 }
@@ -221,10 +238,11 @@ fn json_array_to_strings(value: &Value) -> Vec<String> {
 async fn merge_canonical_evidence_refs_for_medical_review(
     state: &AppState,
     request: &mut SubmitMedicalReviewResultRequest,
+    customer_scope_id: &str,
 ) -> Result<(), ApiError> {
     let events = state
         .repository
-        .claim_audit_history(&request.claim_id)
+        .claim_audit_history(&request.claim_id, Some(customer_scope_id))
         .await
         .map_err(internal_error(
             "MEDICAL_REVIEW_CANONICAL_TRACE_LOOKUP_FAILED",
@@ -332,6 +350,16 @@ fn validate_medical_review_result(
             "decision must be evidence_sufficient, request_more_evidence, medical_necessity_issue, or no_medical_issue",
         ));
     }
+    if request.clinical_outcomes.iter().any(|outcome| {
+        let outcome = outcome.trim();
+        outcome.is_empty() || !is_allowed_clinical_outcome(outcome)
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "UNSUPPORTED_CLINICAL_OUTCOME",
+            "clinical_outcomes must use controlled clinical review outcome fields",
+        ));
+    }
     if request.notes.trim().is_empty()
         || request.evidence_refs.is_empty()
         || request
@@ -358,6 +386,47 @@ fn validate_medical_review_result(
     Ok(())
 }
 
+fn controlled_clinical_outcomes(request: &SubmitMedicalReviewResultRequest) -> Vec<String> {
+    let outcomes = if request.clinical_outcomes.is_empty() {
+        vec![default_clinical_outcome(&request.decision).to_string()]
+    } else {
+        request
+            .clinical_outcomes
+            .iter()
+            .map(|outcome| outcome.trim().to_string())
+            .collect()
+    };
+    outcomes
+        .into_iter()
+        .fold(Vec::new(), |mut values, outcome| {
+            if !values.contains(&outcome) {
+                values.push(outcome);
+            }
+            values
+        })
+}
+
+fn default_clinical_outcome(decision: &str) -> &'static str {
+    match decision {
+        "request_more_evidence" => "insufficient_evidence",
+        "medical_necessity_issue" => "medical_necessity_issue",
+        "no_medical_issue" => "false_positive",
+        _ => "clinical_evidence_sufficient",
+    }
+}
+
+fn is_allowed_clinical_outcome(outcome: &str) -> bool {
+    matches!(
+        outcome,
+        "documentation_issue"
+            | "medical_necessity_review_required"
+            | "insufficient_evidence"
+            | "medical_necessity_issue"
+            | "clinical_evidence_sufficient"
+            | "false_positive"
+    )
+}
+
 fn medical_review_status(decision: &str) -> &'static str {
     match decision {
         "request_more_evidence" => "pending_evidence",
@@ -366,19 +435,11 @@ fn medical_review_status(decision: &str) -> &'static str {
     }
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map(|_| ())
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",

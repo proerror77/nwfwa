@@ -149,6 +149,188 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/backfills": {
+                "get": {
+                    "summary": "List historical replay backfill jobs",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Historical replay jobs",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                },
+                "post": {
+                    "summary": "Create a historical replay backfill job from governed candidates",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Created historical replay job",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/backfills/{job_id}/leads": {
+                "get": {
+                    "summary": "List candidate leads captured by a historical replay job",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "job_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "Backfill candidate leads",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/evidence-requests": {
+                "get": {
+                    "summary": "List generated evidence requests",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Evidence request queue",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/evidence-requests/generate": {
+                "post": {
+                    "summary": "Generate evidence requests from missing clinical evidence",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Generated evidence requests",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/evidence-requests/{request_id}/status": {
+                "post": {
+                    "summary": "Update evidence request collection status",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "request_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Updated evidence request",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/label-bootstrap/queue": {
+                "get": {
+                    "summary": "List label bootstrap items awaiting governance review",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Label bootstrap queue",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/label-bootstrap/items/{item_id}/review": {
+                "post": {
+                    "summary": "Record a governed review for a bootstrap label candidate",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "item_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "type": "object" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded label bootstrap review",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "type": "object" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules": {
                 "get": {
                     "summary": "List rule library",
@@ -586,6 +768,128 @@ pub async fn openapi_schema() -> Json<Value> {
                             "description": "Model evaluation metrics"
                         }
                     }
+                }
+            },
+            "/api/v1/ops/evidence/documents": {
+                "get": {
+                    "summary": "List governed evidence document metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": { "200": { "description": "Evidence documents scoped to the authenticated customer" } }
+                },
+                "post": {
+                    "summary": "Register governed evidence document metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceDocumentRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered evidence document metadata" } }
+                }
+            },
+            "/api/v1/ops/evidence/documents/{document_id}": {
+                "get": {
+                    "summary": "Get governed evidence document metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "Evidence document metadata" }, "404": { "description": "Document not found in customer scope" } }
+                }
+            },
+            "/api/v1/ops/evidence/documents/{document_id}/chunks": {
+                "get": {
+                    "summary": "List governed document chunk metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "Document chunk metadata" } }
+                },
+                "post": {
+                    "summary": "Register governed document chunk metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceDocumentChunkRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered document chunk metadata" }, "404": { "description": "Document not found in customer scope" } }
+                }
+            },
+            "/api/v1/ops/evidence/documents/{document_id}/ocr-outputs": {
+                "get": {
+                    "summary": "List governed OCR output metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "responses": { "200": { "description": "OCR output metadata" } }
+                },
+                "post": {
+                    "summary": "Register governed OCR output metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        { "name": "document_id", "in": "path", "required": true, "schema": { "type": "string" } }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceOcrOutputRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered OCR output metadata" }, "404": { "description": "Document not found in customer scope" } }
+                }
+            },
+            "/api/v1/ops/evidence/embedding-jobs": {
+                "get": {
+                    "summary": "List governed evidence embedding jobs",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": { "200": { "description": "Embedding jobs scoped to the authenticated customer" } }
+                },
+                "post": {
+                    "summary": "Register governed evidence embedding job metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceEmbeddingJobRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Registered evidence embedding job metadata" } }
+                }
+            },
+            "/api/v1/ops/evidence/retrieval-audit-events": {
+                "get": {
+                    "summary": "List governed evidence retrieval audit events",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": { "200": { "description": "Retrieval audit events scoped to the authenticated customer" } }
+                },
+                "post": {
+                    "summary": "Record governed evidence retrieval audit metadata",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/EvidenceRetrievalAuditRegistrationRequest" }
+                            }
+                        }
+                    },
+                    "responses": { "200": { "description": "Recorded retrieval audit metadata" } }
                 }
             },
             "/api/v1/ops/dashboard/summary": {
@@ -1801,6 +2105,14 @@ pub async fn openapi_schema() -> Json<Value> {
                                     "schema": { "$ref": "#/components/schemas/ErrorResponse" }
                                 }
                             }
+                        },
+                        "403": {
+                            "description": "Principal lacks tpa:knowledge:read",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
                         }
                     }
                 }
@@ -2155,6 +2467,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "run_id",
                         "audit_id",
                         "mapping_version",
+                        "raw_payload_checksum",
                         "validation_result",
                         "scoring_ready",
                         "validation_errors",
@@ -2167,6 +2480,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "audit_id": { "type": "string" },
                         "external_message_id": { "type": ["string", "null"] },
                         "idempotency_key": { "type": ["string", "null"] },
+                        "raw_payload_checksum": { "type": "string" },
                         "mapping_version": { "type": "string" },
                         "validation_result": {
                             "type": "string",
@@ -2424,6 +2738,9 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         {
                             "$ref": "#/components/schemas/CanonicalContextScoreClaimRequest"
+                        },
+                        {
+                            "$ref": "#/components/schemas/InboxHandoffScoreClaimRequest"
                         }
                     ]
                 },
@@ -2459,7 +2776,9 @@ pub async fn openapi_schema() -> Json<Value> {
                             { "required": ["documents"] },
                             { "required": ["provider_profile"] },
                             { "required": ["provider_relationships"] },
-                            { "required": ["canonical_claim_context"] }
+                            { "required": ["canonical_claim_context"] },
+                            { "required": ["inbox_run_id"] },
+                            { "required": ["inbox_idempotency_key"] }
                         ]
                     }
                 },
@@ -2493,7 +2812,55 @@ pub async fn openapi_schema() -> Json<Value> {
                             { "required": ["provider"] },
                             { "required": ["documents"] },
                             { "required": ["provider_profile"] },
-                            { "required": ["provider_relationships"] }
+                            { "required": ["provider_relationships"] },
+                            { "required": ["inbox_run_id"] },
+                            { "required": ["inbox_idempotency_key"] }
+                        ]
+                    }
+                },
+                "InboxHandoffScoreClaimRequest": {
+                    "type": "object",
+                    "required": ["source_system"],
+                    "properties": {
+                        "source_system": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Must match the source system bound to the authenticated API key.",
+                            "examples": ["tpa-demo"]
+                        },
+                        "review_mode": {
+                            "type": "string",
+                            "enum": ["pre_payment", "post_payment"],
+                            "default": "pre_payment",
+                            "description": "Runtime scoring context for pre-payment or post-payment review."
+                        },
+                        "inbox_run_id": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Scoring-ready inbox normalization run id returned by /api/v1/inbox/claims/normalize."
+                        },
+                        "inbox_idempotency_key": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Stable scoring-ready inbox normalization idempotency key returned by /api/v1/inbox/claims/normalize."
+                        }
+                    },
+                    "oneOf": [
+                        { "required": ["inbox_run_id"] },
+                        { "required": ["inbox_idempotency_key"] }
+                    ],
+                    "not": {
+                        "anyOf": [
+                            { "required": ["claim_id"] },
+                            { "required": ["claim"] },
+                            { "required": ["items"] },
+                            { "required": ["member"] },
+                            { "required": ["policy"] },
+                            { "required": ["provider"] },
+                            { "required": ["documents"] },
+                            { "required": ["provider_profile"] },
+                            { "required": ["provider_relationships"] },
+                            { "required": ["canonical_claim_context"] }
                         ]
                     }
                 },
@@ -2549,7 +2916,9 @@ pub async fn openapi_schema() -> Json<Value> {
                     "not": {
                         "anyOf": [
                             { "required": ["claim_id"] },
-                            { "required": ["canonical_claim_context"] }
+                            { "required": ["canonical_claim_context"] },
+                            { "required": ["inbox_run_id"] },
+                            { "required": ["inbox_idempotency_key"] }
                         ]
                     }
                 },
@@ -3015,7 +3384,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DetectionLayerScore": {
                     "type": "object",
-                    "required": ["layer_id", "name", "score", "status", "reason"],
+                    "required": ["layer_id", "name", "score", "status", "reason", "evidence_refs"],
                     "properties": {
                         "layer_id": {
                             "type": "string",
@@ -3039,7 +3408,17 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["active", "baseline", "no_data"]
                         },
-                        "reason": { "type": "string" }
+                        "reason": { "type": "string" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": {
+                                "oneOf": [
+                                    { "type": "string" },
+                                    { "$ref": "#/components/schemas/EvidenceRef" }
+                                ]
+                            }
+                        }
                     }
                 },
                 "RoutingPolicy": {
@@ -3220,6 +3599,14 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "string",
                             "enum": ["evidence_sufficient", "request_more_evidence", "medical_necessity_issue", "no_medical_issue"]
                         },
+                        "clinical_outcomes": {
+                            "type": "array",
+                            "description": "Optional controlled clinical outcome fields for model training and rule tuning. When omitted, the platform derives one compatible outcome from decision.",
+                            "items": {
+                                "type": "string",
+                                "enum": ["documentation_issue", "medical_necessity_review_required", "insufficient_evidence", "medical_necessity_issue", "clinical_evidence_sufficient", "false_positive"]
+                            }
+                        },
                         "notes": {
                             "type": "string",
                             "minLength": 1,
@@ -3235,7 +3622,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "MedicalReviewResultResponse": {
                     "type": "object",
-                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "review_status", "evidence_refs"],
+                    "required": ["claim_id", "event_type", "event_status", "audit_id", "run_id", "review_status", "clinical_outcomes", "evidence_refs"],
                     "properties": {
                         "claim_id": { "type": "string" },
                         "event_type": { "type": "string" },
@@ -3243,6 +3630,10 @@ pub async fn openapi_schema() -> Json<Value> {
                         "audit_id": { "type": "string" },
                         "run_id": { "type": "string" },
                         "review_status": { "type": "string" },
+                        "clinical_outcomes": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
@@ -3446,23 +3837,80 @@ pub async fn openapi_schema() -> Json<Value> {
                         "name": { "type": "string" },
                         "status": {
                             "type": "string",
-                            "enum": ["ok", "configured", "local_dev_key", "local_demo_source", "local_dev_database", "local_dev_model_service", "heuristic_model_scorer"],
-                            "description": "Check status. local_dev_key indicates the API is using the local development key. local_demo_source indicates the API is using the local demo source system. local_dev_database indicates the API is using the local development database URL. local_dev_model_service indicates the API is using the local development model service URL. heuristic_model_scorer indicates the API is using the heuristic fallback scorer. These must be reconfigured before customer pilot or production use."
+                            "enum": ["ok", "configured", "local_dev_key", "local_demo_source", "local_dev_database", "local_dev_model_service", "heuristic_model_scorer", "local_demo_object_storage", "local_demo_customer_scope", "local_demo_retention_policy", "local_demo_backup_restore", "local_demo_pii_masking", "local_demo_key_rotation", "local_demo_network_allowlist", "local_demo_alert_routing", "local_demo_observability_exporter", "local_demo_agent_policy"],
+                            "description": "Check status. local_dev_key indicates the API is using the local development key. local_demo_source indicates the API is using the local demo source system. local_dev_database indicates the API is using the local development database URL. local_dev_model_service indicates the API is using the local development model service URL. heuristic_model_scorer indicates the API is using the heuristic fallback scorer. local_demo_object_storage indicates the API is using the local demo object storage URI. local_demo_customer_scope indicates the API is using the local demo customer scope id. local_demo_retention_policy indicates the API is using the local demo retention policy id. local_demo_backup_restore indicates the API is using the local demo backup and restore plan id. local_demo_pii_masking indicates the API is using the local demo PII masking policy id. local_demo_key_rotation indicates the API is using the local demo key rotation policy id. local_demo_network_allowlist indicates the API is using the local demo network allowlist id. local_demo_alert_routing indicates the API is using the local demo alert routing policy id. local_demo_observability_exporter indicates the API is using the local demo observability exporter endpoint. local_demo_agent_policy indicates the API is using the local demo Agent tool policy id. These must be reconfigured before customer pilot or production use."
                         },
                         "runtime_kind": {
                             "type": "string",
-                            "enum": ["python_http", "heuristic"],
+                            "enum": ["python_http", "heuristic", "rust_artifact"],
                             "description": "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
+                        },
+                        "remediation": {
+                            "type": "string",
+                            "description": "Non-secret remediation hint returned for configuration checks that are not yet customer-pilot ready. Secret values and internal endpoint values are intentionally not exposed."
+                        }
+                    }
+                },
+                "PilotReadiness": {
+                    "type": "object",
+                    "required": ["status", "ready_for_customer_pilot", "required_check_names", "required_check_count", "ready_check_count", "blocking_check_count", "blocking_check_names", "remediation_summary", "ready_checks", "blocking_checks"],
+                    "properties": {
+                        "status": {
+                            "type": "string",
+                            "enum": ["ready", "not_ready"],
+                            "description": "Aggregate customer pilot readiness derived from non-secret configuration checks."
+                        },
+                        "ready_for_customer_pilot": {
+                            "type": "boolean",
+                            "description": "True only when no required pilot configuration checks are blocking customer pilot traffic."
+                        },
+                        "required_check_names": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Configuration check names that must be configured before customer pilot traffic."
+                        },
+                        "required_check_count": {
+                            "type": "integer",
+                            "description": "Total number of required pilot configuration checks."
+                        },
+                        "ready_check_count": {
+                            "type": "integer",
+                            "description": "Number of required pilot configuration checks already configured."
+                        },
+                        "blocking_check_count": {
+                            "type": "integer",
+                            "description": "Number of required pilot configuration checks still blocking customer pilot readiness."
+                        },
+                        "blocking_check_names": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Compact list of blocking configuration check names for scripts and dashboards."
+                        },
+                        "remediation_summary": {
+                            "type": "array",
+                            "items": { "type": "string" },
+                            "description": "Compact non-secret remediation hints for blocking readiness checks."
+                        },
+                        "ready_checks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/HealthCheck" },
+                            "description": "Configuration checks that are ready for customer pilot traffic."
+                        },
+                        "blocking_checks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/HealthCheck" },
+                            "description": "Configuration checks that must become configured before customer pilot traffic."
                         }
                     }
                 },
                 "HealthResponse": {
                     "type": "object",
-                    "required": ["status", "service", "version", "checks"],
+                    "required": ["status", "service", "version", "pilot_readiness", "checks"],
                     "properties": {
                         "status": { "type": "string", "enum": ["ok"] },
                         "service": { "type": "string" },
                         "version": { "type": "string" },
+                        "pilot_readiness": { "$ref": "#/components/schemas/PilotReadiness" },
                         "checks": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/HealthCheck" }
@@ -3759,10 +4207,11 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AuditHistoryEvent": {
                     "type": "object",
-                    "required": ["audit_id", "run_id", "event_type", "event_status", "summary", "payload", "evidence_refs"],
+                    "required": ["audit_id", "run_id", "actor_role", "event_type", "event_status", "summary", "payload", "evidence_refs"],
                     "properties": {
                         "audit_id": { "type": "string" },
                         "run_id": { "type": "string" },
+                        "actor_role": { "type": "string" },
                         "event_type": { "type": "string" },
                         "event_status": { "type": "string" },
                         "summary": { "type": "string" },
@@ -3786,7 +4235,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ApiCallRecord": {
                     "type": "object",
-                    "required": ["call_id", "endpoint", "method", "status_code", "result", "source_system", "claim_id", "run_id", "audit_id", "event_type", "idempotency_key", "evidence_refs", "observed_at"],
+                    "required": ["call_id", "endpoint", "method", "status_code", "result", "source_system", "actor_role", "customer_scope_id", "claim_id", "run_id", "audit_id", "event_type", "idempotency_key", "evidence_refs", "observed_at"],
                     "properties": {
                         "call_id": { "type": "string" },
                         "endpoint": { "type": "string" },
@@ -3794,6 +4243,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "status_code": { "type": "integer" },
                         "result": { "type": "string" },
                         "source_system": { "type": "string" },
+                        "actor_role": { "type": "string" },
+                        "customer_scope_id": { "type": "string" },
                         "claim_id": { "type": "string" },
                         "run_id": { "type": "string" },
                         "audit_id": { "type": "string" },
@@ -3818,7 +4269,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "WebhookEvent": {
                     "type": "object",
-                    "required": ["event_id", "event_type", "source_event_type", "source_audit_id", "claim_id", "run_id", "delivery_status", "retry_count", "max_attempts", "next_attempt_at", "last_attempt_at", "last_response_status_code", "last_error_message", "idempotency_key", "signature_key_id", "signature_algorithm", "signature_base_string", "payload", "evidence_refs", "occurred_at"],
+                    "required": ["event_id", "event_type", "source_event_type", "source_audit_id", "customer_scope_id", "claim_id", "run_id", "delivery_status", "retry_count", "max_attempts", "next_attempt_at", "last_attempt_at", "last_response_status_code", "last_error_message", "idempotency_key", "signature_key_id", "signature_algorithm", "signature_base_string", "payload", "evidence_refs", "occurred_at"],
                     "properties": {
                         "event_id": { "type": "string" },
                         "event_type": {
@@ -3827,6 +4278,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "source_event_type": { "type": "string" },
                         "source_audit_id": { "type": "string" },
+                        "customer_scope_id": { "type": "string" },
                         "claim_id": { "type": "string" },
                         "run_id": { "type": "string" },
                         "delivery_status": { "type": "string", "enum": ["pending", "retry_wait", "delivered", "failed"] },
@@ -4030,15 +4482,39 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["samples"],
                     "properties": {
                         "min_support": { "type": "integer", "minimum": 1 },
+                        "source_model_key": { "type": "string" },
+                        "source_model_version": { "type": "string" },
+                        "feature_importance_uri": {
+                            "type": "string",
+                            "description": "Feature importance or SHAP-style artifact URI used as candidate-rule evidence."
+                        },
+                        "min_abs_contribution": {
+                            "type": "number",
+                            "description": "Minimum absolute model explanation contribution required before proposing a rule candidate."
+                        },
+                        "model_explanations": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RuleDiscoveryModelExplanation" }
+                        },
                         "samples": {
                             "type": "array",
                             "items": { "type": "object" }
                         }
                     }
                 },
+                "RuleDiscoveryModelExplanation": {
+                    "type": "object",
+                    "required": ["feature", "direction", "contribution", "reason"],
+                    "properties": {
+                        "feature": { "type": "string" },
+                        "direction": { "type": "string", "enum": ["increases_risk", "decreases_risk"] },
+                        "contribution": { "type": "number" },
+                        "reason": { "type": "string" }
+                    }
+                },
                 "RuleDiscoveryCandidate": {
                     "type": "object",
-                    "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation"],
+                    "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation", "evidence_refs"],
                     "properties": {
                         "rule": { "$ref": "#/components/schemas/RuleDefinition" },
                         "support": { "type": "integer" },
@@ -4051,7 +4527,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "type": "string" }
                         },
-                        "explanation": { "type": "string" }
+                        "explanation": { "type": "string" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        }
                     }
                 },
                 "RuleDiscoveryResponse": {
@@ -4397,7 +4877,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "metrics_json": {
                             "type": "object",
-                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, serving_version_lock_status, artifact_integrity_status, feature_store_materialization_status, segment_fairness_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         }
                     }
                 },
@@ -4426,9 +4906,93 @@ pub async fn openapi_schema() -> Json<Value> {
                         "metrics_json": {
                             "type": "object",
                             "minProperties": 1,
-                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                            "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, serving_version_lock_status, artifact_integrity_status, feature_store_materialization_status, segment_fairness_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         }
                     }
+                },
+                "EvidenceDocumentRegistrationRequest": {
+                    "type": "object",
+                    "required": ["document_id", "source_record_ref", "document_type", "storage_uri", "content_checksum", "ingestion_status", "redaction_status"],
+                    "properties": {
+                        "document_id": { "type": "string", "minLength": 1 },
+                        "source_record_ref": { "type": "string", "minLength": 1 },
+                        "claim_id": { "type": ["string", "null"] },
+                        "external_document_id": { "type": ["string", "null"] },
+                        "document_type": { "type": "string", "minLength": 1 },
+                        "storage_uri": { "type": "string", "minLength": 1 },
+                        "content_checksum": { "type": "string", "minLength": 1 },
+                        "ingestion_status": { "type": "string", "minLength": 1 },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "retention_policy_id": { "type": ["string", "null"] },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "metadata_json": { "type": "object", "additionalProperties": true }
+                    },
+                    "description": "Evidence document metadata only. Raw document text and payloads remain in customer-approved object storage."
+                },
+                "EvidenceDocumentChunkRegistrationRequest": {
+                    "type": "object",
+                    "required": ["chunk_id", "chunk_index", "chunking_version", "redaction_status", "text_checksum", "token_count", "storage_uri"],
+                    "properties": {
+                        "chunk_id": { "type": "string", "minLength": 1 },
+                        "chunk_index": { "type": "integer", "minimum": 0 },
+                        "chunking_version": { "type": "string", "minLength": 1 },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "text_checksum": { "type": "string", "minLength": 1 },
+                        "token_count": { "type": "integer", "minimum": 0 },
+                        "storage_uri": { "type": "string", "minLength": 1 },
+                        "source_offsets_json": { "type": "object", "additionalProperties": true },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    }
+                },
+                "EvidenceOcrOutputRegistrationRequest": {
+                    "type": "object",
+                    "required": ["ocr_output_id", "ocr_engine", "ocr_engine_version", "output_uri", "output_checksum", "quality_status"],
+                    "properties": {
+                        "ocr_output_id": { "type": "string", "minLength": 1 },
+                        "ocr_engine": { "type": "string", "minLength": 1 },
+                        "ocr_engine_version": { "type": "string", "minLength": 1 },
+                        "output_uri": { "type": "string", "minLength": 1 },
+                        "output_checksum": { "type": "string", "minLength": 1 },
+                        "confidence_score": { "type": ["string", "null"] },
+                        "quality_status": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    },
+                    "description": "OCR output metadata only; OCR text is addressed by output_uri and checksum."
+                },
+                "EvidenceEmbeddingJobRegistrationRequest": {
+                    "type": "object",
+                    "required": ["embedding_job_id", "target_kind", "target_ref", "embedding_model", "embedding_model_version", "chunking_version", "redaction_status", "vector_store_kind", "vector_store_ref", "embedding_checksum", "status"],
+                    "properties": {
+                        "embedding_job_id": { "type": "string", "minLength": 1 },
+                        "target_kind": { "type": "string", "enum": ["document", "document_chunk", "knowledge_case"] },
+                        "target_ref": { "type": "string", "minLength": 1 },
+                        "embedding_model": { "type": "string", "minLength": 1 },
+                        "embedding_model_version": { "type": "string", "minLength": 1 },
+                        "chunking_version": { "type": "string", "minLength": 1 },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "vector_store_kind": { "type": "string", "minLength": 1 },
+                        "vector_store_ref": { "type": "string", "minLength": 1 },
+                        "embedding_checksum": { "type": "string", "minLength": 1 },
+                        "status": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    }
+                },
+                "EvidenceRetrievalAuditRegistrationRequest": {
+                    "type": "object",
+                    "required": ["retrieval_id", "query_kind", "query_checksum", "retrieval_method", "top_k", "redaction_status"],
+                    "properties": {
+                        "retrieval_id": { "type": "string", "minLength": 1 },
+                        "query_kind": { "type": "string", "minLength": 1 },
+                        "query_checksum": { "type": "string", "minLength": 1 },
+                        "retrieval_method": { "type": "string", "minLength": 1 },
+                        "embedding_model_version": { "type": ["string", "null"] },
+                        "top_k": { "type": "integer", "minimum": 1 },
+                        "source_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "result_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } },
+                        "redaction_status": { "type": "string", "minLength": 1 },
+                        "evidence_refs": { "type": "array", "items": { "type": "string", "minLength": 1 } }
+                    },
+                    "description": "Retrieval audit metadata uses query_checksum instead of raw query text."
                 },
                 "ModelEvaluationLineage": {
                     "type": "object",
@@ -4746,7 +5310,22 @@ pub async fn openapi_schema() -> Json<Value> {
                         "artifact_uri": {
                             "type": "string",
                             "minLength": 1,
-                            "description": "Supported model artifact formats: .onnx, .pkl, or .joblib."
+                            "description": "Supported serving model artifact formats: .onnx, .pkl, .joblib, or .json. Rust serving exports should use rust_serving_artifact.json."
+                        },
+                        "artifact_sha256": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional sha256 digest for the serving artifact."
+                        },
+                        "training_artifact_uri": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional Python training artifact URI for audit and fallback reproducibility. Supported formats: .pkl or .joblib."
+                        },
+                        "training_artifact_sha256": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional sha256 digest for training_artifact_uri."
                         },
                         "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
                         "validation_report_uri": {
@@ -4759,7 +5338,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "minItems": 1,
                             "items": { "type": "string", "minLength": 1 },
-                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, and model_evaluations refs."
+                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, and model_training_artifacts when training_artifact_uri is present."
                         },
                         "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
@@ -4777,7 +5356,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "metrics_json": {
                             "type": "object",
                             "minProperties": 1,
-                            "description": "Model governance metrics. Promotion-ready retraining outputs should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, and label_provenance_status."
+                            "description": "Model governance metrics. Promotion-ready retraining outputs should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         }
                     }
                 },
@@ -4853,10 +5432,14 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "SavingAttributionSummary": {
                     "type": "object",
-                    "required": ["source_type", "source_id", "action", "saving_amount", "currency", "claim_count", "evidence_refs"],
+                    "required": ["source_type", "source_id", "financial_impact_type", "action", "saving_amount", "currency", "claim_count", "evidence_refs"],
                     "properties": {
                         "source_type": { "type": "string" },
                         "source_id": { "type": "string" },
+                        "financial_impact_type": {
+                            "type": "string",
+                            "enum": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "deterrence_estimate", "estimated_impact"]
+                        },
                         "action": { "type": "string" },
                         "saving_amount": { "type": "string", "format": "decimal" },
                         "currency": { "type": "string" },
@@ -4924,11 +5507,12 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "DashboardValueMeasurement": {
                     "type": "object",
-                    "required": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "estimated_impact", "review_cost", "false_positive_operational_cost", "reviewer_capacity_hours", "net_value", "currency", "evidence_caveat"],
+                    "required": ["prevented_payment", "recovered_amount", "avoided_future_exposure", "deterrence_estimate", "estimated_impact", "review_cost", "false_positive_operational_cost", "reviewer_capacity_hours", "net_value", "currency", "evidence_caveat"],
                     "properties": {
                         "prevented_payment": { "type": "string", "format": "decimal" },
                         "recovered_amount": { "type": "string", "format": "decimal" },
                         "avoided_future_exposure": { "type": "string", "format": "decimal" },
+                        "deterrence_estimate": { "type": "string", "format": "decimal" },
                         "estimated_impact": { "type": "string", "format": "decimal" },
                         "review_cost": { "type": "string", "format": "decimal" },
                         "false_positive_operational_cost": { "type": "string", "format": "decimal" },
@@ -5239,9 +5823,13 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AuditSampleRecord": {
                     "type": "object",
-                    "required": ["sample_id", "sample_mode", "population_definition", "inclusion_criteria", "selection_method", "sample_size", "reviewer", "assignment_queue", "selected_leads", "outcome_distribution"],
+                    "required": ["sample_id", "customer_scope_id", "sample_mode", "population_definition", "inclusion_criteria", "selection_method", "sample_size", "reviewer", "assignment_queue", "selected_leads", "outcome_distribution"],
                     "properties": {
                         "sample_id": { "type": "string" },
+                        "customer_scope_id": {
+                            "type": "string",
+                            "description": "Derived from the authenticated API key and used to scope sample population and list visibility."
+                        },
                         "sample_mode": { "type": "string" },
                         "population_definition": { "type": "string" },
                         "inclusion_criteria": { "type": "object" },
@@ -5402,7 +5990,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Must include agent_run:{agent_run_id} for the approved or rejected run and must not contain PII.",
+                            "description": "Must include agent_run:{agent_run_id} for the approved or rejected run and must not contain PII. The platform appends policy:{FWA_AGENT_POLICY_ID} to the persisted approval and audit event.",
                             "items": { "type": "string", "minLength": 1 },
                             "contains": {
                                 "type": "string",

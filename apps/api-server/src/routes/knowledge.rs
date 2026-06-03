@@ -13,7 +13,7 @@ use axum::{
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_auth::{authenticate_api_key, validate_api_key};
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -78,7 +78,7 @@ pub async fn publish_case(
 ) -> Result<Json<PublishKnowledgeCaseResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
     validate_publish_knowledge_case(&request)?;
-    merge_latest_canonical_evidence_refs(&state, &mut request).await?;
+    merge_latest_canonical_evidence_refs(&state, &actor.customer_scope_id, &mut request).await?;
 
     let scheme_family = request
         .scheme_family
@@ -119,6 +119,7 @@ pub async fn publish_case(
             event_status: "succeeded".into(),
             summary: format!("Knowledge case published: {}", case.case_id),
             payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
                 "claim_id": source_claim_id,
                 "case_id": case.case_id,
                 "fwa_type": case.fwa_type,
@@ -142,6 +143,7 @@ pub async fn publish_case(
 
 async fn merge_latest_canonical_evidence_refs(
     state: &AppState,
+    customer_scope_id: &str,
     request: &mut PublishKnowledgeCaseRequest,
 ) -> Result<(), ApiError> {
     let Some(source_claim_id) = request.source_claim_id.as_ref() else {
@@ -154,6 +156,7 @@ async fn merge_latest_canonical_evidence_refs(
             event_type: Some("scoring.completed".into()),
             claim_id: Some(source_claim_id.clone()),
             has_canonical_trace: Some(true),
+            customer_scope_id: Some(customer_scope_id.into()),
             ..Default::default()
         })
         .await
@@ -261,7 +264,7 @@ pub async fn search_similar(
     headers: HeaderMap,
     Json(request): Json<SimilarCaseSearchRequest>,
 ) -> Result<Json<SimilarCaseSearchResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    authorize_permission(&state, &headers, "tpa:knowledge:read")?;
     validate_similar_case_search(&request)?;
     let results = state
         .repository
@@ -298,20 +301,39 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",
             "invalid api key",
         )
     })
+}
+
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "FORBIDDEN",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
 }
 
 fn internal_error(

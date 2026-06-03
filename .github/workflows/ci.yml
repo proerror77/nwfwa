@@ -24,12 +24,58 @@ concurrency:
 jobs:
   repository-health:
     runs-on: ubuntu-latest
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
       - run: bash scripts/ci/check_repo.sh
 
+  staging-proof:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/build_prd_coverage.py scripts/ops/run_mlops_monitoring_plan.py
+      - run: python3 scripts/ops/validate_k8s_staging.py
+      - run: python3 scripts/ops/validate_container_packaging.py
+      - run: python3 scripts/ops/validate_analytics_scale.py
+      - run: python3 scripts/ops/validate_ai_evidence_foundation.py
+      - run: python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof
+      - run: python3 scripts/ops/validate_operational_drill_proof.py --proof-dir /tmp/nwfwa-staging-proof
+      - run: python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment --commit-sha "$GITHUB_SHA"
+      - run: python3 scripts/ops/validate_staging_deployment_package.py --package-dir /tmp/nwfwa-staging-deployment
+      - run: python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export
+      - run: python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation
+      - run: python3 scripts/ops/build_prd_coverage.py --output-dir /tmp/nwfwa-prd-coverage
+      - run: |
+          python3 scripts/ops/run_mlops_monitoring_plan.py \
+            --plan scripts/ops/sample_mlops_monitoring_plan.json \
+            --output-dir /tmp/nwfwa-mlops-monitoring
+      - run: |
+          test -f /tmp/nwfwa-staging-proof/object_storage_manifest.json
+          test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
+          test -f /tmp/nwfwa-staging-proof/retention_legal_hold_proof.json
+          test -f /tmp/nwfwa-staging-proof/observability_proof.json
+          test -f /tmp/nwfwa-staging-proof/operational_drill_proof.json
+          test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
+          test -f /tmp/nwfwa-staging-deployment/apply.sh
+          test -f /tmp/nwfwa-staging-deployment/rollback.md
+          test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
+          test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
+          test -f /tmp/nwfwa-analytics-export/schema.sql
+          test -f /tmp/nwfwa-analytics-export/dashboard_queries.sql
+          test -f /tmp/nwfwa-ai-evidence-foundation/ai_evidence_foundation_manifest.json
+          test -f /tmp/nwfwa-ai-evidence-foundation/index.json
+          test -f /tmp/nwfwa-prd-coverage/prd_coverage_summary.json
+          test -f /tmp/nwfwa-prd-coverage/index.json
+          test -f /tmp/nwfwa-mlops-monitoring/shadow_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/drift_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/fairness_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/reviewer_disagreement_report.json
+          test -f /tmp/nwfwa-mlops-monitoring/label_delay_report.json
+
   rust:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     env:
       CARGO_INCREMENTAL: "0"
       CARGO_PROFILE_DEV_DEBUG: "0"
@@ -48,6 +94,7 @@ jobs:
 
   migrations:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     services:
       postgres:
         image: postgres:16
@@ -73,6 +120,7 @@ jobs:
 
   demo-smoke:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     services:
       postgres:
         image: postgres:16
@@ -92,6 +140,8 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/ml-service/pyproject.toml
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
         with:
@@ -182,6 +232,7 @@ jobs:
 
   python:
     runs-on: ubuntu-latest
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: apps/ml-service
@@ -190,11 +241,27 @@ jobs:
       - uses: actions/setup-python@v6
         with:
           python-version: "3.12"
+          cache: pip
+          cache-dependency-path: apps/ml-service/pyproject.toml
       - run: python -m pip install -e ".[dev]"
       - run: pytest
+      - run: |
+          python ../../scripts/data/build_public_data_mvp.py \
+            --synthetic-fixture \
+            --output-dir /tmp/fwa-public-mvp \
+            --dataset-version 2026-06-public-mvp
+      - run: |
+          python -m app.train \
+            --manifest /tmp/fwa-public-mvp/manifest.json \
+            --artifact-base-uri /tmp/fwa-public-mvp-artifacts \
+            --model-key baseline_fwa \
+            --base-model-version public-mvp \
+            --job-id public_data_mvp_job_1 \
+            --actor public-data-builder
 
   frontend:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     defaults:
       run:
         working-directory: apps/web-console
@@ -210,11 +277,8 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: 22
-          cache: npm
-          cache-dependency-path: apps/web-console/package-lock.json
       - run: cargo install trunk --version 0.21.14 --locked
-      - run: npm ci
-      - run: npm run lint
-      - run: npm test
-      - run: npm run build
-      - run: npm run smoke:build
+      - run: cargo fmt -- --check
+      - run: cargo check --locked --target wasm32-unknown-unknown
+      - run: NO_COLOR=false trunk build --release --locked
+      - run: node ../../scripts/demo/smoke_web_console.mjs

@@ -1,8 +1,14 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::HeuristicModelScorer;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -11,7 +17,23 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
+}
+
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
 }
 
 async fn json_request(
@@ -158,6 +180,7 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
           "saving_amount": "8200.00",
           "currency": "CNY",
           "notes": "TPA investigation confirmed over-treatment signals.",
+          "customer_scope_id": "spoofed-customer",
           "evidence_refs": ["agent_run:agent_CLM-0287", "knowledge_cases:KC-1001"]
         }"#,
     )
@@ -258,6 +281,7 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
           "issue_type": "alert_handling_incomplete",
           "feedback_target": "rules",
           "notes": "Reviewer should attach provider history evidence.",
+          "customer_scope_id": "spoofed-customer",
           "evidence_refs": ["audit:investigation.result.received", "rule_runs:EARLY_CLAIM"]
         }"#,
     )
@@ -297,6 +321,14 @@ async fn writes_investigation_and_qa_results_then_returns_claim_audit_history() 
     assert_eq!(events.len(), 2);
     assert_eq!(events[0]["event_type"], "investigation.result.received");
     assert_eq!(events[1]["event_type"], "qa.result.received");
+    assert_eq!(events[0]["actor_role"], "tpa_system");
+    assert_eq!(events[1]["actor_role"], "tpa_system");
+    assert_eq!(events[0]["payload"]["customer_scope_id"], "demo-customer");
+    assert_eq!(events[1]["payload"]["customer_scope_id"], "demo-customer");
+    assert_eq!(events[0]["payload"]["actor_id"], "tpa-demo");
+    assert_eq!(events[1]["payload"]["actor_id"], "tpa-demo");
+    assert_eq!(events[0]["payload"]["actor_role"], "tpa_system");
+    assert_eq!(events[1]["payload"]["actor_role"], "tpa_system");
     assert!(events
         .iter()
         .all(|event| !event["evidence_refs"].as_array().unwrap().is_empty()));
@@ -714,6 +746,7 @@ async fn lists_webhook_events_for_tpa_integrations() {
             events.iter().any(|event| {
                 event["event_type"] == expected
                     && event["claim_id"] == "CLM-WEBHOOK-1"
+                    && event["customer_scope_id"] == "demo-customer"
                     && event["delivery_status"] == "pending"
                     && event["retry_count"] == 0
                     && event["max_attempts"] == 3
@@ -1234,12 +1267,19 @@ async fn updates_qa_feedback_item_status_with_audit_trail() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    assert!(audit["events"]
+    let status_event = audit["events"]
         .as_array()
         .unwrap()
         .iter()
-        .any(|event| event["event_type"] == "qa.feedback.status.updated"
-            && event["payload"]["to_status"] == "resolved"));
+        .find(|event| {
+            event["event_type"] == "qa.feedback.status.updated"
+                && event["payload"]["to_status"] == "resolved"
+        })
+        .expect("feedback status update should be audited");
+    assert_eq!(
+        status_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
 }
 
 #[tokio::test]
@@ -2050,6 +2090,422 @@ async fn returns_member_profile_summary_from_scored_claims() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("members:MBR-PROFILE-1")));
+}
+
+#[tokio::test]
+async fn member_profile_summary_is_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "claim": {
+            "external_claim_id": "CLM-MEMBER-SCOPE-1",
+            "claim_amount": "9200.00",
+            "currency": "CNY",
+            "service_date": "2026-02-05",
+            "diagnosis_code": "J10",
+            "member": {
+              "external_member_id": "MBR-SCOPE-PROFILE-1"
+            },
+            "policy": {
+              "external_policy_id": "POL-MEMBER-SCOPE-1",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": "10000.00",
+              "currency": "CNY"
+            },
+            "provider": {
+              "external_provider_id": "PRV-MEMBER-SCOPE-1",
+              "name": "Profile Hospital",
+              "provider_type": "hospital",
+              "region": "Shanghai",
+              "risk_tier": "Medium"
+            },
+            "items": [
+              {
+                "item_code": "PROC-1",
+                "item_type": "procedure",
+                "description": "Procedure",
+                "quantity": 1,
+                "unit_amount": "9200.00",
+                "total_amount": "9200.00",
+                "currency": "CNY"
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/members/MBR-SCOPE-PROFILE-1/profile-summary")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let response = beta_app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+}
+
+#[tokio::test]
+async fn qa_feedback_and_dashboard_are_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-SCOPE-ALPHA-1",
+          "claim_id": "CLM-QA-SCOPE-ALPHA-1",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "medical_necessity_issue",
+          "feedback_target": "rules",
+          "notes": "Alpha QA found missing medical necessity evidence.",
+          "evidence_refs": ["qa_reviews:QA-SCOPE-ALPHA-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, alpha_feedback) = json_request(
+        alpha_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_feedback["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| {
+            item["feedback_id"] == "qa_feedback_QA-SCOPE-ALPHA-1"
+                && item["claim_id"] == "CLM-QA-SCOPE-ALPHA-1"
+        }));
+
+    let (status, beta_feedback) = json_request(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_feedback["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| {
+            item["feedback_id"] == "qa_feedback_QA-SCOPE-ALPHA-1"
+                || item["claim_id"] == "CLM-QA-SCOPE-ALPHA-1"
+        }));
+
+    let (status, beta_update) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/ops/qa/feedback-items/qa_feedback_QA-SCOPE-ALPHA-1/status",
+        r#"{
+          "status": "resolved",
+          "actor_id": "beta-reviewer",
+          "notes": "Beta reviewer must not update alpha feedback.",
+          "evidence_refs": ["qa_feedback:qa_feedback_QA-SCOPE-ALPHA-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(beta_update["code"], "QA_FEEDBACK_NOT_FOUND");
+
+    let (status, beta_summary) = json_request(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/queue-summary",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(beta_summary["open_count"], 0);
+    assert_eq!(beta_summary["unresolved_count"], 0);
+
+    let (status, beta_labels) =
+        json_request(beta_app.clone(), "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|label| {
+            label["source_id"] == "QA-SCOPE-ALPHA-1" || label["claim_id"] == "CLM-QA-SCOPE-ALPHA-1"
+        }));
+
+    let (status, beta_dashboard) =
+        json_request(beta_app, "GET", "/api/v1/ops/dashboard/summary", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(beta_dashboard["qa_reviews"], 0);
+    assert_eq!(beta_dashboard["qa_queue"]["feedback_open_count"], 0);
+    assert_eq!(beta_dashboard["label_pool"]["rule_feedback"], 0);
+}
+
+#[tokio::test]
+async fn writeback_ids_cannot_be_reused_across_customers() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-CROSS-SCOPE-REUSE-1",
+          "claim_id": "CLM-QA-CROSS-SCOPE-ALPHA",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "medical_necessity_issue",
+          "feedback_target": "rules",
+          "notes": "Alpha QA result should own this QA case id.",
+          "evidence_refs": ["qa_reviews:QA-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, beta_qa) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-CROSS-SCOPE-REUSE-1",
+          "claim_id": "CLM-QA-CROSS-SCOPE-BETA",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "workflow_missing_evidence",
+          "feedback_target": "workflow",
+          "notes": "Beta must not overwrite alpha QA result.",
+          "evidence_refs": ["qa_reviews:QA-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(beta_qa["code"], "QA_CASE_SCOPE_CONFLICT");
+
+    let (status, alpha_feedback) = json_request(
+        alpha_app.clone(),
+        "GET",
+        "/api/v1/ops/qa/feedback-items",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_feedback["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| {
+            item["qa_case_id"] == "QA-CROSS-SCOPE-REUSE-1"
+                && item["claim_id"] == "CLM-QA-CROSS-SCOPE-ALPHA"
+                && item["feedback_target"] == "rules"
+        }));
+
+    let (status, _) = json_request(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-INV-CROSS-SCOPE-ALPHA",
+          "investigation_id": "INV-CROSS-SCOPE-REUSE-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Alpha investigation result should own this investigation id.",
+          "evidence_refs": ["investigation_results:INV-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, beta_investigation) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-INV-CROSS-SCOPE-BETA",
+          "investigation_id": "INV-CROSS-SCOPE-REUSE-1",
+          "outcome": "no_issue_found",
+          "confirmed_fwa": false,
+          "saving_amount": "0.00",
+          "currency": "CNY",
+          "notes": "Beta must not overwrite alpha investigation result.",
+          "evidence_refs": ["investigation_results:INV-CROSS-SCOPE-REUSE-1"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    assert_eq!(
+        beta_investigation["code"],
+        "INVESTIGATION_RESULT_SCOPE_CONFLICT"
+    );
+
+    let (status, alpha_labels) = json_request(alpha_app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|label| {
+            label["source_id"] == "INV-CROSS-SCOPE-REUSE-1"
+                && label["claim_id"] == "CLM-INV-CROSS-SCOPE-ALPHA"
+        }));
+
+    let (status, beta_labels) = json_request(beta_app, "GET", "/api/v1/ops/labels", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_labels["labels"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|label| label["source_id"] == "INV-CROSS-SCOPE-REUSE-1"));
+}
+
+#[tokio::test]
+async fn canonical_evidence_merge_is_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-CANONICAL-SCOPE-REUSE",
+              "total_amount": 9300,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-alpha-canonical",
+              "masked_certificate_id": "masked-cert-alpha-canonical",
+              "policy_id": "POL-CANONICAL-SCOPE-ALPHA",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-CANONICAL-SCOPE-ALPHA",
+              "name": "Alpha Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "Alpha-only imaging",
+                "fee_category": "procedure",
+                "amount": 9300,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:ALPHA-CANONICAL-ONLY:fee_detail:LINE-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, beta_qa) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-CANONICAL-SCOPE-BETA",
+          "claim_id": "CLM-CANONICAL-SCOPE-REUSE",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "workflow_missing_evidence",
+          "feedback_target": "workflow",
+          "notes": "Beta QA should not inherit alpha canonical evidence.",
+          "evidence_refs": ["qa_reviews:QA-CANONICAL-SCOPE-BETA"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_qa["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:ALPHA-CANONICAL-ONLY:fee_detail:LINE-1"
+        )));
+
+    let (status, beta_investigation) = json_request(
+        beta_app,
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-CANONICAL-SCOPE-REUSE",
+          "investigation_id": "INV-CANONICAL-SCOPE-BETA",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Beta investigation should not inherit alpha canonical evidence.",
+          "evidence_refs": ["investigation_results:INV-CANONICAL-SCOPE-BETA"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_investigation["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:ALPHA-CANONICAL-ONLY:fee_detail:LINE-1"
+        )));
 }
 
 #[tokio::test]

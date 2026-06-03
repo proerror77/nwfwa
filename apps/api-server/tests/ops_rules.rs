@@ -11,6 +11,16 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 
@@ -1057,6 +1067,86 @@ async fn discovers_candidate_rules_from_labeled_samples() {
 }
 
 #[tokio::test]
+async fn discovers_rule_candidates_from_model_explanations() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/discover",
+        r#"{
+          "min_support": 1,
+          "source_model_key": "baseline_fwa",
+          "source_model_version": "0.3.0-candidate",
+          "feature_importance_uri": "data/eval/baseline_fwa/v3/feature_importance.parquet",
+          "model_explanations": [
+            {
+              "feature": "claim_amount_to_limit_ratio",
+              "direction": "increases_risk",
+              "contribution": 1.4,
+              "reason": "large positive logistic contribution"
+            }
+          ],
+          "samples": [
+            {
+              "external_claim_id": "CLM-ML-TP",
+              "claim_amount": "9000",
+              "currency": "CNY",
+              "service_date": "2026-01-05",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-ML-TP",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-ML-TN",
+              "claim_amount": "500",
+              "currency": "CNY",
+              "service_date": "2026-03-01",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-ML-TN",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            }
+          ]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let candidates = body["candidates"].as_array().unwrap();
+    let candidate = candidates
+        .iter()
+        .find(|candidate| {
+            candidate["rule"]["rule_id"] == "candidate_ml_claim_amount_to_limit_ratio"
+        })
+        .expect("missing model explanation candidate rule");
+    assert_eq!(
+        candidate["rule"]["conditions"][0]["field"],
+        "claim_amount_to_limit_ratio"
+    );
+    assert_eq!(candidate["rule"]["conditions"][0]["operator"], ">=");
+    assert_eq!(candidate["precision"], 1.0);
+    assert!(candidate["explanation"]
+        .as_str()
+        .unwrap()
+        .contains("模型解释"));
+    assert!(candidate["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_versions:baseline_fwa:0.3.0-candidate"
+        )));
+}
+
+#[tokio::test]
 async fn saves_discovered_candidate_rule_for_lifecycle() {
     let app = build_app(test_config());
 
@@ -1302,8 +1392,16 @@ async fn records_rule_candidate_and_lifecycle_audit_events() {
         audit_events[0]["payload"]["rule_id"],
         "candidate_audit_rule"
     );
+    assert_eq!(
+        audit_events[0]["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert_eq!(audit_events[0]["payload"]["to_status"], "draft");
     assert_eq!(audit_events[1]["event_type"], "rule.status.changed");
+    assert_eq!(
+        audit_events[1]["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert_eq!(audit_events[1]["payload"]["from_status"], "draft");
     assert_eq!(audit_events[1]["payload"]["to_status"], "submitted");
     assert_eq!(
@@ -1519,6 +1617,32 @@ async fn blocks_rule_publish_before_approval() {
 }
 
 #[tokio::test]
+async fn blocks_rule_approval_before_submit() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/approve",
+        &rule_lifecycle_payload("rule_early_claim", 1),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "RULE_STATUS_REQUIRED");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("rule must be submitted before approved"));
+
+    let (status, body) = json_request(app, "GET", "/api/v1/ops/rules/rule_early_claim", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["summary"]["status"], "active");
+}
+
+#[tokio::test]
 async fn blocks_rule_publish_when_promotion_gates_are_blocked() {
     let app = build_app(test_config());
 
@@ -1596,6 +1720,10 @@ async fn rolls_back_active_rule_with_audit_event() {
     assert_eq!(rollback_event["payload"]["from_status"], "active");
     assert_eq!(rollback_event["payload"]["to_status"], "approved");
     assert_eq!(rollback_event["payload"]["rule_version"], 1);
+    assert_eq!(
+        rollback_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert_eq!(
         rollback_event["evidence_refs"][0],
         "rules:rule_early_claim:v1"

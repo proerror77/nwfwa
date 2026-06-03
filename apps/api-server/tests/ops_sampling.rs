@@ -1,8 +1,14 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::HeuristicModelScorer;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -11,6 +17,24 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
+    }
+}
+
+fn scoped_config(api_key: &str, customer_scope_id: &str) -> AppConfig {
+    AppConfig {
+        api_key: api_key.into(),
+        customer_scope_id: customer_scope_id.into(),
+        ..test_config()
     }
 }
 
@@ -20,11 +44,21 @@ async fn json_request(
     uri: &str,
     body: &str,
 ) -> (StatusCode, serde_json::Value) {
+    json_request_with_key(app, method, uri, body, "dev-secret").await
+}
+
+async fn json_request_with_key(
+    app: axum::Router,
+    method: &str,
+    uri: &str,
+    body: &str,
+    api_key: &str,
+) -> (StatusCode, serde_json::Value) {
     let request = Request::builder()
         .method(method)
         .uri(uri)
         .header("content-type", "application/json")
-        .header("x-api-key", "dev-secret")
+        .header("x-api-key", api_key)
         .body(Body::from(body.to_string()))
         .unwrap();
     let response = app.oneshot(request).await.unwrap();
@@ -53,6 +87,56 @@ async fn score_high_risk_claim(app: axum::Router, claim_id: &str, amount: &str) 
         "Northwind Hospital",
     )
     .await;
+}
+
+async fn score_high_risk_claim_with_key(
+    app: axum::Router,
+    claim_id: &str,
+    amount: &str,
+    api_key: &str,
+) {
+    let body = format!(
+        r#"{{
+          "source_system": "tpa-demo",
+          "claim": {{
+            "external_claim_id": "{claim_id}",
+            "claim_amount": "{amount}",
+            "currency": "CNY",
+            "service_date": "2026-01-06",
+            "diagnosis_code": "J10"
+          }},
+          "items": [
+            {{
+              "item_code": "PROC-001",
+              "item_type": "procedure",
+              "description": "Imaging",
+              "quantity": 1,
+              "unit_amount": "{amount}",
+              "total_amount": "{amount}"
+            }}
+          ],
+          "member": {{ "external_member_id": "MBR-{claim_id}" }},
+          "policy": {{
+            "external_policy_id": "POL-{claim_id}",
+            "product_code": "MED",
+            "coverage_start_date": "2026-01-01",
+            "coverage_end_date": "2026-12-31",
+            "coverage_limit": "10000",
+            "currency": "CNY"
+          }},
+          "provider": {{
+            "external_provider_id": "PRV-{claim_id}",
+            "name": "Northwind Hospital",
+            "provider_type": "hospital",
+            "region": "SH",
+            "risk_tier": "High"
+          }}
+        }}"#
+    );
+    let (status, response) =
+        json_request_with_key(app, "POST", "/api/v1/claims/score", &body, api_key).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(response["risk_score"].as_u64().unwrap() >= 70);
 }
 
 async fn score_high_risk_claim_with_context(
@@ -145,6 +229,106 @@ async fn score_claim_for_sampling(
     let (status, response) = json_request(app, "POST", "/api/v1/claims/score", &body).await;
     assert_eq!(status, StatusCode::OK);
     response
+}
+
+#[tokio::test]
+async fn audit_samples_are_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("alpha-secret", "customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("beta-secret", "customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    score_high_risk_claim_with_key(
+        alpha_app.clone(),
+        "CLM-SAMPLE-SCOPE-A1",
+        "9100",
+        "alpha-secret",
+    )
+    .await;
+
+    let (status, sample) = json_request_with_key(
+        alpha_app.clone(),
+        "POST",
+        "/api/v1/ops/audit-samples",
+        r#"{
+          "sample_mode": "risk_ranked",
+          "population_definition": "Alpha customer high risk claims",
+          "inclusion_criteria": {
+            "min_risk_score": 70
+          },
+          "sample_size": 1,
+          "reviewer": "qa-alpha",
+          "assignment_queue": "Alpha QA"
+        }"#,
+        "alpha-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(sample["customer_scope_id"], "customer-alpha");
+    assert_eq!(sample["selected_leads"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        sample["selected_leads"][0]["claim_id"],
+        "CLM-SAMPLE-SCOPE-A1"
+    );
+
+    let (status, alpha_samples) = json_request_with_key(
+        alpha_app.clone(),
+        "GET",
+        "/api/v1/ops/audit-samples",
+        "{}",
+        "alpha-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(alpha_samples["samples"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        alpha_samples["samples"][0]["customer_scope_id"],
+        "customer-alpha"
+    );
+
+    let (status, beta_samples) = json_request_with_key(
+        beta_app.clone(),
+        "GET",
+        "/api/v1/ops/audit-samples",
+        "{}",
+        "beta-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(beta_samples["samples"].as_array().unwrap().is_empty());
+
+    let (status, beta_audit_events) = json_request_with_key(
+        beta_app,
+        "GET",
+        "/api/v1/ops/audit-events?event_type=audit_sample.created&limit=20",
+        "{}",
+        "beta-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(beta_audit_events["events"].as_array().unwrap().is_empty());
+
+    let (status, alpha_audit_events) = json_request_with_key(
+        alpha_app,
+        "GET",
+        "/api/v1/ops/audit-events?event_type=audit_sample.created&limit=20",
+        "{}",
+        "alpha-secret",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(alpha_audit_events["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|event| event["payload"]["customer_scope_id"] == "customer-alpha"));
 }
 
 #[tokio::test]
@@ -260,6 +444,29 @@ async fn creates_audit_sample_from_ranked_leads() {
     assert_eq!(sample["outcome_distribution"]["open_count"], 1);
 
     let sample_id = sample["sample_id"].as_str().unwrap();
+    let (status, audit_events) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/audit-events?event_type=audit_sample.created&limit=1",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let created_event = &audit_events["events"][0];
+    assert_eq!(created_event["payload"]["sample_id"], sample["sample_id"]);
+    assert_eq!(
+        created_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
+        created_event["payload"]["outcome_distribution"]["selected_count"],
+        1
+    );
+    assert_eq!(
+        created_event["payload"]["outcome_distribution"]["open_count"],
+        1
+    );
+
     let lead_id = sample["selected_leads"][0]["lead_id"].as_str().unwrap();
     let qa_case_id = format!("qa_{sample_id}_{lead_id}");
     let claim_id = sample["selected_leads"][0]["claim_id"].as_str().unwrap();

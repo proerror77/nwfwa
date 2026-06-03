@@ -15,11 +15,19 @@ CI runs on:
 Current checks:
 
 - repository health check through `scripts/ci/check_repo.sh`
+- `staging-proof`: Kubernetes manifest validation, container packaging checks,
+  staging deployment package validation, staging evidence artifacts,
+  operational drill proof validation, and MLOps monitoring-plan simulation
 - Rust: `cargo fetch --locked`, `cargo fmt --all -- --check`, `cargo clippy --locked --workspace --all-targets -- -D warnings`, and `cargo test --locked --workspace`
 - PostgreSQL migration idempotency
 - demo seed idempotency, minimum demo-data presence, and API/ML demo smoke through `scripts/demo/seed_demo.sh` and `scripts/demo/smoke_demo.py`
 - Python ML service install and `pytest`
-- Web console `npm ci`, Rust/WASM check, Trunk production build, and build smoke
+- Web console Rust/WASM check, Trunk production build, and Node-based build smoke
+
+Every job has a timeout so a stuck service, dependency install, or demo smoke
+cannot hold the branch gate indefinitely. Python jobs use pip dependency caching
+keyed by `apps/ml-service/pyproject.toml`; Rust jobs keep the Cargo cache through
+`Swatinem/rust-cache@v2`.
 
 ## Rust Compilation
 
@@ -49,6 +57,36 @@ Keep hosted runners on GitHub-managed `ubuntu-latest`. If self-hosted runners ar
 Workflow: `.github/workflows/release.yml`
 
 The current CD target is GitHub Releases. A release is published when a semantic version tag matching `v*.*.*` is pushed.
+The release workflow rejects manual dispatch tags that do not match
+`vMAJOR.MINOR.PATCH`, and it verifies that the tag commit is reachable from
+`origin/main` before publishing. This keeps releases tied to the protected
+production-ready branch.
+
+Workflow: `.github/workflows/deploy-staging.yml`
+
+`Deploy Staging` is the GitHub Environment gated staging deployment workflow.
+It runs only through manual dispatch and uses the `staging` GitHub Environment.
+This is the repository's GitHub Environment based deployment boundary for
+staging.
+The job verifies a successful CI run for the selected commit by default,
+validates Kubernetes staging manifests and container packaging, then builds a
+deployment package with `scripts/ops/build_staging_deployment_package.py`.
+The generated package is validated by
+`scripts/ops/validate_staging_deployment_package.py` before upload.
+
+The package includes:
+
+- copied `infra/k8s/staging` manifests;
+- `deployment_manifest.json` with commit, image tag, package checksums, and
+  environment boundary;
+- `apply.sh`, which requires `NWFWA_STAGING_SECRET_FILE` and applies the
+  package to a customer-approved staging cluster;
+- `rollback.md`, which keeps rollback tied to the previous approved package or
+  a reverted commit and preserves the human approval gate for destruction.
+
+The workflow uploads the package as a GitHub Actions artifact. It does not run
+`kubectl apply` by itself because cluster credentials, secrets, and customer
+environment ownership are still environment-specific.
 
 Example:
 
@@ -57,4 +95,9 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Deployment to an external runtime is intentionally not configured yet because this repository does not have an application, environment, or deployment target.
+Deployment to an external runtime is intentionally package-only for now.
+Kubernetes staging manifests now exist under `infra/k8s/staging`, and the GitHub
+Environment workflow packages them for a customer-approved staging cluster.
+Production deployment remains intentionally unconfigured until image registry,
+managed secrets, network controls, observability, and customer environment
+ownership are selected.

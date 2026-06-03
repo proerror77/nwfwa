@@ -11,6 +11,16 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 
@@ -318,9 +328,14 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "time_split_field": "service_date",
                 "group_split_fields": ["member_id", "policy_id", "provider_id"],
                 "shadow_comparison_status": "passed",
+                "serving_version_lock_status": "passed",
+                "artifact_integrity_status": "passed",
+                "feature_store_materialization_status": "passed",
+                "segment_fairness_status": "passed",
                 "feature_reproducibility_hash": "sha256:activation-features",
                 "label_provenance_status": "passed",
-                "label_reviewer_source": "qa_review"
+                "label_reviewer_source": "qa_review",
+                "pilot_validation_status": "passed"
               }}
             }}"#
         ),
@@ -582,7 +597,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
     assert_eq!(body["source_data_quality_status"], "missing");
     assert_eq!(body["passed_count"], 2);
-    assert_eq!(body["total_count"], 16);
+    assert_eq!(body["total_count"], 21);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -611,6 +626,22 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("shadow comparison missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("serving version lock missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("artifact integrity missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("feature-store materialization missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("segment fairness review missing")));
     let dataset_gate = body["gates"]
         .as_array()
         .unwrap()
@@ -649,7 +680,12 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
                 "data_quality_score": 0.91,
                 "feature_reproducibility_hash": "sha256:quality-gate-features",
                 "label_provenance_status": "passed",
-                "label_reviewer_source": "qa_review"
+                "label_reviewer_source": "qa_review",
+                "pilot_validation_status": "passed",
+                "serving_version_lock_status": "passed",
+                "artifact_integrity_status": "passed",
+                "feature_store_materialization_status": "passed",
+                "segment_fairness_status": "passed"
               }}
             }}"#
         ),
@@ -670,7 +706,14 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
         .unwrap();
     assert_eq!(source_gate["passed"], true);
     assert_eq!(source_gate["evidence_source"], "dataset");
-    for label in ["Feature reproducibility", "Label provenance"] {
+    for label in [
+        "Serving version lock",
+        "Artifact integrity",
+        "Feature materialization",
+        "Segment fairness",
+        "Feature reproducibility",
+        "Label provenance",
+    ] {
         let gate = body["gates"]
             .as_array()
             .unwrap()
@@ -733,6 +776,69 @@ async fn model_promotion_gates_require_time_group_split_strategy() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("time/group split strategy missing")));
+}
+
+#[tokio::test]
+async fn model_promotion_gates_block_public_research_dataset_evidence() {
+    let app = build_app(test_config());
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "public_research").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_public_research",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_public_research/v1/feature_importance.parquet",
+              "metrics_json": {{
+                "dataset_usage_scope": "public_kaggle_research",
+                "time_group_split_status": "passed",
+                "time_split_field": "service_date",
+                "group_split_fields": ["member_id", "policy_id", "provider_id"],
+                "review_capacity_threshold_status": "passed",
+                "leakage_check_status": "passed",
+                "shadow_comparison_status": "passed",
+                "feature_reproducibility_hash": "sha256:public-research-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "kaggle_public_dataset",
+                "approval_status": "approved",
+                "out_of_time_auc": 0.79
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["decision"], "routing_blocked");
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("pilot/customer validation missing")));
+    let validation_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Pilot/customer validation")
+        .expect("model promotion gates should include pilot/customer validation");
+    assert_eq!(validation_gate["passed"], false);
+    assert_eq!(validation_gate["evidence_source"], "evaluation");
 }
 
 #[tokio::test]
@@ -1370,13 +1476,17 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "actor": "trainer-worker",
           "notes": "Candidate model and validation report registered.",
           "candidate_model_version": "0.2.0-candidate",
-          "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
+          "artifact_sha256": "sha256:rust-serving-artifact",
+          "training_artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+          "training_artifact_sha256": "sha256:training-artifact",
           "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
           "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "evaluation_run_id": "eval_baseline_retraining_job_candidate",
           "evidence_refs": [
             "model_retraining_jobs:{job_id}",
-            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
+            "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
             "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
             "model_evaluations:eval_baseline_retraining_job_candidate"
           ],
@@ -1410,9 +1520,17 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(completed["candidate_model"]["status"], "candidate");
     assert_eq!(
         completed["candidate_model"]["artifact_uri"],
-        "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx"
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json"
     );
     assert_eq!(completed["evaluation"]["model_version"], "0.2.0-candidate");
+    assert_eq!(
+        completed["evaluation"]["metrics_json"]["training_artifact_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib"
+    );
+    assert_eq!(
+        completed["evaluation"]["metrics_json"]["training_artifact_sha256"],
+        "sha256:training-artifact"
+    );
 
     let (status, audit) = get_json(
         app.clone(),
@@ -1431,7 +1549,13 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!(
-            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx"
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json"
+    )));
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib"
         )));
     assert!(output_event["evidence_refs"]
         .as_array()
@@ -1463,12 +1587,16 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "notes": "Candidate model and validation report registered.",
         "candidate_model_version": "0.2.0-candidate",
         "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "artifact_sha256": "sha256:serving-artifact",
+        "training_artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "training_artifact_sha256": "sha256:training-artifact",
         "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
         "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "evaluation_run_id": "eval_baseline_retraining_job_candidate",
         "evidence_refs": [
           "model_retraining_jobs:job_1",
           "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
           "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "model_evaluations:eval_baseline_retraining_job_candidate"
         ],
@@ -1578,6 +1706,58 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
 
+    let mut invalid_training_artifact = valid_request.clone();
+    invalid_training_artifact["training_artifact_uri"] =
+        serde_json::json!("s3://fwa-models/baseline_fwa/0.2.0-candidate/model.csv");
+    invalid_training_artifact["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.csv",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = invalid_training_artifact.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_TRAINING_ARTIFACT_URI");
+
+    let mut invalid_training_artifact_sha = valid_request.clone();
+    invalid_training_artifact_sha["training_artifact_sha256"] = serde_json::json!("not-sha");
+    let payload = invalid_training_artifact_sha.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_TRAINING_ARTIFACT_SHA256");
+
+    let mut missing_training_artifact_evidence = valid_request.clone();
+    missing_training_artifact_evidence["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = missing_training_artifact_evidence.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
+
     let mut missing_evidence_refs = valid_request.clone();
     missing_evidence_refs["evidence_refs"] = serde_json::json!([]);
     let payload = missing_evidence_refs.to_string();
@@ -1618,6 +1798,27 @@ async fn rejects_invalid_model_retraining_output_contract() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_MODEL_ARTIFACT_URI");
+
+    let mut rust_json_model_artifact = valid_request.clone();
+    rust_json_model_artifact["artifact_uri"] = serde_json::json!(
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json"
+    );
+    rust_json_model_artifact["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = rust_json_model_artifact.to_string();
+    let (status, _body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_ne!(status, StatusCode::BAD_REQUEST);
 
     let mut unsupported_model_artifact = valid_request.clone();
     unsupported_model_artifact["artifact_uri"] =
@@ -1987,6 +2188,17 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
         .iter()
         .any(|model| model["version"] == "0.1.0" && model["status"] == "approved"));
 
+    let (status, audit) = get_json(
+        app.clone(),
+        "/api/v1/ops/audit-events?event_type=model.activation.completed&limit=1",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        audit["events"][0]["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+
     let (status, gates) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(gates["decision"], "routing_allowed");
@@ -2041,7 +2253,11 @@ async fn rolls_back_active_model_version() {
     );
     assert_eq!(
         audit["events"][0]["payload"]["previous_active_version"],
-        candidate_version
+        "0.1.0"
+    );
+    assert_eq!(
+        audit["events"][0]["payload"]["customer_scope_id"],
+        "demo-customer"
     );
 }
 
@@ -2105,7 +2321,7 @@ async fn rollback_can_restore_replaced_active_version_from_rollback_history() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(
         audit["events"][0]["payload"]["previous_active_version"],
-        "0.1.0"
+        candidate_version
     );
     assert_eq!(
         audit["events"][0]["payload"]["replaced_active_version"],

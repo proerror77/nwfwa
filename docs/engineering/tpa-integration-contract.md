@@ -7,6 +7,15 @@ The Operations Studio and internal ops APIs are separate surfaces.
 
 - Base URL: customer environment specific, for example `http://127.0.0.1:8080`.
 - Authentication: every endpoint requires `x-api-key`.
+- Principal mapping: pilot environments can configure multiple API key
+  principals with
+  `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id|permission,permission;...`.
+  The matched principal supplies audit actor context, customer scope, and
+  route-level authorization. TPA pilot endpoints require `tpa:*` or the
+  matching fine-grained permission: `tpa:claims:score`,
+  `tpa:inbox:normalize`, `tpa:members:read`,
+  `tpa:knowledge:read`, `tpa:investigations:write`, `tpa:qa:write`, or
+  `tpa:audit:read`.
 - Content type: JSON request bodies must use `content-type: application/json`.
 - OpenAPI: `GET /api/openapi.json`.
 - Error shape: all documented errors return:
@@ -197,6 +206,9 @@ Each request writes a PII-safe audit event and API call record with source
 trace metadata. The audit payload stores raw payload refs, mapping version,
 validation results, data-quality signals, and a PII-safe `source_paths` summary
 for normalized evidence rows, not the full raw medical or identity payload.
+Audit events expose `actor_role`; API call records reuse that audit role and
+the authenticated `customer_scope_id` for governance review. Callers cannot
+provide or override the tenant/customer scope in the request body.
 
 `calculateRisk = N` is treated only as a source-system hint. It does not bypass
 FWA scoring unless a customer-specific config explicitly permits that behavior.
@@ -272,16 +284,26 @@ Normalized inbox context request:
 }
 ```
 
-Use this mode after `POST /api/v1/inbox/claims/normalize` returns
-`scoring_ready = true` or a reviewer resolves blocking validation findings.
-`claim_id`, full claim payload fields, and `canonical_claim_context` are
-mutually exclusive request modes. Canonical source paths and evidence refs from
-bill lines and document evidence are preserved in the scoring response and
-audit event. For normalized inbox scoring, the `scoring.completed` audit
-payload includes `canonical_claim_context_trace` with `input_mode`,
-`evidence_refs`, and `source_refs` so QA and Agent summaries can trace the
-score back to normalized bill-line and document sources without exposing raw
-PII.
+Use inbox handoff mode after `POST /api/v1/inbox/claims/normalize` returns
+`scoring_ready = true` or a reviewer resolves blocking validation findings:
+
+```json
+{
+  "source_system": "tpa-demo",
+  "inbox_run_id": "inbox:sha256:..."
+}
+```
+
+`inbox_idempotency_key` may be used instead of `inbox_run_id`. `claim_id`, full
+claim payload fields, `canonical_claim_context`, `inbox_run_id`, and
+`inbox_idempotency_key` are mutually exclusive request modes. Canonical source
+paths and evidence refs from bill lines and document evidence are preserved in
+the scoring response and audit event. For normalized inbox scoring, the
+`scoring.completed` audit payload includes `canonical_claim_context_trace` with
+`input_mode = inbox_run`, inbox run/audit/idempotency linkage, `evidence_refs`,
+and `source_refs` so QA and Agent summaries can trace the score back to
+normalized bill-line and document sources without exposing raw PII. Direct
+`canonical_claim_context` scoring remains available as a compatibility mode.
 
 The response is audit-backed and must be treated as assistive risk routing, not an automatic denial:
 
@@ -295,8 +317,8 @@ The response is audit-backed and must be treated as assistive risk routing, not 
   "recommended_action": "ManualReview",
   "model_score": {
     "model_key": "baseline_fwa",
-    "model_version": "0.1.0",
-    "runtime_kind": "python_http",
+    "model_version": "0.2.0-rust",
+    "runtime_kind": "rust_logistic_regression",
     "execution_provider": "cpu",
     "score": 83,
     "label": "HIGH_RISK",
@@ -388,6 +410,7 @@ Documented errors:
 
 - `400` invalid query, including blank diagnosis, region, or tags.
 - `401` missing or invalid API key.
+- `403` principal lacks `tpa:knowledge:read`.
 
 Similarity results return the saved knowledge case evidence refs. If the case
 was published with `source_claim_id` and that claim has a prior
@@ -503,7 +526,10 @@ Documented errors:
 
 Returns the claim-level audit timeline, including scoring, investigation, QA,
 and governed operations events where applicable. Normalized inbox scoring events
-include `canonical_claim_context_trace` in the event payload.
+include `canonical_claim_context_trace` in the event payload. Audit and API
+call records expose `actor_role`; API call and webhook event records expose
+`customer_scope_id` from authenticated API key configuration so TPA traffic and
+delivery attempts can be reviewed by role and tenant/customer scope.
 Operations users can call `/api/v1/ops/audit-events?has_canonical_trace=true`
 to list normalized inbox scoring events that carry this trace.
 Agent investigation runs reuse the latest successful scoring trace for the
@@ -545,6 +571,9 @@ Do not put PII in:
 - free-text Agent or QA output
 
 Use structured references such as `audit:*`, `rule_runs:*`, `agent_run:*`, `knowledge_cases:*`, `investigation_results:*`, and `qa_reviews:*`.
+For Agent approval writeback, include `agent_run:{agent_run_id}`. The platform
+adds `policy:{FWA_AGENT_POLICY_ID}` when it persists the approval and
+`agent.approval.decided` audit event.
 
 ## Mock Client
 

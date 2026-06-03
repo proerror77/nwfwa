@@ -1,0 +1,35 @@
+{
+  "artifact_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/rust_serving_artifact.json",
+  "cron": "0 2 * * *",
+  "jobs": [
+    {
+      "job_kind": "shadow_traffic_evaluation",
+      "output_ref": "model_shadow_reports:<shadow_report_uri>",
+      "shadow_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/shadow_report.json"
+    },
+    {
+      "job_kind": "drift_monitoring",
+      "output_ref": "model_drift_reports:<drift_report_uri>",
+      "drift_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/drift_report.json"
+    },
+    {
+      "job_kind": "segment_fairness_review",
+      "output_ref": "model_fairness_reports:<fairness_report_uri>",
+      "fairness_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/fairness_report.json"
+    },
+    {
+      "job_kind": "reviewer_disagreement_review",
+      "output_ref": "reviewer_disagreement_reports:<reviewer_disagreement_report_uri>",
+      "reviewer_disagreement_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/reviewer_disagreement_report.json"
+    },
+    {
+      "job_kind": "label_delay_review",
+      "output_ref": "label_delay_reports:<label_delay_report_uri>",
+      "label_delay_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/label_delay_report.json"
+    }
+  ],
+  "manifest_uri": "s3://nwfwa-staging-artifacts/datasets/public-mvp/manifest.json",
+  "model_key": "baseline_fwa",
+  "model_version": "staging",
+  "plan_kind": "scheduled_mlops_monitoring"
+}

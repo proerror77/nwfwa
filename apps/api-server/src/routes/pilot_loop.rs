@@ -16,7 +16,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_audit::ActorContext;
+use fwa_auth::{authenticate_api_key, validate_api_key};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -135,10 +136,10 @@ pub async fn member_profile_summary(
     headers: HeaderMap,
     Path(member_id): Path<String>,
 ) -> Result<Json<MemberProfileSummaryRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "tpa:members:read")?;
     let profile = state
         .repository
-        .member_profile_summary(&member_id)
+        .member_profile_summary(&member_id, Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("MEMBER_PROFILE_SUMMARY_FAILED"))?
         .ok_or_else(|| {
@@ -156,10 +157,28 @@ pub async fn write_investigation_result(
     headers: HeaderMap,
     Json(mut request): Json<InvestigationResultRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "tpa:investigations:write")?;
     validate_investigation_result_request(&request)?;
-    validate_investigation_case_link(&state, &request).await?;
-    merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
+    ensure_writeback_id_is_available_for_customer(
+        &state,
+        "investigation.result.received",
+        "investigation_id",
+        &request.investigation_id,
+        &actor.customer_scope_id,
+        "INVESTIGATION_RESULT_SCOPE_CONFLICT",
+        "investigation_id is already used by another customer scope",
+    )
+    .await?;
+    validate_investigation_case_link(&state, &request, &actor.customer_scope_id).await?;
+    merge_latest_canonical_evidence_refs_for_investigation(
+        &state,
+        &actor.customer_scope_id,
+        &mut request,
+    )
+    .await?;
+    request.customer_scope_id = Some(actor.customer_scope_id.clone());
+    request.actor_id = Some(actor.actor_id);
+    request.actor_role = Some(actor.actor_role);
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -182,10 +201,23 @@ pub async fn write_qa_result(
     headers: HeaderMap,
     Json(mut request): Json<QaReviewRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "tpa:qa:write")?;
     validate_qa_review_request(&request)?;
     request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
-    merge_latest_canonical_evidence_refs(&state, &mut request).await?;
+    ensure_writeback_id_is_available_for_customer(
+        &state,
+        "qa.result.received",
+        "qa_case_id",
+        &request.qa_case_id,
+        &actor.customer_scope_id,
+        "QA_CASE_SCOPE_CONFLICT",
+        "qa_case_id is already used by another customer scope",
+    )
+    .await?;
+    merge_latest_canonical_evidence_refs(&state, &actor.customer_scope_id, &mut request).await?;
+    request.customer_scope_id = Some(actor.customer_scope_id.clone());
+    request.actor_id = Some(actor.actor_id);
+    request.actor_role = Some(actor.actor_role);
     let claim_id = request.claim_id.clone();
     let event = state
         .repository
@@ -270,13 +302,14 @@ fn validate_investigation_result_request(
 async fn validate_investigation_case_link(
     state: &AppState,
     request: &InvestigationResultRecord,
+    customer_scope_id: &str,
 ) -> Result<(), ApiError> {
     let Some(case_id) = request.case_id.as_deref() else {
         return Ok(());
     };
     let cases = state
         .repository
-        .list_cases()
+        .list_cases(Some(customer_scope_id))
         .await
         .map_err(internal_error("CASE_LOOKUP_FAILED"))?;
     if cases
@@ -295,6 +328,7 @@ async fn validate_investigation_case_link(
 
 async fn merge_latest_canonical_evidence_refs_for_investigation(
     state: &AppState,
+    customer_scope_id: &str,
     request: &mut InvestigationResultRecord,
 ) -> Result<(), ApiError> {
     let events = state
@@ -303,6 +337,7 @@ async fn merge_latest_canonical_evidence_refs_for_investigation(
             limit: 1,
             event_type: Some("scoring.completed".into()),
             claim_id: Some(request.claim_id.clone()),
+            customer_scope_id: Some(customer_scope_id.into()),
             has_canonical_trace: Some(true),
             ..Default::default()
         })
@@ -394,6 +429,7 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
 
 async fn merge_latest_canonical_evidence_refs(
     state: &AppState,
+    customer_scope_id: &str,
     request: &mut QaReviewRecord,
 ) -> Result<(), ApiError> {
     let events = state
@@ -402,6 +438,7 @@ async fn merge_latest_canonical_evidence_refs(
             limit: 1,
             event_type: Some("scoring.completed".into()),
             claim_id: Some(request.claim_id.clone()),
+            customer_scope_id: Some(customer_scope_id.into()),
             has_canonical_trace: Some(true),
             ..Default::default()
         })
@@ -439,11 +476,11 @@ pub async fn list_qa_feedback_items(
     headers: HeaderMap,
     Query(query): Query<QaFeedbackItemListQuery>,
 ) -> Result<Json<QaFeedbackItemListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_qa_feedback_item_list_query(&query)?;
     let mut items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     if let Some(status) = &query.status {
@@ -460,9 +497,9 @@ pub async fn update_qa_feedback_status(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(feedback_id): Path<String>,
-    Json(request): Json<UpdateQaFeedbackStatusInput>,
+    Json(mut request): Json<UpdateQaFeedbackStatusInput>,
 ) -> Result<Json<UpdateQaFeedbackStatusRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     if !is_supported_qa_feedback_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -518,9 +555,10 @@ pub async fn update_qa_feedback_status(
             format!("QA feedback status evidence_refs must include {required_ref}"),
         ));
     }
+    request.customer_scope_id = Some(actor.customer_scope_id.clone());
     let record = state
         .repository
-        .update_qa_feedback_status(&feedback_id, request)
+        .update_qa_feedback_status(&feedback_id, request, Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_FEEDBACK_STATUS_UPDATE_FAILED"))?
         .ok_or_else(|| {
@@ -570,15 +608,15 @@ pub async fn list_qa_queue(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<QaQueueListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let samples = state
         .repository
-        .list_audit_samples()
+        .list_audit_samples(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("AUDIT_SAMPLE_LIST_FAILED"))?;
     let reviews = state
         .repository
-        .list_qa_reviews()
+        .list_qa_reviews(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_REVIEW_LIST_FAILED"))?;
     let scoring_events = state
@@ -587,6 +625,7 @@ pub async fn list_qa_queue(
             limit: 1_000,
             event_type: Some("scoring.completed".into()),
             has_canonical_trace: Some(true),
+            customer_scope_id: Some(actor.customer_scope_id),
             ..Default::default()
         })
         .await
@@ -601,10 +640,10 @@ pub async fn qa_queue_summary(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<QaQueueSummaryResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let items = state
         .repository
-        .list_qa_feedback_items()
+        .list_qa_feedback_items(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("QA_FEEDBACK_LIST_FAILED"))?;
     Ok(Json(build_qa_queue_summary(&items)))
@@ -614,10 +653,10 @@ pub async fn list_outcome_labels(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<OutcomeLabelListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let labels = state
         .repository
-        .list_outcome_labels()
+        .list_outcome_labels(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("OUTCOME_LABEL_LIST_FAILED"))?;
     Ok(Json(OutcomeLabelListResponse { labels }))
@@ -628,10 +667,10 @@ pub async fn claim_audit_history(
     headers: HeaderMap,
     Path(claim_id): Path<String>,
 ) -> Result<Json<ClaimAuditHistoryResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize_permission(&state, &headers, "tpa:audit:read")?;
     let events = state
         .repository
-        .claim_audit_history(&claim_id)
+        .claim_audit_history(&claim_id, Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("CLAIM_AUDIT_HISTORY_FAILED"))?;
     Ok(Json(ClaimAuditHistoryResponse { claim_id, events }))
@@ -641,12 +680,15 @@ pub async fn list_webhook_events(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<WebhookEventListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_webhook_events()
         .await
-        .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?;
+        .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?
+        .into_iter()
+        .filter(|event| event.customer_scope_id == actor.customer_scope_id)
+        .collect();
     Ok(Json(WebhookEventListResponse { events }))
 }
 
@@ -656,7 +698,7 @@ pub async fn submit_webhook_delivery_attempt(
     Path(event_id): Path<String>,
     Json(request): Json<SubmitWebhookDeliveryAttemptRequest>,
 ) -> Result<Json<WebhookDeliveryAttemptRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     if !matches!(request.delivery_status.as_str(), "delivered" | "failed") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -681,7 +723,9 @@ pub async fn submit_webhook_delivery_attempt(
         .await
         .map_err(internal_error("WEBHOOK_EVENT_LIST_FAILED"))?
         .into_iter()
-        .any(|event| event.event_id == event_id);
+        .any(|event| {
+            event.event_id == event_id && event.customer_scope_id == actor.customer_scope_id
+        });
     if !known_event {
         return Err(ApiError::new(
             StatusCode::NOT_FOUND,
@@ -706,15 +750,15 @@ pub async fn list_ops_alerts(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<OpsAlertListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let leads = state
         .repository
-        .list_leads()
+        .list_leads(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("LEAD_LIST_FAILED"))?;
     let cases = state
         .repository
-        .list_cases()
+        .list_cases(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("CASE_LIST_FAILED"))?;
     let scoring_events = state
@@ -737,7 +781,7 @@ pub async fn list_ops_alerts(
         .map_err(internal_error("ALERT_AUDIT_LIST_FAILED"))?;
     let agent_runs = state
         .repository
-        .list_agent_runs()
+        .list_agent_runs(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("AGENT_RUN_LIST_FAILED"))?;
     Ok(Json(OpsAlertListResponse {
@@ -1160,25 +1204,75 @@ fn highest_priority(items: &[&QaFeedbackItemRecord]) -> &'static str {
     }
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map(|_| ())
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",
             "invalid api key",
         )
     })
+}
+
+fn authorize_permission(
+    state: &AppState,
+    headers: &HeaderMap,
+    permission: &str,
+) -> Result<ActorContext, ApiError> {
+    let api_key = headers
+        .get("x-api-key")
+        .and_then(|value| value.to_str().ok());
+    let principal =
+        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
+            ApiError::new(
+                StatusCode::UNAUTHORIZED,
+                "INVALID_API_KEY",
+                "invalid api key",
+            )
+        })?;
+    if !principal.has_permission(permission) {
+        return Err(ApiError::new(
+            StatusCode::FORBIDDEN,
+            "PERMISSION_DENIED",
+            format!("missing permission: {permission}"),
+        ));
+    }
+    Ok(principal.actor)
+}
+
+async fn ensure_writeback_id_is_available_for_customer(
+    state: &AppState,
+    event_type: &str,
+    id_field: &str,
+    id_value: &str,
+    customer_scope_id: &str,
+    conflict_code: &'static str,
+    conflict_message: &'static str,
+) -> Result<(), ApiError> {
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 10_000,
+            event_type: Some(event_type.into()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("WRITEBACK_SCOPE_LOOKUP_FAILED"))?;
+    let has_cross_scope_match = events.iter().any(|event| {
+        event.payload[id_field].as_str() == Some(id_value)
+            && event.payload["customer_scope_id"].as_str() != Some(customer_scope_id)
+    });
+    if has_cross_scope_match {
+        return Err(ApiError::new(
+            StatusCode::CONFLICT,
+            conflict_code,
+            conflict_message,
+        ));
+    }
+    Ok(())
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
@@ -1240,6 +1334,7 @@ mod tests {
         let scoring_event = AuditHistoryEventRecord {
             audit_id: "audit_scoring_medical_1".into(),
             run_id: "run_medical_1".into(),
+            actor_role: "tpa_system".into(),
             event_type: "scoring.completed".into(),
             event_status: "succeeded".into(),
             summary: "FWA scoring completed".into(),

@@ -81,6 +81,27 @@ pub struct PersistedAuditEvent {
     pub evidence_refs: Vec<Value>,
 }
 
+#[derive(Debug, Clone)]
+pub struct PersistedInboxClaimRun {
+    pub run_id: String,
+    pub audit_id: String,
+    pub external_message_id: Option<String>,
+    pub idempotency_key: Option<String>,
+    pub external_message_fingerprint: Option<String>,
+    pub raw_payload_checksum: String,
+    pub raw_payload_ref: Option<String>,
+    pub mapping_version: String,
+    pub validation_result: String,
+    pub scoring_ready: bool,
+    pub claim_id: String,
+    pub source_system: String,
+    pub customer_scope_id: String,
+    pub canonical_claim_context: Value,
+    pub validation_errors: Value,
+    pub data_quality_signals: Value,
+    pub evidence_refs: Value,
+}
+
 #[derive(Debug, Clone, Default)]
 pub struct AuditEventListFilter {
     pub limit: u32,
@@ -105,6 +126,172 @@ pub struct AuditEventListFilter {
     pub model_dataset_id: Option<String>,
     pub evaluation_run_id: Option<String>,
     pub has_canonical_trace: Option<bool>,
+    pub customer_scope_id: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceDocumentRecord {
+    pub document_id: String,
+    pub customer_scope_id: String,
+    pub source_system: String,
+    pub source_record_ref: String,
+    pub claim_id: Option<String>,
+    pub external_document_id: Option<String>,
+    pub document_type: String,
+    pub storage_uri: String,
+    pub content_checksum: String,
+    pub ingestion_status: String,
+    pub redaction_status: String,
+    pub retention_policy_id: String,
+    pub evidence_refs: Vec<String>,
+    pub metadata_json: Value,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceDocumentInput {
+    pub document_id: String,
+    pub customer_scope_id: String,
+    pub source_system: String,
+    pub source_record_ref: String,
+    pub claim_id: Option<String>,
+    pub external_document_id: Option<String>,
+    pub document_type: String,
+    pub storage_uri: String,
+    pub content_checksum: String,
+    pub ingestion_status: String,
+    pub redaction_status: String,
+    pub retention_policy_id: String,
+    pub evidence_refs: Vec<String>,
+    pub metadata_json: Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceDocumentChunkRecord {
+    pub chunk_id: String,
+    pub document_id: String,
+    pub chunk_index: i32,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub text_checksum: String,
+    pub token_count: i32,
+    pub storage_uri: String,
+    pub source_offsets_json: Value,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceDocumentChunkInput {
+    pub chunk_id: String,
+    pub document_id: String,
+    pub chunk_index: i32,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub text_checksum: String,
+    pub token_count: i32,
+    pub storage_uri: String,
+    pub source_offsets_json: Value,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceOcrOutputRecord {
+    pub ocr_output_id: String,
+    pub document_id: String,
+    pub ocr_engine: String,
+    pub ocr_engine_version: String,
+    pub output_uri: String,
+    pub output_checksum: String,
+    pub confidence_score: Option<Decimal>,
+    pub quality_status: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceOcrOutputInput {
+    pub ocr_output_id: String,
+    pub document_id: String,
+    pub ocr_engine: String,
+    pub ocr_engine_version: String,
+    pub output_uri: String,
+    pub output_checksum: String,
+    pub confidence_score: Option<Decimal>,
+    pub quality_status: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceEmbeddingJobRecord {
+    pub embedding_job_id: String,
+    pub customer_scope_id: String,
+    pub target_kind: String,
+    pub target_ref: String,
+    pub embedding_model: String,
+    pub embedding_model_version: String,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub vector_store_kind: String,
+    pub vector_store_ref: String,
+    pub embedding_checksum: String,
+    pub status: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+    pub completed_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceEmbeddingJobInput {
+    pub embedding_job_id: String,
+    pub customer_scope_id: String,
+    pub target_kind: String,
+    pub target_ref: String,
+    pub embedding_model: String,
+    pub embedding_model_version: String,
+    pub chunking_version: String,
+    pub redaction_status: String,
+    pub vector_store_kind: String,
+    pub vector_store_ref: String,
+    pub embedding_checksum: String,
+    pub status: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct EvidenceRetrievalAuditEventRecord {
+    pub retrieval_id: String,
+    pub customer_scope_id: String,
+    pub actor_id: String,
+    pub actor_role: String,
+    pub query_kind: String,
+    pub query_checksum: String,
+    pub retrieval_method: String,
+    pub embedding_model_version: Option<String>,
+    pub top_k: i32,
+    pub source_refs: Vec<String>,
+    pub result_refs: Vec<String>,
+    pub redaction_status: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct CreateEvidenceRetrievalAuditEventInput {
+    pub retrieval_id: String,
+    pub customer_scope_id: String,
+    pub actor_id: String,
+    pub actor_role: String,
+    pub query_kind: String,
+    pub query_checksum: String,
+    pub retrieval_method: String,
+    pub embedding_model_version: Option<String>,
+    pub top_k: i32,
+    pub source_refs: Vec<String>,
+    pub result_refs: Vec<String>,
+    pub redaction_status: String,
+    pub evidence_refs: Vec<String>,
 }
 
 const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
@@ -127,6 +314,11 @@ const GOVERNANCE_AUDIT_EVENT_TYPES: &[&str] = &[
     "routing_policy.status.changed",
     "routing_policy.activation.completed",
     "routing_policy.rollback.completed",
+    "evidence.document.registered",
+    "evidence.document_chunk.registered",
+    "evidence.ocr_output.registered",
+    "evidence.embedding_job.registered",
+    "evidence.retrieval_audit.recorded",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -315,6 +507,8 @@ pub struct TriageLeadInput {
     pub notes: String,
     #[serde(default)]
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -330,6 +524,8 @@ pub struct UpdateCaseStatusInput {
     pub actor_id: String,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -373,11 +569,14 @@ pub struct CreateAuditSampleInput {
     pub sample_size: usize,
     pub reviewer: String,
     pub assignment_queue: String,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AuditSampleRecord {
     pub sample_id: String,
+    pub customer_scope_id: String,
     pub sample_mode: String,
     pub population_definition: String,
     pub inclusion_criteria: Value,
@@ -484,6 +683,7 @@ pub struct DashboardLayerScoreRecord {
 pub struct DashboardSavingAttributionRecord {
     pub source_type: String,
     pub source_id: String,
+    pub financial_impact_type: String,
     pub action: String,
     pub saving_amount: String,
     pub currency: String,
@@ -621,6 +821,7 @@ pub struct DashboardValueMeasurementRecord {
     pub prevented_payment: String,
     pub recovered_amount: String,
     pub avoided_future_exposure: String,
+    pub deterrence_estimate: String,
     pub estimated_impact: String,
     pub review_cost: String,
     pub false_positive_operational_cost: String,
@@ -886,6 +1087,12 @@ pub struct InvestigationResultRecord {
     pub currency: Option<String>,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub customer_scope_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_role: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -895,6 +1102,7 @@ struct SavingAttributionRecord {
     investigation_id: String,
     source_type: String,
     source_id: String,
+    financial_impact_type: String,
     action: String,
     saving_amount: Decimal,
     currency: String,
@@ -917,6 +1125,12 @@ pub struct QaReviewRecord {
     pub feedback_target: String,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub customer_scope_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_id: Option<String>,
+    #[serde(default, skip_deserializing, skip_serializing_if = "Option::is_none")]
+    pub actor_role: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -955,6 +1169,8 @@ pub struct UpdateQaFeedbackStatusInput {
     pub actor_id: String,
     pub notes: String,
     pub evidence_refs: Vec<String>,
+    #[serde(default, skip_deserializing)]
+    pub customer_scope_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -988,6 +1204,7 @@ pub fn canonical_feedback_target(feedback_target: &str) -> &str {
 pub struct AuditHistoryEventRecord {
     pub audit_id: String,
     pub run_id: String,
+    pub actor_role: String,
     pub event_type: String,
     pub event_status: String,
     pub summary: String,
@@ -1002,6 +1219,7 @@ pub struct WebhookEventRecord {
     pub event_type: String,
     pub source_event_type: String,
     pub source_audit_id: String,
+    pub customer_scope_id: String,
     pub claim_id: String,
     pub run_id: String,
     pub delivery_status: String,
@@ -1299,6 +1517,44 @@ fn provider_risk_tier_from_text(value: &str) -> ProviderRiskTier {
     }
 }
 
+fn inbox_claim_run_from_row(row: PgRow) -> PersistedInboxClaimRun {
+    PersistedInboxClaimRun {
+        run_id: row.try_get("run_id").unwrap_or_default(),
+        audit_id: row.try_get("audit_id").unwrap_or_default(),
+        external_message_id: row
+            .try_get::<Option<String>, _>("external_message_id")
+            .unwrap_or(None),
+        idempotency_key: row
+            .try_get::<Option<String>, _>("idempotency_key")
+            .unwrap_or(None),
+        external_message_fingerprint: row
+            .try_get::<Option<String>, _>("external_message_fingerprint")
+            .unwrap_or(None),
+        raw_payload_checksum: row.try_get("raw_payload_checksum").unwrap_or_default(),
+        raw_payload_ref: row
+            .try_get::<Option<String>, _>("raw_payload_ref")
+            .unwrap_or(None),
+        mapping_version: row.try_get("mapping_version").unwrap_or_default(),
+        validation_result: row.try_get("validation_result").unwrap_or_default(),
+        scoring_ready: row.try_get("scoring_ready").unwrap_or(false),
+        claim_id: row.try_get("claim_id").unwrap_or_default(),
+        source_system: row.try_get("source_system").unwrap_or_default(),
+        customer_scope_id: row.try_get("customer_scope_id").unwrap_or_default(),
+        canonical_claim_context: row
+            .try_get("canonical_claim_context")
+            .unwrap_or_else(|_| serde_json::json!({})),
+        validation_errors: row
+            .try_get("validation_errors")
+            .unwrap_or_else(|_| serde_json::json!([])),
+        data_quality_signals: row
+            .try_get("data_quality_signals")
+            .unwrap_or_else(|_| serde_json::json!([])),
+        evidence_refs: row
+            .try_get("evidence_refs")
+            .unwrap_or_else(|_| serde_json::json!([])),
+    }
+}
+
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
     async fn upsert_claim_context(
@@ -1310,16 +1566,32 @@ pub trait ScoringRepository: Send + Sync {
     async fn load_claim_context(
         &self,
         external_claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ClaimContext>>;
 
     async fn member_profile_summary(
         &self,
         member_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<MemberProfileSummaryRecord>>;
 
     async fn save_scoring_run(&self, run: PersistedScoringRun) -> anyhow::Result<()>;
 
     async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()>;
+
+    async fn save_inbox_claim_run(&self, run: PersistedInboxClaimRun) -> anyhow::Result<()>;
+
+    async fn get_inbox_claim_run_by_idempotency_key(
+        &self,
+        idempotency_key: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>>;
+
+    async fn get_inbox_claim_run_by_run_id(
+        &self,
+        run_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>>;
 
     async fn active_routing_policy(
         &self,
@@ -1403,7 +1675,7 @@ pub trait ScoringRepository: Send + Sync {
         rule_version: u32,
     ) -> anyhow::Result<Option<RulePromotionReviewRecord>>;
 
-    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>>;
+    async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>>;
 
     async fn triage_lead(
         &self,
@@ -1411,7 +1683,7 @@ pub trait ScoringRepository: Send + Sync {
         input: TriageLeadInput,
     ) -> anyhow::Result<Option<TriageLeadRecord>>;
 
-    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>>;
+    async fn list_cases(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<CaseRecord>>;
 
     async fn update_case_status(
         &self,
@@ -1424,7 +1696,10 @@ pub trait ScoringRepository: Send + Sync {
         input: CreateAuditSampleInput,
     ) -> anyhow::Result<AuditSampleRecord>;
 
-    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>>;
+    async fn list_audit_samples(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditSampleRecord>>;
 
     async fn list_models(&self) -> anyhow::Result<Vec<ModelVersionRecord>>;
 
@@ -1491,7 +1766,10 @@ pub trait ScoringRepository: Send + Sync {
         input: CompleteModelRetrainingJobInput<'_>,
     ) -> anyhow::Result<Option<ModelRetrainingJobRecord>>;
 
-    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord>;
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord>;
 
     async fn provider_risk_summary(&self) -> anyhow::Result<ProviderRiskSummaryRecord>;
 
@@ -1509,7 +1787,10 @@ pub trait ScoringRepository: Send + Sync {
 
     async fn save_agent_run(&self, run: PersistedAgentRun) -> anyhow::Result<()>;
 
-    async fn list_agent_runs(&self) -> anyhow::Result<Vec<AgentRunLogRecord>>;
+    async fn list_agent_runs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AgentRunLogRecord>>;
 
     async fn save_agent_approval(
         &self,
@@ -1538,21 +1819,32 @@ pub trait ScoringRepository: Send + Sync {
         record: QaReviewRecord,
     ) -> anyhow::Result<AuditHistoryEventRecord>;
 
-    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>>;
 
     async fn update_qa_feedback_status(
         &self,
         feedback_id: &str,
         input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>>;
 
-    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>>;
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>>;
 
-    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>>;
 
     async fn claim_audit_history(
         &self,
         claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>>;
 
     async fn list_audit_events(
@@ -1593,6 +1885,66 @@ pub trait ScoringRepository: Send + Sync {
     ) -> anyhow::Result<Option<ModelEvaluationRecord>>;
 
     async fn list_model_evaluations(&self) -> anyhow::Result<Vec<ModelEvaluationRecord>>;
+
+    async fn save_evidence_document(
+        &self,
+        input: CreateEvidenceDocumentInput,
+    ) -> anyhow::Result<EvidenceDocumentRecord>;
+
+    async fn list_evidence_documents(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentRecord>>;
+
+    async fn get_evidence_document(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentRecord>>;
+
+    async fn save_evidence_document_chunk(
+        &self,
+        input: CreateEvidenceDocumentChunkInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentChunkRecord>>;
+
+    async fn list_evidence_document_chunks(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentChunkRecord>>;
+
+    async fn save_evidence_ocr_output(
+        &self,
+        input: CreateEvidenceOcrOutputInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceOcrOutputRecord>>;
+
+    async fn list_evidence_ocr_outputs(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceOcrOutputRecord>>;
+
+    async fn save_evidence_embedding_job(
+        &self,
+        input: CreateEvidenceEmbeddingJobInput,
+    ) -> anyhow::Result<EvidenceEmbeddingJobRecord>;
+
+    async fn list_evidence_embedding_jobs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceEmbeddingJobRecord>>;
+
+    async fn save_evidence_retrieval_audit_event(
+        &self,
+        input: CreateEvidenceRetrievalAuditEventInput,
+    ) -> anyhow::Result<EvidenceRetrievalAuditEventRecord>;
+
+    async fn list_evidence_retrieval_audit_events(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>>;
 }
 
 pub type SharedRepository = Arc<dyn ScoringRepository>;
@@ -1600,6 +1952,7 @@ pub type SharedRepository = Arc<dyn ScoringRepository>;
 #[derive(Debug, Default)]
 pub struct InMemoryScoringRepository {
     claims: Mutex<HashMap<String, ClaimContext>>,
+    inbox_claim_runs: Mutex<HashMap<String, PersistedInboxClaimRun>>,
     runs: Mutex<Vec<PersistedScoringRun>>,
     audit_events: Mutex<Vec<PersistedAuditEvent>>,
     agent_runs: Mutex<Vec<PersistedAgentRun>>,
@@ -1629,6 +1982,11 @@ pub struct InMemoryScoringRepository {
     routing_policies: Mutex<Vec<RoutingPolicyRecord>>,
     webhook_delivery_attempts: Mutex<HashMap<String, Vec<WebhookDeliveryAttemptRecord>>>,
     saving_attributions: Mutex<Vec<SavingAttributionRecord>>,
+    evidence_documents: Mutex<HashMap<String, EvidenceDocumentRecord>>,
+    evidence_document_chunks: Mutex<HashMap<String, EvidenceDocumentChunkRecord>>,
+    evidence_ocr_outputs: Mutex<HashMap<String, EvidenceOcrOutputRecord>>,
+    evidence_embedding_jobs: Mutex<HashMap<String, EvidenceEmbeddingJobRecord>>,
+    evidence_retrieval_audit_events: Mutex<HashMap<String, EvidenceRetrievalAuditEventRecord>>,
 }
 
 async fn upsert_pilot_audit_event(
@@ -1664,6 +2022,18 @@ impl InMemoryScoringRepository {
             ..Self::default()
         })
     }
+
+    async fn claim_visible_to_scope(
+        &self,
+        claim_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> bool {
+        let Some(scope) = customer_scope_id else {
+            return true;
+        };
+        scoped_claim_ids_from_audit_events(self.audit_events.lock().await.iter(), scope)
+            .contains(claim_id)
+    }
 }
 
 #[async_trait]
@@ -1683,20 +2053,40 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn load_claim_context(
         &self,
         external_claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ClaimContext>> {
+        if !self
+            .claim_visible_to_scope(external_claim_id, customer_scope_id)
+            .await
+        {
+            return Ok(None);
+        }
         Ok(self.claims.lock().await.get(external_claim_id).cloned())
     }
 
     async fn member_profile_summary(
         &self,
         member_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<MemberProfileSummaryRecord>> {
+        let visible_claim_ids = match customer_scope_id {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
         let member_claims = self
             .claims
             .lock()
             .await
             .values()
             .filter(|context| context.member.external_member_id == member_id)
+            .filter(|context| {
+                visible_claim_ids
+                    .as_ref()
+                    .is_none_or(|claim_ids| claim_ids.contains(&context.claim.external_claim_id))
+            })
             .cloned()
             .collect::<Vec<_>>();
         Ok(member_profile_from_contexts(
@@ -1749,6 +2139,45 @@ impl ScoringRepository for InMemoryScoringRepository {
             audit_events.push(event);
         }
         Ok(())
+    }
+
+    async fn save_inbox_claim_run(&self, run: PersistedInboxClaimRun) -> anyhow::Result<()> {
+        self.inbox_claim_runs
+            .lock()
+            .await
+            .insert(run.run_id.clone(), run);
+        Ok(())
+    }
+
+    async fn get_inbox_claim_run_by_idempotency_key(
+        &self,
+        idempotency_key: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        Ok(self
+            .inbox_claim_runs
+            .lock()
+            .await
+            .values()
+            .find(|run| {
+                run.idempotency_key.as_deref() == Some(idempotency_key)
+                    && customer_scope_id.is_none_or(|scope| run.customer_scope_id == scope)
+            })
+            .cloned())
+    }
+
+    async fn get_inbox_claim_run_by_run_id(
+        &self,
+        run_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        Ok(self
+            .inbox_claim_runs
+            .lock()
+            .await
+            .get(run_id)
+            .filter(|run| customer_scope_id.is_none_or(|scope| run.customer_scope_id == scope))
+            .cloned())
     }
 
     async fn active_routing_policy(
@@ -1932,6 +2361,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -2063,12 +2493,24 @@ impl ScoringRepository for InMemoryScoringRepository {
             .cloned())
     }
 
-    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>> {
+    async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>> {
+        let visible_claim_ids = match customer_scope_id {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
         let mut leads = self
             .leads
             .lock()
             .await
             .values()
+            .filter(|lead| {
+                visible_claim_ids
+                    .as_ref()
+                    .is_none_or(|claim_ids| claim_ids.contains(&lead.claim_id))
+            })
             .cloned()
             .collect::<Vec<_>>();
         leads.sort_by(|left, right| left.lead_id.cmp(&right.lead_id));
@@ -2081,12 +2523,27 @@ impl ScoringRepository for InMemoryScoringRepository {
         input: TriageLeadInput,
     ) -> anyhow::Result<Option<TriageLeadRecord>> {
         let mut leads = self.leads.lock().await;
-        if input.decision == "merge_lead" && !merge_target_exists_in_memory(&leads, &input) {
+        let visible_claim_ids = match input.customer_scope_id.as_deref() {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
+        if input.decision == "merge_lead"
+            && !merge_target_exists_in_memory(&leads, &input, visible_claim_ids.as_ref())
+        {
             return Ok(None);
         }
         let Some(lead) = leads.get_mut(lead_id) else {
             return Ok(None);
         };
+        if visible_claim_ids
+            .as_ref()
+            .is_some_and(|claim_ids| !claim_ids.contains(&lead.claim_id))
+        {
+            return Ok(None);
+        }
         lead.status = triage_status_for_decision(&input.decision).into();
         lead.disposition = triage_disposition_for_decision(&input.decision).into();
         let lead = lead.clone();
@@ -2125,12 +2582,24 @@ impl ScoringRepository for InMemoryScoringRepository {
         }))
     }
 
-    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
+    async fn list_cases(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<CaseRecord>> {
+        let visible_claim_ids = match customer_scope_id {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
         let mut cases = self
             .cases
             .lock()
             .await
             .values()
+            .filter(|case| {
+                visible_claim_ids
+                    .as_ref()
+                    .is_none_or(|claim_ids| claim_ids.contains(&case.claim_id))
+            })
             .cloned()
             .collect::<Vec<_>>();
         cases.sort_by(|left, right| left.case_id.cmp(&right.case_id));
@@ -2146,6 +2615,12 @@ impl ScoringRepository for InMemoryScoringRepository {
         let Some(case) = cases.get_mut(case_id) else {
             return Ok(None);
         };
+        if !self
+            .claim_visible_to_scope(&case.claim_id, input.customer_scope_id.as_deref())
+            .await
+        {
+            return Ok(None);
+        }
         let from_status = case.status.clone();
         case.status = input.status.clone();
         if is_terminal_case_status(&case.status) {
@@ -2181,7 +2656,8 @@ impl ScoringRepository for InMemoryScoringRepository {
                 "lead_id": case.lead_id,
                 "from_status": from_status,
                 "to_status": case.status,
-                "notes": input.notes
+                "notes": input.notes,
+                "customer_scope_id": input.customer_scope_id
             }),
             evidence_refs: input
                 .evidence_refs
@@ -2199,16 +2675,29 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut sequence = self.audit_sample_sequence.lock().await;
         *sequence += 1;
         let sample_id = format!("sample_{}", *sequence);
+        let customer_scope_id = input.customer_scope_id.as_deref();
         let leads = if input.sample_mode == "random_control" {
+            let visible_claim_ids = match customer_scope_id {
+                Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                    self.audit_events.lock().await.iter(),
+                    scope,
+                )),
+                None => None,
+            };
             let claims = self.claims.lock().await;
             self.runs
                 .lock()
                 .await
                 .iter()
+                .filter(|run| {
+                    visible_claim_ids
+                        .as_ref()
+                        .is_none_or(|claim_ids| claim_ids.contains(&run.claim_id))
+                })
                 .map(|run| control_lead_from_scoring_run(run, claims.get(&run.claim_id)))
                 .collect()
         } else {
-            self.list_leads().await?
+            self.list_leads(customer_scope_id).await?
         };
         let claims = self.claims.lock().await;
         let strata_contexts = audit_sample_strata_contexts_from_claims(&claims);
@@ -2231,16 +2720,22 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(sample)
     }
 
-    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>> {
+    async fn list_audit_samples(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditSampleRecord>> {
         let mut samples = self
             .audit_samples
             .lock()
             .await
             .values()
+            .filter(|sample| {
+                customer_scope_id.is_none_or(|scope| sample.customer_scope_id == scope)
+            })
             .cloned()
             .collect::<Vec<_>>();
         samples.sort_by(|left, right| left.sample_id.cmp(&right.sample_id));
-        let reviews = self.list_qa_reviews().await?;
+        let reviews = self.list_qa_reviews(customer_scope_id).await?;
         Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
@@ -2453,7 +2948,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(Some(job.clone()))
     }
 
-    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord> {
         let runs = self.runs.lock().await;
         let claims = self.claims.lock().await;
         let pilot_events = self.pilot_audit_events.lock().await;
@@ -2465,7 +2963,40 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut layer_accumulators = BTreeMap::<String, (String, u32, u32, u32)>::new();
         let mut rule_hits = 0_u32;
 
-        for run in runs.iter() {
+        let scoped_runs = runs
+            .iter()
+            .filter(|run| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&run.audit_event, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let scoped_pilot_events = pilot_events
+            .iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let scoped_claim_ids = scoped_runs
+            .iter()
+            .map(|run| run.claim_id.clone())
+            .chain(
+                scoped_pilot_events
+                    .iter()
+                    .map(|(claim_id, _)| claim_id.clone()),
+            )
+            .collect::<BTreeSet<_>>();
+        let scoped_saving_attributions = saving_attribution_records
+            .iter()
+            .filter(|attribution| {
+                customer_scope_id.is_none() || scoped_claim_ids.contains(&attribution.claim_id)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+
+        for run in scoped_runs.iter() {
             if run.risk_score >= 70 {
                 if let Some(context) = claims.get(&run.claim_id) {
                     risk_amount += context.claim.amount.amount;
@@ -2515,9 +3046,14 @@ impl ScoringRepository for InMemoryScoringRepository {
         let mut qa_reviews = 0_u32;
         let mut outcome_labels = Vec::new();
         let mut financial_impacts = Vec::new();
-        let feedback_statuses = latest_qa_feedback_statuses(&pilot_events);
+        let feedback_statuses = latest_qa_feedback_statuses(
+            &scoped_pilot_events
+                .iter()
+                .map(|(claim_id, event)| ((*claim_id).clone(), (*event).clone()))
+                .collect::<Vec<_>>(),
+        );
 
-        for (_, event) in pilot_events.iter() {
+        for (_, event) in scoped_pilot_events.iter() {
             match event.event_type.as_str() {
                 "investigation.result.received" => {
                     investigation_results += 1;
@@ -2550,9 +3086,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                     }
                 }
                 "medical.review.recorded" => {
-                    if let Some(label) = label_from_medical_review_event(event) {
-                        outcome_labels.push(label);
-                    }
+                    outcome_labels.extend(labels_from_medical_review_event(event));
                 }
                 _ => {}
             }
@@ -2561,7 +3095,11 @@ impl ScoringRepository for InMemoryScoringRepository {
         let scoring_audit_runs = runtime_events
             .iter()
             .filter(|event| {
-                event.event_type == "scoring.completed" && event.event_status == "succeeded"
+                event.event_type == "scoring.completed"
+                    && event.event_status == "succeeded"
+                    && customer_scope_id.is_none_or(|scope| {
+                        audit_event_payload_matches_customer_scope(&event.payload, scope)
+                    })
             })
             .count() as u32;
         let canonical_trace_audit_runs = runtime_events
@@ -2569,6 +3107,9 @@ impl ScoringRepository for InMemoryScoringRepository {
             .filter(|event| {
                 event.event_type == "scoring.completed"
                     && event.event_status == "succeeded"
+                    && customer_scope_id.is_none_or(|scope| {
+                        audit_event_payload_matches_customer_scope(&event.payload, scope)
+                    })
                     && event
                         .payload
                         .get("canonical_claim_context_trace")
@@ -2578,13 +3119,16 @@ impl ScoringRepository for InMemoryScoringRepository {
             .count() as u32;
         let audit_coverage =
             summarize_dashboard_audit_coverage(scoring_audit_runs, canonical_trace_audit_runs);
-        for event in runtime_events
-            .iter()
-            .filter(|event| event.event_type == "medical.review.recorded")
-        {
+        for event in runtime_events.iter().filter(|event| {
+            event.event_type == "medical.review.recorded"
+                && customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+        }) {
             let audit_event = AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -2592,34 +3136,35 @@ impl ScoringRepository for InMemoryScoringRepository {
                 evidence_refs: evidence_values_to_strings(&event.evidence_refs),
                 created_at: None,
             };
-            if let Some(label) = label_from_medical_review_event(&audit_event) {
-                outcome_labels.push(label);
-            }
+            outcome_labels.extend(labels_from_medical_review_event(&audit_event));
         }
-        let suspected_claims = runs.iter().filter(|run| run.risk_score >= 70).count() as u32;
-        let saving_attributions = summarize_saving_attributions(&saving_attribution_records);
+        let suspected_claims = scoped_runs
+            .iter()
+            .filter(|run| run.risk_score >= 70)
+            .count() as u32;
+        let saving_attributions = summarize_saving_attributions(&scoped_saving_attributions);
         drop(runtime_events);
         drop(pilot_events);
         drop(claims);
         drop(runs);
 
-        let audit_samples = self.list_audit_samples().await?;
-        let qa_review_records = self.list_qa_reviews().await?;
-        let qa_feedback_items = self.list_qa_feedback_items().await?;
-        let cases = self.list_cases().await?;
-        let agent_runs = self.list_agent_runs().await?;
+        let audit_samples = self.list_audit_samples(customer_scope_id).await?;
+        let qa_review_records = self.list_qa_reviews(customer_scope_id).await?;
+        let qa_feedback_items = self.list_qa_feedback_items(customer_scope_id).await?;
+        let cases = self.list_cases(customer_scope_id).await?;
+        let agent_runs = self.list_agent_runs(customer_scope_id).await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
         let rules = self.list_rules().await?;
         let rule_performance = self.rule_performance().await?;
-        let leads = self.list_leads().await?;
+        let leads = self.list_leads(customer_scope_id).await?;
         let scheme_distribution = leads
             .iter()
             .fold(BTreeMap::new(), |mut distribution, lead| {
                 *distribution.entry(lead.scheme_family.clone()).or_insert(0) += 1;
                 distribution
             });
-        let saving_segments = summarize_saving_segments(&saving_attribution_records, &leads);
+        let saving_segments = summarize_saving_segments(&scoped_saving_attributions, &leads);
         let false_positive_count = rule_performance
             .iter()
             .map(|record| record.false_positive_count)
@@ -2737,12 +3282,27 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(())
     }
 
-    async fn list_agent_runs(&self) -> anyhow::Result<Vec<AgentRunLogRecord>> {
+    async fn list_agent_runs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AgentRunLogRecord>> {
+        let scoped_claim_ids = match customer_scope_id {
+            Some(scope) => Some(scoped_claim_ids_from_audit_events(
+                self.audit_events.lock().await.iter(),
+                scope,
+            )),
+            None => None,
+        };
         let mut runs = self
             .agent_runs
             .lock()
             .await
             .iter()
+            .filter(|run| {
+                scoped_claim_ids
+                    .as_ref()
+                    .is_none_or(|claim_ids| claim_ids.contains(&run.claim_id))
+            })
             .map(agent_run_log_from_persisted)
             .collect::<Vec<_>>();
         runs.sort_by(|left, right| left.agent_run_id.cmp(&right.agent_run_id));
@@ -2886,6 +3446,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id,
             run_id: format!("pilot_investigation_{}", record.investigation_id),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "investigation.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("Investigation result received: {}", record.outcome),
@@ -2914,6 +3478,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_qa_{}", record.qa_case_id),
             run_id: format!("pilot_qa_{}", record.qa_case_id),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "qa.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("QA result received: {}", record.qa_conclusion),
@@ -2925,10 +3493,21 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(event)
     }
 
-    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
         let events = self.pilot_audit_events.lock().await.clone();
-        let feedback_statuses = latest_qa_feedback_statuses(&events);
-        let mut items = events
+        let scoped_events = events
+            .into_iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let feedback_statuses = latest_qa_feedback_statuses(&scoped_events);
+        let mut items = scoped_events
             .iter()
             .filter_map(|(_, event)| {
                 (event.event_type == "qa.result.received")
@@ -2953,9 +3532,10 @@ impl ScoringRepository for InMemoryScoringRepository {
         &self,
         feedback_id: &str,
         input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
         let Some(mut item) = self
-            .list_qa_feedback_items()
+            .list_qa_feedback_items(customer_scope_id)
             .await?
             .into_iter()
             .find(|item| item.feedback_id == feedback_id)
@@ -2972,6 +3552,7 @@ impl ScoringRepository for InMemoryScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: audit_id.clone(),
             run_id: format!("qa_feedback_status_{}", item.feedback_id),
+            actor_role: "fwa_operator".into(),
             event_type: "qa.feedback.status.updated".into(),
             event_status: "succeeded".into(),
             summary: format!(
@@ -2986,7 +3567,8 @@ impl ScoringRepository for InMemoryScoringRepository {
                 "from_status": from_status,
                 "to_status": item.status,
                 "actor_id": input.actor_id,
-                "notes": input.notes
+                "notes": input.notes,
+                "customer_scope_id": input.customer_scope_id
             }),
             evidence_refs: input.evidence_refs,
             created_at: None,
@@ -2998,12 +3580,20 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(Some(UpdateQaFeedbackStatusRecord { item, audit_id }))
     }
 
-    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>> {
         let mut reviews = self
             .pilot_audit_events
             .lock()
             .await
             .iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
             .filter_map(|(_, event)| {
                 (event.event_type == "qa.result.received")
                     .then(|| serde_json::from_value::<QaReviewRecord>(event.payload.clone()).ok())
@@ -3018,10 +3608,21 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(reviews)
     }
 
-    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
         let events = self.pilot_audit_events.lock().await.clone();
-        let feedback_statuses = latest_qa_feedback_statuses(&events);
-        let mut labels = events
+        let scoped_events = events
+            .into_iter()
+            .filter(|(_, event)| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
+            .collect::<Vec<_>>();
+        let feedback_statuses = latest_qa_feedback_statuses(&scoped_events);
+        let mut labels = scoped_events
             .iter()
             .filter_map(|(_, event)| match event.event_type.as_str() {
                 "investigation.result.received" => {
@@ -3041,9 +3642,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                             vec![label_from_qa_review(review, feedback_status)]
                         })
                 }
-                "medical.review.recorded" => {
-                    label_from_medical_review_event(event).map(|label| vec![label])
-                }
+                "medical.review.recorded" => Some(labels_from_medical_review_event(event)),
                 _ => None,
             })
             .flatten()
@@ -3053,11 +3652,17 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .lock()
                 .await
                 .iter()
-                .filter(|event| event.event_type == "medical.review.recorded")
-                .filter_map(|event| {
-                    label_from_medical_review_event(&AuditHistoryEventRecord {
+                .filter(|event| {
+                    event.event_type == "medical.review.recorded"
+                        && customer_scope_id.is_none_or(|scope| {
+                            audit_event_payload_matches_customer_scope(&event.payload, scope)
+                        })
+                })
+                .flat_map(|event| {
+                    labels_from_medical_review_event(&AuditHistoryEventRecord {
                         audit_id: event.audit_id.clone(),
                         run_id: event.run_id.clone(),
+                        actor_role: event.actor_role.clone(),
                         event_type: event.event_type.clone(),
                         event_status: event.event_status.clone(),
                         summary: event.summary.clone(),
@@ -3067,17 +3672,39 @@ impl ScoringRepository for InMemoryScoringRepository {
                     })
                 }),
         );
+        labels.extend(
+            self.audit_events
+                .lock()
+                .await
+                .iter()
+                .filter(|event| {
+                    event.event_type == "label.bootstrap.reviewed"
+                        && event.event_status == "succeeded"
+                        && customer_scope_id.is_none_or(|scope| {
+                            audit_event_payload_matches_customer_scope(&event.payload, scope)
+                        })
+                })
+                .filter_map(|event| {
+                    label_from_bootstrap_review_event(&audit_history_from_persisted(event))
+                }),
+        );
         let lead_triage_events = self
             .audit_events
             .lock()
             .await
             .iter()
-            .filter(|event| event.event_type == "lead.triaged" && event.event_status == "succeeded")
+            .filter(|event| {
+                event.event_type == "lead.triaged"
+                    && event.event_status == "succeeded"
+                    && customer_scope_id.is_none_or(|scope| {
+                        audit_event_payload_matches_customer_scope(&event.payload, scope)
+                    })
+            })
             .map(audit_history_from_persisted)
             .collect::<Vec<_>>();
         labels.extend(labels_from_lead_triage_events(lead_triage_events));
         labels.extend(
-            self.list_cases()
+            self.list_cases(customer_scope_id)
                 .await?
                 .into_iter()
                 .flat_map(labels_from_case_status),
@@ -3089,6 +3716,7 @@ impl ScoringRepository for InMemoryScoringRepository {
     async fn claim_audit_history(
         &self,
         claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
         let mut events = self
             .audit_events
@@ -3096,9 +3724,15 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .iter()
             .filter(|event| event.claim_id == claim_id)
+            .filter(|event| {
+                customer_scope_id.is_none_or(|scope| {
+                    audit_event_payload_matches_customer_scope(&event.payload, scope)
+                })
+            })
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -3113,7 +3747,12 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .lock()
                 .await
                 .iter()
-                .filter(|(event_claim_id, _)| event_claim_id == claim_id)
+                .filter(|(event_claim_id, event)| {
+                    event_claim_id == claim_id
+                        && customer_scope_id.is_none_or(|scope| {
+                            audit_event_payload_matches_customer_scope(&event.payload, scope)
+                        })
+                })
                 .map(|(_, event)| event.clone()),
         );
         Ok(events)
@@ -3132,6 +3771,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             .map(|event| AuditHistoryEventRecord {
                 audit_id: event.audit_id.clone(),
                 run_id: event.run_id.clone(),
+                actor_role: event.actor_role.clone(),
                 event_type: event.event_type.clone(),
                 event_status: event.event_status.clone(),
                 summary: event.summary.clone(),
@@ -3165,6 +3805,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 let audit_event = AuditHistoryEventRecord {
                     audit_id: event.audit_id.clone(),
                     run_id: event.run_id.clone(),
+                    actor_role: event.actor_role.clone(),
                     event_type: event.event_type.clone(),
                     event_status: event.event_status.clone(),
                     summary: event.summary.clone(),
@@ -3368,6 +4009,271 @@ impl ScoringRepository for InMemoryScoringRepository {
             .collect::<Vec<_>>();
         evaluations.sort_by(|left, right| left.evaluation_run_id.cmp(&right.evaluation_run_id));
         Ok(evaluations)
+    }
+
+    async fn save_evidence_document(
+        &self,
+        input: CreateEvidenceDocumentInput,
+    ) -> anyhow::Result<EvidenceDocumentRecord> {
+        let record = EvidenceDocumentRecord {
+            document_id: input.document_id,
+            customer_scope_id: input.customer_scope_id,
+            source_system: input.source_system,
+            source_record_ref: input.source_record_ref,
+            claim_id: input.claim_id,
+            external_document_id: input.external_document_id,
+            document_type: input.document_type,
+            storage_uri: input.storage_uri,
+            content_checksum: input.content_checksum,
+            ingestion_status: input.ingestion_status,
+            redaction_status: input.redaction_status,
+            retention_policy_id: input.retention_policy_id,
+            evidence_refs: input.evidence_refs,
+            metadata_json: input.metadata_json,
+            created_at: None,
+            updated_at: None,
+        };
+        self.evidence_documents
+            .lock()
+            .await
+            .insert(record.document_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn list_evidence_documents(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentRecord>> {
+        let mut records = self
+            .evidence_documents
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.document_id.cmp(&right.document_id));
+        Ok(records)
+    }
+
+    async fn get_evidence_document(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentRecord>> {
+        Ok(self
+            .evidence_documents
+            .lock()
+            .await
+            .get(document_id)
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned())
+    }
+
+    async fn save_evidence_document_chunk(
+        &self,
+        input: CreateEvidenceDocumentChunkInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let record = EvidenceDocumentChunkRecord {
+            chunk_id: input.chunk_id,
+            document_id: input.document_id,
+            chunk_index: input.chunk_index,
+            chunking_version: input.chunking_version,
+            redaction_status: input.redaction_status,
+            text_checksum: input.text_checksum,
+            token_count: input.token_count,
+            storage_uri: input.storage_uri,
+            source_offsets_json: input.source_offsets_json,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+        };
+        self.evidence_document_chunks
+            .lock()
+            .await
+            .insert(record.chunk_id.clone(), record.clone());
+        Ok(Some(record))
+    }
+
+    async fn list_evidence_document_chunks(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let mut records = self
+            .evidence_document_chunks
+            .lock()
+            .await
+            .values()
+            .filter(|record| record.document_id == document_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by_key(|record| record.chunk_index);
+        Ok(records)
+    }
+
+    async fn save_evidence_ocr_output(
+        &self,
+        input: CreateEvidenceOcrOutputInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let record = EvidenceOcrOutputRecord {
+            ocr_output_id: input.ocr_output_id,
+            document_id: input.document_id,
+            ocr_engine: input.ocr_engine,
+            ocr_engine_version: input.ocr_engine_version,
+            output_uri: input.output_uri,
+            output_checksum: input.output_checksum,
+            confidence_score: input.confidence_score,
+            quality_status: input.quality_status,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+        };
+        self.evidence_ocr_outputs
+            .lock()
+            .await
+            .insert(record.ocr_output_id.clone(), record.clone());
+        Ok(Some(record))
+    }
+
+    async fn list_evidence_ocr_outputs(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let mut records = self
+            .evidence_ocr_outputs
+            .lock()
+            .await
+            .values()
+            .filter(|record| record.document_id == document_id)
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.ocr_output_id.cmp(&right.ocr_output_id));
+        Ok(records)
+    }
+
+    async fn save_evidence_embedding_job(
+        &self,
+        input: CreateEvidenceEmbeddingJobInput,
+    ) -> anyhow::Result<EvidenceEmbeddingJobRecord> {
+        let record = EvidenceEmbeddingJobRecord {
+            embedding_job_id: input.embedding_job_id,
+            customer_scope_id: input.customer_scope_id,
+            target_kind: input.target_kind,
+            target_ref: input.target_ref,
+            embedding_model: input.embedding_model,
+            embedding_model_version: input.embedding_model_version,
+            chunking_version: input.chunking_version,
+            redaction_status: input.redaction_status,
+            vector_store_kind: input.vector_store_kind,
+            vector_store_ref: input.vector_store_ref,
+            embedding_checksum: input.embedding_checksum,
+            status: input.status,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+            completed_at: None,
+        };
+        self.evidence_embedding_jobs
+            .lock()
+            .await
+            .insert(record.embedding_job_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn list_evidence_embedding_jobs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceEmbeddingJobRecord>> {
+        let mut records = self
+            .evidence_embedding_jobs
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.embedding_job_id.cmp(&right.embedding_job_id));
+        Ok(records)
+    }
+
+    async fn save_evidence_retrieval_audit_event(
+        &self,
+        input: CreateEvidenceRetrievalAuditEventInput,
+    ) -> anyhow::Result<EvidenceRetrievalAuditEventRecord> {
+        let record = EvidenceRetrievalAuditEventRecord {
+            retrieval_id: input.retrieval_id,
+            customer_scope_id: input.customer_scope_id,
+            actor_id: input.actor_id,
+            actor_role: input.actor_role,
+            query_kind: input.query_kind,
+            query_checksum: input.query_checksum,
+            retrieval_method: input.retrieval_method,
+            embedding_model_version: input.embedding_model_version,
+            top_k: input.top_k,
+            source_refs: input.source_refs,
+            result_refs: input.result_refs,
+            redaction_status: input.redaction_status,
+            evidence_refs: input.evidence_refs,
+            created_at: None,
+        };
+        self.evidence_retrieval_audit_events
+            .lock()
+            .await
+            .insert(record.retrieval_id.clone(), record.clone());
+        Ok(record)
+    }
+
+    async fn list_evidence_retrieval_audit_events(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>> {
+        let mut records = self
+            .evidence_retrieval_audit_events
+            .lock()
+            .await
+            .values()
+            .filter(|record| {
+                customer_scope_id.is_none_or(|scope| record.customer_scope_id == scope)
+            })
+            .cloned()
+            .collect::<Vec<_>>();
+        records.sort_by(|left, right| left.retrieval_id.cmp(&right.retrieval_id));
+        Ok(records)
     }
 }
 
@@ -3631,6 +4537,7 @@ impl ScoringRepository for PostgresScoringRepository {
     async fn load_claim_context(
         &self,
         external_claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<ClaimContext>> {
         let row: Option<ClaimContextRow> = sqlx::query_as(
             "SELECT c.external_claim_id,
@@ -3656,9 +4563,18 @@ impl ScoringRepository for PostgresScoringRepository {
              JOIN members m ON m.id = c.member_id
              JOIN policies p ON p.id = c.policy_id
              JOIN providers pr ON pr.id = c.provider_id
-             WHERE c.external_claim_id = $1",
+             WHERE c.external_claim_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )",
         )
         .bind(external_claim_id)
+        .bind(customer_scope_id)
         .fetch_optional(&self.pool)
         .await?;
 
@@ -3683,12 +4599,26 @@ impl ScoringRepository for PostgresScoringRepository {
     async fn member_profile_summary(
         &self,
         member_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<MemberProfileSummaryRecord>> {
-        let member_exists: Option<(String,)> =
-            sqlx::query_as("SELECT external_member_id FROM members WHERE external_member_id = $1")
-                .bind(member_id)
-                .fetch_optional(&self.pool)
-                .await?;
+        let member_exists: Option<(String,)> = sqlx::query_as(
+            "SELECT m.external_member_id
+             FROM members m
+             WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM claims c
+                   JOIN audit_events ae ON ae.claim_id = c.id
+                   WHERE c.member_id = m.id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )",
+        )
+        .bind(member_id)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
         if member_exists.is_none() {
             return Ok(None);
         }
@@ -3701,9 +4631,18 @@ impl ScoringRepository for PostgresScoringRepository {
              FROM members m
              LEFT JOIN claims c ON c.member_id = m.id
              LEFT JOIN policies p ON p.id = c.policy_id
-             WHERE m.external_member_id = $1",
+             WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )",
         )
         .bind(member_id)
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
         let latest_claim: Option<(String,)> = sqlx::query_as(
@@ -3711,10 +4650,19 @@ impl ScoringRepository for PostgresScoringRepository {
              FROM claims c
              JOIN members m ON m.id = c.member_id
              WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )
              ORDER BY c.service_date DESC, c.external_claim_id DESC
              LIMIT 1",
         )
         .bind(member_id)
+        .bind(customer_scope_id)
         .fetch_optional(&self.pool)
         .await?;
         let high_risk: (i64,) = sqlx::query_as(
@@ -3723,9 +4671,18 @@ impl ScoringRepository for PostgresScoringRepository {
              JOIN claims c ON c.member_id = m.id
              JOIN scoring_runs sr ON sr.claim_id = c.id
              WHERE m.external_member_id = $1
+               AND (
+                 $2::text IS NULL OR EXISTS (
+                   SELECT 1
+                   FROM audit_events ae
+                   WHERE ae.claim_id = c.id
+                     AND ae.payload ->> 'customer_scope_id' = $2
+                 )
+               )
                AND sr.risk_score >= 70",
         )
         .bind(member_id)
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
 
@@ -3966,6 +4923,99 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
         tx.commit().await?;
         Ok(())
+    }
+
+    async fn save_inbox_claim_run(&self, run: PersistedInboxClaimRun) -> anyhow::Result<()> {
+        sqlx::query(
+            "INSERT INTO inbox_claim_runs
+             (run_id, audit_id, external_message_id, idempotency_key, external_message_fingerprint,
+              raw_payload_checksum, raw_payload_ref, mapping_version, validation_result, scoring_ready,
+              claim_id, source_system, customer_scope_id, canonical_claim_context, validation_errors,
+              data_quality_signals, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+             ON CONFLICT (run_id) DO UPDATE
+             SET audit_id = EXCLUDED.audit_id,
+                 external_message_id = EXCLUDED.external_message_id,
+                 idempotency_key = EXCLUDED.idempotency_key,
+                 external_message_fingerprint = EXCLUDED.external_message_fingerprint,
+                 raw_payload_checksum = EXCLUDED.raw_payload_checksum,
+                 raw_payload_ref = EXCLUDED.raw_payload_ref,
+                 mapping_version = EXCLUDED.mapping_version,
+                 validation_result = EXCLUDED.validation_result,
+                 scoring_ready = EXCLUDED.scoring_ready,
+                 claim_id = EXCLUDED.claim_id,
+                 source_system = EXCLUDED.source_system,
+                 customer_scope_id = EXCLUDED.customer_scope_id,
+                 canonical_claim_context = EXCLUDED.canonical_claim_context,
+                 validation_errors = EXCLUDED.validation_errors,
+                 data_quality_signals = EXCLUDED.data_quality_signals,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 updated_at = now()",
+        )
+        .bind(&run.run_id)
+        .bind(&run.audit_id)
+        .bind(&run.external_message_id)
+        .bind(&run.idempotency_key)
+        .bind(&run.external_message_fingerprint)
+        .bind(&run.raw_payload_checksum)
+        .bind(&run.raw_payload_ref)
+        .bind(&run.mapping_version)
+        .bind(&run.validation_result)
+        .bind(run.scoring_ready)
+        .bind(&run.claim_id)
+        .bind(&run.source_system)
+        .bind(&run.customer_scope_id)
+        .bind(&run.canonical_claim_context)
+        .bind(&run.validation_errors)
+        .bind(&run.data_quality_signals)
+        .bind(&run.evidence_refs)
+        .execute(&self.pool)
+        .await?;
+        Ok(())
+    }
+
+    async fn get_inbox_claim_run_by_idempotency_key(
+        &self,
+        idempotency_key: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        let row = sqlx::query(
+            "SELECT run_id, audit_id, external_message_id, idempotency_key,
+                    external_message_fingerprint, raw_payload_checksum, raw_payload_ref,
+                    mapping_version, validation_result, scoring_ready, claim_id,
+                    source_system, customer_scope_id, canonical_claim_context,
+                    validation_errors, data_quality_signals, evidence_refs
+             FROM inbox_claim_runs
+             WHERE idempotency_key = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)",
+        )
+        .bind(idempotency_key)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(inbox_claim_run_from_row))
+    }
+
+    async fn get_inbox_claim_run_by_run_id(
+        &self,
+        run_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<PersistedInboxClaimRun>> {
+        let row = sqlx::query(
+            "SELECT run_id, audit_id, external_message_id, idempotency_key,
+                    external_message_fingerprint, raw_payload_checksum, raw_payload_ref,
+                    mapping_version, validation_result, scoring_ready, claim_id,
+                    source_system, customer_scope_id, canonical_claim_context,
+                    validation_errors, data_quality_signals, evidence_refs
+             FROM inbox_claim_runs
+             WHERE run_id = $1
+               AND ($2::text IS NULL OR customer_scope_id = $2)",
+        )
+        .bind(run_id)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        Ok(row.map(inbox_claim_run_from_row))
     }
 
     async fn active_routing_policy(
@@ -4257,9 +5307,9 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         rule_id: &str,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
+        let rows: Vec<(String, String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as(
-                "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+                "SELECT audit_id, run_id, actor_role, event_type, event_status, summary, payload, evidence_refs, created_at
                  FROM audit_events
                  WHERE payload ->> 'rule_id' = $1
                  ORDER BY created_at, audit_id",
@@ -4274,6 +5324,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -4283,6 +5334,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )| AuditHistoryEventRecord {
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -4604,8 +5656,8 @@ impl ScoringRepository for PostgresScoringRepository {
         ))
     }
 
-    async fn list_leads(&self) -> anyhow::Result<Vec<LeadRecord>> {
-        load_leads(&self.pool).await
+    async fn list_leads(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<LeadRecord>> {
+        load_leads(&self.pool, customer_scope_id).await
     }
 
     async fn triage_lead(
@@ -4614,7 +5666,7 @@ impl ScoringRepository for PostgresScoringRepository {
         input: TriageLeadInput,
     ) -> anyhow::Result<Option<TriageLeadRecord>> {
         let mut tx = self.pool.begin().await?;
-        let lead = load_lead_in_tx(&mut tx, lead_id).await?;
+        let lead = load_lead_in_tx(&mut tx, lead_id, input.customer_scope_id.as_deref()).await?;
         let Some(mut lead) = lead else {
             return Ok(None);
         };
@@ -4701,8 +5753,8 @@ impl ScoringRepository for PostgresScoringRepository {
         }))
     }
 
-    async fn list_cases(&self) -> anyhow::Result<Vec<CaseRecord>> {
-        load_cases(&self.pool).await
+    async fn list_cases(&self, customer_scope_id: Option<&str>) -> anyhow::Result<Vec<CaseRecord>> {
+        load_cases(&self.pool, customer_scope_id).await
     }
 
     async fn update_case_status(
@@ -4711,14 +5763,15 @@ impl ScoringRepository for PostgresScoringRepository {
         input: UpdateCaseStatusInput,
     ) -> anyhow::Result<Option<UpdateCaseStatusRecord>> {
         let mut tx = self.pool.begin().await?;
-        let case = load_case_in_tx(&mut tx, case_id).await?;
+        let case = load_case_in_tx(&mut tx, case_id, input.customer_scope_id.as_deref()).await?;
         let Some(mut case) = case else {
             return Ok(None);
         };
-        let audit_run_id = load_lead_in_tx(&mut tx, &case.lead_id)
-            .await?
-            .map(|lead| lead.run_id)
-            .unwrap_or_else(|| format!("case_status_{}", case.case_id));
+        let audit_run_id =
+            load_lead_in_tx(&mut tx, &case.lead_id, input.customer_scope_id.as_deref())
+                .await?
+                .map(|lead| lead.run_id)
+                .unwrap_or_else(|| format!("case_status_{}", case.case_id));
         let from_status = case.status.clone();
         case.status = input.status.clone();
         sqlx::query(
@@ -4730,7 +5783,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&case.status)
         .execute(&mut *tx)
         .await?;
-        let case = load_case_in_tx(&mut tx, case_id)
+        let case = load_case_in_tx(&mut tx, case_id, input.customer_scope_id.as_deref())
             .await?
             .expect("case should exist after status update");
 
@@ -4753,7 +5806,8 @@ impl ScoringRepository for PostgresScoringRepository {
                     "lead_id": case.lead_id,
                     "from_status": from_status,
                     "to_status": case.status,
-                    "notes": input.notes
+                    "notes": input.notes,
+                    "customer_scope_id": input.customer_scope_id
                 }),
                 evidence_refs: input
                     .evidence_refs
@@ -4773,13 +5827,15 @@ impl ScoringRepository for PostgresScoringRepository {
         input: CreateAuditSampleInput,
     ) -> anyhow::Result<AuditSampleRecord> {
         let sample_id = format!("sample_{}", AuditEventId::new());
+        let customer_scope_filter = input.customer_scope_id.clone();
+        let customer_scope_id = customer_scope_filter.as_deref();
         let leads = if input.sample_mode == "random_control" {
-            load_control_audit_population(&self.pool).await?
+            load_control_audit_population(&self.pool, customer_scope_id).await?
         } else {
-            self.list_leads().await?
+            self.list_leads(customer_scope_id).await?
         };
         let strata_contexts = load_audit_sample_strata_contexts(&self.pool).await?;
-        let existing_samples = self.list_audit_samples().await?;
+        let existing_samples = self.list_audit_samples(customer_scope_id).await?;
         let reviewer_history =
             reviewer_lead_sample_counts(existing_samples.iter(), &input.reviewer);
         let sample = build_audit_sample(
@@ -4792,10 +5848,11 @@ impl ScoringRepository for PostgresScoringRepository {
         );
         sqlx::query(
             "INSERT INTO audit_samples
-             (sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)",
+             (sample_id, customer_scope_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)",
         )
         .bind(&sample.sample_id)
+        .bind(&sample.customer_scope_id)
         .bind(&sample.sample_mode)
         .bind(&sample.population_definition)
         .bind(&sample.inclusion_criteria)
@@ -4808,15 +5865,19 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(&sample.outcome_distribution)
         .execute(&self.pool)
         .await?;
-        self.list_audit_samples()
+        self.list_audit_samples(customer_scope_id)
             .await?
             .into_iter()
             .find(|record| record.sample_id == sample.sample_id)
             .ok_or_else(|| anyhow::anyhow!("created audit sample was not found"))
     }
 
-    async fn list_audit_samples(&self) -> anyhow::Result<Vec<AuditSampleRecord>> {
+    async fn list_audit_samples(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AuditSampleRecord>> {
         let rows: Vec<(
+            String,
             String,
             String,
             String,
@@ -4830,10 +5891,12 @@ impl ScoringRepository for PostgresScoringRepository {
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT sample_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json, created_at
+            "SELECT sample_id, customer_scope_id, sample_mode, population_definition, inclusion_criteria_json, deterministic_seed, selection_method, sample_size, reviewer, assignment_queue, selected_leads_json, outcome_distribution_json, created_at
              FROM audit_samples
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
              ORDER BY created_at, sample_id",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
         let samples = rows
@@ -4841,6 +5904,7 @@ impl ScoringRepository for PostgresScoringRepository {
             .map(
                 |(
                     sample_id,
+                    customer_scope_id,
                     sample_mode,
                     population_definition,
                     inclusion_criteria,
@@ -4854,6 +5918,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     created_at,
                 )| AuditSampleRecord {
                     sample_id,
+                    customer_scope_id,
                     sample_mode,
                     population_definition,
                     inclusion_criteria,
@@ -4868,7 +5933,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 },
             )
             .collect::<Vec<_>>();
-        let reviews = self.list_qa_reviews().await?;
+        let reviews = self.list_qa_reviews(customer_scope_id).await?;
         Ok(with_sample_outcome_distributions(samples, &reviews))
     }
 
@@ -5329,40 +6394,80 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(row.map(model_retraining_job_from_pg_row))
     }
 
-    async fn dashboard_summary(&self) -> anyhow::Result<DashboardSummaryRecord> {
+    async fn dashboard_summary(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<DashboardSummaryRecord> {
         let suspected: (i64, Option<Decimal>) = sqlx::query_as(
             "SELECT COUNT(*)::bigint, COALESCE(SUM(c.claim_amount), 0)
              FROM scoring_runs sr
              LEFT JOIN claims c ON c.id = sr.claim_id
-             WHERE sr.risk_score >= 70",
+             WHERE sr.risk_score >= 70
+               AND ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))",
         )
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
 
         let rag_rows: Vec<(String, i64)> = sqlx::query_as(
             "SELECT COALESCE(rag, 'UNKNOWN'), COUNT(*)::bigint
-             FROM scoring_runs
+             FROM scoring_runs sr
              WHERE rag IS NOT NULL
+               AND ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))
              GROUP BY rag
              ORDER BY rag",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
-        let rule_hits: (i64,) =
-            sqlx::query_as("SELECT COUNT(*)::bigint FROM rule_runs WHERE matched = true")
-                .fetch_one(&self.pool)
-                .await?;
+        let rule_hits: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint
+             FROM rule_runs rr
+             JOIN scoring_runs sr ON sr.run_id = rr.run_id
+             WHERE rr.matched = true
+               AND ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))",
+        )
+        .bind(customer_scope_id)
+        .fetch_one(&self.pool)
+        .await?;
 
         let model_rows: Vec<(String, i64, Option<Decimal>, Option<i64>)> = sqlx::query_as(
             "SELECT model_key,
                     COUNT(*)::bigint,
                     AVG(score),
                     SUM(CASE WHEN score >= 70 THEN 1 ELSE 0 END)::bigint
-             FROM model_scores
+             FROM model_scores ms
+             JOIN scoring_runs sr ON sr.run_id = ms.run_id
+             WHERE ($1::text IS NULL OR EXISTS (
+                 SELECT 1 FROM audit_events ae
+                 WHERE ae.run_id = sr.run_id
+                   AND ae.event_type = 'scoring.completed'
+                   AND ae.event_status = 'succeeded'
+                   AND ae.payload ->> 'customer_scope_id' = $1
+               ))
              GROUP BY model_key
              ORDER BY model_key",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -5370,8 +6475,10 @@ impl ScoringRepository for PostgresScoringRepository {
             "SELECT payload
              FROM audit_events
              WHERE event_type = 'scoring.completed'
-               AND event_status = 'succeeded'",
+               AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
         let audit_coverage_row: (i64, Option<i64>) = sqlx::query_as(
@@ -5385,8 +6492,10 @@ impl ScoringRepository for PostgresScoringRepository {
                     )::bigint
              FROM audit_events
              WHERE event_type = 'scoring.completed'
-               AND event_status = 'succeeded'",
+               AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)",
         )
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
         let audit_coverage = summarize_dashboard_audit_coverage(
@@ -5421,30 +6530,65 @@ impl ScoringRepository for PostgresScoringRepository {
             "SELECT COUNT(*)::bigint,
                     COALESCE(SUM(CASE WHEN confirmed_fwa THEN 1 ELSE 0 END), 0)::bigint,
                     COALESCE(SUM(saving_amount), 0)
-             FROM investigation_results",
+             FROM investigation_results ir
+             WHERE ($1::text IS NULL OR EXISTS (
+               SELECT 1 FROM audit_events ae
+               WHERE ae.event_type = 'investigation.result.received'
+                 AND ae.event_status = 'succeeded'
+                 AND ae.payload ->> 'investigation_id' = ir.investigation_id
+                 AND ae.payload ->> 'customer_scope_id' = $1
+             ))",
         )
+        .bind(customer_scope_id)
         .fetch_one(&self.pool)
         .await?;
 
-        let qa_reviews: (i64,) = sqlx::query_as("SELECT COUNT(*)::bigint FROM qa_reviews")
-            .fetch_one(&self.pool)
-            .await?;
+        let qa_reviews: (i64,) = sqlx::query_as(
+            "SELECT COUNT(*)::bigint
+             FROM qa_reviews qr
+             WHERE ($1::text IS NULL OR EXISTS (
+               SELECT 1 FROM audit_events ae
+               WHERE ae.event_type = 'qa.result.received'
+                 AND ae.event_status = 'succeeded'
+                 AND ae.payload ->> 'qa_case_id' = qr.qa_case_id
+                 AND ae.payload ->> 'customer_scope_id' = $1
+             ))",
+        )
+        .bind(customer_scope_id)
+        .fetch_one(&self.pool)
+        .await?;
 
         let scheme_rows: Vec<(String, i64)> = sqlx::query_as(
             "SELECT scheme_family, COUNT(*)::bigint
-             FROM fwa_leads
+             FROM fwa_leads l
+             WHERE ($1::text IS NULL OR EXISTS (
+               SELECT 1 FROM audit_events ae
+               WHERE ae.run_id = l.run_id
+                 AND ae.event_type = 'scoring.completed'
+                 AND ae.event_status = 'succeeded'
+                 AND ae.payload ->> 'customer_scope_id' = $1
+             ))
              GROUP BY scheme_family
              ORDER BY scheme_family",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
         let financial_impact_rows: Vec<(bool, Option<String>, Option<Decimal>, Option<String>)> =
             sqlx::query_as(
                 "SELECT confirmed_fwa, financial_impact_type, saving_amount, currency
-                 FROM investigation_results
+                 FROM investigation_results ir
+                 WHERE ($1::text IS NULL OR EXISTS (
+                   SELECT 1 FROM audit_events ae
+                   WHERE ae.event_type = 'investigation.result.received'
+                     AND ae.event_status = 'succeeded'
+                     AND ae.payload ->> 'investigation_id' = ir.investigation_id
+                     AND ae.payload ->> 'customer_scope_id' = $1
+                 ))
                  ORDER BY created_at, investigation_id",
             )
+            .bind(customer_scope_id)
             .fetch_all(&self.pool)
             .await?;
         let financial_impacts = financial_impact_rows
@@ -5465,6 +6609,7 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Option<Decimal>,
             String,
             i64,
@@ -5472,6 +6617,7 @@ impl ScoringRepository for PostgresScoringRepository {
         )> = sqlx::query_as(
             "SELECT source_type,
                         source_id,
+                        financial_impact_type,
                         action,
                         COALESCE(SUM(saving_amount), 0),
                         currency,
@@ -5479,9 +6625,17 @@ impl ScoringRepository for PostgresScoringRepository {
                         ARRAY_REMOVE(ARRAY_AGG(DISTINCT ref.value ORDER BY ref.value), NULL)
                  FROM saving_attributions s
                  LEFT JOIN LATERAL jsonb_array_elements_text(s.evidence_refs) AS ref(value) ON TRUE
-                 GROUP BY source_type, source_id, action, currency
-                 ORDER BY source_type, source_id, action, currency",
+                 WHERE ($1::text IS NULL OR EXISTS (
+                   SELECT 1 FROM audit_events ae
+                   WHERE ae.event_type = 'investigation.result.received'
+                     AND ae.event_status = 'succeeded'
+                     AND ae.payload ->> 'investigation_id' = s.investigation_id
+                     AND ae.payload ->> 'customer_scope_id' = $1
+                 ))
+                 GROUP BY source_type, source_id, financial_impact_type, action, currency
+                 ORDER BY source_type, source_id, financial_impact_type, action, currency",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
         let saving_segments: Vec<(String, String, Option<Decimal>, String, i64, i64)> =
@@ -5500,6 +6654,13 @@ impl ScoringRepository for PostgresScoringRepository {
                           s.claim_id
                    FROM saving_attributions s
                    LEFT JOIN fwa_leads l ON l.claim_id = s.claim_id
+                   WHERE ($1::text IS NULL OR EXISTS (
+                     SELECT 1 FROM audit_events ae
+                     WHERE ae.event_type = 'investigation.result.received'
+                       AND ae.event_status = 'succeeded'
+                       AND ae.payload ->> 'investigation_id' = s.investigation_id
+                       AND ae.payload ->> 'customer_scope_id' = $1
+                   ))
                    UNION ALL
                    SELECT 'scheme'::text AS segment_type,
                           COALESCE(l.scheme_family, 'unknown') AS segment_id,
@@ -5508,6 +6669,13 @@ impl ScoringRepository for PostgresScoringRepository {
                           s.claim_id
                    FROM saving_attributions s
                    LEFT JOIN fwa_leads l ON l.claim_id = s.claim_id
+                   WHERE ($1::text IS NULL OR EXISTS (
+                     SELECT 1 FROM audit_events ae
+                     WHERE ae.event_type = 'investigation.result.received'
+                       AND ae.event_status = 'succeeded'
+                       AND ae.payload ->> 'investigation_id' = s.investigation_id
+                       AND ae.payload ->> 'customer_scope_id' = $1
+                   ))
                    UNION ALL
                    SELECT 'campaign'::text AS segment_type,
                           COALESCE(NULLIF(regexp_replace(ref.value, '^campaigns?:', ''), ''), 'unknown') AS segment_id,
@@ -5516,19 +6684,27 @@ impl ScoringRepository for PostgresScoringRepository {
                           s.claim_id
                    FROM saving_attributions s
                    CROSS JOIN LATERAL jsonb_array_elements_text(s.evidence_refs) AS ref(value)
-                   WHERE ref.value LIKE 'campaign:%'
-                      OR ref.value LIKE 'campaigns:%'
+                   WHERE (ref.value LIKE 'campaign:%'
+                      OR ref.value LIKE 'campaigns:%')
+                     AND ($1::text IS NULL OR EXISTS (
+                       SELECT 1 FROM audit_events ae
+                       WHERE ae.event_type = 'investigation.result.received'
+                         AND ae.event_status = 'succeeded'
+                         AND ae.payload ->> 'investigation_id' = s.investigation_id
+                         AND ae.payload ->> 'customer_scope_id' = $1
+                     ))
                  ) segments
                  GROUP BY segment_type, segment_id, currency
                  ORDER BY segment_type, segment_id, currency",
             )
+            .bind(customer_scope_id)
             .fetch_all(&self.pool)
             .await?;
-        let outcome_labels = self.list_outcome_labels().await?;
-        let audit_samples = self.list_audit_samples().await?;
-        let qa_review_records = self.list_qa_reviews().await?;
-        let qa_feedback_items = self.list_qa_feedback_items().await?;
-        let agent_runs = self.list_agent_runs().await?;
+        let outcome_labels = self.list_outcome_labels(customer_scope_id).await?;
+        let audit_samples = self.list_audit_samples(customer_scope_id).await?;
+        let qa_review_records = self.list_qa_reviews(customer_scope_id).await?;
+        let qa_feedback_items = self.list_qa_feedback_items(customer_scope_id).await?;
+        let agent_runs = self.list_agent_runs(customer_scope_id).await?;
         let models = self.list_models().await?;
         let model_evaluations = self.list_model_evaluations().await?;
         let rules = self.list_rules().await?;
@@ -5590,6 +6766,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     |(
                         source_type,
                         source_id,
+                        financial_impact_type,
                         action,
                         saving_amount,
                         currency,
@@ -5599,6 +6776,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         DashboardSavingAttributionRecord {
                             source_type,
                             source_id,
+                            financial_impact_type,
                             action,
                             saving_amount: format_decimal_cents(
                                 saving_amount.unwrap_or(Decimal::ZERO),
@@ -5650,7 +6828,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 &qa_review_records,
                 &qa_feedback_items,
             ),
-            case_sla: summarize_dashboard_case_sla(&self.list_cases().await?),
+            case_sla: summarize_dashboard_case_sla(&self.list_cases(customer_scope_id).await?),
             agent_governance: summarize_dashboard_agent_governance(&agent_runs),
             model_governance: summarize_dashboard_model_governance(&models, &model_evaluations),
             rule_governance: summarize_dashboard_rule_governance(&rules, &rule_performance),
@@ -5916,7 +7094,10 @@ impl ScoringRepository for PostgresScoringRepository {
         Ok(())
     }
 
-    async fn list_agent_runs(&self) -> anyhow::Result<Vec<AgentRunLogRecord>> {
+    async fn list_agent_runs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<AgentRunLogRecord>> {
         let rows: Vec<(
             String,
             String,
@@ -5928,9 +7109,23 @@ impl ScoringRepository for PostgresScoringRepository {
             Option<chrono::DateTime<chrono::Utc>>,
         )> = sqlx::query_as(
             "SELECT agent_run_id, claim_id, status, decision_boundary, output_json, evidence_refs, created_at, completed_at
-             FROM agent_runs
+             FROM agent_runs ar
+             WHERE (
+               $1::text IS NULL OR EXISTS (
+                 SELECT 1
+                 FROM audit_events ae
+                 LEFT JOIN claims c ON c.id = ae.claim_id
+                 WHERE ae.payload ->> 'customer_scope_id' = $1
+                   AND (
+                     ae.payload ->> 'claim_id' = ar.claim_id
+                     OR c.external_claim_id = ar.claim_id
+                     OR ae.claim_id::text = ar.claim_id
+                   )
+               )
+             )
              ORDER BY created_at DESC, agent_run_id",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
@@ -6254,14 +7449,15 @@ impl ScoringRepository for PostgresScoringRepository {
         for attribution in saving_attributions {
             sqlx::query(
                 "INSERT INTO saving_attributions
-                 (attribution_id, claim_id, investigation_id, source_type, source_id, action, saving_amount, currency, evidence_refs)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)",
+                 (attribution_id, claim_id, investigation_id, source_type, source_id, financial_impact_type, action, saving_amount, currency, evidence_refs)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)",
             )
             .bind(&attribution.attribution_id)
             .bind(&attribution.claim_id)
             .bind(&attribution.investigation_id)
             .bind(&attribution.source_type)
             .bind(&attribution.source_id)
+            .bind(&attribution.financial_impact_type)
             .bind(&attribution.action)
             .bind(attribution.saving_amount)
             .bind(&attribution.currency)
@@ -6273,6 +7469,10 @@ impl ScoringRepository for PostgresScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_investigation_{}", record.investigation_id),
             run_id: format!("pilot_investigation_{}", record.investigation_id),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "investigation.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("Investigation result received: {}", record.outcome),
@@ -6280,7 +7480,7 @@ impl ScoringRepository for PostgresScoringRepository {
             evidence_refs: record.evidence_refs.clone(),
             created_at: None,
         };
-        insert_pilot_audit_event(&mut tx, &record.claim_id, &event, "tpa_system").await?;
+        insert_pilot_audit_event(&mut tx, &record.claim_id, &event).await?;
         tx.commit().await?;
         Ok(event)
     }
@@ -6316,6 +7516,10 @@ impl ScoringRepository for PostgresScoringRepository {
         let event = AuditHistoryEventRecord {
             audit_id: format!("audit_qa_{}", record.qa_case_id),
             run_id: format!("pilot_qa_{}", record.qa_case_id),
+            actor_role: record
+                .actor_role
+                .clone()
+                .unwrap_or_else(|| "tpa_system".into()),
             event_type: "qa.result.received".into(),
             event_status: "succeeded".into(),
             summary: format!("QA result received: {}", record.qa_conclusion),
@@ -6323,16 +7527,36 @@ impl ScoringRepository for PostgresScoringRepository {
             evidence_refs: record.evidence_refs.clone(),
             created_at: None,
         };
-        insert_pilot_audit_event(&mut tx, &record.claim_id, &event, "qa_reviewer").await?;
+        insert_pilot_audit_event(&mut tx, &record.claim_id, &event).await?;
         tx.commit().await?;
         Ok(event)
     }
 
-    async fn list_qa_feedback_items(&self) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+    async fn list_qa_feedback_items(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaFeedbackItemRecord>> {
+        let allowed_qa_case_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("qa.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| event.payload["qa_case_id"].as_str().map(str::to_string))
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
         let mut status_events = self
             .list_audit_events(AuditEventListFilter {
                 limit: 10_000,
                 event_type: Some("qa.feedback.status.updated".into()),
+                customer_scope_id: customer_scope_id.map(str::to_string),
                 ..Default::default()
             })
             .await?;
@@ -6371,6 +7595,11 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
         let mut items = rows
             .into_iter()
+            .filter(|(qa_case_id, _, _, _, _, _, _, _, _)| {
+                allowed_qa_case_ids
+                    .as_ref()
+                    .is_none_or(|ids| ids.contains(qa_case_id))
+            })
             .map(
                 |(
                     qa_case_id,
@@ -6394,6 +7623,9 @@ impl ScoringRepository for PostgresScoringRepository {
                             feedback_target,
                             notes,
                             evidence_refs: json_array_to_strings(evidence_refs),
+                            customer_scope_id: None,
+                            actor_id: None,
+                            actor_role: None,
                         },
                         Some(created_at.to_rfc3339()),
                         &feedback_status,
@@ -6410,10 +7642,28 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         feedback_id: &str,
         input: UpdateQaFeedbackStatusInput,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Option<UpdateQaFeedbackStatusRecord>> {
         let Some(qa_case_id) = qa_case_id_from_feedback_id(feedback_id) else {
             return Ok(None);
         };
+        if let Some(scope) = customer_scope_id {
+            let is_in_scope = self
+                .list_audit_events(AuditEventListFilter {
+                    limit: 1,
+                    event_type: Some("qa.result.received".into()),
+                    qa_case_id: Some(qa_case_id.into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .next()
+                .is_some();
+            if !is_in_scope {
+                return Ok(None);
+            }
+        }
         let mut tx = self.pool.begin().await?;
         let row: Option<(
             String,
@@ -6479,6 +7729,9 @@ impl ScoringRepository for PostgresScoringRepository {
                 feedback_target,
                 notes,
                 evidence_refs: json_array_to_strings(evidence_refs),
+                customer_scope_id: None,
+                actor_id: None,
+                actor_role: None,
             },
             Some(created_at.to_rfc3339()),
             &feedback_status,
@@ -6496,6 +7749,7 @@ impl ScoringRepository for PostgresScoringRepository {
             &AuditHistoryEventRecord {
                 audit_id: audit_id.clone(),
                 run_id: format!("qa_feedback_status_{}", item.feedback_id),
+                actor_role: "fwa_operator".into(),
                 event_type: "qa.feedback.status.updated".into(),
                 event_status: "succeeded".into(),
                 summary: format!("QA feedback status updated: {}", item.status),
@@ -6507,19 +7761,38 @@ impl ScoringRepository for PostgresScoringRepository {
                     "from_status": from_status,
                     "to_status": item.status,
                     "actor_id": input.actor_id,
-                    "notes": input.notes
+                    "notes": input.notes,
+                    "customer_scope_id": input.customer_scope_id
                 }),
                 evidence_refs: input.evidence_refs,
                 created_at: None,
             },
-            "qa_operator",
         )
         .await?;
         tx.commit().await?;
         Ok(Some(UpdateQaFeedbackStatusRecord { item, audit_id }))
     }
 
-    async fn list_qa_reviews(&self) -> anyhow::Result<Vec<QaReviewRecord>> {
+    async fn list_qa_reviews(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<QaReviewRecord>> {
+        let allowed_qa_case_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("qa.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| event.payload["qa_case_id"].as_str().map(str::to_string))
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
         let rows: Vec<(String, String, String, String, String, String, Value)> = sqlx::query_as(
             "SELECT qa_case_id, claim_id, qa_conclusion, issue_type, feedback_target, notes, evidence_refs
              FROM qa_reviews
@@ -6529,6 +7802,11 @@ impl ScoringRepository for PostgresScoringRepository {
         .await?;
         Ok(rows
             .into_iter()
+            .filter(|(qa_case_id, _, _, _, _, _, _)| {
+                allowed_qa_case_ids
+                    .as_ref()
+                    .is_none_or(|ids| ids.contains(qa_case_id))
+            })
             .map(
                 |(
                     qa_case_id,
@@ -6548,13 +7826,55 @@ impl ScoringRepository for PostgresScoringRepository {
                         feedback_target,
                         notes,
                         evidence_refs: json_array_to_strings(evidence_refs),
+                        customer_scope_id: None,
+                        actor_id: None,
+                        actor_role: None,
                     }
                 },
             )
             .collect())
     }
 
-    async fn list_outcome_labels(&self) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+    async fn list_outcome_labels(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<OutcomeLabelRecord>> {
+        let allowed_investigation_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("investigation.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| {
+                    event.payload["investigation_id"]
+                        .as_str()
+                        .map(str::to_string)
+                })
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
+        let allowed_qa_case_ids = if let Some(scope) = customer_scope_id {
+            Some(
+                self.list_audit_events(AuditEventListFilter {
+                    limit: 10_000,
+                    event_type: Some("qa.result.received".into()),
+                    customer_scope_id: Some(scope.into()),
+                    ..Default::default()
+                })
+                .await?
+                .into_iter()
+                .filter_map(|event| event.payload["qa_case_id"].as_str().map(str::to_string))
+                .collect::<BTreeSet<_>>(),
+            )
+        } else {
+            None
+        };
         let investigation_rows: Vec<(
             String,
             String,
@@ -6580,27 +7900,47 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .fetch_all(&self.pool)
             .await?;
-        let medical_review_rows: Vec<(String, Value, Value)> = sqlx::query_as(
-            "SELECT audit_id, payload, evidence_refs
+        let medical_review_rows: Vec<(String, String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, actor_role, payload, evidence_refs
              FROM audit_events
              WHERE event_type = 'medical.review.recorded'
                AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)
              ORDER BY created_at, audit_id",
         )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
-        let lead_triage_rows: Vec<(String, String, Value, Value)> = sqlx::query_as(
-            "SELECT audit_id, run_id, payload, evidence_refs
+        let lead_triage_rows: Vec<(String, String, String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, run_id, actor_role, payload, evidence_refs
              FROM audit_events
              WHERE event_type = 'lead.triaged'
                AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)
              ORDER BY created_at, audit_id",
         )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
+        let label_bootstrap_rows: Vec<(String, String, String, Value, Value)> = sqlx::query_as(
+            "SELECT audit_id, run_id, actor_role, payload, evidence_refs
+             FROM audit_events
+             WHERE event_type = 'label.bootstrap.reviewed'
+               AND event_status = 'succeeded'
+               AND ($1::text IS NULL OR payload ->> 'customer_scope_id' = $1)
+             ORDER BY created_at, audit_id",
+        )
+        .bind(customer_scope_id)
         .fetch_all(&self.pool)
         .await?;
 
         let mut labels = investigation_rows
             .into_iter()
+            .filter(|(investigation_id, _, _, _, _, _, _, _, _)| {
+                allowed_investigation_ids
+                    .as_ref()
+                    .is_none_or(|ids| ids.contains(investigation_id))
+            })
             .flat_map(
                 |(
                     investigation_id,
@@ -6624,40 +7964,71 @@ impl ScoringRepository for PostgresScoringRepository {
                         currency,
                         notes,
                         evidence_refs: json_array_to_strings(evidence_refs),
+                        customer_scope_id: None,
+                        actor_id: None,
+                        actor_role: None,
                     })
                 },
             )
-            .chain(qa_rows.into_iter().map(
-                |(
-                    qa_case_id,
-                    claim_id,
-                    qa_conclusion,
-                    issue_type,
-                    feedback_target,
-                    feedback_status,
-                    notes,
-                    evidence_refs,
-                )| {
-                    label_from_qa_review(
-                        QaReviewRecord {
+            .chain(
+                qa_rows
+                    .into_iter()
+                    .filter(|(qa_case_id, _, _, _, _, _, _, _)| {
+                        allowed_qa_case_ids
+                            .as_ref()
+                            .is_none_or(|ids| ids.contains(qa_case_id))
+                    })
+                    .map(
+                        |(
                             qa_case_id,
                             claim_id,
                             qa_conclusion,
                             issue_type,
                             feedback_target,
+                            feedback_status,
                             notes,
-                            evidence_refs: json_array_to_strings(evidence_refs),
+                            evidence_refs,
+                        )| {
+                            label_from_qa_review(
+                                QaReviewRecord {
+                                    qa_case_id,
+                                    claim_id,
+                                    qa_conclusion,
+                                    issue_type,
+                                    feedback_target,
+                                    notes,
+                                    evidence_refs: json_array_to_strings(evidence_refs),
+                                    customer_scope_id: None,
+                                    actor_id: None,
+                                    actor_role: None,
+                                },
+                                &feedback_status,
+                            )
                         },
-                        &feedback_status,
-                    )
-                },
-            ))
-            .chain(medical_review_rows.into_iter().filter_map(
-                |(audit_id, payload, evidence_refs)| {
-                    label_from_medical_review_event(&AuditHistoryEventRecord {
+                    ),
+            )
+            .chain(medical_review_rows.into_iter().flat_map(
+                |(audit_id, actor_role, payload, evidence_refs)| {
+                    labels_from_medical_review_event(&AuditHistoryEventRecord {
                         audit_id,
                         run_id: String::new(),
+                        actor_role,
                         event_type: "medical.review.recorded".into(),
+                        event_status: "succeeded".into(),
+                        summary: String::new(),
+                        payload,
+                        evidence_refs: json_array_to_strings(evidence_refs),
+                        created_at: None,
+                    })
+                },
+            ))
+            .chain(label_bootstrap_rows.into_iter().filter_map(
+                |(audit_id, run_id, actor_role, payload, evidence_refs)| {
+                    label_from_bootstrap_review_event(&AuditHistoryEventRecord {
+                        audit_id,
+                        run_id,
+                        actor_role,
+                        event_type: "label.bootstrap.reviewed".into(),
                         event_status: "succeeded".into(),
                         summary: String::new(),
                         payload,
@@ -6668,23 +8039,22 @@ impl ScoringRepository for PostgresScoringRepository {
             ))
             .collect::<Vec<_>>();
         labels.extend(labels_from_lead_triage_events(
-            lead_triage_rows
-                .into_iter()
-                .map(
-                    |(audit_id, run_id, payload, evidence_refs)| AuditHistoryEventRecord {
-                        audit_id,
-                        run_id,
-                        event_type: "lead.triaged".into(),
-                        event_status: "succeeded".into(),
-                        summary: String::new(),
-                        payload,
-                        evidence_refs: json_array_to_strings(evidence_refs),
-                        created_at: None,
-                    },
-                ),
+            lead_triage_rows.into_iter().map(
+                |(audit_id, run_id, actor_role, payload, evidence_refs)| AuditHistoryEventRecord {
+                    audit_id,
+                    run_id,
+                    actor_role,
+                    event_type: "lead.triaged".into(),
+                    event_status: "succeeded".into(),
+                    summary: String::new(),
+                    payload,
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                    created_at: None,
+                },
+            ),
         ));
         labels.extend(
-            self.list_cases()
+            self.list_cases(None)
                 .await?
                 .into_iter()
                 .flat_map(labels_from_case_status),
@@ -6696,16 +8066,19 @@ impl ScoringRepository for PostgresScoringRepository {
     async fn claim_audit_history(
         &self,
         claim_id: &str,
+        customer_scope_id: Option<&str>,
     ) -> anyhow::Result<Vec<AuditHistoryEventRecord>> {
-        let rows: Vec<(String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
+        let rows: Vec<(String, String, String, String, String, String, Value, Value, chrono::DateTime<chrono::Utc>)> =
             sqlx::query_as(
-                "SELECT ae.audit_id, ae.run_id, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
+                "SELECT ae.audit_id, ae.run_id, ae.actor_role, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
                  FROM audit_events ae
                  LEFT JOIN claims c ON c.id = ae.claim_id
-                 WHERE payload ->> 'claim_id' = $1 OR c.external_claim_id = $1
+                 WHERE (payload ->> 'claim_id' = $1 OR c.external_claim_id = $1)
+                   AND ($2::text IS NULL OR ae.payload ->> 'customer_scope_id' = $2)
                  ORDER BY ae.created_at, ae.audit_id",
             )
             .bind(claim_id)
+            .bind(customer_scope_id)
             .fetch_all(&self.pool)
             .await?;
 
@@ -6715,6 +8088,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6724,6 +8098,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )| AuditHistoryEventRecord {
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6745,11 +8120,12 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Value,
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT ae.audit_id, ae.run_id, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
+            "SELECT ae.audit_id, ae.run_id, ae.actor_role, ae.event_type, ae.event_status, ae.summary, ae.payload, ae.evidence_refs, ae.created_at
              FROM audit_events ae
              LEFT JOIN claims c ON c.id = ae.claim_id
              WHERE ($2::text IS NULL OR ae.event_type = $2)
@@ -6782,6 +8158,7 @@ impl ScoringRepository for PostgresScoringRepository {
                AND ($19::text IS NULL OR ae.payload ->> 'model_dataset_id' = $19)
                AND ($20::text IS NULL OR ae.payload ->> 'evaluation_run_id' = $20)
                AND ($21::bool IS NULL OR $21 = false OR ae.payload ? 'canonical_claim_context_trace')
+               AND ($22::text IS NULL OR ae.payload ->> 'customer_scope_id' = $22)
              ORDER BY ae.created_at DESC, ae.audit_id DESC
              LIMIT $1",
         )
@@ -6806,6 +8183,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(filter.model_dataset_id.as_deref())
         .bind(filter.evaluation_run_id.as_deref())
         .bind(filter.has_canonical_trace)
+        .bind(filter.customer_scope_id.as_deref())
         .fetch_all(&self.pool)
         .await?;
 
@@ -6815,6 +8193,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6824,6 +8203,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 )| AuditHistoryEventRecord {
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6842,11 +8222,12 @@ impl ScoringRepository for PostgresScoringRepository {
             String,
             String,
             String,
+            String,
             Value,
             Value,
             chrono::DateTime<chrono::Utc>,
         )> = sqlx::query_as(
-            "SELECT audit_id, run_id, event_type, event_status, summary, payload, evidence_refs, created_at
+            "SELECT audit_id, run_id, actor_role, event_type, event_status, summary, payload, evidence_refs, created_at
              FROM audit_events
              ORDER BY created_at, audit_id",
         )
@@ -6859,6 +8240,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 |(
                     audit_id,
                     run_id,
+                    actor_role,
                     event_type,
                     event_status,
                     summary,
@@ -6871,6 +8253,7 @@ impl ScoringRepository for PostgresScoringRepository {
                         &AuditHistoryEventRecord {
                             audit_id,
                             run_id,
+                            actor_role,
                             event_type,
                             event_status,
                             summary,
@@ -7262,6 +8645,444 @@ impl ScoringRepository for PostgresScoringRepository {
             )
             .collect())
     }
+
+    async fn save_evidence_document(
+        &self,
+        input: CreateEvidenceDocumentInput,
+    ) -> anyhow::Result<EvidenceDocumentRecord> {
+        let row = sqlx::query(
+            "WITH input_claim AS (
+               SELECT id FROM claims WHERE external_claim_id = $5 LIMIT 1
+             )
+             INSERT INTO evidence_documents
+             (document_id, customer_scope_id, source_system, source_record_ref, claim_id, external_document_id, document_type, storage_uri, content_checksum, ingestion_status, redaction_status, retention_policy_id, evidence_refs, metadata_json)
+             VALUES ($1, $2, $3, $4, (SELECT id FROM input_claim), $6, $7, $8, $9, $10, $11, $12, $13, $14)
+             ON CONFLICT (document_id) DO UPDATE SET
+               customer_scope_id = EXCLUDED.customer_scope_id,
+               source_system = EXCLUDED.source_system,
+               source_record_ref = EXCLUDED.source_record_ref,
+               claim_id = EXCLUDED.claim_id,
+               external_document_id = EXCLUDED.external_document_id,
+               document_type = EXCLUDED.document_type,
+               storage_uri = EXCLUDED.storage_uri,
+               content_checksum = EXCLUDED.content_checksum,
+               ingestion_status = EXCLUDED.ingestion_status,
+               redaction_status = EXCLUDED.redaction_status,
+               retention_policy_id = EXCLUDED.retention_policy_id,
+               evidence_refs = EXCLUDED.evidence_refs,
+               metadata_json = EXCLUDED.metadata_json,
+               updated_at = now()
+             RETURNING document_id, customer_scope_id, source_system, source_record_ref,
+               (SELECT external_claim_id FROM claims WHERE id = evidence_documents.claim_id) AS claim_id,
+               external_document_id, document_type, storage_uri, content_checksum, ingestion_status,
+               redaction_status, retention_policy_id, evidence_refs, metadata_json, created_at, updated_at",
+        )
+        .bind(&input.document_id)
+        .bind(&input.customer_scope_id)
+        .bind(&input.source_system)
+        .bind(&input.source_record_ref)
+        .bind(&input.claim_id)
+        .bind(&input.external_document_id)
+        .bind(&input.document_type)
+        .bind(&input.storage_uri)
+        .bind(&input.content_checksum)
+        .bind(&input.ingestion_status)
+        .bind(&input.redaction_status)
+        .bind(&input.retention_policy_id)
+        .bind(string_values(&input.evidence_refs))
+        .bind(&input.metadata_json)
+        .fetch_one(&self.pool)
+        .await?;
+        evidence_document_from_row(row)
+    }
+
+    async fn list_evidence_documents(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentRecord>> {
+        let rows = sqlx::query(
+            "SELECT d.document_id, d.customer_scope_id, d.source_system, d.source_record_ref,
+                    c.external_claim_id AS claim_id, d.external_document_id, d.document_type,
+                    d.storage_uri, d.content_checksum, d.ingestion_status, d.redaction_status,
+                    d.retention_policy_id, d.evidence_refs, d.metadata_json, d.created_at, d.updated_at
+             FROM evidence_documents d
+             LEFT JOIN claims c ON c.id = d.claim_id
+             WHERE ($1::text IS NULL OR d.customer_scope_id = $1)
+             ORDER BY d.document_id",
+        )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(evidence_document_from_row).collect()
+    }
+
+    async fn get_evidence_document(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentRecord>> {
+        let row = sqlx::query(
+            "SELECT d.document_id, d.customer_scope_id, d.source_system, d.source_record_ref,
+                    c.external_claim_id AS claim_id, d.external_document_id, d.document_type,
+                    d.storage_uri, d.content_checksum, d.ingestion_status, d.redaction_status,
+                    d.retention_policy_id, d.evidence_refs, d.metadata_json, d.created_at, d.updated_at
+             FROM evidence_documents d
+             LEFT JOIN claims c ON c.id = d.claim_id
+             WHERE d.document_id = $1
+               AND ($2::text IS NULL OR d.customer_scope_id = $2)",
+        )
+        .bind(document_id)
+        .bind(customer_scope_id)
+        .fetch_optional(&self.pool)
+        .await?;
+        row.map(evidence_document_from_row).transpose()
+    }
+
+    async fn save_evidence_document_chunk(
+        &self,
+        input: CreateEvidenceDocumentChunkInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let row = sqlx::query(
+            "INSERT INTO evidence_document_chunks
+             (chunk_id, document_id, chunk_index, chunking_version, redaction_status, text_checksum, token_count, storage_uri, source_offsets_json, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (document_id, chunk_index, chunking_version) DO UPDATE SET
+               redaction_status = EXCLUDED.redaction_status,
+               text_checksum = EXCLUDED.text_checksum,
+               token_count = EXCLUDED.token_count,
+               storage_uri = EXCLUDED.storage_uri,
+               source_offsets_json = EXCLUDED.source_offsets_json,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING chunk_id, document_id, chunk_index, chunking_version, redaction_status, text_checksum, token_count, storage_uri, source_offsets_json, evidence_refs, created_at",
+        )
+        .bind(&input.chunk_id)
+        .bind(&input.document_id)
+        .bind(input.chunk_index)
+        .bind(&input.chunking_version)
+        .bind(&input.redaction_status)
+        .bind(&input.text_checksum)
+        .bind(input.token_count)
+        .bind(&input.storage_uri)
+        .bind(&input.source_offsets_json)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(Some(evidence_document_chunk_from_row(row)?))
+    }
+
+    async fn list_evidence_document_chunks(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceDocumentChunkRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            "SELECT chunk_id, document_id, chunk_index, chunking_version, redaction_status, text_checksum, token_count, storage_uri, source_offsets_json, evidence_refs, created_at
+             FROM evidence_document_chunks
+             WHERE document_id = $1
+             ORDER BY chunk_index, chunk_id",
+        )
+        .bind(document_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(evidence_document_chunk_from_row)
+            .collect()
+    }
+
+    async fn save_evidence_ocr_output(
+        &self,
+        input: CreateEvidenceOcrOutputInput,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Option<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(&input.document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(None);
+        }
+        let row = sqlx::query(
+            "INSERT INTO evidence_ocr_outputs
+             (ocr_output_id, document_id, ocr_engine, ocr_engine_version, output_uri, output_checksum, confidence_score, quality_status, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (ocr_output_id) DO UPDATE SET
+               ocr_engine = EXCLUDED.ocr_engine,
+               ocr_engine_version = EXCLUDED.ocr_engine_version,
+               output_uri = EXCLUDED.output_uri,
+               output_checksum = EXCLUDED.output_checksum,
+               confidence_score = EXCLUDED.confidence_score,
+               quality_status = EXCLUDED.quality_status,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING ocr_output_id, document_id, ocr_engine, ocr_engine_version, output_uri, output_checksum, confidence_score, quality_status, evidence_refs, created_at",
+        )
+        .bind(&input.ocr_output_id)
+        .bind(&input.document_id)
+        .bind(&input.ocr_engine)
+        .bind(&input.ocr_engine_version)
+        .bind(&input.output_uri)
+        .bind(&input.output_checksum)
+        .bind(input.confidence_score)
+        .bind(&input.quality_status)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(Some(evidence_ocr_output_from_row(row)?))
+    }
+
+    async fn list_evidence_ocr_outputs(
+        &self,
+        document_id: &str,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceOcrOutputRecord>> {
+        if self
+            .get_evidence_document(document_id, customer_scope_id)
+            .await?
+            .is_none()
+        {
+            return Ok(Vec::new());
+        }
+        let rows = sqlx::query(
+            "SELECT ocr_output_id, document_id, ocr_engine, ocr_engine_version, output_uri, output_checksum, confidence_score, quality_status, evidence_refs, created_at
+             FROM evidence_ocr_outputs
+             WHERE document_id = $1
+             ORDER BY ocr_output_id",
+        )
+        .bind(document_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter().map(evidence_ocr_output_from_row).collect()
+    }
+
+    async fn save_evidence_embedding_job(
+        &self,
+        input: CreateEvidenceEmbeddingJobInput,
+    ) -> anyhow::Result<EvidenceEmbeddingJobRecord> {
+        let row = sqlx::query(
+            "INSERT INTO evidence_embedding_jobs
+             (embedding_job_id, customer_scope_id, target_kind, target_ref, embedding_model, embedding_model_version, chunking_version, redaction_status, vector_store_kind, vector_store_ref, embedding_checksum, status, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (embedding_job_id) DO UPDATE SET
+               customer_scope_id = EXCLUDED.customer_scope_id,
+               target_kind = EXCLUDED.target_kind,
+               target_ref = EXCLUDED.target_ref,
+               embedding_model = EXCLUDED.embedding_model,
+               embedding_model_version = EXCLUDED.embedding_model_version,
+               chunking_version = EXCLUDED.chunking_version,
+               redaction_status = EXCLUDED.redaction_status,
+               vector_store_kind = EXCLUDED.vector_store_kind,
+               vector_store_ref = EXCLUDED.vector_store_ref,
+               embedding_checksum = EXCLUDED.embedding_checksum,
+               status = EXCLUDED.status,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING embedding_job_id, customer_scope_id, target_kind, target_ref, embedding_model, embedding_model_version, chunking_version, redaction_status, vector_store_kind, vector_store_ref, embedding_checksum, status, evidence_refs, created_at, completed_at",
+        )
+        .bind(&input.embedding_job_id)
+        .bind(&input.customer_scope_id)
+        .bind(&input.target_kind)
+        .bind(&input.target_ref)
+        .bind(&input.embedding_model)
+        .bind(&input.embedding_model_version)
+        .bind(&input.chunking_version)
+        .bind(&input.redaction_status)
+        .bind(&input.vector_store_kind)
+        .bind(&input.vector_store_ref)
+        .bind(&input.embedding_checksum)
+        .bind(&input.status)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        evidence_embedding_job_from_row(row)
+    }
+
+    async fn list_evidence_embedding_jobs(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceEmbeddingJobRecord>> {
+        let rows = sqlx::query(
+            "SELECT embedding_job_id, customer_scope_id, target_kind, target_ref, embedding_model, embedding_model_version, chunking_version, redaction_status, vector_store_kind, vector_store_ref, embedding_checksum, status, evidence_refs, created_at, completed_at
+             FROM evidence_embedding_jobs
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+             ORDER BY embedding_job_id",
+        )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(evidence_embedding_job_from_row)
+            .collect()
+    }
+
+    async fn save_evidence_retrieval_audit_event(
+        &self,
+        input: CreateEvidenceRetrievalAuditEventInput,
+    ) -> anyhow::Result<EvidenceRetrievalAuditEventRecord> {
+        let row = sqlx::query(
+            "INSERT INTO evidence_retrieval_audit_events
+             (retrieval_id, customer_scope_id, actor_id, actor_role, query_kind, query_checksum, retrieval_method, embedding_model_version, top_k, source_refs, result_refs, redaction_status, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (retrieval_id) DO UPDATE SET
+               customer_scope_id = EXCLUDED.customer_scope_id,
+               actor_id = EXCLUDED.actor_id,
+               actor_role = EXCLUDED.actor_role,
+               query_kind = EXCLUDED.query_kind,
+               query_checksum = EXCLUDED.query_checksum,
+               retrieval_method = EXCLUDED.retrieval_method,
+               embedding_model_version = EXCLUDED.embedding_model_version,
+               top_k = EXCLUDED.top_k,
+               source_refs = EXCLUDED.source_refs,
+               result_refs = EXCLUDED.result_refs,
+               redaction_status = EXCLUDED.redaction_status,
+               evidence_refs = EXCLUDED.evidence_refs
+             RETURNING retrieval_id, customer_scope_id, actor_id, actor_role, query_kind, query_checksum, retrieval_method, embedding_model_version, top_k, source_refs, result_refs, redaction_status, evidence_refs, created_at",
+        )
+        .bind(&input.retrieval_id)
+        .bind(&input.customer_scope_id)
+        .bind(&input.actor_id)
+        .bind(&input.actor_role)
+        .bind(&input.query_kind)
+        .bind(&input.query_checksum)
+        .bind(&input.retrieval_method)
+        .bind(&input.embedding_model_version)
+        .bind(input.top_k)
+        .bind(string_values(&input.source_refs))
+        .bind(string_values(&input.result_refs))
+        .bind(&input.redaction_status)
+        .bind(string_values(&input.evidence_refs))
+        .fetch_one(&self.pool)
+        .await?;
+        evidence_retrieval_audit_event_from_row(row)
+    }
+
+    async fn list_evidence_retrieval_audit_events(
+        &self,
+        customer_scope_id: Option<&str>,
+    ) -> anyhow::Result<Vec<EvidenceRetrievalAuditEventRecord>> {
+        let rows = sqlx::query(
+            "SELECT retrieval_id, customer_scope_id, actor_id, actor_role, query_kind, query_checksum, retrieval_method, embedding_model_version, top_k, source_refs, result_refs, redaction_status, evidence_refs, created_at
+             FROM evidence_retrieval_audit_events
+             WHERE ($1::text IS NULL OR customer_scope_id = $1)
+             ORDER BY created_at DESC, retrieval_id",
+        )
+        .bind(customer_scope_id)
+        .fetch_all(&self.pool)
+        .await?;
+        rows.into_iter()
+            .map(evidence_retrieval_audit_event_from_row)
+            .collect()
+    }
+}
+
+fn evidence_document_from_row(row: PgRow) -> anyhow::Result<EvidenceDocumentRecord> {
+    Ok(EvidenceDocumentRecord {
+        document_id: row.try_get("document_id")?,
+        customer_scope_id: row.try_get("customer_scope_id")?,
+        source_system: row.try_get("source_system")?,
+        source_record_ref: row.try_get("source_record_ref")?,
+        claim_id: row.try_get("claim_id")?,
+        external_document_id: row.try_get("external_document_id")?,
+        document_type: row.try_get("document_type")?,
+        storage_uri: row.try_get("storage_uri")?,
+        content_checksum: row.try_get("content_checksum")?,
+        ingestion_status: row.try_get("ingestion_status")?,
+        redaction_status: row.try_get("redaction_status")?,
+        retention_policy_id: row.try_get("retention_policy_id")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        metadata_json: row.try_get("metadata_json")?,
+        created_at: timestamp_from_row(&row, "created_at")?,
+        updated_at: timestamp_from_row(&row, "updated_at")?,
+    })
+}
+
+fn evidence_document_chunk_from_row(row: PgRow) -> anyhow::Result<EvidenceDocumentChunkRecord> {
+    Ok(EvidenceDocumentChunkRecord {
+        chunk_id: row.try_get("chunk_id")?,
+        document_id: row.try_get("document_id")?,
+        chunk_index: row.try_get("chunk_index")?,
+        chunking_version: row.try_get("chunking_version")?,
+        redaction_status: row.try_get("redaction_status")?,
+        text_checksum: row.try_get("text_checksum")?,
+        token_count: row.try_get("token_count")?,
+        storage_uri: row.try_get("storage_uri")?,
+        source_offsets_json: row.try_get("source_offsets_json")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+    })
+}
+
+fn evidence_ocr_output_from_row(row: PgRow) -> anyhow::Result<EvidenceOcrOutputRecord> {
+    Ok(EvidenceOcrOutputRecord {
+        ocr_output_id: row.try_get("ocr_output_id")?,
+        document_id: row.try_get("document_id")?,
+        ocr_engine: row.try_get("ocr_engine")?,
+        ocr_engine_version: row.try_get("ocr_engine_version")?,
+        output_uri: row.try_get("output_uri")?,
+        output_checksum: row.try_get("output_checksum")?,
+        confidence_score: row.try_get("confidence_score")?,
+        quality_status: row.try_get("quality_status")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+    })
+}
+
+fn evidence_embedding_job_from_row(row: PgRow) -> anyhow::Result<EvidenceEmbeddingJobRecord> {
+    Ok(EvidenceEmbeddingJobRecord {
+        embedding_job_id: row.try_get("embedding_job_id")?,
+        customer_scope_id: row.try_get("customer_scope_id")?,
+        target_kind: row.try_get("target_kind")?,
+        target_ref: row.try_get("target_ref")?,
+        embedding_model: row.try_get("embedding_model")?,
+        embedding_model_version: row.try_get("embedding_model_version")?,
+        chunking_version: row.try_get("chunking_version")?,
+        redaction_status: row.try_get("redaction_status")?,
+        vector_store_kind: row.try_get("vector_store_kind")?,
+        vector_store_ref: row.try_get("vector_store_ref")?,
+        embedding_checksum: row.try_get("embedding_checksum")?,
+        status: row.try_get("status")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+        completed_at: timestamp_from_row(&row, "completed_at")?,
+    })
+}
+
+fn evidence_retrieval_audit_event_from_row(
+    row: PgRow,
+) -> anyhow::Result<EvidenceRetrievalAuditEventRecord> {
+    Ok(EvidenceRetrievalAuditEventRecord {
+        retrieval_id: row.try_get("retrieval_id")?,
+        customer_scope_id: row.try_get("customer_scope_id")?,
+        actor_id: row.try_get("actor_id")?,
+        actor_role: row.try_get("actor_role")?,
+        query_kind: row.try_get("query_kind")?,
+        query_checksum: row.try_get("query_checksum")?,
+        retrieval_method: row.try_get("retrieval_method")?,
+        embedding_model_version: row.try_get("embedding_model_version")?,
+        top_k: row.try_get("top_k")?,
+        source_refs: json_array_to_strings(row.try_get("source_refs")?),
+        result_refs: json_array_to_strings(row.try_get("result_refs")?),
+        redaction_status: row.try_get("redaction_status")?,
+        evidence_refs: json_array_to_strings(row.try_get("evidence_refs")?),
+        created_at: timestamp_from_row(&row, "created_at")?,
+    })
+}
+
+fn timestamp_from_row(row: &PgRow, column: &str) -> anyhow::Result<Option<String>> {
+    let value: Option<chrono::DateTime<chrono::Utc>> = row.try_get(column)?;
+    Ok(value.map(|timestamp| timestamp.to_rfc3339()))
 }
 
 fn _decimal_keeps_sqlx_feature_linked(_: Decimal) {}
@@ -7734,6 +9555,7 @@ fn triage_audit_payload(
         "disposition": lead.disposition.clone(),
         "merge_target_lead_id": input.merge_target_lead_id.clone(),
         "notes": input.notes.clone(),
+        "customer_scope_id": input.customer_scope_id.clone(),
         "evidence_sufficiency": evidence_sufficiency,
         "evidence_refs_by_type": case.and_then(|case| case.evidence_package.get("evidence_refs_by_type")).cloned(),
         "evidence_refs": input.evidence_refs.clone()
@@ -7771,8 +9593,13 @@ fn merge_target_lead_id(input: &TriageLeadInput) -> Option<&str> {
 fn merge_target_exists_in_memory(
     leads: &HashMap<String, LeadRecord>,
     input: &TriageLeadInput,
+    visible_claim_ids: Option<&BTreeSet<String>>,
 ) -> bool {
-    merge_target_lead_id(input).is_some_and(|target_lead_id| leads.contains_key(target_lead_id))
+    merge_target_lead_id(input).is_some_and(|target_lead_id| {
+        leads.get(target_lead_id).is_some_and(|lead| {
+            visible_claim_ids.is_none_or(|claim_ids| claim_ids.contains(&lead.claim_id))
+        })
+    })
 }
 
 async fn merge_target_lead_in_tx(
@@ -7780,7 +9607,9 @@ async fn merge_target_lead_in_tx(
     input: &TriageLeadInput,
 ) -> anyhow::Result<Option<LeadRecord>> {
     match merge_target_lead_id(input) {
-        Some(target_lead_id) => load_lead_in_tx(tx, target_lead_id).await,
+        Some(target_lead_id) => {
+            load_lead_in_tx(tx, target_lead_id, input.customer_scope_id.as_deref()).await
+        }
         None => Ok(None),
     }
 }
@@ -7835,6 +9664,7 @@ fn build_audit_sample(
 
     let mut sample = AuditSampleRecord {
         sample_id,
+        customer_scope_id: input.customer_scope_id.unwrap_or_default(),
         sample_mode: input.sample_mode,
         population_definition: input.population_definition,
         inclusion_criteria: input.inclusion_criteria,
@@ -8240,6 +10070,13 @@ fn persisted_audit_event_matches_filter(
         return false;
     }
     if filter
+        .customer_scope_id
+        .as_deref()
+        .is_some_and(|scope| !audit_event_payload_matches_customer_scope(&event.payload, scope))
+    {
+        return false;
+    }
+    if filter
         .run_id
         .as_deref()
         .is_some_and(|run_id| event.run_id != run_id)
@@ -8300,6 +10137,13 @@ fn pilot_audit_event_matches_filter(
         }
     }
     if filter
+        .customer_scope_id
+        .as_deref()
+        .is_some_and(|scope| !audit_event_payload_matches_customer_scope(&event.payload, scope))
+    {
+        return false;
+    }
+    if filter
         .run_id
         .as_deref()
         .is_some_and(|run_id| event.run_id != run_id)
@@ -8345,6 +10189,22 @@ fn audit_event_payload_matches_actor(payload: &Value, actor_id: &str) -> bool {
         || payload["owner"].as_str() == Some(actor_id)
         || payload["approver"].as_str() == Some(actor_id)
         || payload["requested_by"].as_str() == Some(actor_id)
+}
+
+fn audit_event_payload_matches_customer_scope(payload: &Value, customer_scope_id: &str) -> bool {
+    payload["customer_scope_id"].as_str() == Some(customer_scope_id)
+}
+
+fn scoped_claim_ids_from_audit_events<'a>(
+    events: impl Iterator<Item = &'a PersistedAuditEvent>,
+    customer_scope_id: &str,
+) -> BTreeSet<String> {
+    events
+        .filter(|event| {
+            audit_event_payload_matches_customer_scope(&event.payload, customer_scope_id)
+        })
+        .map(|event| event.claim_id.clone())
+        .collect()
 }
 
 fn audit_event_matches_group(event_type: &str, filter: &AuditEventListFilter) -> bool {
@@ -8571,6 +10431,12 @@ fn webhook_event_from_audit(
     }
     let event_id = format!("webhook_{}", event.audit_id);
     let idempotency_key = format!("fwa-webhook:{}:{}", event_type, event.audit_id);
+    let customer_scope_id = event
+        .payload
+        .get("customer_scope_id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
     let signature_base_string = format!(
         "{}.{}.{}.{}",
         event_type, event.audit_id, event.run_id, claim_id
@@ -8580,6 +10446,7 @@ fn webhook_event_from_audit(
         event_type: event_type.into(),
         source_event_type: event.event_type.clone(),
         source_audit_id: event.audit_id.clone(),
+        customer_scope_id,
         claim_id,
         run_id: event.run_id.clone(),
         delivery_status: "pending".into(),
@@ -8812,44 +10679,93 @@ fn qa_label_governance_status(feedback_status: &str) -> &'static str {
     }
 }
 
-fn label_from_medical_review_event(event: &AuditHistoryEventRecord) -> Option<OutcomeLabelRecord> {
-    let claim_id = event.payload["claim_id"].as_str()?.to_string();
-    let decision = event.payload["decision"].as_str()?;
-    let (label_name, label_value, governance_status, feedback_target) =
-        medical_review_label_fields(decision);
-    Some(OutcomeLabelRecord {
-        label_id: format!("label_medical_review_{}_{}", event.audit_id, label_name),
-        claim_id,
-        label_name: label_name.into(),
-        label_value: label_value.into(),
-        source_type: "medical_review".into(),
-        source_id: event.audit_id.clone(),
-        governance_status: governance_status.into(),
-        feedback_target: feedback_target.into(),
-        currency: None,
-        evidence_refs: event.evidence_refs.clone(),
-    })
+fn labels_from_medical_review_event(event: &AuditHistoryEventRecord) -> Vec<OutcomeLabelRecord> {
+    let Some(claim_id) = event.payload["claim_id"].as_str() else {
+        return Vec::new();
+    };
+    medical_review_outcome_labels(event)
+        .into_iter()
+        .map(|label_name| {
+            let (label_value, governance_status, feedback_target) =
+                medical_review_label_fields(&label_name);
+            OutcomeLabelRecord {
+                label_id: format!("label_medical_review_{}_{}", event.audit_id, label_name),
+                claim_id: claim_id.to_string(),
+                label_name,
+                label_value: label_value.into(),
+                source_type: "medical_review".into(),
+                source_id: event.audit_id.clone(),
+                governance_status: governance_status.into(),
+                feedback_target: feedback_target.into(),
+                currency: None,
+                evidence_refs: event.evidence_refs.clone(),
+            }
+        })
+        .collect()
 }
 
-fn medical_review_label_fields(
-    decision: &str,
-) -> (&'static str, &'static str, &'static str, &'static str) {
-    match decision {
-        "request_more_evidence" => ("insufficient_evidence", "true", "needs_review", "workflow"),
-        "medical_necessity_issue" => (
-            "medical_necessity_issue",
-            "true",
-            "approved_for_training",
-            "model",
-        ),
-        "no_medical_issue" => ("false_positive", "true", "approved_for_training", "model"),
-        _ => (
-            "clinical_evidence_sufficient",
-            "true",
-            "approved_for_training",
-            "workflow",
-        ),
+fn medical_review_outcome_labels(event: &AuditHistoryEventRecord) -> Vec<String> {
+    let outcomes = event
+        .payload
+        .get("clinical_outcomes")
+        .and_then(Value::as_array)
+        .map(|outcomes| {
+            outcomes
+                .iter()
+                .filter_map(Value::as_str)
+                .filter(|outcome| is_allowed_medical_review_label(outcome))
+                .map(str::to_string)
+                .collect::<Vec<_>>()
+        })
+        .unwrap_or_default();
+    if !outcomes.is_empty() {
+        return unique_strings(outcomes);
     }
+    event.payload["decision"]
+        .as_str()
+        .map(|decision| vec![medical_review_label_from_decision(decision).to_string()])
+        .unwrap_or_default()
+}
+
+fn medical_review_label_from_decision(decision: &str) -> &'static str {
+    match decision {
+        "request_more_evidence" => "insufficient_evidence",
+        "medical_necessity_issue" => "medical_necessity_issue",
+        "no_medical_issue" => "false_positive",
+        _ => "clinical_evidence_sufficient",
+    }
+}
+
+fn medical_review_label_fields(label_name: &str) -> (&'static str, &'static str, &'static str) {
+    match label_name {
+        "insufficient_evidence" | "medical_necessity_review_required" => {
+            ("true", "needs_review", "workflow")
+        }
+        "documentation_issue" => ("true", "approved_for_training", "workflow"),
+        "medical_necessity_issue" | "false_positive" => ("true", "approved_for_training", "model"),
+        _ => ("true", "approved_for_training", "workflow"),
+    }
+}
+
+fn is_allowed_medical_review_label(label_name: &str) -> bool {
+    matches!(
+        label_name,
+        "documentation_issue"
+            | "medical_necessity_review_required"
+            | "insufficient_evidence"
+            | "medical_necessity_issue"
+            | "clinical_evidence_sufficient"
+            | "false_positive"
+    )
+}
+
+fn unique_strings(values: Vec<String>) -> Vec<String> {
+    values.into_iter().fold(Vec::new(), |mut unique, value| {
+        if !unique.contains(&value) {
+            unique.push(value);
+        }
+        unique
+    })
 }
 
 fn labels_from_lead_triage_events(
@@ -8883,6 +10799,31 @@ fn label_from_lead_triage_event(event: &AuditHistoryEventRecord) -> Option<Outco
         source_id: lead_id,
         governance_status: "needs_review".into(),
         feedback_target: "workflow".into(),
+        currency: None,
+        evidence_refs: event.evidence_refs.clone(),
+    })
+}
+
+fn label_from_bootstrap_review_event(
+    event: &AuditHistoryEventRecord,
+) -> Option<OutcomeLabelRecord> {
+    let item_id = event.payload["item_id"].as_str()?.to_string();
+    Some(OutcomeLabelRecord {
+        label_id: format!(
+            "label_bootstrap_{}_{}",
+            item_id,
+            event.payload["label_name"].as_str()?
+        ),
+        claim_id: event.payload["claim_id"].as_str()?.to_string(),
+        label_name: event.payload["label_name"].as_str()?.to_string(),
+        label_value: event.payload["label_value"].as_str()?.to_string(),
+        source_type: "label_bootstrap".into(),
+        source_id: item_id,
+        governance_status: event.payload["governance_status"].as_str()?.to_string(),
+        feedback_target: event.payload["feedback_target"]
+            .as_str()
+            .unwrap_or("workflow")
+            .to_string(),
         currency: None,
         evidence_refs: event.evidence_refs.clone(),
     })
@@ -8947,6 +10888,7 @@ fn audit_history_from_persisted(event: &PersistedAuditEvent) -> AuditHistoryEven
     AuditHistoryEventRecord {
         audit_id: event.audit_id.clone(),
         run_id: event.run_id.clone(),
+        actor_role: event.actor_role.clone(),
         event_type: event.event_type.clone(),
         event_status: event.event_status.clone(),
         summary: event.summary.clone(),
@@ -9377,7 +11319,8 @@ fn summarize_dashboard_value_measurement(
     let mut prevented_payment = Decimal::ZERO;
     let mut recovered_amount = Decimal::ZERO;
     let mut avoided_future_exposure = Decimal::ZERO;
-    let mut deterrence_or_other_estimate = Decimal::ZERO;
+    let mut deterrence_estimate = Decimal::ZERO;
+    let mut other_estimated_impact = Decimal::ZERO;
     let mut currency = None;
 
     for impact in impacts {
@@ -9387,9 +11330,8 @@ fn summarize_dashboard_value_measurement(
         match impact.impact_type.as_str() {
             "recovered_amount" => recovered_amount += impact.amount,
             "avoided_future_exposure" => avoided_future_exposure += impact.amount,
-            "deterrence_estimate" | "estimated_impact" => {
-                deterrence_or_other_estimate += impact.amount
-            }
+            "deterrence_estimate" => deterrence_estimate += impact.amount,
+            "estimated_impact" => other_estimated_impact += impact.amount,
             _ => prevented_payment += impact.amount,
         }
     }
@@ -9398,13 +11340,14 @@ fn summarize_dashboard_value_measurement(
     let false_positive_operational_cost =
         Decimal::from(false_positive_events) * Decimal::from(RULE_REVIEW_COST_AMOUNT as u32);
     let reviewer_capacity_hours = Decimal::from(review_events) * Decimal::new(25, 2);
-    let estimated_impact = avoided_future_exposure + deterrence_or_other_estimate;
+    let estimated_impact = avoided_future_exposure + deterrence_estimate + other_estimated_impact;
     let net_value = prevented_payment + recovered_amount + estimated_impact - review_cost;
 
     DashboardValueMeasurementRecord {
         prevented_payment: format_decimal_cents(prevented_payment),
         recovered_amount: format_decimal_cents(recovered_amount),
         avoided_future_exposure: format_decimal_cents(avoided_future_exposure),
+        deterrence_estimate: format_decimal_cents(deterrence_estimate),
         estimated_impact: format_decimal_cents(estimated_impact),
         review_cost: format_decimal_cents(review_cost),
         false_positive_operational_cost: format_decimal_cents(false_positive_operational_cost),
@@ -9697,18 +11640,34 @@ fn deterministic_rank(seed: &str, lead_id: &str) -> u64 {
     hasher.finish()
 }
 
-async fn load_leads(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
+async fn load_leads(
+    pool: &PgPool,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<LeadRecord>> {
     let rows: Vec<LeadRow> = sqlx::query_as(
         "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, COALESCE(review_mode, 'pre_payment'), scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
          FROM fwa_leads
+         WHERE (
+           $1::text IS NULL OR EXISTS (
+             SELECT 1
+             FROM audit_events ae
+             JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+             WHERE scoped_claim.external_claim_id = fwa_leads.claim_id
+               AND ae.payload ->> 'customer_scope_id' = $1
+           )
+         )
          ORDER BY created_at, lead_id",
     )
+    .bind(customer_scope_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(lead_from_row).collect())
 }
 
-async fn load_control_audit_population(pool: &PgPool) -> anyhow::Result<Vec<LeadRecord>> {
+async fn load_control_audit_population(
+    pool: &PgPool,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<LeadRecord>> {
     let rows: Vec<LeadRow> = sqlx::query_as(
         "SELECT 'control_lead_' || c.external_claim_id,
                 sr.run_id,
@@ -9742,8 +11701,10 @@ async fn load_control_audit_population(pool: &PgPool) -> anyhow::Result<Vec<Lead
          ) scoring_event ON TRUE
          WHERE sr.status = 'succeeded'
            AND sr.risk_score IS NOT NULL
+           AND ($1::text IS NULL OR scoring_event.payload->>'customer_scope_id' = $1)
          ORDER BY sr.completed_at, sr.run_id",
     )
+    .bind(customer_scope_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(lead_from_row).collect())
@@ -9782,13 +11743,24 @@ async fn load_audit_sample_strata_contexts(
 async fn load_lead_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     lead_id: &str,
+    customer_scope_id: Option<&str>,
 ) -> anyhow::Result<Option<LeadRecord>> {
     let row: Option<LeadRow> = sqlx::query_as(
         "SELECT lead_id, run_id, claim_id, member_id, provider_id, source_system, COALESCE(review_mode, 'pre_payment'), scheme_family, lead_source, status, disposition, risk_score, rag, reason, evidence_refs
          FROM fwa_leads
-         WHERE lead_id = $1",
+         WHERE lead_id = $1
+           AND (
+             $2::text IS NULL OR EXISTS (
+               SELECT 1
+               FROM audit_events ae
+               JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+               WHERE scoped_claim.external_claim_id = fwa_leads.claim_id
+                 AND ae.payload ->> 'customer_scope_id' = $2
+             )
+           )",
     )
     .bind(lead_id)
+    .bind(customer_scope_id)
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row.map(lead_from_row))
@@ -9831,13 +11803,26 @@ fn lead_from_row(row: LeadRow) -> LeadRecord {
     }
 }
 
-async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
+async fn load_cases(
+    pool: &PgPool,
+    customer_scope_id: Option<&str>,
+) -> anyhow::Result<Vec<CaseRecord>> {
     let rows: Vec<CaseRow> = sqlx::query_as(
         "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, COALESCE(c.review_mode, l.review_mode, 'pre_payment') AS review_mode, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
+         WHERE (
+           $1::text IS NULL OR EXISTS (
+             SELECT 1
+             FROM audit_events ae
+             JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+             WHERE scoped_claim.external_claim_id = c.claim_id
+               AND ae.payload ->> 'customer_scope_id' = $1
+           )
+         )
          ORDER BY c.created_at, c.case_id",
     )
+    .bind(customer_scope_id)
     .fetch_all(pool)
     .await?;
     Ok(rows.into_iter().map(case_from_row).collect())
@@ -9846,14 +11831,25 @@ async fn load_cases(pool: &PgPool) -> anyhow::Result<Vec<CaseRecord>> {
 async fn load_case_in_tx(
     tx: &mut Transaction<'_, Postgres>,
     case_id: &str,
+    customer_scope_id: Option<&str>,
 ) -> anyhow::Result<Option<CaseRecord>> {
     let row: Option<CaseRow> = sqlx::query_as(
         "SELECT c.case_id, c.lead_id, c.claim_id, c.member_id, c.provider_id, c.source_system, COALESCE(c.review_mode, l.review_mode, 'pre_payment') AS review_mode, c.scheme_family, c.lead_source, c.status, c.assignee, c.reviewer, c.priority, c.routing_reason, c.evidence_package_json, c.final_outcome, c.reviewer_notes, c.investigation_result_id, l.created_at AS lead_created_at, c.created_at AS case_created_at, c.updated_at AS case_updated_at
          FROM investigation_cases c
          JOIN fwa_leads l ON l.lead_id = c.lead_id
-         WHERE c.case_id = $1",
+         WHERE c.case_id = $1
+           AND (
+             $2::text IS NULL OR EXISTS (
+               SELECT 1
+               FROM audit_events ae
+               JOIN claims scoped_claim ON scoped_claim.id = ae.claim_id
+               WHERE scoped_claim.external_claim_id = c.claim_id
+                 AND ae.payload ->> 'customer_scope_id' = $2
+             )
+           )",
     )
     .bind(case_id)
+    .bind(customer_scope_id)
     .fetch_optional(&mut **tx)
     .await?;
     Ok(row.map(case_from_row))
@@ -11019,6 +13015,8 @@ fn derive_saving_attributions(record: &InvestigationResultRecord) -> Vec<SavingA
 
     let share = (total_saving / Decimal::from(sources.len() as u32)).round_dp(2);
     let currency = record.currency.clone().unwrap_or_else(|| "UNKNOWN".into());
+    let financial_impact_type =
+        normalize_financial_impact_type(record.financial_impact_type.as_deref()).to_string();
 
     sources
         .into_iter()
@@ -11033,6 +13031,7 @@ fn derive_saving_attributions(record: &InvestigationResultRecord) -> Vec<SavingA
             investigation_id: record.investigation_id.clone(),
             source_type,
             source_id,
+            financial_impact_type: financial_impact_type.clone(),
             action: "investigation_confirmed".into(),
             saving_amount: share,
             currency: currency.clone(),
@@ -11073,12 +13072,15 @@ fn non_empty_prefix_before_version(reference_body: &str) -> Option<&str> {
 fn summarize_saving_attributions(
     records: &[SavingAttributionRecord],
 ) -> Vec<DashboardSavingAttributionRecord> {
-    let mut accumulators =
-        BTreeMap::<(String, String, String, String), (Decimal, u32, BTreeSet<String>)>::new();
+    let mut accumulators = BTreeMap::<
+        (String, String, String, String, String),
+        (Decimal, u32, BTreeSet<String>),
+    >::new();
     for record in records {
         let key = (
             record.source_type.clone(),
             record.source_id.clone(),
+            record.financial_impact_type.clone(),
             record.action.clone(),
             record.currency.clone(),
         );
@@ -11094,12 +13096,13 @@ fn summarize_saving_attributions(
         .into_iter()
         .map(
             |(
-                (source_type, source_id, action, currency),
+                (source_type, source_id, financial_impact_type, action, currency),
                 (saving_amount, claim_count, evidence_refs),
             )| {
                 DashboardSavingAttributionRecord {
                     source_type,
                     source_id,
+                    financial_impact_type,
                     action,
                     saving_amount: format_decimal_cents(saving_amount),
                     currency,
@@ -11353,7 +13356,6 @@ async fn insert_pilot_audit_event(
     tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
     claim_id: &str,
     event: &AuditHistoryEventRecord,
-    actor_role: &str,
 ) -> anyhow::Result<()> {
     sqlx::query(
         "INSERT INTO scoring_runs
@@ -11362,7 +13364,7 @@ async fn insert_pilot_audit_event(
          ON CONFLICT (run_id) DO NOTHING",
     )
     .bind(&event.run_id)
-    .bind(actor_role)
+    .bind(&event.actor_role)
     .execute(&mut **tx)
     .await?;
 
@@ -11379,7 +13381,7 @@ async fn insert_pilot_audit_event(
     .bind(&event.audit_id)
     .bind(&event.run_id)
     .bind(claim_id)
-    .bind(actor_role)
+    .bind(&event.actor_role)
     .bind(&event.event_type)
     .bind(&event.event_status)
     .bind(&event.summary)

@@ -1,0 +1,38 @@
+# Example environment for a strict customer pilot proof.
+# Copy values into your shell or secret manager, replace placeholders, then run:
+#   set -a
+#   source scripts/demo/pilot_ready_env.example
+#   set +a
+#
+# Do not commit real API keys, database credentials, signing keys, or customer
+# identifiers. These values are placeholders for a configured demo environment.
+
+DATABASE_URL=postgres://fwa_app:replace-with-password@pilot-postgres.internal:5432/fwa
+FWA_API_BASE_URL=http://127.0.0.1:8080
+
+# FWA_API_KEY is the caller used by scripts/demo/customer_pilot_proof.sh.
+FWA_API_KEY=replace-with-customer-demo-key
+FWA_SOURCE_SYSTEM=customer-demo-tpa
+FWA_DEMO_EXPECTED_ACTOR_ROLE=fwa_operator
+FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID=customer-alpha-pilot
+
+# API server identity and authorization contract.
+FWA_API_KEY_PRINCIPALS='replace-with-customer-demo-key|customer-demo-ops|fwa_operator|customer-demo-tpa|customer-alpha-pilot|ops:*,tpa:*,medical:*,agent:*,audit:read'
+FWA_CUSTOMER_SCOPE_ID=customer-alpha-pilot
+
+# Readiness contracts checked by /api/v1/health.
+FWA_MODEL_SERVICE_URL=https://ml-service.customer-alpha.example
+FWA_OBJECT_STORAGE_URI=s3://customer-alpha-fwa-artifacts
+FWA_RETENTION_POLICY_ID=retention-customer-alpha-v1
+FWA_BACKUP_RESTORE_PLAN_ID=backup-restore-customer-alpha-v1
+FWA_PII_MASKING_POLICY_ID=pii-masking-customer-alpha-v1
+FWA_KEY_ROTATION_POLICY_ID=key-rotation-customer-alpha-v1
+FWA_NETWORK_ALLOWLIST_ID=network-allowlist-customer-alpha-v1
+FWA_ALERT_ROUTING_POLICY_ID=alert-routing-customer-alpha-v1
+FWA_OBSERVABILITY_EXPORTER_ENDPOINT=https://otel.customer-alpha.example/v1/traces
+FWA_AGENT_POLICY_ID=agent-policy-customer-alpha-v1
+
+# Strict proof mode.
+FWA_PROOF_REQUIRE_READY=1
+FWA_PROOF_READINESS_REPORT_PATH=artifacts/pilot-readiness.json
+FWA_PROOF_SUMMARY_PATH=artifacts/customer-pilot-proof-summary.json

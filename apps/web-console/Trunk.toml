@@ -3,7 +3,7 @@ target = "index.html"
 dist = "dist"
 public_url = "/"
 filehash = true
-minify = "on_release"
+minify = "never"
 
 [serve]
 addresses = ["127.0.0.1"]

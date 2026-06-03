@@ -1,0 +1,86 @@
+name: Deploy Staging
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Container image tag to record in the staging deployment package"
+        required: true
+        default: "staging"
+        type: string
+      require_ci_success:
+        description: "Require the current ref to have a successful CI run before packaging"
+        required: true
+        default: true
+        type: boolean
+
+permissions:
+  actions: read
+  contents: read
+
+concurrency:
+  group: staging-deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  staging-deployment-package:
+    name: Build staging deployment package
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: staging
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify current ref CI success
+        if: ${{ inputs.require_ci_success }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          run_id="$(gh run list \
+            --workflow CI \
+            --commit "$GITHUB_SHA" \
+            --json databaseId,status,conclusion \
+            --jq 'map(select(.status == "completed" and .conclusion == "success")) | .[0].databaseId // empty')"
+          if [[ -z "$run_id" ]]; then
+            echo "no successful CI run found for $GITHUB_SHA" >&2
+            exit 1
+          fi
+          echo "ci_run_id=$run_id" >> "$GITHUB_ENV"
+
+      - name: Validate staging manifests
+        run: |
+          python3 -m py_compile \
+            scripts/ops/validate_k8s_staging.py \
+            scripts/ops/validate_container_packaging.py \
+            scripts/ops/validate_staging_deployment_package.py \
+            scripts/ops/build_staging_deployment_package.py
+          python3 scripts/ops/validate_k8s_staging.py
+          python3 scripts/ops/validate_container_packaging.py
+
+      - name: Build deployment package
+        run: |
+          python3 scripts/ops/build_staging_deployment_package.py \
+            --output-dir /tmp/nwfwa-staging-deployment \
+            --image-tag "${{ inputs.image_tag }}" \
+            --commit-sha "$GITHUB_SHA" \
+            --environment staging
+
+      - name: Verify deployment package
+        run: |
+          python3 scripts/ops/validate_staging_deployment_package.py \
+            --package-dir /tmp/nwfwa-staging-deployment
+          test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
+          test -f /tmp/nwfwa-staging-deployment/index.json
+          test -x /tmp/nwfwa-staging-deployment/apply.sh
+          test -f /tmp/nwfwa-staging-deployment/rollback.md
+          test -f /tmp/nwfwa-staging-deployment/k8s/staging/kustomization.yaml
+          grep -q "github_environment_staging_deployment_package" /tmp/nwfwa-staging-deployment/deployment_manifest.json
+          grep -q "human_approval_required_before_destroy" /tmp/nwfwa-staging-deployment/rollback.md
+
+      - name: Upload deployment package
+        uses: actions/upload-artifact@v5
+        with:
+          name: nwfwa-staging-deployment-${{ github.sha }}
+          path: /tmp/nwfwa-staging-deployment
+          if-no-files-found: error

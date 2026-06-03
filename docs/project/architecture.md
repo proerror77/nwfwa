@@ -13,8 +13,12 @@ packages, but it does not directly adjudicate, deny, approve, or accuse fraud.
 flowchart LR
     TPA[TPA or claim system] --> API[Rust Axum API server]
     API --> DB[(PostgreSQL)]
-    API --> ML[Python ML service]
+    API --> RML[Rust artifact scorer]
+    API --> ML[Python ML service compatibility path]
     API --> Worker[Rust worker]
+    Train[External training platform] --> Obj[(Dataset and artifact storage)]
+    Obj --> Train
+    Train --> API
     Web[Yew Operations Studio] --> API
     API --> Audit[Audit and API call records]
     API --> OpenAPI[OpenAPI contract]
@@ -24,9 +28,11 @@ flowchart LR
 
 | Component | Path | Responsibility |
 | --- | --- | --- |
-| API server | `apps/api-server` | Axum API, scoring, ops workflows, OpenAPI, repository layer |
+| API server | `apps/api-server` | Axum API, scoring, ops workflows, OpenAPI, repository layer, Rust artifact scorer selection |
 | Web console | `apps/web-console` | Yew/Trunk operator UI for inbox correction, scoring, and operations |
-| ML service | `apps/ml-service` | FastAPI scorer boundary for local demo model scores |
+| ML runtime | `crates/fwa-ml-runtime` | Rust scorer trait, JSON logistic artifact scorer, HTTP scorer compatibility, heuristic fallback |
+| ML service | `apps/ml-service` | FastAPI compatibility scorer and Python training/export workflow |
+| External training platform | customer or ML platform boundary | Runs training jobs outside the API server while consuming the same governed dataset manifest and returning the standard retraining output payload |
 | Worker | `apps/worker` | Health-checkable worker and retraining job runner |
 | PostgreSQL schema | `migrations/0001_initial.sql` | Claims, scoring, audit, rules, models, cases, QA, datasets |
 | Demo scripts | `scripts/demo` | Seed data, smoke checks, persistence assertions, mock TPA client |
@@ -86,8 +92,10 @@ governance metadata before publication.
 
 Model operations tracks versions, evaluations, performance, drift, promotion
 gates, retraining readiness, retraining jobs, artifact contracts, activation,
-and rollback. The demo uses an HTTP ML service boundary rather than a production
-training platform.
+and rollback. Production training may run on an external training platform, but
+the platform must consume the same governed Parquet dataset manifest and return
+the same retraining output payload that the API validates. The demo keeps the
+Python HTTP ML service as a compatibility path.
 
 ### Dataset And Feature Lineage
 
@@ -146,13 +154,17 @@ backup, retention, or production monitoring setup is complete.
 The current repository supports a local modular monolith path:
 
 - PostgreSQL 16 through Docker Compose.
+- S3-compatible MinIO object storage through Docker Compose for staging proof.
 - Python FastAPI ML service through Docker Compose or local uvicorn.
 - Rust API server through `cargo run --locked -p api-server`.
-- Yew web console through `npm run dev`.
+- Yew web console through `NO_COLOR=false trunk serve`.
+- Kubernetes staging manifests under `infra/k8s/staging` for API server, web
+  console, ML service, PostgreSQL, object storage, and worker CronJobs.
 
-Production deployment is not configured yet. Environment-specific deployment,
-secrets, key rotation, observability, object storage, and customer network
-controls must be selected before production use.
+Production deployment is not configured yet. The Kubernetes manifests are a
+staging architecture and proof surface; environment-specific production
+deployment, managed secrets, key rotation, observability, object storage, and
+customer network controls must still be selected before production use.
 
 Pilot foundation work is also still required before customer data is used:
 object storage health, backup and restore, retention and legal hold, tenant or

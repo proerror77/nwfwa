@@ -3,15 +3,15 @@ use crate::{
     repository::{InMemoryScoringRepository, SharedRepository},
     routes::{
         agent, claims, dashboard, health, inbox, knowledge, openapi, ops_agents, ops_audit,
-        ops_cases, ops_datasets, ops_medical, ops_models, ops_providers, ops_routing_policies,
-        ops_rules, ops_sampling, ops_schemes, pilot_loop,
+        ops_bootstrap, ops_cases, ops_datasets, ops_evidence, ops_medical, ops_models,
+        ops_providers, ops_routing_policies, ops_rules, ops_sampling, ops_schemes, pilot_loop,
     },
 };
 use axum::{
     routing::{get, post},
     Router,
 };
-use fwa_ml_runtime::{HeuristicModelScorer, HttpModelScorer, ModelScorer};
+use fwa_ml_runtime::{ArtifactModelScorer, HeuristicModelScorer, HttpModelScorer, ModelScorer};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -27,7 +27,15 @@ pub fn build_app(config: AppConfig) -> Router {
 }
 
 pub fn configured_model_scorer(config: &AppConfig) -> Arc<dyn ModelScorer> {
-    if config.model_runtime_kind() == "heuristic" {
+    if let Some(artifact_uri) = config.model_artifact_uri() {
+        Arc::new(ArtifactModelScorer::from_env(
+            artifact_uri,
+            config.model_version_lock(),
+            config.model_artifact_sha256(),
+            config.model_artifact_signature(),
+            config.model_signature_key(),
+        ))
+    } else if config.model_runtime_kind() == "heuristic" {
         Arc::new(HeuristicModelScorer)
     } else {
         Arc::new(HttpModelScorer::new(config.model_service_url.clone()))
@@ -75,6 +83,35 @@ pub fn build_app_with_parts(
         .route(
             "/api/v1/ops/cases/:case_id/status",
             post(ops_cases::update_case_status),
+        )
+        .route(
+            "/api/v1/ops/backfills",
+            get(ops_bootstrap::list_historical_backfills)
+                .post(ops_bootstrap::create_historical_backfill),
+        )
+        .route(
+            "/api/v1/ops/backfills/:job_id/leads",
+            get(ops_bootstrap::list_historical_backfill_leads),
+        )
+        .route(
+            "/api/v1/ops/evidence-requests",
+            get(ops_bootstrap::list_evidence_requests),
+        )
+        .route(
+            "/api/v1/ops/evidence-requests/generate",
+            post(ops_bootstrap::generate_evidence_requests),
+        )
+        .route(
+            "/api/v1/ops/evidence-requests/:request_id/status",
+            post(ops_bootstrap::update_evidence_request_status),
+        )
+        .route(
+            "/api/v1/ops/label-bootstrap/queue",
+            get(ops_bootstrap::label_bootstrap_queue),
+        )
+        .route(
+            "/api/v1/ops/label-bootstrap/items/:item_id/review",
+            post(ops_bootstrap::review_label_bootstrap_item),
         )
         .route(
             "/api/v1/ops/audit-samples",
@@ -184,6 +221,31 @@ pub fn build_app_with_parts(
             "/api/v1/ops/model-evaluations/:evaluation_run_id",
             get(ops_datasets::get_model_evaluation),
         )
+        .route(
+            "/api/v1/ops/evidence/documents",
+            get(ops_evidence::list_documents).post(ops_evidence::create_document),
+        )
+        .route(
+            "/api/v1/ops/evidence/documents/:document_id",
+            get(ops_evidence::get_document),
+        )
+        .route(
+            "/api/v1/ops/evidence/documents/:document_id/chunks",
+            get(ops_evidence::list_document_chunks).post(ops_evidence::create_document_chunk),
+        )
+        .route(
+            "/api/v1/ops/evidence/documents/:document_id/ocr-outputs",
+            get(ops_evidence::list_ocr_outputs).post(ops_evidence::create_ocr_output),
+        )
+        .route(
+            "/api/v1/ops/evidence/embedding-jobs",
+            get(ops_evidence::list_embedding_jobs).post(ops_evidence::create_embedding_job),
+        )
+        .route(
+            "/api/v1/ops/evidence/retrieval-audit-events",
+            get(ops_evidence::list_retrieval_audit_events)
+                .post(ops_evidence::create_retrieval_audit_event),
+        )
         .route("/api/v1/ops/models", get(ops_models::list_models))
         .route(
             "/api/v1/ops/routing-policies",
@@ -290,11 +352,15 @@ pub fn build_app_with_parts(
 mod tests {
     use super::*;
     use fwa_core::{ClaimId, ScoringRunId};
+    use fwa_features::FeatureValue;
     use fwa_ml_runtime::ModelScoreRequest;
     use std::{
         collections::BTreeMap,
+        fs,
         io::{Read, Write},
         net::TcpListener,
+        path::PathBuf,
+        sync::{Mutex, OnceLock},
         thread,
     };
 
@@ -304,6 +370,34 @@ mod tests {
             source_system: "tpa-demo".into(),
             database_url: "postgres://unused".into(),
             model_service_url,
+            object_storage_uri: "local://demo-artifacts".into(),
+            customer_scope_id: "demo-customer".into(),
+            retention_policy_id: "demo-retention-policy".into(),
+            backup_restore_plan_id: "demo-backup-restore-plan".into(),
+            pii_masking_policy_id: "demo-pii-masking-policy".into(),
+            key_rotation_policy_id: "demo-key-rotation-policy".into(),
+            network_allowlist_id: "demo-network-allowlist".into(),
+            alert_routing_policy_id: "demo-alert-routing-policy".into(),
+            observability_exporter_endpoint: "local://demo-observability".into(),
+            agent_policy_id: "demo-agent-policy".into(),
+        }
+    }
+
+    fn scorer_env_lock() -> &'static Mutex<()> {
+        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+        LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    fn clear_model_artifact_env() {
+        for name in [
+            "FWA_MODEL_ARTIFACT_URI",
+            "FWA_MODEL_VERSION_LOCK",
+            "FWA_MODEL_ARTIFACT_SHA256",
+            "FWA_MODEL_ARTIFACT_CHECKSUM",
+            "FWA_MODEL_ARTIFACT_SIGNATURE",
+            "FWA_MODEL_SIGNATURE_KEY",
+        ] {
+            std::env::remove_var(name);
         }
     }
 
@@ -323,7 +417,11 @@ mod tests {
             );
             stream.write_all(response.as_bytes()).unwrap();
         });
-        let scorer = configured_model_scorer(&config(format!("http://{address}")));
+        let scorer = {
+            let _guard = scorer_env_lock().lock().unwrap();
+            clear_model_artifact_env();
+            configured_model_scorer(&config(format!("http://{address}")))
+        };
 
         let result = scorer
             .score(ModelScoreRequest {
@@ -345,7 +443,11 @@ mod tests {
 
     #[tokio::test]
     async fn configured_model_scorer_allows_explicit_heuristic_fallback() {
-        let scorer = configured_model_scorer(&config("heuristic://local".into()));
+        let scorer = {
+            let _guard = scorer_env_lock().lock().unwrap();
+            clear_model_artifact_env();
+            configured_model_scorer(&config("heuristic://local".into()))
+        };
 
         let result = scorer
             .score(ModelScoreRequest {
@@ -361,5 +463,70 @@ mod tests {
 
         assert_eq!(result.runtime_kind, "heuristic");
         assert_eq!(result.score, 0);
+    }
+
+    #[tokio::test]
+    async fn configured_model_scorer_prefers_rust_artifact_uri() {
+        let artifact_path = write_artifact(serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.2.0-rust",
+            "runtime_kind": "rust_logistic_regression",
+            "execution_provider": "cpu",
+            "threshold": 0.5,
+            "feature_columns": ["claim_amount_to_limit_ratio"],
+            "intercept": -1.0,
+            "coefficients": {"claim_amount_to_limit_ratio": 4.0}
+        }));
+        let scorer = {
+            let _guard = scorer_env_lock().lock().unwrap();
+            clear_model_artifact_env();
+            std::env::set_var("FWA_MODEL_ARTIFACT_URI", &artifact_path);
+            let scorer = configured_model_scorer(&config("http://127.0.0.1:1".into()));
+            clear_model_artifact_env();
+            scorer
+        };
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_configured_artifact"),
+                claim_id: ClaimId::from_external("CLM-CONFIGURED-ARTIFACT"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.2.0-rust".into(),
+                endpoint_url: None,
+                features: features([("claim_amount_to_limit_ratio", 0.8)]),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.runtime_kind, "rust_logistic_regression");
+        assert_eq!(result.model_version, "0.2.0-rust");
+        assert_eq!(result.score, 90);
+        fs::remove_file(artifact_path).unwrap();
+    }
+
+    fn features(
+        values: impl IntoIterator<Item = (&'static str, f64)>,
+    ) -> BTreeMap<String, FeatureValue> {
+        values
+            .into_iter()
+            .map(|(name, value)| {
+                (
+                    name.to_string(),
+                    FeatureValue {
+                        name: name.to_string(),
+                        version: 1,
+                        value: serde_json::json!(value),
+                        evidence_refs: vec![],
+                    },
+                )
+            })
+            .collect()
+    }
+
+    fn write_artifact(payload: serde_json::Value) -> PathBuf {
+        let path =
+            std::env::temp_dir().join(format!("nwfwa-api-artifact-{}.json", ScoringRunId::new()));
+        fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
+        path
     }
 }

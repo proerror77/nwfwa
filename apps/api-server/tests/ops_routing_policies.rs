@@ -18,6 +18,16 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 
@@ -420,6 +430,17 @@ async fn advances_routing_policy_lifecycle_and_activated_policy_controls_scoring
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(rolled_back["status"], "approved");
+
+    let (status, audit) = get_json(
+        app.clone(),
+        "/api/v1/ops/audit-events?event_type=routing_policy.activation.completed&limit=5",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(audit["events"].as_array().unwrap().iter().any(|event| {
+        event["payload"]["policy_id"] == "candidate_strict_prepay"
+            && event["payload"]["customer_scope_id"] == "demo-customer"
+    }));
 
     let (status, scored_after_rollback) = post_json(
         app,

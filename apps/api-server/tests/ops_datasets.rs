@@ -11,6 +11,16 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 
@@ -705,6 +715,10 @@ async fn registers_feature_set_model_dataset_and_evaluation_trace() {
     assert_eq!(
         model_evaluation_event["payload"]["scheme_family"],
         "diagnosis_procedure_mismatch"
+    );
+    assert_eq!(
+        model_evaluation_event["payload"]["customer_scope_id"],
+        "demo-customer"
     );
     assert_eq!(
         model_evaluation_event["evidence_refs"][0],

@@ -12,7 +12,8 @@ use axum::{
     http::{HeaderMap, StatusCode},
     Json,
 };
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_audit::ActorContext;
+use fwa_auth::validate_api_key;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -29,10 +30,10 @@ pub async fn list_leads(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<LeadListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let leads = state
         .repository
-        .list_leads()
+        .list_leads(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("LEAD_LIST_FAILED"))?;
     Ok(Json(LeadListResponse { leads }))
@@ -42,10 +43,11 @@ pub async fn triage_lead(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(lead_id): Path<String>,
-    Json(request): Json<TriageLeadInput>,
+    Json(mut request): Json<TriageLeadInput>,
 ) -> Result<Json<TriageLeadRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_triage_request(&lead_id, &request)?;
+    request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
         .repository
         .triage_lead(&lead_id, request)
@@ -120,10 +122,10 @@ pub async fn list_cases(
     State(state): State<AppState>,
     headers: HeaderMap,
 ) -> Result<Json<CaseListResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     let cases = state
         .repository
-        .list_cases()
+        .list_cases(Some(&actor.customer_scope_id))
         .await
         .map_err(internal_error("CASE_LIST_FAILED"))?;
     Ok(Json(CaseListResponse { cases }))
@@ -133,9 +135,9 @@ pub async fn update_case_status(
     State(state): State<AppState>,
     headers: HeaderMap,
     Path(case_id): Path<String>,
-    Json(request): Json<UpdateCaseStatusInput>,
+    Json(mut request): Json<UpdateCaseStatusInput>,
 ) -> Result<Json<UpdateCaseStatusRecord>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     if !is_supported_case_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -179,6 +181,7 @@ pub async fn update_case_status(
             "case workflow notes and evidence_refs must not contain PII",
         ));
     }
+    request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
         .repository
         .update_case_status(&case_id, request)
@@ -195,19 +198,11 @@ fn is_supported_case_status(status: &str) -> bool {
     )
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map(|_| ())
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",

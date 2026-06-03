@@ -597,6 +597,14 @@ high-impact writes for human approval. This keeps the architecture compatible
 with modern agentic workflows without turning the FWA platform into an
 uncontrolled autonomous adjudication system.
 
+Agent investigation completion audit events must expose the applied governance
+controls directly in the audit payload, including `decision_boundary`,
+`agent_policy_id`, `policy_check_id`, `tool_call_id`, and `tool_name`, and the
+event evidence refs must include the applied policy ref. The persisted agent run
+may hold the fuller step/tool/approval records, but the audit timeline itself
+must still be sufficient to trace the policy and allowlisted tool used for the
+output.
+
 ## Lead Generation Lifecycle
 
 Analytics creates leads. It does not directly create fraud conclusions.
@@ -678,7 +686,9 @@ Evidence sufficiency depends on the scheme family:
 Clinical review output must remain structured. Free-text notes can explain the
 case, but model training and rule tuning must use controlled outcome fields such
 as `documentation_issue`, `medical_necessity_review_required`, and
-`insufficient_evidence`.
+`insufficient_evidence`. The medical review writeback API stores these values in
+`clinical_outcomes`; if a reviewer omits the array, the platform derives a
+compatible controlled outcome from the review `decision`.
 
 ## Sampling And Audit Methodology
 

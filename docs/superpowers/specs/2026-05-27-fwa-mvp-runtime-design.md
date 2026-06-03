@@ -33,7 +33,7 @@ The system starts as a modular monolith with clear internal boundaries and a sma
 - `api-server`: TPA API and Operations Studio API.
 - `worker`: async jobs, future backtests, embeddings, rule discovery, and long-running workflows.
 - `ml-service`: Python FastAPI baseline model service for MVP.
-- `web-console`: React Operations Studio.
+- `web-console`: Yew/Trunk Operations Studio.
 
 The first real workflow is:
 
@@ -64,7 +64,7 @@ The MVP runtime remains intentionally small:
 - PostgreSQL for transactional source-of-truth data;
 - Rust `api-server` and `worker`;
 - Python `ml-service`;
-- React `web-console`;
+- Yew `web-console`;
 - migrations, seed scripts, and CI checks.
 
 Infrastructure capabilities such as object storage, durable worker job tables,
@@ -452,13 +452,11 @@ The first web console is an internal operations tool, not a marketing page.
 
 Recommended stack:
 
-- React
-- TypeScript
-- Vite
-- React Router
-- Tailwind
-- shadcn/ui
-- TanStack Query
+- Yew
+- Trunk
+- Rust/WASM target
+- gloo-net
+- CSS owned by `apps/web-console/src/styles.css`
 
 Navigation:
 
@@ -524,10 +522,10 @@ Frontend checks:
 
 ```bash
 cd apps/web-console
-npm ci
-npm run lint
-npm test
-npm run build
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 Migration checks should validate SQLx migrations against PostgreSQL once the database container is present.

@@ -16,7 +16,8 @@ use axum::{
 use fwa_agent::{
     DeterministicInvestigator, EvidenceSufficiency, InvestigationRequest, SimilarCaseInput,
 };
-use fwa_auth::{validate_api_key, ApiKeyConfig};
+use fwa_audit::ActorContext;
+use fwa_auth::validate_api_key;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
@@ -57,7 +58,7 @@ pub async fn investigate_case(
     headers: HeaderMap,
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
-    authorize(&state, &headers)?;
+    let actor = authorize(&state, &headers)?;
     validate_agent_investigation_request(&request)?;
     let masked_claim_ref = mask_agent_claim_ref(&request.claim_id);
     let scheme_family = request
@@ -75,6 +76,7 @@ pub async fn investigate_case(
         .iter()
         .map(|tag| sanitize_agent_free_text(tag))
         .collect::<Vec<_>>();
+    let agent_policy_id = state.config.agent_policy_id.clone();
     let tool_call_id = format!("tool_call_{}", masked_claim_ref);
     let tool_result_id = format!("tool_result_{}", masked_claim_ref);
     let policy_check = AgentPolicyCheckRecord {
@@ -82,11 +84,11 @@ pub async fn investigate_case(
         agent_run_id: format!("agent_{}", masked_claim_ref),
         tool_call_id: tool_call_id.clone(),
         tool_name: "knowledge.search_similar".into(),
-        policy_name: "agent_tool_allowlist".into(),
+        policy_name: agent_policy_id.clone(),
         decision: "allowed".into(),
         reason: "Tool is allowlisted for read-only similar-case evidence retrieval.".into(),
         evidence_refs: vec![
-            "policy:agent_tool_allowlist".into(),
+            format!("policy:{agent_policy_id}"),
             format!("knowledge_query:{}", masked_claim_ref),
         ],
         created_at: None,
@@ -126,7 +128,9 @@ pub async fn investigate_case(
                 .cloned()
         })
         .collect::<Vec<_>>();
-    let canonical_trace = latest_canonical_claim_context_trace(&state, &request.claim_id).await?;
+    let canonical_trace =
+        latest_canonical_claim_context_trace(&state, &request.claim_id, &actor.customer_scope_id)
+            .await?;
     let context_json = serde_json::json!({
         "claim_id": masked_claim_ref,
         "risk_score": request.risk_score,
@@ -180,6 +184,33 @@ pub async fn investigate_case(
             })
         })
         .collect::<Vec<_>>();
+    let audit_policy_check_id = policy_check.policy_check_id.clone();
+    let audit_tool_call_id = tool_call_id.clone();
+    let mut audit_payload = output_json.clone();
+    if let Value::Object(payload) = &mut audit_payload {
+        payload.insert(
+            "agent_policy_id".into(),
+            Value::String(agent_policy_id.clone()),
+        );
+        payload.insert(
+            "customer_scope_id".into(),
+            Value::String(actor.customer_scope_id),
+        );
+        payload.insert(
+            "policy_check_id".into(),
+            Value::String(audit_policy_check_id),
+        );
+        payload.insert("tool_call_id".into(), Value::String(audit_tool_call_id));
+        payload.insert(
+            "tool_name".into(),
+            Value::String("knowledge.search_similar".into()),
+        );
+    }
+    let mut audit_evidence_refs = evidence_refs.clone();
+    let policy_evidence_ref = Value::String(format!("policy:{agent_policy_id}"));
+    if !audit_evidence_refs.contains(&policy_evidence_ref) {
+        audit_evidence_refs.push(policy_evidence_ref);
+    }
 
     state
         .repository
@@ -250,8 +281,8 @@ pub async fn investigate_case(
             event_type: "agent.investigation.completed".into(),
             event_status: "succeeded".into(),
             summary: "Agent investigation package generated".into(),
-            payload: output_json,
-            evidence_refs,
+            payload: audit_payload,
+            evidence_refs: audit_evidence_refs,
         })
         .await
         .map_err(internal_error("AGENT_AUDIT_SAVE_FAILED"))?;
@@ -334,10 +365,11 @@ fn validate_agent_investigation_request(
 async fn latest_canonical_claim_context_trace(
     state: &AppState,
     claim_id: &str,
+    customer_scope_id: &str,
 ) -> Result<Value, ApiError> {
     let events = state
         .repository
-        .claim_audit_history(claim_id)
+        .claim_audit_history(claim_id, Some(customer_scope_id))
         .await
         .map_err(internal_error("AGENT_CANONICAL_TRACE_LOOKUP_FAILED"))?;
     Ok(events
@@ -446,19 +478,11 @@ fn stable_fnv1a64(scope: &str, value: &str) -> u64 {
     hash
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<(), ApiError> {
+fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
     let api_key = headers
         .get("x-api-key")
         .and_then(|value| value.to_str().ok());
-    validate_api_key(
-        api_key,
-        &ApiKeyConfig {
-            key: state.config.api_key.clone(),
-            source_system: state.config.source_system.clone(),
-        },
-    )
-    .map(|_| ())
-    .map_err(|_| {
+    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
         ApiError::new(
             StatusCode::UNAUTHORIZED,
             "INVALID_API_KEY",

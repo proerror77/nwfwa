@@ -1,8 +1,14 @@
-use api_server::{app::build_app, config::AppConfig};
+use api_server::{
+    app::{build_app, build_app_with_parts},
+    config::AppConfig,
+    repository::InMemoryScoringRepository,
+};
 use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
+use fwa_ml_runtime::HeuristicModelScorer;
+use std::sync::Arc;
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -11,7 +17,23 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
+}
+
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
 }
 
 async fn json_request(
@@ -323,9 +345,100 @@ async fn creates_lead_from_high_risk_scoring_and_triages_to_case() {
         serde_json::json!(["triage_decisions:open_case"])
     );
     assert_eq!(
+        triage_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
+    assert_eq!(
         triage_event["evidence_refs"],
         serde_json::json!(["triage_decisions:open_case"])
     );
+}
+
+#[tokio::test]
+async fn lead_and_case_lists_are_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    score_high_risk_claim(alpha_app.clone(), "CLM-LEAD-SCOPE-1").await;
+    let (status, alpha_leads) =
+        json_request(alpha_app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let lead_id = lead_id_for_claim(&alpha_leads, "CLM-LEAD-SCOPE-1");
+
+    let (status, _) = json_request(
+        alpha_app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "open_case",
+          "assignee": "siu-reviewer-scope",
+          "reviewer": "medical-reviewer-scope",
+          "priority": "high",
+          "notes": "Open investigation from scoped high-risk lead.",
+          "evidence_refs": ["triage_decisions:scope_open_case"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, beta_leads) =
+        json_request(beta_app.clone(), "GET", "/api/v1/ops/leads", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_leads["leads"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|lead| lead["claim_id"] == "CLM-LEAD-SCOPE-1"));
+
+    let (status, beta_cases) =
+        json_request(beta_app.clone(), "GET", "/api/v1/ops/cases", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_cases["cases"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|case| case["claim_id"] == "CLM-LEAD-SCOPE-1"));
+
+    let (status, beta_triage) = json_request(
+        beta_app.clone(),
+        "POST",
+        &format!("/api/v1/ops/leads/{lead_id}/triage"),
+        r#"{
+          "decision": "reject_lead",
+          "assignee": "siu-reviewer-beta",
+          "reviewer": "medical-reviewer-beta",
+          "priority": "medium",
+          "notes": "Beta reviewer should not see alpha lead.",
+          "evidence_refs": ["triage_decisions:beta_cross_scope"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(beta_triage["code"], "LEAD_NOT_FOUND");
+
+    let (status, beta_status) = json_request(
+        beta_app,
+        "POST",
+        "/api/v1/ops/cases/case_CLM-LEAD-SCOPE-1/status",
+        r#"{
+          "status": "closed",
+          "actor_id": "beta-reviewer",
+          "notes": "Beta reviewer should not see alpha case.",
+          "evidence_refs": ["case_status:beta_cross_scope"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    assert_eq!(beta_status["code"], "CASE_NOT_FOUND");
 }
 
 #[tokio::test]
@@ -922,6 +1035,10 @@ async fn updates_case_status_with_audit_trail() {
     assert_eq!(status_event["payload"]["case_id"], case_id);
     assert_eq!(status_event["run_id"], scoring_run_id);
     assert_eq!(status_event["payload"]["to_status"], "investigating");
+    assert_eq!(
+        status_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert!(status_event["evidence_refs"]
         .as_array()
         .unwrap()

@@ -12,6 +12,30 @@ Local demo API key:
 dev-secret
 ```
 
+Pilot deployments can keep the legacy single-key settings
+`FWA_API_KEY`, `FWA_SOURCE_SYSTEM`, and `FWA_CUSTOMER_SCOPE_ID`, or add
+multiple authenticated principals with:
+
+```text
+FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id|permission,permission;...
+```
+
+Each matched principal supplies the audit `actor_id`, `actor_role`,
+`source_system`, `customer_scope_id`, and permission hints for route-level
+authorization. The permissions field is optional; when omitted, the runtime
+uses conservative defaults for known roles such as `tpa_system`,
+`fwa_operator`, `operations_reviewer`, `medical_reviewer`, and `agent`. The
+legacy single key remains valid as a fallback only when it is not the local
+default `dev-secret`, so existing customer configuration can migrate without
+keeping the local demo key active.
+
+Route-level permission enforcement currently guards production-impacting
+governance actions such as rule promotion review, rule approval, rule publish,
+rule rollback, audit sample creation, model promotion review, model activation,
+and model rollback.
+Read-only operations continue to require a valid API key and audit actor
+context.
+
 ## API Groups
 
 - Health and contract
@@ -34,16 +58,50 @@ dev-secret
 | GET | `/api/openapi.json` | Return OpenAPI contract. | No | None |
 
 `/api/v1/health` includes `api_key_configuration`,
-`source_system_configuration`, `database_configuration`, and
-`model_service_configuration` checks. They report `local_dev_key` when the API
-is still using the local `dev-secret` key, `local_demo_source` when the API is
-still using the local `tpa-demo` source system, `local_dev_database` when the
-API is still using the local development database URL,
-`local_dev_model_service` when the API is still using the local development
-model service URL, `heuristic_model_scorer` when the API is using the heuristic
-fallback scorer, and `configured` after non-default values are configured. The
+`source_system_configuration`, `database_configuration`,
+`model_service_configuration`, `object_storage_configuration`,
+`customer_scope_configuration`, `retention_policy_configuration`, and
+`backup_restore_configuration`, `pii_masking_configuration`, and
+`key_rotation_configuration`, `network_allowlist_configuration`, and
+`alert_routing_configuration`, and `observability_exporter_configuration`
+and `agent_policy_configuration` checks. They report `local_dev_key` when the
+API is still using the local `dev-secret` key,
+`invalid_api_key_principals` when `FWA_API_KEY_PRINCIPALS` is present but does
+not contain any valid principal entry,
+`local_demo_source` when the API is still using the local `tpa-demo` source
+system, `local_dev_database` when the API is still using the local development
+database URL, `local_dev_model_service` when the API is still using the local
+development model service URL, `heuristic_model_scorer` when the API is using
+the heuristic fallback scorer, `local_demo_object_storage` when the API is still
+using local demo artifact storage, `local_demo_customer_scope` when the API is
+still using the local demo customer scope, `local_demo_retention_policy` when
+the API is still using the local demo retention policy id,
+`local_demo_backup_restore` when the API is still using the local demo backup
+and restore plan id, `local_demo_pii_masking` when the API is still using the
+local demo PII masking policy id, `local_demo_key_rotation` when the API is
+still using the local demo key rotation policy id,
+`local_demo_network_allowlist` when the API is still using the local demo
+network allowlist id, `local_demo_alert_routing` when the API is still using
+the local demo alert routing policy id, `local_demo_observability_exporter`
+when the API is still using the local demo observability exporter endpoint, and
+`local_demo_agent_policy` when the API is still using the local demo Agent tool
+policy id, and `configured` after non-default values are configured. The
 response never exposes the configured key, source-system value, database URL,
-or model service URL.
+model service URL, object storage URI, customer scope id, retention policy id,
+backup restore plan id, PII masking policy id, key rotation policy id, network
+allowlist id, alert routing policy id, observability exporter endpoint, or
+Agent policy id.
+
+The response also includes `pilot_readiness.status`. It is `ready` only when
+all customer pilot configuration checks report `configured`; otherwise it is
+`not_ready` and `pilot_readiness.blocking_checks` lists the non-secret check
+names, statuses, and remediation hints that still block customer pilot traffic.
+`ready_for_customer_pilot`, `blocking_check_names`, and `remediation_summary`
+provide the compact machine-readable decision and blocker list for scripts and
+dashboards. The readiness summary also includes `required_check_names`,
+`required_check_count`, `ready_check_count`, `blocking_check_count`, and
+`ready_checks` so a demo or pilot smoke test can reconcile the full blocker set
+without inspecting environment-specific secret values.
 
 ## Inbound Claim Inbox
 
@@ -62,7 +120,9 @@ context to `/api/v1/claims/score`.
 The audit event stores source trace metadata and validation outcomes, not the
 full raw PII-bearing payload. Its payload includes a PII-safe `source_paths`
 summary gathered from normalized document, bill-line, product, and liability
-evidence paths.
+evidence paths. `customer_scope_id` is derived from the authenticated API key
+configuration and persisted in the inbox audit payload; callers cannot provide
+or override it in the request body.
 `canonical_claim_context.claim_header` preserves service, receive, and accident
 dates for timing and waiting-period features. Epoch-millisecond source dates are
 normalized with the source business timezone for the adapter. The current
@@ -140,24 +200,35 @@ Main request modes:
 - stored demo claim by `source_system` and `claim_id`
 - submitted claim payload with member, policy, provider, diagnosis, procedure,
   amount, dates, and context fields
-- normalized inbox context by `source_system` and `canonical_claim_context`,
-  using the `canonical_claim_context` returned from
+- normalized inbox handoff by `source_system` and `inbox_run_id` or
+  `inbox_idempotency_key`, using a `scoring_ready = true` record returned from
   `/api/v1/inbox/claims/normalize`
+- direct normalized inbox context by `source_system` and
+  `canonical_claim_context`, retained as a compatibility mode for demos and
+  adapter tests
 
 These request modes are mutually exclusive. Callers should not combine
-`claim_id`, full payload fields, and `canonical_claim_context` in the same
-scoring request.
+`claim_id`, full payload fields, `canonical_claim_context`, `inbox_run_id`, or
+`inbox_idempotency_key` in the same scoring request.
 
 Request fields that affect policy selection:
 
 - `review_mode`: separates `pre_payment` and `post_payment` behavior.
 - `source_system`: scopes stored-claim lookup and audit source.
 - `claim_id`: identifies stored demo or pilot claim records.
+- `customer_scope_id`: not accepted from the request body. It is derived from
+  the authenticated API key configuration and persisted into scoring audit
+  payloads for tenant/customer-scope traceability.
 - `canonical_claim_context`: carries normalized claim header, member/policy,
   provider, bill-line, and document evidence from the inbox boundary into
   runtime scoring.
   Scoring audit events persist `canonical_claim_context_trace` with normalized
   evidence refs and source refs for QA, Agent summaries, and audit review.
+- `inbox_run_id` / `inbox_idempotency_key`: preferred handoff handles from
+  `/api/v1/inbox/claims/normalize`. Scoring loads the persisted normalized
+  context only when `scoring_ready = true`, adds `inbox_claim_runs:{run_id}` and
+  `audit_events:{audit_id}` evidence refs, and records inbox linkage in
+  `canonical_claim_context_trace`.
 
 `review_mode` participates in routing policy, active model, and threshold
 selection. It does not change the assistive-only decision boundary.
@@ -168,7 +239,7 @@ Main response fields:
 - `audit_id`
 - risk score and RAG band
 - recommended action
-- score layers
+- score layers, each with layer-level `evidence_refs`
 - alerts
 - top reasons
 - evidence refs
@@ -190,6 +261,15 @@ trace governance. `audit_coverage.scoring_runs` counts successful
 `scoring.completed` audit events, `canonical_trace_runs` counts events with
 `canonical_claim_context_trace`, and `canonical_trace_coverage` is the ratio
 used by Operations Studio.
+`value_measurement` separates observed `prevented_payment` and
+`recovered_amount` from estimated `avoided_future_exposure`,
+`deterrence_estimate`, and aggregate `estimated_impact`, with review cost,
+false-positive operational cost, reviewer capacity hours, net value, and an
+evidence caveat.
+Each `saving_attributions` item carries `financial_impact_type` so source-level
+rule, model, and agent ROI can distinguish prevented payment, recovered amount,
+avoided exposure, deterrence estimate, and other estimated impact instead of
+mixing them into one source total.
 
 ## Leads And Cases
 
@@ -202,6 +282,25 @@ used by Operations Studio.
 
 Lead triage is the bridge from scoring to case workflow. Case evidence packages
 preserve claim, rule, model, anomaly, document, and similar-case references.
+
+## Bootstrap Evidence And Labels
+
+| Method | Path | Purpose | Auth | Side effects |
+| --- | --- | --- | --- | --- |
+| GET | `/api/v1/ops/backfills` | List governed historical replay jobs. | Yes | None |
+| POST | `/api/v1/ops/backfills` | Create a historical replay backfill from existing generated leads. | Yes | Records replay job, candidate lead evidence, and audit event. |
+| GET | `/api/v1/ops/backfills/{job_id}/leads` | List candidate leads captured by a backfill job. | Yes | None |
+| GET | `/api/v1/ops/evidence-requests` | List generated clinical evidence requests. | Yes | None |
+| POST | `/api/v1/ops/evidence-requests/generate` | Generate evidence requests from scoring runs with missing clinical evidence. | Yes | Creates evidence request audit events. |
+| POST | `/api/v1/ops/evidence-requests/{request_id}/status` | Update evidence request collection status. | Yes | Appends status audit event and evidence refs. |
+| GET | `/api/v1/ops/label-bootstrap/queue` | List label candidates derived from governed evidence requests. | Yes | None |
+| POST | `/api/v1/ops/label-bootstrap/items/{item_id}/review` | Record human review for a bootstrap label candidate. | Yes | Appends label review audit event and can expose an approved training label. |
+
+Bootstrap APIs support demo and pilot data closure before customer production
+labels exist. They do not adjudicate claims and do not make generated labels
+training-eligible by default. A label candidate enters `/api/v1/ops/labels` only
+after reviewer notes, evidence refs, and governance status are recorded through
+the label review endpoint. Notes and evidence refs must remain non-PII.
 
 ## Investigation And QA Writeback
 
@@ -237,7 +336,11 @@ and procedure consistency, and reviewer feedback. Queue items expose
 `canonical_source_refs` and `canonical_evidence_refs` when the scoring audit
 came from a normalized inbox context. Medical review result writeback merges
 canonical evidence refs from the referenced scoring audit into the persisted
-review, response, and `medical.review.recorded` audit event.
+review, response, and `medical.review.recorded` audit event. Writeback may also
+include `clinical_outcomes` such as `documentation_issue`,
+`medical_necessity_review_required`, or `insufficient_evidence`; when omitted,
+the platform derives a compatible controlled outcome from `decision` for label
+governance.
 
 ## Audit And Governance
 
@@ -252,10 +355,18 @@ review, response, and `medical.review.recorded` audit event.
 | POST | `/api/v1/ops/agent-runs/{agent_run_id}/approvals` | Submit human approval decision for an agent run. | Yes | Records approval and audit event. |
 
 Governance endpoints are read-heavy and audit-first. Mutating governance actions
-record human context and evidence refs. `/api/v1/ops/audit-events` supports
-operational filters for event type, event group, actor, claim, run, rule,
-model, routing policy, review mode, QA, Agent, data lineage, and
-`has_canonical_trace=true` to isolate normalized inbox scoring trace events.
+record human context and evidence refs. Audit events expose `actor_role`; API
+call records reuse that audit role and expose `customer_scope_id` from the
+underlying audit payload so externally reachable TPA calls can be reviewed by
+role and tenant/customer scope. Webhook event records expose the same
+`customer_scope_id` for delivery governance.
+Audit samples are also customer scoped: the platform derives
+`customer_scope_id` from the authenticated API key, uses it to select the sample
+population, and only lists samples visible to that customer scope.
+`/api/v1/ops/audit-events` supports operational filters for event type, event
+group, actor, claim, run, rule, model, routing policy, review mode, QA, Agent,
+data lineage, and `has_canonical_trace=true` to isolate normalized inbox
+scoring trace events.
 
 ## Rules
 
@@ -268,7 +379,7 @@ model, routing policy, review mode, QA, Agent, data lineage, and
 | GET | `/api/v1/ops/rules/{rule_id}/promotion-gates` | Evaluate rule promotion readiness. | Yes | None |
 | POST | `/api/v1/ops/rules/{rule_id}/promotion-reviews` | Submit human promotion review. | Yes | Records review evidence. |
 | POST | `/api/v1/ops/rules/candidates` | Save a candidate rule. | Yes | Creates or updates candidate rule evidence. |
-| POST | `/api/v1/ops/rules/discover` | Discover candidate rules from labeled sample claims. | Yes | Records discovery provenance and candidate metrics. |
+| POST | `/api/v1/ops/rules/discover` | Discover candidate rules from labeled sample claims and optional model explanation contributions. | Yes | Records discovery provenance, model/version refs, feature-importance refs, and candidate metrics. |
 | POST | `/api/v1/ops/rules/{rule_id}/submit` | Submit rule for governance. | Yes | Updates lifecycle status and audit trail. |
 | POST | `/api/v1/ops/rules/{rule_id}/approve` | Mark rule approved with reviewer evidence. | Yes | Updates lifecycle status and audit trail. |
 | POST | `/api/v1/ops/rules/{rule_id}/publish` | Publish approved rule. | Yes | Updates lifecycle status and audit trail. |
@@ -276,6 +387,9 @@ model, routing policy, review mode, QA, Agent, data lineage, and
 
 Rule APIs support deterministic controls. They should not silently change active
 customer behavior without lifecycle and audit evidence.
+Model explanation inputs to rule discovery are candidate sources only; discovered
+rules must still be saved as drafts, backtested, reviewed, approved, and
+published before they can affect routing.
 Rule promotion gates treat a stored backtest as usable routing evidence only
 when its own blockers are cleared; underpowered samples, weak precision/recall,
 excess false positives, or review-capacity overflow keep the deterministic
@@ -324,7 +438,10 @@ Promotion-ready evaluations should also include time/group split evidence in
 `metrics_json`: `time_group_split_status = "passed"`, a non-empty
 `time_split_field`, and non-empty `group_split_fields`. Without those fields,
 model promotion gates keep routing blocked because FWA validation must not rely
-on random train/test splits.
+on random train/test splits. Promotion-ready evaluations must also carry
+`pilot_validation_status = "passed"` or `customer_validation_status = "passed"`;
+public or Kaggle-inspired offline research datasets remain research inputs and
+cannot serve as production promotion evidence.
 
 ## Models
 
@@ -343,16 +460,50 @@ on random train/test splits.
 | POST | `/api/v1/ops/models/{model_key}/activate` | Activate the latest governed candidate that passes gates. | Yes | Demotes previous active model, activates target, and records audit trail. |
 | POST | `/api/v1/ops/models/{model_key}/rollback` | Roll back active model to recorded previous active version. | Yes | Restores approved previous active model and records audit trail. |
 
-Model APIs govern the demo and pilot model lifecycle. They are not a complete
-production model training system.
+Model APIs govern the demo and pilot model lifecycle. The local ML service now
+produces a production-style baseline bundle with artifact checksum/signature,
+serving manifest, feature materialization manifest, shadow comparison report,
+drift report, and segment fairness report. External scheduler, serving image
+registry, secrets manager, observability dashboards, and customer environment
+deployment remain outside this repository.
+
+Model rollback audit payloads separate the restored and replaced versions:
+`previous_active_version` is the approved historical version restored to
+`active`, while `replaced_active_version` is the version moved from `active`
+back to `approved`.
 
 Governed retraining boundary: retraining jobs model the offline worker contract,
-artifact evidence, validation metrics, and candidate registration. They do not
-represent automatic production training or automatic production deployment.
+artifact evidence, validation metrics, MLOps reports, and candidate
+registration. They do not represent automatic production promotion or automatic
+customer-environment deployment.
 
 Promotion gates should be read as the policy checklist for activation. They
 cover data quality, label provenance, drift, promotion review evidence, feature
 reproducibility, explanation artifacts, and validation quality.
+
+## AI Evidence Runtime Metadata
+
+| Method | Path | Purpose | Auth | Side effects |
+| --- | --- | --- | --- | --- |
+| GET | `/api/v1/ops/evidence/documents` | List governed document metadata for the authenticated customer scope. | Yes | None |
+| POST | `/api/v1/ops/evidence/documents` | Register evidence document metadata, storage URI, checksum, redaction status, and retention policy. | Yes | Persists metadata and `evidence.document.registered` audit event. |
+| GET | `/api/v1/ops/evidence/documents/{document_id}` | Read one governed evidence document metadata record. | Yes | None |
+| GET | `/api/v1/ops/evidence/documents/{document_id}/chunks` | List chunk metadata for a governed document. | Yes | None |
+| POST | `/api/v1/ops/evidence/documents/{document_id}/chunks` | Register chunk metadata, checksum, offsets, token count, and redaction status. | Yes | Persists metadata and `evidence.document_chunk.registered` audit event. |
+| GET | `/api/v1/ops/evidence/documents/{document_id}/ocr-outputs` | List OCR output metadata for a governed document. | Yes | None |
+| POST | `/api/v1/ops/evidence/documents/{document_id}/ocr-outputs` | Register OCR engine/version, output URI, checksum, confidence, and quality status. | Yes | Persists metadata and `evidence.ocr_output.registered` audit event. |
+| GET | `/api/v1/ops/evidence/embedding-jobs` | List embedding job metadata for the authenticated customer scope. | Yes | None |
+| POST | `/api/v1/ops/evidence/embedding-jobs` | Register embedding job metadata, vector store refs, checksum, status, and target ref. | Yes | Persists metadata and `evidence.embedding_job.registered` audit event. |
+| GET | `/api/v1/ops/evidence/retrieval-audit-events` | List retrieval audit metadata for the authenticated customer scope. | Yes | None |
+| POST | `/api/v1/ops/evidence/retrieval-audit-events` | Record retrieval audit metadata using query checksum, source refs, result refs, and redaction status. | Yes | Persists metadata and `evidence.retrieval_audit.recorded` audit event. |
+
+These APIs are the runtime metadata surface for the AI evidence foundation.
+`customer_scope_id`, `actor_id`, `actor_role`, and `source_system` are derived
+from the authenticated API key; callers do not supply tenant scope. The payloads
+intentionally do not accept raw document text, OCR text, embedding vectors, or
+raw query text. Raw documents, OCR outputs, and vector materialization remain in
+customer-approved object storage or vector stores referenced by URI, checksum,
+and evidence refs.
 
 ## Provider, Member, And Scheme Intelligence
 
@@ -371,7 +522,7 @@ be routed.
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/ops/knowledge/cases` | List confirmed knowledge cases. | Yes | None |
 | POST | `/api/v1/ops/knowledge/cases` | Publish a confirmed knowledge case. | Yes | Persists case and audit evidence. |
-| POST | `/api/v1/knowledge/search-similar` | Search similar FWA knowledge cases. | Yes | Records retrieval evidence where applicable. |
+| POST | `/api/v1/knowledge/search-similar` | Search similar FWA knowledge cases. Requires `tpa:knowledge:read` or `tpa:*`. | Yes | Records retrieval evidence where applicable. |
 | POST | `/api/v1/agent/cases/investigate` | Generate assistive investigation package. | Yes | Persists agent run and audit evidence. |
 
 Agent responses must include `decision_boundary: assistive_only`. They are
@@ -380,6 +531,12 @@ evidence packages for human review, not autonomous decisions. When a prior
 `canonical_claim_context_trace`, the persisted Agent context snapshot carries
 the trace and source refs so reviewers can connect the summary back to
 normalized inbox evidence.
+
+Human approval decisions for Agent runs must include
+`agent_run:{agent_run_id}` in request `evidence_refs`. The platform appends
+`policy:{FWA_AGENT_POLICY_ID}` to the persisted approval and
+`agent.approval.decided` audit event so the approval gate remains tied to the
+configured Agent governance policy.
 
 Knowledge case publish requires confirmed review evidence such as
 `investigation_results:*` or `qa_reviews:*`. When `source_claim_id` has a prior

@@ -1,0 +1,50 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ml-service
+  labels:
+    app.kubernetes.io/name: ml-service
+    app.kubernetes.io/part-of: nwfwa-staging
+spec:
+  selector:
+    app.kubernetes.io/name: ml-service
+  ports:
+    - name: http
+      port: 8001
+      targetPort: 8001
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ml-service
+  labels:
+    app.kubernetes.io/name: ml-service
+    app.kubernetes.io/part-of: nwfwa-staging
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ml-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: ml-service
+        app.kubernetes.io/part-of: nwfwa-staging
+    spec:
+      containers:
+        - name: ml-service
+          image: ghcr.io/replace-me/nwfwa-ml-service:staging
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8001
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 5
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8001
+            periodSeconds: 10

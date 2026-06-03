@@ -5,6 +5,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
     path::{Path, PathBuf},
+    process::Command,
 };
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -39,7 +40,136 @@ pub fn worker_health() -> WorkerHealthResponse {
                 name: "retraining_job_runner",
                 status: "ok",
             },
+            WorkerHealthCheck {
+                name: "pilot_readiness_checker",
+                status: "ok",
+            },
+            WorkerHealthCheck {
+                name: "analytics_export_plan",
+                status: "ok",
+            },
+            WorkerHealthCheck {
+                name: "ai_evidence_execution_plan",
+                status: "ok",
+            },
+            WorkerHealthCheck {
+                name: "governance_ops_plan",
+                status: "ok",
+            },
         ],
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ApiHealthResponse {
+    pub status: String,
+    pub service: String,
+    pub version: String,
+    pub pilot_readiness: ApiPilotReadiness,
+    pub checks: Vec<ApiHealthCheck>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
+pub struct ApiPilotReadiness {
+    pub status: String,
+    #[serde(default)]
+    pub required_check_names: Vec<String>,
+    #[serde(default)]
+    pub required_check_count: usize,
+    #[serde(default)]
+    pub ready_check_count: usize,
+    #[serde(default)]
+    pub blocking_check_count: usize,
+    #[serde(default)]
+    pub ready_checks: Vec<ApiHealthCheck>,
+    #[serde(default)]
+    pub blocking_checks: Vec<ApiHealthCheck>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize, PartialEq, Eq)]
+pub struct ApiHealthCheck {
+    pub name: String,
+    pub status: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub runtime_kind: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remediation: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct PilotReadinessReport {
+    pub status: String,
+    pub ready_for_customer_pilot: bool,
+    pub api_status: String,
+    pub api_service: String,
+    pub api_version: String,
+    pub required_check_count: usize,
+    pub ready_check_count: usize,
+    pub blocking_check_count: usize,
+    pub model_runtime_kind: Option<String>,
+    pub ready_checks: Vec<ApiHealthCheck>,
+    pub blocking_checks: Vec<ApiHealthCheck>,
+    pub remediation_summary: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+pub async fn check_pilot_readiness(
+    api_base_url: &str,
+    api_key: Option<&str>,
+) -> anyhow::Result<PilotReadinessReport> {
+    let mut request = reqwest::Client::new().get(api_url(api_base_url, "/api/v1/health"));
+    if let Some(api_key) = api_key {
+        request = request.header("x-api-key", api_key);
+    }
+    let response = request.send().await.context("fetch API health")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("fetch API health failed with {status}: {body}");
+    }
+    let health = response
+        .json::<ApiHealthResponse>()
+        .await
+        .context("parse API health response")?;
+    Ok(build_pilot_readiness_report(health))
+}
+
+pub fn build_pilot_readiness_report(health: ApiHealthResponse) -> PilotReadinessReport {
+    let model_runtime_kind = health
+        .checks
+        .iter()
+        .find(|check| check.name == "model_scorer")
+        .and_then(|check| check.runtime_kind.clone());
+    let remediation_summary = health
+        .pilot_readiness
+        .blocking_checks
+        .iter()
+        .map(|check| {
+            check
+                .remediation
+                .clone()
+                .unwrap_or_else(|| format!("{}={}", check.name, check.status))
+        })
+        .collect::<Vec<_>>();
+    let evidence_refs = vec![
+        "api_health:/api/v1/health".to_string(),
+        "pilot_readiness:/api/v1/health#pilot_readiness".to_string(),
+    ];
+    PilotReadinessReport {
+        status: health.pilot_readiness.status.clone(),
+        ready_for_customer_pilot: health.pilot_readiness.status == "ready"
+            && health.pilot_readiness.blocking_checks.is_empty(),
+        api_status: health.status,
+        api_service: health.service,
+        api_version: health.version,
+        required_check_count: health.pilot_readiness.required_check_count,
+        ready_check_count: health.pilot_readiness.ready_check_count,
+        blocking_check_count: health.pilot_readiness.blocking_check_count,
+        model_runtime_kind,
+        ready_checks: health.pilot_readiness.ready_checks,
+        blocking_checks: health.pilot_readiness.blocking_checks,
+        remediation_summary,
+        evidence_refs,
     }
 }
 
@@ -68,7 +198,7 @@ struct UpdateRetrainingJobStatusPayload<'a> {
     notes: &'a str,
 }
 
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 struct CompleteRetrainingJobPayload {
     actor: String,
     notes: String,
@@ -88,6 +218,12 @@ struct CompleteRetrainingJobPayload {
     feature_importance_uri: Option<String>,
     metrics_json: serde_json::Value,
     evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct TrainingCommand {
+    program: String,
+    args: Vec<String>,
 }
 
 pub async fn claim_next_retraining_job(
@@ -160,6 +296,15 @@ pub async fn complete_retraining_job_with_mock_output(
     artifact_base_uri: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let output = build_mock_retraining_output(job, actor, artifact_base_uri)?;
+    register_retraining_output(api_base_url, api_key, job, &output).await
+}
+
+async fn register_retraining_output(
+    api_base_url: &str,
+    api_key: &str,
+    job: &ClaimedRetrainingJob,
+    output: &CompleteRetrainingJobPayload,
+) -> anyhow::Result<serde_json::Value> {
     let response = reqwest::Client::new()
         .post(api_url(
             api_base_url,
@@ -184,12 +329,33 @@ pub async fn complete_retraining_job_with_mock_output(
         .context("parse retraining job output response")
 }
 
+pub async fn complete_retraining_job_with_training_output(
+    api_base_url: &str,
+    api_key: &str,
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+    artifact_base_uri: &str,
+    training_manifest: &str,
+    trainer_python: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let output = build_training_retraining_output(
+        job,
+        actor,
+        artifact_base_uri,
+        training_manifest,
+        trainer_python,
+    )?;
+    register_retraining_output(api_base_url, api_key, job, &output).await
+}
+
 pub async fn run_one_retraining_job(
     api_base_url: &str,
     api_key: &str,
     actor: &str,
     model_key: Option<&str>,
     artifact_base_uri: &str,
+    training_manifest: Option<&str>,
+    trainer_python: &str,
 ) -> anyhow::Result<serde_json::Value> {
     let job = claim_next_retraining_job(
         api_base_url,
@@ -205,17 +371,34 @@ pub async fn run_one_retraining_job(
         &job.job_id,
         "validation",
         actor,
-        "Mock retraining completed; validation metrics are ready.",
+        if training_manifest.is_some() {
+            "Training pipeline completed; validation metrics are ready."
+        } else {
+            "Mock retraining completed; validation metrics are ready."
+        },
     )
     .await?;
-    complete_retraining_job_with_mock_output(
-        api_base_url,
-        api_key,
-        &validation_job,
-        actor,
-        artifact_base_uri,
-    )
-    .await
+    if let Some(training_manifest) = training_manifest {
+        complete_retraining_job_with_training_output(
+            api_base_url,
+            api_key,
+            &validation_job,
+            actor,
+            artifact_base_uri,
+            training_manifest,
+            trainer_python,
+        )
+        .await
+    } else {
+        complete_retraining_job_with_mock_output(
+            api_base_url,
+            api_key,
+            &validation_job,
+            actor,
+            artifact_base_uri,
+        )
+        .await
+    }
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -626,6 +809,522 @@ fn retraining_job_output_path(job_id: &str) -> String {
     format!("/api/v1/ops/model-retraining-jobs/{job_id}/output")
 }
 
+fn build_training_command(
+    python: &str,
+    manifest_path: &str,
+    artifact_base_uri: &str,
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+) -> TrainingCommand {
+    TrainingCommand {
+        program: python.to_string(),
+        args: vec![
+            "-m".into(),
+            "app.train".into(),
+            "--manifest".into(),
+            manifest_path.into(),
+            "--artifact-base-uri".into(),
+            artifact_base_uri.into(),
+            "--model-key".into(),
+            job.model_key.clone(),
+            "--base-model-version".into(),
+            job.model_version.clone(),
+            "--job-id".into(),
+            job.job_id.clone(),
+            "--actor".into(),
+            actor.into(),
+        ],
+    }
+}
+
+pub fn build_training_handoff(
+    manifest_path: impl AsRef<Path>,
+    artifact_base_uri: &str,
+    model_key: &str,
+    base_model_version: &str,
+    job_id: &str,
+    actor: &str,
+) -> anyhow::Result<serde_json::Value> {
+    if artifact_base_uri.trim().is_empty() {
+        bail!("artifact_base_uri is required");
+    }
+    let manifest_path = manifest_path.as_ref();
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read training manifest {}", manifest_path.display()))?;
+    let manifest: serde_json::Value =
+        serde_json::from_str(&manifest_json).context("parse training manifest")?;
+    let dataset_key = required_manifest_str(&manifest, "dataset_key")?;
+    let dataset_version = required_manifest_str(&manifest, "dataset_version")?;
+    let label_column = required_manifest_str(&manifest, "label_column")?;
+    let time_split_field = required_manifest_str(&manifest, "time_split_field")?;
+    let entity_keys = manifest
+        .get("entity_keys")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let group_split_fields = manifest
+        .get("group_split_fields")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let splits = manifest
+        .get("splits")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    if splits.is_empty() {
+        bail!("training manifest must include splits");
+    }
+
+    let candidate_model_version = format!(
+        "{}-candidate-{}",
+        safe_path_segment(base_model_version),
+        safe_path_segment(job_id)
+    );
+    let artifact_root = artifact_base_uri.trim().trim_end_matches('/');
+    let safe_model_key = safe_path_segment(model_key);
+    let artifact_dir = format!("{artifact_root}/{safe_model_key}/{candidate_model_version}");
+
+    Ok(serde_json::json!({
+        "handoff_kind": "external_training_platform",
+        "handoff_version": 1,
+        "data_contract": {
+            "source": "same_parquet_dataset_manifest",
+            "manifest_uri": manifest_path.to_string_lossy(),
+            "forbidden_sources": ["application_tables", "ad_hoc_feature_definitions"]
+        },
+        "dataset": {
+            "dataset_key": dataset_key,
+            "dataset_version": dataset_version,
+            "manifest_uri": manifest_path.to_string_lossy(),
+            "label_column": label_column,
+            "entity_keys": entity_keys,
+            "time_split_field": time_split_field,
+            "group_split_fields": group_split_fields,
+            "splits": splits
+        },
+        "training_job": {
+            "model_key": model_key,
+            "base_model_version": base_model_version,
+            "candidate_model_version": candidate_model_version,
+            "job_id": job_id,
+            "actor": actor
+        },
+        "artifact_contract": {
+            "artifact_dir": artifact_dir,
+            "rust_serving_artifact_uri": format!("{artifact_dir}/rust_serving_artifact.json"),
+            "training_artifact_uri": format!("{artifact_dir}/model.joblib"),
+            "serving_manifest_uri": format!("{artifact_dir}/serving_manifest.json"),
+            "validation_report_uri": format!("{artifact_dir}/validation.json"),
+            "feature_store_manifest_uri": format!("{artifact_dir}/feature_store_manifest.json"),
+            "shadow_report_uri": format!("{artifact_dir}/shadow_report.json"),
+            "drift_report_uri": format!("{artifact_dir}/drift_report.json"),
+            "fairness_report_uri": format!("{artifact_dir}/fairness_report.json")
+        },
+        "output_contract": {
+            "submit_path": retraining_job_output_path(job_id),
+            "artifact_uri": "artifact_contract.rust_serving_artifact_uri",
+            "required_evidence_refs": [
+                "model_retraining_jobs:<job_id>",
+                "model_artifacts:<rust_serving_artifact_uri>",
+                "model_validation_reports:<validation_report_uri>",
+                "model_evaluations:<evaluation_run_id>"
+            ]
+        }
+    }))
+}
+
+pub fn build_mlops_monitoring_plan(
+    manifest_uri: &str,
+    artifact_uri: &str,
+    model_key: &str,
+    model_version: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let manifest_uri = required_non_empty("manifest_uri", manifest_uri)?;
+    let artifact_uri = required_non_empty("artifact_uri", artifact_uri)?;
+    let model_key = required_non_empty("model_key", model_key)?;
+    let model_version = required_non_empty("model_version", model_version)?;
+    let cron = required_non_empty("cron", cron)?;
+    let artifact_dir = artifact_parent_uri(artifact_uri);
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_mlops_monitoring",
+        "plan_version": 2,
+        "data_contract": {
+            "source": "same_parquet_dataset_manifest",
+            "manifest_uri": manifest_uri
+        },
+        "model": {
+            "model_key": model_key,
+            "model_version": model_version,
+            "artifact_uri": artifact_uri
+        },
+        "schedule": {
+            "cron": cron
+        },
+        "jobs": [
+            {
+                "job_kind": "shadow_traffic_evaluation",
+                "input": "live_routing_and_qa_outcomes",
+                "output_ref": "model_shadow_reports:<shadow_report_uri>",
+                "shadow_report_uri": format!("{artifact_dir}/shadow_report.json")
+            },
+            {
+                "job_kind": "drift_monitoring",
+                "input": "scoring_features_and_scores",
+                "output_ref": "model_drift_reports:<drift_report_uri>",
+                "drift_report_uri": format!("{artifact_dir}/drift_report.json")
+            },
+            {
+                "job_kind": "segment_fairness_review",
+                "input": "customer_approved_segments",
+                "output_ref": "model_fairness_reports:<fairness_report_uri>",
+                "fairness_report_uri": format!("{artifact_dir}/fairness_report.json")
+            },
+            {
+                "job_kind": "reviewer_disagreement_review",
+                "input": "qa_reviews_and_investigation_outcomes",
+                "output_ref": "model_reviewer_disagreement_reports:<reviewer_disagreement_report_uri>",
+                "reviewer_disagreement_report_uri": format!("{artifact_dir}/reviewer_disagreement_report.json")
+            },
+            {
+                "job_kind": "label_delay_review",
+                "input": "scoring_runs_and_outcome_label_timestamps",
+                "output_ref": "model_label_delay_reports:<label_delay_report_uri>",
+                "label_delay_report_uri": format!("{artifact_dir}/label_delay_report.json")
+            }
+        ]
+    }))
+}
+
+pub fn build_analytics_export_plan(
+    object_storage_uri: &str,
+    clickhouse_url: &str,
+    customer_scope_id: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let object_storage_uri =
+        required_non_empty("object_storage_uri", object_storage_uri)?.trim_end_matches('/');
+    let clickhouse_url = required_non_empty("clickhouse_url", clickhouse_url)?;
+    let customer_scope_id = required_non_empty("customer_scope_id", customer_scope_id)?;
+    let cron = required_non_empty("cron", cron)?;
+    let export_root = format!("{object_storage_uri}/analytics-exports/{customer_scope_id}");
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_analytics_export",
+        "plan_version": 1,
+        "customer_scope_id": customer_scope_id,
+        "data_contract": {
+            "source_of_truth": "postgresql_operational_tables",
+            "derived_store": "clickhouse",
+            "clickhouse_url": clickhouse_url,
+            "schema_ref": "analytics/clickhouse/schema.sql",
+            "dashboard_queries_ref": "analytics/clickhouse/dashboard_queries.sql",
+            "pii_policy": "masked_ids_and_evidence_refs_only"
+        },
+        "schedule": {
+            "cron": cron,
+            "concurrency_policy": "forbid",
+            "idempotency_key": "customer_scope_id + export_window_start + sink_table"
+        },
+        "export_root_uri": export_root,
+        "jobs": [
+            {
+                "job_kind": "scoring_events_export",
+                "source_tables": ["scoring_runs", "claims"],
+                "sink_table": "fwa_analytics.analytics_scoring_events",
+                "output_uri": format!("{export_root}/scoring_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "rule_events_export",
+                "source_tables": ["rule_runs", "scoring_runs", "qa_reviews"],
+                "sink_table": "fwa_analytics.analytics_rule_events",
+                "output_uri": format!("{export_root}/rule_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "model_events_export",
+                "source_tables": ["model_scores", "model_evaluation_runs", "scoring_runs"],
+                "sink_table": "fwa_analytics.analytics_model_events",
+                "output_uri": format!("{export_root}/model_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "case_sla_events_export",
+                "source_tables": ["investigation_cases", "audit_events"],
+                "sink_table": "fwa_analytics.analytics_case_sla_events",
+                "output_uri": format!("{export_root}/case_sla_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "value_events_export",
+                "source_tables": ["saving_attributions", "investigation_cases", "qa_reviews"],
+                "sink_table": "fwa_analytics.analytics_value_events",
+                "output_uri": format!("{export_root}/value_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "reviewer_capacity_events_export",
+                "source_tables": ["investigation_cases", "qa_reviews"],
+                "sink_table": "fwa_analytics.analytics_reviewer_capacity_events",
+                "output_uri": format!("{export_root}/reviewer_capacity_events/{{window_start}}.ndjson")
+            },
+            {
+                "job_kind": "provider_graph_snapshots_export",
+                "source_tables": ["providers", "claims", "rule_runs"],
+                "sink_table": "fwa_analytics.analytics_provider_graph_snapshots",
+                "output_uri": format!("{export_root}/provider_graph_snapshots/{{window_start}}.ndjson")
+            }
+        ],
+        "dashboard_coverage": [
+            "rule_drift",
+            "model_drift",
+            "sla_reporting",
+            "roi_reporting",
+            "reviewer_capacity",
+            "false_positive_cost",
+            "provider_graph_snapshots"
+        ]
+    }))
+}
+
+pub fn build_ai_evidence_execution_plan(
+    api_base_url: &str,
+    object_storage_uri: &str,
+    vector_store_kind: &str,
+    vector_store_ref: &str,
+    customer_scope_id: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let api_base_url = required_non_empty("api_base_url", api_base_url)?.trim_end_matches('/');
+    let object_storage_uri =
+        required_non_empty("object_storage_uri", object_storage_uri)?.trim_end_matches('/');
+    let vector_store_kind = required_non_empty("vector_store_kind", vector_store_kind)?;
+    let vector_store_ref = required_non_empty("vector_store_ref", vector_store_ref)?;
+    let customer_scope_id = required_non_empty("customer_scope_id", customer_scope_id)?;
+    let cron = required_non_empty("cron", cron)?;
+    let evidence_root = format!("{object_storage_uri}/ai-evidence/{customer_scope_id}");
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_ai_evidence_execution",
+        "plan_version": 1,
+        "customer_scope_id": customer_scope_id,
+        "runtime_boundary": {
+            "raw_document_text": "customer_approved_object_storage_only",
+            "raw_ocr_text": "customer_approved_object_storage_only",
+            "embedding_vectors": "customer_approved_vector_store_only",
+            "retrieval_queries": "query_checksum_only"
+        },
+        "api_contract": {
+            "base_url": api_base_url,
+            "document_registry_path": "/api/v1/ops/evidence/documents",
+            "chunk_registry_path": "/api/v1/ops/evidence/documents/{document_id}/chunks",
+            "ocr_output_registry_path": "/api/v1/ops/evidence/documents/{document_id}/ocr-outputs",
+            "embedding_job_registry_path": "/api/v1/ops/evidence/embedding-jobs",
+            "retrieval_audit_path": "/api/v1/ops/evidence/retrieval-audit-events"
+        },
+        "artifact_contract": {
+            "document_manifest_uri": format!("{evidence_root}/documents/{{window_start}}/document_manifest.ndjson"),
+            "ocr_output_manifest_uri": format!("{evidence_root}/ocr/{{window_start}}/ocr_outputs.ndjson"),
+            "chunk_manifest_uri": format!("{evidence_root}/chunks/{{window_start}}/chunks.ndjson"),
+            "embedding_manifest_uri": format!("{evidence_root}/embeddings/{{window_start}}/embedding_jobs.ndjson"),
+            "retrieval_eval_report_uri": format!("{evidence_root}/retrieval-eval/{{window_start}}/retrieval_eval_report.json")
+        },
+        "vector_store": {
+            "kind": vector_store_kind,
+            "ref": vector_store_ref,
+            "write_policy": "customer_scope_partitioned_and_redacted"
+        },
+        "schedule": {
+            "cron": cron,
+            "concurrency_policy": "forbid",
+            "idempotency_key": "customer_scope_id + source_record_ref + content_checksum + execution_window"
+        },
+        "jobs": [
+            {
+                "job_kind": "document_ingestion_metadata_sync",
+                "input": "customer_approved_document_drop_or_document_management_export",
+                "api_path": "/api/v1/ops/evidence/documents",
+                "output_ref": "evidence_documents:<document_id>",
+                "manifest_uri": format!("{evidence_root}/documents/{{window_start}}/document_manifest.ndjson")
+            },
+            {
+                "job_kind": "ocr_output_registration",
+                "input": "customer_ocr_output_uri_and_checksum",
+                "api_path": "/api/v1/ops/evidence/documents/{document_id}/ocr-outputs",
+                "output_ref": "evidence_ocr_outputs:<ocr_output_id>",
+                "manifest_uri": format!("{evidence_root}/ocr/{{window_start}}/ocr_outputs.ndjson")
+            },
+            {
+                "job_kind": "document_chunk_registration",
+                "input": "redacted_ocr_output_or_redacted_document_text_uri",
+                "api_path": "/api/v1/ops/evidence/documents/{document_id}/chunks",
+                "output_ref": "evidence_chunks:<chunk_id>",
+                "manifest_uri": format!("{evidence_root}/chunks/{{window_start}}/chunks.ndjson")
+            },
+            {
+                "job_kind": "embedding_job_dispatch",
+                "input": "redacted_document_chunk_refs",
+                "api_path": "/api/v1/ops/evidence/embedding-jobs",
+                "output_ref": "evidence_embedding_jobs:<embedding_job_id>",
+                "manifest_uri": format!("{evidence_root}/embeddings/{{window_start}}/embedding_jobs.ndjson")
+            },
+            {
+                "job_kind": "retrieval_ranking_evaluation",
+                "input": "retrieval_audit_events_and_reviewer_outcomes",
+                "api_path": "/api/v1/ops/evidence/retrieval-audit-events",
+                "output_ref": "evidence_retrieval_eval_reports:<retrieval_eval_report_uri>",
+                "report_uri": format!("{evidence_root}/retrieval-eval/{{window_start}}/retrieval_eval_report.json")
+            }
+        ],
+        "downstream_contracts": {
+            "analytics_export_plan": "build-analytics-export-plan",
+            "observability_dashboard": "retrieval_audit_and_agent_workspace_artifacts"
+        }
+    }))
+}
+
+pub fn build_governance_ops_plan(
+    object_storage_uri: &str,
+    database_ref: &str,
+    customer_scope_id: &str,
+    retention_policy_id: &str,
+    backup_restore_plan_id: &str,
+    legal_hold_policy_id: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let object_storage_uri =
+        required_non_empty("object_storage_uri", object_storage_uri)?.trim_end_matches('/');
+    let database_ref = required_non_empty("database_ref", database_ref)?;
+    let customer_scope_id = required_non_empty("customer_scope_id", customer_scope_id)?;
+    let retention_policy_id = required_non_empty("retention_policy_id", retention_policy_id)?;
+    let backup_restore_plan_id =
+        required_non_empty("backup_restore_plan_id", backup_restore_plan_id)?;
+    let legal_hold_policy_id = required_non_empty("legal_hold_policy_id", legal_hold_policy_id)?;
+    let cron = required_non_empty("cron", cron)?;
+    let governance_root = format!("{object_storage_uri}/governance-ops/{customer_scope_id}");
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_governance_ops",
+        "plan_version": 1,
+        "customer_scope_id": customer_scope_id,
+        "policies": {
+            "retention_policy_id": retention_policy_id,
+            "backup_restore_plan_id": backup_restore_plan_id,
+            "legal_hold_policy_id": legal_hold_policy_id
+        },
+        "runtime_boundary": {
+            "raw_payloads": "customer_approved_object_storage_only",
+            "destructive_actions": "approval_required_plan_only",
+            "customer_data": "customer_scope_partitioned"
+        },
+        "schedule": {
+            "cron": cron,
+            "concurrency_policy": "forbid",
+            "idempotency_key": "customer_scope_id + policy_ids + execution_window"
+        },
+        "artifact_contract": {
+            "backup_manifest_uri": format!("{governance_root}/backup/{{window_start}}/backup_manifest.json"),
+            "restore_drill_report_uri": format!("{governance_root}/restore-drills/{{window_start}}/restore_drill_report.json"),
+            "retention_scan_report_uri": format!("{governance_root}/retention/{{window_start}}/retention_scan_report.json"),
+            "legal_hold_report_uri": format!("{governance_root}/legal-hold/{{window_start}}/legal_hold_report.json"),
+            "destruction_review_report_uri": format!("{governance_root}/destruction-review/{{window_start}}/destruction_review_report.json")
+        },
+        "jobs": [
+            {
+                "job_kind": "backup_snapshot_manifest",
+                "input": database_ref,
+                "output_ref": "backup_manifests:<backup_manifest_uri>",
+                "backup_uri": format!("{governance_root}/backup/{{window_start}}/postgres.dump"),
+                "manifest_uri": format!("{governance_root}/backup/{{window_start}}/backup_manifest.json")
+            },
+            {
+                "job_kind": "restore_drill_validation",
+                "input": "latest_backup_manifest",
+                "output_ref": "restore_drill_reports:<restore_drill_report_uri>",
+                "restore_target": "staging-restore-validation",
+                "report_uri": format!("{governance_root}/restore-drills/{{window_start}}/restore_drill_report.json")
+            },
+            {
+                "job_kind": "retention_policy_scan",
+                "input": ["audit_events", "api_call_records", "evidence_documents", "agent_workspace_artifacts"],
+                "output_ref": "retention_scan_reports:<retention_scan_report_uri>",
+                "report_uri": format!("{governance_root}/retention/{{window_start}}/retention_scan_report.json")
+            },
+            {
+                "job_kind": "legal_hold_reconciliation",
+                "input": ["investigation_cases", "audit_samples", "evidence_documents"],
+                "output_ref": "legal_hold_reports:<legal_hold_report_uri>",
+                "report_uri": format!("{governance_root}/legal-hold/{{window_start}}/legal_hold_report.json")
+            },
+            {
+                "job_kind": "destruction_candidate_review",
+                "input": "expired_retention_items_without_legal_hold",
+                "output_ref": "destruction_review_reports:<destruction_review_report_uri>",
+                "approval_gate": "human_approval_required_before_destroy",
+                "report_uri": format!("{governance_root}/destruction-review/{{window_start}}/destruction_review_report.json")
+            }
+        ],
+        "downstream_contracts": {
+            "pilot_readiness": "check-pilot-readiness",
+            "observability_alert": "database.backup.failed | retention.scan.failed | legal_hold.reconciliation.failed"
+        }
+    }))
+}
+
+fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str> {
+    let value = value.trim();
+    if value.is_empty() {
+        bail!("{field} is required");
+    }
+    Ok(value)
+}
+
+fn artifact_parent_uri(artifact_uri: &str) -> &str {
+    artifact_uri
+        .trim()
+        .rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or_else(|| artifact_uri.trim())
+}
+
+fn required_manifest_str<'a>(
+    manifest: &'a serde_json::Value,
+    key: &str,
+) -> anyhow::Result<&'a str> {
+    manifest
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .ok_or_else(|| anyhow!("training manifest missing {key}"))
+}
+
+fn build_training_retraining_output(
+    job: &ClaimedRetrainingJob,
+    actor: &str,
+    artifact_base_uri: &str,
+    training_manifest: &str,
+    trainer_python: &str,
+) -> anyhow::Result<CompleteRetrainingJobPayload> {
+    let training_command = build_training_command(
+        trainer_python,
+        training_manifest,
+        artifact_base_uri,
+        job,
+        actor,
+    );
+    let output = Command::new(&training_command.program)
+        .args(&training_command.args)
+        .output()
+        .with_context(|| format!("run model training command {}", training_command.program))?;
+    if !output.status.success() {
+        bail!(
+            "model training command failed with status {}: {}",
+            output.status,
+            String::from_utf8_lossy(&output.stderr)
+        );
+    }
+    serde_json::from_slice::<CompleteRetrainingJobPayload>(&output.stdout)
+        .context("parse model training output")
+}
+
 fn build_mock_retraining_output(
     job: &ClaimedRetrainingJob,
     actor: &str,
@@ -692,7 +1391,12 @@ fn build_mock_retraining_output(
             "feature_reproducibility_hash": "sha256:demo-retraining-feature-reproducibility",
             "label_provenance_status": "passed",
             "label_reviewer_source": "investigation_results",
+            "pilot_validation_status": "passed",
             "shadow_comparison_status": "passed",
+            "serving_version_lock_status": "passed",
+            "artifact_integrity_status": "passed",
+            "feature_store_materialization_status": "passed",
+            "segment_fairness_status": "passed",
             "review_capacity_threshold_status": "passed"
         }),
         evidence_refs,
@@ -952,6 +1656,95 @@ mod tests {
             name: "retraining_job_runner",
             status: "ok"
         }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "pilot_readiness_checker",
+            status: "ok"
+        }));
+    }
+
+    #[test]
+    fn builds_pilot_readiness_report_from_api_health() {
+        let report = build_pilot_readiness_report(ApiHealthResponse {
+            status: "ok".into(),
+            service: "api-server".into(),
+            version: "0.1.0".into(),
+            checks: vec![ApiHealthCheck {
+                name: "model_scorer".into(),
+                status: "ok".into(),
+                runtime_kind: Some("rust_artifact".into()),
+                remediation: None,
+            }],
+            pilot_readiness: ApiPilotReadiness {
+                status: "not_ready".into(),
+                required_check_names: vec![
+                    "api_key_configuration".into(),
+                    "object_storage_configuration".into(),
+                ],
+                required_check_count: 2,
+                ready_check_count: 1,
+                blocking_check_count: 1,
+                ready_checks: vec![ApiHealthCheck {
+                    name: "api_key_configuration".into(),
+                    status: "configured".into(),
+                    runtime_kind: None,
+                    remediation: None,
+                }],
+                blocking_checks: vec![ApiHealthCheck {
+                    name: "object_storage_configuration".into(),
+                    status: "local_demo_object_storage".into(),
+                    runtime_kind: None,
+                    remediation: Some("Set FWA_OBJECT_STORAGE_URI.".into()),
+                }],
+            },
+        });
+
+        assert_eq!(report.status, "not_ready");
+        assert!(!report.ready_for_customer_pilot);
+        assert_eq!(report.api_service, "api-server");
+        assert_eq!(report.required_check_count, 2);
+        assert_eq!(report.ready_check_count, 1);
+        assert_eq!(report.blocking_check_count, 1);
+        assert_eq!(report.model_runtime_kind.as_deref(), Some("rust_artifact"));
+        assert_eq!(
+            report.remediation_summary,
+            vec!["Set FWA_OBJECT_STORAGE_URI."]
+        );
+        assert!(report
+            .evidence_refs
+            .contains(&"api_health:/api/v1/health".to_string()));
+    }
+
+    #[test]
+    fn marks_pilot_readiness_report_ready_only_without_blockers() {
+        let report = build_pilot_readiness_report(ApiHealthResponse {
+            status: "ok".into(),
+            service: "api-server".into(),
+            version: "0.1.0".into(),
+            checks: vec![ApiHealthCheck {
+                name: "model_scorer".into(),
+                status: "ok".into(),
+                runtime_kind: Some("python_http".into()),
+                remediation: None,
+            }],
+            pilot_readiness: ApiPilotReadiness {
+                status: "ready".into(),
+                required_check_names: vec!["api_key_configuration".into()],
+                required_check_count: 1,
+                ready_check_count: 1,
+                blocking_check_count: 0,
+                ready_checks: vec![ApiHealthCheck {
+                    name: "api_key_configuration".into(),
+                    status: "configured".into(),
+                    runtime_kind: None,
+                    remediation: None,
+                }],
+                blocking_checks: Vec::new(),
+            },
+        });
+
+        assert!(report.ready_for_customer_pilot);
+        assert_eq!(report.blocking_check_count, 0);
+        assert!(report.remediation_summary.is_empty());
     }
 
     #[test]
@@ -997,6 +1790,14 @@ mod tests {
             serde_json::json!(["member_id", "policy_id", "provider_id"])
         );
         assert_eq!(output.metrics_json["label_provenance_status"], "passed");
+        assert_eq!(output.metrics_json["pilot_validation_status"], "passed");
+        assert_eq!(output.metrics_json["serving_version_lock_status"], "passed");
+        assert_eq!(output.metrics_json["artifact_integrity_status"], "passed");
+        assert_eq!(
+            output.metrics_json["feature_store_materialization_status"],
+            "passed"
+        );
+        assert_eq!(output.metrics_json["segment_fairness_status"], "passed");
         assert_eq!(
             output.evidence_refs,
             vec![
@@ -1022,6 +1823,280 @@ mod tests {
         let error = build_mock_retraining_output(&job, "trainer-worker", " ").unwrap_err();
 
         assert!(error.to_string().contains("artifact_base_uri"));
+    }
+
+    #[test]
+    fn builds_training_command_for_retraining_job() {
+        let job = ClaimedRetrainingJob {
+            job_id: "model_retraining_job_1".into(),
+            model_key: "baseline_fwa".into(),
+            model_version: "0.1.0".into(),
+            status: "validation".into(),
+            updated_by: "trainer-worker".into(),
+            status_note: "Validation metrics are ready.".into(),
+        };
+
+        let command = build_training_command(
+            "python3",
+            "data/training/manifest.json",
+            "artifacts/models",
+            &job,
+            "trainer-worker",
+        );
+
+        assert_eq!(command.program, "python3");
+        assert_eq!(
+            command.args,
+            vec![
+                "-m",
+                "app.train",
+                "--manifest",
+                "data/training/manifest.json",
+                "--artifact-base-uri",
+                "artifacts/models",
+                "--model-key",
+                "baseline_fwa",
+                "--base-model-version",
+                "0.1.0",
+                "--job-id",
+                "model_retraining_job_1",
+                "--actor",
+                "trainer-worker",
+            ]
+        );
+    }
+
+    #[test]
+    fn builds_external_training_handoff_from_manifest() {
+        let root = temp_root("training-handoff");
+        let manifest_path = root.join("manifest.json");
+        fs::write(
+            &manifest_path,
+            serde_json::json!({
+                "dataset_key": "claims_model",
+                "dataset_version": "2026-06-02",
+                "business_domain": "health_fwa",
+                "sample_grain": "claim",
+                "label_column": "confirmed_fwa",
+                "entity_keys": ["claim_id", "member_id", "policy_id", "provider_id"],
+                "time_split_field": "service_date",
+                "group_split_fields": ["member_id", "policy_id", "provider_id"],
+                "splits": [
+                    {"split_name": "train", "data_uri": "train.parquet"},
+                    {"split_name": "validation", "data_uri": "validation.parquet"},
+                    {"split_name": "out_of_time", "data_uri": "out_of_time.parquet"}
+                ]
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let handoff = build_training_handoff(
+            &manifest_path,
+            "s3://fwa-models",
+            "baseline_fwa",
+            "0.1.0",
+            "model_retraining_job_1",
+            "trainer-worker",
+        )
+        .expect("training handoff");
+
+        assert_eq!(handoff["handoff_kind"], "external_training_platform");
+        assert_eq!(handoff["dataset"]["dataset_key"], "claims_model");
+        assert_eq!(handoff["dataset"]["dataset_version"], "2026-06-02");
+        assert_eq!(
+            handoff["dataset"]["manifest_uri"],
+            serde_json::json!(manifest_path.to_string_lossy())
+        );
+        assert_eq!(handoff["training_job"]["model_key"], "baseline_fwa");
+        assert_eq!(
+            handoff["training_job"]["candidate_model_version"],
+            "0.1.0-candidate-model_retraining_job_1"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["rust_serving_artifact_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rust_serving_artifact.json"
+        );
+        assert_eq!(
+            handoff["output_contract"]["submit_path"],
+            "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
+        );
+        assert_eq!(
+            handoff["data_contract"]["source"],
+            "same_parquet_dataset_manifest"
+        );
+    }
+
+    #[test]
+    fn builds_scheduled_mlops_monitoring_plan() {
+        let plan = build_mlops_monitoring_plan(
+            "data/training/manifest.json",
+            "s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json",
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+        )
+        .expect("mlops monitoring plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_mlops_monitoring");
+        assert_eq!(plan["plan_version"], 2);
+        assert_eq!(plan["model"]["model_key"], "baseline_fwa");
+        assert_eq!(plan["model"]["model_version"], "0.2.0");
+        assert_eq!(plan["schedule"]["cron"], "0 2 * * *");
+        assert_eq!(
+            plan["data_contract"]["source"],
+            "same_parquet_dataset_manifest"
+        );
+        assert_eq!(plan["jobs"][0]["job_kind"], "shadow_traffic_evaluation");
+        assert_eq!(plan["jobs"][1]["job_kind"], "drift_monitoring");
+        assert_eq!(plan["jobs"][2]["job_kind"], "segment_fairness_review");
+        assert_eq!(plan["jobs"][3]["job_kind"], "reviewer_disagreement_review");
+        assert_eq!(plan["jobs"][4]["job_kind"], "label_delay_review");
+        assert_eq!(
+            plan["jobs"][1]["drift_report_uri"],
+            "s3://fwa-models/baseline_fwa/0.2.0/drift_report.json"
+        );
+        assert_eq!(
+            plan["jobs"][3]["reviewer_disagreement_report_uri"],
+            "s3://fwa-models/baseline_fwa/0.2.0/reviewer_disagreement_report.json"
+        );
+        assert_eq!(
+            plan["jobs"][4]["label_delay_report_uri"],
+            "s3://fwa-models/baseline_fwa/0.2.0/label_delay_report.json"
+        );
+    }
+
+    #[test]
+    fn builds_scheduled_analytics_export_plan() {
+        let plan = build_analytics_export_plan(
+            "s3://nwfwa-staging-artifacts",
+            "http://clickhouse:8123",
+            "staging-customer",
+            "15 * * * *",
+        )
+        .expect("analytics export plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_analytics_export");
+        assert_eq!(plan["plan_version"], 1);
+        assert_eq!(plan["customer_scope_id"], "staging-customer");
+        assert_eq!(plan["data_contract"]["derived_store"], "clickhouse");
+        assert_eq!(
+            plan["data_contract"]["pii_policy"],
+            "masked_ids_and_evidence_refs_only"
+        );
+        assert_eq!(plan["schedule"]["cron"], "15 * * * *");
+        assert_eq!(plan["jobs"][0]["job_kind"], "scoring_events_export");
+        assert_eq!(plan["jobs"][1]["job_kind"], "rule_events_export");
+        assert_eq!(plan["jobs"][2]["job_kind"], "model_events_export");
+        assert_eq!(plan["jobs"][3]["job_kind"], "case_sla_events_export");
+        assert_eq!(plan["jobs"][4]["job_kind"], "value_events_export");
+        assert_eq!(
+            plan["jobs"][5]["job_kind"],
+            "reviewer_capacity_events_export"
+        );
+        assert_eq!(
+            plan["jobs"][6]["job_kind"],
+            "provider_graph_snapshots_export"
+        );
+        assert_eq!(
+            plan["jobs"][6]["sink_table"],
+            "fwa_analytics.analytics_provider_graph_snapshots"
+        );
+        assert!(plan["dashboard_coverage"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("false_positive_cost")));
+    }
+
+    #[test]
+    fn builds_scheduled_ai_evidence_execution_plan() {
+        let plan = build_ai_evidence_execution_plan(
+            "http://api-server:8080",
+            "s3://nwfwa-staging-artifacts",
+            "pgvector",
+            "postgres://evidence_vectors",
+            "staging-customer",
+            "*/20 * * * *",
+        )
+        .expect("ai evidence execution plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_ai_evidence_execution");
+        assert_eq!(plan["plan_version"], 1);
+        assert_eq!(plan["customer_scope_id"], "staging-customer");
+        assert_eq!(
+            plan["runtime_boundary"]["raw_document_text"],
+            "customer_approved_object_storage_only"
+        );
+        assert_eq!(plan["vector_store"]["kind"], "pgvector");
+        assert_eq!(plan["schedule"]["concurrency_policy"], "forbid");
+        assert_eq!(
+            plan["api_contract"]["embedding_job_registry_path"],
+            "/api/v1/ops/evidence/embedding-jobs"
+        );
+        assert_eq!(
+            plan["jobs"][0]["job_kind"],
+            "document_ingestion_metadata_sync"
+        );
+        assert_eq!(plan["jobs"][1]["job_kind"], "ocr_output_registration");
+        assert_eq!(plan["jobs"][2]["job_kind"], "document_chunk_registration");
+        assert_eq!(plan["jobs"][3]["job_kind"], "embedding_job_dispatch");
+        assert_eq!(plan["jobs"][4]["job_kind"], "retrieval_ranking_evaluation");
+        assert_eq!(
+            plan["artifact_contract"]["retrieval_eval_report_uri"],
+            "s3://nwfwa-staging-artifacts/ai-evidence/staging-customer/retrieval-eval/{window_start}/retrieval_eval_report.json"
+        );
+        assert_eq!(
+            plan["downstream_contracts"]["analytics_export_plan"],
+            "build-analytics-export-plan"
+        );
+    }
+
+    #[test]
+    fn builds_scheduled_governance_ops_plan() {
+        let plan = build_governance_ops_plan(
+            "s3://nwfwa-staging-artifacts",
+            "postgres://postgres:5432/fwa",
+            "staging-customer",
+            "staging-retention-v1",
+            "staging-backup-restore-v1",
+            "staging-legal-hold-v1",
+            "45 1 * * *",
+        )
+        .expect("governance ops plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_governance_ops");
+        assert_eq!(plan["plan_version"], 1);
+        assert_eq!(plan["customer_scope_id"], "staging-customer");
+        assert_eq!(
+            plan["policies"]["retention_policy_id"],
+            "staging-retention-v1"
+        );
+        assert_eq!(
+            plan["policies"]["backup_restore_plan_id"],
+            "staging-backup-restore-v1"
+        );
+        assert_eq!(
+            plan["policies"]["legal_hold_policy_id"],
+            "staging-legal-hold-v1"
+        );
+        assert_eq!(
+            plan["runtime_boundary"]["destructive_actions"],
+            "approval_required_plan_only"
+        );
+        assert_eq!(plan["schedule"]["concurrency_policy"], "forbid");
+        assert_eq!(plan["jobs"][0]["job_kind"], "backup_snapshot_manifest");
+        assert_eq!(plan["jobs"][1]["job_kind"], "restore_drill_validation");
+        assert_eq!(plan["jobs"][2]["job_kind"], "retention_policy_scan");
+        assert_eq!(plan["jobs"][3]["job_kind"], "legal_hold_reconciliation");
+        assert_eq!(plan["jobs"][4]["job_kind"], "destruction_candidate_review");
+        assert_eq!(
+            plan["jobs"][4]["approval_gate"],
+            "human_approval_required_before_destroy"
+        );
+        assert_eq!(
+            plan["artifact_contract"]["retention_scan_report_uri"],
+            "s3://nwfwa-staging-artifacts/governance-ops/staging-customer/retention/{window_start}/retention_scan_report.json"
+        );
     }
 
     #[test]

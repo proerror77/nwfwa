@@ -12,6 +12,16 @@ fn test_config() -> AppConfig {
         source_system: "AiClaim Core".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
 }
 
@@ -529,6 +539,7 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(event["run_id"], body["run_id"]);
     assert_eq!(event["event_status"], "accepted_with_warnings");
     assert_eq!(event["payload"]["mapping_version"], "aiclaim-core-v1");
+    assert_eq!(event["payload"]["customer_scope_id"], "demo-customer");
     assert!(event["payload"]["external_message_id"].is_null());
     assert!(event["payload"]["external_message_fingerprint"]
         .as_str()
@@ -573,6 +584,8 @@ async fn normalizes_aiclaim_inbox_payload_with_data_quality_signals() {
     assert_eq!(call["method"], "POST");
     assert_eq!(call["status_code"], 200);
     assert_eq!(call["result"], "accepted_with_warnings");
+    assert_eq!(call["actor_role"], "tpa_system");
+    assert_eq!(call["customer_scope_id"], "demo-customer");
     assert_eq!(call["claim_id"], "SAAS0300040388200349");
     assert_eq!(call["audit_id"], body["audit_id"]);
     assert_eq!(call["idempotency_key"], body["idempotency_key"]);
@@ -614,6 +627,8 @@ async fn rejects_inbox_payload_with_structured_field_errors() {
     assert_eq!(call["endpoint"], "/api/v1/inbox/claims/normalize");
     assert_eq!(call["status_code"], 400);
     assert_eq!(call["result"], "rejected");
+    assert_eq!(call["actor_role"], "tpa_system");
+    assert_eq!(call["customer_scope_id"], "demo-customer");
 }
 
 #[tokio::test]
@@ -2412,6 +2427,10 @@ async fn repeated_inbox_payload_upserts_same_audit_trace() {
     assert_eq!(first["idempotency_key"], second["idempotency_key"]);
     assert_eq!(first["run_id"], second["run_id"]);
     assert_eq!(first["audit_id"], second["audit_id"]);
+    assert_eq!(
+        first["raw_payload_checksum"],
+        second["raw_payload_checksum"]
+    );
 
     let (status, audit_events) = json_request(
         app.clone(),
@@ -2439,4 +2458,48 @@ async fn repeated_inbox_payload_upserts_same_audit_trace() {
         .filter(|call| call["audit_id"] == first["audit_id"])
         .count();
     assert_eq!(matching_calls, 1);
+}
+
+#[tokio::test]
+async fn rejects_same_inbox_idempotency_key_with_different_payload_checksum() {
+    let app = build_app(test_config());
+    let payload = r#"{
+      "systemCode": "AiClaim Core",
+      "transNo": "duplicate-message-conflict-001",
+      "reportCase": {
+        "reportNo": "SAAS-DUPLICATE-CONFLICT-001",
+        "claimReceiveDate": 1779811200000,
+        "calculateRisk": "Y",
+        "policyList": [
+          {
+            "policyNo": "POL-DUP-CONFLICT",
+            "insuredName": "LEE, Peter",
+            "coverageLimit": 20000,
+            "validateDate": 1735689600000,
+            "expireDate": 1798675200000,
+            "invoiceList": [
+              {
+                "invoiceNo": "INV-DUP-CONFLICT",
+                "feeAmount": 100.00,
+                "startDate": 1766678400000,
+                "hospitalName": "南京同仁医院",
+                "feeList": []
+              }
+            ]
+          }
+        ]
+      }
+    }"#;
+    let changed_payload = payload.replace("\"feeAmount\": 100.00", "\"feeAmount\": 101.00");
+
+    let (first_status, first) = post_inbox(app.clone(), payload).await;
+    let (second_status, second) = post_inbox(app, &changed_payload).await;
+
+    assert_eq!(first_status, StatusCode::OK);
+    assert_eq!(second_status, StatusCode::CONFLICT);
+    assert!(first["raw_payload_checksum"]
+        .as_str()
+        .unwrap()
+        .starts_with("sha256:"));
+    assert_eq!(second["code"], "INBOX_IDEMPOTENCY_CONFLICT");
 }

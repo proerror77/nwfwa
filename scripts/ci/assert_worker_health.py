@@ -21,7 +21,15 @@ def main() -> None:
         for check in checks
         if isinstance(check, dict)
     }
-    for name in ["cli_commands", "parquet_profiler", "retraining_job_runner"]:
+    for name in [
+        "cli_commands",
+        "parquet_profiler",
+        "retraining_job_runner",
+        "pilot_readiness_checker",
+        "analytics_export_plan",
+        "ai_evidence_execution_plan",
+        "governance_ops_plan",
+    ]:
         require(check_status.get(name) == "ok", f"worker health check {name} must be ok")
 
 

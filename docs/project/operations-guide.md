@@ -5,20 +5,35 @@ pilot environment.
 
 ## Local Demo Startup
 
-Install frontend build tools and compatibility dependencies before first UI use:
+Install frontend build tools before first UI use:
 
 ```bash
 rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
-cd apps/web-console
-npm ci
-cd ../..
 ```
 
-Start PostgreSQL and the ML service:
+Start the full local demo stack when you want the same containerized API and
+Web Console boundary used by the pilot packaging proof:
 
 ```bash
-docker compose -f infra/docker-compose.yml up -d postgres ml-service
+docker compose -f infra/docker-compose.yml up --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+The Web Console container proxies `/api/` to the `api-server` service, and the
+`migrate-seed` one-shot service applies migrations plus deterministic demo data
+before the API server starts.
+
+Start only PostgreSQL, the ML service, object storage, and ClickHouse when you
+are running the Rust API and Trunk dev server directly from the host:
+
+```bash
+docker compose -f infra/docker-compose.yml up -d postgres ml-service object-storage clickhouse
 ```
 
 Seed deterministic demo data:
@@ -40,7 +55,7 @@ Start the web console:
 
 ```bash
 cd apps/web-console
-npm run dev
+NO_COLOR=false trunk serve
 ```
 
 Open:
@@ -84,8 +99,8 @@ Run web build smoke:
 
 ```bash
 cd apps/web-console
-npm run build
-npm run smoke:build
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 ## Full Local Validation
@@ -106,15 +121,208 @@ python -m pip install -e '.[dev]'
 pytest
 ```
 
+Production ML baseline training:
+
+```bash
+cd apps/ml-service
+python -m pip install -e '.[dev]'
+python -m app.train \
+  --manifest ../../data/training/manifest.json \
+  --artifact-base-uri ../../data/model-artifacts \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor trainer-worker
+```
+
+The command prints the retraining output payload expected by
+`POST /api/v1/ops/model-retraining-jobs/{job_id}/output`. To serve the resulting
+artifact locally, start the ML service with `FWA_MODEL_ARTIFACT_URI` pointing to
+the generated `model.joblib`. The training command also writes a serving
+manifest, artifact checksum/signature, feature-store materialization manifest,
+shadow comparison report, drift report, and segment fairness report next to the
+model artifact.
+
+Public-data MVP manifest:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_public_data_mvp.py \
+  --synthetic-fixture \
+  --output-dir data/public-mvp \
+  --dataset-version 2026-06-public-mvp
+```
+
+The generated manifest validates schema, Parquet splits, weak-label training,
+Rust artifact export, and MLOps handoff contracts. It is not customer
+production model evidence.
+
+Kaggle provider-fraud demo pack:
+
+```bash
+uv run --project apps/ml-service \
+  python scripts/data/build_kaggle_provider_fraud_mvp.py \
+  --archive /Users/proerror/Downloads/archive.zip \
+  --output-dir data/kaggle-provider-fraud \
+  --dataset-version 2026-06-kaggle-provider-fraud-demo \
+  --max-claims 5000 \
+  --max-tpa-payloads 100
+```
+
+This writes a Parquet manifest plus `tpa_claims.jsonl` payloads for inbox and
+scoring demos. The Kaggle label is provider-level `PotentialFraud`; the script
+maps it to `confirmed_fwa` only as
+`weak_provider_level_label_not_claim_level_production_evidence`.
+
+Artifact-backed local serving with integrity and version lock:
+
+```bash
+FWA_MODEL_ARTIFACT_URI=../../data/model-artifacts/baseline_fwa/<version>/model.joblib \
+FWA_MODEL_VERSION_LOCK=<version> \
+FWA_MODEL_ARTIFACT_SHA256=sha256:<artifact-digest> \
+FWA_MODEL_ARTIFACT_SIGNATURE=hmac-sha256:<artifact-signature> \
+FWA_MODEL_SIGNATURE_KEY=<signing-key> \
+FWA_MODEL_SHADOW_HEURISTIC=true \
+python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
+```
+
+Rust runtime artifact scoring is available for local JSON logistic-regression
+artifacts. Configure the API server with `FWA_MODEL_ARTIFACT_URI` plus the same
+optional checksum, signature, and version lock variables. When this is set,
+`/api/v1/health` reports `model_scorer.runtime_kind = rust_artifact` and the
+scoring response model metadata includes artifact integrity, signature, and
+serving version lock status.
+
+Minimal Rust artifact shape:
+
+```json
+{
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-rust",
+  "runtime_kind": "rust_logistic_regression",
+  "execution_provider": "cpu",
+  "threshold": 0.5,
+  "feature_columns": ["claim_amount_to_limit_ratio"],
+  "intercept": -1.0,
+  "coefficients": {
+    "claim_amount_to_limit_ratio": 4.0
+  }
+}
+```
+
+Worker-driven training registration:
+
+```bash
+cargo run --locked -p worker -- run-retraining-job \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --actor trainer-worker \
+  --artifact-base-uri data/model-artifacts \
+  --training-manifest data/training/manifest.json \
+  --trainer-python python \
+  --model-key baseline_fwa
+```
+
+External training handoff:
+
+```bash
+cargo run --locked -p worker -- build-training-handoff \
+  --manifest data/training/manifest.json \
+  --artifact-base-uri s3://fwa-models \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor trainer-worker
+```
+
+Scheduled MLOps monitoring plan:
+
+```bash
+cargo run --locked -p worker -- build-mlops-monitoring-plan \
+  --manifest-uri s3://fwa-datasets/demo_claims_fwa/2026-05-demo/manifest.json \
+  --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --cron "0 2 * * *"
+```
+
+The generated plan covers shadow traffic evaluation, score and feature drift,
+segment fairness review, reviewer disagreement review, and label delay review.
+
+Run the local staging MLOps monitoring-plan simulator:
+
+```bash
+python3 scripts/ops/run_mlops_monitoring_plan.py \
+  --plan scripts/ops/sample_mlops_monitoring_plan.json \
+  --output-dir artifacts/mlops-monitoring
+```
+
+The simulator writes shadow, drift, segment fairness, reviewer disagreement, and
+label delay report artifacts. These are staging proof artifacts only; they are
+not live customer shadow or drift evidence.
+
+Analytics-scale export proof:
+
+```bash
+python3 scripts/ops/validate_analytics_scale.py
+python3 scripts/ops/build_analytics_export.py \
+  --output-dir artifacts/analytics-export \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --clickhouse-url http://clickhouse:8123 \
+  --customer-scope-id staging-customer
+```
+
+The generated `analytics_export_manifest.json` records the scheduled exports
+from PostgreSQL operational tables into the derived ClickHouse analytical event
+store. The proof also copies `analytics/clickhouse/schema.sql` and
+`analytics/clickhouse/dashboard_queries.sql`, which cover rule/model drift, SLA,
+ROI, reviewer capacity, false-positive cost, and provider graph snapshot
+reporting. This proof does not move customer data; it defines the production
+contract and staging scheduler shape.
+
+AI evidence foundation proof:
+
+```bash
+python3 scripts/ops/validate_ai_evidence_foundation.py
+python3 scripts/ops/build_ai_evidence_foundation.py \
+  --output-dir artifacts/ai-evidence-foundation \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --customer-scope-id staging-customer
+```
+
+The generated `ai_evidence_foundation_manifest.json` records the document
+registry, chunk registry, OCR output, redaction review, embedding job, retrieval
+audit, and agent workspace artifact contract. This proof does not run OCR,
+create embeddings, or query a vector database; it defines the governed metadata
+and audit shape.
+
+Build the staging AI evidence execution plan emitted by the Rust worker:
+
+```bash
+cargo run --locked -p worker -- build-ai-evidence-execution-plan \
+  --api-url http://api-server:8080 \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --vector-store-kind pgvector \
+  --vector-store-ref postgres://evidence-vectors \
+  --customer-scope-id staging-customer \
+  --cron "*/20 * * * *"
+```
+
+The plan covers document metadata sync, OCR output registration, chunk
+registration, embedding job dispatch, and retrieval ranking evaluation. It
+binds those jobs to the `/api/v1/ops/evidence/*` metadata APIs and keeps raw
+document text, OCR text, vectors, and raw retrieval queries outside platform
+payloads. It is a portable execution plan, not a customer OCR or vector worker
+implementation.
+
 Frontend:
 
 ```bash
 cd apps/web-console
-npm ci
-npm run lint
-npm test
-npm run build
-npm run smoke:build
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 Worker health:
@@ -122,6 +330,121 @@ Worker health:
 ```bash
 cargo run --locked -p worker -- health | python3 scripts/ci/assert_worker_health.py
 ```
+
+Pilot readiness report:
+
+```bash
+cargo run --locked -p worker -- check-pilot-readiness \
+  --api-url http://127.0.0.1:8080 \
+  --api-key "$FWA_API_KEY" \
+  --require-ready
+```
+
+The report reads `GET /api/v1/health`, returns the aggregate
+`ready_for_customer_pilot` decision, lists blocking configuration checks, and
+keeps evidence refs pointing back to the API health readiness contract. With
+`--require-ready`, the command still prints the JSON report, then exits non-zero
+when any customer pilot blocker remains.
+
+Strict customer pilot proof:
+
+```bash
+set -a
+source scripts/demo/pilot_ready_env.example
+set +a
+scripts/demo/customer_pilot_proof.sh
+```
+
+Replace every placeholder in `scripts/demo/pilot_ready_env.example` before using
+it. The same environment should be applied to the API server process so
+`/api/v1/health` evaluates the configured pilot contracts, not local defaults.
+
+## Kubernetes Staging
+
+Staging manifests live in `infra/k8s/staging` and can be rendered or applied with
+Kustomize:
+
+```bash
+python3 scripts/ops/validate_k8s_staging.py
+kubectl kustomize infra/k8s/staging
+```
+
+Before applying to a real staging cluster, replace the placeholder image names
+and create a real Secret from `infra/k8s/staging/secrets.example.yaml` in the
+`nwfwa-staging` namespace. The example Secret is intentionally not included in
+the kustomization resources, so placeholder secrets are not applied by default.
+The directory includes API, web console, ML service, PostgreSQL,
+S3-compatible object storage, ClickHouse, database migration and seed Jobs, and
+worker CronJobs for pilot readiness, MLOps monitoring-plan generation, AI
+evidence execution-plan generation, analytics export-plan generation, and
+governance ops plan generation.
+
+Build a GitHub Environment gated staging deployment package:
+
+```bash
+python3 scripts/ops/build_staging_deployment_package.py \
+  --output-dir artifacts/staging-deployment \
+  --image-tag staging \
+  --commit-sha "$(git rev-parse HEAD)" \
+  --environment staging
+python3 scripts/ops/validate_staging_deployment_package.py \
+  --package-dir artifacts/staging-deployment
+```
+
+The package includes copied staging manifests, `deployment_manifest.json`,
+`apply.sh`, and `rollback.md`. The GitHub Actions workflow
+`.github/workflows/deploy-staging.yml` builds the same package behind the
+`staging` GitHub Environment and uploads it as an artifact. It does not apply to
+a cluster automatically; `apply.sh` requires a customer-approved Kubernetes
+context and `NWFWA_STAGING_SECRET_FILE`.
+
+Validate container packaging before building images:
+
+```bash
+python3 scripts/ops/validate_container_packaging.py
+```
+
+The packaging check verifies Dockerfiles for API server, worker, web console,
+and the ops image that carries migration and seed SQL. It does not push images
+or deploy to a cluster.
+The local API server and Web Console images are optimized for demo build
+latency and use locked debug builds; the worker image remains a release build
+because it is used as a compact operational runtime.
+
+Generate local pilot foundation evidence without customer data:
+
+```bash
+python3 scripts/ops/build_staging_evidence.py \
+  --output-dir artifacts/staging-proof \
+  --object-storage-uri s3://nwfwa-staging-artifacts
+python3 scripts/ops/validate_operational_drill_proof.py \
+  --proof-dir artifacts/staging-proof
+```
+
+The evidence pack records object-storage prefixes, backup/restore proof
+metadata, retention/legal-hold proof metadata, observability proof metadata, and
+`operational_drill_proof.json` for restore, rollback, alert-route, and incident
+tabletop drill contracts. It does not replace live restore execution,
+production dashboards, customer alert receivers, or customer-approved retention
+controls.
+
+Generate the portable governance ops plan without customer data:
+
+```bash
+cargo run --locked -p worker -- build-governance-ops-plan \
+  --object-storage-uri s3://nwfwa-staging-artifacts \
+  --database-ref postgres://postgres:5432/fwa \
+  --customer-scope-id staging-customer \
+  --retention-policy-id staging-retention-v1 \
+  --backup-restore-plan-id staging-backup-restore-v1 \
+  --legal-hold-policy-id staging-legal-hold-v1 \
+  --cron "45 1 * * *"
+```
+
+The plan covers backup manifest generation, restore-drill validation,
+retention-policy scans, legal-hold reconciliation, and destruction-candidate
+review. Destructive actions remain plan-only and require human approval before
+any customer environment deletes data.
 
 ## CI Gates
 
@@ -170,6 +493,10 @@ checks.
 Before a customer pilot contract test:
 
 - Configure customer-specific API keys.
+  Use `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id|permission,permission;...`
+  when a pilot has multiple TPA, operations, or integration callers. Keep the
+  legacy `FWA_API_KEY` only for a single non-default fallback principal; the
+  local `dev-secret` key is disabled when principal entries are configured.
 - Define key rotation policy.
 - Define network allowlists.
 - Confirm masked identifier policy.
@@ -177,6 +504,21 @@ Before a customer pilot contract test:
 - Validate scoring on representative pilot claims.
 - Validate investigation, QA, and medical review writebacks.
 - Verify audit history for every demo flow.
+- Run `scripts/demo/smoke_demo.py --customer-principal-smoke` to prove the
+  customer principal actor role and customer scope appear in API call records
+  and claim audit history.
+- For the local customer pilot demo database, prefer
+  `scripts/demo/customer_pilot_proof.sh` because it combines seed, customer
+  principal smoke, pilot readiness reporting, and persistence assertions in one
+  proof command. Set `FWA_PROOF_REQUIRE_READY=1` when the environment should
+  fail on unresolved `/api/v1/health` pilot readiness blockers; otherwise the
+  proof prints the report but keeps local demo proof flow focused on identity,
+  smoke, and persistence. Set `FWA_PROOF_READINESS_REPORT_PATH` to retain the
+  readiness JSON as a pilot evidence artifact, and set
+  `FWA_PROOF_SUMMARY_PATH` to retain a non-secret
+  `customer_pilot_proof_summary` artifact. Use
+  `scripts/demo/pilot_ready_env.example` as the strict-mode checklist before
+  enabling `FWA_PROOF_REQUIRE_READY=1`.
 - Confirm high-risk outputs remain assistive-only.
 
 Writeback contract fields:
@@ -186,7 +528,7 @@ Writeback contract fields:
 - QA: `qa_case_id`, `claim_id`, `qa_conclusion`, `issue_type`,
   `feedback_target`, `notes`, and `evidence_refs`
 - medical review: `claim_id`, `scoring_audit_id`, `reviewer`, `decision`,
-  `notes`, and `evidence_refs`
+  optional controlled `clinical_outcomes`, `notes`, and `evidence_refs`
 
 ### Pilot Foundation Required Before Customer Data
 
@@ -224,15 +566,24 @@ Not complete yet:
 - production secrets manager
 - production key rotation automation
 - production object storage wiring
+- production OCR, embedding, vector-search, and retrieval workers
 - production observability stack
+- production ClickHouse retention, backup, and access policy
 - production alert routing
-- pilot backup and restore automation
-- pilot retention and legal hold automation
-- customer scoping enforcement
-- real training pipeline
-- real model artifact loader
-- customer holdout and out-of-time validation process
-- long-running drift monitoring
+- customer-executed backup and restore drills
+- customer-approved retention windows and legal-hold execution
+- customer scoping enforcement review in the selected environment
+- external orchestrator for executing scheduled training, shadow, drift, and
+  fairness jobs. The worker can generate the portable monitoring plan contract,
+  but it does not replace a production scheduler.
+- external orchestrator or managed job runner for executing PostgreSQL to
+  ClickHouse analytics exports. The worker and ops script generate the portable
+  export contract, but do not replace customer environment data movement.
+- production artifact signing key management
+- production serving image/version registry
+- customer holdout validation process
+- production observability dashboards for long-running drift and fairness review
+- production observability dashboards for retrieval audit and agent workspace artifacts
 - full rollback runbook for customer environments
 
 ## Troubleshooting

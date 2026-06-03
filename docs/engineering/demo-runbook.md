@@ -17,7 +17,10 @@ scripts/demo/seed_demo.sh
 The seed includes:
 
 - Claims: `CLM-0287`, `CLM-9100`
-- Rules: `rule_early_claim`, `rule_high_amount_to_limit`
+- Rules: 16-rule standard FWA rule pack covering early high-value claim,
+  duplicate billing, upcoding, unbundling, excessive utilization, provider peer
+  outlier, diagnosis-procedure mismatch, relationship concentration, and
+  medical necessity evidence gap
 - Knowledge cases: `KC-1001`, `KC-1002`
 - Dataset catalog: `demo_claims_fwa@2026-05-demo`
 - Model evaluation: `eval-baseline-fwa-2026-05-demo`
@@ -38,8 +41,7 @@ In another terminal:
 rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
 cd apps/web-console
-npm ci
-npm run dev
+NO_COLOR=false trunk serve
 ```
 
 Open `http://127.0.0.1:5173`.
@@ -60,7 +62,8 @@ Expected demo signal:
 
 - `rag` is usually `Red`
 - `alerts` include active rule hits
-- `layers` should cover the seven-layer detection stack
+- `layers` should cover the seven-layer detection stack and each layer should
+  carry non-empty `evidence_refs`
 - response includes `run_id`, `audit_id`, `top_reasons`, and `evidence_refs`
 
 ## 4. Show Operations Studio
@@ -148,6 +151,58 @@ psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/demo/assert_demo_persistence.
 
 The smoke script verifies scoring, lead generation, lead triage, case status updates, medical review queue/writeback, similar-case retrieval, Agent evidence-package generation, investigation writeback, QA writeback, API call records, claim audit history, outcome labels, and Dashboard rollups for `CLM-0287`. The SQL assertion verifies the same demo run was persisted across `scoring_runs`, `feature_values`, `rule_runs`, `model_scores`, `audit_events`, lead/case tables, QA, investigation, and saving attribution tables.
 
+Run the customer principal smoke when preparing a pilot demo. Start the API
+server with a non-dev principal and a non-demo customer scope:
+
+```bash
+DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
+FWA_API_KEY=legacy-customer-secret \
+FWA_API_KEY_PRINCIPALS='customer-demo-key|customer-demo-ops|fwa_operator|customer-demo-tpa|customer-alpha-pilot|ops:*,tpa:*,medical:*,agent:*,audit:read' \
+FWA_SOURCE_SYSTEM=customer-demo-tpa \
+FWA_CUSTOMER_SCOPE_ID=customer-alpha-pilot \
+FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
+cargo run --locked -p api-server
+```
+
+The demo principal includes `tpa:*` because the customer proof exercises TPA
+inbox normalization, claim scoring, member profile lookup, investigation
+writeback, QA writeback, and claim audit history. For production separation,
+split those into fine-grained permissions such as `tpa:claims:score`,
+`tpa:knowledge:read`, `tpa:qa:write`, and `tpa:audit:read`.
+
+Then run:
+
+```bash
+FWA_API_KEY=customer-demo-key \
+FWA_SOURCE_SYSTEM=customer-demo-tpa \
+FWA_DEMO_EXPECTED_ACTOR_ROLE=fwa_operator \
+FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID=customer-alpha-pilot \
+scripts/demo/customer_pilot_proof.sh
+```
+
+For a strict customer pilot proof, use `scripts/demo/pilot_ready_env.example` as
+the single environment checklist. Replace the placeholder secrets and endpoints,
+source it in the shell that starts the API server and runs the proof, then keep
+`FWA_PROOF_REQUIRE_READY=1` enabled so unresolved `/api/v1/health` pilot
+readiness blockers fail after the JSON readiness report is printed.
+
+The proof script applies migrations and deterministic seed data, runs the same
+end-to-end path as the local demo with `--customer-principal-smoke`, and then
+executes the SQL persistence assertions. It additionally asserts that API call
+records and claim audit history carry the expected `actor_role` and
+`customer_scope_id` for scoring, investigation writeback, QA writeback, and
+medical review. It also captures the worker pilot readiness report from
+`/api/v1/health`, and verifies that health readiness no longer classifies the
+API key or customer scope as local demo configuration. Set
+`FWA_PROOF_REQUIRE_READY=1` to make unresolved pilot readiness blockers fail the
+proof after printing the JSON readiness report. Use `FWA_PROOF_SKIP_SEED=1`,
+`FWA_PROOF_SKIP_READINESS=1`, or `FWA_PROOF_SKIP_PERSISTENCE=1` only when the
+environment is managed outside the local demo database. Set
+`FWA_PROOF_READINESS_REPORT_PATH=artifacts/pilot-readiness.json` when the demo
+needs a retained readiness evidence artifact, and set
+`FWA_PROOF_SUMMARY_PATH=artifacts/customer-pilot-proof-summary.json` to retain a
+non-secret proof summary after the full chain passes.
+
 ## 6. Model Promotion Evidence
 
 For model promotion demos, use Models -> Promotion Gates and the API contract as
@@ -158,12 +213,17 @@ the source of truth. A promotion-ready `metrics_json` must include:
 - `group_split_fields`
 - `leakage_check_status = "passed"`
 - `shadow_comparison_status = "passed"`
+- `serving_version_lock_status = "passed"`
+- `artifact_integrity_status = "passed"`
+- `feature_store_materialization_status = "passed"`
+- `segment_fairness_status = "passed"`
 - `label_provenance_status = "passed"`
 
 If these fields are missing or not passing, `/api/v1/ops/models/{model_key}/promotion-gates`
 must keep routing blocked. This is intentional: model promotion is allowed only
 when evaluation evidence covers time split, group leakage control, shadow
-comparison, and label provenance.
+comparison, serving integrity, feature materialization, segment review, and
+label provenance.
 
 ## 7. Verification Gates
 
@@ -176,13 +236,15 @@ cd apps/ml-service
 pytest
 
 cd ../web-console
-npm run lint
-npm test
-npm run build
+cargo fmt -- --check
+cargo check --locked --target wasm32-unknown-unknown
+NO_COLOR=false trunk build --release --locked
+node ../../scripts/demo/smoke_web_console.mjs
 ```
 
 ## 8. Demo Caveats
 
-- The first demo uses PostgreSQL, Python ML service, Rust API server, and Yew web console as a modular monolith path.
+- The first demo uses PostgreSQL, Rust API server scoring, optional Python ML
+  service compatibility, and Yew web console as a modular monolith path.
 - The QA queue is a UI demo queue that writes to the real QA writeback API.
 - Seeded historical audit data demonstrates timeline views; live scoring still creates new runtime audit events.

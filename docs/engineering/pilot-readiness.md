@@ -16,7 +16,7 @@ Pilot API endpoints:
 - `POST /api/v1/ops/medical-review/results`
 - `GET /api/v1/ops/api-calls`
 
-All endpoints require `x-api-key`. Customer-specific credentials, network allowlists, and key rotation are configured outside the repository before pilot start.
+All endpoints require `x-api-key`. Customer-specific credentials, network allowlists, and key rotation are configured outside the repository before pilot start. Pilot environments may use the legacy single-key settings or configure multiple principals with `FWA_API_KEY_PRINCIPALS=key|actor_id|actor_role|source_system|customer_scope_id|permission,permission;...` so each caller resolves to the correct audit actor, customer scope, and permission hints.
 
 ## Writeback Contract
 
@@ -58,8 +58,71 @@ Medical review results also produce governed outcome labels for model and workfl
 Minimum pilot monitoring:
 
 - API health: `GET /api/v1/health`
+- Pilot readiness gate: `/api/v1/health` field `pilot_readiness.status` must be
+  `ready` and `pilot_readiness.ready_for_customer_pilot` must be `true` before
+  customer pilot traffic. When it is `not_ready`,
+  `pilot_readiness.blocking_checks` lists the non-secret configuration check
+  names, statuses, and remediation hints that still need action.
+  `blocking_check_names` and `remediation_summary` provide compact
+  machine-readable blocker output for scripts, while `required_check_names`,
+  `required_check_count`, `ready_check_count`, `blocking_check_count`, and
+  `ready_checks` preserve the full readiness evidence for demo smoke and
+  customer pilot contract tests.
 - API key readiness: `/api/v1/health` check `api_key_configuration` must be
   `configured`, not `local_dev_key`, before customer pilot traffic.
+  `invalid_api_key_principals` means `FWA_API_KEY_PRINCIPALS` is present but no
+  valid principal entry can be parsed.
+- Customer principal smoke: `scripts/demo/smoke_demo.py --customer-principal-smoke`
+  requires a non-dev `FWA_API_KEY`, `FWA_DEMO_EXPECTED_ACTOR_ROLE`, and
+  `FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID`. It fails if scoring, investigation
+  writeback, QA writeback, or medical review audit/API observability does not
+  carry the configured principal role and customer scope.
+- Customer pilot proof: `scripts/demo/customer_pilot_proof.sh` applies the demo
+  seed, runs the customer principal smoke, and checks persistence across
+  scoring, feature, rule, model, audit, case, QA, investigation, and ROI tables.
+  This is the preferred single command for local customer demo hardening after
+  PostgreSQL, ML service, and API server are already running.
+  Set `FWA_PROOF_SUMMARY_PATH` to write a non-secret
+  `customer_pilot_proof_summary` artifact after the chain passes.
+  `scripts/demo/pilot_ready_env.example` lists the environment variables needed
+  for strict proof mode and should be copied into the pilot shell or secret
+  manager with real customer-approved values before `FWA_PROOF_REQUIRE_READY=1`
+  is used.
+- Kubernetes staging proof: `infra/k8s/staging` defines the staging deployment
+  shape for API, web console, ML service, PostgreSQL, S3-compatible object
+  storage, and worker CronJobs. Run
+  `python3 scripts/ops/validate_k8s_staging.py` before applying manifests.
+- Container packaging proof: `python3 scripts/ops/validate_container_packaging.py`
+  validates Dockerfiles for API server, worker, web console, and the ops image
+  used by database migration and seed Jobs.
+- Pilot foundation evidence pack:
+  `python3 scripts/ops/build_staging_evidence.py --output-dir artifacts/staging-proof`
+  writes object-storage, backup/restore, observability, and
+  `operational_drill_proof.json` metadata without requiring customer data. The
+  operational drill proof declares restore, rollback, alert-route, pilot
+  readiness, and incident tabletop evidence expected before customer pilot
+  sign-off.
+  Validate that contract with
+  `python3 scripts/ops/validate_operational_drill_proof.py --proof-dir artifacts/staging-proof`.
+- MLOps monitoring-plan simulation:
+  `python3 scripts/ops/run_mlops_monitoring_plan.py --plan scripts/ops/sample_mlops_monitoring_plan.json --output-dir artifacts/mlops-monitoring`
+  writes staging shadow, drift, fairness, reviewer-disagreement, and label-delay
+  report artifacts. These artifacts prove the execution contract only; they are
+  not live customer shadow or drift evidence.
+- Standard FWA rule pack readiness: the deterministic seed and customer smoke
+  must expose the active 16-rule FWA rule pack for early high-value claim,
+  duplicate billing, upcoding, unbundling, excessive utilization, provider peer
+  outlier, diagnosis-procedure mismatch, relationship concentration, and
+  medical necessity evidence gap before a customer demo is treated as
+  pilot-ready.
+- Permission readiness: TPA pilot endpoints require `tpa:*` or matching
+  fine-grained permissions such as `tpa:claims:score`,
+  `tpa:inbox:normalize`, `tpa:members:read`, `tpa:knowledge:read`,
+  `tpa:investigations:write`, `tpa:qa:write`, and `tpa:audit:read`.
+  Production-impacting rule and model governance actions require matching
+  `ops:*` permissions, for example `ops:rules:publish`,
+  `ops:audit-samples:create`, or `ops:models:activate`. Missing permissions
+  return `PERMISSION_DENIED`.
 - Source-system readiness: `/api/v1/health` check
   `source_system_configuration` must be `configured`, not
   `local_demo_source`, before customer pilot traffic.
@@ -69,14 +132,62 @@ Minimum pilot monitoring:
   `model_service_configuration` must be `configured`, not
   `local_dev_model_service` or `heuristic_model_scorer`, before customer pilot
   traffic.
+- Object storage readiness: `/api/v1/health` check
+  `object_storage_configuration` must be `configured`, not
+  `local_demo_object_storage`, before customer pilot traffic.
+- Customer scope readiness: `/api/v1/health` check
+  `customer_scope_configuration` must be `configured`, not
+  `local_demo_customer_scope`, before customer pilot traffic.
+  The customer scope is derived from the authenticated API key configuration,
+  not from caller-supplied claim payloads. Inbox normalization, scoring, TPA
+  writeback, case workflow, and governance audit payloads include
+  `customer_scope_id` for tenant/customer traceability.
+  Audit event queries, API call records, claim audit history, webhook event
+  listings, and medical review queues are filtered by the authenticated
+  principal's `customer_scope_id`.
+- Retention policy readiness: `/api/v1/health` check
+  `retention_policy_configuration` must be `configured`, not
+  `local_demo_retention_policy`, before customer pilot traffic.
+- Backup and restore readiness: `/api/v1/health` check
+  `backup_restore_configuration` must be `configured`, not
+  `local_demo_backup_restore`, before customer pilot traffic.
+- PII masking readiness: `/api/v1/health` check
+  `pii_masking_configuration` must be `configured`, not
+  `local_demo_pii_masking`, before customer pilot traffic.
+- Key rotation readiness: `/api/v1/health` check
+  `key_rotation_configuration` must be `configured`, not
+  `local_demo_key_rotation`, before customer pilot traffic.
+- Network allowlist readiness: `/api/v1/health` check
+  `network_allowlist_configuration` must be `configured`, not
+  `local_demo_network_allowlist`, before customer pilot traffic.
+- Alert routing readiness: `/api/v1/health` check
+  `alert_routing_configuration` must be `configured`, not
+  `local_demo_alert_routing`, before customer pilot traffic.
+- Observability exporter readiness: `/api/v1/health` check
+  `observability_exporter_configuration` must be `configured`, not
+  `local_demo_observability_exporter`, before customer pilot traffic.
+- Agent policy readiness: `/api/v1/health` check
+  `agent_policy_configuration` must be `configured`, not
+  `local_demo_agent_policy`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
+- Worker pilot readiness report:
+  `cargo run --locked -p worker -- check-pilot-readiness --api-url <api-base-url> --api-key <pilot-api-key> --require-ready`
+  reads the API health contract and returns `ready_for_customer_pilot`,
+  `blocking_checks`, `remediation_summary`, and evidence refs for the readiness
+  decision. `remediation_summary` prefers the non-secret `remediation` hints
+  from `/api/v1/health` and falls back to `name=status` for older health
+  payloads. With `--require-ready`, unresolved blockers make the command fail
+  after printing the JSON report.
 - ML service health: `GET /health`
-- CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
-- Runtime logs: request path, status, run id, audit id, event type, source system
-- API call records: audit-backed scoring, investigation, and QA writeback calls in Governance
+- CI health: GitHub Actions `repository-health`, `staging-proof`, `migrations`, `rust`, `python`, `frontend`
+- Runtime logs: request path, status, run id, audit id, event type, source
+  system, actor role
+- API call records: audit-backed scoring, investigation, and QA writeback calls
+  in Governance with `actor_role` and `customer_scope_id` for role and tenant
+  traceability
 - Database checks: migration success and audit event append rate
 
-OpenTelemetry, Grafana, Loki, and alert routing are production setup tasks after pilot environment selection.
+Grafana and Loki dashboards are production setup tasks after pilot environment selection.
 
 ## PII Handling
 
@@ -100,5 +211,13 @@ Evidence references should point to structured objects, for example `rule_runs:E
 - Write back an investigation result.
 - Write back a QA result.
 - Query `/api/v1/audit/claims/{claim_id}` and verify the timeline contains scoring, investigation, and QA events where applicable.
+- Run `scripts/demo/smoke_demo.py --customer-principal-smoke` with the customer
+  principal and confirm actor/scope propagation in API call records and claim
+  audit history.
+- Run `scripts/demo/customer_pilot_proof.sh` for the full local pilot proof
+  path when using the deterministic demo database.
+- For strict proof mode, replace placeholders in
+  `scripts/demo/pilot_ready_env.example`, source the file for both API server
+  startup and proof execution, and keep the retained readiness JSON artifact.
 - Confirm high-risk outputs are assistive only and do not directly reject claims.
 - Confirm customer pilot data is registered as Parquet dataset metadata before model training or evaluation use.

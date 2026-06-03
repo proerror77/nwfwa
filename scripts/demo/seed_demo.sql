@@ -140,7 +140,22 @@ VALUES
 INSERT INTO rules (id, rule_key, name, status, owner)
 VALUES
   ('50000000-0000-0000-0000-000000000001', 'rule_early_claim', 'Early claim', 'active', 'rules-ops'),
-  ('50000000-0000-0000-0000-000000000002', 'rule_high_amount_to_limit', 'High amount to policy limit', 'active', 'rules-ops')
+  ('50000000-0000-0000-0000-000000000002', 'rule_high_amount_to_limit', 'High amount to policy limit', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000003', 'rule_early_high_amount', 'Early high amount', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000004', 'rule_duplicate_claim', 'Duplicate claim', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000005', 'rule_provider_profile_high', 'Provider profile high', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000006', 'rule_low_medical_match', 'Low medical match', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000007', 'rule_medically_unnecessary_service', 'Medically unnecessary service', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000008', 'rule_large_limit_usage', 'Large limit usage', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000009', 'rule_high_cost_single_item', 'High cost single item', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000010', 'rule_upcoding_complexity', 'Upcoding complexity', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000011', 'rule_unbundling_component_pattern', 'Unbundling component pattern', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000012', 'rule_same_member_repeated_service', 'Same member repeated service', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000013', 'rule_relationship_concentration', 'Relationship concentration', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000014', 'rule_many_claim_items', 'Many claim items', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000015', 'rule_peer_p95_amount', 'Peer P95 amount', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000016', 'rule_peer_p99_amount', 'Peer P99 amount', 'active', 'rules-ops'),
+  ('50000000-0000-0000-0000-000000000017', 'rule_provider_high_risk_tier', 'Provider high risk tier', 'active', 'rules-ops')
 ON CONFLICT (rule_key) DO UPDATE
 SET name = EXCLUDED.name,
     status = EXCLUDED.status,
@@ -161,7 +176,7 @@ VALUES
   (
     (SELECT id FROM rules WHERE rule_key = 'rule_early_claim'),
     1,
-    '{"conditions":[{"field":"days_since_policy_start","operator":"<=","value":7}],"action":{"score":75,"alert_code":"EARLY_CLAIM","recommended_action":"ManualReview","reason":"Policy start within 7 days"}}'::jsonb,
+    '{"review_mode":"both","scheme_family":"early_high_value_claim","conditions":[{"field":"days_since_policy_start","operator":"<=","value":7}],"action":{"score":75,"alert_code":"EARLY_CLAIM","recommended_action":"ManualReview","reason":"Policy start within 7 days"}}'::jsonb,
     75,
     'ManualReview',
     'seed',
@@ -171,7 +186,157 @@ VALUES
   (
     (SELECT id FROM rules WHERE rule_key = 'rule_high_amount_to_limit'),
     1,
-    '{"conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.75}],"action":{"score":30,"alert_code":"HIGH_AMOUNT_TO_LIMIT","recommended_action":"ManualReview","reason":"Claim amount consumes a high share of policy limit"}}'::jsonb,
+    '{"review_mode":"both","scheme_family":"early_high_value_claim","conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.75}],"action":{"score":30,"alert_code":"HIGH_AMOUNT_TO_LIMIT","recommended_action":"ManualReview","reason":"Claim amount consumes a high share of policy limit"}}'::jsonb,
+    30,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_early_high_amount'),
+    1,
+    '{"review_mode":"both","scheme_family":"early_high_value_claim","conditions":[{"field":"days_since_policy_start","operator":"<=","value":10},{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.7}],"action":{"score":45,"alert_code":"EARLY_HIGH_AMOUNT","recommended_action":"ManualReview","reason":"Policy start is recent and claim amount is high relative to limit"}}'::jsonb,
+    45,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_duplicate_claim'),
+    1,
+    '{"review_mode":"both","scheme_family":"duplicate_billing","conditions":[{"field":"duplicate_claim_similarity_score","operator":">=","value":0.95}],"action":{"score":35,"alert_code":"DUPLICATE_CLAIM","recommended_action":"ManualReview","reason":"Similar member, provider, service date, item, and amount indicate possible duplicate billing"}}'::jsonb,
+    35,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_provider_profile_high'),
+    1,
+    '{"review_mode":"both","scheme_family":"provider_peer_outlier","conditions":[{"field":"provider_profile_score","operator":">=","value":70}],"action":{"score":30,"alert_code":"PROVIDER_PROFILE_HIGH","recommended_action":"ManualReview","reason":"Provider risk profile score is high versus peer baseline"}}'::jsonb,
+    30,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_low_medical_match'),
+    1,
+    '{"review_mode":"both","scheme_family":"diagnosis_procedure_mismatch","conditions":[{"field":"diagnosis_procedure_match_score","operator":"<=","value":0.4}],"action":{"score":30,"alert_code":"LOW_MEDICAL_MATCH","recommended_action":"ManualReview","reason":"Diagnosis and billed procedure have weak medical match"}}'::jsonb,
+    30,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_medically_unnecessary_service'),
+    1,
+    '{"review_mode":"both","scheme_family":"medically_unnecessary_service","conditions":[{"field":"clinical_review_required","operator":"==","value":1}],"action":{"score":30,"alert_code":"MEDICALLY_UNNECESSARY_SERVICE","recommended_action":"ManualReview","reason":"Clinical evidence is missing or insufficient for medical necessity"}}'::jsonb,
+    30,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_large_limit_usage'),
+    1,
+    '{"review_mode":"both","scheme_family":"early_high_value_claim","conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.8}],"action":{"score":35,"alert_code":"LARGE_LIMIT_USAGE","recommended_action":"ManualReview","reason":"Claim amount is close to policy limit"}}'::jsonb,
+    35,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_high_cost_single_item'),
+    1,
+    '{"review_mode":"both","scheme_family":"high_risk_claim","conditions":[{"field":"high_cost_item_ratio","operator":">=","value":0.5}],"action":{"score":25,"alert_code":"HIGH_COST_SINGLE_ITEM","recommended_action":"ManualReview","reason":"Single high-cost item contributes a high share of claim amount"}}'::jsonb,
+    25,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_upcoding_complexity'),
+    1,
+    '{"review_mode":"both","scheme_family":"upcoding","conditions":[{"field":"diagnosis_procedure_match_score","operator":"<=","value":0.45},{"field":"high_cost_item_ratio","operator":">=","value":0.5}],"action":{"score":35,"alert_code":"UPCODING_COMPLEXITY","recommended_action":"ManualReview","reason":"High-complexity or high-cost services have weak diagnosis support"}}'::jsonb,
+    35,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_unbundling_component_pattern'),
+    1,
+    '{"review_mode":"both","scheme_family":"unbundling","conditions":[{"field":"claim_item_count","operator":">=","value":6}],"action":{"score":25,"alert_code":"UNBUNDLING_COMPONENT_PATTERN","recommended_action":"ManualReview","reason":"Claim contains unusually many line items and may require unbundling review"}}'::jsonb,
+    25,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_same_member_repeated_service'),
+    1,
+    '{"review_mode":"both","scheme_family":"excessive_utilization","conditions":[{"field":"same_member_service_count_30d","operator":">=","value":3}],"action":{"score":25,"alert_code":"SAME_MEMBER_REPEATED_SERVICE","recommended_action":"ManualReview","reason":"Same member has repeated similar service usage within 30 days"}}'::jsonb,
+    25,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_relationship_concentration'),
+    1,
+    '{"review_mode":"both","scheme_family":"relationship_concentration","conditions":[{"field":"provider_high_risk_neighbor_signal","operator":"==","value":true}],"action":{"score":35,"alert_code":"RELATIONSHIP_CONCENTRATION","recommended_action":"EscalateInvestigation","reason":"Provider relationship graph has high-risk neighbor or concentration signal"}}'::jsonb,
+    35,
+    'EscalateInvestigation',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_many_claim_items'),
+    1,
+    '{"review_mode":"both","scheme_family":"excessive_utilization","conditions":[{"field":"claim_item_count","operator":">=","value":5}],"action":{"score":20,"alert_code":"MANY_CLAIM_ITEMS","recommended_action":"ManualReview","reason":"Claim contains many billing line items"}}'::jsonb,
+    20,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_peer_p95_amount'),
+    1,
+    '{"review_mode":"both","scheme_family":"provider_peer_outlier","conditions":[{"field":"claim_amount_peer_percentile","operator":">=","value":95}],"action":{"score":25,"alert_code":"PEER_P95_AMOUNT","recommended_action":"ManualReview","reason":"Claim amount is above peer P95"}}'::jsonb,
+    25,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_peer_p99_amount'),
+    1,
+    '{"review_mode":"both","scheme_family":"provider_peer_outlier","conditions":[{"field":"claim_amount_peer_percentile","operator":">=","value":99}],"action":{"score":40,"alert_code":"PEER_P99_AMOUNT","recommended_action":"ManualReview","reason":"Claim amount is above peer P99"}}'::jsonb,
+    40,
+    'ManualReview',
+    'seed',
+    'seed',
+    now()
+  ),
+  (
+    (SELECT id FROM rules WHERE rule_key = 'rule_provider_high_risk_tier'),
+    1,
+    '{"review_mode":"both","scheme_family":"provider_peer_outlier","conditions":[{"field":"provider_risk_tier","operator":"==","value":"HIGH"}],"action":{"score":30,"alert_code":"PROVIDER_HIGH_RISK_TIER","recommended_action":"ManualReview","reason":"Provider risk tier is high"}}'::jsonb,
     30,
     'ManualReview',
     'seed',
@@ -753,9 +918,14 @@ VALUES (
     "time_split_field": "service_date",
     "group_split_fields": ["member_id", "policy_id", "provider_id"],
     "shadow_comparison_status": "passed",
+    "serving_version_lock_status": "passed",
+    "artifact_integrity_status": "passed",
+    "feature_store_materialization_status": "passed",
+    "segment_fairness_status": "passed",
     "feature_reproducibility_hash": "sha256:demo-baseline-feature-reproducibility",
     "label_provenance_status": "passed",
     "label_reviewer_source": "investigation_results",
+    "pilot_validation_status": "passed",
     "approval_status": "approved"
   }'::jsonb
 )
@@ -787,18 +957,31 @@ INSERT INTO scoring_runs (
   recommended_action,
   completed_at
 )
-VALUES (
-  '80000000-0000-0000-0000-000000000001',
-  'run-demo-historical-9100',
-  '40000000-0000-0000-0000-000000000900',
-  'tpa-demo',
-  'seed',
-  'completed',
-  82,
-  'Red',
-  'ManualReview',
-  now()
-)
+VALUES
+  (
+    '80000000-0000-0000-0000-000000000001',
+    'run-demo-historical-9100',
+    '40000000-0000-0000-0000-000000000900',
+    'tpa-demo',
+    'seed',
+    'completed',
+    82,
+    'Red',
+    'ManualReview',
+    now()
+  ),
+  (
+    '80000000-0000-0000-0000-000000000287',
+    'run-demo-scope-0287',
+    '40000000-0000-0000-0000-000000000287',
+    'tpa-demo',
+    'seed',
+    'seeded_scope',
+    NULL,
+    NULL,
+    NULL,
+    now()
+  )
 ON CONFLICT (run_id) DO UPDATE
 SET claim_id = EXCLUDED.claim_id,
     source_system = EXCLUDED.source_system,
@@ -884,6 +1067,19 @@ INSERT INTO audit_events (
 )
 VALUES
   (
+    'audit-demo-scope-0287',
+    'run-demo-scope-0287',
+    '40000000-0000-0000-0000-000000000287',
+    'seed',
+    'system',
+    'tpa-demo',
+    'claim.seeded',
+    'completed',
+    'Seeded demo claim assigned to demo customer scope.',
+    '{"customer_scope_id":"demo-customer","seed_scope":true}'::jsonb,
+    '["claims:CLM-0287"]'::jsonb
+  ),
+  (
     'audit-demo-score-9100',
     'run-demo-historical-9100',
     '40000000-0000-0000-0000-000000000900',
@@ -893,7 +1089,7 @@ VALUES
     'claim.scored',
     'completed',
     'Seeded historical claim scored as Red.',
-    '{"risk_score":82,"rag":"Red","recommended_action":"ManualReview"}'::jsonb,
+    '{"customer_scope_id":"demo-customer","risk_score":82,"rag":"Red","recommended_action":"ManualReview"}'::jsonb,
     '["scoring_runs:run-demo-historical-9100"]'::jsonb
   ),
   (
@@ -906,7 +1102,7 @@ VALUES
     'qa.result.received',
     'completed',
     'Seeded QA review found provider-pattern issue.',
-    '{"qa_case_id":"QA-9100","feedback_target":"rules"}'::jsonb,
+    '{"customer_scope_id":"demo-customer","qa_case_id":"QA-9100","feedback_target":"rules"}'::jsonb,
     '["qa_reviews:QA-9100","rule_runs:HIGH_AMOUNT_TO_LIMIT"]'::jsonb
   )
 ON CONFLICT (audit_id) DO UPDATE

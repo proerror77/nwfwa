@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 import json
+import http.client
 import os
 import sys
 import time
@@ -14,8 +15,49 @@ SOURCE_SYSTEM = os.environ.get("FWA_SOURCE_SYSTEM", "tpa-demo")
 CLAIM_ID = os.environ.get("FWA_DEMO_CLAIM_ID", "CLM-0287")
 MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
+EXPECTED_ACTOR_ROLE = os.environ.get("FWA_DEMO_EXPECTED_ACTOR_ROLE")
+EXPECTED_CUSTOMER_SCOPE_ID = os.environ.get("FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID")
+EXPECTED_MODEL_RUNTIME_KIND = os.environ.get("FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND", "python_http")
+EXPECTED_MODEL_METADATA_RUNTIME_KIND = os.environ.get(
+    "FWA_DEMO_EXPECTED_MODEL_METADATA_RUNTIME_KIND",
+    "python_fastapi" if EXPECTED_MODEL_RUNTIME_KIND == "python_http" else "",
+)
+EXPECTED_MODEL_PROBABILITIES = [
+    value.strip()
+    for value in os.environ.get(
+        "FWA_DEMO_EXPECTED_MODEL_PROBABILITIES",
+        "fraud_probability,abuse_probability,waste_probability"
+        if EXPECTED_MODEL_RUNTIME_KIND == "python_http"
+        else "fraud_probability",
+    ).split(",")
+    if value.strip()
+]
+CUSTOMER_PRINCIPAL_SMOKE = "--customer-principal-smoke" in sys.argv
+CUSTOMER_PRINCIPAL_ASSERTIONS = (
+    CUSTOMER_PRINCIPAL_SMOKE
+    or EXPECTED_ACTOR_ROLE is not None
+    or EXPECTED_CUSTOMER_SCOPE_ID is not None
+)
 CANDIDATE_RULE_ID = "candidate_early_high_amount"
 ROUTING_POLICY_PREFIX = "demo_strict_prepay"
+STANDARD_RULE_PACK = {
+    "EARLY_CLAIM": "early_high_value_claim",
+    "LARGE_LIMIT_USAGE": "early_high_value_claim",
+    "PEER_P95_AMOUNT": "provider_peer_outlier",
+    "PEER_P99_AMOUNT": "provider_peer_outlier",
+    "EARLY_HIGH_AMOUNT": "early_high_value_claim",
+    "DUPLICATE_CLAIM": "duplicate_billing",
+    "PROVIDER_PROFILE_HIGH": "provider_peer_outlier",
+    "LOW_MEDICAL_MATCH": "diagnosis_procedure_mismatch",
+    "MEDICALLY_UNNECESSARY_SERVICE": "medically_unnecessary_service",
+    "MANY_CLAIM_ITEMS": "excessive_utilization",
+    "HIGH_COST_SINGLE_ITEM": "high_risk_claim",
+    "PROVIDER_HIGH_RISK_TIER": "provider_peer_outlier",
+    "UPCODING_COMPLEXITY": "upcoding",
+    "UNBUNDLING_COMPONENT_PATTERN": "unbundling",
+    "SAME_MEMBER_REPEATED_SERVICE": "excessive_utilization",
+    "RELATIONSHIP_CONCENTRATION": "relationship_concentration",
+}
 
 
 def request(method, path, payload=None, retries=1):
@@ -39,7 +81,12 @@ def request(method, path, payload=None, retries=1):
         except urllib.error.HTTPError as error:
             last_error = f"HTTP {error.code}: {error.read().decode('utf-8', errors='replace')}"
             time.sleep(1)
-        except (urllib.error.URLError, TimeoutError) as error:
+        except (
+            urllib.error.URLError,
+            http.client.RemoteDisconnected,
+            ConnectionError,
+            TimeoutError,
+        ) as error:
             last_error = error
             time.sleep(1)
     raise RuntimeError(f"{method} {path} failed: {last_error}")
@@ -48,6 +95,23 @@ def request(method, path, payload=None, retries=1):
 def assert_true(condition, message):
     if not condition:
         raise AssertionError(message)
+
+
+def require_customer_principal_smoke_config():
+    if not CUSTOMER_PRINCIPAL_ASSERTIONS:
+        return
+    assert_true(
+        API_KEY != "dev-secret",
+        "customer principal smoke requires a non-dev FWA_API_KEY",
+    )
+    assert_true(
+        EXPECTED_ACTOR_ROLE,
+        "customer principal smoke requires FWA_DEMO_EXPECTED_ACTOR_ROLE",
+    )
+    assert_true(
+        EXPECTED_CUSTOMER_SCOPE_ID,
+        "customer principal smoke requires FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID",
+    )
 
 
 def agent_rag(score_rag):
@@ -63,6 +127,89 @@ def has_label(labels, **expected):
         all(label.get(field) == value for field, value in expected.items())
         and label.get("evidence_refs")
         for label in labels
+    )
+
+
+def has_health_check(checks, name, status):
+    return any(check.get("name") == name and check.get("status") == status for check in checks)
+
+
+def assert_health_readiness_contract(health):
+    pilot_readiness = health.get("pilot_readiness", {})
+    assert_true(
+        pilot_readiness.get("status") in {"ready", "not_ready"},
+        "health endpoint missing pilot readiness status",
+    )
+    blocking_checks = pilot_readiness.get("blocking_checks", [])
+    ready_checks = pilot_readiness.get("ready_checks", [])
+    required_check_names = pilot_readiness.get("required_check_names", [])
+    required_check_count = pilot_readiness.get("required_check_count")
+    blocking_check_count = pilot_readiness.get("blocking_check_count")
+    ready_check_count = pilot_readiness.get("ready_check_count")
+    assert_true(required_check_names, "pilot readiness missing required check names")
+    assert_true(
+        required_check_count == len(required_check_names),
+        "pilot readiness required check count mismatch",
+    )
+    assert_true(
+        blocking_check_count == len(blocking_checks),
+        "pilot readiness blocking check count mismatch",
+    )
+    assert_true(
+        ready_check_count == len(ready_checks),
+        "pilot readiness ready check count mismatch",
+    )
+    assert_true(
+        required_check_count == blocking_check_count + ready_check_count,
+        "pilot readiness check counts do not reconcile",
+    )
+    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+        health_checks = health.get("checks", [])
+        assert_true(
+            has_health_check(health_checks, "api_key_configuration", "configured"),
+            "customer principal smoke requires configured API key readiness",
+        )
+        assert_true(
+            has_health_check(health_checks, "source_system_configuration", "configured"),
+            "customer principal smoke requires configured source-system readiness",
+        )
+        assert_true(
+            has_health_check(health_checks, "customer_scope_configuration", "configured"),
+            "customer principal smoke requires configured customer-scope readiness",
+        )
+        assert_true(
+            not has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
+            "customer principal smoke must not use the local dev API key",
+        )
+        assert_true(
+            not any(
+                check.get("name")
+                in {
+                    "api_key_configuration",
+                    "source_system_configuration",
+                    "customer_scope_configuration",
+                }
+                for check in blocking_checks
+            ),
+            "customer principal smoke has customer identity readiness blockers",
+        )
+        return
+
+    assert_true(
+        pilot_readiness.get("status") == "not_ready",
+        "local demo health should expose pilot readiness as not_ready",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "api_key_configuration", "local_dev_key"),
+        "pilot readiness missing local API key blocker",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "model_service_configuration", "local_dev_model_service"),
+        "pilot readiness missing local model service blocker",
+    )
+    assert_true(
+        has_health_check(blocking_checks, "agent_policy_configuration", "local_demo_agent_policy"),
+        "pilot readiness missing local Agent policy blocker",
     )
 
 
@@ -908,6 +1055,16 @@ def assert_dataset_model_lineage():
         decimal_value(evaluation.get("metrics_json", {}).get("psi")) <= Decimal("0.1"),
         "baseline evaluation PSI should be within demo governance threshold",
     )
+    for gate_status in [
+        "serving_version_lock_status",
+        "artifact_integrity_status",
+        "feature_store_materialization_status",
+        "segment_fairness_status",
+    ]:
+        assert_true(
+            evaluation.get("metrics_json", {}).get(gate_status) == "passed",
+            f"baseline evaluation missing {gate_status}",
+        )
 
     lineage = next(
         (
@@ -1173,10 +1330,60 @@ def assert_tpa_api_call_observability(score, investigation, qa):
             f"{event_type} idempotency key mismatch",
         )
         assert_true(call.get("evidence_refs"), f"{event_type} evidence refs missing")
+        if CUSTOMER_PRINCIPAL_ASSERTIONS:
+            assert_true(
+                call.get("actor_role") == EXPECTED_ACTOR_ROLE,
+                f"{event_type} actor role mismatch",
+            )
+            assert_true(
+                call.get("customer_scope_id") == EXPECTED_CUSTOMER_SCOPE_ID,
+                f"{event_type} customer scope mismatch",
+            )
 
-    return {
+    result = {
         "api_call_count": len(api_calls),
         "observed_event_types": sorted(expected),
+    }
+    if CUSTOMER_PRINCIPAL_ASSERTIONS:
+        result["expected_actor_role"] = EXPECTED_ACTOR_ROLE
+        result["expected_customer_scope_id"] = EXPECTED_CUSTOMER_SCOPE_ID
+    return result
+
+
+def assert_customer_principal_audit_observability(audit):
+    if not CUSTOMER_PRINCIPAL_ASSERTIONS:
+        return None
+    expected_event_types = {
+        "scoring.completed",
+        "investigation.result.received",
+        "qa.result.received",
+        "medical.review.recorded",
+    }
+    observed = {}
+    for event_type in expected_event_types:
+        observed[event_type] = next(
+            (
+                event
+                for event in audit.get("events", [])
+                if event.get("event_type") == event_type
+            ),
+            None,
+        )
+    missing = {event_type for event_type, event in observed.items() if event is None}
+    assert_true(not missing, f"customer principal audit missing event types: {sorted(missing)}")
+    for event_type, event in observed.items():
+        assert_true(
+            event.get("actor_role") == EXPECTED_ACTOR_ROLE,
+            f"{event_type} audit actor role mismatch",
+        )
+        assert_true(
+            event.get("payload", {}).get("customer_scope_id") == EXPECTED_CUSTOMER_SCOPE_ID,
+            f"{event_type} audit customer scope mismatch",
+        )
+    return {
+        "observed_event_types": sorted(expected_event_types),
+        "expected_actor_role": EXPECTED_ACTOR_ROLE,
+        "expected_customer_scope_id": EXPECTED_CUSTOMER_SCOPE_ID,
     }
 
 
@@ -1395,6 +1602,47 @@ def assert_fwa_scheme_taxonomy():
     }
 
 
+def assert_standard_rule_pack():
+    rules = request("GET", "/api/v1/ops/rules").get("rules", [])
+    by_alert_code = {rule.get("alert_code"): rule for rule in rules}
+    assert_true(
+        len(rules) >= len(STANDARD_RULE_PACK),
+        "standard FWA rule pack has fewer rules than expected",
+    )
+    for alert_code, scheme_family in STANDARD_RULE_PACK.items():
+        rule = by_alert_code.get(alert_code)
+        assert_true(rule is not None, f"standard FWA rule pack missing {alert_code}")
+        assert_true(
+            rule.get("status") == "active",
+            f"standard FWA rule pack rule {alert_code} is not active",
+        )
+        assert_true(
+            rule.get("scheme_family") == scheme_family,
+            f"standard FWA rule pack rule {alert_code} scheme mismatch",
+        )
+        assert_true(
+            rule.get("review_mode") in ("both", "pre_payment", "post_payment"),
+            f"standard FWA rule pack rule {alert_code} missing review mode",
+        )
+        assert_true(
+            rule.get("evidence_refs"),
+            f"standard FWA rule pack rule {alert_code} missing evidence refs",
+        )
+        assert_true(
+            rule.get("backtest_result", {}).get("status") in ("not_run", "completed"),
+            f"standard FWA rule pack rule {alert_code} missing backtest governance",
+        )
+        assert_true(
+            rule.get("false_positive_history", {}).get("status")
+            in ("not_observed", "observed"),
+            f"standard FWA rule pack rule {alert_code} missing false-positive governance",
+        )
+    return {
+        "rule_count": len(rules),
+        "alert_codes": sorted(STANDARD_RULE_PACK.keys()),
+    }
+
+
 def assert_dashboard_roi(dashboard, agent, lead):
     value = dashboard.get("value_measurement", {})
     assert_true(
@@ -1416,6 +1664,7 @@ def assert_dashboard_roi(dashboard, agent, lead):
         any(
             item.get("source_type") == "agent"
             and item.get("source_id") == agent["agent_run_id"]
+            and item.get("financial_impact_type") == "estimated_impact"
             and decimal_value(item.get("saving_amount", "0")) > Decimal("0")
             and f"agent_run:{agent['agent_run_id']}" in item.get("evidence_refs", [])
             for item in attributions
@@ -1426,6 +1675,7 @@ def assert_dashboard_roi(dashboard, agent, lead):
         any(
             item.get("source_type") == "rule"
             and item.get("source_id") == "EARLY_CLAIM"
+            and item.get("financial_impact_type") == "estimated_impact"
             and decimal_value(item.get("saving_amount", "0")) > Decimal("0")
             and "rule_runs:EARLY_CLAIM" in item.get("evidence_refs", [])
             for item in attributions
@@ -1464,6 +1714,7 @@ def assert_dashboard_roi(dashboard, agent, lead):
     )
     return {
         "net_value": value["net_value"],
+        "deterrence_estimate": value.get("deterrence_estimate", "0.00"),
         "estimated_impact": value["estimated_impact"],
         "attribution_count": len(attributions),
         "segment_count": len(segments),
@@ -1509,8 +1760,12 @@ def govern_agent_run(agent):
     assert_true(policy_check is not None, "agent run log missing tool policy check")
     assert_true(policy_check.get("decision") == "allowed", "agent tool policy check did not allow tool")
     assert_true(
-        policy_check.get("policy_name") == "agent_tool_allowlist",
+        policy_check.get("policy_name") == "demo-agent-policy",
         "agent tool policy check policy mismatch",
+    )
+    assert_true(
+        "policy:demo-agent-policy" in policy_check.get("evidence_refs", []),
+        "agent tool policy check missing configured policy evidence",
     )
     tool_result = next(
         (
@@ -1570,6 +1825,10 @@ def govern_agent_run(agent):
         f"agent_run:{agent_run_id}" in approval_record.get("evidence_refs", []),
         "agent approval missing run evidence ref",
     )
+    assert_true(
+        "policy:demo-agent-policy" in approval_record.get("evidence_refs", []),
+        "agent approval missing policy evidence ref",
+    )
 
     approved_runs = request("GET", "/api/v1/ops/agent-runs").get("runs", [])
     approved_run = next((item for item in approved_runs if item.get("agent_run_id") == agent_run_id), None)
@@ -1599,9 +1858,42 @@ def govern_agent_run(agent):
         "GET",
         f"/api/v1/ops/audit-events?agent_run_id={agent_run_id}&limit=10",
     ).get("events", [])
+    investigation_event = next(
+        (
+            event
+            for event in audit_events
+            if event.get("event_type") == "agent.investigation.completed"
+        ),
+        None,
+    )
     assert_true(
-        any(event.get("event_type") == "agent.investigation.completed" for event in audit_events),
+        investigation_event is not None,
         "agent audit log missing investigation completion",
+    )
+    investigation_payload = investigation_event.get("payload", {})
+    assert_true(
+        investigation_payload.get("decision_boundary") == "assistive_only",
+        "agent investigation audit missing assistive-only boundary",
+    )
+    assert_true(
+        investigation_payload.get("agent_policy_id") == "demo-agent-policy",
+        "agent investigation audit missing policy id",
+    )
+    assert_true(
+        investigation_payload.get("tool_name") == "knowledge.search_similar",
+        "agent investigation audit missing tool name",
+    )
+    assert_true(
+        investigation_payload.get("policy_check_id"),
+        "agent investigation audit missing policy check id",
+    )
+    assert_true(
+        investigation_payload.get("tool_call_id"),
+        "agent investigation audit missing tool call id",
+    )
+    assert_true(
+        "policy:demo-agent-policy" in investigation_event.get("evidence_refs", []),
+        "agent investigation audit missing policy evidence ref",
     )
     assert_true(
         any(event.get("event_type") == "agent.approval.decided" for event in audit_events),
@@ -1717,21 +2009,30 @@ def score_normalized_inbox_context():
     assert_true(inbox.get("scoring_ready") is True, f"inbox context not scoring ready: {inbox}")
     canonical_claim_context = inbox.get("canonical_claim_context")
     assert_true(canonical_claim_context, "inbox normalize missing canonical_claim_context")
+    assert_true(inbox.get("run_id"), "inbox normalize missing run_id")
 
     score = request(
         "POST",
         "/api/v1/claims/score",
         {
             "source_system": SOURCE_SYSTEM,
-            "canonical_claim_context": canonical_claim_context,
+            "inbox_run_id": inbox.get("run_id"),
         },
     )
-    assert_true(score.get("claim_id") == claim_id, "canonical context score claim_id mismatch")
-    assert_true(score.get("audit_id"), "canonical context score missing audit_id")
-    assert_true(len(score.get("layers", [])) == 7, "canonical context score missing 7 layers")
+    assert_true(score.get("claim_id") == claim_id, "inbox handoff score claim_id mismatch")
+    assert_true(score.get("audit_id"), "inbox handoff score missing audit_id")
+    assert_true(len(score.get("layers", [])) == 7, "inbox handoff score missing 7 layers")
+    assert_true(
+        all(layer.get("evidence_refs") for layer in score.get("layers", [])),
+        "inbox handoff score layers missing evidence refs",
+    )
     assert_true(
         f"invoice:{invoice_id}:fee_detail:{line_id}" in score.get("evidence_refs", []),
-        "canonical context score did not preserve inbox bill-line evidence ref",
+        "inbox handoff score did not preserve inbox bill-line evidence ref",
+    )
+    assert_true(
+        f"inbox_claim_runs:{inbox.get('run_id')}" in score.get("evidence_refs", []),
+        "inbox handoff score missing inbox run evidence ref",
     )
     audit = request("GET", f"/api/v1/audit/claims/{claim_id}")
     assert_true(
@@ -1755,16 +2056,19 @@ def score_normalized_inbox_context():
 
 
 def main():
+    require_customer_principal_smoke_config()
     health = request("GET", "/api/v1/health", retries=180)
     assert_true(health.get("status") == "ok", "health endpoint did not return ok")
     assert_true(health.get("service") == "api-server", "health endpoint missing service metadata")
     assert_true(health.get("version"), "health endpoint missing version metadata")
     health_checks = health.get("checks", [])
     assert_true(
-        any(check.get("name") == "http_router" and check.get("status") == "ok" for check in health_checks),
+        has_health_check(health_checks, "http_router", "ok"),
         "health endpoint missing http_router check",
     )
+    assert_health_readiness_contract(health)
     scheme_taxonomy = assert_fwa_scheme_taxonomy()
+    standard_rule_pack = assert_standard_rule_pack()
     inbox_canonical_score = score_normalized_inbox_context()
 
     score = request(
@@ -1777,23 +2081,28 @@ def main():
     assert_true(score.get("audit_id"), "score response missing audit_id")
     assert_true(isinstance(score.get("risk_score"), int), "score response missing risk_score")
     assert_true(len(score.get("layers", [])) == 7, "score response must include 7 layers")
+    assert_true(
+        all(layer.get("evidence_refs") for layer in score.get("layers", [])),
+        "score response layers missing evidence refs",
+    )
     assert_true(score.get("top_reasons"), "score response missing top_reasons")
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
     model_score = score.get("model_score", {})
     assert_true(
-        model_score.get("runtime_kind") == "python_http",
-        "score response did not use Python HTTP ML runtime",
+        model_score.get("runtime_kind") == EXPECTED_MODEL_RUNTIME_KIND,
+        f"score response did not use expected ML runtime {EXPECTED_MODEL_RUNTIME_KIND}",
     )
     assert_true(
         model_score.get("execution_provider") == "cpu",
         "model score execution provider mismatch",
     )
     metadata = model_score.get("metadata", {})
-    assert_true(
-        metadata.get("runtime_kind") == "python_fastapi",
-        "model score metadata missing Python service runtime",
-    )
-    for probability in ["fraud_probability", "abuse_probability", "waste_probability"]:
+    if EXPECTED_MODEL_METADATA_RUNTIME_KIND:
+        assert_true(
+            metadata.get("runtime_kind") == EXPECTED_MODEL_METADATA_RUNTIME_KIND,
+            f"model score metadata missing expected runtime {EXPECTED_MODEL_METADATA_RUNTIME_KIND}",
+        )
+    for probability in EXPECTED_MODEL_PROBABILITIES:
         assert_true(isinstance(metadata.get(probability), (int, float)), f"model metadata missing {probability}")
     member_profile = assert_member_profile_summary()
     provider_risk = assert_provider_risk_summary()
@@ -2062,6 +2371,7 @@ def main():
         "knowledge.case.published" in event_types,
         "audit history missing knowledge.case.published",
     )
+    customer_principal_audit = assert_customer_principal_audit_observability(audit)
     api_call_observability = assert_tpa_api_call_observability(score, investigation, qa)
     governance_audit = assert_governance_audit_trail(
         agent_governance,
@@ -2229,6 +2539,7 @@ def main():
                 "audit_id": score["audit_id"],
                 "risk_score": score["risk_score"],
                 "scheme_taxonomy": {"scheme_count": scheme_taxonomy["scheme_count"]},
+                "standard_rule_pack": standard_rule_pack,
                 "member_profile": member_profile,
                 "provider_risk": provider_risk,
                 "similar_case": results[0]["case_id"],
@@ -2246,6 +2557,7 @@ def main():
                 "qa_feedback_update": qa_feedback_update,
                 "knowledge_publish": knowledge_publish,
                 "api_call_observability": api_call_observability,
+                "customer_principal_audit": customer_principal_audit,
                 "governance_audit": governance_audit,
                 "dataset_model_lineage": dataset_model_lineage,
                 "factor_readiness": factor_readiness,
@@ -2263,10 +2575,10 @@ if __name__ == "__main__":
     try:
         if len(sys.argv) == 2 and sys.argv[1] == "--govern-retraining-candidate":
             govern_retraining_candidate()
-        elif len(sys.argv) == 1:
+        elif len(sys.argv) == 1 or (len(sys.argv) == 2 and sys.argv[1] == "--customer-principal-smoke"):
             main()
         else:
-            raise RuntimeError("usage: smoke_demo.py [--govern-retraining-candidate]")
+            raise RuntimeError("usage: smoke_demo.py [--govern-retraining-candidate|--customer-principal-smoke]")
     except Exception as error:
         print(f"demo smoke failed: {error}", file=sys.stderr)
         sys.exit(1)

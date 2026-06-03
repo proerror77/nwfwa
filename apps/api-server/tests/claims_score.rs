@@ -21,7 +21,23 @@ fn test_config() -> AppConfig {
         source_system: "tpa-demo".into(),
         database_url: "postgres://unused".into(),
         model_service_url: "heuristic://local".into(),
+        object_storage_uri: "local://demo-artifacts".into(),
+        customer_scope_id: "demo-customer".into(),
+        retention_policy_id: "demo-retention-policy".into(),
+        backup_restore_plan_id: "demo-backup-restore-plan".into(),
+        pii_masking_policy_id: "demo-pii-masking-policy".into(),
+        key_rotation_policy_id: "demo-key-rotation-policy".into(),
+        network_allowlist_id: "demo-network-allowlist".into(),
+        alert_routing_policy_id: "demo-alert-routing-policy".into(),
+        observability_exporter_endpoint: "local://demo-observability".into(),
+        agent_policy_id: "demo-agent-policy".into(),
     }
+}
+
+fn scoped_config(customer_scope_id: &str) -> AppConfig {
+    let mut config = test_config();
+    config.customer_scope_id = customer_scope_id.into();
+    config
 }
 
 async fn activate_candidate_model(repository: SharedRepository) {
@@ -177,6 +193,90 @@ async fn scores_full_payload_with_api_key() {
 }
 
 #[tokio::test]
+async fn claim_id_scoring_is_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HighRiskScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HighRiskScorer),
+        repository,
+    );
+
+    let alpha_score = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-SCOPE-CLAIM-1",
+                "claim_amount": "8000",
+                "currency": "CNY",
+                "service_date": "2026-01-06",
+                "diagnosis_code": "J10",
+                "items": [
+                  {
+                    "item_code": "PROC-001",
+                    "item_type": "procedure",
+                    "description": "Imaging",
+                    "quantity": 1,
+                    "unit_amount": "8000",
+                    "total_amount": "8000"
+                  }
+                ],
+                "member": {
+                  "external_member_id": "MBR-SCOPE-CLAIM-1"
+                },
+                "policy": {
+                  "external_policy_id": "POL-SCOPE-CLAIM-1",
+                  "product_code": "MED",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": "10000",
+                  "currency": "CNY"
+                },
+                "provider": {
+                  "external_provider_id": "PRV-SCOPE-CLAIM-1",
+                  "name": "Scope Hospital",
+                  "provider_type": "hospital",
+                  "region": "SH",
+                  "risk_tier": "High"
+                }
+              }
+            }"#,
+        ))
+        .unwrap();
+    let alpha_response = alpha_app.oneshot(alpha_score).await.unwrap();
+    assert_eq!(alpha_response.status(), StatusCode::OK);
+
+    let beta_reload = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim_id": "CLM-SCOPE-CLAIM-1"
+            }"#,
+        ))
+        .unwrap();
+    let beta_response = beta_app.oneshot(beta_reload).await.unwrap();
+    assert_eq!(beta_response.status(), StatusCode::NOT_FOUND);
+    let body = to_bytes(beta_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(body["code"], "CLAIM_NOT_FOUND");
+}
+
+#[tokio::test]
 async fn scores_spec_style_top_level_full_payload() {
     let app = build_app(test_config());
 
@@ -290,6 +390,31 @@ async fn scores_spec_style_top_level_full_payload() {
     assert_eq!(layers[5]["layer_id"], "L6_PROVIDER_GRAPH_RISK");
     assert_eq!(layers[6]["layer_id"], "L7_RISK_FUSION_ROUTING");
     assert_eq!(layers[6]["score"], body["scores"]["final_score"]);
+    assert!(layers.iter().all(|layer| {
+        layer["evidence_refs"]
+            .as_array()
+            .is_some_and(|refs| !refs.is_empty())
+    }));
+    assert!(layers[0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "feature_values:claim_amount_peer_percentile:v1"
+        )));
+    assert!(layers[1]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("rules:rule_early_claim:v1")));
+    assert!(layers[3]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model_versions:baseline_fwa:0.1.0")));
+    assert!(layers[6]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "routing_policies:fwa_risk_fusion_routing:v1:pre_payment"
+        )));
     let evidence_refs = body["evidence_refs"]
         .as_array()
         .expect("response should include evidence refs");
@@ -335,6 +460,10 @@ async fn scores_spec_style_top_level_full_payload() {
     assert_eq!(scoring_event["run_id"], body["run_id"]);
     assert_eq!(scoring_event["payload"]["risk_level"], "Critical");
     assert_eq!(scoring_event["payload"]["confidence"], "High");
+    assert_eq!(
+        scoring_event["payload"]["customer_scope_id"],
+        "demo-customer"
+    );
     assert_eq!(
         scoring_event["payload"]["scores"]["final_score"],
         body["scores"]["final_score"]
@@ -487,6 +616,159 @@ async fn scores_inbox_canonical_claim_context() {
             .as_array()
             .unwrap()
             .contains(&serde_json::json!("medical_record:MR-INBOX-1"))
+    );
+}
+
+#[tokio::test]
+async fn scores_scoring_ready_inbox_run_handoff() {
+    let app = build_app(test_config());
+
+    let normalize_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/inbox/claims/normalize")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "systemCode": "tpa-demo",
+              "transNo": "score-handoff-001",
+              "reportCase": {
+                "reportNo": "CLM-INBOX-HANDOFF",
+                "accidentDate": 1767225600000,
+                "claimReceiveDate": 1767312000000,
+                "calculateRisk": "Y",
+                "medicalRecordInfoList": [
+                  {
+                    "id": 88001,
+                    "hospitalName": "Inbox Hospital",
+                    "departmentName": "内科",
+                    "diagnosisName": "流感",
+                    "medicalType": "门诊",
+                    "visitDate": 1767225600000,
+                    "medicalRecordInformation": "诊断：流感"
+                  }
+                ],
+                "policyList": [
+                  {
+                    "policyNo": "POL-INBOX-HANDOFF",
+                    "insuredName": "LEE, Peter",
+                    "coverageLimit": 10000,
+                    "validateDate": 1735689600000,
+                    "expireDate": 1798675200000,
+                    "invoiceList": [
+                      {
+                        "invoiceNo": "INV-INBOX-HANDOFF",
+                        "feeAmount": 8800,
+                        "startDate": 1767225600000,
+                        "hospitalCode": "PRV-INBOX-HANDOFF",
+                        "hospitalName": "Inbox Hospital",
+                        "diagnosisList": [
+                          {
+                            "detailCode": "J10",
+                            "detailName": "流感",
+                            "primary": true
+                          }
+                        ],
+                        "feeList": [
+                          {
+                            "feeCategory": "inspectionFee",
+                            "feeDetailList": [
+                              {
+                                "id": 88001,
+                                "name": "High cost imaging",
+                                "amount": 8800,
+                                "medicalCategory": "procedure"
+                              }
+                            ]
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }"#,
+        ))
+        .unwrap();
+    let normalize_response = app.clone().oneshot(normalize_request).await.unwrap();
+    assert_eq!(normalize_response.status(), StatusCode::OK);
+    let normalize_body = to_bytes(normalize_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let normalize_body: serde_json::Value = serde_json::from_slice(&normalize_body).unwrap();
+    assert_eq!(normalize_body["scoring_ready"], true);
+
+    let score_request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(format!(
+            r#"{{
+              "source_system": "tpa-demo",
+              "inbox_run_id": {}
+            }}"#,
+            serde_json::to_string(&normalize_body["run_id"]).unwrap()
+        )))
+        .unwrap();
+    let score_response = app.clone().oneshot(score_request).await.unwrap();
+    assert_eq!(score_response.status(), StatusCode::OK);
+    let score_body = to_bytes(score_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let score_body: serde_json::Value = serde_json::from_slice(&score_body).unwrap();
+
+    assert_eq!(score_body["claim_id"], "CLM-INBOX-HANDOFF");
+    assert!(score_body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!(
+            "inbox_claim_runs:{}",
+            normalize_body["run_id"].as_str().unwrap()
+        ))));
+    assert!(score_body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(format!(
+            "audit_events:{}",
+            normalize_body["audit_id"].as_str().unwrap()
+        ))));
+    assert!(score_body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:INV-INBOX-HANDOFF:fee_detail:88001"
+        )));
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-INBOX-HANDOFF")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    let trace = &scoring_event["payload"]["canonical_claim_context_trace"];
+    assert_eq!(trace["input_mode"], "inbox_run");
+    assert_eq!(trace["inbox_run_id"], normalize_body["run_id"]);
+    assert_eq!(trace["inbox_audit_id"], normalize_body["audit_id"]);
+    assert_eq!(
+        trace["inbox_idempotency_key"],
+        normalize_body["idempotency_key"]
+    );
+    assert_eq!(
+        trace["raw_payload_checksum"],
+        normalize_body["raw_payload_checksum"]
     );
 }
 
@@ -1817,13 +2099,16 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     let one_of = schema["components"]["schemas"]["ScoreClaimRequest"]["oneOf"]
         .as_array()
         .expect("request schema oneOf");
-    assert_eq!(one_of.len(), 3);
+    assert_eq!(one_of.len(), 4);
     assert!(
         one_of
             .iter()
             .any(|variant| variant["$ref"]
                 == "#/components/schemas/CanonicalContextScoreClaimRequest")
     );
+    assert!(one_of
+        .iter()
+        .any(|variant| variant["$ref"] == "#/components/schemas/InboxHandoffScoreClaimRequest"));
     let claim_id_mode = &schema["components"]["schemas"]["ClaimIdScoreClaimRequest"];
     assert_eq!(
         claim_id_mode["properties"]["review_mode"]["enum"],
@@ -1845,6 +2130,8 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "provider_profile",
         "provider_relationships",
         "canonical_claim_context",
+        "inbox_run_id",
+        "inbox_idempotency_key",
     ] {
         assert!(
             claim_id_mode["not"]["anyOf"]
@@ -1875,6 +2162,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .expect("full payload mode forbidden fields")
         .iter()
         .any(|schema| schema["required"][0] == "canonical_claim_context"));
+    assert!(full_payload_mode["not"]["anyOf"]
+        .as_array()
+        .expect("full payload mode forbidden fields")
+        .iter()
+        .any(|schema| schema["required"][0] == "inbox_run_id"));
     let canonical_mode = &schema["components"]["schemas"]["CanonicalContextScoreClaimRequest"];
     assert_eq!(
         canonical_mode["properties"]["canonical_claim_context"]["$ref"],
@@ -1885,6 +2177,22 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         .expect("canonical mode forbidden fields")
         .iter()
         .any(|schema| schema["required"][0] == "claim"));
+    let inbox_mode = &schema["components"]["schemas"]["InboxHandoffScoreClaimRequest"];
+    assert_eq!(inbox_mode["properties"]["inbox_run_id"]["minLength"], 1);
+    assert_eq!(
+        inbox_mode["properties"]["inbox_idempotency_key"]["minLength"],
+        1
+    );
+    assert!(inbox_mode["oneOf"]
+        .as_array()
+        .expect("inbox handoff mode locator oneOf")
+        .iter()
+        .any(|schema| schema["required"][0] == "inbox_run_id"));
+    assert!(inbox_mode["not"]["anyOf"]
+        .as_array()
+        .expect("inbox handoff mode forbidden fields")
+        .iter()
+        .any(|schema| schema["required"][0] == "canonical_claim_context"));
     for (schema_name, fields) in [
         (
             "FullClaimPayload",
@@ -2129,7 +2437,14 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     let layer_schema = &schema["components"]["schemas"]["DetectionLayerScore"];
     assert_eq!(
         layer_schema["required"],
-        serde_json::json!(["layer_id", "name", "score", "status", "reason"])
+        serde_json::json!([
+            "layer_id",
+            "name",
+            "score",
+            "status",
+            "reason",
+            "evidence_refs"
+        ])
     );
     assert_eq!(
         layer_schema["properties"]["layer_id"]["enum"],
@@ -2145,6 +2460,7 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     );
     assert_eq!(layer_schema["properties"]["score"]["minimum"], 0);
     assert_eq!(layer_schema["properties"]["score"]["maximum"], 100);
+    assert_eq!(layer_schema["properties"]["evidence_refs"]["minItems"], 1);
 
     let score_required = schema["components"]["schemas"]["ScoreBreakdown"]["required"]
         .as_array()

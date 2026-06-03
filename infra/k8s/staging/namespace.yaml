@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: nwfwa-staging
+  labels:
+    app.kubernetes.io/name: nwfwa
+    app.kubernetes.io/part-of: fwa-risk-operations
+    environment: staging

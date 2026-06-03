@@ -7,3 +7,8 @@ dist/
 __pycache__/
 *.pyc
 *.egg-info/
+apps/ml-service/uv.lock
+data/public-mvp/
+data/public-mvp-artifacts/
+data/kaggle-provider-fraud/
+data/kaggle-provider-fraud-artifacts/
