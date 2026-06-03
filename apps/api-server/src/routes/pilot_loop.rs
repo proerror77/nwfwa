@@ -170,7 +170,12 @@ pub async fn write_investigation_result(
     )
     .await?;
     validate_investigation_case_link(&state, &request, &actor.customer_scope_id).await?;
-    merge_latest_canonical_evidence_refs_for_investigation(&state, &mut request).await?;
+    merge_latest_canonical_evidence_refs_for_investigation(
+        &state,
+        &actor.customer_scope_id,
+        &mut request,
+    )
+    .await?;
     request.customer_scope_id = Some(actor.customer_scope_id.clone());
     request.actor_id = Some(actor.actor_id);
     request.actor_role = Some(actor.actor_role);
@@ -209,7 +214,7 @@ pub async fn write_qa_result(
         "qa_case_id is already used by another customer scope",
     )
     .await?;
-    merge_latest_canonical_evidence_refs(&state, &mut request).await?;
+    merge_latest_canonical_evidence_refs(&state, &actor.customer_scope_id, &mut request).await?;
     request.customer_scope_id = Some(actor.customer_scope_id.clone());
     request.actor_id = Some(actor.actor_id);
     request.actor_role = Some(actor.actor_role);
@@ -323,6 +328,7 @@ async fn validate_investigation_case_link(
 
 async fn merge_latest_canonical_evidence_refs_for_investigation(
     state: &AppState,
+    customer_scope_id: &str,
     request: &mut InvestigationResultRecord,
 ) -> Result<(), ApiError> {
     let events = state
@@ -331,6 +337,7 @@ async fn merge_latest_canonical_evidence_refs_for_investigation(
             limit: 1,
             event_type: Some("scoring.completed".into()),
             claim_id: Some(request.claim_id.clone()),
+            customer_scope_id: Some(customer_scope_id.into()),
             has_canonical_trace: Some(true),
             ..Default::default()
         })
@@ -422,6 +429,7 @@ fn validate_qa_review_request(request: &QaReviewRecord) -> Result<(), ApiError> 
 
 async fn merge_latest_canonical_evidence_refs(
     state: &AppState,
+    customer_scope_id: &str,
     request: &mut QaReviewRecord,
 ) -> Result<(), ApiError> {
     let events = state
@@ -430,6 +438,7 @@ async fn merge_latest_canonical_evidence_refs(
             limit: 1,
             event_type: Some("scoring.completed".into()),
             claim_id: Some(request.claim_id.clone()),
+            customer_scope_id: Some(customer_scope_id.into()),
             has_canonical_trace: Some(true),
             ..Default::default()
         })

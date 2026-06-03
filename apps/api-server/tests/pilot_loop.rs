@@ -2402,6 +2402,113 @@ async fn writeback_ids_cannot_be_reused_across_customers() {
 }
 
 #[tokio::test]
+async fn canonical_evidence_merge_is_scoped_to_authenticated_customer() {
+    let repository = InMemoryScoringRepository::shared();
+    let alpha_app = build_app_with_parts(
+        scoped_config("customer-alpha"),
+        Arc::new(HeuristicModelScorer),
+        repository.clone(),
+    );
+    let beta_app = build_app_with_parts(
+        scoped_config("customer-beta"),
+        Arc::new(HeuristicModelScorer),
+        repository,
+    );
+
+    let (status, _) = json_request(
+        alpha_app,
+        "POST",
+        "/api/v1/claims/score",
+        r#"{
+          "source_system": "tpa-demo",
+          "canonical_claim_context": {
+            "claim_header": {
+              "external_claim_id": "CLM-CANONICAL-SCOPE-REUSE",
+              "total_amount": 9300,
+              "currency": "CNY",
+              "service_date": "2026-01-06"
+            },
+            "member_policy_snapshot": {
+              "masked_member_id": "masked-member-alpha-canonical",
+              "masked_certificate_id": "masked-cert-alpha-canonical",
+              "policy_id": "POL-CANONICAL-SCOPE-ALPHA",
+              "product_code": "MED",
+              "coverage_start_date": "2026-01-01",
+              "coverage_end_date": "2026-12-31",
+              "coverage_limit": 10000
+            },
+            "provider_snapshot": {
+              "provider_id": "PRV-CANONICAL-SCOPE-ALPHA",
+              "name": "Alpha Trace Hospital",
+              "provider_type": "hospital",
+              "region": "SH",
+              "risk_tier": "High"
+            },
+            "itemized_bill_lines": [
+              {
+                "item_name": "Alpha-only imaging",
+                "fee_category": "procedure",
+                "amount": 9300,
+                "diagnosis_list": [{ "code": "J10", "name": "Influenza" }],
+                "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                "evidence_refs": ["invoice:ALPHA-CANONICAL-ONLY:fee_detail:LINE-1"]
+              }
+            ]
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, beta_qa) = json_request(
+        beta_app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-CANONICAL-SCOPE-BETA",
+          "claim_id": "CLM-CANONICAL-SCOPE-REUSE",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "workflow_missing_evidence",
+          "feedback_target": "workflow",
+          "notes": "Beta QA should not inherit alpha canonical evidence.",
+          "evidence_refs": ["qa_reviews:QA-CANONICAL-SCOPE-BETA"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_qa["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:ALPHA-CANONICAL-ONLY:fee_detail:LINE-1"
+        )));
+
+    let (status, beta_investigation) = json_request(
+        beta_app,
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-CANONICAL-SCOPE-REUSE",
+          "investigation_id": "INV-CANONICAL-SCOPE-BETA",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Beta investigation should not inherit alpha canonical evidence.",
+          "evidence_refs": ["investigation_results:INV-CANONICAL-SCOPE-BETA"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(!beta_investigation["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "invoice:ALPHA-CANONICAL-ONLY:fee_detail:LINE-1"
+        )));
+}
+
+#[tokio::test]
 async fn pilot_loop_endpoints_require_api_key() {
     for (method, uri, body) in [
         (
