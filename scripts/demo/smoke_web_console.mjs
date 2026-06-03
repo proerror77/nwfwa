@@ -98,8 +98,10 @@ async function main() {
     assertContains(builtText, "Label Bootstrap", "web console bootstrap ops bundle");
     assertContains(builtText, "Create backfill", "web console bootstrap ops bundle");
     assertContains(builtText, "Generate evidence requests", "web console bootstrap ops bundle");
-    assertContains(builtText, "Mark evidence received", "web console bootstrap ops bundle");
-    assertContains(builtText, "Approve bootstrap label", "web console bootstrap ops bundle");
+    assertContains(builtText, "Evidence Intake", "web console bootstrap ops bundle");
+    assertContains(builtText, "Label Review", "web console bootstrap ops bundle");
+    assertContains(builtText, "Mark selected request received", "web console bootstrap ops bundle");
+    assertContains(builtText, "Review selected label", "web console bootstrap ops bundle");
     assertContains(builtText, "Offline ML Governance", "web console mlops workspace bundle");
     assertContains(builtText, "MLOps Control Plane", "web console mlops workspace bundle");
     assertContains(builtText, "Offline Training Handoff", "web console mlops workspace bundle");

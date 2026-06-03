@@ -460,6 +460,7 @@ pub async fn review_label_bootstrap_item(
             "LABEL_BOOTSTRAP_ITEM_NOT_FOUND",
             "label bootstrap item not found",
         ))?;
+    validate_label_training_approval(&item, &request)?;
     let audit_id = AuditEventId::new().to_string();
     state
         .repository
@@ -626,6 +627,13 @@ fn validate_evidence_status_update(
             "actor_id and notes are required",
         ));
     }
+    if request.status == "received" && !has_document_evidence_ref(&request.evidence_refs) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "EVIDENCE_REQUEST_DOCUMENT_EVIDENCE_REQUIRED",
+            "received evidence requests require at least one evidence_documents reference",
+        ));
+    }
     validate_optional_notes(Some(&request.notes), "EVIDENCE_REQUEST_NOTES_CONTAIN_PII")
 }
 
@@ -654,6 +662,36 @@ fn validate_label_review(request: &ReviewLabelBootstrapItemRequest) -> Result<()
         ));
     }
     validate_optional_notes(Some(&request.notes), "LABEL_REVIEW_NOTES_CONTAIN_PII")
+}
+
+fn validate_label_training_approval(
+    item: &LabelBootstrapItemRecord,
+    request: &ReviewLabelBootstrapItemRequest,
+) -> Result<(), ApiError> {
+    if request.governance_status != "approved_for_training" {
+        return Ok(());
+    }
+    if item.suggested_label_name == "insufficient_evidence" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "LABEL_BOOTSTRAP_EVIDENCE_NOT_RECEIVED",
+            "evidence must be received before a bootstrap label can be approved for training",
+        ));
+    }
+    if !has_document_evidence_ref(&request.evidence_refs) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "LABEL_BOOTSTRAP_DOCUMENT_EVIDENCE_REQUIRED",
+            "approved training labels require at least one evidence_documents reference",
+        ));
+    }
+    Ok(())
+}
+
+fn has_document_evidence_ref(evidence_refs: &[String]) -> bool {
+    evidence_refs
+        .iter()
+        .any(|reference| reference.starts_with("evidence_documents:"))
 }
 
 fn validate_optional_notes(notes: Option<&str>, code: &'static str) -> Result<(), ApiError> {

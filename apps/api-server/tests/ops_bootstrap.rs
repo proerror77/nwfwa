@@ -215,3 +215,54 @@ async fn backfill_evidence_request_and_label_bootstrap_flow() {
     );
     assert_eq!(bootstrap_label["feedback_target"], "model");
 }
+
+#[tokio::test]
+async fn label_bootstrap_rejects_training_approval_before_evidence_is_received() {
+    let app = build_app(test_config());
+    score_claim_with_missing_clinical_evidence(app.clone(), "CLM-BOOTSTRAP-2").await;
+
+    let (status, generated) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/evidence-requests/generate",
+        r#"{
+          "claim_id": "CLM-BOOTSTRAP-2",
+          "requested_by": "clinical-ops",
+          "reviewer_queue": "clinical-evidence",
+          "notes": "Generate missing clinical evidence checklist.",
+          "limit": 10
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{generated}");
+
+    let (status, queue) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/label-bootstrap/queue",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{queue}");
+    let item = &queue["items"][0];
+    assert_eq!(item["suggested_label_name"], "insufficient_evidence");
+    let item_id = item["item_id"].as_str().unwrap();
+
+    let (status, review) = json_request(
+        app,
+        "POST",
+        &format!("/api/v1/ops/label-bootstrap/items/{item_id}/review"),
+        r#"{
+          "reviewer": "label-governance",
+          "label_name": "clinical_evidence_sufficient",
+          "label_value": "true",
+          "governance_status": "approved_for_training",
+          "feedback_target": "model",
+          "notes": "Attempt to approve before evidence is received.",
+          "evidence_refs": ["evidence_requests:placeholder"]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{review}");
+    assert_eq!(review["code"], "LABEL_BOOTSTRAP_EVIDENCE_NOT_RECEIVED");
+}
