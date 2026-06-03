@@ -9165,12 +9165,15 @@ fn data_lineage_node(tone: &'static str, label: &'static str, value: &str, detai
 }
 
 fn unique_dataset_sources(datasets: &[DatasetRecord]) -> usize {
-    datasets.iter().fold(Vec::<&str>::new(), |mut values, dataset| {
-        if !values.contains(&dataset.source_key.as_str()) {
-            values.push(dataset.source_key.as_str());
-        }
-        values
-    }).len()
+    datasets
+        .iter()
+        .fold(Vec::<&str>::new(), |mut values, dataset| {
+            if !values.contains(&dataset.source_key.as_str()) {
+                values.push(dataset.source_key.as_str());
+            }
+            values
+        })
+        .len()
 }
 
 fn unique_canonical_targets(datasets: &[DatasetRecord]) -> usize {
@@ -9215,10 +9218,16 @@ fn data_quality_summary(health: &[DatasetHealthRecord]) -> String {
     if health.is_empty() {
         return "no health record".into();
     }
-    if health.iter().any(|item| status_tone(&item.data_quality_status) == "danger") {
+    if health
+        .iter()
+        .any(|item| status_tone(&item.data_quality_status) == "danger")
+    {
         return "data blocker".into();
     }
-    if health.iter().any(|item| status_tone(&item.data_quality_status) == "warning") {
+    if health
+        .iter()
+        .any(|item| status_tone(&item.data_quality_status) == "warning")
+    {
         return "review required".into();
     }
     "data ready".into()
