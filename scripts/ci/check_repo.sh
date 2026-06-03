@@ -512,7 +512,7 @@ grep -q "cargo build --release --locked -p worker" apps/worker/Dockerfile
 grep -q "COPY apps ./apps" apps/api-server/Dockerfile
 grep -q "COPY apps ./apps" apps/worker/Dockerfile
 grep -q "CARGO_INCREMENTAL=0" apps/web-console/Dockerfile
-grep -q "NO_COLOR=false trunk build --locked" apps/web-console/Dockerfile
+grep -q "NO_COLOR=false trunk build --release --locked" apps/web-console/Dockerfile
 grep -q "COPY apps/web-console/nginx.conf /etc/nginx/conf.d/default.conf" apps/web-console/Dockerfile
 grep -q "listen 8081;" apps/web-console/nginx.conf
 grep -q "location = /" apps/web-console/nginx.conf

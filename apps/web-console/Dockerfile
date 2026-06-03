@@ -7,7 +7,7 @@ COPY apps/web-console ./apps/web-console
 WORKDIR /workspace/apps/web-console
 ENV CARGO_INCREMENTAL=0 \
     CARGO_PROFILE_DEV_DEBUG=0
-RUN NO_COLOR=false trunk build --locked
+RUN NO_COLOR=false trunk build --release --locked
 
 FROM nginx:1.27-alpine AS runtime
 

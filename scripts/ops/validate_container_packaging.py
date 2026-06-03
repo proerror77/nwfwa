@@ -38,7 +38,7 @@ REQUIRED_FILES = {
         "rustup target add wasm32-unknown-unknown",
         "cargo install trunk --version 0.21.14 --locked",
         "CARGO_INCREMENTAL=0",
-        "NO_COLOR=false trunk build --locked",
+        "NO_COLOR=false trunk build --release --locked",
         "COPY apps/web-console/nginx.conf /etc/nginx/conf.d/default.conf",
         "nginx:1.27-alpine",
     ],
