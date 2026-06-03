@@ -179,6 +179,14 @@ grep -q "Rust runtime artifact scoring" docs/project/operations-guide.md
 grep -q "External Training Platform Boundary" docs/project/ml-pipeline-runbook.md
 grep -q "same Parquet dataset manifest" docs/project/ml-pipeline-runbook.md
 grep -q "external training platform" docs/project/architecture.md
+grep -q "build-training-handoff" apps/worker/src/main.rs
+grep -q "build-mlops-monitoring-plan" apps/worker/src/main.rs
+grep -q "scheduled_mlops_monitoring" apps/worker/src/lib.rs
+grep -q "shadow_traffic_evaluation" apps/worker/src/lib.rs
+grep -q "build-training-handoff" docs/project/ml-pipeline-runbook.md
+grep -q "build-mlops-monitoring-plan" docs/project/ml-pipeline-runbook.md
+grep -q "FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND" scripts/demo/smoke_demo.py
+grep -q "Rust serving exports should use rust_serving_artifact.json" apps/api-server/src/routes/openapi.rs
 grep -q "/api/v1/ops/factors/readiness" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/fwa-schemes" scripts/demo/smoke_demo.py
 grep -q "/api/v1/ops/webhook-events" scripts/demo/smoke_demo.py

@@ -142,8 +142,10 @@ for local demo compatibility and for the current training/export workflow. Use
 
 Path: `apps/worker`
 
-The worker currently provides a health-checkable operational process. Pilot
-readiness uses it as part of the minimum runtime health surface.
+The worker provides the operational batch surface for health checks, Parquet
+profiling, retraining handoff generation, worker-driven candidate registration,
+and scheduled MLOps monitoring plan generation. Pilot readiness uses it as part
+of the minimum runtime health and model-operations surface.
 
 ### Rust Crates
 
@@ -361,6 +363,27 @@ Keep Rust CI commands locked to `Cargo.lock` with `--locked`.
 cd apps/ml-service
 python -m pip install -e '.[dev]'
 pytest
+```
+
+### ML Operations Commands
+
+```bash
+cargo run --locked -p worker -- build-training-handoff \
+  --manifest data/training/manifest.json \
+  --artifact-base-uri s3://fwa-models \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor trainer-worker
+```
+
+```bash
+cargo run --locked -p worker -- build-mlops-monitoring-plan \
+  --manifest-uri s3://fwa-datasets/demo_claims_fwa/2026-05-demo/manifest.json \
+  --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --cron "0 2 * * *"
 ```
 
 ### Web Console

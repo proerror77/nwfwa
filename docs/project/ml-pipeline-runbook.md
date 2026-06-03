@@ -231,6 +231,42 @@ Required boundary:
 This keeps training portable without forking the data source. The local Python
 trainer is only the compatibility implementation of the same contract.
 
+External handoff command:
+
+```bash
+cargo run --locked -p worker -- build-training-handoff \
+  --manifest data/training/manifest.json \
+  --artifact-base-uri s3://fwa-models \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor trainer-worker
+```
+
+The command prints a handoff JSON document with `handoff_kind =
+external_training_platform`. It names the same Parquet manifest, expected Rust
+serving artifact, Python training artifact, serving manifest, validation
+report, feature-store manifest, shadow report, drift report, fairness report,
+and retraining output submit path. This is the contract an external training
+platform should execute and return to the API.
+
+Scheduled MLOps monitoring plan command:
+
+```bash
+cargo run --locked -p worker -- build-mlops-monitoring-plan \
+  --manifest-uri s3://fwa-datasets/demo_claims_fwa/2026-05-demo/manifest.json \
+  --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --cron "0 2 * * *"
+```
+
+The output is a `scheduled_mlops_monitoring` plan with three jobs:
+`shadow_traffic_evaluation`, `drift_monitoring`, and
+`segment_fairness_review`. It is intentionally a plan document, not a built-in
+scheduler, so customer or platform schedulers can run it without giving the
+application direct control over production ML infrastructure.
+
 ## Stage 7: Promotion Gates
 
 Purpose: block candidate models until the required evidence exists.
@@ -372,6 +408,24 @@ Monitor:
 - recovery and audit outcomes.
 
 Monitoring should trigger retraining readiness, not automatic promotion.
+
+The worker can generate the portable scheduled monitoring contract that an
+external orchestrator should execute:
+
+```bash
+cargo run --locked -p worker -- build-mlops-monitoring-plan \
+  --manifest-uri data/training/manifest.json \
+  --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --cron "0 2 * * *"
+```
+
+The generated plan contains shadow traffic evaluation, drift monitoring, and
+segment fairness review jobs. It uses the same governed Parquet dataset
+manifest and derives the expected report URIs from the active serving artifact
+location. A production scheduler should execute the plan and publish the
+resulting reports back into the model governance evidence set.
 
 ## Stage 12: Retraining Or Rollback
 

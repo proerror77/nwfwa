@@ -16,6 +16,21 @@ MODEL_KEY = os.environ.get("FWA_DEMO_MODEL_KEY", "baseline_fwa")
 RULE_ID = os.environ.get("FWA_DEMO_RULE_ID", "rule_early_claim")
 EXPECTED_ACTOR_ROLE = os.environ.get("FWA_DEMO_EXPECTED_ACTOR_ROLE")
 EXPECTED_CUSTOMER_SCOPE_ID = os.environ.get("FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID")
+EXPECTED_MODEL_RUNTIME_KIND = os.environ.get("FWA_DEMO_EXPECTED_MODEL_RUNTIME_KIND", "python_http")
+EXPECTED_MODEL_METADATA_RUNTIME_KIND = os.environ.get(
+    "FWA_DEMO_EXPECTED_MODEL_METADATA_RUNTIME_KIND",
+    "python_fastapi" if EXPECTED_MODEL_RUNTIME_KIND == "python_http" else "",
+)
+EXPECTED_MODEL_PROBABILITIES = [
+    value.strip()
+    for value in os.environ.get(
+        "FWA_DEMO_EXPECTED_MODEL_PROBABILITIES",
+        "fraud_probability,abuse_probability,waste_probability"
+        if EXPECTED_MODEL_RUNTIME_KIND == "python_http"
+        else "fraud_probability",
+    ).split(",")
+    if value.strip()
+]
 CUSTOMER_PRINCIPAL_SMOKE = "--customer-principal-smoke" in sys.argv
 CUSTOMER_PRINCIPAL_ASSERTIONS = (
     CUSTOMER_PRINCIPAL_SMOKE
@@ -2063,19 +2078,20 @@ def main():
     assert_true(score.get("evidence_refs"), "score response missing evidence_refs")
     model_score = score.get("model_score", {})
     assert_true(
-        model_score.get("runtime_kind") == "python_http",
-        "score response did not use Python HTTP ML runtime",
+        model_score.get("runtime_kind") == EXPECTED_MODEL_RUNTIME_KIND,
+        f"score response did not use expected ML runtime {EXPECTED_MODEL_RUNTIME_KIND}",
     )
     assert_true(
         model_score.get("execution_provider") == "cpu",
         "model score execution provider mismatch",
     )
     metadata = model_score.get("metadata", {})
-    assert_true(
-        metadata.get("runtime_kind") == "python_fastapi",
-        "model score metadata missing Python service runtime",
-    )
-    for probability in ["fraud_probability", "abuse_probability", "waste_probability"]:
+    if EXPECTED_MODEL_METADATA_RUNTIME_KIND:
+        assert_true(
+            metadata.get("runtime_kind") == EXPECTED_MODEL_METADATA_RUNTIME_KIND,
+            f"model score metadata missing expected runtime {EXPECTED_MODEL_METADATA_RUNTIME_KIND}",
+        )
+    for probability in EXPECTED_MODEL_PROBABILITIES:
         assert_true(isinstance(metadata.get(probability), (int, float)), f"model metadata missing {probability}")
     member_profile = assert_member_profile_summary()
     provider_risk = assert_provider_risk_summary()

@@ -174,6 +174,29 @@ cargo run --locked -p worker -- run-retraining-job \
   --model-key baseline_fwa
 ```
 
+External training handoff:
+
+```bash
+cargo run --locked -p worker -- build-training-handoff \
+  --manifest data/training/manifest.json \
+  --artifact-base-uri s3://fwa-models \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor trainer-worker
+```
+
+Scheduled MLOps monitoring plan:
+
+```bash
+cargo run --locked -p worker -- build-mlops-monitoring-plan \
+  --manifest-uri s3://fwa-datasets/demo_claims_fwa/2026-05-demo/manifest.json \
+  --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --cron "0 2 * * *"
+```
+
 Frontend:
 
 ```bash
@@ -306,7 +329,9 @@ Not complete yet:
 - pilot backup and restore automation
 - pilot retention and legal hold automation
 - customer scoping enforcement
-- external orchestrator for scheduled training, shadow, drift, and fairness jobs
+- external orchestrator for executing scheduled training, shadow, drift, and
+  fairness jobs. The worker can generate the portable monitoring plan contract,
+  but it does not replace a production scheduler.
 - production artifact signing key management
 - production serving image/version registry
 - customer holdout validation process

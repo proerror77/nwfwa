@@ -805,6 +805,74 @@ pub fn build_training_handoff(
     }))
 }
 
+pub fn build_mlops_monitoring_plan(
+    manifest_uri: &str,
+    artifact_uri: &str,
+    model_key: &str,
+    model_version: &str,
+    cron: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let manifest_uri = required_non_empty("manifest_uri", manifest_uri)?;
+    let artifact_uri = required_non_empty("artifact_uri", artifact_uri)?;
+    let model_key = required_non_empty("model_key", model_key)?;
+    let model_version = required_non_empty("model_version", model_version)?;
+    let cron = required_non_empty("cron", cron)?;
+    let artifact_dir = artifact_parent_uri(artifact_uri);
+
+    Ok(serde_json::json!({
+        "plan_kind": "scheduled_mlops_monitoring",
+        "plan_version": 1,
+        "data_contract": {
+            "source": "same_parquet_dataset_manifest",
+            "manifest_uri": manifest_uri
+        },
+        "model": {
+            "model_key": model_key,
+            "model_version": model_version,
+            "artifact_uri": artifact_uri
+        },
+        "schedule": {
+            "cron": cron
+        },
+        "jobs": [
+            {
+                "job_kind": "shadow_traffic_evaluation",
+                "input": "live_routing_and_qa_outcomes",
+                "output_ref": "model_shadow_reports:<shadow_report_uri>",
+                "shadow_report_uri": format!("{artifact_dir}/shadow_report.json")
+            },
+            {
+                "job_kind": "drift_monitoring",
+                "input": "scoring_features_and_scores",
+                "output_ref": "model_drift_reports:<drift_report_uri>",
+                "drift_report_uri": format!("{artifact_dir}/drift_report.json")
+            },
+            {
+                "job_kind": "segment_fairness_review",
+                "input": "customer_approved_segments",
+                "output_ref": "model_fairness_reports:<fairness_report_uri>",
+                "fairness_report_uri": format!("{artifact_dir}/fairness_report.json")
+            }
+        ]
+    }))
+}
+
+fn required_non_empty<'a>(field: &str, value: &'a str) -> anyhow::Result<&'a str> {
+    let value = value.trim();
+    if value.is_empty() {
+        bail!("{field} is required");
+    }
+    Ok(value)
+}
+
+fn artifact_parent_uri(artifact_uri: &str) -> &str {
+    artifact_uri
+        .trim()
+        .rsplit_once('/')
+        .map(|(parent, _)| parent)
+        .unwrap_or_else(|| artifact_uri.trim())
+}
+
 fn required_manifest_str<'a>(
     manifest: &'a serde_json::Value,
     key: &str,
@@ -1355,6 +1423,34 @@ mod tests {
         assert_eq!(
             handoff["data_contract"]["source"],
             "same_parquet_dataset_manifest"
+        );
+    }
+
+    #[test]
+    fn builds_scheduled_mlops_monitoring_plan() {
+        let plan = build_mlops_monitoring_plan(
+            "data/training/manifest.json",
+            "s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json",
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+        )
+        .expect("mlops monitoring plan");
+
+        assert_eq!(plan["plan_kind"], "scheduled_mlops_monitoring");
+        assert_eq!(plan["model"]["model_key"], "baseline_fwa");
+        assert_eq!(plan["model"]["model_version"], "0.2.0");
+        assert_eq!(plan["schedule"]["cron"], "0 2 * * *");
+        assert_eq!(
+            plan["data_contract"]["source"],
+            "same_parquet_dataset_manifest"
+        );
+        assert_eq!(plan["jobs"][0]["job_kind"], "shadow_traffic_evaluation");
+        assert_eq!(plan["jobs"][1]["job_kind"], "drift_monitoring");
+        assert_eq!(plan["jobs"][2]["job_kind"], "segment_fairness_review");
+        assert_eq!(
+            plan["jobs"][1]["drift_report_uri"],
+            "s3://fwa-models/baseline_fwa/0.2.0/drift_report.json"
         );
     }
 

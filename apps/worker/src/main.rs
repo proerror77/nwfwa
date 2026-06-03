@@ -31,6 +31,44 @@ async fn main() -> anyhow::Result<()> {
                 "parquet profile written"
             );
         }
+        "build-training-handoff" => {
+            let manifest = take_flag_value(&mut args, "--manifest")?;
+            let artifact_base_uri = take_flag_value(&mut args, "--artifact-base-uri")?;
+            let model_key = take_flag_value(&mut args, "--model-key")?;
+            let base_model_version = take_flag_value(&mut args, "--base-model-version")?;
+            let job_id = take_flag_value(&mut args, "--job-id")?;
+            let actor = take_flag_value(&mut args, "--actor")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let handoff = worker::build_training_handoff(
+                manifest,
+                &artifact_base_uri,
+                &model_key,
+                &base_model_version,
+                &job_id,
+                &actor,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&handoff)?);
+        }
+        "build-mlops-monitoring-plan" => {
+            let manifest_uri = take_flag_value(&mut args, "--manifest-uri")?;
+            let artifact_uri = take_flag_value(&mut args, "--artifact-uri")?;
+            let model_key = take_flag_value(&mut args, "--model-key")?;
+            let model_version = take_flag_value(&mut args, "--model-version")?;
+            let cron = take_flag_value(&mut args, "--cron")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let plan = worker::build_mlops_monitoring_plan(
+                &manifest_uri,
+                &artifact_uri,
+                &model_key,
+                &model_version,
+                &cron,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&plan)?);
+        }
         "claim-retraining-job" => {
             let api_url = take_flag_value(&mut args, "--api-url")?;
             let api_key = take_flag_value(&mut args, "--api-key")?;
