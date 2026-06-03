@@ -126,6 +126,9 @@ pub struct CompleteModelRetrainingJobRequest {
     pub notes: String,
     pub candidate_model_version: String,
     pub artifact_uri: String,
+    pub artifact_sha256: Option<String>,
+    pub training_artifact_uri: Option<String>,
+    pub training_artifact_sha256: Option<String>,
     pub endpoint_url: Option<String>,
     pub validation_report_uri: String,
     pub evaluation_run_id: String,
@@ -452,6 +455,7 @@ pub async fn complete_model_retraining_job(
         })
         .await
         .map_err(internal_error("MODEL_VERSION_SAVE_FAILED"))?;
+    let metrics_json = retraining_metrics_with_artifacts(&request);
     let evaluation = state
         .repository
         .register_model_evaluation(RegisterModelEvaluationInput {
@@ -469,7 +473,7 @@ pub async fn complete_model_retraining_job(
             threshold: request.threshold,
             confusion_matrix_json: request.confusion_matrix_json,
             feature_importance_uri: request.feature_importance_uri,
-            metrics_json: request.metrics_json,
+            metrics_json,
         })
         .await
         .map_err(internal_error(
@@ -661,6 +665,37 @@ fn validate_retraining_output_request(
         }
     }
     validate_model_artifact_uri(&request.artifact_uri, "INVALID_MODEL_ARTIFACT_URI")?;
+    if let Some(artifact_sha256) = &request.artifact_sha256 {
+        validate_sha256_digest(
+            artifact_sha256,
+            "INVALID_MODEL_ARTIFACT_SHA256",
+            "artifact_sha256 must start with sha256:",
+        )?;
+    }
+    if let Some(training_artifact_uri) = &request.training_artifact_uri {
+        if training_artifact_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_TRAINING_ARTIFACT_URI",
+                "training_artifact_uri must not be blank when provided",
+            ));
+        }
+        validate_training_artifact_uri(training_artifact_uri, "INVALID_TRAINING_ARTIFACT_URI")?;
+    }
+    if let Some(training_artifact_sha256) = &request.training_artifact_sha256 {
+        if request.training_artifact_uri.is_none() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_TRAINING_ARTIFACT_URI",
+                "training_artifact_sha256 requires training_artifact_uri",
+            ));
+        }
+        validate_sha256_digest(
+            training_artifact_sha256,
+            "INVALID_TRAINING_ARTIFACT_SHA256",
+            "training_artifact_sha256 must start with sha256:",
+        )?;
+    }
     validate_json_report_uri(
         &request.validation_report_uri,
         "INVALID_VALIDATION_REPORT_URI",
@@ -751,7 +786,47 @@ fn validate_retraining_output_evidence_refs(
             ));
         }
     }
+    if let Some(training_artifact_uri) = &request.training_artifact_uri {
+        let expected_ref = format!("model_training_artifacts:{training_artifact_uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!("model retraining output evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
     Ok(())
+}
+
+fn retraining_metrics_with_artifacts(request: &CompleteModelRetrainingJobRequest) -> Value {
+    let mut metrics_json = request.metrics_json.clone();
+    let Some(metrics) = metrics_json.as_object_mut() else {
+        return metrics_json;
+    };
+    if let Some(artifact_sha256) = &request.artifact_sha256 {
+        metrics.insert(
+            "artifact_sha256".into(),
+            Value::String(artifact_sha256.clone()),
+        );
+    }
+    if let Some(training_artifact_uri) = &request.training_artifact_uri {
+        metrics.insert(
+            "training_artifact_uri".into(),
+            Value::String(training_artifact_uri.clone()),
+        );
+    }
+    if let Some(training_artifact_sha256) = &request.training_artifact_sha256 {
+        metrics.insert(
+            "training_artifact_sha256".into(),
+            Value::String(training_artifact_sha256.clone()),
+        );
+    }
+    metrics_json
 }
 
 fn validate_retraining_notes_without_pii(notes: &str) -> Result<(), ApiError> {
@@ -802,6 +877,30 @@ fn validate_model_artifact_uri(value: &str, code: &'static str) -> Result<(), Ap
             code,
             "model retraining artifact_uri must use a supported model artifact format: .onnx, .pkl, .joblib, or .json",
         ))
+    }
+}
+
+fn validate_training_artifact_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    if has_supported_uri_suffix(value, &[".pkl", ".joblib"]) {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            code,
+            "training_artifact_uri must use a supported training artifact format: .pkl or .joblib",
+        ))
+    }
+}
+
+fn validate_sha256_digest(
+    value: &str,
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
+    if value.starts_with("sha256:") && value.len() > "sha256:".len() {
+        Ok(())
+    } else {
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
     }
 }
 

@@ -1028,6 +1028,9 @@ async fn openapi_includes_operations_paths() {
                 "notes",
                 "candidate_model_version",
                 "artifact_uri",
+                "artifact_sha256",
+                "training_artifact_uri",
+                "training_artifact_sha256",
                 "endpoint_url",
                 "validation_report_uri",
                 "evaluation_run_id",
@@ -1117,8 +1120,40 @@ async fn openapi_includes_operations_paths() {
             ["artifact_uri"]["description"]
             .as_str()
             .unwrap_or_default()
-            .contains("Supported model artifact formats"),
+            .contains("Rust serving exports"),
         "missing CompleteModelRetrainingJobRequest.artifact_uri format contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["training_artifact_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Python training artifact"),
+        "missing CompleteModelRetrainingJobRequest.training_artifact_uri contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["artifact_sha256"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("sha256"),
+        "missing CompleteModelRetrainingJobRequest.artifact_sha256 contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["training_artifact_sha256"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("sha256"),
+        "missing CompleteModelRetrainingJobRequest.training_artifact_sha256 contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["evidence_refs"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("model_training_artifacts"),
+        "missing CompleteModelRetrainingJobRequest training artifact evidence contract"
     );
     assert!(
         schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]

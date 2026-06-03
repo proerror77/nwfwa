@@ -4789,7 +4789,22 @@ pub async fn openapi_schema() -> Json<Value> {
                         "artifact_uri": {
                             "type": "string",
                             "minLength": 1,
-                            "description": "Supported model artifact formats: .onnx, .pkl, or .joblib."
+                            "description": "Supported serving model artifact formats: .onnx, .pkl, .joblib, or .json. Rust serving exports should use rust_serving_artifact.json."
+                        },
+                        "artifact_sha256": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional sha256 digest for the serving artifact."
+                        },
+                        "training_artifact_uri": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional Python training artifact URI for audit and fallback reproducibility. Supported formats: .pkl or .joblib."
+                        },
+                        "training_artifact_sha256": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional sha256 digest for training_artifact_uri."
                         },
                         "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
                         "validation_report_uri": {
@@ -4802,7 +4817,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "minItems": 1,
                             "items": { "type": "string", "minLength": 1 },
-                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, and model_evaluations refs."
+                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, and model_training_artifacts when training_artifact_uri is present."
                         },
                         "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },

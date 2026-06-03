@@ -1476,13 +1476,17 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "actor": "trainer-worker",
           "notes": "Candidate model and validation report registered.",
           "candidate_model_version": "0.2.0-candidate",
-          "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
+          "artifact_sha256": "sha256:rust-serving-artifact",
+          "training_artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+          "training_artifact_sha256": "sha256:training-artifact",
           "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
           "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "evaluation_run_id": "eval_baseline_retraining_job_candidate",
           "evidence_refs": [
             "model_retraining_jobs:{job_id}",
-            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
+            "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
             "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
             "model_evaluations:eval_baseline_retraining_job_candidate"
           ],
@@ -1516,9 +1520,17 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(completed["candidate_model"]["status"], "candidate");
     assert_eq!(
         completed["candidate_model"]["artifact_uri"],
-        "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx"
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json"
     );
     assert_eq!(completed["evaluation"]["model_version"], "0.2.0-candidate");
+    assert_eq!(
+        completed["evaluation"]["metrics_json"]["training_artifact_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib"
+    );
+    assert_eq!(
+        completed["evaluation"]["metrics_json"]["training_artifact_sha256"],
+        "sha256:training-artifact"
+    );
 
     let (status, audit) = get_json(
         app.clone(),
@@ -1537,7 +1549,13 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!(
-            "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx"
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json"
+    )));
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib"
         )));
     assert!(output_event["evidence_refs"]
         .as_array()
@@ -1569,12 +1587,16 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "notes": "Candidate model and validation report registered.",
         "candidate_model_version": "0.2.0-candidate",
         "artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "artifact_sha256": "sha256:serving-artifact",
+        "training_artifact_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "training_artifact_sha256": "sha256:training-artifact",
         "endpoint_url": "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate",
         "validation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "evaluation_run_id": "eval_baseline_retraining_job_candidate",
         "evidence_refs": [
           "model_retraining_jobs:job_1",
           "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+          "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
           "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "model_evaluations:eval_baseline_retraining_job_candidate"
         ],
@@ -1684,6 +1706,58 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE");
 
+    let mut invalid_training_artifact = valid_request.clone();
+    invalid_training_artifact["training_artifact_uri"] =
+        serde_json::json!("s3://fwa-models/baseline_fwa/0.2.0-candidate/model.csv");
+    invalid_training_artifact["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.csv",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = invalid_training_artifact.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_TRAINING_ARTIFACT_URI");
+
+    let mut invalid_training_artifact_sha = valid_request.clone();
+    invalid_training_artifact_sha["training_artifact_sha256"] = serde_json::json!("not-sha");
+    let payload = invalid_training_artifact_sha.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_TRAINING_ARTIFACT_SHA256");
+
+    let mut missing_training_artifact_evidence = valid_request.clone();
+    missing_training_artifact_evidence["evidence_refs"] = serde_json::json!([
+        "model_retraining_jobs:job_1",
+        "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
+        "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+        "model_evaluations:eval_baseline_retraining_job_candidate"
+    ]);
+    let payload = missing_training_artifact_evidence.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
+
     let mut missing_evidence_refs = valid_request.clone();
     missing_evidence_refs["evidence_refs"] = serde_json::json!([]);
     let payload = missing_evidence_refs.to_string();
@@ -1732,6 +1806,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
     rust_json_model_artifact["evidence_refs"] = serde_json::json!([
         "model_retraining_jobs:job_1",
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
+        "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "model_evaluations:eval_baseline_retraining_job_candidate"
     ]);
