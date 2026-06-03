@@ -2,6 +2,9 @@
 .github
 .pytest_cache
 .venv
+**/.pytest_cache
+**/.venv
+**/*.egg-info
 target
 apps/web-console/target
 apps/web-console/dist

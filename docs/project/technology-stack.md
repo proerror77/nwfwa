@@ -147,7 +147,7 @@ belong in object storage or a data lake for real pilots.
 
 | Technology | Where | Purpose |
 | --- | --- | --- |
-| Docker Compose | `infra/docker-compose.yml` | Local PostgreSQL and ML service |
+| Docker Compose | `infra/docker-compose.yml` | Local full-stack demo runtime for PostgreSQL, ML service, API server, Web Console, seed job, and MinIO |
 | Dockerfiles | `apps/*/Dockerfile`, `infra/dockerfiles/Dockerfile.ops` | API, worker, web console, and database ops image packaging |
 | MinIO | `infra/docker-compose.yml`, `infra/k8s/staging` | S3-compatible staging artifact storage proof |
 | Kubernetes / Kustomize | `infra/k8s/staging` | Staging deployment architecture for pilot foundation proof |

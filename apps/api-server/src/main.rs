@@ -13,8 +13,9 @@ async fn main() -> anyhow::Result<()> {
         Arc::new(PostgresScoringRepository::connect(&config.database_url).await?);
     let scorer = configured_model_scorer(&config);
     let app = build_app_with_parts(config, scorer, repository);
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:8080").await?;
-    tracing::info!("api-server listening on 127.0.0.1:8080");
+    let bind_addr = std::env::var("FWA_BIND_ADDR").unwrap_or_else(|_| "127.0.0.1:8080".into());
+    let listener = tokio::net::TcpListener::bind(bind_addr.as_str()).await?;
+    tracing::info!("api-server listening on {}", bind_addr);
     axum::serve(listener, app).await?;
     Ok(())
 }

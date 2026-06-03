@@ -388,13 +388,21 @@ grep -q "UPDATE investigation_cases" migrations/0001_initial.sql
 grep -q "SET review_mode = l.review_mode" migrations/0001_initial.sql
 grep -q "object-storage" infra/docker-compose.yml
 grep -q "quay.io/minio/minio" infra/docker-compose.yml
-grep -q "cargo build --release --locked -p api-server" apps/api-server/Dockerfile
+grep -q "CARGO_INCREMENTAL=0" apps/api-server/Dockerfile
+grep -q "cargo build --locked -p api-server" apps/api-server/Dockerfile
+grep -q "target/debug/api-server" apps/api-server/Dockerfile
 grep -q "cargo build --release --locked -p worker" apps/worker/Dockerfile
 grep -q "COPY apps ./apps" apps/api-server/Dockerfile
 grep -q "COPY apps ./apps" apps/worker/Dockerfile
-grep -q "NO_COLOR=false trunk build --release --locked" apps/web-console/Dockerfile
+grep -q "CARGO_INCREMENTAL=0" apps/web-console/Dockerfile
+grep -q "NO_COLOR=false trunk build --locked" apps/web-console/Dockerfile
 grep -q "COPY apps/web-console/nginx.conf /etc/nginx/conf.d/default.conf" apps/web-console/Dockerfile
 grep -q "listen 8081;" apps/web-console/nginx.conf
+grep -q "proxy_pass http://api-server:8080/api/;" apps/web-console/nginx.conf
+grep -q "migrate-seed:" infra/docker-compose.yml
+grep -q "api-server:" infra/docker-compose.yml
+grep -q "FWA_BIND_ADDR: 0.0.0.0:8080" infra/docker-compose.yml
+grep -q "web-console:" infra/docker-compose.yml
 grep -q "COPY migrations ./migrations" infra/dockerfiles/Dockerfile.ops
 grep -q "target" .dockerignore
 grep -q "nwfwa-staging" infra/k8s/staging/kustomization.yaml

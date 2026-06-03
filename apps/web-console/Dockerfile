@@ -1,11 +1,13 @@
-FROM rust:1.82-bookworm AS builder
+FROM rust:1.96-bookworm AS builder
 
 WORKDIR /workspace
 RUN rustup target add wasm32-unknown-unknown \
     && cargo install trunk --version 0.21.14 --locked
 COPY apps/web-console ./apps/web-console
 WORKDIR /workspace/apps/web-console
-RUN NO_COLOR=false trunk build --release --locked
+ENV CARGO_INCREMENTAL=0 \
+    CARGO_PROFILE_DEV_DEBUG=0
+RUN NO_COLOR=false trunk build --locked
 
 FROM nginx:1.27-alpine AS runtime
 

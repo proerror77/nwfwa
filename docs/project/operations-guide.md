@@ -12,7 +12,25 @@ rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
 ```
 
-Start PostgreSQL and the ML service:
+Start the full local demo stack when you want the same containerized API and
+Web Console boundary used by the pilot packaging proof:
+
+```bash
+docker compose -f infra/docker-compose.yml up --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+The Web Console container proxies `/api/` to the `api-server` service, and the
+`migrate-seed` one-shot service applies migrations plus deterministic demo data
+before the API server starts.
+
+Start only PostgreSQL, the ML service, and object storage when you are running
+the Rust API and Trunk dev server directly from the host:
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres ml-service object-storage
@@ -297,6 +315,9 @@ python3 scripts/ops/validate_container_packaging.py
 The packaging check verifies Dockerfiles for API server, worker, web console,
 and the ops image that carries migration and seed SQL. It does not push images
 or deploy to a cluster.
+The local API server and Web Console images are optimized for demo build
+latency and use locked debug builds; the worker image remains a release build
+because it is used as a compact operational runtime.
 
 Generate local pilot foundation evidence without customer data:
 

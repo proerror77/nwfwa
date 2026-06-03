@@ -305,7 +305,26 @@ customer adjudication state.
 - Node.js for the web-console build smoke script
 - `jq` for command-line response inspection
 
-### Start PostgreSQL And ML Service
+### Start The Full Local Demo Stack
+
+To run the API server, Web Console, ML service, PostgreSQL, seed job, and MinIO
+through Docker Compose:
+
+```bash
+docker compose -f infra/docker-compose.yml up --build
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+The web console proxies `/api/` to the containerized API server. The compose
+stack runs migrations and deterministic demo seed data through the
+`migrate-seed` one-shot service before the API server starts.
+
+### Start PostgreSQL And ML Service Only
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres ml-service

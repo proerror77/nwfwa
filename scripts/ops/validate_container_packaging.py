@@ -10,29 +10,52 @@ import sys
 ROOT = Path(__file__).resolve().parents[2]
 
 REQUIRED_FILES = {
-    ".dockerignore": ["target", "apps/web-console/node_modules", "apps/web-console/dist"],
+    ".dockerignore": [
+        "target",
+        "apps/web-console/node_modules",
+        "apps/web-console/dist",
+        "**/.venv",
+        "**/*.egg-info",
+    ],
     "apps/api-server/Dockerfile": [
-        "cargo build --release --locked -p api-server",
+        "FROM rust:1.96-bookworm AS builder",
+        "CARGO_INCREMENTAL=0",
+        "cargo build --locked -p api-server",
+        "target/debug/api-server",
         "COPY apps ./apps",
         "COPY crates ./crates",
         "CMD [\"api-server\"]",
     ],
     "apps/worker/Dockerfile": [
+        "FROM rust:1.96-bookworm AS builder",
         "cargo build --release --locked -p worker",
         "COPY apps ./apps",
         "COPY crates ./crates",
         "CMD [\"worker\", \"health\"]",
     ],
     "apps/web-console/Dockerfile": [
+        "FROM rust:1.96-bookworm AS builder",
         "rustup target add wasm32-unknown-unknown",
         "cargo install trunk --version 0.21.14 --locked",
-        "NO_COLOR=false trunk build --release --locked",
+        "CARGO_INCREMENTAL=0",
+        "NO_COLOR=false trunk build --locked",
         "COPY apps/web-console/nginx.conf /etc/nginx/conf.d/default.conf",
         "nginx:1.27-alpine",
     ],
     "apps/web-console/nginx.conf": [
         "listen 8081;",
         "try_files $uri $uri/ /index.html;",
+        "proxy_pass http://api-server:8080/api/;",
+    ],
+    "infra/docker-compose.yml": [
+        "migrate-seed:",
+        "api-server:",
+        "FWA_BIND_ADDR: 0.0.0.0:8080",
+        "FWA_MODEL_SERVICE_URL: http://ml-service:8001",
+        "web-console:",
+        "dockerfile: apps/web-console/Dockerfile",
+        '"5173:8081"',
+        "object-storage:",
     ],
     "infra/dockerfiles/Dockerfile.ops": [
         "FROM postgres:16",
