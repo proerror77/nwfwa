@@ -1963,7 +1963,8 @@ fn bootstrap_ops_page() -> Html {
     let action_state = use_state(|| ApiState::<String>::Idle);
     let selected_evidence_request_id = use_state(String::new);
     let evidence_refs_input = use_state(String::new);
-    let evidence_notes = use_state(|| "Evidence packet received and linked for bootstrap review.".to_string());
+    let evidence_notes =
+        use_state(|| "Evidence packet received and linked for bootstrap review.".to_string());
     let selected_label_item_id = use_state(String::new);
     let label_name = use_state(String::new);
     let label_value = use_state(|| "true".to_string());
@@ -2072,7 +2073,14 @@ fn bootstrap_ops_page() -> Html {
             let action_state = action_state.clone();
             action_state.set(ApiState::Loading);
             spawn_local(async move {
-                match mark_bootstrap_evidence_received(api_key.clone(), request_id, evidence_refs, notes).await {
+                match mark_bootstrap_evidence_received(
+                    api_key.clone(),
+                    request_id,
+                    evidence_refs,
+                    notes,
+                )
+                .await
+                {
                     Ok(request) => {
                         action_state.set(ApiState::Ready(format!(
                             "Evidence request {} is now {}.",
@@ -2103,7 +2111,9 @@ fn bootstrap_ops_page() -> Html {
         Callback::from(move |_| {
             let item_id = (*selected_label_item_id).trim().to_string();
             if item_id.is_empty() {
-                action_state.set(ApiState::Failed("select one label bootstrap item first".into()));
+                action_state.set(ApiState::Failed(
+                    "select one label bootstrap item first".into(),
+                ));
                 return;
             }
             let label_name_value = (*label_name).trim().to_string();
@@ -2132,7 +2142,9 @@ fn bootstrap_ops_page() -> Html {
             }
             let evidence_refs = parse_tags(&label_evidence_refs_input);
             if evidence_refs.is_empty() {
-                action_state.set(ApiState::Failed("label review evidence refs are required".into()));
+                action_state.set(ApiState::Failed(
+                    "label review evidence refs are required".into(),
+                ));
                 return;
             }
             if governance_status == "approved_for_training"
@@ -2211,11 +2223,13 @@ fn bootstrap_ops_page() -> Html {
             if let Some(item) = label_item_by_id(&snapshot_state, &item_id) {
                 label_name.set(item.suggested_label_name.clone());
                 label_value.set(item.suggested_label_value.clone());
-                label_governance_status.set(if item.suggested_label_name == "insufficient_evidence" {
-                    "rejected_for_training".into()
-                } else {
-                    "approved_for_training".into()
-                });
+                label_governance_status.set(
+                    if item.suggested_label_name == "insufficient_evidence" {
+                        "rejected_for_training".into()
+                    } else {
+                        "approved_for_training".into()
+                    },
+                );
                 label_feedback_target.set(item.feedback_target.clone());
                 let document_refs = document_refs_text(&item.evidence_refs);
                 label_evidence_refs_input.set(if document_refs.is_empty() {
@@ -2606,7 +2620,9 @@ fn bootstrap_selected_evidence_request(
                 <small>{format!("current evidence {}", refs_label(&request.evidence_refs))}</small>
             </div>
         },
-        None => html! { <p class="error">{"Selected evidence request is no longer in the queue."}</p> },
+        None => {
+            html! { <p class="error">{"Selected evidence request is no longer in the queue."}</p> }
+        }
     }
 }
 
