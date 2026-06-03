@@ -4639,6 +4639,8 @@ fn knowledge_base_view(props: &KnowledgeBaseProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <>
+                        {knowledge_evidence_cockpit(snapshot)}
+
                         <section class="panel result-stack">
                             <h3>{"Confirmed Knowledge Cases"}</h3>
                             if snapshot.cases.is_empty() {
@@ -4693,6 +4695,118 @@ fn knowledge_base_view(props: &KnowledgeBaseProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn knowledge_evidence_cockpit(snapshot: &KnowledgeSnapshot) -> Html {
+    let selected_result = snapshot.results.first();
+    let selected_case = selected_result
+        .and_then(|result| {
+            snapshot
+                .cases
+                .iter()
+                .find(|case| case.case_id == result.case_id)
+        })
+        .or_else(|| snapshot.cases.first());
+    let case_id = selected_result
+        .map(|case| case.case_id.as_str())
+        .or_else(|| selected_case.map(|case| case.case_id.as_str()))
+        .unwrap_or("no case");
+    let title = selected_result
+        .map(|case| case.title.as_str())
+        .or_else(|| selected_case.map(|case| case.title.as_str()))
+        .unwrap_or("knowledge case pending");
+    let scheme = selected_result
+        .map(|case| case.scheme_family.as_str())
+        .or_else(|| selected_case.map(|case| case.scheme_family.as_str()))
+        .unwrap_or("scheme pending");
+    let outcome = selected_result
+        .map(|case| case.outcome.as_str())
+        .or_else(|| selected_case.map(|case| case.outcome.as_str()))
+        .unwrap_or("outcome pending");
+    let matched_signal = selected_result
+        .and_then(|case| case.matched_signals.first().map(String::as_str))
+        .or_else(|| selected_case.and_then(|case| case.tags.first().map(String::as_str)))
+        .unwrap_or("signal pending");
+    let provenance_ref = selected_result
+        .and_then(|case| case.provenance_refs.first().map(String::as_str))
+        .or_else(|| selected_case.and_then(|case| case.evidence_refs.first().map(String::as_str)))
+        .unwrap_or("provenance pending");
+    let evidence_ref = selected_result
+        .and_then(|case| case.evidence_refs.first().map(String::as_str))
+        .or_else(|| selected_case.and_then(|case| case.evidence_refs.first().map(String::as_str)))
+        .unwrap_or("evidence pending");
+    let retrieval_method = selected_result
+        .map(|case| case.retrieval_method.as_str())
+        .unwrap_or("structured catalog");
+    let similarity = selected_result
+        .map(|case| format!("{:.2}", case.similarity_score))
+        .unwrap_or_else(|| "n/a".into());
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Knowledge graph match"}</h3>
+                    <p>{"Similar confirmed FWA cases are shown as evidence-backed references for reviewer context, not as automated adjudication."}</p>
+                </div>
+                <span class="status-token strong">{"Evidence provenance path"}</span>
+            </div>
+            <div class="knowledge-cockpit">
+                <aside class="case-brief knowledge-brief">
+                    <span>{"Selected knowledge case"}</span>
+                    <strong>{case_id}</strong>
+                    <dl>
+                        <div><dt>{"Scheme"}</dt><dd>{scheme}</dd></div>
+                        <div><dt>{"Similarity"}</dt><dd>{similarity}</dd></div>
+                        <div><dt>{"Retrieval"}</dt><dd>{retrieval_method}</dd></div>
+                        <div><dt>{"Outcome"}</dt><dd>{outcome}</dd></div>
+                    </dl>
+                    <div class="tag-grid compact-tags">
+                        <span>{format!("confirmed {}", snapshot.cases.len())}</span>
+                        <span>{format!("matches {}", snapshot.results.len())}</span>
+                        <span>{format!("signals {}", selected_result.map(|case| case.matched_signals.len()).unwrap_or(0))}</span>
+                    </div>
+                </aside>
+
+                <div class="knowledge-map">
+                    <div class="knowledge-map-title">
+                        <span>{"Structured + semantic retrieval"}</span>
+                        <strong>{title}</strong>
+                    </div>
+                    <div class="knowledge-link horizontal"></div>
+                    <div class="knowledge-link diagonal-a"></div>
+                    <div class="knowledge-link diagonal-b"></div>
+                    <div class="knowledge-core">
+                        <span>{"Confirmed case"}</span>
+                        <strong>{case_id}</strong>
+                    </div>
+                    <div class="knowledge-node signal">
+                        <span>{"Matched signal"}</span>
+                        <strong>{matched_signal}</strong>
+                    </div>
+                    <div class="knowledge-node scheme">
+                        <span>{"Scheme family"}</span>
+                        <strong>{scheme}</strong>
+                    </div>
+                    <div class="knowledge-node provenance">
+                        <span>{"Provenance"}</span>
+                        <strong>{provenance_ref}</strong>
+                    </div>
+                    <div class="knowledge-node evidence">
+                        <span>{"Evidence"}</span>
+                        <strong>{evidence_ref}</strong>
+                    </div>
+                </div>
+
+                <aside class="case-timeline knowledge-trace">
+                    <h4>{"Source trace"}</h4>
+                    {timeline_item("Catalog", &format!("{} confirmed cases", snapshot.cases.len()), "done")}
+                    {timeline_item("Search", retrieval_method, "ready")}
+                    {timeline_item("Match", matched_signal, "done")}
+                    {timeline_item("Review", "human reviewer consumes context", "review")}
+                </aside>
+            </div>
+        </section>
     }
 }
 

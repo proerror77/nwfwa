@@ -1776,6 +1776,141 @@ pre {
   background: #ffffff;
 }
 
+.knowledge-cockpit {
+  display: grid;
+  grid-template-columns: minmax(190px, 0.74fr) minmax(440px, 1.52fr) minmax(220px, 0.86fr);
+  gap: 14px;
+  align-items: stretch;
+}
+
+.knowledge-brief strong {
+  color: #123d45;
+}
+
+.knowledge-map {
+  position: relative;
+  min-height: 360px;
+  overflow: hidden;
+  padding: 16px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(241, 249, 246, 0.97)),
+    radial-gradient(circle at 50% 52%, rgba(31, 143, 84, 0.15), transparent 54%);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.knowledge-map-title {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: start;
+}
+
+.knowledge-map-title span,
+.knowledge-node span,
+.knowledge-core span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.knowledge-map-title strong {
+  color: #0c315f;
+  overflow-wrap: anywhere;
+}
+
+.knowledge-link {
+  position: absolute;
+  left: 12%;
+  right: 12%;
+  top: 52%;
+  height: 2px;
+  background: #b8d9cb;
+}
+
+.knowledge-link.diagonal-a {
+  transform: rotate(23deg);
+}
+
+.knowledge-link.diagonal-b {
+  transform: rotate(-23deg);
+}
+
+.knowledge-node,
+.knowledge-core {
+  position: absolute;
+  z-index: 2;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  box-shadow: 0 12px 24px rgba(15, 46, 89, 0.08);
+}
+
+.knowledge-node {
+  width: 154px;
+  min-height: 82px;
+  padding: 11px;
+  border-top: 4px solid #1f8f54;
+}
+
+.knowledge-node strong,
+.knowledge-core strong {
+  display: block;
+  margin-top: 6px;
+  color: #0c315f;
+  overflow-wrap: anywhere;
+  line-height: 1.18;
+}
+
+.knowledge-core {
+  left: 50%;
+  top: 50%;
+  display: grid;
+  place-items: center;
+  width: 126px;
+  height: 126px;
+  padding: 13px;
+  text-align: center;
+  background: linear-gradient(180deg, #1f8f54 0%, #14663a 100%);
+  border: 6px solid #dff4e8;
+  border-radius: 999px;
+  transform: translate(-50%, -50%);
+}
+
+.knowledge-core span,
+.knowledge-core strong {
+  color: #ffffff;
+}
+
+.knowledge-node.signal {
+  left: 8%;
+  top: 23%;
+  border-top-color: var(--blue);
+}
+
+.knowledge-node.scheme {
+  right: 8%;
+  top: 23%;
+  border-top-color: #6f5bd5;
+}
+
+.knowledge-node.provenance {
+  left: 12%;
+  bottom: 14%;
+  border-top-color: var(--amber);
+}
+
+.knowledge-node.evidence {
+  right: 12%;
+  bottom: 14%;
+  border-top-color: #1f8f54;
+}
+
+.knowledge-trace {
+  background: #ffffff;
+}
+
 .summary-grid strong,
 .result-list strong {
   display: block;
@@ -2477,6 +2612,7 @@ pre {
   .clinical-cockpit,
   .clinical-outcome-grid,
   .agent-cockpit,
+  .knowledge-cockpit,
   .case-action-grid,
   .gate-pipeline,
   .case-grid {
@@ -2498,6 +2634,10 @@ pre {
 
   .agent-evidence-map {
     min-height: 600px;
+  }
+
+  .knowledge-map {
+    min-height: 560px;
   }
 
   .graph-entity {
