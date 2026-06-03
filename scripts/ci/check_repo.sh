@@ -45,6 +45,7 @@ required_files=(
   "infra/k8s/staging/README.md"
   "apps/api-server/tests/tpa_contract_docs.rs"
   "docs/project/public-data-mvp.md"
+  "docs/project/mlops-ui-design.md"
   "docs/project/prd-coverage.md"
 )
 
@@ -160,6 +161,10 @@ grep -q "prd_coverage_summary" scripts/ops/build_prd_coverage.py
 grep -q "customer_data_or_environment_required" scripts/ops/build_prd_coverage.py
 grep -q "PRD Coverage" README.md
 grep -q "PRD Coverage" docs/project/README.md
+grep -q "MLOps UI Design" docs/project/README.md
+grep -q "Offline Training Handoff" docs/project/mlops-ui-design.md
+grep -q "Promotion Gates" docs/project/mlops-ui-design.md
+grep -q "Production Boundaries" docs/project/mlops-ui-design.md
 grep -q "Coverage Matrix" docs/project/prd-coverage.md
 grep -q "customer holdout validation and live shadow traffic" docs/project/prd-coverage.md
 grep -q -- "--require-ready" apps/worker/src/main.rs
