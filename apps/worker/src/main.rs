@@ -20,11 +20,18 @@ async fn main() -> anyhow::Result<()> {
         "check-pilot-readiness" => {
             let api_url = take_flag_value(&mut args, "--api-url")?;
             let api_key = take_optional_flag_value(&mut args, "--api-key")?;
+            let require_ready = take_bool_flag(&mut args, "--require-ready");
             if !args.is_empty() {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
             }
             let report = worker::check_pilot_readiness(&api_url, api_key.as_deref()).await?;
             println!("{}", serde_json::to_string_pretty(&report)?);
+            if require_ready && !report.ready_for_customer_pilot {
+                anyhow::bail!(
+                    "customer pilot readiness blocked: {}",
+                    report.remediation_summary.join(", ")
+                );
+            }
         }
         "profile-parquet" => {
             let manifest = take_flag_value(&mut args, "--manifest")?;
@@ -147,4 +154,12 @@ fn take_optional_flag_value(args: &mut Vec<String>, flag: &str) -> anyhow::Resul
         anyhow::bail!("missing value for flag {flag}");
     }
     Ok(Some(args.remove(index)))
+}
+
+fn take_bool_flag(args: &mut Vec<String>, flag: &str) -> bool {
+    let Some(index) = args.iter().position(|arg| arg == flag) else {
+        return false;
+    };
+    args.remove(index);
+    true
 }

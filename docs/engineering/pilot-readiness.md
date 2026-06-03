@@ -139,10 +139,11 @@ Minimum pilot monitoring:
   `local_demo_agent_policy`, before customer pilot traffic.
 - Worker health: `cargo run --locked -p worker -- health`
 - Worker pilot readiness report:
-  `cargo run --locked -p worker -- check-pilot-readiness --api-url <api-base-url> --api-key <pilot-api-key>`
+  `cargo run --locked -p worker -- check-pilot-readiness --api-url <api-base-url> --api-key <pilot-api-key> --require-ready`
   reads the API health contract and returns `ready_for_customer_pilot`,
   `blocking_checks`, `remediation_summary`, and evidence refs for the readiness
-  decision.
+  decision. With `--require-ready`, unresolved blockers make the command fail
+  after printing the JSON report.
 - ML service health: `GET /health`
 - CI health: GitHub Actions `repository-health`, `migrations`, `rust`, `python`, `frontend`
 - Runtime logs: request path, status, run id, audit id, event type, source

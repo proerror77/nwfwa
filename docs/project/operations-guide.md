@@ -218,12 +218,15 @@ Pilot readiness report:
 ```bash
 cargo run --locked -p worker -- check-pilot-readiness \
   --api-url http://127.0.0.1:8080 \
-  --api-key "$FWA_API_KEY"
+  --api-key "$FWA_API_KEY" \
+  --require-ready
 ```
 
 The report reads `GET /api/v1/health`, returns the aggregate
 `ready_for_customer_pilot` decision, lists blocking configuration checks, and
-keeps evidence refs pointing back to the API health readiness contract.
+keeps evidence refs pointing back to the API health readiness contract. With
+`--require-ready`, the command still prints the JSON report, then exits non-zero
+when any customer pilot blocker remains.
 
 ## CI Gates
 

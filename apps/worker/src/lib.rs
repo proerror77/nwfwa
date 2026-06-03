@@ -1410,6 +1410,37 @@ mod tests {
     }
 
     #[test]
+    fn marks_pilot_readiness_report_ready_only_without_blockers() {
+        let report = build_pilot_readiness_report(ApiHealthResponse {
+            status: "ok".into(),
+            service: "api-server".into(),
+            version: "0.1.0".into(),
+            checks: vec![ApiHealthCheck {
+                name: "model_scorer".into(),
+                status: "ok".into(),
+                runtime_kind: Some("python_http".into()),
+            }],
+            pilot_readiness: ApiPilotReadiness {
+                status: "ready".into(),
+                required_check_names: vec!["api_key_configuration".into()],
+                required_check_count: 1,
+                ready_check_count: 1,
+                blocking_check_count: 0,
+                ready_checks: vec![ApiHealthCheck {
+                    name: "api_key_configuration".into(),
+                    status: "configured".into(),
+                    runtime_kind: None,
+                }],
+                blocking_checks: Vec::new(),
+            },
+        });
+
+        assert!(report.ready_for_customer_pilot);
+        assert_eq!(report.blocking_check_count, 0);
+        assert!(report.remediation_summary.is_empty());
+    }
+
+    #[test]
     fn builds_deterministic_mock_retraining_output() {
         let job = ClaimedRetrainingJob {
             job_id: "model retraining/job#1".into(),
