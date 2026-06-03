@@ -5415,8 +5415,8 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
                 ApiState::Ready(response) => html! {
                     <>
-                        <div class="score-hero">
-                            <div><span>{"Validation"}</span><strong>{&response.validation_result}</strong></div>
+                        <div class="score-hero compact-metrics">
+                            <div><span>{"Validation"}</span><strong>{readable_token(&response.validation_result)}</strong></div>
                             <div><span>{"Scoring Ready"}</span><strong>{if response.scoring_ready { "yes" } else { "no" }}</strong></div>
                             <div><span>{"Mapping"}</span><strong>{&response.mapping_version}</strong></div>
                         </div>
@@ -5466,7 +5466,7 @@ fn score_result_view(props: &ScoreResultProps) -> Html {
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
                 ApiState::Ready(response) => html! {
                     <>
-                        <div class="score-hero">
+                        <div class="score-hero compact-metrics">
                             <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
                             <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
                             <div><span>{"Action"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
@@ -6156,6 +6156,10 @@ fn display_value(value: &Value) -> String {
         .map(|number| format!("{number:.1}"))
         .or_else(|| value.as_str().map(str::to_string))
         .unwrap_or_else(|| value.to_string())
+}
+
+fn readable_token(value: &str) -> String {
+    value.replace(['_', '-'], " ")
 }
 
 fn optional_number(value: Option<f64>) -> String {

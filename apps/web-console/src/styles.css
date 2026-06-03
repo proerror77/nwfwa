@@ -603,6 +603,22 @@ pre {
   overflow-wrap: anywhere;
 }
 
+.score-hero.compact-metrics > div {
+  min-height: 82px;
+}
+
+.score-hero.compact-metrics strong {
+  font-size: 17px;
+  line-height: 1.18;
+  overflow-wrap: normal;
+  word-break: normal;
+  hyphens: none;
+}
+
+.score-hero.compact-metrics span {
+  margin-bottom: 8px;
+}
+
 .visual-kpis {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
