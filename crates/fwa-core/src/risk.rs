@@ -53,6 +53,46 @@ pub enum RecommendedAction {
     RecoveryReview,
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DecisionOutcome {
+    StraightThrough,
+    AutoDeny,
+    PendingEvidence,
+    ManualReview,
+    QaSample,
+    PostPaymentAudit,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DecisionAuthority {
+    CustomerPolicyRule,
+    ClinicalPolicyRule,
+    RiskRoutingPolicy,
+    HumanReviewer,
+    QaPolicy,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DecisionConfidence {
+    Deterministic,
+    High,
+    Medium,
+    Low,
+}
+
+#[derive(Debug, Copy, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuleActionClass {
+    HardDeny,
+    StraightThrough,
+    PendingEvidence,
+    ManualReview,
+    ScoreOnly,
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

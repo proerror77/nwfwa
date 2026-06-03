@@ -1,4 +1,4 @@
-use fwa_core::RecommendedAction;
+use fwa_core::{RecommendedAction, RuleActionClass};
 use fwa_features::FeatureMap;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -39,7 +39,13 @@ pub struct RuleAction {
     pub score: u8,
     pub alert_code: String,
     pub recommended_action: RecommendedAction,
+    #[serde(default = "default_rule_action_class")]
+    pub action_class: RuleActionClass,
     pub reason: String,
+}
+
+fn default_rule_action_class() -> RuleActionClass {
+    RuleActionClass::ManualReview
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -50,6 +56,7 @@ pub struct RuleMatch {
     pub alert_code: String,
     pub reason: String,
     pub recommended_action: RecommendedAction,
+    pub action_class: RuleActionClass,
     #[serde(default)]
     pub evidence_refs: Vec<Value>,
 }
@@ -73,6 +80,7 @@ pub fn evaluate_rules(rules: &[Rule], features: &FeatureMap) -> Result<Vec<RuleM
                 alert_code: rule.action.alert_code.clone(),
                 reason: rule.action.reason.clone(),
                 recommended_action: rule.action.recommended_action,
+                action_class: rule.action.action_class,
                 evidence_refs: rule_evidence_refs(rule, features),
             });
         }
@@ -160,6 +168,7 @@ mod tests {
                 score: 25,
                 alert_code: "EARLY_CLAIM".into(),
                 recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::ManualReview,
                 reason: "保单生效后 7 天内发生理赔".into(),
             },
         }];
@@ -197,11 +206,25 @@ mod tests {
                 score: 10,
                 alert_code: "MISSING".into(),
                 recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::ManualReview,
                 reason: "missing".into(),
             },
         }];
 
         let matches = evaluate_rules(&rules, &BTreeMap::new()).unwrap();
         assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn defaults_rule_action_class_for_legacy_dsl() {
+        let action: RuleAction = serde_json::from_value(serde_json::json!({
+            "score": 25,
+            "alert_code": "LEGACY",
+            "recommended_action": "ManualReview",
+            "reason": "legacy rule"
+        }))
+        .unwrap();
+
+        assert_eq!(action.action_class, RuleActionClass::ManualReview);
     }
 }

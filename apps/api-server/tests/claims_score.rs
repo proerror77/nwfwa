@@ -8,7 +8,7 @@ use axum::{
     body::{to_bytes, Body},
     http::{Request, StatusCode},
 };
-use fwa_core::RecommendedAction;
+use fwa_core::{RecommendedAction, RuleActionClass};
 use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest, ModelScorer};
 use fwa_rules::{Condition, Rule, RuleAction};
 use fwa_scoring::{ConfidenceThresholds, RiskThresholds, RoutingPolicy};
@@ -103,6 +103,7 @@ async fn activate_post_payment_rule(repository: SharedRepository) {
                     score: 30,
                     alert_code: "POST_PAYMENT_LIMIT_USAGE".into(),
                     recommended_action: RecommendedAction::PostPaymentAudit,
+                    action_class: RuleActionClass::ScoreOnly,
                     reason: "赔后规则仅用于高额度使用审计".into(),
                 },
             },
@@ -358,6 +359,11 @@ async fn scores_spec_style_top_level_full_payload() {
     assert!(body["model_score"]["metadata"]["abuse_probability"].is_number());
     assert!(body["model_score"]["metadata"]["waste_probability"].is_number());
     assert_eq!(body["risk_level"], "Critical");
+    assert_eq!(body["decision_outcome"], "manual_review");
+    assert_eq!(body["decision_authority"], "customer_policy_rule");
+    assert_eq!(body["decision_confidence"], "deterministic");
+    assert_eq!(body["appeal_or_review_required"], true);
+    assert_eq!(body["reason_code"], "EARLY_CLAIM");
     assert!(body["confidence_score"].as_u64().unwrap() >= 80);
     assert_eq!(body["confidence"], "High");
     assert!(body["routing_reason"]
@@ -459,6 +465,23 @@ async fn scores_spec_style_top_level_full_payload() {
         .expect("audit history should include scoring.completed");
     assert_eq!(scoring_event["run_id"], body["run_id"]);
     assert_eq!(scoring_event["payload"]["risk_level"], "Critical");
+    assert_eq!(
+        scoring_event["payload"]["decision_outcome"],
+        body["decision_outcome"]
+    );
+    assert_eq!(
+        scoring_event["payload"]["decision_authority"],
+        body["decision_authority"]
+    );
+    assert_eq!(
+        scoring_event["payload"]["decision_confidence"],
+        body["decision_confidence"]
+    );
+    assert_eq!(
+        scoring_event["payload"]["appeal_or_review_required"],
+        body["appeal_or_review_required"]
+    );
+    assert_eq!(scoring_event["payload"]["reason_code"], body["reason_code"]);
     assert_eq!(scoring_event["payload"]["confidence"], "High");
     assert_eq!(
         scoring_event["payload"]["customer_scope_id"],
@@ -800,6 +823,8 @@ async fn scores_claim_with_review_mode_and_audits_routing_policy() {
     let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
     assert_eq!(body["review_mode"], "post_payment");
     assert_eq!(body["recommended_action"], "PostPaymentAudit");
+    assert_eq!(body["decision_outcome"], "post_payment_audit");
+    assert_eq!(body["decision_authority"], "customer_policy_rule");
     assert!(body["routing_reason"].as_str().unwrap().contains("赔后"));
 
     let audit_request = Request::builder()
@@ -824,6 +849,10 @@ async fn scores_claim_with_review_mode_and_audits_routing_policy() {
     assert_eq!(
         scoring_event["payload"]["recommended_action"],
         "PostPaymentAudit"
+    );
+    assert_eq!(
+        scoring_event["payload"]["decision_outcome"],
+        "post_payment_audit"
     );
 }
 
@@ -2319,6 +2348,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "rag",
         "risk_level",
         "recommended_action",
+        "decision_outcome",
+        "decision_authority",
+        "decision_confidence",
+        "appeal_or_review_required",
+        "reason_code",
         "confidence_score",
         "confidence",
         "routing_reason",
@@ -2353,6 +2387,31 @@ async fn exposes_openapi_schema_for_scoring_contract() {
             "ProviderReview",
             "RecoveryReview"
         ])
+    );
+    assert_eq!(
+        response_properties["decision_outcome"]["enum"],
+        serde_json::json!([
+            "straight_through",
+            "auto_deny",
+            "pending_evidence",
+            "manual_review",
+            "qa_sample",
+            "post_payment_audit"
+        ])
+    );
+    assert_eq!(
+        response_properties["decision_authority"]["enum"],
+        serde_json::json!([
+            "customer_policy_rule",
+            "clinical_policy_rule",
+            "risk_routing_policy",
+            "human_reviewer",
+            "qa_policy"
+        ])
+    );
+    assert_eq!(
+        response_properties["decision_confidence"]["enum"],
+        serde_json::json!(["deterministic", "high", "medium", "low"])
     );
     assert_eq!(
         response_properties["routing_policy"]["$ref"],
@@ -2393,6 +2452,11 @@ async fn exposes_openapi_schema_for_scoring_contract() {
         "risk_score",
         "rag",
         "recommended_action",
+        "decision_outcome",
+        "decision_authority",
+        "decision_confidence",
+        "appeal_or_review_required",
+        "reason_code",
         "scores",
         "model_score",
         "top_reasons",

@@ -3179,6 +3179,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "rag",
                         "risk_level",
                         "recommended_action",
+                        "decision_outcome",
+                        "decision_authority",
+                        "decision_confidence",
+                        "appeal_or_review_required",
+                        "reason_code",
                         "confidence_score",
                         "confidence",
                         "routing_reason",
@@ -3235,6 +3240,38 @@ pub async fn openapi_schema() -> Json<Value> {
                                 "ProviderReview",
                                 "RecoveryReview"
                             ]
+                        },
+                        "decision_outcome": {
+                            "type": "string",
+                            "enum": [
+                                "straight_through",
+                                "auto_deny",
+                                "pending_evidence",
+                                "manual_review",
+                                "qa_sample",
+                                "post_payment_audit"
+                            ]
+                        },
+                        "decision_authority": {
+                            "type": "string",
+                            "enum": [
+                                "customer_policy_rule",
+                                "clinical_policy_rule",
+                                "risk_routing_policy",
+                                "human_reviewer",
+                                "qa_policy"
+                            ]
+                        },
+                        "decision_confidence": {
+                            "type": "string",
+                            "enum": ["deterministic", "high", "medium", "low"]
+                        },
+                        "appeal_or_review_required": {
+                            "type": "boolean"
+                        },
+                        "reason_code": {
+                            "type": "string",
+                            "minLength": 1
                         },
                         "confidence_score": {
                             "type": "integer",

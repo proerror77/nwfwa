@@ -17,7 +17,8 @@ use fwa_audit::ActorContext;
 use fwa_auth::{authenticate_api_key, validate_api_key};
 use fwa_core::{
     canonical_scheme_family, AuditEventId, Claim, ClaimContext, ClaimId, Member, MemberId, Money,
-    Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction, ScoringRunId,
+    Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction, RuleActionClass,
+    ScoringRunId,
 };
 use fwa_features::calculate_features;
 use fwa_rules::{evaluate_rules, Condition, Rule, RuleAction};
@@ -1358,6 +1359,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
                 score: 30,
                 alert_code: "EARLY_HIGH_AMOUNT_CANDIDATE".into(),
                 recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::ManualReview,
                 reason: "保单生效早期发生高额理赔".into(),
             },
         },
@@ -1376,6 +1378,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
                 score: 20,
                 alert_code: "HIGH_AMOUNT_RATIO_CANDIDATE".into(),
                 recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::ManualReview,
                 reason: "理赔金额接近保障额度".into(),
             },
         },
@@ -1422,6 +1425,7 @@ fn model_explanation_candidate_rules(request: &RuleDiscoveryRequest) -> Vec<Rule
                     score: explanation_score(explanation.contribution),
                     alert_code: format!("ML_{}", feature_slug.to_uppercase()),
                     recommended_action: RecommendedAction::ManualReview,
+                    action_class: RuleActionClass::ManualReview,
                     reason: format!(
                         "模型解释显示 {} 对风险贡献较高：{}",
                         explanation.feature, explanation.reason
