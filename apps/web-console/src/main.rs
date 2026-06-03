@@ -988,7 +988,6 @@ struct DashboardSummary {
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct DashboardModelScore {
-    model_key: String,
     scored_runs: u32,
     average_score: f64,
     high_risk_count: u32,
@@ -1912,7 +1911,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                                 <div class="factor-card-grid">
                                     {for summary.model_scores.iter().map(|(model_key, model)| html! {
                                         <div class="metric-row">
-                                            <span>{format!("{} / {}", model_key, model.model_key)}</span>
+                                            <span>{model_key}</span>
                                             <strong>{format!("{:.1}", model.average_score)}</strong>
                                             <small>{format!("runs {}", model.scored_runs)}</small>
                                             <small>{format!("high risk {}", model.high_risk_count)}</small>
