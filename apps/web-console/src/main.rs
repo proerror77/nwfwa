@@ -9119,14 +9119,43 @@ struct ScoreResultProps {
 #[function_component(ScoreResultView)]
 fn score_result_view(props: &ScoreResultProps) -> Html {
     html! {
-        <section class="panel result-stack">
+        <section class="panel result-stack queue-handoff-panel">
             <h3>{"Queue Handoff"}</h3>
             {match &props.state {
-                ApiState::Idle => html! { <p class="empty">{"Accepted claims enter Leads & Cases or review queues after release."}</p> },
-                ApiState::Loading => html! { <p>{"Releasing accepted claim..."}</p> },
-                ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                ApiState::Idle => html! {
+                    <div class="handoff-status pending">
+                        <span>{"Not released"}</span>
+                        <strong>{"Waiting for intake check"}</strong>
+                        <small>{"Accepted claims enter Leads & Cases or review queues after release."}</small>
+                    </div>
+                },
+                ApiState::Loading => html! {
+                    <div class="handoff-status pending">
+                        <span>{"Release in progress"}</span>
+                        <strong>{"Creating queue handoff"}</strong>
+                        <small>{"The claim is being checked by the risk service before downstream routing."}</small>
+                    </div>
+                },
+                ApiState::Failed(error) => html! {
+                    <>
+                        <div class="handoff-status blocked">
+                            <span>{"Not released"}</span>
+                            <strong>{release_blocker_title(error)}</strong>
+                            <small>{release_blocker_next_step(error)}</small>
+                        </div>
+                        <details>
+                            <summary>{"Diagnostic detail"}</summary>
+                            <p class="empty">{error}</p>
+                        </details>
+                    </>
+                },
                 ApiState::Ready(response) => html! {
                     <>
+                        <div class="handoff-status done">
+                            <span>{"Released"}</span>
+                            <strong>{"Claim entered downstream queue"}</strong>
+                            <small>{"Reviewers continue the case from Leads & Cases or Review Workbench."}</small>
+                        </div>
                         <div class="score-hero compact-metrics">
                             <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
                             <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
@@ -9143,6 +9172,26 @@ fn score_result_view(props: &ScoreResultProps) -> Html {
                 },
             }}
         </section>
+    }
+}
+
+fn release_blocker_title(error: &str) -> &'static str {
+    if error.contains("coverage_limit") || error.contains("coverage limit") {
+        "Coverage limit needs correction"
+    } else if error.contains("claim_amount") || error.contains("claim amount") {
+        "Claim amount needs confirmation"
+    } else {
+        "Claim packet is not ready"
+    }
+}
+
+fn release_blocker_next_step(error: &str) -> &'static str {
+    if error.contains("coverage_limit") || error.contains("coverage limit") {
+        "Update the policy or liability coverage limit, then check the intake packet again."
+    } else if error.contains("claim_amount") || error.contains("claim amount") {
+        "Confirm the payable claim amount from invoice totals before release."
+    } else {
+        "Resolve the intake findings on the left before releasing this claim."
     }
 }
 

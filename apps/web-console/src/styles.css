@@ -757,6 +757,44 @@ pre {
   border-left: 3px solid var(--blue);
 }
 
+.queue-handoff-panel {
+  align-self: start;
+}
+
+.handoff-status {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--blue);
+  border-radius: 8px;
+}
+
+.handoff-status span,
+.handoff-status small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.handoff-status strong {
+  color: #0c315f;
+  font-size: 18px;
+  line-height: 1.2;
+}
+
+.handoff-status.blocked {
+  background: var(--red-soft);
+  border-color: #ffc2d0;
+  border-left-color: var(--red);
+}
+
+.handoff-status.done {
+  background: #f2fbf5;
+  border-color: #b7e4c4;
+  border-left-color: var(--green);
+}
+
 .action-bar,
 .button-row {
   display: flex;

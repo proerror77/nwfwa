@@ -182,6 +182,8 @@ async function main() {
     assertContains(builtText, "Correction Worklist", "web console claim inbox release bundle");
     assertContains(builtText, "Release accepted claim", "web console claim inbox release bundle");
     assertContains(builtText, "Queue Handoff", "web console claim inbox release bundle");
+    assertContains(builtText, "Coverage limit needs correction", "web console claim inbox release bundle");
+    assertContains(builtText, "Waiting for intake check", "web console claim inbox release bundle");
     assertContains(builtText, "Queue Ready", "web console claim inbox release bundle");
     assertContains(builtText, "Technical payload editor", "web console claim inbox release bundle");
     assertNotContains(builtText, "Approve for scoring", "web console claim inbox release bundle");
