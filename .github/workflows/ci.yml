@@ -34,12 +34,13 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
       - run: python3 scripts/ops/validate_k8s_staging.py
       - run: python3 scripts/ops/validate_container_packaging.py
       - run: python3 scripts/ops/validate_analytics_scale.py
       - run: python3 scripts/ops/validate_ai_evidence_foundation.py
       - run: python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof
+      - run: python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment --commit-sha "$GITHUB_SHA"
       - run: python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export
       - run: python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation
       - run: |
@@ -51,6 +52,9 @@ jobs:
           test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
           test -f /tmp/nwfwa-staging-proof/retention_legal_hold_proof.json
           test -f /tmp/nwfwa-staging-proof/observability_proof.json
+          test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
+          test -f /tmp/nwfwa-staging-deployment/apply.sh
+          test -f /tmp/nwfwa-staging-deployment/rollback.md
           test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
           test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
           test -f /tmp/nwfwa-analytics-export/schema.sql

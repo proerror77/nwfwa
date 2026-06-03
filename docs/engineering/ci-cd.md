@@ -61,6 +61,30 @@ The release workflow rejects manual dispatch tags that do not match
 `origin/main` before publishing. This keeps releases tied to the protected
 production-ready branch.
 
+Workflow: `.github/workflows/deploy-staging.yml`
+
+`Deploy Staging` is the GitHub Environment gated staging deployment workflow.
+It runs only through manual dispatch and uses the `staging` GitHub Environment.
+This is the repository's GitHub Environment based deployment boundary for
+staging.
+The job verifies a successful CI run for the selected commit by default,
+validates Kubernetes staging manifests and container packaging, then builds a
+deployment package with `scripts/ops/build_staging_deployment_package.py`.
+
+The package includes:
+
+- copied `infra/k8s/staging` manifests;
+- `deployment_manifest.json` with commit, image tag, package checksums, and
+  environment boundary;
+- `apply.sh`, which requires `NWFWA_STAGING_SECRET_FILE` and applies the
+  package to a customer-approved staging cluster;
+- `rollback.md`, which keeps rollback tied to the previous approved package or
+  a reverted commit and preserves the human approval gate for destruction.
+
+The workflow uploads the package as a GitHub Actions artifact. It does not run
+`kubectl apply` by itself because cluster credentials, secrets, and customer
+environment ownership are still environment-specific.
+
 Example:
 
 ```bash
@@ -68,10 +92,9 @@ git tag v0.1.0
 git push origin v0.1.0
 ```
 
-Deployment to an external runtime is intentionally not configured yet because this repository does not have an application, environment, or deployment target.
-Kubernetes staging manifests now exist under `infra/k8s/staging`, but production
-deployment remains intentionally unconfigured until image registry, managed
-secrets, network controls, observability, and customer environment ownership are
-selected.
-GitHub Environment based deployment should be added in the deployment phase, not
-as part of the current packaging proof.
+Deployment to an external runtime is intentionally package-only for now.
+Kubernetes staging manifests now exist under `infra/k8s/staging`, and the GitHub
+Environment workflow packages them for a customer-approved staging cluster.
+Production deployment remains intentionally unconfigured until image registry,
+managed secrets, network controls, observability, and customer environment
+ownership are selected.

@@ -7,6 +7,7 @@ required_files=(
   "docs/engineering/git-flow.md"
   "docs/engineering/ci-cd.md"
   "docs/engineering/tpa-integration-contract.md"
+  ".github/workflows/deploy-staging.yml"
   "apps/ml-service/pyproject.toml"
   "apps/web-console/Cargo.toml"
   "apps/web-console/Trunk.toml"
@@ -27,6 +28,7 @@ required_files=(
   "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
+  "scripts/ops/build_staging_deployment_package.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
   "scripts/ops/sample_mlops_monitoring_plan.json"
   "infra/docker-compose.yml"
@@ -120,6 +122,11 @@ grep -q "claimValidateDate" docs/product/fwa-risk-operations-prd.md
 grep -q "cargo clippy --locked --workspace --all-targets -- -D warnings" .github/workflows/ci.yml
 grep -q "cargo test --locked --workspace" .github/workflows/ci.yml
 grep -q "staging-proof" .github/workflows/ci.yml
+grep -q "Deploy Staging" .github/workflows/deploy-staging.yml
+grep -q "environment:" .github/workflows/deploy-staging.yml
+grep -q "name: staging" .github/workflows/deploy-staging.yml
+grep -q "actions/upload-artifact@v5" .github/workflows/deploy-staging.yml
+grep -q "build_staging_deployment_package.py" .github/workflows/deploy-staging.yml
 grep -q "validate_k8s_staging.py" .github/workflows/ci.yml
 grep -q "validate_container_packaging.py" .github/workflows/ci.yml
 grep -q "validate_analytics_scale.py" .github/workflows/ci.yml
@@ -440,6 +447,8 @@ grep -q "MinIO" docs/project/technology-stack.md
 grep -q "staging-proof" docs/engineering/ci-cd.md
 grep -q "container packaging checks" docs/engineering/ci-cd.md
 grep -q "GitHub Environment based deployment" docs/engineering/ci-cd.md
+grep -q "Deploy Staging" docs/engineering/ci-cd.md
+grep -q "build_staging_deployment_package.py" docs/engineering/ci-cd.md
 grep -q "Kubernetes staging manifests now exist" docs/engineering/ci-cd.md
 grep -q "Kubernetes staging proof" docs/engineering/pilot-readiness.md
 grep -q "Container packaging proof" docs/engineering/pilot-readiness.md
@@ -448,6 +457,7 @@ grep -q "run_mlops_monitoring_plan.py" docs/engineering/pilot-readiness.md
 grep -q "Kubernetes Staging" docs/project/operations-guide.md
 grep -q "validate_container_packaging.py" docs/project/operations-guide.md
 grep -q "build_staging_evidence.py" docs/project/operations-guide.md
+grep -q "build_staging_deployment_package.py" docs/project/operations-guide.md
 grep -q "run_mlops_monitoring_plan.py" docs/project/operations-guide.md
 grep -q "infra/k8s/staging" README.md
 grep -q "validate_k8s_staging.py" README.md
@@ -493,6 +503,8 @@ grep -q "staging_object_storage_manifest" scripts/ops/build_staging_evidence.py
 grep -q "staging_backup_restore_proof" scripts/ops/build_staging_evidence.py
 grep -q "staging_retention_legal_hold_proof" scripts/ops/build_staging_evidence.py
 grep -q "staging_observability_proof" scripts/ops/build_staging_evidence.py
+grep -q "github_environment_staging_deployment_package" scripts/ops/build_staging_deployment_package.py
+grep -q "human_approval_required_before_destroy" scripts/ops/build_staging_deployment_package.py
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "scheduled_ai_evidence_execution" apps/worker/src/lib.rs
 grep -q "ai_evidence_execution_plan" apps/worker/src/lib.rs
@@ -503,12 +515,13 @@ grep -q "governance_ops_plan" apps/worker/src/lib.rs
 grep -q "build-governance-ops-plan" apps/worker/src/main.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
 python3 scripts/ops/validate_analytics_scale.py
 python3 scripts/ops/validate_ai_evidence_foundation.py
 python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof >/tmp/nwfwa-staging-proof.json
+python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment >/tmp/nwfwa-staging-deployment.json
 python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
 python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation >/tmp/nwfwa-ai-evidence-foundation.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
@@ -518,6 +531,9 @@ test -f /tmp/nwfwa-staging-proof/object_storage_manifest.json
 test -f /tmp/nwfwa-staging-proof/backup_restore_proof.json
 test -f /tmp/nwfwa-staging-proof/retention_legal_hold_proof.json
 test -f /tmp/nwfwa-staging-proof/observability_proof.json
+test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
+test -f /tmp/nwfwa-staging-deployment/apply.sh
+test -f /tmp/nwfwa-staging-deployment/rollback.md
 test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
 test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
 test -f /tmp/nwfwa-analytics-export/schema.sql

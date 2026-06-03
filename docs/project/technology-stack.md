@@ -160,6 +160,7 @@ customer-approved object storage, not in free-text database fields.
 | MinIO | `infra/docker-compose.yml`, `infra/k8s/staging` | S3-compatible staging artifact storage proof |
 | Kubernetes / Kustomize | `infra/k8s/staging` | Staging deployment architecture for pilot foundation proof |
 | GitHub Actions | `.github/workflows/ci.yml` | CI validation |
+| GitHub Environments | `.github/workflows/deploy-staging.yml` | Manual staging deployment package gate |
 | GitHub Releases | `.github/workflows/release.yml` | Tag-based release publication |
 | Shell and Python scripts | `scripts/ci`, `scripts/demo`, `scripts/ops` | Health, seed, smoke, persistence, staging, analytics, and MLOps proof checks |
 | GitHub CLI | release workflow | `gh release create` publication |
@@ -194,6 +195,9 @@ The same job validates the AI evidence foundation schema contract and generates
 The same staging proof also generates retention/legal-hold proof metadata and
 validates the worker governance ops plan command for backup, restore-drill,
 retention, legal-hold, and destruction-review scheduling.
+Staging deployment packaging is gated by the `staging` GitHub Environment
+through `.github/workflows/deploy-staging.yml`; the workflow validates staging
+manifests and uploads a deployment package instead of applying to a cluster.
 
 ## Declared And Resolved Versions
 

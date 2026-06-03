@@ -121,3 +121,11 @@ Recommended GitHub branch protection for `main` and `develop`:
 `develop` should block force pushes and require CI when multiple contributors or
 agents are pushing concurrently. If direct pushes to `develop` are allowed for
 speed, only push after the local pre-push check above passes.
+
+## GitHub Environments
+
+Use the `staging` GitHub Environment for manual staging deployment packaging.
+The workflow `.github/workflows/deploy-staging.yml` should be dispatched only
+after CI is green for the selected commit. It builds the staging deployment
+package and uploads it as an artifact; applying the package to a cluster remains
+an environment-specific operator action with customer-approved secrets.

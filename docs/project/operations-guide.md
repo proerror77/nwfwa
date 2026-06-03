@@ -362,6 +362,23 @@ worker CronJobs for pilot readiness, MLOps monitoring-plan generation, AI
 evidence execution-plan generation, analytics export-plan generation, and
 governance ops plan generation.
 
+Build a GitHub Environment gated staging deployment package:
+
+```bash
+python3 scripts/ops/build_staging_deployment_package.py \
+  --output-dir artifacts/staging-deployment \
+  --image-tag staging \
+  --commit-sha "$(git rev-parse HEAD)" \
+  --environment staging
+```
+
+The package includes copied staging manifests, `deployment_manifest.json`,
+`apply.sh`, and `rollback.md`. The GitHub Actions workflow
+`.github/workflows/deploy-staging.yml` builds the same package behind the
+`staging` GitHub Environment and uploads it as an artifact. It does not apply to
+a cluster automatically; `apply.sh` requires a customer-approved Kubernetes
+context and `NWFWA_STAGING_SECRET_FILE`.
+
 Validate container packaging before building images:
 
 ```bash

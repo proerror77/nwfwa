@@ -74,8 +74,10 @@ PostgreSQL, S3-compatible object storage, ClickHouse, and worker CronJobs. They
 are staging manifests with placeholder images and secrets, not a production
 package.
 Container packaging is defined for API server, worker, web console, and the
-database ops image, but GitHub Environment based deployment is intentionally
-left for the deployment phase.
+database ops image. GitHub Environment based staging deployment is now
+configured as a package-only workflow; it builds and uploads a deployment
+package for the `staging` environment but does not apply it to a cluster without
+customer-approved credentials and secrets.
 
 Analytics scale is now implemented as a staging proof contract. The derived
 ClickHouse schema and dashboard queries live under `analytics/clickhouse`, the
@@ -216,6 +218,7 @@ Local staging evidence artifacts:
 
 ```bash
 python3 scripts/ops/build_staging_evidence.py --output-dir artifacts/staging-proof
+python3 scripts/ops/build_staging_deployment_package.py --output-dir artifacts/staging-deployment
 python3 scripts/ops/build_analytics_export.py --output-dir artifacts/analytics-export
 python3 scripts/ops/run_mlops_monitoring_plan.py \
   --plan scripts/ops/sample_mlops_monitoring_plan.json \
@@ -529,7 +532,8 @@ workflow checks:
 
 Release workflow publishes GitHub Releases for semantic tags matching `v*.*.*`.
 Manual release dispatch requires an existing tag input. Releases are GitHub
-release records only; external deployment is intentionally not configured yet.
+release records only. Staging deployment packaging is handled by
+`.github/workflows/deploy-staging.yml` through the `staging` GitHub Environment.
 
 See [docs/engineering/ci-cd.md](docs/engineering/ci-cd.md) and
 [docs/engineering/git-flow.md](docs/engineering/git-flow.md).
