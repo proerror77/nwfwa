@@ -27,12 +27,24 @@ This repository uses a lightweight GitFlow policy.
 
 ## Local Pre-Push Check
 
-Run this minimum check before pushing backend or workflow changes:
+Use the local verification cadence B for normal feature work. The goal is to
+avoid repeated workspace-wide Cargo builds while still proving each coherent
+change before it is pushed.
+
+During development:
+
+- run only one Cargo command at a time, otherwise the shared `target` directory
+  lock can make local feedback appear stuck;
+- prefer `cargo check --locked -p <crate>` for the affected Rust crate;
+- do not run workspace tests after every small edit.
+
+Before an atomic commit, run the checks that match the feature group:
 
 ```bash
 bash scripts/ci/check_repo.sh
 cargo fmt --all -- --check
-cargo test --locked --workspace
+cargo check --locked -p <affected-crate>
+cargo test --locked -p <affected-crate> <focused-test-filter>
 ```
 
 For frontend changes, also run:
@@ -44,6 +56,11 @@ cargo check --locked --target wasm32-unknown-unknown
 NO_COLOR=false trunk build --release --locked
 node ../../scripts/demo/smoke_web_console.mjs
 ```
+
+Run `cargo test --locked --workspace` locally only for release stabilization,
+large cross-crate refactors, or when CI failures suggest a workspace-level
+interaction. Normal pushes should rely on GitHub CI for the full Rust matrix
+after focused local checks pass.
 
 ## Release Flow
 
