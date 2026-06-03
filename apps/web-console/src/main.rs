@@ -293,6 +293,127 @@ struct RuntimeLayerScore {
     evidence_refs: Vec<Value>,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceDocumentListResponse {
+    documents: Vec<EvidenceDocumentRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceDocumentChunkListResponse {
+    chunks: Vec<EvidenceDocumentChunkRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceOcrOutputListResponse {
+    ocr_outputs: Vec<EvidenceOcrOutputRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceEmbeddingJobListResponse {
+    embedding_jobs: Vec<EvidenceEmbeddingJobRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceRetrievalAuditEventListResponse {
+    retrieval_audit_events: Vec<EvidenceRetrievalAuditEventRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceDocumentRecord {
+    document_id: String,
+    customer_scope_id: String,
+    source_system: String,
+    source_record_ref: String,
+    claim_id: Option<String>,
+    external_document_id: Option<String>,
+    document_type: String,
+    storage_uri: String,
+    content_checksum: String,
+    ingestion_status: String,
+    redaction_status: String,
+    retention_policy_id: String,
+    evidence_refs: Vec<String>,
+    metadata_json: Value,
+    created_at: Option<String>,
+    updated_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceDocumentChunkRecord {
+    chunk_id: String,
+    document_id: String,
+    chunk_index: i32,
+    chunking_version: String,
+    redaction_status: String,
+    text_checksum: String,
+    token_count: i32,
+    storage_uri: String,
+    source_offsets_json: Value,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceOcrOutputRecord {
+    ocr_output_id: String,
+    document_id: String,
+    ocr_engine: String,
+    ocr_engine_version: String,
+    output_uri: String,
+    output_checksum: String,
+    confidence_score: Option<Value>,
+    quality_status: String,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceEmbeddingJobRecord {
+    embedding_job_id: String,
+    customer_scope_id: String,
+    target_kind: String,
+    target_ref: String,
+    embedding_model: String,
+    embedding_model_version: String,
+    chunking_version: String,
+    redaction_status: String,
+    vector_store_kind: String,
+    vector_store_ref: String,
+    embedding_checksum: String,
+    status: String,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+    completed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct EvidenceRetrievalAuditEventRecord {
+    retrieval_id: String,
+    customer_scope_id: String,
+    actor_id: String,
+    actor_role: String,
+    query_kind: String,
+    query_checksum: String,
+    retrieval_method: String,
+    embedding_model_version: Option<String>,
+    top_k: i32,
+    source_refs: Vec<String>,
+    result_refs: Vec<String>,
+    redaction_status: String,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct EvidenceRuntimeSnapshot {
+    documents: Vec<EvidenceDocumentRecord>,
+    selected_document_id: Option<String>,
+    chunks: Vec<EvidenceDocumentChunkRecord>,
+    ocr_outputs: Vec<EvidenceOcrOutputRecord>,
+    embedding_jobs: Vec<EvidenceEmbeddingJobRecord>,
+    retrieval_audit_events: Vec<EvidenceRetrievalAuditEventRecord>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct CorrectionHint {
     field_path: String,
@@ -1419,6 +1540,8 @@ fn app() -> Html {
                         {detection_controls_page(select_module.clone())}
                     } else if *active == "Evidence Hub" {
                         {evidence_hub_page(select_module.clone())}
+                    } else if *active == "Evidence Runtime" {
+                        <EvidenceRuntimePage />
                     } else if *active == "Rules" {
                         <RulesPage />
                     } else if *active == "Models" {
@@ -1468,6 +1591,9 @@ fn module_context(module: &str) -> &'static str {
         "Evidence Hub" => {
             "Open member, provider, knowledge, and dataset context from one evidence hub."
         }
+        "Evidence Runtime" => {
+            "Register document, OCR, chunk, embedding, and retrieval metadata with audit trace."
+        }
         "Rules" => "Operate deterministic FWA controls and promotion gates.",
         "Models" => "Review model readiness, thresholds, and production evidence.",
         "Routing Policies" => "Inspect routing boundaries for model and policy execution.",
@@ -1494,6 +1620,7 @@ fn module_description(module: &str) -> &'static str {
         "Review Workbench" => "medical + QA",
         "Detection Controls" => "rules + models",
         "Evidence Hub" => "context lookup",
+        "Evidence Runtime" => "document evidence",
         "Rules" => "deterministic controls",
         "Models" => "threshold evidence",
         "Routing Policies" => "execution routing",
@@ -1520,6 +1647,7 @@ fn module_icon_class(module: &str) -> &'static str {
         "Review Workbench" => "icon-qa",
         "Detection Controls" => "icon-rules",
         "Evidence Hub" => "icon-knowledge",
+        "Evidence Runtime" => "icon-audit",
         "Rules" => "icon-rules",
         "Models" => "icon-models",
         "Routing Policies" => "icon-routing",
@@ -1588,6 +1716,7 @@ fn evidence_hub_page(on_navigate: Callback<String>) -> Html {
             </div>
             {evidence_hub_visual()}
             <div class="workflow-card-grid">
+                {workflow_action_card("Evidence Runtime", "Register document packets, chunks, OCR outputs, embedding jobs, and retrieval audit metadata.", "Open runtime", "Evidence Runtime", "strong", &on_navigate)}
                 {workflow_action_card("Provider Risk", "Open provider graph signals, suspicious patterns, and network flags.", "Review provider", "Provider Risk", "danger", &on_navigate)}
                 {workflow_action_card("Member Profile", "Inspect member-level utilization, policy, and claim history context.", "Review member", "Member Profile", "neutral", &on_navigate)}
                 {workflow_action_card("Knowledge Base", "Search confirmed evidence without crossing adjudication boundaries.", "Search evidence", "Knowledge Base", "strong", &on_navigate)}
@@ -1641,6 +1770,323 @@ fn evidence_pipeline_node(step: &str, label: &str, caption: &str) -> Html {
             <span>{step}</span>
             <strong>{label}</strong>
             <small>{caption}</small>
+        </div>
+    }
+}
+
+#[function_component(EvidenceRuntimePage)]
+fn evidence_runtime_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let selected_document_id = use_state(String::new);
+    let snapshot_state = use_state(|| ApiState::<EvidenceRuntimeSnapshot>::Idle);
+    let action_state = use_state(|| ApiState::<String>::Idle);
+
+    let load_runtime = {
+        let api_key = api_key.clone();
+        let selected_document_id = selected_document_id.clone();
+        let snapshot_state = snapshot_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let selected_document_id = (*selected_document_id).clone();
+            let snapshot_state = snapshot_state.clone();
+            snapshot_state.set(ApiState::Loading);
+            spawn_local(async move {
+                snapshot_state.set(
+                    match get_evidence_runtime_snapshot(api_key, selected_document_id).await {
+                        Ok(snapshot) => ApiState::Ready(snapshot),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
+            });
+        })
+    };
+
+    {
+        let load_runtime = load_runtime.clone();
+        use_effect_with((), move |_| {
+            load_runtime.emit(());
+            || ()
+        });
+    }
+
+    let run_demo_lifecycle = {
+        let api_key = api_key.clone();
+        let selected_document_id = selected_document_id.clone();
+        let snapshot_state = snapshot_state.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let next_index = match &*snapshot_state {
+                ApiState::Ready(snapshot) => snapshot.documents.len() + 1,
+                _ => 1,
+            };
+            let selected_document_id = selected_document_id.clone();
+            let snapshot_state = snapshot_state.clone();
+            let action_state = action_state.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match post_evidence_demo_lifecycle(api_key.clone(), next_index).await {
+                    Ok(document_id) => {
+                        selected_document_id.set(document_id.clone());
+                        action_state.set(ApiState::Ready(format!(
+                            "registered evidence lifecycle for {document_id}"
+                        )));
+                        snapshot_state.set(ApiState::Loading);
+                        snapshot_state.set(
+                            match get_evidence_runtime_snapshot(api_key, document_id).await {
+                                Ok(snapshot) => ApiState::Ready(snapshot),
+                                Err(error) => ApiState::Failed(error),
+                            },
+                        );
+                    }
+                    Err(error) => action_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let refresh = {
+        let load_runtime = load_runtime.clone();
+        Callback::from(move |_| load_runtime.emit(()))
+    };
+
+    html! {
+        <section class="module-status">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Evidence Runtime"}</h2>
+                    <p>{"Operate the AI evidence metadata lifecycle without exposing raw document text or embedding vectors to the browser."}</p>
+                </div>
+                <span class="status-pill">{"AI Evidence Foundation"}</span>
+            </div>
+
+            <section class="panel">
+                <h3>{"Runtime Source"}</h3>
+                <div class="form-grid">
+                    <label>
+                        {"API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Selected document id"}
+                        <input
+                            value={(*selected_document_id).clone()}
+                            placeholder="leave blank to use first document"
+                            oninput={{
+                                let selected_document_id = selected_document_id.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    selected_document_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="button-row">
+                    <button onclick={refresh.clone()} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh evidence" }}
+                    </button>
+                    <button onclick={run_demo_lifecycle} disabled={matches!(&*action_state, ApiState::Loading)}>
+                        {if matches!(&*action_state, ApiState::Loading) { "Registering..." } else { "Run demo evidence lifecycle" }}
+                    </button>
+                </div>
+                {match &*action_state {
+                    ApiState::Idle => html! { <p class="empty">{"Demo lifecycle writes document, chunk, OCR, embedding job, retrieval audit, and governance audit events."}</p> },
+                    ApiState::Loading => html! { <p>{"Registering governed evidence metadata..."}</p> },
+                    ApiState::Ready(message) => html! { <p class="success-note">{message}</p> },
+                    ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+                }}
+            </section>
+
+            <EvidenceRuntimeView state={(*snapshot_state).clone()} />
+        </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct EvidenceRuntimeProps {
+    state: ApiState<EvidenceRuntimeSnapshot>,
+}
+
+#[function_component(EvidenceRuntimeView)]
+fn evidence_runtime_view(props: &EvidenceRuntimeProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load evidence runtime metadata to inspect the current governed packet state."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading evidence runtime metadata..."}</p></section> },
+                ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
+                ApiState::Ready(snapshot) => html! {
+                    <>
+                        {evidence_runtime_cockpit(snapshot)}
+                        <section class="panel result-stack">
+                            <h3>{"Document Packets"}</h3>
+                            if snapshot.documents.is_empty() {
+                                <p class="empty">{"No evidence documents registered for this customer scope."}</p>
+                            } else {
+                                <div class="evidence-runtime-grid">
+                                    {for snapshot.documents.iter().take(8).map(evidence_document_card)}
+                                </div>
+                            }
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Selected Document Outputs"}</h3>
+                            <div class="summary-grid">
+                                <div><span>{"Selected Document"}</span><strong>{snapshot.selected_document_id.as_deref().unwrap_or("none")}</strong></div>
+                                <div><span>{"Chunks"}</span><strong>{snapshot.chunks.len()}</strong></div>
+                                <div><span>{"OCR Outputs"}</span><strong>{snapshot.ocr_outputs.len()}</strong></div>
+                            </div>
+                            <div class="evidence-runtime-grid two-column">
+                                <div>
+                                    <h4>{"Chunks"}</h4>
+                                    if snapshot.chunks.is_empty() {
+                                        <p class="empty">{"No chunk metadata returned."}</p>
+                                    } else {
+                                        <div class="table-list">
+                                            {for snapshot.chunks.iter().map(evidence_chunk_row)}
+                                        </div>
+                                    }
+                                </div>
+                                <div>
+                                    <h4>{"OCR Outputs"}</h4>
+                                    if snapshot.ocr_outputs.is_empty() {
+                                        <p class="empty">{"No OCR metadata returned."}</p>
+                                    } else {
+                                        <div class="table-list">
+                                            {for snapshot.ocr_outputs.iter().map(evidence_ocr_row)}
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </section>
+
+                        <section class="panel result-stack">
+                            <h3>{"Embedding And Retrieval Audit"}</h3>
+                            <div class="evidence-runtime-grid two-column">
+                                <div>
+                                    <h4>{"Embedding Jobs"}</h4>
+                                    if snapshot.embedding_jobs.is_empty() {
+                                        <p class="empty">{"No embedding jobs registered."}</p>
+                                    } else {
+                                        <div class="table-list">
+                                            {for snapshot.embedding_jobs.iter().take(8).map(evidence_embedding_row)}
+                                        </div>
+                                    }
+                                </div>
+                                <div>
+                                    <h4>{"Retrieval Audit Events"}</h4>
+                                    if snapshot.retrieval_audit_events.is_empty() {
+                                        <p class="empty">{"No retrieval audit events recorded."}</p>
+                                    } else {
+                                        <div class="table-list">
+                                            {for snapshot.retrieval_audit_events.iter().take(8).map(evidence_retrieval_row)}
+                                        </div>
+                                    }
+                                </div>
+                            </div>
+                        </section>
+                    </>
+                },
+            }}
+        </>
+    }
+}
+
+fn evidence_runtime_cockpit(snapshot: &EvidenceRuntimeSnapshot) -> Html {
+    html! {
+        <section class="panel evidence-runtime-cockpit">
+            <div class="evidence-runtime-map">
+                {evidence_runtime_stage("Document", &snapshot.documents.len().to_string(), "source URI + checksum", "source")}
+                {evidence_runtime_stage("Chunk", &snapshot.chunks.len().to_string(), "offsets + token count", "chunk")}
+                {evidence_runtime_stage("OCR", &snapshot.ocr_outputs.len().to_string(), "engine + quality", "ocr")}
+                {evidence_runtime_stage("Embedding", &snapshot.embedding_jobs.len().to_string(), "vector store refs", "embedding")}
+                {evidence_runtime_stage("Retrieval", &snapshot.retrieval_audit_events.len().to_string(), "query checksum only", "retrieval")}
+                <div class="evidence-runtime-core">
+                    <span>{"Boundary"}</span>
+                    <strong>{"no raw text in UI"}</strong>
+                </div>
+            </div>
+        </section>
+    }
+}
+
+fn evidence_runtime_stage(label: &str, value: &str, caption: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("evidence-runtime-stage", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{caption}</small>
+        </div>
+    }
+}
+
+fn evidence_document_card(document: &EvidenceDocumentRecord) -> Html {
+    html! {
+        <div class="factor-card evidence-document-card">
+            <div>
+                <strong>{&document.document_id}</strong>
+                <span>{format!("{} / {} / {}", document.document_type, document.ingestion_status, document.redaction_status)}</span>
+            </div>
+            <div class="summary-grid">
+                <div><span>{"Claim"}</span><strong>{document.claim_id.as_deref().unwrap_or("none")}</strong></div>
+                <div><span>{"Scope"}</span><strong>{&document.customer_scope_id}</strong></div>
+                <div><span>{"Retention"}</span><strong>{&document.retention_policy_id}</strong></div>
+            </div>
+            <small>{format!("storage: {}", document.storage_uri)}</small>
+            <small>{format!("checksum: {}", document.content_checksum)}</small>
+            <small>{format!("evidence: {}", refs_label(&document.evidence_refs))}</small>
+        </div>
+    }
+}
+
+fn evidence_chunk_row(chunk: &EvidenceDocumentChunkRecord) -> Html {
+    html! {
+        <div class="metric-row compact-metric-row">
+            <span>{format!("{} / index {}", chunk.chunk_id, chunk.chunk_index)}</span>
+            <strong>{format!("{} tokens", chunk.token_count)}</strong>
+            <small>{format!("{} / {}", chunk.chunking_version, chunk.redaction_status)}</small>
+            <small>{format!("evidence: {}", refs_label(&chunk.evidence_refs))}</small>
+        </div>
+    }
+}
+
+fn evidence_ocr_row(output: &EvidenceOcrOutputRecord) -> Html {
+    html! {
+        <div class="metric-row compact-metric-row">
+            <span>{format!("{} / {}", output.ocr_output_id, output.ocr_engine)}</span>
+            <strong>{&output.quality_status}</strong>
+            <small>{format!("version {} / confidence {}", output.ocr_engine_version, output.confidence_score.as_ref().map(display_value).unwrap_or_else(|| "none".into()))}</small>
+            <small>{format!("evidence: {}", refs_label(&output.evidence_refs))}</small>
+        </div>
+    }
+}
+
+fn evidence_embedding_row(job: &EvidenceEmbeddingJobRecord) -> Html {
+    html! {
+        <div class="metric-row compact-metric-row">
+            <span>{format!("{} / {}", job.embedding_job_id, job.target_ref)}</span>
+            <strong>{&job.status}</strong>
+            <small>{format!("{} {} -> {}", job.embedding_model, job.embedding_model_version, job.vector_store_kind)}</small>
+            <small>{format!("evidence: {}", refs_label(&job.evidence_refs))}</small>
+        </div>
+    }
+}
+
+fn evidence_retrieval_row(event: &EvidenceRetrievalAuditEventRecord) -> Html {
+    html! {
+        <div class="metric-row compact-metric-row">
+            <span>{format!("{} / {}", event.retrieval_id, event.query_kind)}</span>
+            <strong>{format!("top {}", event.top_k)}</strong>
+            <small>{format!("{} / actor {}", event.retrieval_method, event.actor_role)}</small>
+            <small>{format!("sources: {} / results: {}", refs_label(&event.source_refs), refs_label(&event.result_refs))}</small>
         </div>
     }
 }
@@ -6496,6 +6942,183 @@ async fn get_agent_runs(api_key: String) -> Result<Vec<AgentRunRecord>, String> 
             .await?
             .runs,
     )
+}
+
+async fn get_evidence_runtime_snapshot(
+    api_key: String,
+    selected_document_id: String,
+) -> Result<EvidenceRuntimeSnapshot, String> {
+    let documents = request_get_json::<EvidenceDocumentListResponse>(
+        "/api/v1/ops/evidence/documents",
+        api_key.clone(),
+    )
+    .await?
+    .documents;
+    let selected_document_id = selected_document_id.trim().to_string();
+    let selected_document_id = if selected_document_id.is_empty() {
+        documents
+            .first()
+            .map(|document| document.document_id.clone())
+    } else {
+        Some(selected_document_id)
+    };
+    let (chunks, ocr_outputs) = if let Some(document_id) = &selected_document_id {
+        let chunks = request_get_json::<EvidenceDocumentChunkListResponse>(
+            &format!("/api/v1/ops/evidence/documents/{document_id}/chunks"),
+            api_key.clone(),
+        )
+        .await?
+        .chunks;
+        let ocr_outputs = request_get_json::<EvidenceOcrOutputListResponse>(
+            &format!("/api/v1/ops/evidence/documents/{document_id}/ocr-outputs"),
+            api_key.clone(),
+        )
+        .await?
+        .ocr_outputs;
+        (chunks, ocr_outputs)
+    } else {
+        (Vec::new(), Vec::new())
+    };
+    let embedding_jobs = request_get_json::<EvidenceEmbeddingJobListResponse>(
+        "/api/v1/ops/evidence/embedding-jobs",
+        api_key.clone(),
+    )
+    .await?
+    .embedding_jobs;
+    let retrieval_audit_events = request_get_json::<EvidenceRetrievalAuditEventListResponse>(
+        "/api/v1/ops/evidence/retrieval-audit-events",
+        api_key,
+    )
+    .await?
+    .retrieval_audit_events;
+    Ok(EvidenceRuntimeSnapshot {
+        documents,
+        selected_document_id,
+        chunks,
+        ocr_outputs,
+        embedding_jobs,
+        retrieval_audit_events,
+    })
+}
+
+async fn post_evidence_demo_lifecycle(
+    api_key: String,
+    next_index: usize,
+) -> Result<String, String> {
+    let document_id = format!("web-doc-{next_index:03}");
+    let chunk_id = format!("web-chunk-{next_index:03}");
+    let ocr_output_id = format!("web-ocr-{next_index:03}");
+    let embedding_job_id = format!("web-emb-{next_index:03}");
+    let retrieval_id = format!("web-ret-{next_index:03}");
+    let claim_id = "CLM-0287";
+
+    let document_payload = json!({
+        "document_id": document_id,
+        "source_record_ref": format!("claim_documents:{claim_id}"),
+        "claim_id": claim_id,
+        "external_document_id": format!("TPA-DOC-{next_index:03}"),
+        "document_type": "medical_record",
+        "storage_uri": format!("s3://customer-approved/evidence/{document_id}.json"),
+        "content_checksum": format!("sha256:{document_id}"),
+        "ingestion_status": "registered",
+        "redaction_status": "redacted",
+        "retention_policy_id": "pilot-7y",
+        "evidence_refs": [format!("claim_context:{claim_id}")],
+        "metadata_json": {
+            "demo_source": "web-console",
+            "raw_text_present": false,
+            "pii_masking": "required"
+        }
+    });
+    let document = request_json::<EvidenceDocumentRecord>(
+        "/api/v1/ops/evidence/documents",
+        api_key.clone(),
+        document_payload,
+    )
+    .await?;
+
+    let chunk_payload = json!({
+        "chunk_id": chunk_id,
+        "chunk_index": 0,
+        "chunking_version": "medical-record-v1",
+        "redaction_status": "redacted",
+        "text_checksum": format!("sha256:{chunk_id}"),
+        "token_count": 128,
+        "storage_uri": format!("s3://customer-approved/evidence/chunks/{chunk_id}.json"),
+        "source_offsets_json": {"page": 1, "raw_text_present": false},
+        "evidence_refs": [format!("evidence_documents:{}", document.document_id)]
+    });
+    let chunk = request_json::<EvidenceDocumentChunkRecord>(
+        &format!(
+            "/api/v1/ops/evidence/documents/{}/chunks",
+            document.document_id
+        ),
+        api_key.clone(),
+        chunk_payload,
+    )
+    .await?;
+
+    let ocr_payload = json!({
+        "ocr_output_id": ocr_output_id,
+        "ocr_engine": "customer-ocr",
+        "ocr_engine_version": "2026.06",
+        "output_uri": format!("s3://customer-approved/evidence/ocr/{ocr_output_id}.json"),
+        "output_checksum": format!("sha256:{ocr_output_id}"),
+        "confidence_score": "0.94",
+        "quality_status": "passed",
+        "evidence_refs": [format!("evidence_documents:{}", document.document_id)]
+    });
+    request_json::<EvidenceOcrOutputRecord>(
+        &format!(
+            "/api/v1/ops/evidence/documents/{}/ocr-outputs",
+            document.document_id
+        ),
+        api_key.clone(),
+        ocr_payload,
+    )
+    .await?;
+
+    let embedding_payload = json!({
+        "embedding_job_id": embedding_job_id,
+        "target_kind": "document_chunk",
+        "target_ref": chunk.chunk_id,
+        "embedding_model": "customer-approved-embedder",
+        "embedding_model_version": "v1",
+        "chunking_version": "medical-record-v1",
+        "redaction_status": "redacted",
+        "vector_store_kind": "pgvector",
+        "vector_store_ref": format!("pgvector:evidence_chunks:{}", chunk.chunk_id),
+        "embedding_checksum": format!("sha256:{embedding_job_id}"),
+        "status": "queued",
+        "evidence_refs": [format!("evidence_chunks:{}", chunk.chunk_id)]
+    });
+    request_json::<EvidenceEmbeddingJobRecord>(
+        "/api/v1/ops/evidence/embedding-jobs",
+        api_key.clone(),
+        embedding_payload,
+    )
+    .await?;
+
+    let retrieval_payload = json!({
+        "retrieval_id": retrieval_id,
+        "query_kind": "masked_claim_context",
+        "query_checksum": format!("sha256:masked-query-{next_index:03}"),
+        "retrieval_method": "vector_top_k",
+        "embedding_model_version": "v1",
+        "top_k": 5,
+        "source_refs": [format!("claim_context:{claim_id}")],
+        "result_refs": [format!("evidence_chunks:{}", chunk.chunk_id)],
+        "redaction_status": "redacted",
+        "evidence_refs": [format!("retrieval:{retrieval_id}")]
+    });
+    request_json::<EvidenceRetrievalAuditEventRecord>(
+        "/api/v1/ops/evidence/retrieval-audit-events",
+        api_key,
+        retrieval_payload,
+    )
+    .await?;
+
+    Ok(document.document_id)
 }
 
 async fn post_agent_investigation(
