@@ -5380,6 +5380,8 @@ fn governance_view(props: &GovernanceProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <>
+                        {governance_control_tower(snapshot)}
+
                         <section class="panel result-stack">
                             <h3>{"Pilot Security Readiness"}</h3>
                             <div class="score-hero">
@@ -5511,6 +5513,114 @@ fn governance_view(props: &GovernanceProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn governance_control_tower(snapshot: &GovernanceSnapshot) -> Html {
+    let pilot_status = snapshot.health.pilot_readiness.status.as_str();
+    let first_blocker = snapshot
+        .health
+        .pilot_readiness
+        .blocking_checks
+        .first()
+        .map(|check| check.name.as_str())
+        .unwrap_or("no blocking checks");
+    let first_audit = snapshot
+        .audit_events
+        .first()
+        .map(|event| event.audit_id.as_str())
+        .unwrap_or("audit pending");
+    let first_api = snapshot
+        .api_calls
+        .first()
+        .map(|call| call.endpoint.as_str())
+        .unwrap_or("api call pending");
+    let first_agent = snapshot
+        .agent_runs
+        .first()
+        .map(|run| run.agent_run_id.as_str())
+        .unwrap_or("agent run pending");
+    let config_summary = count_by(
+        snapshot
+            .health
+            .checks
+            .iter()
+            .filter(|check| check.name.ends_with("_configuration"))
+            .map(|check| check.status.as_str()),
+    );
+    html! {
+        <section class="panel result-stack">
+            <div class="section-header">
+                <div>
+                    <h3>{"Governance control tower"}</h3>
+                    <p>{"Audit-by-design map for pilot readiness, API access, Agent boundaries, and evidence trace coverage."}</p>
+                </div>
+                <span class={classes!("status-token", status_tone(pilot_status))}>{pilot_status}</span>
+            </div>
+            <div class="governance-cockpit">
+                <aside class="case-brief governance-brief">
+                    <span>{"Pilot readiness gate"}</span>
+                    <strong>{pilot_status}</strong>
+                    <dl>
+                        <div><dt>{"Service"}</dt><dd>{format!("{} {}", snapshot.health.service, snapshot.health.version)}</dd></div>
+                        <div><dt>{"Blockers"}</dt><dd>{snapshot.health.pilot_readiness.blocking_checks.len()}</dd></div>
+                        <div><dt>{"Checks"}</dt><dd>{snapshot.health.checks.len()}</dd></div>
+                        <div><dt>{"Configs"}</dt><dd>{config_summary}</dd></div>
+                    </dl>
+                    <div class="tag-grid compact-tags">
+                        <span>{format!("audit {}", snapshot.audit_events.len())}</span>
+                        <span>{format!("api {}", snapshot.api_calls.len())}</span>
+                        <span>{format!("agent {}", snapshot.agent_runs.len())}</span>
+                    </div>
+                </aside>
+
+                <div class="governance-map">
+                    <div class="governance-map-title">
+                        <span>{"Audit-by-design map"}</span>
+                        <strong>{"Evidence Trace Hub"}</strong>
+                    </div>
+                    <div class="governance-link horizontal"></div>
+                    <div class="governance-link diagonal-a"></div>
+                    <div class="governance-link diagonal-b"></div>
+                    <div class="governance-core">
+                        <span>{"Governance"}</span>
+                        <strong>{"audit trail"}</strong>
+                    </div>
+                    <div class="governance-node readiness">
+                        <span>{"Pilot gate"}</span>
+                        <strong>{first_blocker}</strong>
+                    </div>
+                    <div class="governance-node api">
+                        <span>{"API access"}</span>
+                        <strong>{first_api}</strong>
+                    </div>
+                    <div class="governance-node audit">
+                        <span>{"Audit event"}</span>
+                        <strong>{first_audit}</strong>
+                    </div>
+                    <div class="governance-node agent">
+                        <span>{"Agent boundary"}</span>
+                        <strong>{first_agent}</strong>
+                    </div>
+                    <div class="governance-node evidence">
+                        <span>{"Evidence refs"}</span>
+                        <strong>{format!(
+                            "{} audit / {} agent",
+                            snapshot.audit_events.iter().filter(|event| !event.evidence_refs.is_empty()).count(),
+                            snapshot.agent_runs.iter().filter(|run| !run.evidence_refs.is_empty()).count()
+                        )}</strong>
+                    </div>
+                </div>
+
+                <aside class="case-timeline governance-trace">
+                    <h4>{"Control path"}</h4>
+                    {timeline_item("Readiness", pilot_status, pilot_status)}
+                    {timeline_item("API", &format!("{} records", snapshot.api_calls.len()), "done")}
+                    {timeline_item("Audit", &format!("{} events", snapshot.audit_events.len()), "done")}
+                    {timeline_item("Agent", "human approval boundary", "review")}
+                </aside>
+            </div>
+        </section>
     }
 }
 
