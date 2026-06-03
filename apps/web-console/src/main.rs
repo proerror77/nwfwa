@@ -3324,6 +3324,7 @@ fn routing_policies_view(props: &RoutingPoliciesProps) -> Html {
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <>
+                        {routing_policy_cockpit(snapshot)}
                         <section class="panel result-stack">
                             <h3>{"Routing Policy Inventory"}</h3>
                             <div class="score-hero">
@@ -3384,6 +3385,91 @@ fn routing_policies_view(props: &RoutingPoliciesProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn routing_policy_cockpit(snapshot: &RoutingPolicySnapshot) -> Html {
+    let policy = snapshot
+        .policies
+        .iter()
+        .find(|policy| policy.status == "active")
+        .or_else(|| snapshot.policies.first());
+
+    if let Some(policy) = policy {
+        let blocker_label = snapshot
+            .gates
+            .blockers
+            .first()
+            .map(String::as_str)
+            .unwrap_or("no blocker");
+        html! {
+            <section class="panel result-stack">
+                <div class="section-header">
+                    <div>
+                        <h3>{"L7 Routing Decision Map"}</h3>
+                        <p>{"How fused risk score, confidence, provider graph pressure, and governance gates route claims without automatic adjudication."}</p>
+                    </div>
+                    <span class={classes!("status-token", status_tone(&policy.status))}>{&policy.status}</span>
+                </div>
+                <div class="routing-cockpit">
+                    <aside class="routing-brief">
+                        <span class="eyebrow">{"Active routing policy"}</span>
+                        <strong>{format!("{} v{}", policy.policy_id, policy.version)}</strong>
+                        <dl>
+                            <div><dt>{"Review mode"}</dt><dd>{&policy.review_mode}</dd></div>
+                            <div><dt>{"Owner"}</dt><dd>{&policy.owner}</dd></div>
+                            <div><dt>{"Promotion"}</dt><dd>{format!("{} / {}", snapshot.gates.passed_count, snapshot.gates.total_count)}</dd></div>
+                            <div><dt>{"Decision"}</dt><dd>{&snapshot.gates.decision}</dd></div>
+                        </dl>
+                    </aside>
+
+                    <div class="routing-decision-map">
+                        <div class="routing-map-title">
+                            <span>{"Risk fusion and routing"}</span>
+                            <strong>{"L1-L6 scores -> L7 policy -> human-safe action"}</strong>
+                        </div>
+                        <div class="routing-link horizontal"></div>
+                        <div class="routing-link diagonal-a"></div>
+                        <div class="routing-link diagonal-b"></div>
+                        <div class="routing-core">
+                            <span>{"L7 Fusion"}</span>
+                            <strong>{&policy.review_mode}</strong>
+                        </div>
+                        {routing_node("Green band", &format!("0-{}", policy.risk_thresholds.low_max), "low")}
+                        {routing_node("Amber band", &format!("{}-{}", policy.risk_thresholds.medium_min, policy.risk_thresholds.high_min.saturating_sub(1)), "medium")}
+                        {routing_node("Red band", &format!("{}+", policy.risk_thresholds.high_min), "high")}
+                        {routing_node("Critical route", &format!("{}+", policy.risk_thresholds.critical_min), "critical")}
+                        {routing_node("Confidence gate", &format!("<{} low / {}+ high", policy.confidence_thresholds.low_confidence_below, policy.confidence_thresholds.high_confidence_min), "confidence")}
+                        {routing_node("Provider review", &format!("{}+", policy.provider_review_threshold), "provider")}
+                    </div>
+
+                    <aside class="routing-trace">
+                        <span class="eyebrow">{"Human-safe route"}</span>
+                        <div class="provider-signal-stack">
+                            {provider_signal_row("Low", "STP or sample QA", "neutral")}
+                            {provider_signal_row("Medium", "QA sampling", "warning")}
+                            {provider_signal_row("High", "Manual review", "danger")}
+                            {provider_signal_row("Rollback gate", blocker_label, "strong")}
+                        </div>
+                    </aside>
+                </div>
+            </section>
+        }
+    } else {
+        html! {
+            <section class="panel">
+                <p class="empty">{"No routing policy available for L7 routing decision map."}</p>
+            </section>
+        }
+    }
+}
+
+fn routing_node(label: &str, value: &str, position: &str) -> Html {
+    html! {
+        <div class={classes!("routing-node", position.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
     }
 }
 
