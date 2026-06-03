@@ -4446,6 +4446,7 @@ fn member_profile_view(props: &MemberProfileProps) -> Html {
                             <div><span>{"Risk Summary"}</span><strong>{&profile.risk_level_summary}</strong></div>
                             <div><span>{"High-Risk Claims"}</span><strong>{profile.high_risk_claim_count}</strong></div>
                         </div>
+                        {member_profile_cockpit(profile)}
                         <div class="summary-grid">
                             <div><span>{"Claims"}</span><strong>{profile.claim_count}</strong></div>
                             <div><span>{"Policies"}</span><strong>{profile.policy_count}</strong></div>
@@ -4461,6 +4462,64 @@ fn member_profile_view(props: &MemberProfileProps) -> Html {
                 },
             }}
         </section>
+    }
+}
+
+fn member_profile_cockpit(profile: &MemberProfileSummary) -> Html {
+    let total_amount = format!(
+        "{} {}",
+        display_value(&profile.total_claim_amount),
+        profile.currency
+    );
+    html! {
+        <div class="member-profile-cockpit">
+            <div class="relationship-graph member-relationship-graph">
+                <div class="graph-ring"></div>
+                <div class="graph-ring inner"></div>
+                <div class="graph-center member-profile-center">
+                    <span>{"Member Evidence"}</span>
+                    <strong>{&profile.member_id}</strong>
+                </div>
+                {member_graph_entity("Risk summary", &profile.risk_level_summary, "top", "lead")}
+                {member_graph_entity("Claims", &profile.claim_count.to_string(), "right", "claim")}
+                {member_graph_entity("Policy exposure", &profile.policy_count.to_string(), "bottom", "case")}
+                {member_graph_entity("Latest claim", profile.latest_claim_id.as_deref().unwrap_or("none"), "left", "claim")}
+                {member_graph_entity("Total amount", &total_amount, "lower-right", "provider")}
+                {member_graph_entity("Evidence refs", &profile.evidence_refs.len().to_string(), "lower-left", "reviewer")}
+            </div>
+            <div class="member-evidence-panel">
+                <div>
+                    <span>{"Member Evidence Map"}</span>
+                    <strong>{format!("{} high-risk / {} total claims", profile.high_risk_claim_count, profile.claim_count)}</strong>
+                    <small>{&profile.profile_summary}</small>
+                </div>
+                <div class="member-signal-stack">
+                    {member_signal_row("Utilization Snapshot", &format!("{} claims", profile.claim_count), "strong")}
+                    {member_signal_row("Policy exposure", &format!("{} policies", profile.policy_count), "neutral")}
+                    {member_signal_row("Risk amount", &total_amount, "warning")}
+                    {member_signal_row("Evidence trace", &format!("{} refs", profile.evidence_refs.len()), "success")}
+                </div>
+                <small>{format!("evidence: {}", refs_label(&profile.evidence_refs))}</small>
+            </div>
+        </div>
+    }
+}
+
+fn member_graph_entity(label: &str, value: &str, position: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("graph-entity", position.to_string(), tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
+    }
+}
+
+fn member_signal_row(label: &str, value: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("member-signal-row", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+        </div>
     }
 }
 
