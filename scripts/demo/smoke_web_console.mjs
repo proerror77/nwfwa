@@ -178,6 +178,11 @@ async function main() {
     assertContains(builtText, "Selected Actions", "web console leads cases action bundle");
     assertContains(builtText, "Selected lead", "web console leads cases action bundle");
     assertContains(builtText, "Selected case", "web console leads cases action bundle");
+    assertContains(builtText, "Release to risk queue", "web console claim inbox release bundle");
+    assertContains(builtText, "Risk Queue Release", "web console claim inbox release bundle");
+    assertContains(builtText, "Queue Ready", "web console claim inbox release bundle");
+    assertNotContains(builtText, "Approve for scoring", "web console claim inbox release bundle");
+    assertNotContains(builtText, "Scoring Release", "web console claim inbox release bundle");
     assertContains(builtText, "Runtime Scoring", "web console bundle");
     assertContains(builtText, "Model Performance", "web console bundle");
     assertContains(builtText, "Promotion Gates", "web console bundle");

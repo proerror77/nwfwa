@@ -23,12 +23,7 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
     ),
     (
         "Control Rooms",
-        &[
-            "Detection Controls",
-            "Runtime Scoring",
-            "Evidence Hub",
-            "Governance",
-        ],
+        &["Detection Controls", "Evidence Hub", "Governance"],
     ),
     ("MLOps", &["MLOps Workspace"]),
 ];
@@ -258,6 +253,11 @@ struct ScoreResponse {
     rag: Option<Value>,
     risk_level: Option<String>,
     recommended_action: Option<String>,
+    decision_outcome: Option<String>,
+    decision_authority: Option<String>,
+    decision_confidence: Option<String>,
+    appeal_or_review_required: Option<bool>,
+    reason_code: Option<String>,
     confidence_score: Option<u8>,
     confidence: Option<String>,
     routing_reason: Option<String>,
@@ -3385,9 +3385,14 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                         {runtime_signal_map(response)}
                         <div class="summary-grid">
                             <div><span>{"Action"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
+                            <div><span>{"Decision"}</span><strong>{response.decision_outcome.as_deref().unwrap_or("manual_review")}</strong></div>
+                            <div><span>{"Authority"}</span><strong>{response.decision_authority.as_deref().unwrap_or("risk_routing_policy")}</strong></div>
                             <div><span>{"Risk Level"}</span><strong>{response.risk_level.as_deref().unwrap_or("unknown")}</strong></div>
                             <div><span>{"Confidence"}</span><strong>{format!("{} / {}", response.confidence.as_deref().unwrap_or("unknown"), optional_u8(response.confidence_score))}</strong></div>
+                            <div><span>{"Decision Confidence"}</span><strong>{response.decision_confidence.as_deref().unwrap_or("low")}</strong></div>
+                            <div><span>{"Review Required"}</span><strong>{if response.appeal_or_review_required.unwrap_or(true) { "yes" } else { "no" }}</strong></div>
                             <div><span>{"Review Mode"}</span><strong>{response.review_mode.as_deref().unwrap_or("unknown")}</strong></div>
+                            <div><span>{"Reason Code"}</span><strong>{response.reason_code.as_deref().unwrap_or("pending")}</strong></div>
                             <div><span>{"Run"}</span><strong>{response.run_id.as_deref().unwrap_or("pending")}</strong></div>
                             <div><span>{"Audit"}</span><strong>{response.audit_id.as_deref().unwrap_or("pending")}</strong></div>
                         </div>
@@ -3516,7 +3521,7 @@ fn runtime_decision_visual(response: &ScoreResponse) -> Html {
                 </div>
                 <div class="risk-gauge-meta">
                     <span>{"Routing outcome"}</span>
-                    <strong>{response.recommended_action.as_deref().unwrap_or("MANUAL_REVIEW")}</strong>
+                    <strong>{response.decision_outcome.as_deref().or(response.recommended_action.as_deref()).unwrap_or("manual_review")}</strong>
                     <small>{format!("{} / {}", rag, response.confidence.as_deref().unwrap_or("confidence pending"))}</small>
                 </div>
             </div>
@@ -8954,8 +8959,8 @@ fn claim_inbox_page() -> Html {
         <section class="claim-inbox">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"Claim Inbox / Correction Review"}</h2>
-                    <p>{"Normalize raw customer payloads, review validation findings, apply a correction overlay, and approve the canonical context for scoring."}</p>
+                    <h2>{"Claim Inbox"}</h2>
+                    <p>{"Normalize raw customer payloads, review validation findings, apply a correction overlay, and release clean canonical claims into the risk and review queue."}</p>
                 </div>
                 <span class="status-pill">{"Yew"}</span>
             </div>
@@ -9034,7 +9039,7 @@ fn claim_inbox_page() -> Html {
                     {"Reviewer resolved blocking findings"}
                 </label>
                 <button onclick={score} disabled={!can_score || matches!(&*score_state, ApiState::Loading)}>
-                    {if matches!(&*score_state, ApiState::Loading) { "Scoring..." } else { "Approve for scoring" }}
+                    {if matches!(&*score_state, ApiState::Loading) { "Releasing..." } else { "Release to risk queue" }}
                 </button>
             </div>
 
@@ -9065,7 +9070,7 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                     <>
                         <div class="score-hero compact-metrics">
                             <div><span>{"Validation"}</span><strong>{readable_token(&response.validation_result)}</strong></div>
-                            <div><span>{"Scoring Ready"}</span><strong>{if response.scoring_ready { "yes" } else { "no" }}</strong></div>
+                            <div><span>{"Queue Ready"}</span><strong>{if response.scoring_ready { "yes" } else { "no" }}</strong></div>
                             <div><span>{"Mapping"}</span><strong>{&response.mapping_version}</strong></div>
                         </div>
                         {inbox_pipeline_visual(response)}
@@ -9086,7 +9091,7 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                                         <strong>{&hint.field_path}</strong>
                                         <span class={classes!("severity", hint.severity.clone())}>{&hint.severity}</span>
                                         <p>{&hint.next_action}</p>
-                                        <small>{if hint.blocks_scoring { "blocks direct scoring" } else { "review signal" }}</small>
+                                        <small>{if hint.blocks_scoring { "blocks queue release" } else { "review signal" }}</small>
                                     </div>
                                 })}
                             </div>
@@ -9109,10 +9114,10 @@ struct ScoreResultProps {
 fn score_result_view(props: &ScoreResultProps) -> Html {
     html! {
         <section class="panel result-stack">
-            <h3>{"Scoring Release"}</h3>
+            <h3>{"Risk Queue Release"}</h3>
             {match &props.state {
-                ApiState::Idle => html! { <p class="empty">{"Approve the normalized canonical context to score it through the existing risk engine."}</p> },
-                ApiState::Loading => html! { <p>{"Scoring canonical context..."}</p> },
+                ApiState::Idle => html! { <p class="empty">{"Release the normalized canonical context into the risk service so downstream leads and review queues can be created."}</p> },
+                ApiState::Loading => html! { <p>{"Releasing canonical context..."}</p> },
                 ApiState::Failed(error) => html! { <p class="error">{error}</p> },
                 ApiState::Ready(response) => html! {
                     <>
@@ -9120,6 +9125,7 @@ fn score_result_view(props: &ScoreResultProps) -> Html {
                             <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
                             <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
                             <div><span>{"Action"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
+                            <div><span>{"Decision"}</span><strong>{response.decision_outcome.as_deref().unwrap_or("manual_review")}</strong></div>
                         </div>
                         <dl class="result-grid">
                             <div><dt>{"Audit ID"}</dt><dd>{response.audit_id.as_deref().unwrap_or("pending")}</dd></div>
@@ -9952,13 +9958,13 @@ fn next_action_for_validation_error(error: &InboxValidationError) -> String {
         return "use an API key/source-system config that matches the payload systemCode".into();
     }
     if error.field_path.ends_with(".coverageLimit") {
-        return "map the policy or liability coverage limit before direct scoring".into();
+        return "map the policy or liability coverage limit before risk queue release".into();
     }
     if error.field_path.ends_with(".validateDate")
         || error.field_path.ends_with(".expireDate")
         || error.field_path.ends_with(".claimValidateDate")
     {
-        return "fix or reviewer-resolve the policy/product/liability date window before scoring"
+        return "fix or reviewer-resolve the policy/product/liability date window before queue release"
             .into();
     }
     if error.field_path == "reportCase.calculateRisk" {
@@ -9966,7 +9972,7 @@ fn next_action_for_validation_error(error: &InboxValidationError) -> String {
             .into();
     }
     if error.remediation.is_empty() {
-        "review this field before scoring".into()
+        "review this field before queue release".into()
     } else {
         error.remediation.clone()
     }
@@ -10198,7 +10204,7 @@ fn inbox_pipeline_visual(response: &InboxNormalizeResponse) -> Html {
             {pipeline_step("Raw", response.external_message_id.as_deref().unwrap_or("message pending"), "done")}
             {pipeline_step("Normalize", &response.mapping_version, "done")}
             {pipeline_step("Findings", &format!("{} findings", response.validation_errors.len()), finding_state)}
-            {pipeline_step("Approval", if response.scoring_ready { "direct scoring" } else { "review gate" }, approval_state)}
+            {pipeline_step("Approval", if response.scoring_ready { "queue release" } else { "review gate" }, approval_state)}
             {pipeline_step("Release", if response.scoring_ready { "ready" } else { "held" }, if response.scoring_ready { "done" } else { "pending" })}
         </div>
     }
