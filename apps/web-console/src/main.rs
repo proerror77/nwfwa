@@ -3211,7 +3211,7 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
             <div class="section-header">
                 <div>
                     <h3>{"Customer Pilot Proof Runway"}</h3>
-                    <p>{"A one-screen path for proving a scoped customer principal can move from intake to scoring, human review, QA feedback, audit trace, and ROI measurement."}</p>
+                    <p>{"A one-screen path for proving a scoped customer principal can move from intake to scoring, human review, QA feedback, audit trace, net value, and ROI readiness."}</p>
                 </div>
                 <span class="status-token strong">{"demo chain"}</span>
             </div>
@@ -3223,7 +3223,7 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
                 {pilot_runway_step("Case", &summary.case_sla.open_cases.to_string(), "open investigations", "Leads & Cases", "case", on_navigate)}
                 {pilot_runway_step("QA", &qa_work.to_string(), "open QA + feedback", "Review Workbench", "qa", on_navigate)}
                 {pilot_runway_step("Audit", &audit_label, "canonical trace coverage", "Governance", "audit", on_navigate)}
-                {pilot_runway_step("ROI", &summary.value_measurement.net_value, "net value evidence", "Dashboard", "roi", on_navigate)}
+                {pilot_runway_step("Net value", &summary.value_measurement.net_value, "cost-adjusted value", "Dashboard", "roi", on_navigate)}
             </div>
             <div class="pilot-runway-proof">
                 <div>
@@ -3237,9 +3237,9 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
                     <small>{"Agent output is shown as investigation assistance, with policy checks and approvals tracked separately."}</small>
                 </div>
                 <div>
-                    <span>{"Value proof"}</span>
+                    <span>{"Net value / savings"}</span>
                     <strong>{format!("{} / {}", summary.value_measurement.net_value, summary.saving_amount)}</strong>
-                    <small>{"Savings and net value remain attributable to rule, model, agent, and operational outcomes."}</small>
+                    <small>{"ROI pending until confirmed savings are recorded; net value subtracts review cost."}</small>
                 </div>
             </div>
         </section>
@@ -9890,7 +9890,7 @@ fn dashboard_operations_map(summary: &DashboardSummary) -> Html {
                 {ops_map_node("Agent", "evidence pack", &format!("{} runs", summary.agent_governance.total_runs), "agent")}
                 {ops_map_node("QA", "feedback loop", &format!("{} open", summary.qa_queue.open_cases), "qa")}
                 {ops_map_node("Audit", "trace coverage", &percent_label(summary.audit_coverage.canonical_trace_coverage), "audit")}
-                {ops_map_node("ROI", "value attribution", &summary.value_measurement.net_value, "roi")}
+                {ops_map_node("Net value", "ROI readiness", &summary.value_measurement.net_value, "roi")}
             </div>
         </div>
     }

@@ -122,6 +122,8 @@ async function main() {
     assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
+    assertContains(builtText, "Net value", "web console dashboard value wording bundle");
+    assertContains(builtText, "ROI pending", "web console dashboard value wording bundle");
     assertContains(builtText, "Next actions", "web console dashboard visual bundle");
     assertContains(builtText, "click to work", "web console dashboard visual bundle");
     assertContains(builtText, "FWA operating map", "web console dashboard topology bundle");
