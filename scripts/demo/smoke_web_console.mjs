@@ -102,6 +102,9 @@ async function main() {
     assertContains(builtText, "peer benchmark", "web console seven-layer visual bundle");
     assertContains(builtText, "fusion route", "web console seven-layer visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
+    assertContains(builtText, "Seven-Layer Detection Console", "web console dashboard detection console bundle");
+    assertContains(builtText, "Risk Fusion", "web console dashboard detection console bundle");
+    assertContains(builtText, "Agent assist", "web console dashboard detection console bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
     assertContains(builtText, "Next actions", "web console dashboard visual bundle");
     assertContains(builtText, "click to work", "web console dashboard visual bundle");
@@ -119,6 +122,9 @@ async function main() {
     assertContains(builtText, "Review rules", "web console detection workbench bundle");
     assertContains(builtText, "Search evidence", "web console evidence workbench bundle");
     assertContains(builtText, "Rule command path", "web console rules visual bundle");
+    assertContains(builtText, "Rule Backfill Workbench", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Candidate rule workflow", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Discover candidates", "web console rule discovery workbench bundle");
     assertContains(builtText, "FWA Rule Pack Matrix", "web console rule pack visual bundle");
     assertContains(builtText, "duplicate billing", "web console rule pack visual bundle");
     assertContains(builtText, "medical necessity evidence gap", "web console rule pack visual bundle");

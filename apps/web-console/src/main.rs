@@ -1359,6 +1359,48 @@ struct RuleOpsSnapshot {
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleDiscoveryResponse {
+    sample_count: usize,
+    positive_count: usize,
+    candidates: Vec<RuleDiscoveryCandidate>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleDiscoveryCandidate {
+    rule: Value,
+    support: usize,
+    precision: f64,
+    recall: f64,
+    lift: f64,
+    estimated_saving: String,
+    false_positive_rate: f64,
+    matched_claim_ids: Vec<String>,
+    explanation: String,
+    #[serde(default)]
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuleBacktestResponse {
+    sample_count: usize,
+    matched_count: usize,
+    reviewed_count: usize,
+    confirmed_fwa_count: usize,
+    false_positive_count: usize,
+    match_rate: f64,
+    precision: f64,
+    recall: f64,
+    lift: f64,
+    false_positive_rate: f64,
+    average_score_contribution: f64,
+    estimated_saving: String,
+    promotion_recommendation: String,
+    blockers: Vec<String>,
+    matched_claim_ids: Vec<String>,
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
 struct LeadListResponse {
     leads: Vec<LeadRecord>,
 }
@@ -2595,6 +2637,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                 ApiState::Ready(summary) => html! {
                     <>
                         {dashboard_mission_visual(summary)}
+                        {dashboard_detection_console(summary)}
                         {dashboard_pilot_runway(summary, &props.on_navigate)}
                         <section class="panel result-stack">
                             <h3>{"Executive KPIs"}</h3>
@@ -2749,6 +2792,74 @@ fn dashboard_view(props: &DashboardProps) -> Html {
     }
 }
 
+fn dashboard_detection_console(summary: &DashboardSummary) -> Html {
+    let layer_specs = [
+        ("L1", "Peer benchmark", "peer deviation", "peer"),
+        ("L2", "Rule detection", "deterministic hits", "rules"),
+        ("L3", "Anomaly", "rare pattern", "anomaly"),
+        ("L4", "ML classifier", "baseline probability", "ml"),
+        ("L5", "Medical", "necessity", "medical"),
+        ("L6", "Provider graph", "network risk", "graph"),
+        ("L7", "Fusion route", "RAG + action", "route"),
+    ];
+    html! {
+        <section class="panel detection-console-shell">
+            <div class="section-header">
+                <div>
+                    <h3>{"Seven-Layer Detection Console"}</h3>
+                    <p>{"The PRD risk engine as an operating diagram: intake context, seven scored layers, fusion, human gates, and value proof."}</p>
+                </div>
+                <span class="status-token strong">{map_counts_label(&summary.rag_distribution)}</span>
+            </div>
+            <div class="detection-console">
+                <div class="console-intake-stack">
+                    {console_context_card("Claims", &summary.suspected_claims.to_string(), "suspected queue", "claims")}
+                    {console_context_card("Rules", &summary.rule_hits.to_string(), "rule hits", "rules")}
+                    {console_context_card("Cases", &summary.case_sla.open_cases.to_string(), "open investigation", "cases")}
+                </div>
+                <div class="console-engine-board">
+                    <div class="console-engine-core">
+                        <span>{"FWA"}</span>
+                        <strong>{"Risk Fusion"}</strong>
+                        <small>{format!("audit {}", percent_label(summary.audit_coverage.canonical_trace_coverage))}</small>
+                    </div>
+                    <div class="console-layer-grid">
+                        {for layer_specs.iter().map(|(layer_id, label, caption, tone)| {
+                            console_layer_tile(layer_id, label, &layer_score_label(&summary.layer_scores, layer_id), caption, tone)
+                        })}
+                    </div>
+                </div>
+                <div class="console-output-stack">
+                    {console_context_card("Human gate", &summary.qa_queue.open_cases.to_string(), "QA open", "human")}
+                    {console_context_card("Agent assist", &summary.agent_governance.evidence_backed_runs.to_string(), "evidence-backed", "agent")}
+                    {console_context_card("Net value", &summary.value_measurement.net_value, "ROI proof", "value")}
+                </div>
+            </div>
+        </section>
+    }
+}
+
+fn console_context_card(label: &str, value: &str, caption: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("console-context-card", tone.to_string())}>
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{caption}</small>
+        </div>
+    }
+}
+
+fn console_layer_tile(layer_id: &str, label: &str, value: &str, caption: &str, tone: &str) -> Html {
+    html! {
+        <div class={classes!("console-layer-tile", tone.to_string())}>
+            <span>{layer_id}</span>
+            <strong>{value}</strong>
+            <em>{label}</em>
+            <small>{caption}</small>
+        </div>
+    }
+}
+
 fn dashboard_mission_visual(summary: &DashboardSummary) -> Html {
     html! {
         <section class="panel mission-visual-shell">
@@ -2895,7 +3006,18 @@ fn outcome_chip(label: &str, value: &str, tone: &str) -> Html {
 fn rules_page() -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
     let rule_id = use_state(|| "rule_early_claim".to_string());
+    let model_key = use_state(|| "baseline_fwa".to_string());
+    let model_version = use_state(|| "0.3.0-candidate".to_string());
+    let explanation_feature = use_state(|| "claim_amount_to_limit_ratio".to_string());
+    let explanation_contribution = use_state(|| "1.40".to_string());
+    let feature_importance_uri =
+        use_state(|| "data/eval/baseline_fwa/v3/feature_importance.parquet".to_string());
+    let candidate_owner = use_state(|| "rule-discovery".to_string());
+    let selected_candidate_id = use_state(String::new);
     let snapshot_state = use_state(|| ApiState::<RuleOpsSnapshot>::Idle);
+    let discovery_state = use_state(|| ApiState::<RuleDiscoveryResponse>::Idle);
+    let backtest_state = use_state(|| ApiState::<RuleBacktestResponse>::Idle);
+    let save_state = use_state(|| ApiState::<Value>::Idle);
 
     let load_rules = {
         let api_key = api_key.clone();
@@ -2928,18 +3050,181 @@ fn rules_page() -> Html {
         });
     }
 
+    let discover_candidates = {
+        let api_key = api_key.clone();
+        let model_key = model_key.clone();
+        let model_version = model_version.clone();
+        let explanation_feature = explanation_feature.clone();
+        let explanation_contribution = explanation_contribution.clone();
+        let feature_importance_uri = feature_importance_uri.clone();
+        let selected_candidate_id = selected_candidate_id.clone();
+        let discovery_state = discovery_state.clone();
+        let backtest_state = backtest_state.clone();
+        let save_state = save_state.clone();
+        Callback::from(move |_| {
+            let Ok(contribution) = explanation_contribution.trim().parse::<f64>() else {
+                discovery_state.set(ApiState::Failed(
+                    "model contribution must be numeric".into(),
+                ));
+                return;
+            };
+            let payload = rule_discovery_payload(
+                &model_key,
+                &model_version,
+                &explanation_feature,
+                contribution,
+                &feature_importance_uri,
+            );
+            let api_key = (*api_key).clone();
+            let selected_candidate_id = selected_candidate_id.clone();
+            let discovery_state = discovery_state.clone();
+            let backtest_state = backtest_state.clone();
+            let save_state = save_state.clone();
+            discovery_state.set(ApiState::Loading);
+            backtest_state.set(ApiState::Idle);
+            save_state.set(ApiState::Idle);
+            spawn_local(async move {
+                match request_json::<RuleDiscoveryResponse>(
+                    "/api/v1/ops/rules/discover",
+                    api_key,
+                    payload,
+                )
+                .await
+                {
+                    Ok(response) => {
+                        selected_candidate_id.set(
+                            response
+                                .candidates
+                                .first()
+                                .map(rule_candidate_id)
+                                .unwrap_or_default(),
+                        );
+                        discovery_state.set(ApiState::Ready(response));
+                    }
+                    Err(error) => discovery_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let backtest_candidate = {
+        let api_key = api_key.clone();
+        let selected_candidate_id = selected_candidate_id.clone();
+        let discovery_state = discovery_state.clone();
+        let backtest_state = backtest_state.clone();
+        Callback::from(move |_| {
+            let candidate_rule = match &*discovery_state {
+                ApiState::Ready(response) => {
+                    selected_rule_candidate(response, &selected_candidate_id)
+                        .map(|candidate| candidate.rule.clone())
+                }
+                _ => None,
+            };
+            let Some(rule) = candidate_rule else {
+                backtest_state.set(ApiState::Failed(
+                    "select a discovered candidate first".into(),
+                ));
+                return;
+            };
+            let api_key = (*api_key).clone();
+            let backtest_state = backtest_state.clone();
+            let payload = rule_backtest_payload(rule);
+            backtest_state.set(ApiState::Loading);
+            spawn_local(async move {
+                backtest_state.set(
+                    match request_json::<RuleBacktestResponse>(
+                        "/api/v1/ops/rules/backtest",
+                        api_key,
+                        payload,
+                    )
+                    .await
+                    {
+                        Ok(response) => ApiState::Ready(response),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
+            });
+        })
+    };
+
+    let save_candidate = {
+        let api_key = api_key.clone();
+        let candidate_owner = candidate_owner.clone();
+        let selected_candidate_id = selected_candidate_id.clone();
+        let discovery_state = discovery_state.clone();
+        let snapshot_state = snapshot_state.clone();
+        let save_state = save_state.clone();
+        let rule_id = rule_id.clone();
+        Callback::from(move |_| {
+            let candidate_rule = match &*discovery_state {
+                ApiState::Ready(response) => {
+                    selected_rule_candidate(response, &selected_candidate_id)
+                        .map(|candidate| candidate.rule.clone())
+                }
+                _ => None,
+            };
+            let Some(rule) = candidate_rule else {
+                save_state.set(ApiState::Failed(
+                    "select a discovered candidate first".into(),
+                ));
+                return;
+            };
+            let api_key = (*api_key).clone();
+            let owner = (*candidate_owner).clone();
+            let snapshot_state = snapshot_state.clone();
+            let save_state = save_state.clone();
+            let rule_id = rule_id.clone();
+            let payload = json!({ "owner": owner, "rule": rule });
+            save_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match request_json::<Value>(
+                    "/api/v1/ops/rules/candidates",
+                    api_key.clone(),
+                    payload,
+                )
+                .await
+                {
+                    Ok(saved) => {
+                        if let Some(saved_rule_id) = saved
+                            .pointer("/summary/rule_id")
+                            .and_then(Value::as_str)
+                            .map(str::to_string)
+                        {
+                            rule_id.set(saved_rule_id.clone());
+                            snapshot_state.set(ApiState::Loading);
+                            snapshot_state.set(
+                                match get_rule_ops_snapshot(api_key, saved_rule_id).await {
+                                    Ok(snapshot) => ApiState::Ready(snapshot),
+                                    Err(error) => ApiState::Failed(error),
+                                },
+                            );
+                        }
+                        save_state.set(ApiState::Ready(saved));
+                    }
+                    Err(error) => save_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let selected_candidate_available = matches!(
+        &*discovery_state,
+        ApiState::Ready(response) if selected_rule_candidate(response, &selected_candidate_id).is_some()
+    );
+
     html! {
         <section class="module-status">
             <div class="dashboard-header">
                 <div>
                     <h2>{"Rules"}</h2>
-                    <p>{"Review deterministic rule inventory, runtime performance, backtest evidence, false-positive history, and promotion readiness before lifecycle actions."}</p>
+                    <p>{"Convert explainable model signals into governed rule candidates, then inspect backtest evidence and promotion readiness."}</p>
                 </div>
-                <span class="status-pill">{"Rule Library"}</span>
+                <span class="status-pill">{"Rule Governance"}</span>
             </div>
 
-            <section class="panel">
-                <h3>{"Rule Source"}</h3>
+            <section class="panel result-stack">
+                <h3>{"Rule Backfill Workbench"}</h3>
+                {rule_backfill_pipeline(&discovery_state, &backtest_state, &save_state, &snapshot_state)}
                 <div class="form-grid">
                     <label>
                         {"API key"}
@@ -2954,7 +3239,7 @@ fn rules_page() -> Html {
                         />
                     </label>
                     <label>
-                        {"Rule ID"}
+                        {"Gate Rule ID"}
                         <input
                             value={(*rule_id).clone()}
                             oninput={{
@@ -2965,12 +3250,99 @@ fn rules_page() -> Html {
                             }}
                         />
                     </label>
+                    <label>
+                        {"Model Key"}
+                        <input
+                            value={(*model_key).clone()}
+                            oninput={{
+                                let model_key = model_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    model_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Model Version"}
+                        <input
+                            value={(*model_version).clone()}
+                            oninput={{
+                                let model_version = model_version.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    model_version.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Explained Feature"}
+                        <input
+                            value={(*explanation_feature).clone()}
+                            oninput={{
+                                let explanation_feature = explanation_feature.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    explanation_feature.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Contribution"}
+                        <input
+                            value={(*explanation_contribution).clone()}
+                            oninput={{
+                                let explanation_contribution = explanation_contribution.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    explanation_contribution.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Explanation Artifact"}
+                        <input
+                            value={(*feature_importance_uri).clone()}
+                            oninput={{
+                                let feature_importance_uri = feature_importance_uri.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    feature_importance_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Draft Owner"}
+                        <input
+                            value={(*candidate_owner).clone()}
+                            oninput={{
+                                let candidate_owner = candidate_owner.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    candidate_owner.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
                 </div>
                 <div class="button-row">
+                    <button onclick={discover_candidates} disabled={matches!(&*discovery_state, ApiState::Loading)}>
+                        {if matches!(&*discovery_state, ApiState::Loading) { "Discovering..." } else { "Discover candidates" }}
+                    </button>
+                    <button onclick={backtest_candidate} disabled={!selected_candidate_available || matches!(&*backtest_state, ApiState::Loading)}>
+                        {if matches!(&*backtest_state, ApiState::Loading) { "Backtesting..." } else { "Run backtest" }}
+                    </button>
+                    <button onclick={save_candidate} disabled={!selected_candidate_available || matches!(&*save_state, ApiState::Loading)}>
+                        {if matches!(&*save_state, ApiState::Loading) { "Saving..." } else { "Save draft rule" }}
+                    </button>
                     <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
-                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh rules" }}
+                        {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh gates" }}
                     </button>
                 </div>
+                {rule_candidate_workflow(
+                    &discovery_state,
+                    &backtest_state,
+                    &save_state,
+                    &selected_candidate_id,
+                )}
             </section>
 
             <RulesView state={(*snapshot_state).clone()} />
@@ -8870,6 +9242,262 @@ fn rule_matches_family(rule: &RuleSummary, family_key: &str) -> bool {
 
 fn contains_any(value: &str, needles: &[&str]) -> bool {
     needles.iter().any(|needle| value.contains(needle))
+}
+
+fn rule_discovery_payload(
+    model_key: &UseStateHandle<String>,
+    model_version: &UseStateHandle<String>,
+    explanation_feature: &UseStateHandle<String>,
+    explanation_contribution: f64,
+    feature_importance_uri: &UseStateHandle<String>,
+) -> Value {
+    json!({
+        "min_support": 1,
+        "source_model_key": (**model_key).clone(),
+        "source_model_version": (**model_version).clone(),
+        "feature_importance_uri": (**feature_importance_uri).clone(),
+        "min_abs_contribution": 0.1,
+        "model_explanations": [
+            {
+                "feature": (**explanation_feature).clone(),
+                "direction": "increases_risk",
+                "contribution": explanation_contribution,
+                "reason": "Operations Studio candidate explanation input"
+            }
+        ],
+        "samples": rule_demo_samples()
+    })
+}
+
+fn rule_backtest_payload(rule: Value) -> Value {
+    json!({
+        "rule": rule,
+        "samples": rule_demo_samples(),
+        "expected_review_capacity": 10
+    })
+}
+
+fn rule_demo_samples() -> Vec<Value> {
+    vec![
+        json!({
+            "external_claim_id": "CLM-RULE-DEMO-TP",
+            "claim_amount": "9000",
+            "currency": "CNY",
+            "service_date": "2026-01-05",
+            "confirmed_fwa": true,
+            "policy": {
+                "external_policy_id": "POL-RULE-DEMO-TP",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+            }
+        }),
+        json!({
+            "external_claim_id": "CLM-RULE-DEMO-TN",
+            "claim_amount": "500",
+            "currency": "CNY",
+            "service_date": "2026-03-01",
+            "confirmed_fwa": false,
+            "policy": {
+                "external_policy_id": "POL-RULE-DEMO-TN",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+            }
+        }),
+        json!({
+            "external_claim_id": "CLM-RULE-DEMO-FN",
+            "claim_amount": "6800",
+            "currency": "CNY",
+            "service_date": "2026-02-04",
+            "confirmed_fwa": true,
+            "policy": {
+                "external_policy_id": "POL-RULE-DEMO-FN",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "12000"
+            }
+        }),
+    ]
+}
+
+fn selected_rule_candidate<'a>(
+    response: &'a RuleDiscoveryResponse,
+    selected_candidate_id: &UseStateHandle<String>,
+) -> Option<&'a RuleDiscoveryCandidate> {
+    let selected_id = (**selected_candidate_id).as_str();
+    response
+        .candidates
+        .iter()
+        .find(|candidate| rule_candidate_id(candidate) == selected_id)
+        .or_else(|| response.candidates.first())
+}
+
+fn rule_candidate_id(candidate: &RuleDiscoveryCandidate) -> String {
+    candidate
+        .rule
+        .get("rule_id")
+        .and_then(Value::as_str)
+        .unwrap_or("candidate_rule")
+        .to_string()
+}
+
+fn rule_backfill_pipeline(
+    discovery_state: &UseStateHandle<ApiState<RuleDiscoveryResponse>>,
+    backtest_state: &UseStateHandle<ApiState<RuleBacktestResponse>>,
+    save_state: &UseStateHandle<ApiState<Value>>,
+    snapshot_state: &UseStateHandle<ApiState<RuleOpsSnapshot>>,
+) -> Html {
+    let nodes = [
+        ("Explain", true, "model contribution"),
+        (
+            "Discover",
+            matches!(&**discovery_state, ApiState::Ready(_)),
+            state_label(discovery_state),
+        ),
+        (
+            "Backtest",
+            matches!(&**backtest_state, ApiState::Ready(_)),
+            state_label(backtest_state),
+        ),
+        (
+            "Save",
+            matches!(&**save_state, ApiState::Ready(_))
+                || matches!(&**snapshot_state, ApiState::Ready(_)),
+            state_label(save_state),
+        ),
+    ];
+    gate_pipeline("Candidate rule workflow", &nodes)
+}
+
+fn state_label<T>(state: &UseStateHandle<ApiState<T>>) -> &'static str
+where
+    T: Clone + PartialEq + 'static,
+{
+    match &**state {
+        ApiState::Idle => "pending",
+        ApiState::Loading => "running",
+        ApiState::Ready(_) => "ready",
+        ApiState::Failed(_) => "blocked",
+    }
+}
+
+fn rule_candidate_workflow(
+    discovery_state: &UseStateHandle<ApiState<RuleDiscoveryResponse>>,
+    backtest_state: &UseStateHandle<ApiState<RuleBacktestResponse>>,
+    save_state: &UseStateHandle<ApiState<Value>>,
+    selected_candidate_id: &UseStateHandle<String>,
+) -> Html {
+    html! {
+        <div class="rule-candidate-workflow">
+            {rule_discovery_candidates_view(discovery_state, selected_candidate_id)}
+            {rule_backtest_view(backtest_state)}
+            {rule_save_view(save_state)}
+        </div>
+    }
+}
+
+fn rule_discovery_candidates_view(
+    discovery_state: &UseStateHandle<ApiState<RuleDiscoveryResponse>>,
+    selected_candidate_id: &UseStateHandle<String>,
+) -> Html {
+    match &**discovery_state {
+        ApiState::Idle => {
+            html! { <p class="empty">{"Run discovery to generate governed rule candidates from explainable model signals."}</p> }
+        }
+        ApiState::Loading => html! { <p>{"Discovering candidate rules..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(response) => html! {
+            <div class="result-stack">
+                <div class="summary-grid">
+                    <div><span>{"Samples"}</span><strong>{response.sample_count}</strong></div>
+                    <div><span>{"Positive Labels"}</span><strong>{response.positive_count}</strong></div>
+                    <div><span>{"Candidates"}</span><strong>{response.candidates.len()}</strong></div>
+                </div>
+                <div class="factor-card-grid">
+                    {for response.candidates.iter().map(|candidate| {
+                        let candidate_id = rule_candidate_id(candidate);
+                        let is_selected = candidate_id == **selected_candidate_id;
+                        let selected_candidate_id = selected_candidate_id.clone();
+                        let candidate_id_for_click = candidate_id.clone();
+                        html! {
+                            <button
+                                class={classes!("rule-candidate-card", is_selected.then_some("active"))}
+                                onclick={Callback::from(move |_| selected_candidate_id.set(candidate_id_for_click.clone()))}
+                            >
+                                <span>{candidate_id}</span>
+                                <strong>{rule_candidate_name(candidate)}</strong>
+                                <small>{&candidate.explanation}</small>
+                                <div class="summary-grid compact-summary-grid">
+                                    <div><span>{"Support"}</span><strong>{candidate.support}</strong></div>
+                                    <div><span>{"Precision"}</span><strong>{percent_label(candidate.precision)}</strong></div>
+                                    <div><span>{"Lift"}</span><strong>{format!("{:.2}", candidate.lift)}</strong></div>
+                                    <div><span>{"Saving"}</span><strong>{&candidate.estimated_saving}</strong></div>
+                                </div>
+                            </button>
+                        }
+                    })}
+                </div>
+            </div>
+        },
+    }
+}
+
+fn rule_backtest_view(backtest_state: &UseStateHandle<ApiState<RuleBacktestResponse>>) -> Html {
+    match &**backtest_state {
+        ApiState::Idle => html! {},
+        ApiState::Loading => html! { <p>{"Backtesting selected candidate..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(backtest) => html! {
+            <section class="visual-panel">
+                <h4>{"Backtest Evidence"}</h4>
+                <div class="summary-grid">
+                    <div><span>{"Matched"}</span><strong>{format!("{} / {}", backtest.matched_count, backtest.sample_count)}</strong></div>
+                    <div><span>{"Precision"}</span><strong>{percent_label(backtest.precision)}</strong></div>
+                    <div><span>{"Recall"}</span><strong>{percent_label(backtest.recall)}</strong></div>
+                    <div><span>{"False Positive"}</span><strong>{percent_label(backtest.false_positive_rate)}</strong></div>
+                    <div><span>{"Saving"}</span><strong>{&backtest.estimated_saving}</strong></div>
+                    <div><span>{"Recommendation"}</span><strong>{&backtest.promotion_recommendation}</strong></div>
+                </div>
+                if !backtest.blockers.is_empty() {
+                    <div class="compact-list">
+                        {for backtest.blockers.iter().map(|blocker| html! { <span>{blocker}</span> })}
+                    </div>
+                }
+            </section>
+        },
+    }
+}
+
+fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
+    match &**save_state {
+        ApiState::Idle => html! {},
+        ApiState::Loading => html! { <p>{"Saving draft rule..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(saved) => {
+            let rule_id = saved
+                .pointer("/summary/rule_id")
+                .and_then(Value::as_str)
+                .unwrap_or("draft rule");
+            let status = saved
+                .pointer("/summary/status")
+                .and_then(Value::as_str)
+                .unwrap_or("draft");
+            html! {
+                <div class="success-note">
+                    {format!("Saved {rule_id} as {status}.")}
+                </div>
+            }
+        }
+    }
+}
+
+fn rule_candidate_name(candidate: &RuleDiscoveryCandidate) -> String {
+    if let Some(name) = candidate.rule.get("name").and_then(Value::as_str) {
+        name.to_string()
+    } else {
+        rule_candidate_id(candidate)
+    }
 }
 
 fn rule_gate_pipeline(gates: &RulePromotionGates) -> Html {

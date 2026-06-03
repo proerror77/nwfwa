@@ -358,7 +358,7 @@ scoring trace events.
 | GET | `/api/v1/ops/rules/{rule_id}/promotion-gates` | Evaluate rule promotion readiness. | Yes | None |
 | POST | `/api/v1/ops/rules/{rule_id}/promotion-reviews` | Submit human promotion review. | Yes | Records review evidence. |
 | POST | `/api/v1/ops/rules/candidates` | Save a candidate rule. | Yes | Creates or updates candidate rule evidence. |
-| POST | `/api/v1/ops/rules/discover` | Discover candidate rules from labeled sample claims. | Yes | Records discovery provenance and candidate metrics. |
+| POST | `/api/v1/ops/rules/discover` | Discover candidate rules from labeled sample claims and optional model explanation contributions. | Yes | Records discovery provenance, model/version refs, feature-importance refs, and candidate metrics. |
 | POST | `/api/v1/ops/rules/{rule_id}/submit` | Submit rule for governance. | Yes | Updates lifecycle status and audit trail. |
 | POST | `/api/v1/ops/rules/{rule_id}/approve` | Mark rule approved with reviewer evidence. | Yes | Updates lifecycle status and audit trail. |
 | POST | `/api/v1/ops/rules/{rule_id}/publish` | Publish approved rule. | Yes | Updates lifecycle status and audit trail. |
@@ -366,6 +366,9 @@ scoring trace events.
 
 Rule APIs support deterministic controls. They should not silently change active
 customer behavior without lifecycle and audit evidence.
+Model explanation inputs to rule discovery are candidate sources only; discovered
+rules must still be saved as drafts, backtested, reviewed, approved, and
+published before they can affect routing.
 Rule promotion gates treat a stored backtest as usable routing evidence only
 when its own blockers are cleared; underpowered samples, weak precision/recall,
 excess false positives, or review-capacity overflow keep the deterministic
