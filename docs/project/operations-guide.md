@@ -228,6 +228,19 @@ keeps evidence refs pointing back to the API health readiness contract. With
 `--require-ready`, the command still prints the JSON report, then exits non-zero
 when any customer pilot blocker remains.
 
+Strict customer pilot proof:
+
+```bash
+set -a
+source scripts/demo/pilot_ready_env.example
+set +a
+scripts/demo/customer_pilot_proof.sh
+```
+
+Replace every placeholder in `scripts/demo/pilot_ready_env.example` before using
+it. The same environment should be applied to the API server process so
+`/api/v1/health` evaluates the configured pilot contracts, not local defaults.
+
 ## CI Gates
 
 GitHub Actions runs:
@@ -296,7 +309,9 @@ Before a customer pilot contract test:
   fail on unresolved `/api/v1/health` pilot readiness blockers; otherwise the
   proof prints the report but keeps local demo proof flow focused on identity,
   smoke, and persistence. Set `FWA_PROOF_READINESS_REPORT_PATH` to retain the
-  readiness JSON as a pilot evidence artifact.
+  readiness JSON as a pilot evidence artifact. Use
+  `scripts/demo/pilot_ready_env.example` as the strict-mode checklist before
+  enabling `FWA_PROOF_REQUIRE_READY=1`.
 - Confirm high-risk outputs remain assistive-only.
 
 Writeback contract fields:

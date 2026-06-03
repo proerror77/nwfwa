@@ -79,6 +79,10 @@ Minimum pilot monitoring:
   scoring, feature, rule, model, audit, case, QA, investigation, and ROI tables.
   This is the preferred single command for local customer demo hardening after
   PostgreSQL, ML service, and API server are already running.
+  `scripts/demo/pilot_ready_env.example` lists the environment variables needed
+  for strict proof mode and should be copied into the pilot shell or secret
+  manager with real customer-approved values before `FWA_PROOF_REQUIRE_READY=1`
+  is used.
 - Standard FWA rule pack readiness: the deterministic seed and customer smoke
   must expose the active 16-rule FWA rule pack for early high-value claim,
   duplicate billing, upcoding, unbundling, excessive utilization, provider peer
@@ -182,5 +186,8 @@ Evidence references should point to structured objects, for example `rule_runs:E
   audit history.
 - Run `scripts/demo/customer_pilot_proof.sh` for the full local pilot proof
   path when using the deterministic demo database.
+- For strict proof mode, replace placeholders in
+  `scripts/demo/pilot_ready_env.example`, source the file for both API server
+  startup and proof execution, and keep the retained readiness JSON artifact.
 - Confirm high-risk outputs are assistive only and do not directly reject claims.
 - Confirm customer pilot data is registered as Parquet dataset metadata before model training or evaluation use.

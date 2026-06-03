@@ -180,6 +180,12 @@ FWA_DEMO_EXPECTED_CUSTOMER_SCOPE_ID=customer-alpha-pilot \
 scripts/demo/customer_pilot_proof.sh
 ```
 
+For a strict customer pilot proof, use `scripts/demo/pilot_ready_env.example` as
+the single environment checklist. Replace the placeholder secrets and endpoints,
+source it in the shell that starts the API server and runs the proof, then keep
+`FWA_PROOF_REQUIRE_READY=1` enabled so unresolved `/api/v1/health` pilot
+readiness blockers fail after the JSON readiness report is printed.
+
 The proof script applies migrations and deterministic seed data, runs the same
 end-to-end path as the local demo with `--customer-principal-smoke`, and then
 executes the SQL persistence assertions. It additionally asserts that API call
