@@ -5,7 +5,7 @@ use fwa_core::{
     ClaimId, ClaimItem, Member, MemberId, Money, Policy, PolicyId, Provider, ProviderId,
     ProviderRiskTier, RecommendedAction, RuleActionClass,
 };
-use fwa_rules::{Condition, RequiredEvidence, Rule, RuleAction};
+use fwa_rules::{AdjudicationPolicy, Condition, RequiredEvidence, Rule, RuleAction};
 use fwa_scoring::RoutingPolicy;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -11891,6 +11891,40 @@ fn case_from_row(row: CaseRow) -> CaseRecord {
 
 pub fn default_runtime_rules() -> Vec<Rule> {
     vec![
+        Rule {
+            rule_id: "rule_service_before_coverage".into(),
+            version: 1,
+            name: "Service before coverage start".into(),
+            review_mode: "pre_payment".into(),
+            scheme_family: Some("early_high_value_claim".into()),
+            conditions: vec![Condition {
+                field: "days_since_policy_start".into(),
+                operator: "<=".into(),
+                value: serde_json::json!(-1),
+            }],
+            action: RuleAction {
+                score: 100,
+                alert_code: "SERVICE_BEFORE_COVERAGE_START".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::HardDeny,
+                required_evidence: vec![RequiredEvidence {
+                    evidence_type: "coverage_eligibility".into(),
+                    evidence_request_type: None,
+                    blocking: true,
+                    policy_authority_ref: Some("policy:coverage-eligibility:v1".into()),
+                    exception_check: Some("no_retroactive_coverage_exception".into()),
+                }],
+                adjudication_policy: Some(AdjudicationPolicy {
+                    customer_approval_ref: "customer-rule-list:demo:v1".into(),
+                    appeal_or_override_route: "appeals:manual-review:v1".into(),
+                    effective_date: "2026-01-01".into(),
+                    rollback_plan_ref: "rollback:rules:v1".into(),
+                    production_threshold_ref: "thresholds:prepay-hard-deny:v1".into(),
+                    routing_impact_ref: "routing-impact:shadow-demo:v1".into(),
+                }),
+                reason: "服务日期早于保单生效日，且无追溯保障例外".into(),
+            },
+        },
         Rule {
             rule_id: "rule_early_claim".into(),
             version: 1,

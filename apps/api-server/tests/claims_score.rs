@@ -562,6 +562,67 @@ async fn scores_spec_style_top_level_full_payload() {
 }
 
 #[tokio::test]
+async fn approved_demo_hard_deny_rule_auto_denies_coverage_ineligible_claim() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-BEFORE-COVERAGE",
+                "claim_amount": "1200",
+                "currency": "CNY",
+                "service_date": "2025-12-31",
+                "diagnosis_code": "J10",
+                "policy": {
+                  "external_policy_id": "POL-BEFORE-COVERAGE",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": "10000"
+                }
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["decision_outcome"], "auto_deny");
+    assert_eq!(body["decision_authority"], "customer_policy_rule");
+    assert_eq!(body["decision_confidence"], "deterministic");
+    assert_eq!(body["appeal_or_review_required"], true);
+    assert_eq!(body["reason_code"], "SERVICE_BEFORE_COVERAGE_START");
+    assert!(body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "rule_runs:SERVICE_BEFORE_COVERAGE_START"
+        )));
+    let alert = body["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|alert| alert["alert_code"] == "SERVICE_BEFORE_COVERAGE_START")
+        .expect("approved hard-deny alert");
+    assert_eq!(
+        alert["required_evidence"][0]["policy_authority_ref"],
+        "policy:coverage-eligibility:v1"
+    );
+    assert_eq!(
+        alert["required_evidence"][0]["exception_check"],
+        "no_retroactive_coverage_exception"
+    );
+}
+
+#[tokio::test]
 async fn scores_inbox_canonical_claim_context() {
     let app = build_app(test_config());
 
