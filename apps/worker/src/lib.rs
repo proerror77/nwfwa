@@ -72,6 +72,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "provider_graph_clusterer",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "automl_lifecycle_closure_reporter",
                 status: "ok",
             },
@@ -918,6 +922,61 @@ pub struct ClaimEntityReviewTask {
     pub evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderGraphCommunityReport {
+    pub report_kind: String,
+    pub report_version: u8,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub algorithm: String,
+    pub label_policy: String,
+    pub governance_boundary: String,
+    pub community_summaries: Vec<ProviderGraphCommunitySummary>,
+    pub provider_assignments: Vec<ProviderGraphCommunityAssignment>,
+    pub anomaly_candidates: Vec<ProviderGraphAnomalyCandidate>,
+    pub review_tasks: Vec<ProviderGraphReviewTask>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderGraphCommunitySummary {
+    pub community_id: i32,
+    pub provider_count: usize,
+    pub average_graph_degree: f64,
+    pub average_peer_z_score: f64,
+    pub anomaly_candidate_count: usize,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderGraphCommunityAssignment {
+    pub provider_id: String,
+    pub community_id: i32,
+    pub graph_degree: f64,
+    pub peer_z_score: f64,
+    pub anomaly_candidate: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderGraphAnomalyCandidate {
+    pub provider_id: String,
+    pub community_id: i32,
+    pub graph_degree: f64,
+    pub peer_z_score: f64,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderGraphReviewTask {
+    pub task_kind: String,
+    pub provider_id: String,
+    pub community_id: i32,
+    pub review_queue: String,
+    pub required_review: String,
+    pub decision_options: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct UnlabeledDatasetManifest {
     dataset_key: String,
@@ -938,6 +997,7 @@ struct ProviderPeerFeatureRow {
     high_cost_rate: f64,
     peer_z_score: f64,
     graph_degree: f64,
+    community_id: i32,
 }
 
 #[derive(Debug, Clone)]
@@ -1109,6 +1169,11 @@ pub fn build_demo_ml_datasets(
             ),
             format!(
                 "cargo run --locked -p worker -- cluster-provider-peers --manifest {} --output-dir {}/clusters",
+                provider_dir.join("manifest.json").display(),
+                provider_dir.display()
+            ),
+            format!(
+                "cargo run --locked -p worker -- cluster-provider-graph --manifest {} --output-dir {}/graph-communities",
                 provider_dir.join("manifest.json").display(),
                 provider_dir.display()
             ),
@@ -2649,6 +2714,7 @@ pub fn build_automl_lifecycle_closure_report(
     artifact_evaluation_report_uris: &[String],
     rule_backtest_report_uri: &str,
     provider_clustering_report_uri: &str,
+    provider_graph_clustering_report_uri: &str,
     claim_entity_clustering_report_uri: &str,
     mlops_monitoring_report_uri: &str,
     output_dir: impl AsRef<Path>,
@@ -2663,6 +2729,10 @@ pub fn build_automl_lifecycle_closure_report(
     let provider_clustering_report_uri = required_non_empty(
         "provider_clustering_report_uri",
         provider_clustering_report_uri,
+    )?;
+    let provider_graph_clustering_report_uri = required_non_empty(
+        "provider_graph_clustering_report_uri",
+        provider_graph_clustering_report_uri,
     )?;
     let claim_entity_clustering_report_uri = required_non_empty(
         "claim_entity_clustering_report_uri",
@@ -2679,6 +2749,7 @@ pub fn build_automl_lifecycle_closure_report(
         .collect::<anyhow::Result<Vec<_>>>()?;
     let rule_backtest = read_json_report(rule_backtest_report_uri)?;
     let provider_clustering = read_json_report(provider_clustering_report_uri)?;
+    let provider_graph_clustering = read_json_report(provider_graph_clustering_report_uri)?;
     let claim_entity_clustering = read_json_report(claim_entity_clustering_report_uri)?;
     let mlops_monitoring = read_json_report(mlops_monitoring_report_uri)?;
 
@@ -2735,6 +2806,12 @@ pub fn build_automl_lifecycle_closure_report(
         && json_string(&provider_clustering, "governance_boundary")
             .is_some_and(|boundary| boundary.contains("must not create confirmed FWA labels"))
         && json_array_len(&provider_clustering, "anomaly_candidates") > 0;
+    let provider_graph_clustering_passed = provider_graph_clustering["report_kind"]
+        == "provider_graph_community_clustering"
+        && json_string(&provider_graph_clustering, "governance_boundary")
+            .is_some_and(|boundary| boundary.contains("must not create confirmed FWA labels"))
+        && json_array_len(&provider_graph_clustering, "anomaly_candidates") > 0
+        && json_array_len(&provider_graph_clustering, "review_tasks") > 0;
     let claim_entity_clustering_passed = claim_entity_clustering["report_kind"]
         == "claim_entity_clustering"
         && json_string(&claim_entity_clustering, "governance_boundary")
@@ -2790,11 +2867,14 @@ pub fn build_automl_lifecycle_closure_report(
         ),
         lifecycle_stage(
             "unlabeled_clustering_reviews",
-            provider_clustering_passed && claim_entity_clustering_passed,
-            "provider-peer and claim/member/provider clustering create review candidates only"
+            provider_clustering_passed
+                && provider_graph_clustering_passed
+                && claim_entity_clustering_passed,
+            "provider-peer, provider graph-community, and claim/member/provider clustering create review candidates only"
                 .into(),
             vec![
                 format!("provider_peer_clustering:{provider_clustering_report_uri}"),
+                format!("provider_graph_clustering:{provider_graph_clustering_report_uri}"),
                 format!("claim_entity_clustering:{claim_entity_clustering_report_uri}"),
             ],
         ),
@@ -2831,6 +2911,7 @@ pub fn build_automl_lifecycle_closure_report(
             format!("automl_candidate_ranking:{candidate_ranking_uri}"),
             format!("rule_candidate_backtests:{rule_backtest_report_uri}"),
             format!("provider_peer_clustering:{provider_clustering_report_uri}"),
+            format!("provider_graph_clustering:{provider_graph_clustering_report_uri}"),
             format!("claim_entity_clustering:{claim_entity_clustering_report_uri}"),
             format!("mlops_monitoring_reports:{mlops_monitoring_report_uri}")
         ],
@@ -2967,6 +3048,11 @@ pub fn build_demo_automl_lifecycle_evidence(
     let provider_cluster_dir = output_dir.join("clustering/provider-peer");
     let provider_clustering =
         cluster_provider_peers(&provider_manifest.to_string_lossy(), &provider_cluster_dir)?;
+    let provider_graph_dir = output_dir.join("clustering/provider-graph");
+    let provider_graph = cluster_provider_graph_communities(
+        &provider_manifest.to_string_lossy(),
+        &provider_graph_dir,
+    )?;
     let claim_cluster_dir = output_dir.join("clustering/claim-entity");
     let claim_clustering =
         cluster_claim_entities(&claim_manifest.to_string_lossy(), &claim_cluster_dir)?;
@@ -3033,6 +3119,9 @@ pub fn build_demo_automl_lifecycle_evidence(
         &provider_cluster_dir
             .join("provider_peer_clustering_report.json")
             .to_string_lossy(),
+        &provider_graph_dir
+            .join("provider_graph_community_report.json")
+            .to_string_lossy(),
         &claim_cluster_dir
             .join("claim_entity_clustering_report.json")
             .to_string_lossy(),
@@ -3049,6 +3138,7 @@ pub fn build_demo_automl_lifecycle_evidence(
         "output_dir": output_dir.to_string_lossy(),
         "recommended_candidate_model_version": ranking.recommended_candidate_model_version,
         "provider_anomaly_candidate_count": provider_clustering.anomaly_candidates.len(),
+        "provider_graph_anomaly_candidate_count": provider_graph.anomaly_candidates.len(),
         "claim_entity_anomaly_candidate_count": claim_clustering.anomaly_candidates.len(),
         "closure_status": closure["closure_status"],
         "artifacts": {
@@ -3061,6 +3151,7 @@ pub fn build_demo_automl_lifecycle_evidence(
             "rule_candidate_plan": rule_candidate_dir.join("rule_candidate_mining_plan.json"),
             "rule_backtest_report": rule_backtest_dir.join("rule_candidate_backtest_report.json"),
             "provider_clustering_report": provider_cluster_dir.join("provider_peer_clustering_report.json"),
+            "provider_graph_report": provider_graph_dir.join("provider_graph_community_report.json"),
             "claim_entity_clustering_report": claim_cluster_dir.join("claim_entity_clustering_report.json"),
             "mlops_monitoring_report": output_dir.join("monitoring/mlops_monitoring_report.json"),
             "lifecycle_closure_report": output_dir.join("closure/rust_automl_lifecycle_closure_report.json")
@@ -4432,6 +4523,125 @@ pub fn cluster_claim_entities(
     Ok(report)
 }
 
+pub fn cluster_provider_graph_communities(
+    manifest_path: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<ProviderGraphCommunityReport> {
+    let manifest_path = Path::new(manifest_path);
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read provider graph manifest {}", manifest_path.display()))?;
+    let manifest: UnlabeledDatasetManifest =
+        serde_json::from_str(&manifest_json).context("parse provider graph manifest")?;
+    if manifest.label_column.is_some() {
+        bail!("provider graph clustering requires an unlabeled manifest");
+    }
+    if !manifest.label_policy.contains("unlabeled") {
+        bail!("provider graph clustering requires an unlabeled label_policy");
+    }
+    let base_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let rows = read_provider_peer_rows(&manifest, base_dir)?;
+    if rows.len() < 2 {
+        bail!("provider graph clustering requires at least two provider rows");
+    }
+
+    let graph_degree_threshold =
+        anomaly_threshold(&rows.iter().map(|row| row.graph_degree).collect::<Vec<_>>());
+    let mut provider_assignments = Vec::new();
+    let mut anomaly_candidates = Vec::new();
+    for row in &rows {
+        let anomaly_candidate =
+            row.graph_degree >= graph_degree_threshold || row.peer_z_score >= 2.0;
+        provider_assignments.push(ProviderGraphCommunityAssignment {
+            provider_id: row.provider_id.clone(),
+            community_id: row.community_id,
+            graph_degree: row.graph_degree,
+            peer_z_score: row.peer_z_score,
+            anomaly_candidate,
+        });
+        if anomaly_candidate {
+            anomaly_candidates.push(ProviderGraphAnomalyCandidate {
+                provider_id: row.provider_id.clone(),
+                community_id: row.community_id,
+                graph_degree: row.graph_degree,
+                peer_z_score: row.peer_z_score,
+                reason: "Provider is unusually central or high-risk inside the provider graph community; review as a graph anomaly candidate, not a confirmed FWA label.".into(),
+                evidence_refs: vec![
+                    format!("dataset_manifest:{}", manifest_path.display()),
+                    format!(
+                        "provider_graph_community:{}:{}",
+                        manifest.dataset_key, row.provider_id
+                    ),
+                ],
+            });
+        }
+    }
+    anomaly_candidates.sort_by(|left, right| {
+        right
+            .graph_degree
+            .partial_cmp(&left.graph_degree)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                right
+                    .peer_z_score
+                    .partial_cmp(&left.peer_z_score)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| left.provider_id.cmp(&right.provider_id))
+    });
+    let review_tasks = anomaly_candidates
+        .iter()
+        .map(|candidate| ProviderGraphReviewTask {
+            task_kind: "provider_graph_anomaly_review".into(),
+            provider_id: candidate.provider_id.clone(),
+            community_id: candidate.community_id,
+            review_queue: "provider_graph_anomaly_candidate_review".into(),
+            required_review: "human_review_required_before_case_creation_or_label_assignment"
+                .into(),
+            decision_options: vec![
+                "dismiss_as_network_variation".into(),
+                "request_more_evidence".into(),
+                "open_investigation_candidate".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let community_summaries = summarize_provider_graph_communities(&rows, &provider_assignments);
+    let report = ProviderGraphCommunityReport {
+        report_kind: "provider_graph_community_clustering".into(),
+        report_version: 1,
+        dataset_key: manifest.dataset_key,
+        dataset_version: manifest.dataset_version,
+        algorithm: "rust_provider_graph_community_v1".into(),
+        label_policy: manifest.label_policy,
+        governance_boundary:
+            "unlabeled graph clustering creates anomaly review candidates only; it must not create confirmed FWA labels or automatic claim disposition"
+                .into(),
+        community_summaries,
+        provider_assignments,
+        anomaly_candidates,
+        review_tasks,
+        evidence_refs: vec![format!("dataset_manifest:{}", manifest_path.display())],
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create provider graph clustering output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_graph_community_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir.as_ref().join("provider_graph_review_tasks.json"),
+        &report.review_tasks,
+    )?;
+    Ok(report)
+}
+
 fn read_provider_peer_rows(
     manifest: &UnlabeledDatasetManifest,
     base_dir: &Path,
@@ -4465,6 +4675,8 @@ fn read_provider_peer_rows(
                         high_cost_rate: required_numeric_cell(&batch, "high_cost_rate", row_index)?,
                         peer_z_score: required_numeric_cell(&batch, "peer_z_score", row_index)?,
                         graph_degree: required_numeric_cell(&batch, "graph_degree", row_index)?,
+                        community_id: required_numeric_cell(&batch, "community_id", row_index)?
+                            as i32,
                     });
                 }
             }
@@ -4864,6 +5076,56 @@ fn summarize_claim_entity_clusters(
                         .sum::<f64>()
                         / divisor,
                 ),
+            }
+        })
+        .collect()
+}
+
+fn summarize_provider_graph_communities(
+    rows: &[ProviderPeerFeatureRow],
+    assignments: &[ProviderGraphCommunityAssignment],
+) -> Vec<ProviderGraphCommunitySummary> {
+    let mut community_ids = rows
+        .iter()
+        .map(|row| row.community_id)
+        .collect::<BTreeSet<_>>();
+    if community_ids.is_empty() {
+        community_ids.insert(0);
+    }
+    community_ids
+        .into_iter()
+        .map(|community_id| {
+            let indexes = rows
+                .iter()
+                .enumerate()
+                .filter_map(|(index, row)| (row.community_id == community_id).then_some(index))
+                .collect::<Vec<_>>();
+            let provider_count = indexes.len();
+            let divisor = provider_count.max(1) as f64;
+            let anomaly_candidate_count = assignments
+                .iter()
+                .filter(|assignment| {
+                    assignment.community_id == community_id && assignment.anomaly_candidate
+                })
+                .count();
+            ProviderGraphCommunitySummary {
+                community_id,
+                provider_count,
+                average_graph_degree: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].graph_degree)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                average_peer_z_score: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].peer_z_score)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                anomaly_candidate_count,
             }
         })
         .collect()
@@ -6594,6 +6856,10 @@ mod tests {
         assert!(pack
             .next_worker_commands
             .iter()
+            .any(|command| command.contains("cluster-provider-graph")));
+        assert!(pack
+            .next_worker_commands
+            .iter()
             .any(|command| command.contains("cluster-claim-entities")));
     }
 
@@ -6890,6 +7156,40 @@ mod tests {
             .is_file());
         assert!(output_dir
             .join("provider_anomaly_review_tasks.json")
+            .is_file());
+    }
+
+    #[test]
+    fn clusters_provider_graph_communities_without_label_assignment() {
+        let root = temp_root("provider-graph-clustering");
+        let pack =
+            build_demo_ml_datasets(&root, "2026-06-provider-graph-demo").expect("demo ML datasets");
+        let provider_manifest = pack
+            .unlabeled_manifest_uris
+            .iter()
+            .find(|uri| uri.contains("unlabeled_provider_peer_clustering"))
+            .expect("provider peer manifest");
+        let output_dir = root.join("graph-communities");
+
+        let report = cluster_provider_graph_communities(provider_manifest, &output_dir)
+            .expect("provider graph clustering");
+
+        assert_eq!(report.report_kind, "provider_graph_community_clustering");
+        assert_eq!(report.dataset_key, "rust_demo_provider_peer_unlabeled");
+        assert_eq!(report.algorithm, "rust_provider_graph_community_v1");
+        assert_eq!(report.label_policy, "unlabeled_clustering_discovery_only");
+        assert!(report
+            .governance_boundary
+            .contains("must not create confirmed FWA labels"));
+        assert!(!report.community_summaries.is_empty());
+        assert_eq!(report.provider_assignments.len(), 6);
+        assert!(!report.anomaly_candidates.is_empty());
+        assert_eq!(report.review_tasks.len(), report.anomaly_candidates.len());
+        assert!(output_dir
+            .join("provider_graph_community_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("provider_graph_review_tasks.json")
             .is_file());
     }
 
@@ -7253,6 +7553,9 @@ mod tests {
         let provider_cluster_dir = root.join("provider-clusters");
         cluster_provider_peers(provider_manifest, &provider_cluster_dir)
             .expect("provider clustering");
+        let provider_graph_dir = root.join("provider-graph");
+        cluster_provider_graph_communities(provider_manifest, &provider_graph_dir)
+            .expect("provider graph clustering");
         let claim_manifest = pack
             .unlabeled_manifest_uris
             .iter()
@@ -7310,6 +7613,9 @@ mod tests {
             &provider_cluster_dir
                 .join("provider_peer_clustering_report.json")
                 .to_string_lossy(),
+            &provider_graph_dir
+                .join("provider_graph_community_report.json")
+                .to_string_lossy(),
             &claim_cluster_dir
                 .join("claim_entity_clustering_report.json")
                 .to_string_lossy(),
@@ -7335,6 +7641,20 @@ mod tests {
             .as_str()
             .unwrap()
             .contains("must not auto-activate models"));
+        let clustering_stage = report["lifecycle_stages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|stage| stage["stage"] == "unlabeled_clustering_reviews")
+            .expect("clustering stage");
+        assert!(clustering_stage["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|evidence_ref| evidence_ref
+                .as_str()
+                .unwrap()
+                .starts_with("provider_graph_clustering:")));
         assert!(root
             .join("closure/rust_automl_lifecycle_closure_report.json")
             .is_file());
@@ -7370,6 +7690,9 @@ mod tests {
             .is_file());
         assert!(output_dir
             .join("clustering/provider-peer/provider_peer_clustering_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("clustering/provider-graph/provider_graph_community_report.json")
             .is_file());
         assert!(output_dir
             .join("clustering/claim-entity/claim_entity_clustering_report.json")

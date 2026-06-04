@@ -8,6 +8,7 @@
     "lightgbm_validation_report": "data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json",
     "mlops_monitoring_report": "data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
     "provider_clustering_report": "data/rust-automl-demo/lifecycle-evidence/clustering/provider-peer/provider_peer_clustering_report.json",
+    "provider_graph_report": "data/rust-automl-demo/lifecycle-evidence/clustering/provider-graph/provider_graph_community_report.json",
     "rule_backtest_report": "data/rust-automl-demo/lifecycle-evidence/rule-candidates/backtest/rule_candidate_backtest_report.json",
     "rule_candidate_plan": "data/rust-automl-demo/lifecycle-evidence/rule-candidates/rule_candidate_mining_plan.json",
     "xgboost_artifact_evaluation": "data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/xgboost_model_artifact_evaluation.json",
@@ -21,5 +22,6 @@
   "governance_boundary": "demo evidence only; the pack proves the Rust AutoML lifecycle contract but must not activate models, assign fraud labels, or write rules without the recorded human gates",
   "output_dir": "data/rust-automl-demo/lifecycle-evidence",
   "provider_anomaly_candidate_count": 2,
+  "provider_graph_anomaly_candidate_count": 3,
   "recommended_candidate_model_version": "0.2.0-xgboost-candidate"
 }

@@ -226,6 +226,23 @@ This writes:
 The output is an anomaly-candidate workflow only. It must not create confirmed
 FWA labels, supervised-training labels, or automatic claim disposition.
 
+Run the Rust provider graph-community clustering demo on the same unlabeled
+provider manifest:
+
+```bash
+cargo run --locked -p worker -- cluster-provider-graph \
+  --manifest data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json \
+  --output-dir data/rust-automl-demo/unlabeled_provider_peer_clustering/graph-communities
+```
+
+This writes:
+
+- `provider_graph_community_report.json`;
+- `provider_graph_review_tasks.json`.
+
+This is also a review-candidate workflow only. It detects graph/community
+centrality anomalies without assigning labels or opening cases automatically.
+
 Run the Rust claim/member/provider entity clustering demo on the unlabeled
 claim manifest:
 
@@ -255,8 +272,9 @@ cargo run --locked -p worker -- build-demo-automl-lifecycle-evidence \
 This writes `demo_lifecycle_evidence_index.json`, validation reports for
 XGBoost and LightGBM, AutoML candidate ranking, ONNX Rust-serving artifact
 evaluation reports, feature-importance evidence, rule-candidate mining and
-backtest reports, provider and claim-entity clustering reports, MLOps
-monitoring reports, and the final lifecycle closure report. The checked-in
+backtest reports, provider-peer, provider-graph, and claim-entity clustering
+reports, MLOps monitoring reports, and the final lifecycle closure report. The
+checked-in
 closure report is `data/rust-automl-demo/lifecycle-evidence/closure/rust_automl_lifecycle_closure_report.json`
 and should stay `closed_with_human_governance_gates`.
 
@@ -633,6 +651,7 @@ cargo run --locked -p worker -- build-automl-lifecycle-closure-report \
   --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/lightgbm/artifact-evaluation/model_artifact_evaluation_report.json \
   --rule-backtest-report data/model-artifacts/baseline_fwa/0.2.0/rule-candidates/backtest/rule_candidate_backtest_report.json \
   --provider-clustering-report data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json \
+  --provider-graph-report data/rust-automl-demo/unlabeled_provider_peer_clustering/graph-communities/provider_graph_community_report.json \
   --claim-entity-clustering-report data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json \
   --mlops-monitoring-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
   --output-dir data/model-artifacts/baseline_fwa/0.2.0/lifecycle-closure
@@ -642,8 +661,8 @@ The worker writes `rust_automl_lifecycle_closure_report.json`. The closure
 status can only pass when the evidence proves: one labeled demo dataset, at
 least two unlabeled demo datasets, XGBoost and LightGBM candidate ranking,
 XGBoost and LightGBM ONNX Rust-serving artifact gates, rule-candidate backtest
-before rule-library writeback, provider and claim-entity clustering review
-tasks, and non-blocked MLOps monitoring.
+before rule-library writeback, provider-peer, provider graph-community, and
+claim-entity clustering review tasks, and non-blocked MLOps monitoring.
 
 ## Stage 7: Promotion Gates
 

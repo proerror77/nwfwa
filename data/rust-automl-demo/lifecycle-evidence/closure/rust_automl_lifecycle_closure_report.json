@@ -9,6 +9,7 @@
     "automl_candidate_ranking:data/rust-automl-demo/lifecycle-evidence/ranking/automl_candidate_ranking.json",
     "rule_candidate_backtests:data/rust-automl-demo/lifecycle-evidence/rule-candidates/backtest/rule_candidate_backtest_report.json",
     "provider_peer_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-peer/provider_peer_clustering_report.json",
+    "provider_graph_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-graph/provider_graph_community_report.json",
     "claim_entity_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/claim-entity/claim_entity_clustering_report.json",
     "mlops_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json"
   ],
@@ -50,11 +51,12 @@
     {
       "evidence_refs": [
         "provider_peer_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-peer/provider_peer_clustering_report.json",
+        "provider_graph_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-graph/provider_graph_community_report.json",
         "claim_entity_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/claim-entity/claim_entity_clustering_report.json"
       ],
       "stage": "unlabeled_clustering_reviews",
       "status": "passed",
-      "summary": "provider-peer and claim/member/provider clustering create review candidates only"
+      "summary": "provider-peer, provider graph-community, and claim/member/provider clustering create review candidates only"
     },
     {
       "evidence_refs": [

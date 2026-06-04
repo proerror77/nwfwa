@@ -149,6 +149,7 @@ async fn main() -> anyhow::Result<()> {
             let rule_backtest_report = take_flag_value(&mut args, "--rule-backtest-report")?;
             let provider_clustering_report =
                 take_flag_value(&mut args, "--provider-clustering-report")?;
+            let provider_graph_report = take_flag_value(&mut args, "--provider-graph-report")?;
             let claim_entity_clustering_report =
                 take_flag_value(&mut args, "--claim-entity-clustering-report")?;
             let mlops_monitoring_report = take_flag_value(&mut args, "--mlops-monitoring-report")?;
@@ -162,6 +163,7 @@ async fn main() -> anyhow::Result<()> {
                 &artifact_evaluation_reports,
                 &rule_backtest_report,
                 &provider_clustering_report,
+                &provider_graph_report,
                 &claim_entity_clustering_report,
                 &mlops_monitoring_report,
                 output_dir,
@@ -249,6 +251,15 @@ async fn main() -> anyhow::Result<()> {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
             }
             let report = worker::cluster_claim_entities(&manifest, output_dir)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
+        "cluster-provider-graph" => {
+            let manifest = take_flag_value(&mut args, "--manifest")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::cluster_provider_graph_communities(&manifest, output_dir)?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
         "build-analytics-export-plan" => {

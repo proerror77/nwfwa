@@ -105,6 +105,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
   rule-library writeback blocked.
 - `cluster-provider-peers`: run Rust-native clustering over unlabeled provider
   peer features, then create anomaly review tasks without assigning labels.
+- `cluster-provider-graph`: run Rust-native provider graph-community
+  clustering over unlabeled provider graph features, then create graph anomaly
+  review tasks without assigning labels.
 - `cluster-claim-entities`: run Rust-native claim/member/provider entity
   clustering over unlabeled claims, then create anomaly review tasks or
   rule-candidate backtest preparation without assigning labels or writing rules.
@@ -158,9 +161,8 @@ Current repository completion for this target architecture is approximately:
   XGBoost and LightGBM training now emit governed ONNX serving artifacts with
   probability-parity reports, the Rust runtime can execute XGBoost, LightGBM,
   generic Rust ONNX, and `deep_learning_onnx` manifests after contract
-  validation, and provider-peer plus claim/member/provider entity clustering
-  have Rust-native demo workflows; broader graph clustering remains future
-  work.
+  validation, and provider-peer, provider graph-community, and
+  claim/member/provider entity clustering have Rust-native demo workflows.
 - 80% for Auto MLOps: worker can build feature-set manifests, create
   algorithm-aware training handoffs, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
@@ -173,8 +175,8 @@ Current repository completion for this target architecture is approximately:
   Rust feature-set and Rust serving evaluation evidence, and trainer-side ONNX
   parity reports and unlabeled anomaly review tasks exist; API retraining output
   now accepts governed serving manifests, and the console has provider model
-  release, promotion review, activation, and rollback actions. Broader graph
-  clustering and live monitoring surfaces still need hardening.
+  release, promotion review, activation, and rollback actions. Live monitoring
+  surfaces still need hardening.
 - 78% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation
