@@ -6864,11 +6864,11 @@ fn audit_samples_view(props: &AuditSamplesProps) -> Html {
                                             <div><span>{"Reviewer"}</span><strong>{&sample.reviewer}</strong></div>
                                             <div><span>{"Seed"}</span><strong>{sample.deterministic_seed.as_deref().unwrap_or("none")}</strong></div>
                                             <div><span>{"Created"}</span><strong>{sample.created_at.as_deref().unwrap_or("unknown")}</strong></div>
-                                            <div><span>{"Criteria"}</span><strong>{payload_keys_label(&sample.inclusion_criteria)}</strong></div>
+                                            <div><span>{"Criteria"}</span><strong>{payload_signal_count_label(&sample.inclusion_criteria, "criteria fields")}</strong></div>
                                         </div>
-                                        <small>{format!("outcome: {}", payload_keys_label(&sample.outcome_distribution))}</small>
-                                        <details>
-                                            <summary>{"Selected leads"}</summary>
+                                        <small>{format!("outcome: {}", payload_signal_count_label(&sample.outcome_distribution, "outcome fields"))}</small>
+                                        <details class="data-source-detail governance-detail">
+                                            <summary>{"Selected lead detail"}</summary>
                                             if sample.selected_leads.is_empty() {
                                                 <p class="empty">{"No selected leads in this sample."}</p>
                                             } else {
@@ -6880,7 +6880,7 @@ fn audit_samples_view(props: &AuditSamplesProps) -> Html {
                                                             <small>{format!("{} / {} / {}", lead.scheme_family, lead.review_mode, lead.risk_band)}</small>
                                                             <small>{format!("provider: {} / {} / {}", lead.provider_id, lead.provider_type, lead.provider_region)}</small>
                                                             <small>{format!("policy: {} / strata: {} / prior reviewer samples: {}", lead.policy_type, lead.strata_key, lead.prior_reviewer_sample_count)}</small>
-                                                            <small>{format!("evidence: {}", refs_label(&lead.evidence_refs))}</small>
+                                                            <small>{format!("evidence: {}", refs_count_label(&lead.evidence_refs))}</small>
                                                         </div>
                                                     })}
                                                 </div>
@@ -6913,7 +6913,7 @@ fn audit_sampling_governance_cockpit(samples: &[AuditSampleRecord]) -> Html {
         .map(|lead| format!("{} / {}", lead.provider_id, lead.provider_region))
         .unwrap_or_else(|| "pending".into());
     let evidence_label = primary_lead
-        .map(|lead| refs_label(&lead.evidence_refs))
+        .map(|lead| refs_count_label(&lead.evidence_refs))
         .unwrap_or_else(|| "none".into());
     let seed_label = sample.deterministic_seed.as_deref().unwrap_or("none");
     let created_at = sample.created_at.as_deref().unwrap_or("unknown");
@@ -6948,7 +6948,7 @@ fn audit_sampling_governance_cockpit(samples: &[AuditSampleRecord]) -> Html {
                     <strong>{&sample.selection_method}</strong>
                 </div>
                 {sampling_node("Population", &sample.sample_mode, "population")}
-                {sampling_node("Inclusion Criteria", &payload_keys_label(&sample.inclusion_criteria), "criteria")}
+                {sampling_node("Inclusion Criteria", &payload_signal_count_label(&sample.inclusion_criteria, "criteria fields"), "criteria")}
                 {sampling_node("Deterministic seed", seed_label, "seed")}
                 {sampling_node("Selected leads", &lead_label, "leads")}
                 {sampling_node("QA queue", &sample.assignment_queue, "queue")}
@@ -6960,9 +6960,15 @@ fn audit_sampling_governance_cockpit(samples: &[AuditSampleRecord]) -> Html {
                 <div class="provider-signal-stack">
                     {provider_signal_row("Top selected risk", &risk_label, "danger")}
                     {provider_signal_row("Provider focus", &provider_label, "warning")}
-                    {provider_signal_row("Outcome distribution", &payload_keys_label(&sample.outcome_distribution), "neutral")}
+                    {provider_signal_row("Outcome distribution", &payload_signal_count_label(&sample.outcome_distribution, "outcome fields"), "neutral")}
                     {provider_signal_row("Evidence refs", &evidence_label, "strong")}
                 </div>
+                <details class="data-source-detail governance-detail">
+                    <summary>{"Sample output detail"}</summary>
+                    <small>{format!("inclusion criteria: {}", payload_keys_label(&sample.inclusion_criteria))}</small>
+                    <small>{format!("outcome distribution: {}", payload_keys_label(&sample.outcome_distribution))}</small>
+                    <small>{format!("top lead evidence: {}", primary_lead.map(|lead| refs_label(&lead.evidence_refs)).unwrap_or_else(|| "none".into()))}</small>
+                </details>
             </div>
         </div>
     }
@@ -7004,7 +7010,12 @@ fn audit_sample_events_view(props: &AuditSampleEventsProps) -> Html {
                                     </div>
                                     <p>{&event.summary}</p>
                                     <small>{format!("audit: {} / run: {} / at: {}", event.audit_id, event.run_id, event.created_at.as_deref().unwrap_or("unknown"))}</small>
-                                    <small>{format!("payload: {} / evidence: {}", payload_keys_label(&event.payload), refs_label(&event.evidence_refs))}</small>
+                                    <small>{format!("payload: {} / evidence: {}", payload_signal_count_label(&event.payload, "payload fields"), refs_count_label(&event.evidence_refs))}</small>
+                                    <details class="data-source-detail governance-detail">
+                                        <summary>{"Sample audit payload detail"}</summary>
+                                        <small>{format!("payload: {}", payload_keys_label(&event.payload))}</small>
+                                        <small>{format!("evidence: {}", refs_label(&event.evidence_refs))}</small>
+                                    </details>
                                 </li>
                             })}
                         </ol>
