@@ -294,6 +294,26 @@ The simulator writes shadow, drift, segment fairness, reviewer disagreement, and
 label delay report artifacts. These are staging proof artifacts only; they are
 not live customer shadow or drift evidence.
 
+Run the Rust MLOps monitoring cycle executor after the runtime reports exist.
+The artifact-evaluation report comes from `evaluate-model-artifact`; the
+shadow, drift, and fairness reports can come from the staging simulator or the
+customer environment:
+
+```bash
+cargo run --locked -p worker -- run-mlops-monitoring-cycle \
+  --plan scripts/ops/sample_mlops_monitoring_plan.json \
+  --artifact-evaluation-report artifacts/model-artifact-evaluation/model_artifact_evaluation_report.json \
+  --shadow-report artifacts/mlops-monitoring/shadow_report.json \
+  --drift-report artifacts/mlops-monitoring/drift_report.json \
+  --fairness-report artifacts/mlops-monitoring/fairness_report.json \
+  --output-dir artifacts/mlops-monitoring/cycle
+```
+
+Add `--api-url`, `--api-key`, `--actor`, and `--notes` to the same command when
+the cycle should submit monitoring and alert-router handoff evidence into the
+API governance audit. This is still a governed handoff; it does not execute
+retraining, activation, rollback, label assignment, or rule writeback.
+
 After the Rust monitoring report and scheduler execution report exist, submit
 the alert-router handoff into governance audit:
 

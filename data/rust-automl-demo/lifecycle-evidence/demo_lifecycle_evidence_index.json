@@ -6,6 +6,7 @@
     "lifecycle_closure_report": "data/rust-automl-demo/lifecycle-evidence/closure/rust_automl_lifecycle_closure_report.json",
     "lightgbm_artifact_evaluation": "data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/lightgbm_model_artifact_evaluation.json",
     "lightgbm_validation_report": "data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json",
+    "mlops_monitoring_cycle_report": "data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/mlops_monitoring_cycle_report.json",
     "mlops_monitoring_plan": "data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_monitoring_plan.json",
     "mlops_monitoring_report": "data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
     "mlops_scheduler_execution_report": "data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json",

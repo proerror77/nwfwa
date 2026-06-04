@@ -655,6 +655,30 @@ and monitoring-report evidence refs. It returns next actions such as continued
 monitoring or retraining preparation, but it does not create retraining jobs,
 activate models, or rollback models automatically.
 
+Run the Rust monitoring cycle executor when the plan and runtime reports already
+exist:
+
+```bash
+cargo run --locked -p worker -- run-mlops-monitoring-cycle \
+  --plan data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/xgboost/artifact-evaluation/model_artifact_evaluation_report.json \
+  --shadow-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/shadow_report.json \
+  --drift-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/drift_report.json \
+  --fairness-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/fairness_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/cycle \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --actor mlops-worker \
+  --notes "Rust monitoring cycle submitted for governance audit."
+```
+
+The cycle executor builds `mlops_monitoring_report.json`,
+`mlops_scheduler_execution_report.json`, `mlops_alert_delivery_tasks.json`, and
+`mlops_monitoring_cycle_report.json`, then submits the monitoring and
+alert-router handoff records when API credentials are provided. It requires the
+external shadow, drift, and fairness report producers to have already written
+their report artifacts; it does not replace customer-side report generation.
+
 Build the Rust scheduler execution and alert-delivery evidence package:
 
 ```bash
@@ -701,6 +725,7 @@ cargo run --locked -p worker -- build-automl-lifecycle-closure-report \
   --claim-entity-clustering-report data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json \
   --mlops-monitoring-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
   --mlops-scheduler-execution-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --mlops-monitoring-cycle-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/cycle/mlops_monitoring_cycle_report.json \
   --output-dir data/model-artifacts/baseline_fwa/0.2.0/lifecycle-closure
 ```
 
@@ -710,7 +735,7 @@ least two unlabeled demo datasets, XGBoost and LightGBM candidate ranking,
 XGBoost and LightGBM ONNX Rust-serving artifact gates, rule-candidate backtest
 before rule-library writeback, provider-peer, provider graph-community, and
 claim-entity clustering review tasks, non-blocked MLOps monitoring, and
-scheduler/alert-delivery evidence.
+scheduler/alert-delivery/cycle execution evidence.
 
 ## Stage 7: Promotion Gates
 

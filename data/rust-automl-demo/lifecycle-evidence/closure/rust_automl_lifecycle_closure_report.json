@@ -12,7 +12,8 @@
     "provider_graph_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/provider-graph/provider_graph_community_report.json",
     "claim_entity_clustering:data/rust-automl-demo/lifecycle-evidence/clustering/claim-entity/claim_entity_clustering_report.json",
     "mlops_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
-    "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json"
+    "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json",
+    "mlops_monitoring_cycles:data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/mlops_monitoring_cycle_report.json"
   ],
   "governance_boundary": "Rust lifecycle closure may open monitoring, review, retraining preparation, and rule-candidate backtest work only; it must not auto-activate models, assign fraud labels, or write back to the rule library",
   "lifecycle_stages": [
@@ -62,11 +63,12 @@
     {
       "evidence_refs": [
         "mlops_monitoring_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/mlops_monitoring_report.json",
-        "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json"
+        "mlops_scheduler_execution_reports:data/rust-automl-demo/lifecycle-evidence/monitoring/scheduler/mlops_scheduler_execution_report.json",
+        "mlops_monitoring_cycles:data/rust-automl-demo/lifecycle-evidence/monitoring/cycle/mlops_monitoring_cycle_report.json"
       ],
       "stage": "mlops_monitoring_loop",
       "status": "passed",
-      "summary": "monitoring status: passed; scheduler: completed_with_pending_external_reports; alert delivery: no_alerts_required"
+      "summary": "monitoring status: passed; scheduler: completed_with_pending_external_reports; alert delivery: no_alerts_required; cycle: completed_no_alerts_required"
     }
   ],
   "report_kind": "rust_automl_lifecycle_closure",
