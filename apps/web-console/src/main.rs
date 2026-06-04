@@ -2641,8 +2641,14 @@ fn bootstrap_backfill_panel(backfills: &[HistoricalBackfillJob]) -> Html {
                     {for backfills.iter().take(5).map(|job| html! {
                         <div class="finding-row">
                             <strong>{&job.job_id}</strong>
-                            <span>{format!("{} candidates / datasets {}", job.candidate_count, refs_label(&job.dataset_refs))}</span>
-                            <small>{format!("rules {} / evidence {}", refs_label(&job.rule_refs), refs_label(&job.evidence_refs))}</small>
+                            <span>{format!("{} candidates / {} datasets", job.candidate_count, job.dataset_refs.len())}</span>
+                            <small>{format!("rules {} / evidence {}", refs_count_label(&job.rule_refs), refs_count_label(&job.evidence_refs))}</small>
+                            <details class="data-source-detail governance-detail">
+                                <summary>{"Backfill evidence detail"}</summary>
+                                <small>{format!("datasets: {}", refs_label(&job.dataset_refs))}</small>
+                                <small>{format!("rules: {}", refs_label(&job.rule_refs))}</small>
+                                <small>{format!("evidence: {}", refs_label(&job.evidence_refs))}</small>
+                            </details>
                         </div>
                     })}
                 </div>
@@ -2666,8 +2672,20 @@ fn bootstrap_evidence_panel(requests: &[EvidenceRequestRecord]) -> Html {
                         <div class="finding-row">
                             <strong>{&request.claim_id}</strong>
                             <span>{format!("{} / {}", request.status, request.request_reason)}</span>
-                            <small>{format!("missing {} / queue {}", refs_label(&request.missing_evidence), request.reviewer_queue)}</small>
-                            <small>{format!("items {}", evidence_request_items_label(&request.items))}</small>
+                            <div class="summary-grid">
+                                <div><span>{"Missing"}</span><strong>{refs_count_label(&request.missing_evidence)}</strong></div>
+                                <div><span>{"Items"}</span><strong>{request.items.len()}</strong></div>
+                                <div><span>{"Queue"}</span><strong>{&request.reviewer_queue}</strong></div>
+                                <div><span>{"Evidence"}</span><strong>{refs_count_label(&request.evidence_refs)}</strong></div>
+                            </div>
+                            <details class="data-source-detail governance-detail">
+                                <summary>{"Bootstrap evidence detail"}</summary>
+                                <small>{format!("request: {}", request.request_id)}</small>
+                                <small>{format!("audit: {}", request.scoring_audit_id)}</small>
+                                <small>{format!("missing: {}", refs_label(&request.missing_evidence))}</small>
+                                <small>{format!("items: {}", evidence_request_items_label(&request.items))}</small>
+                                <small>{format!("evidence: {}", refs_label(&request.evidence_refs))}</small>
+                            </details>
                         </div>
                     })}
                 </div>
@@ -2691,7 +2709,14 @@ fn bootstrap_label_panel(items: &[LabelBootstrapItem]) -> Html {
                         <div class="finding-row">
                             <strong>{&item.suggested_label_name}</strong>
                             <span>{format!("{} / {}", item.review_status, item.governance_status)}</span>
-                            <small>{format!("claim {} / training {}", item.claim_id, item.training_eligible)}</small>
+                            <small>{format!("claim {} / training {} / evidence {}", item.claim_id, item.training_eligible, refs_count_label(&item.evidence_refs))}</small>
+                            <details class="data-source-detail governance-detail">
+                                <summary>{"Bootstrap label detail"}</summary>
+                                <small>{format!("item: {}", item.item_id)}</small>
+                                <small>{format!("source: {} / {}", item.source_type, item.source_id)}</small>
+                                <small>{format!("feedback target: {}", item.feedback_target)}</small>
+                                <small>{format!("evidence: {}", refs_label(&item.evidence_refs))}</small>
+                            </details>
                         </div>
                     })}
                 </div>

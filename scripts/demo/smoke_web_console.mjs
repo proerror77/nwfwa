@@ -108,7 +108,10 @@ async function main() {
     assertContains(builtText, "leads-cases", "web console browser history bundle");
     assertContains(builtText, "Bootstrap Ops", "web console navigation bundle");
     assertContains(builtText, "Historical Replay", "web console bootstrap ops bundle");
+    assertContains(builtText, "Backfill evidence detail", "web console bootstrap ops bundle");
     assertContains(builtText, "Evidence Requests", "web console bootstrap ops bundle");
+    assertContains(builtText, "Bootstrap evidence detail", "web console bootstrap ops bundle");
+    assertContains(builtText, "Bootstrap label detail", "web console bootstrap ops bundle");
     assertContains(builtText, "Label Bootstrap", "web console bootstrap ops bundle");
     assertContains(builtText, "Create backfill", "web console bootstrap ops bundle");
     assertContains(builtText, "Generate evidence requests", "web console bootstrap ops bundle");
