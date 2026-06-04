@@ -206,8 +206,10 @@ Current repository completion for this target architecture is approximately:
   accepts governed serving manifests, and the console has provider model
   release, promotion review, activation, and rollback actions. Scheduled
   monitoring outputs now include checksum-bound publication manifests for
-  durable artifact targets. Customer data bindings, actual environment-specific
-  object-store upload wiring, and receiver-specific monitoring inputs still need
+  durable artifact targets, and the Rust runner can bind supplied customer or
+  pilot monitoring inputs into shadow, drift, fairness, reviewer-disagreement,
+  and label-delay reports. Actual environment-specific object-store upload
+  wiring and receiver-specific monitoring input collection still need
   environment-specific wiring.
 - 81% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability

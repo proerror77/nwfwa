@@ -3153,6 +3153,28 @@ pub fn run_scheduled_mlops_monitoring_with_artifact_base_uri(
     output_dir: impl AsRef<Path>,
     artifact_base_uri: Option<&str>,
 ) -> anyhow::Result<serde_json::Value> {
+    run_scheduled_mlops_monitoring_with_options(
+        manifest_uri,
+        artifact_uri,
+        model_key,
+        model_version,
+        cron,
+        output_dir,
+        artifact_base_uri,
+        None,
+    )
+}
+
+pub fn run_scheduled_mlops_monitoring_with_options(
+    manifest_uri: &str,
+    artifact_uri: &str,
+    model_key: &str,
+    model_version: &str,
+    cron: &str,
+    output_dir: impl AsRef<Path>,
+    artifact_base_uri: Option<&str>,
+    monitoring_inputs_uri: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
     let output_dir = output_dir.as_ref();
     fs::create_dir_all(output_dir).with_context(|| {
         format!(
@@ -3164,7 +3186,11 @@ pub fn run_scheduled_mlops_monitoring_with_artifact_base_uri(
         build_mlops_monitoring_plan(manifest_uri, artifact_uri, model_key, model_version, cron)?;
     let plan_uri = output_dir.join("mlops_monitoring_plan.json");
     write_json(plan_uri.clone(), &plan)?;
-    let mut index = run_mlops_monitoring_plan(&plan_uri.to_string_lossy(), output_dir)?;
+    let mut index = run_mlops_monitoring_plan_with_inputs(
+        &plan_uri.to_string_lossy(),
+        output_dir,
+        monitoring_inputs_uri,
+    )?;
     if let Some(artifact_base_uri) = artifact_base_uri {
         let artifact_base_uri =
             required_non_empty("artifact_base_uri", artifact_base_uri)?.trim_end_matches('/');
@@ -3200,6 +3226,14 @@ pub fn run_mlops_monitoring_plan(
     plan_uri: &str,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<serde_json::Value> {
+    run_mlops_monitoring_plan_with_inputs(plan_uri, output_dir, None)
+}
+
+pub fn run_mlops_monitoring_plan_with_inputs(
+    plan_uri: &str,
+    output_dir: impl AsRef<Path>,
+    monitoring_inputs_uri: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
     let plan_uri = required_non_empty("plan_uri", plan_uri)?;
     let plan = read_json_report(plan_uri)?;
     if json_string(&plan, "plan_kind").as_deref() != Some("scheduled_mlops_monitoring") {
@@ -3228,6 +3262,10 @@ pub fn run_mlops_monitoring_plan(
             output_dir.display()
         )
     })?;
+    let monitoring_inputs = monitoring_inputs_uri
+        .map(read_json_report)
+        .transpose()
+        .context("read MLOps monitoring input binding")?;
 
     let mut seen = BTreeSet::new();
     let mut artifacts = BTreeMap::new();
@@ -3251,6 +3289,8 @@ pub fn run_mlops_monitoring_plan(
             &manifest_uri,
             &artifact_uri,
             output_uri.as_deref(),
+            monitoring_inputs_uri,
+            mlops_monitoring_input_for_job(monitoring_inputs.as_ref(), &job_kind),
         );
         write_json(output_dir.join(&file_name), &report)?;
         artifacts.insert(job_kind, file_name);
@@ -3274,7 +3314,10 @@ pub fn run_mlops_monitoring_plan(
         "manifest_uri": manifest_uri,
         "artifact_uri": artifact_uri,
         "status": "completed",
-        "customer_data_required": true,
+        "customer_data_required": monitoring_inputs.is_none(),
+        "customer_data_bound": monitoring_inputs.is_some(),
+        "monitoring_inputs_uri": monitoring_inputs_uri,
+        "input_binding_status": if monitoring_inputs.is_some() { "provided" } else { "not_provided" },
         "runtime_source": "rust_worker_monitoring_plan_runner",
         "artifacts": artifacts,
         "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules"
@@ -6427,6 +6470,8 @@ fn mlops_runtime_report_for_job(
     manifest_uri: &str,
     artifact_uri: &str,
     output_uri: Option<&str>,
+    monitoring_inputs_uri: Option<&str>,
+    monitoring_input: Option<&serde_json::Value>,
 ) -> serde_json::Value {
     let mut report = serde_json::json!({
         "artifact_kind": job_kind,
@@ -6438,7 +6483,10 @@ fn mlops_runtime_report_for_job(
         "artifact_uri": artifact_uri,
         "output_uri": output_uri,
         "status": "passed",
-        "customer_data_required": true,
+        "customer_data_required": monitoring_input.is_none(),
+        "customer_data_bound": monitoring_input.is_some(),
+        "monitoring_inputs_uri": monitoring_inputs_uri,
+        "input_binding_status": if monitoring_input.is_some() { "provided" } else { "not_provided" },
         "input": job.get("input").cloned().unwrap_or(serde_json::Value::Null),
         "output_ref": job.get("output_ref").cloned().unwrap_or(serde_json::Value::Null),
         "schedule": plan.get("schedule").cloned().unwrap_or(serde_json::Value::Null),
@@ -6476,7 +6524,59 @@ fn mlops_runtime_report_for_job(
         }
         _ => {}
     }
+    if let Some(monitoring_input) = monitoring_input {
+        apply_mlops_monitoring_input(&mut report, monitoring_input, job_kind);
+    }
     report
+}
+
+fn mlops_monitoring_input_for_job<'a>(
+    monitoring_inputs: Option<&'a serde_json::Value>,
+    job_kind: &str,
+) -> Option<&'a serde_json::Value> {
+    let monitoring_inputs = monitoring_inputs?;
+    monitoring_inputs
+        .get("jobs")
+        .and_then(|jobs| jobs.get(job_kind))
+        .or_else(|| monitoring_inputs.get(job_kind))
+}
+
+fn apply_mlops_monitoring_input(
+    report: &mut serde_json::Value,
+    monitoring_input: &serde_json::Value,
+    job_kind: &str,
+) {
+    if let (Some(report_object), Some(input_object)) =
+        (report.as_object_mut(), monitoring_input.as_object())
+    {
+        for (key, value) in input_object {
+            if is_protected_mlops_report_field(key) {
+                continue;
+            }
+            report_object.insert(key.clone(), value.clone());
+        }
+        report_object.insert("input_binding_job_kind".into(), serde_json::json!(job_kind));
+        report_object.insert("input_binding_status".into(), serde_json::json!("provided"));
+        report_object.insert("customer_data_bound".into(), serde_json::json!(true));
+        report_object.insert("customer_data_required".into(), serde_json::json!(false));
+    }
+}
+
+fn is_protected_mlops_report_field(key: &str) -> bool {
+    matches!(
+        key,
+        "artifact_kind"
+            | "report_version"
+            | "runtime_source"
+            | "model_key"
+            | "model_version"
+            | "manifest_uri"
+            | "artifact_uri"
+            | "output_uri"
+            | "output_ref"
+            | "schedule"
+            | "governance_boundary"
+    )
 }
 
 fn mlops_alert_delivery_task(
@@ -8597,6 +8697,71 @@ mod tests {
             .iter()
             .any(|artifact| artifact["file_name"] == "index.json"
                 && artifact["sha256"] == index_checksum));
+    }
+
+    #[test]
+    fn scheduled_mlops_monitoring_binds_customer_monitoring_inputs() {
+        let root = temp_root("scheduled-mlops-monitoring-inputs");
+        let inputs_path = root.join("monitoring_inputs.json");
+        write_json(
+            inputs_path.clone(),
+            &serde_json::json!({
+                "artifact_kind": "mlops_monitoring_inputs",
+                "source": "pilot_shadow_window",
+                "jobs": {
+                    "shadow_traffic_evaluation": {
+                        "status": "passed",
+                        "comparison_count": 240,
+                        "average_abs_probability_delta": 0.02,
+                        "max_abs_probability_delta": 0.07
+                    },
+                    "drift_monitoring": {
+                        "status": "watch",
+                        "score_psi": 0.14,
+                        "max_feature_psi": 0.18
+                    },
+                    "segment_fairness_review": {
+                        "status": "passed",
+                        "segments": [{"segment_column": "provider_region", "segment_value": "north"}]
+                    },
+                    "reviewer_disagreement_review": {
+                        "reviewer_disagreement_rate": 0.05,
+                        "review_sample_count": 240
+                    },
+                    "label_delay_review": {
+                        "label_delay_p95_days": 9,
+                        "delayed_label_count": 2
+                    }
+                }
+            }),
+        )
+        .unwrap();
+
+        let index = run_scheduled_mlops_monitoring_with_options(
+            "data/training/manifest.json",
+            "s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json",
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+            root.join("runtime"),
+            None,
+            Some(&inputs_path.to_string_lossy()),
+        )
+        .expect("scheduled runtime reports");
+
+        assert_eq!(index["customer_data_bound"], true);
+        assert_eq!(index["customer_data_required"], false);
+        assert_eq!(index["input_binding_status"], "provided");
+        let drift = read_json_report(&root.join("runtime/drift_report.json").to_string_lossy())
+            .expect("drift report");
+        assert_eq!(drift["status"], "watch");
+        assert_eq!(drift["score_psi"], 0.14);
+        assert_eq!(drift["customer_data_bound"], true);
+        assert_eq!(drift["input_binding_job_kind"], "drift_monitoring");
+        let shadow = read_json_report(&root.join("runtime/shadow_report.json").to_string_lossy())
+            .expect("shadow report");
+        assert_eq!(shadow["comparison_count"], 240);
+        assert_eq!(shadow["max_abs_probability_delta"], 0.07);
     }
 
     #[test]

@@ -126,10 +126,11 @@ async fn main() -> anyhow::Result<()> {
             let cron = take_flag_value(&mut args, "--cron")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;
             let artifact_base_uri = take_optional_flag_value(&mut args, "--artifact-base-uri")?;
+            let monitoring_inputs = take_optional_flag_value(&mut args, "--monitoring-inputs")?;
             if !args.is_empty() {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
             }
-            let index = worker::run_scheduled_mlops_monitoring_with_artifact_base_uri(
+            let index = worker::run_scheduled_mlops_monitoring_with_options(
                 &manifest_uri,
                 &artifact_uri,
                 &model_key,
@@ -137,6 +138,7 @@ async fn main() -> anyhow::Result<()> {
                 &cron,
                 output_dir,
                 artifact_base_uri.as_deref(),
+                monitoring_inputs.as_deref(),
             )?;
             println!("{}", serde_json::to_string_pretty(&index)?);
         }
@@ -166,10 +168,15 @@ async fn main() -> anyhow::Result<()> {
         "run-mlops-monitoring-plan" => {
             let plan = take_flag_value(&mut args, "--plan")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            let monitoring_inputs = take_optional_flag_value(&mut args, "--monitoring-inputs")?;
             if !args.is_empty() {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
             }
-            let index = worker::run_mlops_monitoring_plan(&plan, output_dir)?;
+            let index = worker::run_mlops_monitoring_plan_with_inputs(
+                &plan,
+                output_dir,
+                monitoring_inputs.as_deref(),
+            )?;
             println!("{}", serde_json::to_string_pretty(&index)?);
         }
         "submit-mlops-monitoring-report" => {

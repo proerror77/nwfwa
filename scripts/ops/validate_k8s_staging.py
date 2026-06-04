@@ -86,6 +86,7 @@ REQUIRED_TEXT = {
         "--require-ready",
         "run-scheduled-mlops-monitoring",
         "--artifact-base-uri",
+        "s3://nwfwa-staging-artifacts/mlops-monitoring/baseline_fwa/staging",
         "build-analytics-export-plan",
         "build-ai-evidence-execution-plan",
         "build-governance-ops-plan",

@@ -632,6 +632,7 @@ cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
   --model-version 0.2.0 \
   --cron "0 2 * * *" \
   --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring \
+  --monitoring-inputs scripts/ops/sample_mlops_monitoring_inputs.json \
   --artifact-base-uri s3://fwa-models/baseline_fwa/0.2.0/mlops-monitoring
 ```
 
@@ -639,6 +640,9 @@ This writes `mlops_monitoring_plan.json`, the runtime report artifacts, and
 `mlops_monitoring_artifact_publication_manifest.json` in one worker invocation.
 The publication manifest records each local artifact, target durable URI,
 checksum, and byte size. The staging Kubernetes CronJob uses this command shape.
+Omit `--monitoring-inputs` for staging proof data; pass it when a customer,
+pilot, or replay window has already produced shadow, drift, fairness,
+reviewer-disagreement, and label-delay measurements.
 
 Execute the scheduled monitoring plan with the Rust runtime report producer:
 
@@ -978,6 +982,7 @@ cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
   --model-version 0.2.0 \
   --cron "0 2 * * *" \
   --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring \
+  --monitoring-inputs scripts/ops/sample_mlops_monitoring_inputs.json \
   --artifact-base-uri s3://fwa-models/baseline_fwa/0.2.0/mlops-monitoring
 ```
 
@@ -987,7 +992,10 @@ review, and label delay review jobs. They use the same governed Parquet dataset
 manifest and derive the expected report URIs from the active serving artifact
 location. The publication manifest records the target durable artifact URIs and
 checksums that a production scheduler should publish back into the model
-governance evidence set. The worker can then run
+governance evidence set. When `--monitoring-inputs` is provided, the worker
+binds the supplied metrics into the report artifacts and marks
+`customer_data_bound = true`; otherwise the generated reports remain staging
+proof artifacts. The worker can then run
 `build-mlops-monitoring-report` over those reports to open review tasks or
 prepare retraining without automatic promotion.
 

@@ -315,6 +315,8 @@ Relevant commands and artifacts:
 - reviewer-disagreement report;
 - label-delay report.
 - `mlops_monitoring_artifact_publication_manifest.json`.
+- `scripts/ops/sample_mlops_monitoring_inputs.json` as the local binding
+  example for customer or pilot monitoring metrics.
 
 Monitoring should trigger retraining readiness or rollback review. It should not
 promote or replace a model automatically.
