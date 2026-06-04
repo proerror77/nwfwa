@@ -1218,6 +1218,96 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
 }
 
 #[tokio::test]
+async fn deterministic_adjudication_rule_requires_customer_policy_gates() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        r#"{
+          "owner": "customer-policy",
+          "rule": {
+            "rule_id": "candidate_customer_hard_deny",
+            "version": 1,
+            "name": "Customer approved hard deny candidate",
+            "review_mode": "pre_payment",
+            "scheme_family": "diagnosis_procedure_mismatch",
+            "conditions": [
+              {
+                "field": "diagnosis_procedure_match_score",
+                "operator": "<=",
+                "value": 0.1
+              }
+            ],
+            "action": {
+              "score": 0,
+              "alert_code": "CUSTOMER_HARD_DENY",
+              "recommended_action": "ManualReview",
+              "action_class": "hard_deny",
+              "required_evidence": [
+                {
+                  "evidence_type": "policy_eligibility",
+                  "blocking": true,
+                  "policy_authority_ref": "policy:eligibility:v1",
+                  "exception_check": "no_approved_exception"
+                }
+              ],
+              "adjudication_policy": {
+                "customer_approval_ref": "customer-rule-list:demo:v1",
+                "appeal_or_override_route": "appeals:manual-review:v1",
+                "effective_date": "2026-01-01",
+                "rollback_plan_ref": "rollback:rules:v1",
+                "production_threshold_ref": "thresholds:prepay:v1",
+                "routing_impact_ref": "routing-impact:shadow:v1"
+              },
+              "reason": "Customer-approved deterministic ineligibility rule"
+            }
+          }
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/candidate_customer_hard_deny/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["decision"], "routing_blocked");
+    assert_eq!(body["total_count"], 15);
+    let gates = body["gates"].as_array().unwrap();
+    let customer_gate = gates
+        .iter()
+        .find(|gate| gate["label"] == "Customer-approved adjudication rule list")
+        .expect("adjudication rule list gate");
+    assert_eq!(customer_gate["passed"], true);
+    let authority_gate = gates
+        .iter()
+        .find(|gate| gate["label"] == "Policy authority and exception check")
+        .expect("policy authority gate");
+    assert_eq!(authority_gate["passed"], true);
+    let routing_impact_gate = gates
+        .iter()
+        .find(|gate| gate["label"] == "Routing impact promotion")
+        .expect("routing impact gate");
+    assert_eq!(routing_impact_gate["passed"], false);
+    assert_eq!(
+        routing_impact_gate["blocker"],
+        "routing impact evidence missing"
+    );
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("routing impact evidence missing")));
+}
+
+#[tokio::test]
 async fn saves_candidate_rule_with_explicit_scheme_family() {
     let app = build_app(test_config());
 

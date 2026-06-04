@@ -394,6 +394,13 @@ Rule promotion gates treat a stored backtest as usable routing evidence only
 when its own blockers are cleared; underpowered samples, weak precision/recall,
 excess false positives, or review-capacity overflow keep the deterministic
 backtest gate blocked.
+Hard-deny and straight-through rules are treated as customer-approved
+deterministic adjudication rules only when the rule action includes
+`adjudication_policy` metadata plus required evidence with both
+`policy_authority_ref` and `exception_check`. Missing adjudication metadata
+keeps runtime scoring on a manual-review fallback and keeps rule promotion
+blocked with customer approval, appeal/override, production threshold,
+rollback, and routing-impact gates.
 
 Rule lifecycle caveat: `approve` currently writes approved status with evidence
 refs. `rollback` moves an active rule back to approved status; it does not select

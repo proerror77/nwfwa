@@ -282,6 +282,11 @@ Rule Studio supports rule listing, detail inspection, deterministic backtests,
 candidate discovery, promotion gates, promotion reviews, approval, publication,
 and rollback. Rules carry scheme scope, lifecycle metadata, evidence refs, and
 performance signals.
+Hard-deny and straight-through rules require customer-approved adjudication
+metadata, policy authority refs, exception checks, appeal/override routing,
+production thresholds, rollback refs, and routing-impact evidence before they
+can act as deterministic adjudication rules. If that metadata is missing, runtime
+scoring falls back to manual review instead of auto-denial or review bypass.
 
 ### Model Operations
 

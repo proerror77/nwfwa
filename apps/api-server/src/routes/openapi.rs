@@ -3870,6 +3870,26 @@ pub async fn openapi_schema() -> Json<Value> {
                         "exception_check": { "type": ["string", "null"] }
                     }
                 },
+                "AdjudicationPolicy": {
+                    "type": "object",
+                    "required": ["customer_approval_ref", "appeal_or_override_route", "effective_date", "rollback_plan_ref", "production_threshold_ref", "routing_impact_ref"],
+                    "properties": {
+                        "customer_approval_ref": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Customer-approved deterministic rule-list or policy approval reference."
+                        },
+                        "appeal_or_override_route": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Customer-approved appeal, exception, or reviewer override route."
+                        },
+                        "effective_date": { "type": "string", "minLength": 1 },
+                        "rollback_plan_ref": { "type": "string", "minLength": 1 },
+                        "production_threshold_ref": { "type": "string", "minLength": 1 },
+                        "routing_impact_ref": { "type": "string", "minLength": 1 }
+                    }
+                },
                 "ErrorResponse": {
                     "type": "object",
                     "required": ["code", "message"],
@@ -4535,6 +4555,13 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/RequiredEvidence" },
                             "default": []
+                        },
+                        "adjudication_policy": {
+                            "anyOf": [
+                                { "$ref": "#/components/schemas/AdjudicationPolicy" },
+                                { "type": "null" }
+                            ],
+                            "description": "Required only for customer-approved hard-deny or straight-through adjudication rules."
                         },
                         "reason": { "type": "string" }
                     }

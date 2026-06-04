@@ -246,13 +246,14 @@ async fn load_rule_promotion_gates(
     state: &AppState,
     rule_id: &str,
 ) -> Result<RulePromotionGatesResponse, ApiError> {
-    let rule = state
+    let detail = state
         .repository
         .get_rule(rule_id)
         .await
         .map_err(internal_error("RULE_LOAD_FAILED"))?
-        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
-        .summary;
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?;
+    let latest_action = latest_rule_action(&detail);
+    let rule = detail.summary;
     let performance = state
         .repository
         .rule_performance()
@@ -289,6 +290,7 @@ async fn load_rule_promotion_gates(
         &outcome_labels,
         &feedback_items,
         latest_review.as_ref(),
+        latest_action.as_ref(),
     ))
 }
 
@@ -390,6 +392,7 @@ fn build_rule_promotion_gates(
     outcome_labels: &[crate::repository::OutcomeLabelRecord],
     feedback_items: &[QaFeedbackItemRecord],
     latest_review: Option<&RulePromotionReviewRecord>,
+    latest_action: Option<&RuleAction>,
 ) -> RulePromotionGatesResponse {
     let effective_reviewed_count = performance.reviewed_count.max(
         latest_backtest
@@ -455,7 +458,7 @@ fn build_rule_promotion_gates(
         .iter()
         .any(|label| label.governance_status == "needs_review");
     let rule_feedback_governance = !unresolved_rule_feedback;
-    let gates = vec![
+    let mut gates = vec![
         rule_gate(
             "Named owner",
             !rule.owner.trim().is_empty(),
@@ -527,6 +530,9 @@ fn build_rule_promotion_gates(
             },
         ),
     ];
+    if let Some(action) = latest_action.filter(|action| deterministic_adjudication_action(action)) {
+        gates.extend(adjudication_policy_gates(action, shadow_rollout));
+    }
     let blockers = gates
         .iter()
         .filter(|gate| !gate.passed)
@@ -556,6 +562,114 @@ fn build_rule_promotion_gates(
         gates,
         blockers,
     }
+}
+
+fn latest_rule_action(detail: &crate::repository::RuleDetailRecord) -> Option<RuleAction> {
+    detail
+        .versions
+        .iter()
+        .find(|version| version.version == detail.summary.latest_version)
+        .and_then(|version| serde_json::from_value(version.dsl["action"].clone()).ok())
+}
+
+fn deterministic_adjudication_action(action: &RuleAction) -> bool {
+    matches!(
+        action.action_class,
+        RuleActionClass::HardDeny | RuleActionClass::StraightThrough
+    )
+}
+
+fn adjudication_policy_gates(action: &RuleAction, shadow_rollout: bool) -> Vec<RulePromotionGate> {
+    let policy = action.adjudication_policy.as_ref();
+    let has_customer_approval = policy
+        .map(|policy| non_empty(&policy.customer_approval_ref))
+        .unwrap_or(false);
+    let has_authority_and_exception = action.required_evidence.iter().any(|evidence| {
+        evidence
+            .policy_authority_ref
+            .as_deref()
+            .is_some_and(non_empty)
+            && evidence.exception_check.as_deref().is_some_and(non_empty)
+    });
+    let has_appeal_or_override = policy
+        .map(|policy| non_empty(&policy.appeal_or_override_route))
+        .unwrap_or(false);
+    let has_effective_date_and_rollback = policy
+        .map(|policy| non_empty(&policy.effective_date) && non_empty(&policy.rollback_plan_ref))
+        .unwrap_or(false);
+    let has_production_threshold = policy
+        .map(|policy| non_empty(&policy.production_threshold_ref))
+        .unwrap_or(false);
+    let has_routing_impact = policy
+        .map(|policy| non_empty(&policy.routing_impact_ref))
+        .unwrap_or(false)
+        && shadow_rollout;
+    vec![
+        rule_gate(
+            "Customer-approved adjudication rule list",
+            has_customer_approval,
+            "customer-approved rule list missing",
+            if has_customer_approval {
+                "approval"
+            } else {
+                "missing"
+            },
+        ),
+        rule_gate(
+            "Policy authority and exception check",
+            has_authority_and_exception,
+            "policy authority or exception check missing",
+            if has_authority_and_exception {
+                "metadata"
+            } else {
+                "missing"
+            },
+        ),
+        rule_gate(
+            "Appeal or override route",
+            has_appeal_or_override,
+            "appeal or override route missing",
+            if has_appeal_or_override {
+                "metadata"
+            } else {
+                "missing"
+            },
+        ),
+        rule_gate(
+            "Effective date and rollback plan",
+            has_effective_date_and_rollback,
+            "effective date or rollback plan missing",
+            if has_effective_date_and_rollback {
+                "metadata"
+            } else {
+                "missing"
+            },
+        ),
+        rule_gate(
+            "Production thresholds",
+            has_production_threshold,
+            "production thresholds missing",
+            if has_production_threshold {
+                "metadata"
+            } else {
+                "missing"
+            },
+        ),
+        rule_gate(
+            "Routing impact promotion",
+            has_routing_impact,
+            "routing impact evidence missing",
+            if has_routing_impact {
+                "runtime"
+            } else {
+                "missing"
+            },
+        ),
+    ]
+}
+
+fn non_empty(value: &str) -> bool {
+    !value.trim().is_empty()
 }
 
 fn decimal_from_string(value: &str) -> Decimal {
@@ -1361,6 +1475,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
                 required_evidence: vec![],
+                adjudication_policy: None,
                 reason: "保单生效早期发生高额理赔".into(),
             },
         },
@@ -1381,6 +1496,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
                 required_evidence: vec![],
+                adjudication_policy: None,
                 reason: "理赔金额接近保障额度".into(),
             },
         },
@@ -1429,6 +1545,7 @@ fn model_explanation_candidate_rules(request: &RuleDiscoveryRequest) -> Vec<Rule
                     recommended_action: RecommendedAction::ManualReview,
                     action_class: RuleActionClass::ManualReview,
                     required_evidence: vec![],
+                    adjudication_policy: None,
                     reason: format!(
                         "模型解释显示 {} 对风险贡献较高：{}",
                         explanation.feature, explanation.reason

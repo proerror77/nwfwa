@@ -43,6 +43,8 @@ pub struct RuleAction {
     pub action_class: RuleActionClass,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub required_evidence: Vec<RequiredEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjudication_policy: Option<AdjudicationPolicy>,
     pub reason: String,
 }
 
@@ -67,6 +69,16 @@ fn default_required_evidence_blocking() -> bool {
     true
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct AdjudicationPolicy {
+    pub customer_approval_ref: String,
+    pub appeal_or_override_route: String,
+    pub effective_date: String,
+    pub rollback_plan_ref: String,
+    pub production_threshold_ref: String,
+    pub routing_impact_ref: String,
+}
+
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct RuleMatch {
     pub rule_id: String,
@@ -78,6 +90,8 @@ pub struct RuleMatch {
     pub action_class: RuleActionClass,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub required_evidence: Vec<RequiredEvidence>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adjudication_policy: Option<AdjudicationPolicy>,
     #[serde(default)]
     pub evidence_refs: Vec<Value>,
 }
@@ -103,6 +117,7 @@ pub fn evaluate_rules(rules: &[Rule], features: &FeatureMap) -> Result<Vec<RuleM
                 recommended_action: rule.action.recommended_action,
                 action_class: rule.action.action_class,
                 required_evidence: rule.action.required_evidence.clone(),
+                adjudication_policy: rule.action.adjudication_policy.clone(),
                 evidence_refs: rule_evidence_refs(rule, features),
             });
         }
@@ -192,6 +207,7 @@ mod tests {
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
                 required_evidence: vec![],
+                adjudication_policy: None,
                 reason: "保单生效后 7 天内发生理赔".into(),
             },
         }];
@@ -231,6 +247,7 @@ mod tests {
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
                 required_evidence: vec![],
+                adjudication_policy: None,
                 reason: "missing".into(),
             },
         }];
@@ -288,6 +305,7 @@ mod tests {
                     policy_authority_ref: Some("policy:dental:evidence:v1".into()),
                     exception_check: Some("xray_waiver_not_present".into()),
                 }],
+                adjudication_policy: None,
                 reason: "牙科治疗需要 X 光佐证".into(),
             },
         }];

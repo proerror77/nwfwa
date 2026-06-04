@@ -526,11 +526,19 @@ fn decision_context(
     }
     if let Some(rule_match) = first_rule_with_action_class(rule_matches, RuleActionClass::HardDeny)
     {
+        if deterministic_adjudication_ready(rule_match) {
+            return rule_decision_context(
+                rule_match,
+                DecisionOutcome::AutoDeny,
+                true,
+                rule_authority(rule_match),
+            );
+        }
         return rule_decision_context(
             rule_match,
-            DecisionOutcome::AutoDeny,
+            DecisionOutcome::ManualReview,
             true,
-            rule_authority(rule_match),
+            DecisionAuthority::HumanReviewer,
         );
     }
     if let Some(rule_match) =
@@ -556,6 +564,14 @@ fn decision_context(
     if let Some(rule_match) =
         first_rule_with_action_class(rule_matches, RuleActionClass::StraightThrough)
     {
+        if !deterministic_adjudication_ready(rule_match) {
+            return rule_decision_context(
+                rule_match,
+                DecisionOutcome::ManualReview,
+                true,
+                DecisionAuthority::HumanReviewer,
+            );
+        }
         return rule_decision_context(
             rule_match,
             DecisionOutcome::StraightThrough,
@@ -584,6 +600,31 @@ fn first_rule_with_action_class(
     rule_matches
         .iter()
         .find(|rule_match| rule_match.action_class == action_class)
+}
+
+fn deterministic_adjudication_ready(rule_match: &RuleMatch) -> bool {
+    rule_match
+        .adjudication_policy
+        .as_ref()
+        .is_some_and(|policy| {
+            non_empty(&policy.customer_approval_ref)
+                && non_empty(&policy.appeal_or_override_route)
+                && non_empty(&policy.effective_date)
+                && non_empty(&policy.rollback_plan_ref)
+                && non_empty(&policy.production_threshold_ref)
+                && non_empty(&policy.routing_impact_ref)
+        })
+        && rule_match.required_evidence.iter().any(|evidence| {
+            evidence
+                .policy_authority_ref
+                .as_deref()
+                .is_some_and(non_empty)
+                && evidence.exception_check.as_deref().is_some_and(non_empty)
+        })
+}
+
+fn non_empty(value: &str) -> bool {
+    !value.trim().is_empty()
 }
 
 fn rule_decision_context(
@@ -793,8 +834,30 @@ mod tests {
             recommended_action: RecommendedAction::ManualReview,
             action_class: RuleActionClass::ManualReview,
             required_evidence: vec![],
+            adjudication_policy: None,
             evidence_refs: vec![],
         }
+    }
+
+    fn adjudication_policy() -> fwa_rules::AdjudicationPolicy {
+        fwa_rules::AdjudicationPolicy {
+            customer_approval_ref: "customer_rule_list:demo:v1".into(),
+            appeal_or_override_route: "appeals:manual-review:v1".into(),
+            effective_date: "2026-01-01".into(),
+            rollback_plan_ref: "rollback:rules:v1".into(),
+            production_threshold_ref: "thresholds:prepay:v1".into(),
+            routing_impact_ref: "routing-impact:shadow:v1".into(),
+        }
+    }
+
+    fn adjudication_evidence() -> Vec<fwa_rules::RequiredEvidence> {
+        vec![fwa_rules::RequiredEvidence {
+            evidence_type: "policy_eligibility".into(),
+            evidence_request_type: None,
+            blocking: true,
+            policy_authority_ref: Some("policy:eligibility:v1".into()),
+            exception_check: Some("no_approved_exception".into()),
+        }]
     }
 
     #[test]
@@ -881,6 +944,7 @@ mod tests {
             recommended_action: RecommendedAction::ManualReview,
             action_class: RuleActionClass::ManualReview,
             required_evidence: vec![],
+            adjudication_policy: None,
             evidence_refs: vec![],
         }];
         let model = ModelScore {
@@ -985,6 +1049,7 @@ mod tests {
             recommended_action: RecommendedAction::ManualReview,
             action_class: RuleActionClass::ManualReview,
             required_evidence: vec![],
+            adjudication_policy: None,
             evidence_refs: vec![serde_json::json!("rules:rule_layer_evidence:v2")],
         }];
         let model = ModelScore {
@@ -1110,6 +1175,8 @@ mod tests {
         hard_deny_rule.alert_code = "MALE_ONLY_DRUG_FOR_FEMALE_MEMBER".into();
         hard_deny_rule.action_class = RuleActionClass::HardDeny;
         hard_deny_rule.recommended_action = RecommendedAction::ManualReview;
+        hard_deny_rule.required_evidence = adjudication_evidence();
+        hard_deny_rule.adjudication_policy = Some(adjudication_policy());
 
         let decision = aggregate(
             &BTreeMap::new(),
@@ -1130,6 +1197,101 @@ mod tests {
         );
         assert!(decision.appeal_or_review_required);
         assert_eq!(decision.reason_code, "MALE_ONLY_DRUG_FOR_FEMALE_MEMBER");
+    }
+
+    #[test]
+    fn hard_deny_without_customer_adjudication_policy_falls_back_to_manual_review() {
+        let mut hard_deny_rule = rule(10);
+        hard_deny_rule.alert_code = "UNAPPROVED_HARD_DENY".into();
+        hard_deny_rule.action_class = RuleActionClass::HardDeny;
+        hard_deny_rule.required_evidence = adjudication_evidence();
+
+        let decision = aggregate(
+            &BTreeMap::new(),
+            &[hard_deny_rule],
+            &model(10),
+            &anomaly(0),
+            0,
+        );
+
+        assert_eq!(decision.decision_outcome, DecisionOutcome::ManualReview);
+        assert_eq!(
+            decision.decision_authority,
+            DecisionAuthority::HumanReviewer
+        );
+        assert_ne!(decision.decision_outcome, DecisionOutcome::AutoDeny);
+        assert!(decision.appeal_or_review_required);
+    }
+
+    #[test]
+    fn hard_deny_without_policy_authority_and_exception_check_falls_back_to_manual_review() {
+        let mut hard_deny_rule = rule(10);
+        hard_deny_rule.alert_code = "MISSING_AUTHORITY".into();
+        hard_deny_rule.action_class = RuleActionClass::HardDeny;
+        hard_deny_rule.adjudication_policy = Some(adjudication_policy());
+
+        let decision = aggregate(
+            &BTreeMap::new(),
+            &[hard_deny_rule],
+            &model(10),
+            &anomaly(0),
+            0,
+        );
+
+        assert_eq!(decision.decision_outcome, DecisionOutcome::ManualReview);
+        assert_eq!(
+            decision.decision_authority,
+            DecisionAuthority::HumanReviewer
+        );
+        assert!(decision.appeal_or_review_required);
+    }
+
+    #[test]
+    fn straight_through_without_customer_adjudication_policy_does_not_bypass_review() {
+        let mut straight_through_rule = rule(0);
+        straight_through_rule.alert_code = "UNAPPROVED_STP".into();
+        straight_through_rule.action_class = RuleActionClass::StraightThrough;
+        straight_through_rule.recommended_action = RecommendedAction::StandardProcessing;
+
+        let decision = aggregate(
+            &BTreeMap::new(),
+            &[straight_through_rule],
+            &model(10),
+            &anomaly(0),
+            0,
+        );
+
+        assert_eq!(decision.decision_outcome, DecisionOutcome::ManualReview);
+        assert_eq!(
+            decision.decision_authority,
+            DecisionAuthority::HumanReviewer
+        );
+        assert!(decision.appeal_or_review_required);
+    }
+
+    #[test]
+    fn approved_straight_through_rule_can_pass_without_review() {
+        let mut straight_through_rule = rule(0);
+        straight_through_rule.alert_code = "APPROVED_STP".into();
+        straight_through_rule.action_class = RuleActionClass::StraightThrough;
+        straight_through_rule.recommended_action = RecommendedAction::StandardProcessing;
+        straight_through_rule.required_evidence = adjudication_evidence();
+        straight_through_rule.adjudication_policy = Some(adjudication_policy());
+
+        let decision = aggregate(
+            &BTreeMap::new(),
+            &[straight_through_rule],
+            &model(10),
+            &anomaly(0),
+            0,
+        );
+
+        assert_eq!(decision.decision_outcome, DecisionOutcome::StraightThrough);
+        assert_eq!(
+            decision.decision_authority,
+            DecisionAuthority::CustomerPolicyRule
+        );
+        assert!(!decision.appeal_or_review_required);
     }
 
     #[test]
