@@ -141,6 +141,15 @@ async fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
+        "run-mlops-monitoring-plan" => {
+            let plan = take_flag_value(&mut args, "--plan")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let index = worker::run_mlops_monitoring_plan(&plan, output_dir)?;
+            println!("{}", serde_json::to_string_pretty(&index)?);
+        }
         "submit-mlops-monitoring-report" => {
             let api_url = take_flag_value(&mut args, "--api-url")?;
             let api_key = take_flag_value(&mut args, "--api-key")?;

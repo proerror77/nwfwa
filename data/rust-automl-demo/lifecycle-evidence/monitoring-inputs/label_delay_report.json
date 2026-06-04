@@ -1,7 +1,6 @@
 {
-  "artifact_kind": "shadow_traffic_evaluation",
+  "artifact_kind": "label_delay_review",
   "artifact_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/rust_serving_artifact.json",
-  "average_abs_probability_delta": 0.04,
   "checks": [
     {
       "name": "plan_job_present",
@@ -16,16 +15,16 @@
       "status": "passed"
     }
   ],
-  "comparison_count": 128,
   "customer_data_required": true,
+  "delayed_label_count": 0,
   "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules",
-  "input": "live_routing_and_qa_outcomes",
+  "input": "scoring_runs_and_outcome_label_timestamps",
+  "label_delay_p95_days": 14,
   "manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
-  "max_abs_probability_delta": 0.12,
   "model_key": "baseline_fwa",
   "model_version": "0.2.0-xgboost-candidate",
-  "output_ref": "model_shadow_reports:<shadow_report_uri>",
-  "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/shadow_report.json",
+  "output_ref": "model_label_delay_reports:<label_delay_report_uri>",
+  "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/label_delay_report.json",
   "report_version": 1,
   "runtime_source": "rust_worker_monitoring_plan_runner",
   "schedule": {

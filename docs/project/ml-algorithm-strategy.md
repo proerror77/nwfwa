@@ -58,10 +58,10 @@ Primary sources:
 
 | Area | Current implementation | Assessment |
 | --- | --- | --- |
-| Python ML service | `apps/ml-service/app/scorer.py` keeps the deterministic baseline fallback and can load a trained `.joblib` artifact through `FWA_MODEL_ARTIFACT_URI`. `apps/ml-service/app/training.py` trains a logistic-regression baseline from a Parquet manifest and writes model, validation, and feature-importance artifacts. | Training/export and HTTP demo compatibility are in place. Python is no longer the only serving route once `FWA_MODEL_ARTIFACT_URI` points the API server to a Rust JSON artifact. |
-| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, local JSON logistic artifact scoring, model identity checks, checksum validation, optional HMAC signature verification, version-lock metadata, explanations, latency, and bounded HTTP model-service calls that bypass host proxy settings. | Production-oriented serving has moved into Rust for the logistic baseline format. Production still needs automated export from training artifacts, service-level SLOs, active failure-rate monitoring, and environment-specific timeout policy. |
+| Python ML service | `apps/ml-service/app/scorer.py` keeps the deterministic baseline fallback and can load a trained `.joblib` artifact through `FWA_MODEL_ARTIFACT_URI`. `apps/ml-service/app/training.py` trains logistic, XGBoost, and LightGBM candidates from a Parquet manifest and writes model, validation, feature-importance, serving-manifest, and ONNX parity artifacts where applicable. | Training/export and HTTP demo compatibility are in place. Python remains a training and fallback surface; the long-term production control plane and serving contract are Rust-governed. |
+| Rust model runtime | `crates/fwa-ml-runtime` supports HTTP scoring, heuristic fallback, local JSON logistic artifact scoring, Rust ONNX serving for `rust_onnx`, `xgboost_onnx`, `lightgbm_onnx`, and `deep_learning_onnx`, model identity checks, checksum validation, optional HMAC signature verification, version-lock metadata, explanations, latency, and bounded HTTP model-service calls that bypass host proxy settings. | Production-oriented serving has moved into Rust for logistic and ONNX artifacts. Production still needs broader real ONNX fixture coverage, service-level SLOs, active failure-rate monitoring, and environment-specific timeout policy. |
 | Feature layer | `crates/fwa-features` emits claim amount ratio, peer-percentile baseline, item count, high-cost item ratio, diagnosis/procedure match, and provider tier/profile features. | Suitable for demo. Production needs rolling provider/member/history, peer cohort, duplicate/similarity, graph, and label-delay features. |
-| Anomaly layer | `crates/fwa-anomaly` uses explainable threshold signals. | Reasonable explainable anomaly baseline. Not yet an unsupervised anomaly model. |
+| Anomaly layer | `crates/fwa-anomaly` uses explainable threshold signals, and `apps/worker` has Rust-native provider-peer, provider graph-community, and claim-entity clustering demo workflows over unlabeled manifests. | Reasonable explainable anomaly baseline plus demo clustering. Production still needs customer-scale unlabeled feature materialization and governance review volume controls. |
 | Risk fusion | `crates/fwa-scoring` combines seven layers with explicit weights and evidence refs. | Good demo and pilot decision-support structure. Weights are policy defaults, not learned coefficients. |
 | Retraining worker | `apps/worker` can keep the deterministic mock candidate output for demo smoke, or call `python -m app.train` when `run-retraining-job` receives `--training-manifest`. | Real candidate registration can now be driven by a local training manifest. Demo fallback remains available. |
 | Model governance | `apps/api-server/src/routes/ops_models.rs` enforces dataset, holdout, out-of-time, split, leakage, explanation, shadow, data quality, label, drift, feedback, and approval gates. | Strong governance skeleton. It still depends on real evaluation evidence being produced later. |
@@ -223,12 +223,12 @@ and production-operations gaps rather than missing demo mechanics:
 
 - real customer or pilot labels with provenance, delayed-label handling, and
   reviewer-disagreement measurement;
-- Rust ONNX runtime execution for XGBoost and LightGBM; training already writes
-  governed ONNX artifacts and parity reports, but the Rust scorer still needs
-  the ONNX Runtime session;
-- production clustering and anomaly-discovery jobs over unlabeled member,
-  claim, and graph features; the Rust worker now covers provider-peer demo
-  clustering with output treated as review candidates only;
+- production-grade ONNX fixture coverage, runtime cache/reuse, latency SLOs, and
+  monitoring around XGBoost, LightGBM, and deep-learning ONNX serving;
+- production clustering and anomaly-discovery jobs over customer-scale unlabeled
+  member, claim, provider, and graph features; the Rust worker covers demo
+  provider-peer, provider graph-community, and claim-entity clustering with
+  output treated as review candidates only;
 - production feature store or scheduled feature materialization beyond the
   current manifest-backed offline baseline;
 - calibrated probability outputs with calibration evidence and disjoint

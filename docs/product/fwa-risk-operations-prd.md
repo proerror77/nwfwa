@@ -853,6 +853,13 @@ models may enter production serving through ONNX when feature-order and
 prediction-parity tests pass; otherwise they remain governed candidates or use a
 controlled fallback scorer until the Rust serving boundary is proven.
 
+Auto MLOps should operate as an evidence and recommendation loop, not an
+autonomous model operator. It may schedule monitoring, rank candidates, prepare
+retraining proposals, open review tasks, and package rule-candidate evidence. It
+must not activate a model, rollback a model, publish a rule, assign a fraud
+label, or write extracted patterns into the active rule library without the
+required backtest, human review, and approval gates.
+
 Large language models or deep models may support OCR cleanup, document summary,
 medical-note extraction, clustering, and investigation drafting. They must not
 directly decide fraud status or final claim disposition.

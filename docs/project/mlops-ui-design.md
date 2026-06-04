@@ -307,7 +307,7 @@ Operational states:
 Relevant commands and artifacts:
 
 - `cargo run --locked -p worker -- build-mlops-monitoring-plan`;
-- `python3 scripts/ops/run_mlops_monitoring_plan.py`;
+- `cargo run --locked -p worker -- run-mlops-monitoring-plan`;
 - `shadow_report.json`;
 - `drift_report.json`;
 - `fairness_report.json`;

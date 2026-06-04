@@ -1,7 +1,6 @@
 {
-  "artifact_kind": "shadow_traffic_evaluation",
+  "artifact_kind": "reviewer_disagreement_review",
   "artifact_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/rust_serving_artifact.json",
-  "average_abs_probability_delta": 0.04,
   "checks": [
     {
       "name": "plan_job_present",
@@ -16,17 +15,17 @@
       "status": "passed"
     }
   ],
-  "comparison_count": 128,
   "customer_data_required": true,
   "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules",
-  "input": "live_routing_and_qa_outcomes",
+  "input": "qa_reviews_and_investigation_outcomes",
   "manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
-  "max_abs_probability_delta": 0.12,
   "model_key": "baseline_fwa",
   "model_version": "0.2.0-xgboost-candidate",
-  "output_ref": "model_shadow_reports:<shadow_report_uri>",
-  "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/shadow_report.json",
+  "output_ref": "model_reviewer_disagreement_reports:<reviewer_disagreement_report_uri>",
+  "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/reviewer_disagreement_report.json",
   "report_version": 1,
+  "review_sample_count": 128,
+  "reviewer_disagreement_rate": 0.03,
   "runtime_source": "rust_worker_monitoring_plan_runner",
   "schedule": {
     "cron": "0 2 * * *"

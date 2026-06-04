@@ -113,6 +113,10 @@ The worker is the right control-plane home for scheduled and batch ML work:
   rule-candidate backtest preparation without assigning labels or writing rules.
 - `build-mlops-monitoring-plan`: define scheduled shadow, drift, fairness,
   reviewer-disagreement, and label-delay checks.
+- `run-mlops-monitoring-plan`: execute the scheduled monitoring plan as a Rust
+  runtime report producer and write shadow, drift, fairness,
+  reviewer-disagreement, and label-delay evidence without changing model,
+  label, or rule state.
 - `build-mlops-monitoring-report`: combine Rust artifact evaluation, shadow,
   drift, and fairness reports into one monitoring decision with review tasks and
   retraining preparation triggers.
@@ -178,13 +182,14 @@ Current repository completion for this target architecture is approximately:
   generic Rust ONNX, and `deep_learning_onnx` manifests after contract
   validation, and provider-peer, provider graph-community, and
   claim/member/provider entity clustering have Rust-native demo workflows.
-- 96% for Auto MLOps: worker can build feature-set manifests, create
+- 97% for Auto MLOps: worker can build feature-set manifests, create
   algorithm-aware training handoffs, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, require ONNX parity evidence for
   XGBoost/LightGBM gates, mine explainable rule candidates, backtest those
   candidates into human-review evidence, summarize live monitoring reports into
-  review/retraining triggers, submit those reports into API governance audit,
+  review/retraining triggers, produce scheduled runtime monitoring reports from
+  Rust monitoring plans, submit those reports into API governance audit,
   produce scheduler execution and alert-delivery evidence, submit scheduler
   alert-router handoff evidence into API governance audit, run the Rust
   monitoring cycle executor from plan plus runtime reports, POST queued alert
@@ -195,9 +200,9 @@ Current repository completion for this target architecture is approximately:
   feature-set and Rust serving evaluation evidence, and trainer-side ONNX parity
   reports and unlabeled anomaly review tasks exist; API retraining output now
   accepts governed serving manifests, and the console has provider model
-  release, promotion review, activation, and rollback actions. Customer-side
-  runtime report producers and production cron deployment still need
-  environment-specific wiring.
+  release, promotion review, activation, and rollback actions. Production cron
+  deployment, customer data bindings, and receiver-specific monitoring inputs
+  still need environment-specific wiring.
 - 78% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation

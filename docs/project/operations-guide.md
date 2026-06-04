@@ -282,17 +282,17 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
 The generated plan covers shadow traffic evaluation, score and feature drift,
 segment fairness review, reviewer disagreement review, and label delay review.
 
-Run the local staging MLOps monitoring-plan simulator:
+Run the local staging MLOps monitoring-plan runtime report producer:
 
 ```bash
-python3 scripts/ops/run_mlops_monitoring_plan.py \
+cargo run --locked -p worker -- run-mlops-monitoring-plan \
   --plan scripts/ops/sample_mlops_monitoring_plan.json \
   --output-dir artifacts/mlops-monitoring
 ```
 
-The simulator writes shadow, drift, segment fairness, reviewer disagreement, and
-label delay report artifacts. These are staging proof artifacts only; they are
-not live customer shadow or drift evidence.
+The Rust worker writes shadow, drift, segment fairness, reviewer disagreement,
+and label delay report artifacts. These are staging proof artifacts only; they
+are not live customer shadow or drift evidence.
 
 Run the Rust MLOps monitoring cycle executor after the runtime reports exist.
 The artifact-evaluation report comes from `evaluate-model-artifact`; the

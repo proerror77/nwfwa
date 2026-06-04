@@ -616,9 +616,24 @@ cargo run --locked -p worker -- build-mlops-monitoring-plan \
 The output is a `scheduled_mlops_monitoring` plan with five jobs:
 `shadow_traffic_evaluation`, `drift_monitoring`, and
 `segment_fairness_review`, `reviewer_disagreement_review`, and
-`label_delay_review`. It is intentionally a plan document, not a built-in
-scheduler, so customer or platform schedulers can run it without giving the
-application direct control over production ML infrastructure.
+`label_delay_review`. It is intentionally a plan document rather than a
+production scheduler, so customer or platform schedulers can trigger the same
+Rust job without giving the application direct control over production ML
+infrastructure.
+
+Execute the scheduled monitoring plan with the Rust runtime report producer:
+
+```bash
+cargo run --locked -p worker -- run-mlops-monitoring-plan \
+  --plan data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring
+```
+
+The worker writes `shadow_report.json`, `drift_report.json`,
+`fairness_report.json`, `reviewer_disagreement_report.json`,
+`label_delay_report.json`, and `index.json`. These reports are monitoring
+evidence only; producing them must not create retraining jobs, activate models,
+rollback models, assign fraud labels, or write rules.
 
 After the scheduled jobs publish their reports, summarize them into the Rust
 Auto MLOps monitoring decision:
@@ -655,8 +670,8 @@ and monitoring-report evidence refs. It returns next actions such as continued
 monitoring or retraining preparation, but it does not create retraining jobs,
 activate models, or rollback models automatically.
 
-Run the Rust monitoring cycle executor when the plan and runtime reports already
-exist:
+Run the Rust monitoring cycle executor when the plan, artifact evaluation, and
+runtime reports already exist:
 
 ```bash
 cargo run --locked -p worker -- run-mlops-monitoring-cycle \
@@ -675,9 +690,9 @@ cargo run --locked -p worker -- run-mlops-monitoring-cycle \
 The cycle executor builds `mlops_monitoring_report.json`,
 `mlops_scheduler_execution_report.json`, `mlops_alert_delivery_tasks.json`, and
 `mlops_monitoring_cycle_report.json`, then submits the monitoring and
-alert-router handoff records when API credentials are provided. It requires the
-external shadow, drift, and fairness report producers to have already written
-their report artifacts; it does not replace customer-side report generation.
+alert-router handoff records when API credentials are provided. The shadow,
+drift, and fairness reports may be produced by `run-mlops-monitoring-plan` for
+staging/demo evidence or by customer-side monitoring jobs for live evidence.
 
 Build the Rust scheduler execution and alert-delivery evidence package:
 

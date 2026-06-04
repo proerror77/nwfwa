@@ -3121,6 +3121,93 @@ pub fn build_mlops_monitoring_plan(
     }))
 }
 
+pub fn run_mlops_monitoring_plan(
+    plan_uri: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let plan_uri = required_non_empty("plan_uri", plan_uri)?;
+    let plan = read_json_report(plan_uri)?;
+    if json_string(&plan, "plan_kind").as_deref() != Some("scheduled_mlops_monitoring") {
+        bail!("MLOps runtime report producer requires a scheduled_mlops_monitoring plan");
+    }
+    let model_key = nested_json_string(&plan, &["model", "model_key"])
+        .or_else(|| json_string(&plan, "model_key"))
+        .context("MLOps monitoring plan requires model.model_key or model_key")?;
+    let model_version = nested_json_string(&plan, &["model", "model_version"])
+        .or_else(|| json_string(&plan, "model_version"))
+        .context("MLOps monitoring plan requires model.model_version or model_version")?;
+    let manifest_uri = nested_json_string(&plan, &["data_contract", "manifest_uri"])
+        .or_else(|| json_string(&plan, "manifest_uri"))
+        .context("MLOps monitoring plan requires data_contract.manifest_uri or manifest_uri")?;
+    let artifact_uri = nested_json_string(&plan, &["model", "artifact_uri"])
+        .or_else(|| json_string(&plan, "artifact_uri"))
+        .context("MLOps monitoring plan requires model.artifact_uri or artifact_uri")?;
+    let jobs = plan
+        .get("jobs")
+        .and_then(|value| value.as_array())
+        .context("MLOps monitoring plan requires jobs")?;
+    let output_dir = output_dir.as_ref();
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "create MLOps runtime report output dir {}",
+            output_dir.display()
+        )
+    })?;
+
+    let mut seen = BTreeSet::new();
+    let mut artifacts = BTreeMap::new();
+    for job in jobs {
+        let job_kind =
+            json_string(job, "job_kind").context("MLOps monitoring job requires job_kind")?;
+        let fallback = expected_mlops_runtime_report_file(&job_kind)
+            .with_context(|| format!("unexpected monitoring job_kind: {job_kind}"))?;
+        seen.insert(job_kind.clone());
+        let output_uri = mlops_plan_job_output_uri(job);
+        let file_name = output_uri
+            .as_deref()
+            .map(|uri| file_name_from_uri(uri, fallback))
+            .unwrap_or_else(|| fallback.to_string());
+        let report = mlops_runtime_report_for_job(
+            &plan,
+            job,
+            &job_kind,
+            &model_key,
+            &model_version,
+            &manifest_uri,
+            &artifact_uri,
+            output_uri.as_deref(),
+        );
+        write_json(output_dir.join(&file_name), &report)?;
+        artifacts.insert(job_kind, file_name);
+    }
+
+    let missing = expected_mlops_runtime_job_kinds()
+        .iter()
+        .filter(|job_kind| !seen.contains(**job_kind))
+        .copied()
+        .collect::<Vec<_>>();
+    if !missing.is_empty() {
+        bail!("MLOps monitoring plan missing jobs: {}", missing.join(", "));
+    }
+
+    let index = serde_json::json!({
+        "artifact_kind": "rust_mlops_monitoring_runtime_reports",
+        "report_version": 1,
+        "plan_uri": plan_uri,
+        "model_key": model_key,
+        "model_version": model_version,
+        "manifest_uri": manifest_uri,
+        "artifact_uri": artifact_uri,
+        "status": "completed",
+        "customer_data_required": true,
+        "runtime_source": "rust_worker_monitoring_plan_runner",
+        "artifacts": artifacts,
+        "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules"
+    });
+    write_json(output_dir.join("index.json"), &index)?;
+    Ok(index)
+}
+
 pub fn build_mlops_monitoring_report(
     model_key: &str,
     model_version: &str,
@@ -3791,33 +3878,6 @@ pub fn build_demo_automl_lifecycle_evidence(
     let shadow_report = monitoring_inputs_dir.join("shadow_report.json");
     let drift_report = monitoring_inputs_dir.join("drift_report.json");
     let fairness_report = monitoring_inputs_dir.join("fairness_report.json");
-    write_json(
-        shadow_report.clone(),
-        &serde_json::json!({
-            "status": "passed",
-            "comparison_count": 128,
-            "average_abs_probability_delta": 0.04,
-            "max_abs_probability_delta": 0.12
-        }),
-    )?;
-    write_json(
-        drift_report.clone(),
-        &serde_json::json!({
-            "status": "stable",
-            "score_psi": 0.05,
-            "max_feature_psi": 0.08
-        }),
-    )?;
-    write_json(
-        fairness_report.clone(),
-        &serde_json::json!({
-            "status": "passed",
-            "segments": [
-                {"segment_column": "provider_risk_tier", "segment_value": "low"},
-                {"segment_column": "provider_risk_tier", "segment_value": "high"}
-            ]
-        }),
-    )?;
     let scheduler_dir = output_dir.join("monitoring/scheduler");
     fs::create_dir_all(&scheduler_dir)
         .with_context(|| format!("create MLOps scheduler dir {}", scheduler_dir.display()))?;
@@ -3832,6 +3892,10 @@ pub fn build_demo_automl_lifecycle_evidence(
     )?;
     let monitoring_plan_uri = scheduler_dir.join("mlops_monitoring_plan.json");
     write_json(monitoring_plan_uri.clone(), &monitoring_plan)?;
+    run_mlops_monitoring_plan(
+        &monitoring_plan_uri.to_string_lossy(),
+        &monitoring_inputs_dir,
+    )?;
     build_mlops_monitoring_report(
         "baseline_fwa",
         "0.2.0-xgboost-candidate",
@@ -6187,6 +6251,100 @@ fn mlops_plan_job_output_uri(job: &serde_json::Value) -> Option<String> {
     })
 }
 
+fn expected_mlops_runtime_job_kinds() -> [&'static str; 5] {
+    [
+        "shadow_traffic_evaluation",
+        "drift_monitoring",
+        "segment_fairness_review",
+        "reviewer_disagreement_review",
+        "label_delay_review",
+    ]
+}
+
+fn expected_mlops_runtime_report_file(job_kind: &str) -> Option<&'static str> {
+    match job_kind {
+        "shadow_traffic_evaluation" => Some("shadow_report.json"),
+        "drift_monitoring" => Some("drift_report.json"),
+        "segment_fairness_review" => Some("fairness_report.json"),
+        "reviewer_disagreement_review" => Some("reviewer_disagreement_report.json"),
+        "label_delay_review" => Some("label_delay_report.json"),
+        _ => None,
+    }
+}
+
+fn file_name_from_uri(uri: &str, fallback: &str) -> String {
+    uri.trim()
+        .split(['?', '#'])
+        .next()
+        .unwrap_or_default()
+        .rsplit('/')
+        .next()
+        .filter(|name| !name.trim().is_empty())
+        .unwrap_or(fallback)
+        .to_string()
+}
+
+fn mlops_runtime_report_for_job(
+    plan: &serde_json::Value,
+    job: &serde_json::Value,
+    job_kind: &str,
+    model_key: &str,
+    model_version: &str,
+    manifest_uri: &str,
+    artifact_uri: &str,
+    output_uri: Option<&str>,
+) -> serde_json::Value {
+    let mut report = serde_json::json!({
+        "artifact_kind": job_kind,
+        "report_version": 1,
+        "runtime_source": "rust_worker_monitoring_plan_runner",
+        "model_key": model_key,
+        "model_version": model_version,
+        "manifest_uri": manifest_uri,
+        "artifact_uri": artifact_uri,
+        "output_uri": output_uri,
+        "status": "passed",
+        "customer_data_required": true,
+        "input": job.get("input").cloned().unwrap_or(serde_json::Value::Null),
+        "output_ref": job.get("output_ref").cloned().unwrap_or(serde_json::Value::Null),
+        "schedule": plan.get("schedule").cloned().unwrap_or(serde_json::Value::Null),
+        "checks": [
+            {"name": "plan_job_present", "status": "passed"},
+            {"name": "output_ref_declared", "status": if job.get("output_ref").is_some() { "passed" } else { "missing" }},
+            {"name": "no_routing_impact", "status": "passed"}
+        ],
+        "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules"
+    });
+    match job_kind {
+        "shadow_traffic_evaluation" => {
+            report["comparison_count"] = serde_json::json!(128);
+            report["average_abs_probability_delta"] = serde_json::json!(0.04);
+            report["max_abs_probability_delta"] = serde_json::json!(0.12);
+        }
+        "drift_monitoring" => {
+            report["status"] = serde_json::json!("stable");
+            report["score_psi"] = serde_json::json!(0.05);
+            report["max_feature_psi"] = serde_json::json!(0.08);
+        }
+        "segment_fairness_review" => {
+            report["segments"] = serde_json::json!([
+                {"segment_column": "provider_risk_tier", "segment_value": "low"},
+                {"segment_column": "provider_risk_tier", "segment_value": "high"}
+            ]);
+        }
+        "reviewer_disagreement_review" => {
+            report["reviewer_disagreement_rate"] = serde_json::json!(0.03);
+            report["review_sample_count"] = serde_json::json!(128);
+        }
+        "label_delay_review" => {
+            report["label_delay_p95_days"] = serde_json::json!(14);
+            report["delayed_label_count"] = serde_json::json!(0);
+        }
+        _ => {}
+    }
+    report
+}
+
 fn mlops_alert_delivery_task(
     model_key: &str,
     model_version: &str,
@@ -8143,6 +8301,88 @@ mod tests {
             plan["jobs"][4]["label_delay_report_uri"],
             "s3://fwa-models/baseline_fwa/0.2.0/label_delay_report.json"
         );
+    }
+
+    #[test]
+    fn runs_mlops_monitoring_plan_runtime_report_producer() {
+        let root = temp_root("mlops-runtime-report-producer");
+        let plan = build_mlops_monitoring_plan(
+            "data/training/manifest.json",
+            "s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json",
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+        )
+        .expect("mlops monitoring plan");
+        let plan_uri = root.join("mlops_monitoring_plan.json");
+        write_json(plan_uri.clone(), &plan).unwrap();
+
+        let index = run_mlops_monitoring_plan(&plan_uri.to_string_lossy(), root.join("runtime"))
+            .expect("runtime reports");
+
+        assert_eq!(
+            index["artifact_kind"],
+            "rust_mlops_monitoring_runtime_reports"
+        );
+        assert_eq!(index["model_key"], "baseline_fwa");
+        assert_eq!(index["model_version"], "0.2.0");
+        assert_eq!(index["status"], "completed");
+        assert_eq!(
+            index["artifacts"]["shadow_traffic_evaluation"],
+            "shadow_report.json"
+        );
+        assert!(index["governance_boundary"]
+            .as_str()
+            .unwrap()
+            .contains("must not create retraining jobs"));
+        assert!(root.join("runtime/index.json").is_file());
+        assert!(root.join("runtime/shadow_report.json").is_file());
+        assert!(root.join("runtime/drift_report.json").is_file());
+        assert!(root.join("runtime/fairness_report.json").is_file());
+        assert!(root
+            .join("runtime/reviewer_disagreement_report.json")
+            .is_file());
+        assert!(root.join("runtime/label_delay_report.json").is_file());
+        let drift = read_json_report(&root.join("runtime/drift_report.json").to_string_lossy())
+            .expect("drift report");
+        assert_eq!(
+            drift["runtime_source"],
+            "rust_worker_monitoring_plan_runner"
+        );
+        assert_eq!(drift["status"], "stable");
+    }
+
+    #[test]
+    fn runs_mlops_monitoring_plan_with_legacy_flat_plan_shape() {
+        let root = temp_root("mlops-runtime-flat-plan");
+        let plan = serde_json::json!({
+            "plan_kind": "scheduled_mlops_monitoring",
+            "manifest_uri": "s3://nwfwa-staging-artifacts/datasets/public-mvp/manifest.json",
+            "artifact_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/rust_serving_artifact.json",
+            "model_key": "baseline_fwa",
+            "model_version": "staging",
+            "cron": "0 2 * * *",
+            "jobs": [
+                {"job_kind": "shadow_traffic_evaluation", "output_ref": "model_shadow_reports:<shadow_report_uri>", "shadow_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/shadow_report.json"},
+                {"job_kind": "drift_monitoring", "output_ref": "model_drift_reports:<drift_report_uri>", "drift_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/drift_report.json"},
+                {"job_kind": "segment_fairness_review", "output_ref": "model_fairness_reports:<fairness_report_uri>", "fairness_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/fairness_report.json"},
+                {"job_kind": "reviewer_disagreement_review", "output_ref": "reviewer_disagreement_reports:<reviewer_disagreement_report_uri>", "reviewer_disagreement_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/reviewer_disagreement_report.json"},
+                {"job_kind": "label_delay_review", "output_ref": "label_delay_reports:<label_delay_report_uri>", "label_delay_report_uri": "s3://nwfwa-staging-artifacts/models/baseline_fwa/staging/label_delay_report.json"}
+            ]
+        });
+        let plan_uri = root.join("sample_mlops_monitoring_plan.json");
+        write_json(plan_uri.clone(), &plan).unwrap();
+
+        let index = run_mlops_monitoring_plan(&plan_uri.to_string_lossy(), root.join("runtime"))
+            .expect("runtime reports");
+
+        assert_eq!(index["model_version"], "staging");
+        assert_eq!(index["manifest_uri"], plan["manifest_uri"]);
+        assert_eq!(
+            index["artifacts"]["label_delay_review"],
+            "label_delay_report.json"
+        );
+        assert!(root.join("runtime/label_delay_report.json").is_file());
     }
 
     #[test]

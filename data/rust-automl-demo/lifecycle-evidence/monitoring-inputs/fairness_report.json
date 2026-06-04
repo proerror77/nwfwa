@@ -1,4 +1,33 @@
 {
+  "artifact_kind": "segment_fairness_review",
+  "artifact_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/rust_serving_artifact.json",
+  "checks": [
+    {
+      "name": "plan_job_present",
+      "status": "passed"
+    },
+    {
+      "name": "output_ref_declared",
+      "status": "passed"
+    },
+    {
+      "name": "no_routing_impact",
+      "status": "passed"
+    }
+  ],
+  "customer_data_required": true,
+  "governance_boundary": "runtime report production may write monitoring evidence only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules",
+  "input": "customer_approved_segments",
+  "manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate",
+  "output_ref": "model_fairness_reports:<fairness_report_uri>",
+  "output_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/fairness_report.json",
+  "report_version": 1,
+  "runtime_source": "rust_worker_monitoring_plan_runner",
+  "schedule": {
+    "cron": "0 2 * * *"
+  },
   "segments": [
     {
       "segment_column": "provider_risk_tier",
