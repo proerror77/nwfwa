@@ -611,6 +611,11 @@ textarea:focus {
   border-color: var(--blue);
 }
 
+.compact-field {
+  min-width: 220px;
+  margin: 0;
+}
+
 pre {
   white-space: pre-wrap;
   overflow: auto;
@@ -618,6 +623,140 @@ pre {
   background: #09213f;
   color: #eaf4ff;
   border-radius: 8px;
+}
+
+.tpa-demo-command,
+.tpa-demo-grid,
+.tpa-demo-picker,
+.tpa-case-list,
+.tpa-funnel {
+  display: grid;
+  gap: 12px;
+}
+
+.tpa-demo-picker {
+  grid-template-columns: minmax(280px, 1fr) auto;
+  align-items: end;
+}
+
+.tpa-demo-grid {
+  grid-template-columns: 320px minmax(0, 1fr);
+  align-items: start;
+}
+
+.tpa-case-button {
+  display: grid;
+  gap: 5px;
+  width: 100%;
+  min-height: 72px;
+  padding: 11px;
+  text-align: left;
+  color: var(--text);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.current-demo-case {
+  display: grid;
+  gap: 4px;
+  min-height: 62px;
+  padding: 11px;
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.current-demo-case span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.current-demo-case small {
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+.tpa-case-button:hover,
+.tpa-case-button.active {
+  border-color: var(--blue);
+  box-shadow: 0 10px 20px rgba(23, 105, 224, 0.12);
+}
+
+.tpa-case-button span,
+.demo-outcome-card span,
+.tpa-funnel-step span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.tpa-case-button strong,
+.demo-outcome-card strong,
+.tpa-funnel-step strong {
+  overflow-wrap: anywhere;
+}
+
+.tpa-case-button small {
+  color: var(--faint);
+  overflow-wrap: anywhere;
+}
+
+.demo-outcome-card {
+  display: grid;
+  gap: 7px;
+  padding: 14px;
+  background: linear-gradient(135deg, #eef7ff, #ffffff);
+  border: 1px solid #c9ddf5;
+  border-radius: 8px;
+}
+
+.demo-outcome-card strong {
+  font-size: 20px;
+  color: var(--graphite);
+}
+
+.demo-outcome-card p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.tpa-funnel {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+
+.tpa-funnel-step {
+  position: relative;
+  display: grid;
+  gap: 5px;
+  min-height: 96px;
+  padding: 11px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-top: 4px solid var(--teal);
+  border-radius: 8px;
+}
+
+.tpa-funnel-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  right: -9px;
+  top: 42px;
+  z-index: 1;
+  width: 16px;
+  height: 2px;
+  background: var(--line-strong);
+}
+
+.tpa-funnel-step small {
+  color: var(--muted);
+  line-height: 1.3;
 }
 
 .error {
@@ -6189,7 +6328,8 @@ pre {
   .provider-risk-cockpit,
   .rule-pack-cockpit,
   .model-monitoring-cockpit,
-  .model-telemetry {
+  .model-telemetry,
+  .tpa-funnel {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
@@ -6212,7 +6352,9 @@ pre {
   .agent-run-cockpit,
   .pilot-readiness-cockpit,
   .data-lineage-proof-grid,
-  .leads-cases-workflow {
+  .leads-cases-workflow,
+  .tpa-demo-grid,
+  .tpa-demo-picker {
     grid-template-columns: 1fr;
   }
 
@@ -6417,6 +6559,7 @@ pre {
 
   .gate-node:not(:last-child)::after,
   .pipeline-step:not(:last-child)::after,
+  .tpa-funnel-step:not(:last-child)::after,
   .ops-system-map::before,
   .blueprint-layer-rail::before,
   .runtime-path-card::before,

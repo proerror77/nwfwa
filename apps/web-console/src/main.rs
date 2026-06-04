@@ -16,6 +16,7 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
         &[
             "Dashboard",
             "Leads & Cases",
+            "TPA Demo Runner",
             "Review Workbench",
             "Bootstrap Ops",
         ],
@@ -47,6 +48,7 @@ const ALL_MODULES: &[&str] = &[
     "Data Sources",
     "Factor Factory",
     "Leads & Cases",
+    "TPA Demo Runner",
     "Member Profile",
     "Provider Risk",
     "Medical Review",
@@ -223,6 +225,83 @@ const SAMPLE_RUNTIME_SCORE_REQUEST: &str = r#"{
   "review_mode": "pre_payment",
   "claim_id": "CLM-0287"
 }"#;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct TpaDemoCase {
+    case_id: &'static str,
+    title: &'static str,
+    purpose: &'static str,
+    expected_outcome: Option<&'static str>,
+    expected_evidence: &'static [&'static str],
+    direct_payload: &'static str,
+    inbox_payload: &'static str,
+}
+
+const TPA_DEMO_CASES: &[TpaDemoCase] = &[
+    TpaDemoCase {
+        case_id: "straight_through_low_risk",
+        title: "Straight-through",
+        purpose: "资料完整，规则未阻断，算法置信度足够，预期直通。",
+        expected_outcome: Some("straight_through"),
+        expected_evidence: &[],
+        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/straight_through_low_risk.json"),
+        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/straight_through_low_risk.json"),
+    },
+    TpaDemoCase {
+        case_id: "pending_dental_xray",
+        title: "Dental X-ray required",
+        purpose: "牙科植牙缺 X 光片，规则应进入补件。",
+        expected_outcome: Some("pending_evidence"),
+        expected_evidence: &["dental_xray", "medical_record"],
+        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/pending_dental_xray.json"),
+        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/pending_dental_xray.json"),
+    },
+    TpaDemoCase {
+        case_id: "pending_prescription_detail",
+        title: "Prescription detail required",
+        purpose: "药品缺处方/药单明细，规则应进入补件。",
+        expected_outcome: Some("pending_evidence"),
+        expected_evidence: &["medication_order", "prescription_detail"],
+        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/pending_prescription_detail.json"),
+        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/pending_prescription_detail.json"),
+    },
+    TpaDemoCase {
+        case_id: "pending_operation_record",
+        title: "Operation record required",
+        purpose: "手术缺手术记录，规则应进入补件。",
+        expected_outcome: Some("pending_evidence"),
+        expected_evidence: &["operation_record", "medical_record", "invoice"],
+        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/pending_operation_record.json"),
+        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/pending_operation_record.json"),
+    },
+    TpaDemoCase {
+        case_id: "manual_review_provider_pattern",
+        title: "Provider pattern review",
+        purpose: "Provider / graph 风险高，但不是确定性拒赔，只能进入人工复核。",
+        expected_outcome: Some("manual_review"),
+        expected_evidence: &[],
+        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/manual_review_provider_pattern.json"),
+        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/manual_review_provider_pattern.json"),
+    },
+    TpaDemoCase {
+        case_id: "manual_review_high_amount",
+        title: "High amount review",
+        purpose: "高额度/接近保额但资料不缺，进入人工审核而不是补件。",
+        expected_outcome: Some("manual_review"),
+        expected_evidence: &[],
+        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/manual_review_high_amount.json"),
+        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/manual_review_high_amount.json"),
+    },
+    TpaDemoCase {
+        case_id: "inbox_missing_coverage_limit",
+        title: "Inbox blocker",
+        purpose: "TPA 原始包缺保额，normalize 应 scoring_ready=false。",
+        expected_outcome: None,
+        expected_evidence: &["reportCase.policyList[0].coverageLimit"],
+        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/inbox_missing_coverage_limit.json"),
+        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/inbox_missing_coverage_limit.json"),
+    },
+];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct InboxNormalizeResponse {
@@ -1847,6 +1926,8 @@ fn app() -> Html {
                     } else if *active == "Factor Factory" {
                         <FactorFactoryPage />
                     } else if *active == "Leads & Cases" {
+                    } else if *active == "TPA Demo Runner" {
+                        <TpaDemoRunnerPage />
                         <LeadsCasesPage />
                     } else if *active == "Member Profile" {
                         <MemberProfilePage />
@@ -1940,6 +2021,7 @@ fn module_slug(module: &str) -> &'static str {
         "Routing Policies" => "routing-policies",
         "Data Sources" => "data-sources",
         "Factor Factory" => "factor-factory",
+        "TPA Demo Runner" => "tpa-demo-runner",
         "Leads & Cases" => "leads-cases",
         "Member Profile" => "member-profile",
         "Provider Risk" => "provider-risk",
@@ -2022,6 +2104,9 @@ fn module_context(module: &str) -> &'static str {
         "Member Profile" => "Inspect member-level risk evidence and utilization context.",
         "Provider Risk" => "Review provider graph signals and suspicious practice patterns.",
         "Medical Review" => "Route clinical evidence to human review with traceable outcomes.",
+        "TPA Demo Runner" => {
+            "Run deterministic TPA fixtures through intake normalization and risk scoring."
+        }
         "Audit Sampling" => "Sample decisions for QA, compliance, and model governance.",
         "Knowledge Base" => "Search confirmed evidence without crossing adjudication boundaries.",
         "Agent Investigator" => "Run assistive investigation with human decision gates.",
@@ -2051,6 +2136,7 @@ fn module_description(module: &str) -> &'static str {
         "Member Profile" => "member context",
         "Provider Risk" => "provider signals",
         "Medical Review" => "clinical review",
+        "TPA Demo Runner" => "fixture funnel",
         "Audit Sampling" => "sample governance",
         "Knowledge Base" => "confirmed evidence",
         "Agent Investigator" => "assistive agent",
@@ -2080,6 +2166,7 @@ fn module_icon_class(module: &str) -> &'static str {
         "Member Profile" => "icon-member",
         "Provider Risk" => "icon-provider",
         "Medical Review" => "icon-medical",
+        "TPA Demo Runner" => "icon-scoring",
         "Audit Sampling" => "icon-audit",
         "Knowledge Base" => "icon-knowledge",
         "Agent Investigator" => "icon-agent",
@@ -3441,6 +3528,251 @@ fn runtime_scoring_page() -> Html {
 #[derive(Properties, PartialEq)]
 struct RuntimeScoreProps {
     state: ApiState<ScoreResponse>,
+#[function_component(TpaDemoRunnerPage)]
+fn tpa_demo_runner_page() -> Html {
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let selected_case_id = use_state(|| TPA_DEMO_CASES[0].case_id.to_string());
+    let normalize_state = use_state(|| ApiState::<InboxNormalizeResponse>::Idle);
+    let score_state = use_state(|| ApiState::<ScoreResponse>::Idle);
+    let selected_case = tpa_demo_case_by_id((*selected_case_id).as_str());
+
+    let select_case = {
+        let selected_case_id = selected_case_id.clone();
+        let normalize_state = normalize_state.clone();
+        let score_state = score_state.clone();
+        Callback::from(move |case_id: String| {
+            selected_case_id.set(case_id);
+            normalize_state.set(ApiState::Idle);
+            score_state.set(ApiState::Idle);
+        })
+    };
+
+    let run_normalize = {
+        let api_key = api_key.clone();
+        let normalize_state = normalize_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let normalize_state = normalize_state.clone();
+            match parse_demo_payload(selected_case.inbox_payload, "inbox payload") {
+                Ok(payload) => {
+                    normalize_state.set(ApiState::Loading);
+                    spawn_local(async move {
+                        normalize_state.set(match normalize_claim(payload, api_key).await {
+                            Ok(response) => ApiState::Ready(response),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    });
+                }
+                Err(error) => normalize_state.set(ApiState::Failed(error)),
+            }
+        })
+    };
+
+    let run_scoring = {
+        let api_key = api_key.clone();
+        let score_state = score_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let score_state = score_state.clone();
+            match parse_demo_payload(selected_case.direct_payload, "direct scoring payload") {
+                Ok(payload) => {
+                    score_state.set(ApiState::Loading);
+                    spawn_local(async move {
+                        score_state.set(match score_canonical_claim(payload, api_key).await {
+                            Ok(response) => ApiState::Ready(response),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    });
+                }
+                Err(error) => score_state.set(ApiState::Failed(error)),
+            }
+        })
+    };
+
+    let run_full_demo = {
+        let api_key = api_key.clone();
+        let normalize_state = normalize_state.clone();
+        let score_state = score_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let normalize_state = normalize_state.clone();
+            let score_state = score_state.clone();
+            let inbox_payload =
+                match parse_demo_payload(selected_case.inbox_payload, "inbox payload") {
+                    Ok(payload) => payload,
+                    Err(error) => {
+                        normalize_state.set(ApiState::Failed(error));
+                        return;
+                    }
+                };
+            let direct_payload =
+                match parse_demo_payload(selected_case.direct_payload, "direct scoring payload") {
+                    Ok(payload) => payload,
+                    Err(error) => {
+                        score_state.set(ApiState::Failed(error));
+                        return;
+                    }
+                };
+            normalize_state.set(ApiState::Loading);
+            score_state.set(ApiState::Loading);
+            spawn_local(async move {
+                normalize_state.set(
+                    match normalize_claim(inbox_payload, api_key.clone()).await {
+                        Ok(response) => ApiState::Ready(response),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
+                score_state.set(match score_canonical_claim(direct_payload, api_key).await {
+                    Ok(response) => ApiState::Ready(response),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
+    let normalize_hints = match &*normalize_state {
+        ApiState::Ready(response) => correction_hints_for(response),
+        _ => Vec::new(),
+    };
+
+    html! {
+        <section class="module-status tpa-demo-runner">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"TPA Demo Runner"}</h2>
+                    <p>{"Run checked-in TPA fixtures through intake normalization and direct scoring to explain the rule plus algorithm funnel."}</p>
+                </div>
+                <span class="status-pill">{"Demo UAT"}</span>
+            </div>
+
+            <section class="panel tpa-demo-command">
+                <div class="section-header compact">
+                    <div>
+                        <h3>{"Fixture Control"}</h3>
+                        <p>{"These cases are deterministic demo labels for UAT. They are not production claim truth labels."}</p>
+                    </div>
+                    <label class="compact-field">
+                        {"Dev API key"}
+                        <input
+                            value={(*api_key).clone()}
+                            oninput={{
+                                let api_key = api_key.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                </div>
+                <div class="tpa-demo-picker">
+                    <div class="current-demo-case">
+                        <span>{"Selected case"}</span>
+                        <strong>{selected_case.title}</strong>
+                        <small>{selected_case.case_id}</small>
+                    </div>
+                    <div class="button-row">
+                        <button onclick={run_normalize.clone()} disabled={matches!(&*normalize_state, ApiState::Loading)}>
+                            {if matches!(&*normalize_state, ApiState::Loading) { "Normalizing..." } else { "Run intake normalize" }}
+                        </button>
+                        <button onclick={run_scoring.clone()} disabled={matches!(&*score_state, ApiState::Loading)}>
+                            {if matches!(&*score_state, ApiState::Loading) { "Scoring..." } else { "Run direct scoring" }}
+                        </button>
+                        <button onclick={run_full_demo} disabled={matches!(&*normalize_state, ApiState::Loading) || matches!(&*score_state, ApiState::Loading)}>
+                            {"Run full demo"}
+                        </button>
+                    </div>
+                </div>
+            </section>
+
+            <div class="tpa-demo-grid">
+                <section class="panel result-stack">
+                    <h3>{"Demo Cases"}</h3>
+                    <div class="tpa-case-list">
+                        {for TPA_DEMO_CASES.iter().map(|demo_case| {
+                            let case_id = demo_case.case_id.to_string();
+                            let select_case = select_case.clone();
+                            let is_active = demo_case.case_id == selected_case.case_id;
+                            html! {
+                                <button
+                                    class={classes!("tpa-case-button", is_active.then_some("active"))}
+                                    onclick={Callback::from(move |_| select_case.emit(case_id.clone()))}
+                                >
+                                    <span>{demo_case.title}</span>
+                                    <strong>{demo_case.expected_outcome.unwrap_or("normalize_blocker")}</strong>
+                                    <small>{demo_case.case_id}</small>
+                                </button>
+                            }
+                        })}
+                    </div>
+                </section>
+
+                <section class="panel result-stack">
+                    <h3>{"Expected Business Outcome"}</h3>
+                    <div class="demo-outcome-card">
+                        <span>{selected_case.case_id}</span>
+                        <strong>{selected_case.expected_outcome.unwrap_or("normalize_scoring_ready=false")}</strong>
+                        <p>{selected_case.purpose}</p>
+                    </div>
+                    <div class="summary-grid">
+                        <div><span>{"Direct payload"}</span><strong>{"claims/score"}</strong></div>
+                        <div><span>{"Inbox payload"}</span><strong>{"inbox normalize"}</strong></div>
+                        <div><span>{"Required evidence"}</span><strong>{if selected_case.expected_evidence.is_empty() { "none".into() } else { selected_case.expected_evidence.join(", ") }}</strong></div>
+                    </div>
+                    {tpa_demo_funnel_visual(selected_case)}
+                    <details>
+                        <summary>{"Direct scoring JSON"}</summary>
+                        <pre>{selected_case.direct_payload}</pre>
+                    </details>
+                    <details>
+                        <summary>{"TPA inbox JSON"}</summary>
+                        <pre>{selected_case.inbox_payload}</pre>
+                    </details>
+                </section>
+            </div>
+
+            <div class="inbox-grid">
+                <NormalizeResultView state={(*normalize_state).clone()} hints={normalize_hints} />
+                <RuntimeScoreView state={(*score_state).clone()} />
+            </div>
+        </section>
+    }
+}
+
+fn tpa_demo_case_by_id(case_id: &str) -> &'static TpaDemoCase {
+    TPA_DEMO_CASES
+        .iter()
+        .find(|demo_case| demo_case.case_id == case_id)
+        .unwrap_or(&TPA_DEMO_CASES[0])
+}
+
+fn parse_demo_payload(payload: &str, label: &str) -> Result<Value, String> {
+    serde_json::from_str::<Value>(payload)
+        .map_err(|error| format!("{label} JSON is invalid: {error}"))
+}
+
+fn tpa_demo_funnel_visual(demo_case: &TpaDemoCase) -> Html {
+    let outcome = demo_case.expected_outcome.unwrap_or("normalize_blocker");
+    html! {
+        <div class="tpa-funnel">
+            {tpa_funnel_step("TPA", "raw packet", demo_case.case_id)}
+            {tpa_funnel_step("Normalize", "field gate", if demo_case.expected_outcome.is_some() { "scoring candidate" } else { "not scoring ready" })}
+            {tpa_funnel_step("Rules", "hard controls", if demo_case.expected_evidence.is_empty() { "no evidence blocker" } else { "evidence required" })}
+            {tpa_funnel_step("Algorithms", "risk fusion", "model + anomaly + provider")}
+            {tpa_funnel_step("Outcome", "route", outcome)}
+        </div>
+    }
+}
+
+fn tpa_funnel_step(label: &str, caption: &str, value: &str) -> Html {
+    html! {
+        <div class="tpa-funnel-step">
+            <span>{label}</span>
+            <strong>{value}</strong>
+            <small>{caption}</small>
+        </div>
+    }
+}
+
 }
 
 #[function_component(RuntimeScoreView)]
