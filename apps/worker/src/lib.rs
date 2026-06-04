@@ -1020,6 +1020,8 @@ pub struct RuleCandidateBacktestResult {
     pub selected_operator: String,
     pub selected_threshold: f64,
     pub threshold_selection_split: String,
+    pub rule_library_writeback_template: serde_json::Value,
+    pub condition_refs: Vec<String>,
     pub metrics_by_split: BTreeMap<String, RuleCandidateSplitMetrics>,
     pub gate_status: String,
     pub required_before_rule_library_writeback: Vec<String>,
@@ -5191,7 +5193,7 @@ pub fn mine_rule_candidates(
                     "version": 0,
                     "name": format!("Model pattern: {}", feature.feature),
                     "review_mode": "both",
-                    "scheme_family": "model_explanation_pattern",
+                    "scheme_family": "high_risk_claim",
                     "conditions": [
                         {
                             "field": feature.feature,
@@ -5501,16 +5503,40 @@ fn backtest_rule_candidate(
         );
     }
 
+    let condition_ref = format!("rule_conditions:{}_v1_c1", candidate.candidate_rule_key);
     Ok(RuleCandidateBacktestResult {
         candidate_rule_key: candidate.candidate_rule_key.clone(),
         source_feature: candidate.source_feature.clone(),
-        selected_operator: "gte".into(),
+        selected_operator: ">=".into(),
         selected_threshold: threshold,
         threshold_selection_split: if rows.iter().any(|row| row.split_name == "train") {
             "train".into()
         } else {
             "all_rows".into()
         },
+        rule_library_writeback_template: serde_json::json!({
+            "rule_id": candidate.candidate_rule_key,
+            "version": 1,
+            "name": format!("Model pattern: {}", candidate.source_feature),
+            "review_mode": "both",
+            "scheme_family": "high_risk_claim",
+            "conditions": [
+                {
+                    "field": candidate.source_feature,
+                    "operator": ">=",
+                    "value": threshold
+                }
+            ],
+            "action": {
+                "score": 20,
+                "alert_code": format!("MODEL_PATTERN_{}", safe_id_segment(&candidate.source_feature).to_uppercase()),
+                "recommended_action": "ManualReview",
+                "action_class": "manual_review",
+                "required_evidence": [],
+                "reason": "Explainable model pattern candidate; not publishable before deterministic backtest, false-positive review, human approval, and policy governance approval."
+            }
+        }),
+        condition_refs: vec![condition_ref.clone()],
         metrics_by_split,
         gate_status: "backtested_but_blocked_until_human_review".into(),
         required_before_rule_library_writeback: vec![
@@ -5521,6 +5547,7 @@ fn backtest_rule_candidate(
         ],
         evidence_refs: vec![
             format!("rule_candidate_backtest:{}", candidate.candidate_rule_key),
+            condition_ref,
             format!("source_feature:{}", candidate.source_feature),
         ],
     })
@@ -10323,6 +10350,10 @@ mod tests {
             plan.candidate_rules[0].draft_rule_template["conditions"][0]["operator"],
             "threshold_selected_by_backtest"
         );
+        assert_eq!(
+            plan.candidate_rules[0].draft_rule_template["scheme_family"],
+            "high_risk_claim"
+        );
         assert_eq!(plan.backtest_requests.len(), 3);
         assert_eq!(
             plan.backtest_requests[0].backtest_kind,
@@ -10397,6 +10428,16 @@ mod tests {
             "backtested_but_blocked_until_human_review"
         );
         assert!(report.candidate_results[0].selected_threshold.is_finite());
+        assert_eq!(report.candidate_results[0].selected_operator, ">=");
+        assert_eq!(
+            report.candidate_results[0].rule_library_writeback_template["conditions"][0]
+                ["operator"],
+            ">="
+        );
+        assert!(report.candidate_results[0].condition_refs[0].starts_with("rule_conditions:"));
+        assert!(report.candidate_results[0]
+            .evidence_refs
+            .contains(&report.candidate_results[0].condition_refs[0]));
         assert!(report.candidate_results[0]
             .metrics_by_split
             .contains_key("train"));

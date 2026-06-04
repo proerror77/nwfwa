@@ -451,6 +451,24 @@ pub struct RuleBacktestRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleConditionLibraryRecord {
+    pub condition_key: String,
+    pub source_rule_key: String,
+    pub source_rule_version: u32,
+    pub condition_index: u32,
+    pub field: String,
+    pub operator: String,
+    pub value: Value,
+    pub review_mode: String,
+    pub scheme_family: String,
+    pub status: String,
+    pub owner: String,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+    pub updated_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LeadRecord {
     pub lead_id: String,
     pub run_id: String,
@@ -1651,6 +1669,8 @@ pub trait ScoringRepository: Send + Sync {
         status: &str,
     ) -> anyhow::Result<Option<RuleSummaryRecord>>;
 
+    async fn list_rule_conditions(&self) -> anyhow::Result<Vec<RuleConditionLibraryRecord>>;
+
     async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>>;
 
     async fn save_rule_backtest(
@@ -2398,6 +2418,19 @@ impl ScoringRepository for InMemoryScoringRepository {
             .await
             .insert(rule_id.to_string(), status.to_string());
         Ok(self.get_rule(rule_id).await?.map(|detail| detail.summary))
+    }
+
+    async fn list_rule_conditions(&self) -> anyhow::Result<Vec<RuleConditionLibraryRecord>> {
+        let statuses = self.rule_statuses.lock().await;
+        let mut details = default_rule_details();
+        details.extend(self.candidate_rules.lock().await.values().cloned());
+        let mut records = Vec::new();
+        for mut detail in details {
+            apply_rule_status(&mut detail, &statuses);
+            records.extend(rule_condition_records_from_detail(&detail)?);
+        }
+        records.sort_by(|left, right| left.condition_key.cmp(&right.condition_key));
+        Ok(records)
     }
 
     async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>> {
@@ -5352,6 +5385,7 @@ impl ScoringRepository for PostgresScoringRepository {
         owner: String,
     ) -> anyhow::Result<RuleDetailRecord> {
         ensure_default_rules_seeded(&self.pool).await?;
+        ensure_rule_condition_library_table(&self.pool).await?;
         let detail = rule_detail_from_rule(rule, "draft", owner);
         let mut tx = self.pool.begin().await?;
         let row: (String,) = sqlx::query_as(
@@ -5389,6 +5423,8 @@ impl ScoringRepository for PostgresScoringRepository {
         .execute(&mut *tx)
         .await?;
 
+        upsert_rule_conditions_tx(&mut tx, &row.0, &detail).await?;
+
         tx.commit().await?;
         Ok(detail)
     }
@@ -5399,6 +5435,7 @@ impl ScoringRepository for PostgresScoringRepository {
         status: &str,
     ) -> anyhow::Result<Option<RuleSummaryRecord>> {
         ensure_default_rules_seeded(&self.pool).await?;
+        ensure_rule_condition_library_table(&self.pool).await?;
         let result =
             sqlx::query("UPDATE rules SET status = $1, updated_at = now() WHERE rule_key = $2")
                 .bind(status)
@@ -5408,11 +5445,86 @@ impl ScoringRepository for PostgresScoringRepository {
         if result.rows_affected() == 0 {
             return Ok(None);
         }
+        sqlx::query(
+            "UPDATE rule_condition_library
+             SET status = $1, updated_at = now()
+             WHERE source_rule_key = $2",
+        )
+        .bind(rule_condition_status(status))
+        .bind(rule_id)
+        .execute(&self.pool)
+        .await?;
         Ok(self
             .list_rules()
             .await?
             .into_iter()
             .find(|rule| rule.rule_id == rule_id))
+    }
+
+    async fn list_rule_conditions(&self) -> anyhow::Result<Vec<RuleConditionLibraryRecord>> {
+        ensure_default_rules_seeded(&self.pool).await?;
+        ensure_rule_condition_library_table(&self.pool).await?;
+        let rows: Vec<(
+            String,
+            String,
+            i32,
+            i32,
+            String,
+            String,
+            Value,
+            String,
+            String,
+            String,
+            String,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT condition_key, source_rule_key, source_rule_version, condition_index,
+                    field_name, operator, value, review_mode, scheme_family, status, owner,
+                    evidence_refs, created_at, updated_at
+             FROM rule_condition_library
+             ORDER BY source_rule_key, source_rule_version, condition_index",
+        )
+        .fetch_all(&self.pool)
+        .await?;
+
+        Ok(rows
+            .into_iter()
+            .map(
+                |(
+                    condition_key,
+                    source_rule_key,
+                    source_rule_version,
+                    condition_index,
+                    field,
+                    operator,
+                    value,
+                    review_mode,
+                    scheme_family,
+                    status,
+                    owner,
+                    evidence_refs,
+                    created_at,
+                    updated_at,
+                )| RuleConditionLibraryRecord {
+                    condition_key,
+                    source_rule_key,
+                    source_rule_version: source_rule_version.max(0) as u32,
+                    condition_index: condition_index.max(0) as u32,
+                    field,
+                    operator,
+                    value,
+                    review_mode,
+                    scheme_family,
+                    status,
+                    owner,
+                    evidence_refs: json_array_to_strings(evidence_refs),
+                    created_at: Some(created_at.to_rfc3339()),
+                    updated_at: Some(updated_at.to_rfc3339()),
+                },
+            )
+            .collect())
     }
 
     async fn rule_performance(&self) -> anyhow::Result<Vec<RulePerformanceRecord>> {
@@ -12341,6 +12453,75 @@ fn rule_detail_from_rule(rule: Rule, status: &str, owner: String) -> RuleDetailR
     }
 }
 
+fn rule_condition_records_from_detail(
+    detail: &RuleDetailRecord,
+) -> anyhow::Result<Vec<RuleConditionLibraryRecord>> {
+    let mut records = Vec::new();
+    for version in &detail.versions {
+        let conditions: Vec<Condition> = serde_json::from_value(version.dsl["conditions"].clone())?;
+        for (index, condition) in conditions.into_iter().enumerate() {
+            let condition_key = rule_condition_key(&detail.summary.rule_id, version.version, index);
+            let mut evidence_refs = detail.summary.evidence_refs.clone();
+            evidence_refs.push(format!("rule_conditions:{condition_key}"));
+            records.push(RuleConditionLibraryRecord {
+                condition_key,
+                source_rule_key: detail.summary.rule_id.clone(),
+                source_rule_version: version.version,
+                condition_index: index as u32,
+                field: condition.field,
+                operator: condition.operator,
+                value: condition.value,
+                review_mode: version.review_mode.clone(),
+                scheme_family: version.scheme_family.clone(),
+                status: rule_condition_status(&detail.summary.status),
+                owner: detail.summary.owner.clone(),
+                evidence_refs,
+                created_at: None,
+                updated_at: None,
+            });
+        }
+    }
+    Ok(records)
+}
+
+fn rule_condition_key(rule_id: &str, version: u32, index: usize) -> String {
+    format!(
+        "{}_v{}_c{}",
+        safe_condition_key_segment(rule_id),
+        version,
+        index + 1
+    )
+}
+
+fn rule_condition_status(rule_status: &str) -> String {
+    match rule_status {
+        "active" => "active",
+        "draft" => "candidate",
+        "submitted" | "approved" => "governance_review",
+        _ => "retired",
+    }
+    .into()
+}
+
+fn safe_condition_key_segment(value: &str) -> String {
+    let segment = value
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || ch == '_' {
+                ch.to_ascii_lowercase()
+            } else {
+                '_'
+            }
+        })
+        .collect::<String>();
+    let segment = segment.trim_matches('_').to_string();
+    if segment.is_empty() {
+        "condition".into()
+    } else {
+        segment
+    }
+}
+
 fn rule_applicability_scope(
     review_mode: &str,
     scheme_family: &str,
@@ -12578,6 +12759,7 @@ fn runtime_rule_from_parts(
 }
 
 async fn ensure_default_rules_seeded(pool: &PgPool) -> anyhow::Result<()> {
+    ensure_rule_condition_library_table(pool).await?;
     for detail in default_rule_details() {
         let mut tx = pool.begin().await?;
         let row: (String,) = sqlx::query_as(
@@ -12593,7 +12775,7 @@ async fn ensure_default_rules_seeded(pool: &PgPool) -> anyhow::Result<()> {
         .fetch_one(&mut *tx)
         .await?;
 
-        for version in detail.versions {
+        for version in &detail.versions {
             sqlx::query(
                 "INSERT INTO rule_versions
                  (rule_id, version, dsl, score, recommended_action, created_by, approved_by, published_at)
@@ -12609,7 +12791,78 @@ async fn ensure_default_rules_seeded(pool: &PgPool) -> anyhow::Result<()> {
             .await?;
         }
 
+        upsert_rule_conditions_tx(&mut tx, &row.0, &detail).await?;
+
         tx.commit().await?;
+    }
+    Ok(())
+}
+
+async fn ensure_rule_condition_library_table(pool: &PgPool) -> anyhow::Result<()> {
+    sqlx::query(
+        "CREATE TABLE IF NOT EXISTS rule_condition_library (
+           condition_key TEXT PRIMARY KEY,
+           source_rule_id UUID NOT NULL REFERENCES rules(id),
+           source_rule_key TEXT NOT NULL,
+           source_rule_version INTEGER NOT NULL,
+           condition_index INTEGER NOT NULL,
+           field_name TEXT NOT NULL,
+           operator TEXT NOT NULL,
+           value JSONB NOT NULL,
+           review_mode TEXT NOT NULL,
+           scheme_family TEXT NOT NULL,
+           status TEXT NOT NULL,
+           owner TEXT NOT NULL,
+           evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+           created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+           updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+           UNIQUE(source_rule_key, source_rule_version, condition_index)
+         )",
+    )
+    .execute(pool)
+    .await?;
+    Ok(())
+}
+
+async fn upsert_rule_conditions_tx(
+    tx: &mut Transaction<'_, Postgres>,
+    source_rule_id: &str,
+    detail: &RuleDetailRecord,
+) -> anyhow::Result<()> {
+    for condition in rule_condition_records_from_detail(detail)? {
+        sqlx::query(
+            "INSERT INTO rule_condition_library
+             (condition_key, source_rule_id, source_rule_key, source_rule_version,
+              condition_index, field_name, operator, value, review_mode, scheme_family,
+              status, owner, evidence_refs)
+             VALUES ($1, $2::uuid, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+             ON CONFLICT (source_rule_key, source_rule_version, condition_index) DO UPDATE
+             SET condition_key = EXCLUDED.condition_key,
+                 field_name = EXCLUDED.field_name,
+                 operator = EXCLUDED.operator,
+                 value = EXCLUDED.value,
+                 review_mode = EXCLUDED.review_mode,
+                 scheme_family = EXCLUDED.scheme_family,
+                 status = EXCLUDED.status,
+                 owner = EXCLUDED.owner,
+                 evidence_refs = EXCLUDED.evidence_refs,
+                 updated_at = now()",
+        )
+        .bind(&condition.condition_key)
+        .bind(source_rule_id)
+        .bind(&condition.source_rule_key)
+        .bind(condition.source_rule_version as i32)
+        .bind(condition.condition_index as i32)
+        .bind(&condition.field)
+        .bind(&condition.operator)
+        .bind(&condition.value)
+        .bind(&condition.review_mode)
+        .bind(&condition.scheme_family)
+        .bind(&condition.status)
+        .bind(&condition.owner)
+        .bind(serde_json::json!(condition.evidence_refs))
+        .execute(&mut **tx)
+        .await?;
     }
     Ok(())
 }

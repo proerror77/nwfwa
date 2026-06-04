@@ -135,6 +135,25 @@ CREATE TABLE IF NOT EXISTS rule_versions (
   UNIQUE(rule_id, version)
 );
 
+CREATE TABLE IF NOT EXISTS rule_condition_library (
+  condition_key TEXT PRIMARY KEY,
+  source_rule_id UUID NOT NULL REFERENCES rules(id),
+  source_rule_key TEXT NOT NULL,
+  source_rule_version INTEGER NOT NULL,
+  condition_index INTEGER NOT NULL,
+  field_name TEXT NOT NULL,
+  operator TEXT NOT NULL,
+  value JSONB NOT NULL,
+  review_mode TEXT NOT NULL,
+  scheme_family TEXT NOT NULL,
+  status TEXT NOT NULL,
+  owner TEXT NOT NULL,
+  evidence_refs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE(source_rule_key, source_rule_version, condition_index)
+);
+
 CREATE TABLE IF NOT EXISTS model_versions (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
   model_key TEXT NOT NULL,

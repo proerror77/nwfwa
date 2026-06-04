@@ -2,8 +2,8 @@ use crate::{
     app::AppState,
     error::ApiError,
     repository::{
-        PersistedAuditEvent, QaFeedbackItemRecord, RuleBacktestRecord, RulePerformanceRecord,
-        RulePromotionReviewRecord, RuleSummaryRecord,
+        PersistedAuditEvent, QaFeedbackItemRecord, RuleBacktestRecord, RuleConditionLibraryRecord,
+        RulePerformanceRecord, RulePromotionReviewRecord, RuleSummaryRecord,
     },
     routes::pii,
 };
@@ -28,6 +28,11 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Serialize)]
 pub struct RuleListResponse {
     pub rules: Vec<crate::repository::RuleSummaryRecord>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct RuleConditionLibraryResponse {
+    pub conditions: Vec<RuleConditionLibraryRecord>,
 }
 
 #[derive(Debug, Serialize)]
@@ -190,6 +195,7 @@ pub struct RuleDiscoveryCandidate {
     pub false_positive_rate: f64,
     pub matched_claim_ids: Vec<String>,
     pub explanation: String,
+    pub condition_refs: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -231,6 +237,19 @@ pub async fn rule_performance(
         .await
         .map_err(internal_error("RULE_PERFORMANCE_FAILED"))?;
     Ok(Json(RulePerformanceResponse { rules }))
+}
+
+pub async fn list_rule_conditions(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+) -> Result<Json<RuleConditionLibraryResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let conditions = state
+        .repository
+        .list_rule_conditions()
+        .await
+        .map_err(internal_error("RULE_CONDITION_LIST_FAILED"))?;
+    Ok(Json(RuleConditionLibraryResponse { conditions }))
 }
 
 pub async fn rule_promotion_gates(
@@ -990,6 +1009,7 @@ pub async fn discover_rules(
 
         candidates.push(RuleDiscoveryCandidate {
             explanation: explanation_for_candidate(&rule),
+            condition_refs: condition_refs_for_rule(&rule),
             rule,
             support,
             precision,
@@ -1576,6 +1596,21 @@ fn positive_feature_threshold(request: &RuleDiscoveryRequest, feature_name: &str
 
 fn explanation_score(contribution: f64) -> u8 {
     ((contribution.abs() * 20.0).round() as u8).clamp(10, 35)
+}
+
+fn condition_refs_for_rule(rule: &Rule) -> Vec<String> {
+    rule.conditions
+        .iter()
+        .enumerate()
+        .map(|(index, _)| {
+            format!(
+                "rule_conditions:{}_v{}_c{}",
+                rule_id_slug(&rule.rule_id),
+                rule.version,
+                index + 1
+            )
+        })
+        .collect()
 }
 
 fn rule_id_slug(value: &str) -> String {

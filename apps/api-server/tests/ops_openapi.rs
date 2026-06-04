@@ -1358,6 +1358,35 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["SaveRuleCandidateRequest"]["properties"]["rule"]["$ref"],
         "#/components/schemas/RuleDefinition"
     );
+    assert_eq!(
+        schema["paths"]["/api/v1/ops/rules/conditions"]["get"]["responses"]["200"]["content"]
+            ["application/json"]["schema"]["$ref"],
+        "#/components/schemas/RuleConditionLibraryResponse"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleConditionLibraryResponse"]["properties"]["conditions"]
+            ["items"]["$ref"],
+        "#/components/schemas/RuleConditionLibraryRecord"
+    );
+    assert!(
+        schema["components"]["schemas"]["RuleConditionLibraryRecord"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "condition_key")
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleConditionLibraryRecord"]["properties"]
+            ["scheme_family"]["$ref"],
+        "#/components/schemas/FwaSchemeFamily"
+    );
+    assert!(
+        schema["components"]["schemas"]["RuleDiscoveryCandidate"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "condition_refs")
+    );
     assert!(
         schema["components"]["schemas"]["RuleDefinition"]["required"]
             .as_array()

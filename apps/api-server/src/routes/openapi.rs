@@ -355,6 +355,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/conditions": {
+                "get": {
+                    "summary": "List reusable rule conditions mined or curated from rule versions",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "responses": {
+                        "200": {
+                            "description": "Rule condition library entries",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleConditionLibraryResponse" }
+                                }
+                            }
+                        },
+                        "401": {
+                            "description": "Missing or invalid API key",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/performance": {
                 "get": {
                     "summary": "Get rule performance and ROI metrics",
@@ -4204,6 +4228,39 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "RuleConditionLibraryRecord": {
+                    "type": "object",
+                    "required": ["condition_key", "source_rule_key", "source_rule_version", "condition_index", "field", "operator", "value", "review_mode", "scheme_family", "status", "owner", "evidence_refs"],
+                    "properties": {
+                        "condition_key": { "type": "string" },
+                        "source_rule_key": { "type": "string" },
+                        "source_rule_version": { "type": "integer", "minimum": 0 },
+                        "condition_index": { "type": "integer", "minimum": 0 },
+                        "field": { "type": "string" },
+                        "operator": { "type": "string", "enum": ["<=", ">=", "=="] },
+                        "value": {},
+                        "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
+                        "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
+                        "status": { "type": "string", "enum": ["candidate", "governance_review", "active", "retired"] },
+                        "owner": { "type": "string" },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" },
+                        "updated_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "RuleConditionLibraryResponse": {
+                    "type": "object",
+                    "required": ["conditions"],
+                    "properties": {
+                        "conditions": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RuleConditionLibraryRecord" }
+                        }
+                    }
+                },
                 "RuleLifecycleResponse": {
                     "type": "object",
                     "required": ["rule_id", "status", "active_version", "latest_version"],
@@ -4683,7 +4740,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RuleDiscoveryCandidate": {
                     "type": "object",
-                    "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation", "evidence_refs"],
+                    "required": ["rule", "support", "precision", "recall", "lift", "estimated_saving", "false_positive_rate", "matched_claim_ids", "explanation", "condition_refs", "evidence_refs"],
                     "properties": {
                         "rule": { "$ref": "#/components/schemas/RuleDefinition" },
                         "support": { "type": "integer" },
@@ -4697,6 +4754,10 @@ pub async fn openapi_schema() -> Json<Value> {
                             "items": { "type": "string" }
                         },
                         "explanation": { "type": "string" },
+                        "condition_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
                         "evidence_refs": {
                             "type": "array",
                             "items": { "type": "string" }

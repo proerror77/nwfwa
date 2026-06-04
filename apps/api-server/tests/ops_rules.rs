@@ -1060,6 +1060,12 @@ async fn discovers_candidate_rules_from_labeled_samples() {
     assert!(candidate["lift"].as_f64().unwrap() > 1.0);
     assert_eq!(candidate["false_positive_rate"], 0.0);
     assert_eq!(candidate["estimated_saving"], "900.00");
+    assert!(candidate["condition_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "rule_conditions:candidate_early_high_amount_v1_c1"
+        )));
     assert!(candidate["explanation"]
         .as_str()
         .unwrap()
@@ -1133,6 +1139,12 @@ async fn discovers_rule_candidates_from_model_explanations() {
         "claim_amount_to_limit_ratio"
     );
     assert_eq!(candidate["rule"]["conditions"][0]["operator"], ">=");
+    assert!(candidate["condition_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "rule_conditions:candidate_ml_claim_amount_to_limit_ratio_v1_c1"
+        )));
     assert_eq!(candidate["precision"], 1.0);
     assert!(candidate["explanation"]
         .as_str()
@@ -1193,6 +1205,36 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
         body["versions"][0]["alert_code"],
         "EARLY_HIGH_AMOUNT_CANDIDATE"
     );
+
+    let (status, body) =
+        json_request(app.clone(), "GET", "/api/v1/ops/rules/conditions", "{}").await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let candidate_conditions = body["conditions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .filter(|condition| condition["source_rule_key"] == "candidate_early_high_amount")
+        .collect::<Vec<_>>();
+    assert_eq!(candidate_conditions.len(), 2);
+    assert!(candidate_conditions.iter().any(|condition| {
+        condition["condition_key"] == "candidate_early_high_amount_v1_c1"
+            && condition["field"] == "days_since_policy_start"
+            && condition["operator"] == "<="
+            && condition["value"] == 10
+            && condition["status"] == "candidate"
+            && condition["owner"] == "rule-discovery"
+    }));
+    assert!(candidate_conditions
+        .iter()
+        .all(
+            |condition| condition["evidence_refs"].as_array().unwrap().contains(
+                &serde_json::json!(format!(
+                    "rule_conditions:{}",
+                    condition["condition_key"].as_str().unwrap()
+                ))
+            )
+        ));
 
     let (status, body) = json_request(
         app.clone(),
