@@ -127,12 +127,34 @@ pub fn assess_clinical_evidence(
 fn required_evidence_for_item(context: &ClaimContext, item: &fwa_core::ClaimItem) -> Vec<String> {
     let item_type = item.item_type.to_ascii_lowercase();
     let description = item.description.to_ascii_lowercase();
+    let item_code = item.item_code.to_ascii_uppercase();
+    if item_type == "dental"
+        || description.contains("dental")
+        || description.contains("implant")
+        || description.contains("tooth")
+        || item_code.starts_with("DEN")
+    {
+        return vec!["dental_xray".into(), "medical_record".into()];
+    }
+    if item_type == "surgery"
+        || description.contains("surgery")
+        || description.contains("surgical")
+        || description.contains("operation")
+        || item_code.starts_with("SURG")
+        || item_code.starts_with("OP")
+    {
+        return vec![
+            "operation_record".into(),
+            "medical_record".into(),
+            "invoice".into(),
+        ];
+    }
     if item_type == "procedure"
         && (description.contains("imaging")
             || description.contains("radiology")
             || description.contains("ct")
             || description.contains("mri")
-            || item.item_code.to_ascii_uppercase().starts_with("IMG"))
+            || item_code.starts_with("IMG"))
     {
         return vec![
             "clinical_order".into(),
@@ -145,7 +167,7 @@ fn required_evidence_for_item(context: &ClaimContext, item: &fwa_core::ClaimItem
         || item_type == "pharmacy"
         || description.contains("prescription")
     {
-        return vec!["medication_order".into(), "prescription".into()];
+        return vec!["medication_order".into(), "prescription_detail".into()];
     }
     if item_type == "lab" || description.contains("laboratory") || description.contains("lab") {
         return vec!["lab_order".into(), "lab_result".into()];
@@ -171,6 +193,10 @@ fn reason_for_item(item: &fwa_core::ClaimItem) -> String {
     let item_type = item.item_type.to_ascii_lowercase();
     if item_type == "drug" || item_type == "medication" || item_type == "pharmacy" {
         "药品或处方项目需要医嘱和处方证据支持".into()
+    } else if item_type == "dental" {
+        "牙科项目需要 X 光片和病历证据支持".into()
+    } else if item_type == "surgery" {
+        "手术项目需要手术记录、病历和发票证据支持".into()
     } else if item_type == "lab" {
         "检验项目需要医嘱和检验结果证据支持".into()
     } else {
@@ -254,6 +280,19 @@ mod tests {
         }
     }
 
+    fn context_with_item(item_code: &str, item_type: &str, description: &str) -> ClaimContext {
+        let mut context = context();
+        context.items[0] = ClaimItem {
+            item_code: item_code.into(),
+            item_type: item_type.into(),
+            description: description.into(),
+            quantity: 1,
+            unit_amount: Money::new(Decimal::new(12000, 0), "CNY"),
+            total_amount: Money::new(Decimal::new(12000, 0), "CNY"),
+        };
+        context
+    }
+
     #[test]
     fn flags_missing_medical_evidence_for_imaging() {
         let assessment = assess_clinical_evidence(&context(), &[]);
@@ -267,5 +306,53 @@ mod tests {
             assessment.item_findings[0].issue_type,
             "medical_necessity_review_required"
         );
+    }
+
+    #[test]
+    fn flags_missing_dental_xray_for_dental_items() {
+        let assessment = assess_clinical_evidence(
+            &context_with_item("DEN-100", "dental", "Dental implant"),
+            &[],
+        );
+
+        assert!(assessment.review_required);
+        assert!(assessment
+            .missing_evidence
+            .contains(&"dental_xray".to_string()));
+        assert!(assessment
+            .missing_evidence
+            .contains(&"medical_record".to_string()));
+    }
+
+    #[test]
+    fn flags_missing_prescription_detail_for_drug_items() {
+        let assessment = assess_clinical_evidence(
+            &context_with_item("DRUG-100", "drug", "Prescription medication"),
+            &[],
+        );
+
+        assert!(assessment.review_required);
+        assert!(assessment
+            .missing_evidence
+            .contains(&"medication_order".to_string()));
+        assert!(assessment
+            .missing_evidence
+            .contains(&"prescription_detail".to_string()));
+    }
+
+    #[test]
+    fn flags_missing_operation_record_for_surgery_items() {
+        let assessment = assess_clinical_evidence(
+            &context_with_item("SURG-100", "surgery", "Complex operation"),
+            &[],
+        );
+
+        assert!(assessment.review_required);
+        assert!(assessment
+            .missing_evidence
+            .contains(&"operation_record".to_string()));
+        assert!(assessment
+            .missing_evidence
+            .contains(&"medical_record".to_string()));
     }
 }

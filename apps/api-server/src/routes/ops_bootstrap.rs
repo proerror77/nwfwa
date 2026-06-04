@@ -923,9 +923,11 @@ fn evidence_request_item_from_value(value: &Value) -> Option<EvidenceRequestItem
 fn evidence_request_reason(document_type: &str) -> &'static str {
     match document_type {
         "radiology_report" => "radiology evidence is required before clinical necessity review",
-        "medication_order" | "prescription" => {
+        "dental_xray" => "dental X-ray evidence is required before clinical necessity review",
+        "medication_order" | "prescription" | "prescription_detail" => {
             "medication detail is required before pharmacy review"
         }
+        "operation_record" => "operation record is required before surgical necessity review",
         "clinical_order" | "medical_record" => {
             "source clinical documentation is required before adjudication"
         }

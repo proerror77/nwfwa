@@ -3098,7 +3098,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "document_type": {
                             "type": "string",
                             "minLength": 1,
-                            "description": "Examples: medical_record, clinical_order, radiology_report, prescription, lab_result"
+                            "description": "Examples: medical_record, clinical_order, radiology_report, dental_xray, prescription_detail, operation_record, lab_result"
                         },
                         "linked_item_codes": {
                             "type": "array",
