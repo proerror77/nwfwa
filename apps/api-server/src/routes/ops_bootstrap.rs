@@ -122,6 +122,9 @@ pub struct EvidenceRequestItemRecord {
     pub document_type: String,
     pub status: String,
     pub reason: String,
+    pub blocking: bool,
+    pub policy_authority_ref: Option<String>,
+    pub exception_check: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -821,6 +824,9 @@ fn evidence_request_from_scoring_event(
             document_type: document_type.clone(),
             status: "open".into(),
             reason: evidence_request_reason(document_type).into(),
+            blocking: true,
+            policy_authority_ref: Some("policy:clinical-evidence:v1".into()),
+            exception_check: Some("required_clinical_documents_not_present".into()),
         })
         .collect::<Vec<_>>();
     Some(EvidenceRequestRecord {
@@ -908,6 +914,9 @@ fn evidence_request_item_from_value(value: &Value) -> Option<EvidenceRequestItem
         document_type: value["document_type"].as_str()?.to_string(),
         status: value["status"].as_str().unwrap_or("open").to_string(),
         reason: value["reason"].as_str().unwrap_or_default().to_string(),
+        blocking: value["blocking"].as_bool().unwrap_or(true),
+        policy_authority_ref: value["policy_authority_ref"].as_str().map(str::to_string),
+        exception_check: value["exception_check"].as_str().map(str::to_string),
     })
 }
 

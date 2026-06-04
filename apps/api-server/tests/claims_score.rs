@@ -1130,11 +1130,41 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
     assert_eq!(clinical["review_required"], true);
     assert_eq!(clinical["review_route"], "medical_review");
     assert_eq!(clinical["evidence_status"], "missing_required_evidence");
+    assert_eq!(body["decision_outcome"], "pending_evidence");
+    assert_eq!(body["decision_authority"], "clinical_policy_rule");
+    assert_eq!(body["reason_code"], "MEDICALLY_UNNECESSARY_SERVICE");
     assert!(clinical["missing_evidence"]
         .as_array()
         .unwrap()
         .iter()
         .any(|item| item == "medical_record"));
+    let clinical_missing_evidence = clinical["missing_evidence"].as_array().unwrap();
+    assert!(clinical_missing_evidence
+        .iter()
+        .any(|item| item == "radiology_report"));
+    assert!(!clinical_missing_evidence
+        .iter()
+        .any(|item| item == "prescription"));
+    let clinical_rule_alert = body["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|alert| alert["alert_code"] == "MEDICALLY_UNNECESSARY_SERVICE")
+        .expect("clinical pending evidence rule should trigger");
+    let alert_required_evidence = clinical_rule_alert["required_evidence"].as_array().unwrap();
+    assert!(alert_required_evidence
+        .iter()
+        .any(|item| item["evidence_type"] == "radiology_report"));
+    assert!(alert_required_evidence
+        .iter()
+        .any(|item| item["evidence_type"] == "medical_record"));
+    assert!(!alert_required_evidence
+        .iter()
+        .any(|item| item["evidence_type"] == "prescription"));
+    assert_eq!(
+        alert_required_evidence[0]["policy_authority_ref"],
+        "policy:clinical-evidence:v1"
+    );
     assert_eq!(
         clinical["item_findings"][0]["issue_type"],
         "medical_necessity_review_required"
@@ -1153,7 +1183,7 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
         .header("x-api-key", "dev-secret")
         .body(Body::empty())
         .unwrap();
-    let audit_response = app.oneshot(audit_request).await.unwrap();
+    let audit_response = app.clone().oneshot(audit_request).await.unwrap();
     assert_eq!(audit_response.status(), StatusCode::OK);
     let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
         .await
@@ -1178,6 +1208,44 @@ async fn returns_clinical_evidence_gaps_for_medical_necessity_review() {
         .unwrap()
         .iter()
         .any(|item| item.as_str().unwrap().contains("clinical_evidence")));
+
+    let evidence_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/ops/evidence-requests")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let evidence_response = app.oneshot(evidence_request).await.unwrap();
+    assert_eq!(evidence_response.status(), StatusCode::OK);
+    let evidence_body = to_bytes(evidence_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let evidence_body: serde_json::Value = serde_json::from_slice(&evidence_body).unwrap();
+    let request = evidence_body["requests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|request| request["claim_id"] == "CLM-CLINICAL-1")
+        .expect("clinical pending rule should create an evidence request");
+    assert_eq!(request["request_reason"], "rule_required_evidence");
+    assert!(request["missing_evidence"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "radiology_report"));
+    assert!(!request["missing_evidence"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item == "prescription"));
+    assert!(request["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|item| item["document_type"] == "medical_record"
+            && item["blocking"] == true
+            && item["policy_authority_ref"] == "policy:clinical-evidence:v1"
+            && item["exception_check"] == "required_clinical_documents_not_present"));
 }
 
 #[tokio::test]

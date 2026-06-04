@@ -5,7 +5,7 @@ use fwa_core::{
     ClaimId, ClaimItem, Member, MemberId, Money, Policy, PolicyId, Provider, ProviderId,
     ProviderRiskTier, RecommendedAction, RuleActionClass,
 };
-use fwa_rules::{Condition, Rule, RuleAction};
+use fwa_rules::{Condition, RequiredEvidence, Rule, RuleAction};
 use fwa_scoring::RoutingPolicy;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -12079,9 +12079,15 @@ pub fn default_runtime_rules() -> Vec<Rule> {
             action: RuleAction {
                 score: 30,
                 alert_code: "MEDICALLY_UNNECESSARY_SERVICE".into(),
-                recommended_action: RecommendedAction::ManualReview,
-                action_class: RuleActionClass::ManualReview,
-                required_evidence: vec![],
+                recommended_action: RecommendedAction::RequestEvidence,
+                action_class: RuleActionClass::PendingEvidence,
+                required_evidence: vec![RequiredEvidence {
+                    evidence_type: "clinical_missing_evidence".into(),
+                    evidence_request_type: Some("clinical_document_request".into()),
+                    blocking: true,
+                    policy_authority_ref: Some("policy:clinical-evidence:v1".into()),
+                    exception_check: Some("required_clinical_documents_not_present".into()),
+                }],
                 reason: "临床证据不足或存在缺失，需复核医疗必要性".into(),
             },
         },

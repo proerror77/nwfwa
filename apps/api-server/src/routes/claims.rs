@@ -466,8 +466,9 @@ pub async fn score_claim(
         .into_iter()
         .filter(|rule| review_mode_applies(&rule.review_mode, &review_mode))
         .collect::<Vec<_>>();
-    let rule_matches =
+    let mut rule_matches =
         evaluate_rules(&rules, &features).map_err(internal_error("RULE_EVALUATION_FAILED"))?;
+    expand_dynamic_required_evidence(&mut rule_matches, &clinical_evidence);
     let anomaly_score = detect_anomaly(&features);
     let similar_case_tags = similar_case_tags(&features, &rule_matches);
     let similar_cases = state
@@ -775,6 +776,51 @@ async fn persist_rule_evidence_request(
         .await
         .map_err(internal_error("EVIDENCE_REQUEST_SAVE_FAILED"))?;
     Ok(())
+}
+
+fn expand_dynamic_required_evidence(
+    rule_matches: &mut [RuleMatch],
+    clinical_evidence: &ClinicalEvidenceAssessment,
+) {
+    for rule_match in rule_matches {
+        if !rule_match
+            .required_evidence
+            .iter()
+            .any(|evidence| evidence.evidence_type == "clinical_missing_evidence")
+        {
+            continue;
+        }
+
+        let mut expanded = Vec::new();
+        for evidence in &rule_match.required_evidence {
+            if evidence.evidence_type == "clinical_missing_evidence" {
+                for evidence_type in &clinical_evidence.missing_evidence {
+                    push_unique_required_evidence(
+                        &mut expanded,
+                        RequiredEvidence {
+                            evidence_type: evidence_type.clone(),
+                            evidence_request_type: evidence.evidence_request_type.clone(),
+                            blocking: evidence.blocking,
+                            policy_authority_ref: evidence.policy_authority_ref.clone(),
+                            exception_check: evidence.exception_check.clone(),
+                        },
+                    );
+                }
+            } else {
+                push_unique_required_evidence(&mut expanded, evidence.clone());
+            }
+        }
+        rule_match.required_evidence = expanded;
+    }
+}
+
+fn push_unique_required_evidence(items: &mut Vec<RequiredEvidence>, evidence: RequiredEvidence) {
+    if !items
+        .iter()
+        .any(|item| item.evidence_type == evidence.evidence_type)
+    {
+        items.push(evidence);
+    }
 }
 
 fn build_agent_investigation_prefill(

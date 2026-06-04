@@ -22,14 +22,30 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
     ),
     (
         "Control Rooms",
-        &["Intake Ops", "Detection Controls", "Evidence Hub", "Governance"],
+        &[
+            "Intake Ops",
+            "Detection Releases",
+            "Evidence Hub",
+            "Governance",
+        ],
     ),
-    ("MLOps", &["MLOps Workspace"]),
+    (
+        "Advanced",
+        &[
+            "Rules",
+            "Models",
+            "Routing Policies",
+            "Factor Factory",
+            "Data Sources",
+            "MLOps Workspace",
+        ],
+    ),
 ];
 
 const ALL_MODULES: &[&str] = &[
     "Intake Ops",
     "Dashboard",
+    "Detection Releases",
     "Runtime Scoring",
     "Review Workbench",
     "Bootstrap Ops",
@@ -1035,6 +1051,10 @@ struct EvidenceRequestItem {
     document_type: String,
     status: String,
     reason: String,
+    #[serde(default)]
+    blocking: bool,
+    policy_authority_ref: Option<String>,
+    exception_check: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -1820,6 +1840,8 @@ fn app() -> Html {
                         {review_workbench_page(select_module.clone())}
                     } else if *active == "Bootstrap Ops" {
                         <BootstrapOpsPage />
+                    } else if *active == "Detection Releases" {
+                        {detection_releases_page(select_module.clone())}
                     } else if *active == "Detection Controls" {
                         {detection_controls_page(select_module.clone())}
                     } else if *active == "Evidence Hub" {
@@ -1920,6 +1942,7 @@ fn module_slug(module: &str) -> &'static str {
     match module {
         "Intake Ops" => "intake-ops",
         "Dashboard" => "dashboard",
+        "Detection Releases" => "detection-releases",
         "Runtime Scoring" => "runtime-scoring",
         "Review Workbench" => "review-workbench",
         "Bootstrap Ops" => "bootstrap-ops",
@@ -1988,6 +2011,9 @@ fn module_context(module: &str) -> &'static str {
             "Resolve inbound TPA packet exceptions before claims enter risk and review queues."
         }
         "Dashboard" => "Choose the next operational action from live risk and review queues.",
+        "Detection Releases" => {
+            "Approve rule and model candidates before they affect routing."
+        }
         "Runtime Scoring" => {
             "Validate the scoring API contract, routing policy, evidence refs, and audit IDs."
         }
@@ -2029,6 +2055,7 @@ fn module_description(module: &str) -> &'static str {
     match module {
         "Intake Ops" => "intake exceptions",
         "Dashboard" => "next action",
+        "Detection Releases" => "rule + model releases",
         "Runtime Scoring" => "contract check",
         "Review Workbench" => "medical + QA",
         "Bootstrap Ops" => "labels + evidence",
@@ -2058,6 +2085,7 @@ fn module_icon_class(module: &str) -> &'static str {
     match module {
         "Intake Ops" => "icon-inbox",
         "Dashboard" => "icon-dashboard",
+        "Detection Releases" => "icon-routing",
         "Runtime Scoring" => "icon-scoring",
         "Review Workbench" => "icon-qa",
         "Bootstrap Ops" => "icon-audit",
@@ -2814,7 +2842,19 @@ fn evidence_request_items_label(items: &[EvidenceRequestItem]) -> String {
     }
     items
         .iter()
-        .map(|item| format!("{}: {}", item.document_type, item.reason))
+        .map(|item| {
+            let mut label = format!("{}: {}", item.document_type, item.reason);
+            if item.blocking {
+                label.push_str(" / blocking");
+            }
+            if let Some(policy_authority_ref) = item.policy_authority_ref.as_deref() {
+                label = format!("{label} / {policy_authority_ref}");
+            }
+            if let Some(exception_check) = item.exception_check.as_deref() {
+                label = format!("{label} / {exception_check}");
+            }
+            label
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }
