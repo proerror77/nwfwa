@@ -333,7 +333,34 @@ integrity, feature materialization, fairness, AUC, or recall evidence is
 missing or failed. The output may recommend a candidate for human review; it
 must not activate a model or publish a rule.
 
-## Stage 6.6: Explainable Rule Candidate Mining
+## Stage 6.6: Rust Serving Artifact Evaluation
+
+Purpose: verify that a governed serving manifest can execute through the Rust
+runtime before the candidate enters activation review.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- evaluate-model-artifact \
+  --serving-manifest data/model-artifacts/baseline_fwa/<candidate-version>/serving_manifest.json \
+  --dataset-manifest data/training/manifest.json \
+  --split validation \
+  --output-dir data/model-artifacts/baseline_fwa/<candidate-version>/artifact-evaluation \
+  --expected-probability-column expected_probability \
+  --probability-tolerance 0.0001 \
+  --latency-budget-ms 100 \
+  --max-rows 100
+```
+
+`--expected-probability-column` is optional. When it is present, the report
+requires Rust serving probability parity against that column. When it is absent,
+the report still validates the manifest contract, feature order, checksum,
+optional signature, Rust scorer execution, and P95 latency. The worker writes
+`model_artifact_evaluation_report.json` with `gate_status`, blocking reasons,
+sample scores, probability deltas, latency, and evidence refs. The report is
+activation-review evidence only; it does not activate the model.
+
+## Stage 6.7: Explainable Rule Candidate Mining
 
 Purpose: turn explainable model evidence into draft Rule Studio candidates
 without writing to the active rule library.
@@ -360,7 +387,7 @@ pass deterministic backtest, false-positive review, human promotion review,
 customer policy or model-governance approval, and shadow or limited rollout
 when impact is high.
 
-## Stage 6.7: Rule Candidate Backtest
+## Stage 6.8: Rule Candidate Backtest
 
 Purpose: turn draft rule candidates into auditable backtest evidence before a
 human reviewer decides whether they can move toward Rule Studio publication.

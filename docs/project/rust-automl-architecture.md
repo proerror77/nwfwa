@@ -83,6 +83,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
   LightGBM, and anomaly candidates, then open human-review recommendations
   without activating any model.
+- `evaluate-model-artifact`: run Rust serving-manifest execution against a
+  governed Parquet split, verify optional probability parity, record P95
+  latency, and write activation-review evidence without promoting the model.
 - `mine-rule-candidates`: translate feature-importance evidence into draft rule
   candidates plus required backtest and human-review work items.
 - `run-rule-candidate-backtest`: select deterministic thresholds, calculate
@@ -96,7 +99,6 @@ The worker is the right control-plane home for scheduled and batch ML work:
 Future worker commands should add:
 
 - `build-feature-set`: materialize feature versions from registered datasets;
-- `evaluate-model-artifact`: run offline metrics and serving parity tests;
 
 ## Serving Architecture
 
@@ -137,17 +139,20 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer clustering has a Rust-native demo
   workflow; broader graph/member/claim clustering and deep-learning serving
   remain future work.
-- 45% for Auto MLOps: worker can rank candidates, mine explainable rule
-  candidates, and backtest those candidates into human-review evidence, while
-  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist;
-  activation workflows and UI/API review surfaces still need implementation.
-- 65% for Rust ONNX serving: serving-manifest validation, checksum/signature
+- 50% for Auto MLOps: worker can rank candidates, evaluate serving artifacts,
+  mine explainable rule candidates, and backtest those candidates into
+  human-review evidence, while trainer-side ONNX parity reports and unlabeled
+  anomaly review tasks exist; activation workflows and UI/API review surfaces
+  still need implementation.
+- 70% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
-  extraction are implemented; production cache/reuse strategy, broader model
-  fixture tests, and latency monitoring still need hardening.
+  extraction are implemented, and the worker can create Rust serving evaluation
+  evidence; production cache/reuse strategy, broader ONNX fixture tests, and
+  live latency monitoring still need hardening.
 
 The runtime now has a serving-manifest boundary for Rust logistic artifacts and
-real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The next
-highest-leverage implementation is an artifact-evaluation command that performs
-serving parity and latency checks from Rust before a candidate can enter
-activation review.
+real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The worker
+now has an artifact-evaluation gate for Rust serving parity and latency
+evidence before a candidate can enter activation review. The next
+highest-leverage implementation is wiring those reports into API/UI model
+promotion gates.

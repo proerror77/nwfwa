@@ -8,6 +8,9 @@ publish.workspace = true
 anyhow.workspace = true
 arrow-array = "53"
 arrow-schema = "53"
+fwa-core = { path = "../../crates/fwa-core" }
+fwa-features = { path = "../../crates/fwa-features" }
+fwa-ml-runtime = { path = "../../crates/fwa-ml-runtime" }
 parquet = { version = "53", features = ["arrow"] }
 reqwest.workspace = true
 serde.workspace = true
@@ -17,3 +20,4 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
+sha2.workspace = true
