@@ -129,6 +129,7 @@ pub struct CompleteModelRetrainingJobRequest {
     pub artifact_sha256: Option<String>,
     pub training_artifact_uri: Option<String>,
     pub training_artifact_sha256: Option<String>,
+    pub serving_manifest_uri: Option<String>,
     pub endpoint_url: Option<String>,
     pub validation_report_uri: String,
     pub evaluation_run_id: String,
@@ -696,6 +697,20 @@ fn validate_retraining_output_request(
             "training_artifact_sha256 must start with sha256:",
         )?;
     }
+    if let Some(serving_manifest_uri) = &request.serving_manifest_uri {
+        if serving_manifest_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_SERVING_MANIFEST_URI",
+                "serving_manifest_uri must not be blank when provided",
+            ));
+        }
+        validate_json_artifact_uri(
+            serving_manifest_uri,
+            "INVALID_SERVING_MANIFEST_URI",
+            "serving_manifest_uri must point to a JSON serving manifest",
+        )?;
+    }
     validate_json_report_uri(
         &request.validation_report_uri,
         "INVALID_VALIDATION_REPORT_URI",
@@ -800,6 +815,27 @@ fn validate_retraining_output_evidence_refs(
             ));
         }
     }
+    if let Some(serving_manifest_uri) = &request.serving_manifest_uri {
+        let expected_refs = [
+            format!("model_serving_manifests:{serving_manifest_uri}"),
+            format!("serving_manifests:{serving_manifest_uri}"),
+        ];
+        if !expected_refs.iter().any(|expected_ref| {
+            request
+                .evidence_refs
+                .iter()
+                .any(|reference| reference.trim() == expected_ref)
+        }) {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!(
+                    "model retraining output evidence_refs must include {}",
+                    expected_refs[0]
+                ),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -824,6 +860,12 @@ fn retraining_metrics_with_artifacts(request: &CompleteModelRetrainingJobRequest
         metrics.insert(
             "training_artifact_sha256".into(),
             Value::String(training_artifact_sha256.clone()),
+        );
+    }
+    if let Some(serving_manifest_uri) = &request.serving_manifest_uri {
+        metrics.insert(
+            "serving_manifest_uri".into(),
+            Value::String(serving_manifest_uri.clone()),
         );
     }
     metrics_json
@@ -905,14 +947,22 @@ fn validate_sha256_digest(
 }
 
 fn validate_json_report_uri(value: &str, code: &'static str) -> Result<(), ApiError> {
+    validate_json_artifact_uri(
+        value,
+        code,
+        "model retraining validation_report_uri must point to a JSON report",
+    )
+}
+
+fn validate_json_artifact_uri(
+    value: &str,
+    code: &'static str,
+    message: &'static str,
+) -> Result<(), ApiError> {
     if has_supported_uri_suffix(value, &[".json"]) {
         Ok(())
     } else {
-        Err(ApiError::new(
-            StatusCode::BAD_REQUEST,
-            code,
-            "model retraining validation_report_uri must point to a JSON report",
-        ))
+        Err(ApiError::new(StatusCode::BAD_REQUEST, code, message))
     }
 }
 
