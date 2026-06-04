@@ -190,7 +190,8 @@ This writes:
   train, validation, and out-of-time Parquet splits and `confirmed_fwa` as a
   weak demo label;
 - `unlabeled_shadow_scoring/manifest.json`: unlabeled claim rows for shadow
-  scoring, score-distribution, and drift exercises;
+  scoring, claim/member/provider entity clustering, score-distribution, and
+  drift exercises;
 - `unlabeled_provider_peer_clustering/manifest.json`: unlabeled provider-month
   peer features for clustering and anomaly-discovery exercises.
 
@@ -224,6 +225,24 @@ This writes:
 
 The output is an anomaly-candidate workflow only. It must not create confirmed
 FWA labels, supervised-training labels, or automatic claim disposition.
+
+Run the Rust claim/member/provider entity clustering demo on the unlabeled
+claim manifest:
+
+```bash
+cargo run --locked -p worker -- cluster-claim-entities \
+  --manifest data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json \
+  --output-dir data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters
+```
+
+This writes:
+
+- `claim_entity_clustering_report.json`;
+- `claim_entity_review_tasks.json`.
+
+The output is also an anomaly-candidate workflow only. It can prepare review or
+rule-candidate backtest work, but it must not write back to the rule library
+until backtesting and human review are complete.
 
 ```bash
 uv run --project apps/ml-service \

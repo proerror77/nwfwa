@@ -68,6 +68,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "claim_entity_clusterer",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "model_artifact_evaluator",
                 status: "ok",
             },
@@ -844,6 +848,66 @@ pub struct ProviderPeerReviewTask {
     pub evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ClaimEntityClusteringReport {
+    pub report_kind: String,
+    pub report_version: u8,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub algorithm: String,
+    pub label_policy: String,
+    pub governance_boundary: String,
+    pub feature_columns: Vec<String>,
+    pub cluster_count: usize,
+    pub cluster_summaries: Vec<ClaimEntityClusterSummary>,
+    pub entity_assignments: Vec<ClaimEntityClusterAssignment>,
+    pub anomaly_candidates: Vec<ClaimEntityAnomalyCandidate>,
+    pub review_tasks: Vec<ClaimEntityReviewTask>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ClaimEntityClusterSummary {
+    pub cluster_id: usize,
+    pub claim_count: usize,
+    pub average_outlier_score: f64,
+    pub average_claim_amount: f64,
+    pub average_provider_degree: f64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ClaimEntityClusterAssignment {
+    pub claim_id: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub cluster_id: usize,
+    pub outlier_score: f64,
+    pub anomaly_candidate: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ClaimEntityAnomalyCandidate {
+    pub claim_id: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub cluster_id: usize,
+    pub outlier_score: f64,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ClaimEntityReviewTask {
+    pub task_kind: String,
+    pub claim_id: String,
+    pub member_id: String,
+    pub provider_id: String,
+    pub review_queue: String,
+    pub required_review: String,
+    pub decision_options: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
 #[derive(Debug, Clone, Deserialize)]
 struct UnlabeledDatasetManifest {
     dataset_key: String,
@@ -864,6 +928,22 @@ struct ProviderPeerFeatureRow {
     high_cost_rate: f64,
     peer_z_score: f64,
     graph_degree: f64,
+}
+
+#[derive(Debug, Clone)]
+struct ClaimEntityFeatureRow {
+    claim_id: String,
+    member_id: String,
+    provider_id: String,
+    claim_amount: f64,
+    amount_to_limit_ratio: f64,
+    peer_percentile: f64,
+    item_count: f64,
+    high_cost_item_ratio: f64,
+    provider_risk_tier: f64,
+    diagnosis_procedure_mismatch: f64,
+    member_degree: f64,
+    provider_degree: f64,
 }
 
 pub fn build_demo_ml_datasets(
@@ -928,7 +1008,7 @@ pub fn build_demo_ml_datasets(
             {"split_name": "scoring", "data_uri": "split=scoring/"}
         ],
         "governance": {
-            "allowed_uses": ["shadow_scoring", "drift_monitoring_demo", "score_distribution_demo"],
+            "allowed_uses": ["shadow_scoring", "claim_entity_clustering", "drift_monitoring_demo", "score_distribution_demo"],
             "blocked_uses": ["supervised_training", "production_promotion_evidence", "confirmed_fwa_labeling"]
         }
     });
@@ -1017,6 +1097,11 @@ pub fn build_demo_ml_datasets(
                 "cargo run --locked -p worker -- cluster-provider-peers --manifest {} --output-dir {}/clusters",
                 provider_dir.join("manifest.json").display(),
                 provider_dir.display()
+            ),
+            format!(
+                "cargo run --locked -p worker -- cluster-claim-entities --manifest {} --output-dir {}/entity-clusters",
+                scoring_dir.join("manifest.json").display(),
+                scoring_dir.display()
             ),
         ],
     };
@@ -3557,6 +3642,139 @@ pub fn cluster_provider_peers(
     Ok(report)
 }
 
+pub fn cluster_claim_entities(
+    manifest_path: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<ClaimEntityClusteringReport> {
+    let manifest_path = Path::new(manifest_path);
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read claim entity manifest {}", manifest_path.display()))?;
+    let manifest: UnlabeledDatasetManifest =
+        serde_json::from_str(&manifest_json).context("parse claim entity manifest")?;
+    if manifest.label_column.is_some() {
+        bail!("claim entity clustering requires an unlabeled manifest");
+    }
+    if !manifest.label_policy.contains("unlabeled") {
+        bail!("claim entity clustering requires an unlabeled label_policy");
+    }
+    let base_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let rows = read_claim_entity_rows(&manifest, base_dir)?;
+    if rows.len() < 2 {
+        bail!("claim entity clustering requires at least two claim rows");
+    }
+
+    let feature_columns = vec![
+        "claim_amount".into(),
+        "amount_to_limit_ratio".into(),
+        "peer_percentile".into(),
+        "item_count".into(),
+        "high_cost_item_ratio".into(),
+        "provider_risk_tier".into(),
+        "diagnosis_procedure_mismatch".into(),
+        "member_degree".into(),
+        "provider_degree".into(),
+    ];
+    let normalized = normalize_claim_entity_rows(&rows);
+    let cluster_count = rows.len().clamp(1, 4);
+    let cluster_ids = assign_standardized_clusters(&normalized, 2, cluster_count);
+    let distances = standardized_cluster_distances(&normalized, &cluster_ids, cluster_count);
+    let threshold = anomaly_threshold(&distances);
+    let mut entity_assignments = Vec::new();
+    let mut anomaly_candidates = Vec::new();
+    for (index, row) in rows.iter().enumerate() {
+        let outlier_score = round4(distances[index]);
+        let anomaly_candidate = distances[index] >= threshold;
+        entity_assignments.push(ClaimEntityClusterAssignment {
+            claim_id: row.claim_id.clone(),
+            member_id: row.member_id.clone(),
+            provider_id: row.provider_id.clone(),
+            cluster_id: cluster_ids[index],
+            outlier_score,
+            anomaly_candidate,
+        });
+        if anomaly_candidate {
+            anomaly_candidates.push(ClaimEntityAnomalyCandidate {
+                claim_id: row.claim_id.clone(),
+                member_id: row.member_id.clone(),
+                provider_id: row.provider_id.clone(),
+                cluster_id: cluster_ids[index],
+                outlier_score,
+                reason: "Claim/member/provider entity context is far from its cluster centroid; review as an anomaly candidate, not a confirmed FWA label.".into(),
+                evidence_refs: vec![
+                    format!("dataset_manifest:{}", manifest_path.display()),
+                    format!("claim_entity_cluster:{}:{}", manifest.dataset_key, row.claim_id),
+                ],
+            });
+        }
+    }
+    anomaly_candidates.sort_by(|left, right| {
+        right
+            .outlier_score
+            .partial_cmp(&left.outlier_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.claim_id.cmp(&right.claim_id))
+    });
+
+    let review_tasks = anomaly_candidates
+        .iter()
+        .map(|candidate| ClaimEntityReviewTask {
+            task_kind: "claim_entity_anomaly_review".into(),
+            claim_id: candidate.claim_id.clone(),
+            member_id: candidate.member_id.clone(),
+            provider_id: candidate.provider_id.clone(),
+            review_queue: "claim_entity_anomaly_candidate_review".into(),
+            required_review:
+                "human_review_required_before_case_creation_label_assignment_or_rule_writeback"
+                    .into(),
+            decision_options: vec![
+                "dismiss_as_entity_variation".into(),
+                "request_more_evidence".into(),
+                "open_investigation_candidate".into(),
+                "prepare_rule_candidate_backtest".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let cluster_summaries =
+        summarize_claim_entity_clusters(&rows, &cluster_ids, &distances, cluster_count);
+    let report = ClaimEntityClusteringReport {
+        report_kind: "claim_entity_clustering".into(),
+        report_version: 1,
+        dataset_key: manifest.dataset_key,
+        dataset_version: manifest.dataset_version,
+        algorithm: "rust_standardized_entity_kmeans_v1".into(),
+        label_policy: manifest.label_policy,
+        governance_boundary:
+            "unlabeled entity clustering creates anomaly review candidates only; it must not create confirmed FWA labels, automatic claim disposition, or rule-library writeback"
+                .into(),
+        feature_columns,
+        cluster_count,
+        cluster_summaries,
+        entity_assignments,
+        anomaly_candidates,
+        review_tasks,
+        evidence_refs: vec![format!("dataset_manifest:{}", manifest_path.display())],
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create claim entity clustering output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("claim_entity_clustering_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir.as_ref().join("claim_entity_review_tasks.json"),
+        &report.review_tasks,
+    )?;
+    Ok(report)
+}
+
 fn read_provider_peer_rows(
     manifest: &UnlabeledDatasetManifest,
     base_dir: &Path,
@@ -3596,6 +3814,87 @@ fn read_provider_peer_rows(
         }
     }
     Ok(rows)
+}
+
+fn read_claim_entity_rows(
+    manifest: &UnlabeledDatasetManifest,
+    base_dir: &Path,
+) -> anyhow::Result<Vec<ClaimEntityFeatureRow>> {
+    let mut raw_rows = Vec::new();
+    for split in &manifest.splits {
+        reject_csv_uri(&split.data_uri)?;
+        let parquet_files = resolve_parquet_files(base_dir, &split.data_uri)?;
+        if parquet_files.is_empty() {
+            bail!("split {} has no parquet files", split.split_name);
+        }
+        for parquet_file in parquet_files {
+            let file = File::open(&parquet_file)
+                .with_context(|| format!("open parquet file {}", parquet_file.display()))?;
+            let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+                .with_context(|| format!("read parquet metadata {}", parquet_file.display()))?;
+            let mut reader = builder.with_batch_size(4096).build()?;
+            for batch in &mut reader {
+                let batch = batch?;
+                for row_index in 0..batch.num_rows() {
+                    raw_rows.push((
+                        required_string_cell(&batch, "claim_id", row_index)?,
+                        required_string_cell(&batch, "member_id", row_index)?,
+                        required_string_cell(&batch, "provider_id", row_index)?,
+                        required_numeric_cell(&batch, "claim_amount", row_index)?,
+                        required_numeric_cell(&batch, "amount_to_limit_ratio", row_index)?,
+                        required_numeric_cell(&batch, "peer_percentile", row_index)?,
+                        required_numeric_cell(&batch, "item_count", row_index)?,
+                        required_numeric_cell(&batch, "high_cost_item_ratio", row_index)?,
+                        required_numeric_cell(&batch, "provider_risk_tier", row_index)?,
+                        required_numeric_cell(&batch, "diagnosis_procedure_mismatch", row_index)?,
+                    ));
+                }
+            }
+        }
+    }
+
+    let mut member_counts = BTreeMap::<String, u64>::new();
+    let mut provider_counts = BTreeMap::<String, u64>::new();
+    for (_, member_id, provider_id, ..) in &raw_rows {
+        *member_counts.entry(member_id.clone()).or_default() += 1;
+        *provider_counts.entry(provider_id.clone()).or_default() += 1;
+    }
+
+    Ok(raw_rows
+        .into_iter()
+        .map(
+            |(
+                claim_id,
+                member_id,
+                provider_id,
+                claim_amount,
+                amount_to_limit_ratio,
+                peer_percentile,
+                item_count,
+                high_cost_item_ratio,
+                provider_risk_tier,
+                diagnosis_procedure_mismatch,
+            )| {
+                let member_degree = member_counts.get(&member_id).copied().unwrap_or(1) as f64;
+                let provider_degree =
+                    provider_counts.get(&provider_id).copied().unwrap_or(1) as f64;
+                ClaimEntityFeatureRow {
+                    claim_id,
+                    member_id,
+                    provider_id,
+                    claim_amount,
+                    amount_to_limit_ratio,
+                    peer_percentile,
+                    item_count,
+                    high_cost_item_ratio,
+                    provider_risk_tier,
+                    diagnosis_procedure_mismatch,
+                    member_degree,
+                    provider_degree,
+                }
+            },
+        )
+        .collect())
 }
 
 fn required_string_cell(
@@ -3668,11 +3967,68 @@ fn normalize_provider_rows(rows: &[ProviderPeerFeatureRow]) -> Vec<[f64; 5]> {
         .collect()
 }
 
+fn normalize_claim_entity_rows(rows: &[ClaimEntityFeatureRow]) -> Vec<[f64; 9]> {
+    let raw = rows
+        .iter()
+        .map(|row| {
+            [
+                row.claim_amount,
+                row.amount_to_limit_ratio,
+                row.peer_percentile,
+                row.item_count,
+                row.high_cost_item_ratio,
+                row.provider_risk_tier,
+                row.diagnosis_procedure_mismatch,
+                row.member_degree,
+                row.provider_degree,
+            ]
+        })
+        .collect::<Vec<_>>();
+    let mut means = [0.0; 9];
+    for values in &raw {
+        for index in 0..9 {
+            means[index] += values[index];
+        }
+    }
+    for mean in &mut means {
+        *mean /= raw.len() as f64;
+    }
+    let mut stddevs = [0.0; 9];
+    for values in &raw {
+        for index in 0..9 {
+            stddevs[index] += (values[index] - means[index]).powi(2);
+        }
+    }
+    for stddev in &mut stddevs {
+        *stddev = (*stddev / raw.len() as f64).sqrt();
+        if *stddev == 0.0 {
+            *stddev = 1.0;
+        }
+    }
+    raw.iter()
+        .map(|values| {
+            let mut normalized = [0.0; 9];
+            for index in 0..9 {
+                normalized[index] = (values[index] - means[index]) / stddevs[index];
+            }
+            normalized
+        })
+        .collect()
+}
+
 fn assign_provider_clusters(rows: &[[f64; 5]], cluster_count: usize) -> Vec<usize> {
+    assign_standardized_clusters(rows, 3, cluster_count)
+}
+
+fn assign_standardized_clusters<const N: usize>(
+    rows: &[[f64; N]],
+    ordering_feature_index: usize,
+    cluster_count: usize,
+) -> Vec<usize> {
     let mut ordered = rows.iter().enumerate().collect::<Vec<_>>();
     ordered.sort_by(|left, right| {
-        left.1[3]
-            .partial_cmp(&right.1[3])
+        left.1[ordering_feature_index]
+            .partial_cmp(&right.1[ordering_feature_index])
             .unwrap_or(std::cmp::Ordering::Equal)
     });
     let mut centroids = (0..cluster_count)
@@ -3706,13 +4062,13 @@ fn assign_provider_clusters(rows: &[[f64; 5]], cluster_count: usize) -> Vec<usiz
     assignments
 }
 
-fn nearest_centroid(row: &[f64; 5], centroids: &[[f64; 5]]) -> usize {
+fn nearest_centroid<const N: usize>(row: &[f64; N], centroids: &[[f64; N]]) -> usize {
     centroids
         .iter()
         .enumerate()
         .min_by(|(_, left), (_, right)| {
-            squared_distance(row, left)
-                .partial_cmp(&squared_distance(row, right))
+            squared_distance(row, *left)
+                .partial_cmp(&squared_distance(row, *right))
                 .unwrap_or(std::cmp::Ordering::Equal)
         })
         .map(|(index, _)| index)
@@ -3720,20 +4076,28 @@ fn nearest_centroid(row: &[f64; 5], centroids: &[[f64; 5]]) -> usize {
 }
 
 fn cluster_distances(rows: &[[f64; 5]], assignments: &[usize], cluster_count: usize) -> Vec<f64> {
-    let mut sums = vec![[0.0; 5]; cluster_count];
+    standardized_cluster_distances(rows, assignments, cluster_count)
+}
+
+fn standardized_cluster_distances<const N: usize>(
+    rows: &[[f64; N]],
+    assignments: &[usize],
+    cluster_count: usize,
+) -> Vec<f64> {
+    let mut sums = vec![[0.0; N]; cluster_count];
     let mut counts = vec![0_usize; cluster_count];
     for (row, cluster_id) in rows.iter().zip(assignments.iter()) {
         counts[*cluster_id] += 1;
-        for index in 0..5 {
+        for index in 0..N {
             sums[*cluster_id][index] += row[index];
         }
     }
-    let mut centroids = vec![[0.0; 5]; cluster_count];
+    let mut centroids = vec![[0.0; N]; cluster_count];
     for cluster_id in 0..cluster_count {
         if counts[cluster_id] == 0 {
             continue;
         }
-        for index in 0..5 {
+        for index in 0..N {
             centroids[cluster_id][index] = sums[cluster_id][index] / counts[cluster_id] as f64;
         }
     }
@@ -3743,9 +4107,10 @@ fn cluster_distances(rows: &[[f64; 5]], assignments: &[usize], cluster_count: us
         .collect()
 }
 
-fn squared_distance(left: &[f64; 5], right: &[f64; 5]) -> f64 {
-    (0..5)
-        .map(|index| (left[index] - right[index]).powi(2))
+fn squared_distance(left: &[f64], right: &[f64]) -> f64 {
+    left.iter()
+        .zip(right.iter())
+        .map(|(left, right)| (*left - *right).powi(2))
         .sum()
 }
 
@@ -3799,6 +4164,46 @@ fn summarize_provider_clusters(
                     indexes
                         .iter()
                         .map(|index| rows[*index].high_cost_rate)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+            }
+        })
+        .collect()
+}
+
+fn summarize_claim_entity_clusters(
+    rows: &[ClaimEntityFeatureRow],
+    assignments: &[usize],
+    distances: &[f64],
+    cluster_count: usize,
+) -> Vec<ClaimEntityClusterSummary> {
+    (0..cluster_count)
+        .map(|cluster_id| {
+            let indexes = assignments
+                .iter()
+                .enumerate()
+                .filter_map(|(index, assigned)| (*assigned == cluster_id).then_some(index))
+                .collect::<Vec<_>>();
+            let claim_count = indexes.len();
+            let divisor = claim_count.max(1) as f64;
+            ClaimEntityClusterSummary {
+                cluster_id,
+                claim_count,
+                average_outlier_score: round4(
+                    indexes.iter().map(|index| distances[*index]).sum::<f64>() / divisor,
+                ),
+                average_claim_amount: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].claim_amount)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                average_provider_degree: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].provider_degree)
                         .sum::<f64>()
                         / divisor,
                 ),
@@ -5326,6 +5731,10 @@ mod tests {
             .next_worker_commands
             .iter()
             .any(|command| command.contains("cluster-provider-peers")));
+        assert!(pack
+            .next_worker_commands
+            .iter()
+            .any(|command| command.contains("cluster-claim-entities")));
     }
 
     #[test]
@@ -5620,6 +6029,45 @@ mod tests {
         assert!(output_dir
             .join("provider_anomaly_review_tasks.json")
             .is_file());
+    }
+
+    #[test]
+    fn clusters_unlabeled_claim_entities_without_rule_writeback() {
+        let root = temp_root("claim-entity-clustering");
+        let pack = build_demo_ml_datasets(&root, "2026-06-entity-clustering-demo")
+            .expect("demo ML datasets");
+        let scoring_manifest = pack
+            .unlabeled_manifest_uris
+            .iter()
+            .find(|uri| uri.contains("unlabeled_shadow_scoring"))
+            .expect("shadow scoring manifest");
+        let output_dir = root.join("entity-clusters");
+
+        let report =
+            cluster_claim_entities(scoring_manifest, &output_dir).expect("entity clustering");
+
+        assert_eq!(report.report_kind, "claim_entity_clustering");
+        assert_eq!(report.dataset_key, "rust_demo_claim_shadow_unlabeled");
+        assert_eq!(report.algorithm, "rust_standardized_entity_kmeans_v1");
+        assert_eq!(report.label_policy, "unlabeled_shadow_scoring_only");
+        assert!(report
+            .governance_boundary
+            .contains("must not create confirmed FWA labels"));
+        assert!(report
+            .governance_boundary
+            .contains("rule-library writeback"));
+        assert_eq!(report.cluster_count, 4);
+        assert_eq!(report.entity_assignments.len(), 6);
+        assert!(!report.anomaly_candidates.is_empty());
+        assert_eq!(report.review_tasks.len(), report.anomaly_candidates.len());
+        assert_eq!(
+            report.review_tasks[0].required_review,
+            "human_review_required_before_case_creation_label_assignment_or_rule_writeback"
+        );
+        assert!(output_dir
+            .join("claim_entity_clustering_report.json")
+            .is_file());
+        assert!(output_dir.join("claim_entity_review_tasks.json").is_file());
     }
 
     #[test]

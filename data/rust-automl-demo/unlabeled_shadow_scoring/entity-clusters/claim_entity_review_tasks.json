@@ -1,0 +1,20 @@
+[
+  {
+    "task_kind": "claim_entity_anomaly_review",
+    "claim_id": "CLM-S006",
+    "member_id": "MBR-S006",
+    "provider_id": "PRV-206",
+    "review_queue": "claim_entity_anomaly_candidate_review",
+    "required_review": "human_review_required_before_case_creation_label_assignment_or_rule_writeback",
+    "decision_options": [
+      "dismiss_as_entity_variation",
+      "request_more_evidence",
+      "open_investigation_candidate",
+      "prepare_rule_candidate_backtest"
+    ],
+    "evidence_refs": [
+      "dataset_manifest:data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json",
+      "claim_entity_cluster:rust_demo_claim_shadow_unlabeled:CLM-S006"
+    ]
+  }
+]

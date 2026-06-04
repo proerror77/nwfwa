@@ -99,6 +99,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
   rule-library writeback blocked.
 - `cluster-provider-peers`: run Rust-native clustering over unlabeled provider
   peer features, then create anomaly review tasks without assigning labels.
+- `cluster-claim-entities`: run Rust-native claim/member/provider entity
+  clustering over unlabeled claims, then create anomaly review tasks or
+  rule-candidate backtest preparation without assigning labels or writing rules.
 - `build-mlops-monitoring-plan`: define scheduled shadow, drift, fairness,
   reviewer-disagreement, and label-delay checks.
 - `build-mlops-monitoring-report`: combine Rust artifact evaluation, shadow,
@@ -140,12 +143,12 @@ Current repository completion for this target architecture is approximately:
   Rust-built feature-set manifests exist, and worker-driven retraining now
   injects Rust feature-set evidence into candidate registration; Rust-generated
   labeled/unlabeled demo packs now cover the missing dataset shape.
-- 60% for model portfolio: logistic has a native Rust JSON serving artifact;
+- 64% for model portfolio: logistic has a native Rust JSON serving artifact;
   XGBoost and LightGBM training now emit governed ONNX serving artifacts with
   probability-parity reports, the Rust runtime can execute those ONNX manifests
-  after contract validation, and provider-peer clustering has a Rust-native demo
-  workflow; broader graph/member/claim clustering and deep-learning serving
-  remain future work.
+  after contract validation, and provider-peer plus claim/member/provider entity
+  clustering have Rust-native demo workflows; broader graph clustering and
+  deep-learning serving remain future work.
 - 70% for Auto MLOps: worker can build feature-set manifests, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, mine explainable rule candidates,
@@ -156,7 +159,7 @@ Current repository completion for this target architecture is approximately:
   parity reports and unlabeled anomaly review tasks exist; API retraining output
   now accepts governed serving manifests, and the console has provider model
   release, promotion review, activation, and rollback actions. Broader graph,
-  member, and claim clustering still need hardening.
+  graph clustering and live monitoring surfaces still need hardening.
 - 72% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation

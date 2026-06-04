@@ -13,6 +13,7 @@
   "governance": {
     "allowed_uses": [
       "shadow_scoring",
+      "claim_entity_clustering",
       "drift_monitoring_demo",
       "score_distribution_demo"
     ],
