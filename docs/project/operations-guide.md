@@ -294,6 +294,22 @@ The simulator writes shadow, drift, segment fairness, reviewer disagreement, and
 label delay report artifacts. These are staging proof artifacts only; they are
 not live customer shadow or drift evidence.
 
+After the Rust monitoring report and scheduler execution report exist, submit
+the alert-router handoff into governance audit:
+
+```bash
+cargo run --locked -p worker -- submit-mlops-alert-delivery-tasks \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --scheduler-report artifacts/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --actor mlops-worker \
+  --notes "MLOps scheduler alert-router handoff submitted."
+```
+
+This records delivery handoff evidence only. It does not replace the customer
+alert receiver, create retraining jobs, activate models, rollback models, or
+assign fraud labels.
+
 Analytics-scale export proof:
 
 ```bash

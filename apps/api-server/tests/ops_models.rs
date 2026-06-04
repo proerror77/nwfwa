@@ -1452,6 +1452,82 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
 }
 
 #[tokio::test]
+async fn submits_mlops_alert_delivery_without_creating_retraining_job() {
+    let app = build_app(test_config());
+
+    let (status, response) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-alert-deliveries",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Queue alert-router delivery for drift and shadow review.",
+          "scheduler_execution_report_uri": "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+          "report_kind": "mlops_scheduler_execution_report",
+          "model_version": "0.1.0",
+          "alert_delivery_status": "queued_for_external_alert_router",
+          "alert_delivery_tasks": [
+            {
+              "task_kind": "mlops_alert_delivery",
+              "trigger": "model_drift_detected",
+              "route_key": "mlops_retraining_readiness",
+              "delivery_status": "queued_for_external_alert_router"
+            }
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{response}");
+    assert_eq!(response["model_key"], "baseline_fwa");
+    assert_eq!(response["model_version"], "0.1.0");
+    assert_eq!(
+        response["alert_delivery_status"],
+        "queued_for_external_alert_router"
+    );
+    assert_eq!(response["alert_delivery_task_count"], 1);
+    assert_eq!(response["alert_routing_policy_configured"], true);
+    assert!(response["next_actions"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("confirm_customer_alert_router_receipt")));
+    assert!(response["governance_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("must not create retraining jobs"));
+
+    let (status, jobs) = get_json(
+        app.clone(),
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(jobs["jobs"].as_array().unwrap().is_empty());
+
+    let (status, audit) = get_json(
+        app,
+        "/api/v1/ops/audit-events?event_type=model.mlops_alert_delivery.submitted&model_key=baseline_fwa&model_version=0.1.0&limit=5",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let event = &audit["events"][0];
+    assert_eq!(event["event_type"], "model.mlops_alert_delivery.submitted");
+    assert_eq!(event["payload"]["alert_delivery_task_count"], 1);
+    assert_eq!(
+        event["payload"]["alert_routing_policy_ref"],
+        "configured_alert_routing_policy"
+    );
+    assert!(event["evidence_refs"].as_array().unwrap().contains(
+        &serde_json::json!(
+            "mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"
+        )
+    ));
+}
+
+#[tokio::test]
 async fn blocks_model_retraining_job_when_readiness_is_blocked() {
     let app = build_app(test_config());
 

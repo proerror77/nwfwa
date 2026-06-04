@@ -318,6 +318,10 @@ pub fn build_app_with_parts(
             post(ops_models::submit_mlops_monitoring_report),
         )
         .route(
+            "/api/v1/ops/models/:model_key/mlops-alert-deliveries",
+            post(ops_models::submit_mlops_alert_delivery),
+        )
+        .route(
             "/api/v1/ops/model-retraining-jobs/:job_id/status",
             post(ops_models::update_model_retraining_job_status),
         )

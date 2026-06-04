@@ -144,6 +144,30 @@ pub struct SubmitMlopsMonitoringReportResponse {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct SubmitMlopsAlertDeliveryRequest {
+    pub actor: String,
+    pub notes: String,
+    pub scheduler_execution_report_uri: String,
+    pub report_kind: String,
+    pub model_version: String,
+    pub alert_delivery_status: String,
+    pub alert_delivery_tasks: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitMlopsAlertDeliveryResponse {
+    pub model_key: String,
+    pub model_version: String,
+    pub scheduler_execution_report_uri: String,
+    pub alert_delivery_status: String,
+    pub alert_delivery_task_count: usize,
+    pub alert_routing_policy_configured: bool,
+    pub next_actions: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct UpdateModelRetrainingJobStatusRequest {
     pub status: String,
     pub actor: String,
@@ -362,6 +386,42 @@ pub async fn submit_mlops_monitoring_report(
     record_mlops_monitoring_audit(&state, &actor, &model, &request, &response)
         .await
         .map_err(internal_error("MLOPS_MONITORING_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(response))
+}
+
+pub async fn submit_mlops_alert_delivery(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+    Json(request): Json<SubmitMlopsAlertDeliveryRequest>,
+) -> Result<Json<SubmitMlopsAlertDeliveryResponse>, ApiError> {
+    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    validate_mlops_alert_delivery_request(&request)?;
+    let model = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == model_key && model.version == request.model_version)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_VERSION_NOT_FOUND",
+                "model version not found",
+            )
+        })?;
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &model.model_key,
+        &model.version,
+        "MLOps alert delivery",
+    )?;
+    validate_alert_delivery_evidence(&request)?;
+    let response = build_mlops_alert_delivery_response(&state, &model, &request);
+    record_mlops_alert_delivery_audit(&state, &actor, &model, &request, &response)
+        .await
+        .map_err(internal_error("MLOPS_ALERT_DELIVERY_AUDIT_SAVE_FAILED"))?;
     Ok(Json(response))
 }
 
@@ -971,6 +1031,135 @@ fn validate_monitoring_report_evidence(
             StatusCode::BAD_REQUEST,
             "MISSING_MLOPS_MONITORING_EVIDENCE",
             format!("MLOps monitoring evidence_refs must include {expected_ref}"),
+        ))
+    }
+}
+
+fn validate_mlops_alert_delivery_request(
+    request: &SubmitMlopsAlertDeliveryRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_MLOPS_ALERT_DELIVERY_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_MLOPS_ALERT_DELIVERY_NOTES",
+            "MLOps alert delivery notes are required",
+        ),
+        (
+            request.scheduler_execution_report_uri.as_str(),
+            "INVALID_MLOPS_SCHEDULER_REPORT_URI",
+            "scheduler_execution_report_uri is required",
+        ),
+        (
+            request.model_version.as_str(),
+            "INVALID_MLOPS_ALERT_DELIVERY_MODEL_VERSION",
+            "model_version is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "mlops_scheduler_execution_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_SCHEDULER_REPORT_KIND",
+            "report_kind must be mlops_scheduler_execution_report",
+        ));
+    }
+    if !matches!(
+        request.alert_delivery_status.as_str(),
+        "no_alerts_required" | "queued_for_external_alert_router"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_ALERT_DELIVERY_STATUS",
+            "alert_delivery_status must be no_alerts_required or queued_for_external_alert_router",
+        ));
+    }
+    validate_json_artifact_uri(
+        &request.scheduler_execution_report_uri,
+        "INVALID_MLOPS_SCHEDULER_REPORT_URI",
+        "scheduler_execution_report_uri must point to a JSON report",
+    )?;
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_ALERT_DELIVERY_EVIDENCE",
+            "MLOps alert delivery evidence_refs are required",
+        ));
+    }
+    if request.alert_delivery_status == "queued_for_external_alert_router"
+        && request.alert_delivery_tasks.is_empty()
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_ALERT_DELIVERY_TASK",
+            "queued alert delivery requires alert_delivery_tasks",
+        ));
+    }
+    if request
+        .alert_delivery_tasks
+        .iter()
+        .any(|task| match task.as_object() {
+            Some(object) => {
+                object.is_empty()
+                    || task.get("task_kind").and_then(|value| value.as_str())
+                        != Some("mlops_alert_delivery")
+            }
+            None => true,
+        })
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_ALERT_DELIVERY_TASK",
+            "alert_delivery_tasks must be non-empty mlops_alert_delivery objects",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.actor.as_str())
+            .chain(std::iter::once(request.notes.as_str()))
+            .chain(std::iter::once(
+                request.scheduler_execution_report_uri.as_str(),
+            ))
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_ALERT_DELIVERY",
+            "MLOps alert delivery actor, notes, scheduler report URI, and evidence_refs must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_alert_delivery_evidence(
+    request: &SubmitMlopsAlertDeliveryRequest,
+) -> Result<(), ApiError> {
+    let expected_ref = format!(
+        "mlops_scheduler_execution_reports:{}",
+        request.scheduler_execution_report_uri
+    );
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_ALERT_DELIVERY_EVIDENCE",
+            format!("MLOps alert delivery evidence_refs must include {expected_ref}"),
         ))
     }
 }
@@ -2042,6 +2231,35 @@ fn build_mlops_monitoring_report_response(
     }
 }
 
+fn build_mlops_alert_delivery_response(
+    state: &AppState,
+    model: &ModelVersionRecord,
+    request: &SubmitMlopsAlertDeliveryRequest,
+) -> SubmitMlopsAlertDeliveryResponse {
+    let mut next_actions = vec!["record_alert_router_delivery_evidence".into()];
+    if request.alert_delivery_status == "queued_for_external_alert_router" {
+        next_actions.push("confirm_customer_alert_router_receipt".into());
+        next_actions.push("review_alert_delivery_tasks".into());
+    } else {
+        next_actions.push("continue_monitoring".into());
+    }
+    next_actions.sort();
+    next_actions.dedup();
+
+    SubmitMlopsAlertDeliveryResponse {
+        model_key: model.model_key.clone(),
+        model_version: model.version.clone(),
+        scheduler_execution_report_uri: request.scheduler_execution_report_uri.clone(),
+        alert_delivery_status: request.alert_delivery_status.clone(),
+        alert_delivery_task_count: request.alert_delivery_tasks.len(),
+        alert_routing_policy_configured: !state.config.alert_routing_policy_id.trim().is_empty(),
+        next_actions,
+        governance_boundary:
+            "alert delivery submission records customer alert-router handoff only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels"
+                .into(),
+    }
+}
+
 fn is_unresolved_feedback_status(status: &str) -> bool {
     matches!(status, "open" | "in_progress")
 }
@@ -2424,6 +2642,53 @@ async fn record_mlops_monitoring_audit(
                 "retraining_recommendation": request.retraining_recommendation,
                 "trigger_count": request.triggers.len(),
                 "review_task_count": request.review_tasks.len(),
+                "next_actions": response.next_actions,
+                "submitted_by": request.actor,
+                "note_present": !request.notes.trim().is_empty(),
+                "governance_boundary": response.governance_boundary,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_mlops_alert_delivery_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    model: &ModelVersionRecord,
+    request: &SubmitMlopsAlertDeliveryRequest,
+    response: &SubmitMlopsAlertDeliveryResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "model.mlops_alert_delivery.submitted".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "MLOps alert delivery submitted: {}",
+                request.alert_delivery_status
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "model_key": model.model_key,
+                "model_version": model.version,
+                "scheduler_execution_report_uri": request.scheduler_execution_report_uri,
+                "report_kind": request.report_kind,
+                "alert_delivery_status": request.alert_delivery_status,
+                "alert_delivery_task_count": request.alert_delivery_tasks.len(),
+                "alert_routing_policy_configured": response.alert_routing_policy_configured,
+                "alert_routing_policy_ref": "configured_alert_routing_policy",
                 "next_actions": response.next_actions,
                 "submitted_by": request.actor,
                 "note_present": !request.notes.trim().is_empty(),

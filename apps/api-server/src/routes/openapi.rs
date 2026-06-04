@@ -1893,6 +1893,46 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/mlops-alert-deliveries": {
+                "post": {
+                    "summary": "Submit Rust MLOps alert-router delivery evidence into governance audit",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitMlopsAlertDeliveryRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded MLOps alert delivery governance event",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/SubmitMlopsAlertDeliveryResponse" }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid alert delivery submission",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/model-retraining-jobs/{job_id}/status": {
                 "post": {
                     "summary": "Update model retraining job status",
@@ -5457,6 +5497,59 @@ pub async fn openapi_schema() -> Json<Value> {
                         "retraining_recommendation": { "type": "string", "enum": ["monitor", "prepare_retraining", "blocked"] },
                         "trigger_count": { "type": "integer" },
                         "review_task_count": { "type": "integer" },
+                        "next_actions": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "governance_boundary": { "type": "string" }
+                    }
+                },
+                "SubmitMlopsAlertDeliveryRequest": {
+                    "type": "object",
+                    "required": ["actor", "notes", "scheduler_execution_report_uri", "report_kind", "model_version", "alert_delivery_status", "alert_delivery_tasks", "evidence_refs"],
+                    "properties": {
+                        "actor": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Alert delivery notes must not contain PII."
+                        },
+                        "scheduler_execution_report_uri": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "URI of mlops_scheduler_execution_report.json."
+                        },
+                        "report_kind": { "type": "string", "enum": ["mlops_scheduler_execution_report"] },
+                        "model_version": { "type": "string", "minLength": 1 },
+                        "alert_delivery_status": {
+                            "type": "string",
+                            "enum": ["no_alerts_required", "queued_for_external_alert_router"]
+                        },
+                        "alert_delivery_tasks": {
+                            "type": "array",
+                            "items": { "type": "object", "minProperties": 1 }
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 },
+                            "description": "Must include model_versions:{model_key}:{model_version} and mlops_scheduler_execution_reports:{scheduler_execution_report_uri}."
+                        }
+                    }
+                },
+                "SubmitMlopsAlertDeliveryResponse": {
+                    "type": "object",
+                    "required": ["model_key", "model_version", "scheduler_execution_report_uri", "alert_delivery_status", "alert_delivery_task_count", "alert_routing_policy_configured", "next_actions", "governance_boundary"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "scheduler_execution_report_uri": { "type": "string" },
+                        "alert_delivery_status": {
+                            "type": "string",
+                            "enum": ["no_alerts_required", "queued_for_external_alert_router"]
+                        },
+                        "alert_delivery_task_count": { "type": "integer" },
+                        "alert_routing_policy_configured": { "type": "boolean" },
                         "next_actions": {
                             "type": "array",
                             "items": { "type": "string" }

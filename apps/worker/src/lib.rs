@@ -92,6 +92,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "mlops_alert_delivery_submitter",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "model_artifact_evaluator",
                 status: "ok",
             },
@@ -183,6 +187,18 @@ pub struct MlopsMonitoringReportSubmission {
     pub retraining_recommendation: String,
     pub triggers: Vec<String>,
     pub review_tasks: Vec<serde_json::Value>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct MlopsAlertDeliverySubmission {
+    pub actor: String,
+    pub notes: String,
+    pub scheduler_execution_report_uri: String,
+    pub report_kind: String,
+    pub model_version: String,
+    pub alert_delivery_status: String,
+    pub alert_delivery_tasks: Vec<serde_json::Value>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -338,6 +354,94 @@ pub async fn submit_mlops_monitoring_report(
         .json::<serde_json::Value>()
         .await
         .context("parse MLOps monitoring report response")
+}
+
+pub fn build_mlops_alert_delivery_submission(
+    scheduler_execution_report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<(String, MlopsAlertDeliverySubmission)> {
+    let scheduler_execution_report_uri = required_non_empty(
+        "scheduler_execution_report_uri",
+        scheduler_execution_report_uri,
+    )?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report = read_json_report(scheduler_execution_report_uri)?;
+    let model_key = json_string(&report, "model_key")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps scheduler execution report requires model_key")?;
+    let model_version = json_string(&report, "model_version")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps scheduler execution report requires model_version")?;
+    let report_kind = json_string(&report, "report_kind")
+        .filter(|value| value == "mlops_scheduler_execution_report")
+        .context("report_kind must be mlops_scheduler_execution_report")?;
+    let alert_delivery_status = json_string(&report, "alert_delivery_status")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps scheduler execution report requires alert_delivery_status")?;
+    let alert_delivery_tasks = report
+        .get("alert_delivery_tasks")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut evidence_refs = report
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    evidence_refs.push(format!("model_versions:{model_key}:{model_version}"));
+    evidence_refs.push(format!(
+        "mlops_scheduler_execution_reports:{scheduler_execution_report_uri}"
+    ));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    Ok((
+        model_key,
+        MlopsAlertDeliverySubmission {
+            actor: actor.into(),
+            notes: notes.into(),
+            scheduler_execution_report_uri: scheduler_execution_report_uri.into(),
+            report_kind,
+            model_version,
+            alert_delivery_status,
+            alert_delivery_tasks,
+            evidence_refs,
+        },
+    ))
+}
+
+pub async fn submit_mlops_alert_delivery_tasks(
+    api_base_url: &str,
+    api_key: &str,
+    scheduler_execution_report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let (model_key, payload) =
+        build_mlops_alert_delivery_submission(scheduler_execution_report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            &format!("/api/v1/ops/models/{model_key}/mlops-alert-deliveries"),
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit MLOps alert delivery tasks")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit MLOps alert delivery tasks failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse MLOps alert delivery response")
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -7925,6 +8029,25 @@ mod tests {
         assert!(root
             .join("scheduler/mlops_alert_delivery_tasks.json")
             .is_file());
+
+        let (_, submission) = build_mlops_alert_delivery_submission(
+            &root
+                .join("scheduler/mlops_scheduler_execution_report.json")
+                .to_string_lossy(),
+            "mlops-worker",
+            "Submit alert-router delivery tasks.",
+        )
+        .expect("alert delivery submission");
+        assert_eq!(submission.model_version, "0.2.0");
+        assert_eq!(
+            submission.alert_delivery_status,
+            "queued_for_external_alert_router"
+        );
+        assert_eq!(submission.alert_delivery_tasks.len(), 2);
+        assert!(submission
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.starts_with("mlops_scheduler_execution_reports:")));
     }
 
     #[test]
