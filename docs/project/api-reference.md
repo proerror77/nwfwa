@@ -470,9 +470,10 @@ cannot serve as production promotion evidence.
 Model APIs govern the demo and pilot model lifecycle. The local ML service now
 produces a production-style baseline bundle with artifact checksum/signature,
 serving manifest, feature materialization manifest, shadow comparison report,
-drift report, and segment fairness report. External scheduler, serving image
-registry, secrets manager, observability dashboards, and customer environment
-deployment remain outside this repository.
+drift report, segment fairness report, and worker-generated Rust serving
+artifact evaluation evidence. External scheduler, serving image registry,
+secrets manager, observability dashboards, and customer environment deployment
+remain outside this repository.
 
 Model rollback audit payloads separate the restored and replaced versions:
 `previous_active_version` is the approved historical version restored to
@@ -486,7 +487,8 @@ customer-environment deployment.
 
 Promotion gates should be read as the policy checklist for activation. They
 cover data quality, label provenance, drift, promotion review evidence, feature
-reproducibility, explanation artifacts, and validation quality.
+reproducibility, explanation artifacts, Rust serving artifact evaluation, and
+validation quality.
 
 ## AI Evidence Runtime Metadata
 

@@ -490,6 +490,7 @@ Promotion-ready evidence must include:
 - out-of-time metrics;
 - time/group split strategy;
 - leakage check;
+- Rust serving artifact evaluation from `evaluate-model-artifact`;
 - review-capacity threshold;
 - explanation artifact;
 - shadow comparison;

@@ -808,6 +808,8 @@ Model promotion requires:
 - holdout and out-of-time metrics;
 - threshold selection tied to review capacity;
 - explanation artifact such as feature importance or SHAP-style analysis;
+- Rust serving artifact evaluation, including manifest contract, feature order,
+  checksum/signature, probability parity when available, and latency budget;
 - shadow-mode comparison against rules, previous model, and QA outcomes;
 - approval before the model affects recommended actions.
 

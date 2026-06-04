@@ -332,6 +332,10 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "artifact_integrity_status": "passed",
                 "feature_store_materialization_status": "passed",
                 "segment_fairness_status": "passed",
+                "model_artifact_evaluation_status": "passed",
+                "model_artifact_evaluation_report_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/artifact-evaluation/model_artifact_evaluation_report.json",
+                "rust_serving_status": "passed",
+                "rust_serving_latency_status": "passed",
                 "feature_reproducibility_hash": "sha256:activation-features",
                 "label_provenance_status": "passed",
                 "label_reviewer_source": "qa_review",
@@ -597,7 +601,7 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
     assert_eq!(body["source_data_quality_score"], serde_json::Value::Null);
     assert_eq!(body["source_data_quality_status"], "missing");
     assert_eq!(body["passed_count"], 2);
-    assert_eq!(body["total_count"], 21);
+    assert_eq!(body["total_count"], 22);
     assert!(body["blockers"]
         .as_array()
         .unwrap()
@@ -642,6 +646,12 @@ async fn returns_model_promotion_gates_without_evaluation_evidence() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("segment fairness review missing")));
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "rust serving artifact evaluation missing"
+        )));
     let dataset_gate = body["gates"]
         .as_array()
         .unwrap()
@@ -723,6 +733,74 @@ async fn model_promotion_gates_require_data_quality_and_label_provenance() {
         assert_eq!(gate["passed"], true);
         assert_eq!(gate["evidence_source"], "evaluation");
     }
+}
+
+#[tokio::test]
+async fn model_promotion_gates_require_rust_serving_artifact_evaluation() {
+    let app = build_app(test_config());
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "rust_serving_gate").await;
+
+    let (status, _) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "eval_baseline_rust_serving_gate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_rust_serving_gate/v1/feature_importance.parquet",
+              "metrics_json": {{
+                "data_quality_score": 0.91,
+                "out_of_time_auc": 0.79,
+                "review_capacity_threshold_status": "passed",
+                "leakage_check_status": "passed",
+                "time_group_split_status": "passed",
+                "time_split_field": "service_date",
+                "group_split_fields": ["member_id", "policy_id", "provider_id"],
+                "shadow_comparison_status": "passed",
+                "serving_version_lock_status": "passed",
+                "artifact_integrity_status": "passed",
+                "feature_store_materialization_status": "passed",
+                "segment_fairness_status": "passed",
+                "feature_reproducibility_hash": "sha256:rust-serving-gate-features",
+                "label_provenance_status": "passed",
+                "label_reviewer_source": "qa_review",
+                "pilot_validation_status": "passed"
+              }}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, body) = get_json(app, "/api/v1/ops/models/baseline_fwa/promotion-gates").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert!(body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "rust serving artifact evaluation missing"
+        )));
+    let gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Rust serving evaluation")
+        .unwrap();
+    assert_eq!(gate["passed"], false);
+    assert_eq!(gate["evidence_source"], "missing");
 }
 
 #[tokio::test]

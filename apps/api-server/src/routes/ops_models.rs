@@ -1424,6 +1424,7 @@ fn build_model_promotion_gates(
         .get("segment_fairness_status")
         .and_then(|value| value.as_str())
         == Some("passed");
+    let rust_serving_evaluation = rust_serving_evaluation_gate(metrics);
     let source_data_quality = source_data_quality_gate(metrics, source_dataset);
     let feature_reproducibility = metrics
         .get("feature_reproducibility_hash")
@@ -1556,6 +1557,12 @@ fn build_model_promotion_gates(
             segment_fairness,
             "segment fairness review missing",
             evidence_source(segment_fairness, "evaluation"),
+        ),
+        gate(
+            "Rust serving evaluation",
+            rust_serving_evaluation,
+            "rust serving artifact evaluation missing",
+            evidence_source(rust_serving_evaluation, "evaluation"),
         ),
         gate(
             "Source data quality",
@@ -1841,6 +1848,36 @@ fn pilot_customer_validation_evidence_source(
     } else {
         "missing"
     }
+}
+
+fn rust_serving_evaluation_gate(metrics: &Value) -> bool {
+    if metrics
+        .get("model_artifact_evaluation_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+    {
+        return true;
+    }
+    if metrics
+        .get("model_artifact_evaluation_gate_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+    {
+        return true;
+    }
+    if metrics.get("report_kind").and_then(|value| value.as_str())
+        == Some("model_artifact_evaluation")
+        && metrics.get("gate_status").and_then(|value| value.as_str()) == Some("passed")
+    {
+        return true;
+    }
+    metrics
+        .get("model_artifact_evaluation")
+        .is_some_and(|value| {
+            value.get("report_kind").and_then(|value| value.as_str())
+                == Some("model_artifact_evaluation")
+                && value.get("gate_status").and_then(|value| value.as_str()) == Some("passed")
+        })
 }
 
 fn source_data_quality_gate(
