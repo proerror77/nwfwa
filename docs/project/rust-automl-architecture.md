@@ -129,16 +129,18 @@ Current repository completion for this target architecture is approximately:
 - 45% for data lifecycle: labeled public/demo manifests and profiling exist;
   Rust-generated labeled/unlabeled demo packs now cover the missing dataset
   shape.
-- 35% for model portfolio: logistic and XGBoost training paths exist; LightGBM,
-  clustering, and ONNX serving are still future work.
+- 50% for model portfolio: logistic has a native Rust JSON serving artifact;
+  XGBoost and LightGBM training now emit governed ONNX serving artifacts with
+  probability-parity reports; clustering and deep-learning serving remain
+  future work.
 - 45% for Auto MLOps: worker can rank candidates, mine explainable rule
-  candidates, and backtest those candidates into human-review evidence, but
-  parity tests, activation workflows, and UI/API review surfaces still need
-  implementation.
+  candidates, and backtest those candidates into human-review evidence, while
+  trainer-side ONNX parity reports exist for GBDT candidates; activation
+  workflows and UI/API review surfaces still need implementation.
 - 20% for Rust ONNX serving: architecture is defined, but the runtime scorer and
-  parity tests still need implementation.
+  ONNX Runtime session still need implementation.
 
 The runtime now has a serving-manifest boundary for Rust logistic artifacts and
 ONNX contract validation. The next highest-leverage implementation is the real
-Rust ONNX scorer with parity tests against XGBoost and LightGBM training
-artifacts.
+Rust ONNX scorer using the already-generated XGBoost and LightGBM ONNX artifacts
+and parity reports.

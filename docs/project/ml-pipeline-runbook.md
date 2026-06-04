@@ -238,9 +238,11 @@ Current implementation:
   `--algorithm lightgbm` for gradient-boosted-tree supervised-learning
   candidates;
 - numeric feature columns from the manifest dataset;
-- `.joblib` model artifact;
+- `.joblib` training artifact;
+- `.onnx` serving artifact for XGBoost and LightGBM;
 - `validation.json`;
 - `feature_importance.parquet`;
+- `onnx_parity_report.json` for XGBoost and LightGBM;
 - `serving_manifest.json` with artifact checksum, signature, and version lock;
 - `feature_store_manifest.json` with materialized feature columns, split row
   counts, entity keys, and null-count evidence;
@@ -253,12 +255,12 @@ The first production supervised-learning comparison should include the logistic
 baseline, an XGBoost candidate, and a LightGBM candidate. Logistic exports both
 a Python `.joblib` artifact and a Rust JSON serving artifact for the API
 server's lightweight runtime. XGBoost and LightGBM export Python `.joblib`
-training artifacts and serving manifests for the existing Python scorer
-boundary today. The target path is ONNX export and Rust ONNX serving when
-conversion preserves feature order and prediction parity. Until that parity gate
-exists, both GBDT candidates remain governed candidates with feature-importance
-evidence and the same registration, promotion, shadow, drift, and human-review
-gates.
+training artifacts plus governed `.onnx` serving artifacts. Their serving
+manifests use `runtime_kind` values `xgboost_onnx` and `lightgbm_onnx` only
+after the trainer verifies validation-split probability parity with ONNX
+Runtime. They still remain governed candidates with feature-importance,
+shadow, drift, fairness, registration, promotion, and human-review gates; ONNX
+export alone does not activate them.
 
 ## Stage 6: Worker-Driven Candidate Registration
 
@@ -555,12 +557,12 @@ to use the trained `.joblib` artifact. The Rust artifact uses this shape:
 ```
 
 For XGBoost and LightGBM, `.joblib` remains a training artifact or Python
-fallback artifact. Rust local serving requires an ONNX-serving manifest with
-`runtime_kind` such as `xgboost_onnx` or `lightgbm_onnx`. The current Rust
-runtime validates the ONNX manifest, feature order, and checksum, then rejects
-execution until the ONNX Runtime session and parity test gate are implemented.
-This prevents a `.joblib` artifact from being accidentally treated as Rust
-serving evidence.
+fallback artifact. The trainer now writes `model.onnx` plus
+`onnx_parity_report.json`; the serving manifest points to the `.onnx` artifact
+only when probability parity passes. The current Rust runtime validates the
+ONNX manifest, feature order, and checksum, then rejects execution until the
+ONNX Runtime session is linked. This prevents a `.joblib` artifact from being
+accidentally treated as Rust serving evidence.
 
 The active serving selector is:
 

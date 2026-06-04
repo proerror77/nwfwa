@@ -193,21 +193,37 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     )
 
     assert payload["candidate_model_version"] == "0.1.0-xgboost-candidate-model_retraining_job_1"
-    assert payload["artifact_uri"].endswith("/model.joblib")
-    assert payload["training_artifact_uri"] == payload["artifact_uri"]
+    assert payload["artifact_uri"].endswith("/model.onnx")
+    assert payload["training_artifact_uri"].endswith("/model.joblib")
     assert not (Path(payload["artifact_uri"]).parent / "rust_serving_artifact.json").exists()
     assert payload["metrics_json"]["algorithm"] == "xgboost"
     assert payload["metrics_json"]["algorithm_family"] == "gradient_boosted_tree"
-    assert payload["metrics_json"]["runtime_kind"] == "xgboost_classifier"
+    assert payload["metrics_json"]["runtime_kind"] == "xgboost_onnx"
     assert payload["metrics_json"]["python_runtime_kind"] == "xgboost_classifier"
+    assert payload["metrics_json"]["onnx_export_status"] == "exported"
+    assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert (
+        payload["metrics_json"]["rust_serving_gate_status"]
+        == "onnx_export_and_parity_passed_runtime_link_pending"
+    )
     assert Path(payload["feature_importance_uri"]).exists()
+    assert Path(payload["artifact_uri"]).exists()
+    assert Path(payload["training_artifact_uri"]).exists()
+    assert Path(payload["onnx_parity_report_uri"]).exists()
 
     serving_manifest = json.loads(
         Path(payload["serving_manifest_uri"]).read_text(encoding="utf-8")
     )
-    assert serving_manifest["runtime_kind"] == "xgboost_classifier"
+    assert serving_manifest["runtime_kind"] == "xgboost_onnx"
     assert serving_manifest["artifact_uri"] == payload["artifact_uri"]
     assert serving_manifest["training_artifact_uri"] == payload["training_artifact_uri"]
+
+    parity_report = json.loads(
+        Path(payload["onnx_parity_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert parity_report["status"] == "passed"
+    assert parity_report["serving_runtime_kind"] == "xgboost_onnx"
+    assert parity_report["max_abs_probability_delta"] <= parity_report["tolerance"]
 
     feature_importance = pd.read_parquet(payload["feature_importance_uri"])
     assert set(feature_importance["feature"]) == {
@@ -233,21 +249,37 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     )
 
     assert payload["candidate_model_version"] == "0.1.0-lightgbm-candidate-model_retraining_job_1"
-    assert payload["artifact_uri"].endswith("/model.joblib")
-    assert payload["training_artifact_uri"] == payload["artifact_uri"]
+    assert payload["artifact_uri"].endswith("/model.onnx")
+    assert payload["training_artifact_uri"].endswith("/model.joblib")
     assert not (Path(payload["artifact_uri"]).parent / "rust_serving_artifact.json").exists()
     assert payload["metrics_json"]["algorithm"] == "lightgbm"
     assert payload["metrics_json"]["algorithm_family"] == "gradient_boosted_tree"
-    assert payload["metrics_json"]["runtime_kind"] == "lightgbm_classifier"
+    assert payload["metrics_json"]["runtime_kind"] == "lightgbm_onnx"
     assert payload["metrics_json"]["python_runtime_kind"] == "lightgbm_classifier"
+    assert payload["metrics_json"]["onnx_export_status"] == "exported"
+    assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert (
+        payload["metrics_json"]["rust_serving_gate_status"]
+        == "onnx_export_and_parity_passed_runtime_link_pending"
+    )
     assert Path(payload["feature_importance_uri"]).exists()
+    assert Path(payload["artifact_uri"]).exists()
+    assert Path(payload["training_artifact_uri"]).exists()
+    assert Path(payload["onnx_parity_report_uri"]).exists()
 
     serving_manifest = json.loads(
         Path(payload["serving_manifest_uri"]).read_text(encoding="utf-8")
     )
-    assert serving_manifest["runtime_kind"] == "lightgbm_classifier"
+    assert serving_manifest["runtime_kind"] == "lightgbm_onnx"
     assert serving_manifest["artifact_uri"] == payload["artifact_uri"]
     assert serving_manifest["training_artifact_uri"] == payload["training_artifact_uri"]
+
+    parity_report = json.loads(
+        Path(payload["onnx_parity_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert parity_report["status"] == "passed"
+    assert parity_report["serving_runtime_kind"] == "lightgbm_onnx"
+    assert parity_report["max_abs_probability_delta"] <= parity_report["tolerance"]
 
     feature_importance = pd.read_parquet(payload["feature_importance_uri"])
     assert set(feature_importance["feature"]) == {

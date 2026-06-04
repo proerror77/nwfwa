@@ -137,11 +137,14 @@ python -m app.train \
 
 The command prints the retraining output payload expected by
 `POST /api/v1/ops/model-retraining-jobs/{job_id}/output`. To serve the resulting
-artifact locally, start the ML service with `FWA_MODEL_ARTIFACT_URI` pointing to
-the generated `model.joblib`. The training command also writes a serving
-manifest, artifact checksum/signature, feature-store materialization manifest,
-shadow comparison report, drift report, and segment fairness report next to the
-model artifact.
+logistic fallback artifact locally, start the ML service with
+`FWA_MODEL_ARTIFACT_URI` pointing to the generated `model.joblib`. The training
+command also writes a serving manifest, artifact checksum/signature,
+feature-store materialization manifest, shadow comparison report, drift report,
+and segment fairness report next to the model artifact. For XGBoost and
+LightGBM, the payload's `artifact_uri` points to `model.onnx`; `model.joblib`
+is retained as `training_artifact_uri`, and `onnx_parity_report.json` records
+the Python-versus-ONNX probability parity gate.
 
 Public-data MVP manifest:
 
@@ -212,6 +215,23 @@ Minimal Rust artifact shape:
   "coefficients": {
     "claim_amount_to_limit_ratio": 4.0
   }
+}
+```
+
+GBDT serving manifest shape:
+
+```json
+{
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate-job-1",
+  "runtime_kind": "xgboost_onnx",
+  "artifact_uri": "data/model-artifacts/baseline_fwa/0.2.0-xgboost-candidate-job-1/model.onnx",
+  "artifact_sha256": "sha256:<onnx-digest>",
+  "artifact_signature": "hmac-sha256:<artifact-signature>",
+  "version_lock": "0.2.0-xgboost-candidate-job-1",
+  "feature_columns": ["claim_amount_to_limit_ratio", "provider_profile_score"],
+  "threshold": 0.5,
+  "training_artifact_uri": "data/model-artifacts/baseline_fwa/0.2.0-xgboost-candidate-job-1/model.joblib"
 }
 ```
 

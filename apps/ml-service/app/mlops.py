@@ -98,8 +98,11 @@ def build_shadow_report(
     frame: pd.DataFrame,
     feature_columns: list[str],
     output_path: str | Path,
+    use_numpy_matrix: bool = False,
 ) -> dict[str, Any]:
-    model_probabilities = pipeline.predict_proba(frame[feature_columns])[:, 1]
+    model_probabilities = pipeline.predict_proba(
+        model_input(frame, feature_columns, use_numpy_matrix)
+    )[:, 1]
     heuristic_probabilities = frame.apply(heuristic_probability, axis=1)
     deltas = [
         float(model - heuristic)
@@ -123,13 +126,22 @@ def build_drift_report(
     current: pd.DataFrame,
     feature_columns: list[str],
     output_path: str | Path,
+    use_numpy_matrix: bool = False,
 ) -> dict[str, Any]:
     feature_psi = {
         feature: population_stability_index(baseline[feature], current[feature])
         for feature in feature_columns
     }
-    baseline_scores = pd.Series(pipeline.predict_proba(baseline[feature_columns])[:, 1])
-    current_scores = pd.Series(pipeline.predict_proba(current[feature_columns])[:, 1])
+    baseline_scores = pd.Series(
+        pipeline.predict_proba(model_input(baseline, feature_columns, use_numpy_matrix))[
+            :, 1
+        ]
+    )
+    current_scores = pd.Series(
+        pipeline.predict_proba(model_input(current, feature_columns, use_numpy_matrix))[
+            :, 1
+        ]
+    )
     score_psi = population_stability_index(baseline_scores, current_scores)
     report = {
         "status": drift_status(score_psi),
@@ -148,8 +160,11 @@ def build_fairness_report(
     label_column: str,
     segment_columns: list[str],
     output_path: str | Path,
+    use_numpy_matrix: bool = False,
 ) -> dict[str, Any]:
-    probabilities = pipeline.predict_proba(frame[feature_columns])[:, 1]
+    probabilities = pipeline.predict_proba(
+        model_input(frame, feature_columns, use_numpy_matrix)
+    )[:, 1]
     predictions = (probabilities >= 0.5).astype(int)
     segments = []
     for segment_column in segment_columns:
@@ -241,3 +256,17 @@ def safe_precision(y_true: pd.Series, y_pred: Any) -> float:
 
 def safe_recall(y_true: pd.Series, y_pred: Any) -> float:
     return float(recall_score(y_true, y_pred, zero_division=0))
+
+
+def model_input(
+    frame: pd.DataFrame,
+    feature_columns: list[str],
+    use_numpy_matrix: bool,
+) -> Any:
+    if use_numpy_matrix:
+        return model_matrix(frame, feature_columns)
+    return frame[feature_columns]
+
+
+def model_matrix(frame: pd.DataFrame, feature_columns: list[str]) -> Any:
+    return frame[feature_columns].to_numpy(dtype="float32")

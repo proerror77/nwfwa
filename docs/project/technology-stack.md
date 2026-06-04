@@ -70,6 +70,10 @@ The API server uses:
 | pandas | `apps/ml-service` | Parquet training dataset loading |
 | pyarrow | `apps/ml-service` | Parquet training and feature-importance artifacts |
 | scikit-learn | `apps/ml-service` | Logistic-regression baseline training and inference |
+| XGBoost | `apps/ml-service` | Primary gradient-boosted-tree supervised candidate |
+| LightGBM | `apps/ml-service` | Secondary gradient-boosted-tree supervised candidate |
+| ONNXMLTools | `apps/ml-service` | XGBoost and LightGBM conversion to ONNX serving artifacts |
+| ONNX Runtime | `apps/ml-service` | Trainer-side Python-versus-ONNX probability parity checks |
 | joblib | `apps/ml-service` | Model artifact serialization |
 | Pydantic 2 | `apps/ml-service` | Request and response validation |
 | Uvicorn | `apps/ml-service` | ASGI server |

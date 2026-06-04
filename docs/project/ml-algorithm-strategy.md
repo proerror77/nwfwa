@@ -155,11 +155,11 @@ Candidate order:
    platform constraints or customer stack preference make it a better fit.
 
 XGBoost or LightGBM candidates must carry feature importance or SHAP-style
-artifacts, threshold evidence tied to review capacity, and strict time/group
-validation. Their high-contribution feature patterns may be sent into Rule
-Studio as candidate rules, but those candidates still require backtest, human
-review, promotion gates, approval, and publication before they become active
-rules.
+artifacts, threshold evidence tied to review capacity, strict time/group
+validation, ONNX serving artifacts, and probability-parity reports. Their
+high-contribution feature patterns may be sent into Rule Studio as candidate
+rules, but those candidates still require backtest, human review, promotion
+gates, approval, and publication before they become active rules.
 
 Do not make deep learning the default for structured claims scoring. Keep deep
 or LLM models limited to OCR cleanup, document summarization, medical-note
@@ -178,6 +178,8 @@ Every candidate evaluation should record:
 - threshold selection tied to review capacity;
 - rule-only and previous-model comparisons;
 - feature importance or SHAP artifact URI;
+- ONNX artifact URI, ONNX parity report URI, and maximum probability delta for
+  XGBoost and LightGBM candidates;
 - shadow-mode comparison against live traffic, QA outcomes, and routing impact;
 - source data quality score, label provenance, pilot or customer validation,
   drift status, and human approval.
@@ -221,10 +223,9 @@ and production-operations gaps rather than missing demo mechanics:
 
 - real customer or pilot labels with provenance, delayed-label handling, and
   reviewer-disagreement measurement;
-- ONNX export and Rust ONNX serving for XGBoost when conversion preserves
-  feature order, threshold semantics, and prediction parity;
-- ONNX export and Rust ONNX serving for LightGBM using the same manifest and
-  parity boundary as XGBoost;
+- Rust ONNX runtime execution for XGBoost and LightGBM; training already writes
+  governed ONNX artifacts and parity reports, but the Rust scorer still needs
+  the ONNX Runtime session;
 - clustering and anomaly-discovery jobs over unlabeled provider, member, claim,
   and graph features, with output treated as review candidates only;
 - production feature store or scheduled feature materialization beyond the
@@ -248,8 +249,8 @@ Keep the current algorithm architecture, but move the lifecycle toward a
 Rust-owned Auto MLOps control plane. Logistic regression is the native baseline,
 XGBoost is the primary production challenger, LightGBM is the next GBDT
 candidate, and clustering/anomaly models support provider and claim discovery.
-XGBoost and LightGBM do not need to be reimplemented in Rust; they should enter
-Rust serving through ONNX when parity tests pass, or through a governed fallback
-serving artifact until ONNX support is proven. Deep learning remains limited to
-non-structured evidence workflows unless a later customer-approved validation
-package proves otherwise.
+XGBoost and LightGBM do not need to be reimplemented in Rust; they now enter the
+governed serving contract as ONNX artifacts only after parity tests pass, while
+`.joblib` remains the training artifact or Python fallback. Deep learning
+remains limited to non-structured evidence workflows unless a later
+customer-approved validation package proves otherwise.

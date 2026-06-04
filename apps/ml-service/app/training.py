@@ -8,7 +8,11 @@ from pathlib import Path
 from typing import Any
 
 import joblib
+import numpy as np
 import pandas as pd
+import onnxruntime as ort
+from onnxmltools import convert_lightgbm, convert_xgboost
+from onnxmltools.convert.common.data_types import FloatTensorType
 from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import (
     accuracy_score,
@@ -76,16 +80,34 @@ def train_from_manifest(
     if not feature_columns:
         raise ValueError("training manifest must expose at least one numeric feature column")
 
+    use_numpy_matrix = model_algorithm == "xgboost"
     pipeline = build_pipeline(model_algorithm, train[label_column])
-    pipeline.fit(train[feature_columns], train[label_column].astype(int))
+    pipeline.fit(
+        model_input(train, feature_columns, use_numpy_matrix),
+        train[label_column].astype(int),
+    )
 
-    validation_metrics = evaluate_split(pipeline, validation, feature_columns, label_column)
-    oot_metrics = evaluate_split(pipeline, out_of_time, feature_columns, label_column)
+    validation_metrics = evaluate_split(
+        pipeline,
+        validation,
+        feature_columns,
+        label_column,
+        use_numpy_matrix,
+    )
+    oot_metrics = evaluate_split(
+        pipeline,
+        out_of_time,
+        feature_columns,
+        label_column,
+        use_numpy_matrix,
+    )
     candidate_model_version = candidate_version(base_model_version, job_id, model_algorithm)
     artifact_root = Path(artifact_base_uri) / safe_path_segment(model_key) / candidate_model_version
     artifact_root.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_root / "model.joblib"
     rust_artifact_path = artifact_root / "rust_serving_artifact.json"
+    onnx_artifact_path = artifact_root / "model.onnx"
+    onnx_parity_report_path = artifact_root / "onnx_parity_report.json"
     validation_report_path = artifact_root / "validation.json"
     feature_importance_path = artifact_root / "feature_importance.parquet"
     serving_manifest_path = artifact_root / "serving_manifest.json"
@@ -121,6 +143,18 @@ def train_from_manifest(
             encoding="utf-8",
         )
         serving_artifact_path = rust_artifact_path
+        onnx_parity_report = None
+    else:
+        onnx_parity_report = export_onnx_serving_artifact(
+            pipeline=pipeline,
+            algorithm=model_algorithm,
+            feature_columns=feature_columns,
+            validation=validation,
+            onnx_artifact_path=onnx_artifact_path,
+            parity_report_path=onnx_parity_report_path,
+            use_numpy_matrix=use_numpy_matrix,
+        )
+        serving_artifact_path = onnx_artifact_path
 
     feature_importance = build_feature_importance(pipeline, feature_columns)
     feature_importance.to_parquet(feature_importance_path, index=False)
@@ -156,6 +190,7 @@ def train_from_manifest(
         validation,
         feature_columns,
         shadow_report_path,
+        use_numpy_matrix=use_numpy_matrix,
     )
     drift_report = build_drift_report(
         pipeline,
@@ -163,6 +198,7 @@ def train_from_manifest(
         out_of_time,
         feature_columns,
         drift_report_path,
+        use_numpy_matrix=use_numpy_matrix,
     )
     fairness_report = build_fairness_report(
         pipeline,
@@ -171,6 +207,7 @@ def train_from_manifest(
         label_column,
         group_split_fields,
         fairness_report_path,
+        use_numpy_matrix=use_numpy_matrix,
     )
 
     metrics_json = {
@@ -192,6 +229,22 @@ def train_from_manifest(
         "python_runtime_kind": runtime_kind,
         "training_artifact_uri": str(artifact_path),
         "training_artifact_sha256": training_artifact_sha256,
+        "onnx_artifact_uri": str(onnx_artifact_path) if onnx_parity_report else None,
+        "onnx_parity_report_uri": str(onnx_parity_report_path) if onnx_parity_report else None,
+        "onnx_export_status": onnx_parity_report["onnx_export_status"]
+        if onnx_parity_report
+        else "not_required",
+        "onnx_parity_status": onnx_parity_report["status"]
+        if onnx_parity_report
+        else "not_required",
+        "onnx_max_abs_probability_delta": onnx_parity_report[
+            "max_abs_probability_delta"
+        ]
+        if onnx_parity_report
+        else None,
+        "rust_serving_gate_status": "onnx_export_and_parity_passed_runtime_link_pending"
+        if onnx_parity_report
+        else "rust_native_artifact_ready",
         "feature_store_materialization_status": "passed",
         "segment_fairness_status": fairness_report["status"],
         "score_psi": drift_report["score_psi"],
@@ -246,6 +299,9 @@ def train_from_manifest(
         "confusion_matrix_json": validation_metrics["confusion_matrix"],
         "feature_importance_uri": str(feature_importance_path),
         "serving_manifest_uri": str(serving_manifest_path),
+        "onnx_parity_report_uri": str(onnx_parity_report_path)
+        if onnx_parity_report
+        else None,
         "feature_store_manifest_uri": str(feature_store_manifest_path),
         "shadow_report_uri": str(shadow_report_path),
         "drift_report_uri": str(drift_report_path),
@@ -256,6 +312,13 @@ def train_from_manifest(
             f"model_artifacts:{serving_artifact_path}",
             f"model_training_artifacts:{artifact_path}",
             f"model_serving_manifests:{serving_manifest_path}",
+            *(
+                [
+                    f"model_onnx_parity_reports:{onnx_parity_report_path}",
+                ]
+                if onnx_parity_report
+                else []
+            ),
             f"feature_store_manifests:{feature_store_manifest_path}",
             f"model_shadow_reports:{shadow_report_path}",
             f"model_drift_reports:{drift_report_path}",
@@ -307,6 +370,7 @@ def build_pipeline(algorithm: str, labels: pd.Series) -> Pipeline:
             eval_metric="logloss",
             tree_method="hist",
             n_jobs=1,
+            min_child_weight=0,
             scale_pos_weight=scale_pos_weight,
             random_state=42,
             verbosity=0,
@@ -346,8 +410,8 @@ def runtime_kind_for_algorithm(algorithm: str) -> str:
 def serving_runtime_kind_for_algorithm(algorithm: str) -> str:
     return {
         DEFAULT_ALGORITHM: "rust_logistic_regression",
-        "xgboost": "xgboost_classifier",
-        "lightgbm": "lightgbm_classifier",
+        "xgboost": "xgboost_onnx",
+        "lightgbm": "lightgbm_onnx",
     }[algorithm]
 
 
@@ -397,6 +461,97 @@ def build_rust_serving_artifact(
     }
 
 
+def export_onnx_serving_artifact(
+    pipeline: Pipeline,
+    algorithm: str,
+    feature_columns: list[str],
+    validation: pd.DataFrame,
+    onnx_artifact_path: Path,
+    parity_report_path: Path,
+    use_numpy_matrix: bool,
+) -> dict[str, Any]:
+    model = pipeline.named_steps["model"]
+    initial_types = [("float_input", FloatTensorType([None, len(feature_columns)]))]
+    if algorithm == "xgboost":
+        onnx_model = convert_xgboost(
+            model,
+            initial_types=initial_types,
+            target_opset=15,
+        )
+    elif algorithm == "lightgbm":
+        onnx_model = convert_lightgbm(
+            model,
+            initial_types=initial_types,
+            target_opset=15,
+            zipmap=False,
+        )
+    else:
+        raise ValueError(f"ONNX export is not supported for algorithm: {algorithm}")
+
+    onnx_artifact_path.write_bytes(onnx_model.SerializeToString())
+    session = ort.InferenceSession(
+        str(onnx_artifact_path),
+        providers=["CPUExecutionProvider"],
+    )
+    feature_matrix = model_matrix(validation, feature_columns)
+    python_probabilities = pipeline.predict_proba(
+        model_input(validation, feature_columns, use_numpy_matrix)
+    )[:, 1]
+    onnx_outputs = session.run(None, {session.get_inputs()[0].name: feature_matrix})
+    onnx_probabilities = extract_positive_probabilities(onnx_outputs)
+    if len(onnx_probabilities) != len(python_probabilities):
+        raise ValueError(
+            "ONNX parity output row count does not match Python model output row count"
+        )
+
+    deltas = np.abs(np.asarray(python_probabilities) - np.asarray(onnx_probabilities))
+    tolerance = 1e-4
+    max_delta = float(deltas.max()) if len(deltas) else 0.0
+    average_delta = float(deltas.mean()) if len(deltas) else 0.0
+    status = "passed" if max_delta <= tolerance else "failed"
+    report = {
+        "report_kind": "onnx_probability_parity",
+        "report_version": 1,
+        "algorithm": algorithm,
+        "python_runtime_kind": runtime_kind_for_algorithm(algorithm),
+        "serving_runtime_kind": serving_runtime_kind_for_algorithm(algorithm),
+        "onnx_export_status": "exported",
+        "status": status,
+        "sample_count": int(len(python_probabilities)),
+        "tolerance": tolerance,
+        "max_abs_probability_delta": max_delta,
+        "average_abs_probability_delta": average_delta,
+        "input_name": session.get_inputs()[0].name,
+        "output_names": [output.name for output in session.get_outputs()],
+        "feature_columns": feature_columns,
+    }
+    parity_report_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    if status != "passed":
+        raise ValueError(
+            f"ONNX parity failed for {algorithm}: max probability delta {max_delta} exceeds {tolerance}"
+        )
+    return report
+
+
+def extract_positive_probabilities(outputs: list[Any]) -> np.ndarray:
+    for output in reversed(outputs):
+        array = np.asarray(output)
+        if array.ndim == 2 and array.shape[1] >= 2 and np.issubdtype(array.dtype, np.number):
+            return array[:, 1].astype(float)
+        if array.ndim == 1 and np.issubdtype(array.dtype, np.floating):
+            return array.astype(float)
+    for output in reversed(outputs):
+        if isinstance(output, list) and output and isinstance(output[0], dict):
+            return np.asarray(
+                [row.get(1, row.get("1", 0.0)) for row in output],
+                dtype=float,
+            )
+    raise ValueError("ONNX output does not expose usable positive-class probabilities")
+
+
 def load_splits(manifest: dict[str, Any], dataset_root: Path) -> dict[str, pd.DataFrame]:
     splits: dict[str, pd.DataFrame] = {}
     for split in manifest.get("splits", []):
@@ -416,6 +571,20 @@ def read_parquet_path(data_path: Path) -> pd.DataFrame:
             raise ValueError(f"split directory has no parquet files: {data_path}")
         return pd.concat(frames, ignore_index=True)
     return pd.read_parquet(data_path)
+
+
+def model_input(
+    frame: pd.DataFrame,
+    feature_columns: list[str],
+    use_numpy_matrix: bool,
+) -> pd.DataFrame | np.ndarray:
+    if use_numpy_matrix:
+        return model_matrix(frame, feature_columns)
+    return frame[feature_columns]
+
+
+def model_matrix(frame: pd.DataFrame, feature_columns: list[str]) -> np.ndarray:
+    return frame[feature_columns].to_numpy(dtype=np.float32)
 
 
 def required_split(splits: dict[str, pd.DataFrame], split_name: str) -> pd.DataFrame:
@@ -459,9 +628,12 @@ def evaluate_split(
     frame: pd.DataFrame,
     feature_columns: list[str],
     label_column: str,
+    use_numpy_matrix: bool,
 ) -> dict[str, Any]:
     y_true = frame[label_column].astype(int)
-    probabilities = pipeline.predict_proba(frame[feature_columns])[:, 1]
+    probabilities = pipeline.predict_proba(
+        model_input(frame, feature_columns, use_numpy_matrix)
+    )[:, 1]
     predictions = (probabilities >= DEFAULT_THRESHOLD).astype(int)
     tn, fp, fn, tp = confusion_matrix(y_true, predictions, labels=[0, 1]).ravel()
     auc = safe_auc(y_true, probabilities)
