@@ -6035,6 +6035,31 @@ pre {
   gap: 4px;
 }
 
+.governance-detail {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line);
+}
+
+.governance-detail summary {
+  color: #16436f;
+}
+
+.governance-check-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 8px;
+}
+
+.governance-check-list > div {
+  display: grid;
+  gap: 5px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
 .lineage-row {
   grid-template-columns: minmax(260px, 1.45fr) minmax(140px, 0.8fr) 108px;
   padding: 11px 12px;

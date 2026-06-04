@@ -8578,29 +8578,39 @@ fn governance_view(props: &GovernanceProps) -> Html {
                             if snapshot.health.pilot_readiness.blocking_checks.is_empty() {
                                 <p class="empty">{"All pilot configuration gates are configured for this environment."}</p>
                             } else {
-                                <div class="factor-card-grid">
-                                    {for snapshot.health.pilot_readiness.blocking_checks.iter().map(|check| html! {
-                                        <div class="factor-card">
-                                            <div>
-                                                <strong>{&check.name}</strong>
-                                                <span>{&check.status}</span>
+                                <>
+                                    <div class="factor-card-grid">
+                                        {for snapshot.health.pilot_readiness.blocking_checks.iter().take(3).map(|check| html! {
+                                            <div class="factor-card">
+                                                <div>
+                                                    <strong>{&check.name}</strong>
+                                                    <span>{&check.status}</span>
+                                                </div>
+                                                <small>{format!("runtime: {}", check.runtime_kind.as_deref().unwrap_or("n/a"))}</small>
+                                                if let Some(remediation) = &check.remediation {
+                                                    <small>{remediation}</small>
+                                                }
                                             </div>
-                                            <small>{format!("runtime: {}", check.runtime_kind.as_deref().unwrap_or("n/a"))}</small>
-                                            if let Some(remediation) = &check.remediation {
-                                                <small>{remediation}</small>
-                                            }
-                                        </div>
-                                    })}
-                                </div>
-                            }
-                            <div class="summary-grid">
-                                {for snapshot.health.checks.iter().filter(|check| check.name.ends_with("_configuration")).map(|check| html! {
-                                    <div>
-                                        <span>{&check.name}</span>
-                                        <strong>{&check.status}</strong>
+                                        })}
                                     </div>
-                                })}
-                            </div>
+                                    <details class="data-source-detail governance-detail">
+                                        <summary>{format!("All blocking check detail: {} checks", snapshot.health.pilot_readiness.blocking_checks.len())}</summary>
+                                        <div class="governance-check-list">
+                                            {for snapshot.health.pilot_readiness.blocking_checks.iter().map(|check| html! {
+                                                <div>
+                                                    <strong>{&check.name}</strong>
+                                                    <span class={classes!("status-token", status_tone(&check.status))}>{&check.status}</span>
+                                                    <small>{format!("runtime: {}", check.runtime_kind.as_deref().unwrap_or("n/a"))}</small>
+                                                    if let Some(remediation) = &check.remediation {
+                                                        <small>{remediation}</small>
+                                                    }
+                                                </div>
+                                            })}
+                                        </div>
+                                    </details>
+                                </>
+                            }
+                            {pilot_configuration_summary(&snapshot.health)}
                         </section>
 
                         <section class="panel result-stack">
@@ -8622,11 +8632,11 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                             </div>
                                             <p>{&event.summary}</p>
                                             <small>{format!("audit: {} / run: {} / at: {}", event.audit_id, event.run_id, event.created_at.as_deref().unwrap_or("unknown"))}</small>
-                                            <small>{format!("evidence: {}", refs_label(&event.evidence_refs))}</small>
-                                            <span class="inline-detail">
-                                                <strong>{"Payload Trace"}</strong>
+                                            <small>{format!("evidence: {}", refs_count_label(&event.evidence_refs))}</small>
+                                            <details class="inline-detail data-source-detail governance-detail">
+                                                <summary>{"Payload trace detail"}</summary>
                                                 <small>{payload_keys_label(&event.payload)}</small>
-                                            </span>
+                                            </details>
                                         </li>
                                     })}
                                 </ol>
@@ -8648,12 +8658,18 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                             <div class="summary-grid">
                                                 <div><span>{"Claim"}</span><strong>{empty_label(&call.claim_id)}</strong></div>
                                                 <div><span>{"Event"}</span><strong>{&call.event_type}</strong></div>
-                                                <div><span>{"Idempotency"}</span><strong>{call.idempotency_key.as_deref().unwrap_or("none")}</strong></div>
-                                                <div><span>{"Run"}</span><strong>{&call.run_id}</strong></div>
-                                                <div><span>{"Audit"}</span><strong>{&call.audit_id}</strong></div>
+                                                <div><span>{"Result"}</span><strong>{&call.result}</strong></div>
+                                                <div><span>{"Evidence"}</span><strong>{refs_count_label(&call.evidence_refs)}</strong></div>
                                                 <div><span>{"Observed"}</span><strong>{call.observed_at.as_deref().unwrap_or("unknown")}</strong></div>
                                             </div>
-                                            <small>{format!("call: {} / evidence: {}", call.call_id, refs_label(&call.evidence_refs))}</small>
+                                            <details class="data-source-detail governance-detail">
+                                                <summary>{"API evidence detail"}</summary>
+                                                <small>{format!("call: {}", call.call_id)}</small>
+                                                <small>{format!("run: {}", call.run_id)}</small>
+                                                <small>{format!("audit: {}", call.audit_id)}</small>
+                                                <small>{format!("idempotency: {}", call.idempotency_key.as_deref().unwrap_or("none"))}</small>
+                                                <small>{format!("evidence: {}", refs_label(&call.evidence_refs))}</small>
+                                            </details>
                                         </div>
                                     })}
                                 </div>
@@ -8670,7 +8686,7 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                     {for snapshot.agent_runs.iter().take(8).map(|run| html! {
                                         <div class="factor-card">
                                             <div>
-                                                <strong>{format!("{} / {}", run.agent_run_id, run.claim_id)}</strong>
+                                                <strong>{&run.claim_id}</strong>
                                                 <span>{format!("{} / {}", run.status, run.decision_boundary)}</span>
                                             </div>
                                             <div class="summary-grid">
@@ -8682,13 +8698,14 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                                 <div><span>{"Approvals"}</span><strong>{run.approvals.len()}</strong></div>
                                             </div>
                                             <small>{format!("created: {} / completed: {}", run.created_at.as_deref().unwrap_or("unknown"), run.completed_at.as_deref().unwrap_or("pending"))}</small>
-                                            <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
-                                            <small>{format!("output: {}", payload_keys_label(&run.output_json))}</small>
-                                            if run.approvals.is_empty() {
-                                                <small>{"approval: none"}</small>
-                                            } else {
-                                                <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
-                                            }
+                                            <small>{format!("evidence: {}", refs_count_label(&run.evidence_refs))}</small>
+                                            <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
+                                            <details class="data-source-detail governance-detail">
+                                                <summary>{"Agent run detail"}</summary>
+                                                <small>{format!("agent run: {}", run.agent_run_id)}</small>
+                                                <small>{format!("output: {}", payload_signal_count_label(&run.output_json, "output fields"))}</small>
+                                                <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
+                                            </details>
                                         </div>
                                     })}
                                 </div>
@@ -8776,6 +8793,45 @@ fn pilot_readiness_cockpit(health: &HealthResponse) -> Html {
     }
 }
 
+fn pilot_configuration_summary(health: &HealthResponse) -> Html {
+    let configuration_checks = health
+        .checks
+        .iter()
+        .filter(|check| check.name.ends_with("_configuration"))
+        .collect::<Vec<_>>();
+    let configured_count = configuration_checks
+        .iter()
+        .filter(|check| status_tone(&check.status) == "success")
+        .count();
+    let needs_setup_count = configuration_checks
+        .len()
+        .saturating_sub(configured_count);
+
+    html! {
+        <>
+            <div class="summary-grid">
+                <div><span>{"Configuration checks"}</span><strong>{configuration_checks.len()}</strong></div>
+                <div><span>{"Configured"}</span><strong>{configured_count}</strong></div>
+                <div><span>{"Needs setup"}</span><strong>{needs_setup_count}</strong></div>
+            </div>
+            <details class="data-source-detail governance-detail">
+                <summary>{"Configuration check detail"}</summary>
+                <div class="governance-check-list">
+                    {for configuration_checks.iter().map(|check| html! {
+                        <div>
+                            <strong>{&check.name}</strong>
+                            <span class={classes!("status-token", status_tone(&check.status))}>{&check.status}</span>
+                            if let Some(remediation) = &check.remediation {
+                                <small>{remediation}</small>
+                            }
+                        </div>
+                    })}
+                </div>
+            </details>
+        </>
+    }
+}
+
 fn readiness_node(label: &str, value: &str, detail: &str, tone: &str) -> Html {
     html! {
         <div class={classes!("readiness-node", tone.to_string())}>
@@ -8810,14 +8866,12 @@ fn governance_control_tower(snapshot: &GovernanceSnapshot) -> Html {
         .first()
         .map(|run| run.agent_run_id.as_str())
         .unwrap_or("agent run pending");
-    let config_summary = count_by(
-        snapshot
-            .health
-            .checks
-            .iter()
-            .filter(|check| check.name.ends_with("_configuration"))
-            .map(|check| check.status.as_str()),
-    );
+    let config_count = snapshot
+        .health
+        .checks
+        .iter()
+        .filter(|check| check.name.ends_with("_configuration"))
+        .count();
     html! {
         <section class="panel result-stack">
             <div class="section-header">
@@ -8835,7 +8889,7 @@ fn governance_control_tower(snapshot: &GovernanceSnapshot) -> Html {
                         <div><dt>{"Service"}</dt><dd>{format!("{} {}", snapshot.health.service, snapshot.health.version)}</dd></div>
                         <div><dt>{"Blockers"}</dt><dd>{snapshot.health.pilot_readiness.blocking_checks.len()}</dd></div>
                         <div><dt>{"Checks"}</dt><dd>{snapshot.health.checks.len()}</dd></div>
-                        <div><dt>{"Configs"}</dt><dd>{config_summary}</dd></div>
+                        <div><dt>{"Configs"}</dt><dd>{format!("{} checks", config_count)}</dd></div>
                     </dl>
                     <div class="tag-grid compact-tags">
                         <span>{format!("audit {}", snapshot.audit_events.len())}</span>
@@ -12024,6 +12078,14 @@ fn refs_label(refs: &[String]) -> String {
         "none".into()
     } else {
         refs.join(", ")
+    }
+}
+
+fn refs_count_label(refs: &[String]) -> String {
+    if refs.is_empty() {
+        "none".into()
+    } else {
+        format!("{} refs", refs.len())
     }
 }
 
