@@ -143,14 +143,16 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer clustering has a Rust-native demo
   workflow; broader graph/member/claim clustering and deep-learning serving
   remain future work.
-- 65% for Auto MLOps: worker can build feature-set manifests, enrich
+- 68% for Auto MLOps: worker can build feature-set manifests, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, mine explainable rule candidates,
   and backtest those candidates into human-review evidence, while API promotion
   gates now require Rust feature-set materialization evidence, worker ranking
   requires Rust feature-set and Rust serving evaluation evidence, and
-  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist;
-  activation workflows and UI/API review surfaces still need implementation.
+  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist; API
+  retraining output now accepts governed serving manifests, and the console has
+  provider model release, promotion review, activation, and rollback actions.
+  Artifact report drill-down and live monitoring surfaces still need hardening.
 - 72% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation
@@ -163,5 +165,7 @@ real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The worker
 now has an artifact-evaluation gate for Rust serving parity and latency
 evidence before a candidate can enter activation review, and `run-retraining-job`
 attaches that evidence before candidate registration when the trainer returns a
-serving manifest. The next highest-leverage implementation is wiring those
-reports into API/UI model promotion review surfaces.
+serving manifest. The API now records serving-manifest evidence in retraining
+output registration and the console exposes the human release actions. The next
+highest-leverage implementation is richer artifact report drill-down and live
+latency/drift monitoring around those existing gates.

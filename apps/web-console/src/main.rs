@@ -2567,7 +2567,7 @@ fn bootstrap_ops_page() -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Bootstrap Ops"}</h2>
-                    <p>{"Operate historical replay, missing-evidence requests, and label governance as one controlled path before MLOps consumes training labels."}</p>
+                    <p>{"Operate historical replay, missing-evidence requests, and label governance as one controlled path before provider model release consumes training labels."}</p>
                 </div>
                 <span class="status-pill">{"Label Bootstrap"}</span>
             </div>
