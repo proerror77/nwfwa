@@ -82,7 +82,8 @@ The worker is the right control-plane home for scheduled and batch ML work:
   reproducibility hash before training.
 - `build-training-handoff`: create the reproducible external training contract.
 - `run-retraining-job`: claim a candidate job, execute the trainer, and register
-  output.
+  output, enriching the trainer payload with the Rust feature-set manifest URI
+  and reproducibility hash before API registration.
 - `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
   LightGBM, and anomaly candidates, then open human-review recommendations
   without activating any model.
@@ -129,20 +130,22 @@ Current repository completion for this target architecture is approximately:
 
 - 60% for governance skeleton: model jobs, approval gates, worker handoff,
   monitoring-plan contract, and documentation exist.
-- 50% for data lifecycle: labeled public/demo manifests, profiling, and
-  Rust-built feature-set manifests exist; Rust-generated labeled/unlabeled demo
-  packs now cover the missing dataset shape.
+- 55% for data lifecycle: labeled public/demo manifests, profiling, and
+  Rust-built feature-set manifests exist, and worker-driven retraining now
+  injects Rust feature-set evidence into candidate registration; Rust-generated
+  labeled/unlabeled demo packs now cover the missing dataset shape.
 - 60% for model portfolio: logistic has a native Rust JSON serving artifact;
   XGBoost and LightGBM training now emit governed ONNX serving artifacts with
   probability-parity reports, the Rust runtime can execute those ONNX manifests
   after contract validation, and provider-peer clustering has a Rust-native demo
   workflow; broader graph/member/claim clustering and deep-learning serving
   remain future work.
-- 55% for Auto MLOps: worker can build feature-set manifests, rank candidates,
-  evaluate serving artifacts, mine explainable rule candidates, and backtest
-  those candidates into human-review evidence, while trainer-side ONNX parity
-  reports and unlabeled anomaly review tasks exist; activation workflows and
-  UI/API review surfaces still need implementation.
+- 58% for Auto MLOps: worker can build feature-set manifests, enrich
+  retraining outputs with Rust feature-set evidence, rank candidates, evaluate
+  serving artifacts, mine explainable rule candidates, and backtest those
+  candidates into human-review evidence, while trainer-side ONNX parity reports
+  and unlabeled anomaly review tasks exist; activation workflows and UI/API
+  review surfaces still need implementation.
 - 70% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker can create Rust serving evaluation

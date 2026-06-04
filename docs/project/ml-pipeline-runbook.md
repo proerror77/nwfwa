@@ -340,6 +340,14 @@ Behavior:
 - without `--training-manifest`, the worker keeps the deterministic demo mock
   output path;
 - with `--training-manifest`, the worker calls `python -m app.train`;
+- before posting the trainer output, the worker runs the Rust feature-set
+  builder against the same training manifest, writes
+  `rust_feature_set/feature_set_manifest.json` next to the model artifact, and
+  injects `rust_feature_set_manifest_uri`, `rust_feature_set_status`, and the
+  Rust `feature_reproducibility_hash` into `metrics_json`;
+- if the trainer also returned a feature hash, the worker preserves it as
+  `trainer_feature_reproducibility_hash` while making the Rust feature-set hash
+  the promotion-gate hash;
 - the worker posts the trainer output to
   `/api/v1/ops/model-retraining-jobs/{job_id}/output`;
 - the API creates a candidate model version and evaluation record if the output

@@ -239,6 +239,12 @@ struct CompleteRetrainingJobPayload {
     notes: String,
     candidate_model_version: String,
     artifact_uri: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    artifact_sha256: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    training_artifact_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    training_artifact_sha256: Option<String>,
     endpoint_url: Option<String>,
     validation_report_uri: String,
     evaluation_run_id: String,
@@ -2227,10 +2233,18 @@ pub fn build_training_handoff(
             "training_artifact_uri": format!("{artifact_dir}/model.joblib"),
             "serving_manifest_uri": format!("{artifact_dir}/serving_manifest.json"),
             "validation_report_uri": format!("{artifact_dir}/validation.json"),
+            "rust_feature_set_manifest_uri": format!("{artifact_dir}/rust_feature_set/feature_set_manifest.json"),
             "feature_store_manifest_uri": format!("{artifact_dir}/feature_store_manifest.json"),
             "shadow_report_uri": format!("{artifact_dir}/shadow_report.json"),
             "drift_report_uri": format!("{artifact_dir}/drift_report.json"),
             "fairness_report_uri": format!("{artifact_dir}/fairness_report.json")
+        },
+        "feature_set_contract": {
+            "builder": "worker build-feature-set",
+            "required_hash_field": "metrics_json.feature_reproducibility_hash",
+            "required_manifest_field": "metrics_json.rust_feature_set_manifest_uri",
+            "excluded_columns": ["dataset.entity_keys", "dataset.label_column"],
+            "evidence_ref": "feature_set_manifests:<rust_feature_set_manifest_uri>"
         },
         "output_contract": {
             "submit_path": retraining_job_output_path(job_id),
@@ -2238,6 +2252,7 @@ pub fn build_training_handoff(
             "required_evidence_refs": [
                 "model_retraining_jobs:<job_id>",
                 "model_artifacts:<rust_serving_artifact_uri>",
+                "feature_set_manifests:<rust_feature_set_manifest_uri>",
                 "model_validation_reports:<validation_report_uri>",
                 "model_evaluations:<evaluation_run_id>"
             ]
@@ -4083,6 +4098,15 @@ fn artifact_parent_uri(artifact_uri: &str) -> &str {
         .unwrap_or_else(|| artifact_uri.trim())
 }
 
+fn artifact_parent_path(artifact_uri: &str) -> PathBuf {
+    let parent_uri = artifact_parent_uri(artifact_uri);
+    let local_parent = parent_uri
+        .strip_prefix("artifact://")
+        .or_else(|| parent_uri.strip_prefix("file://"))
+        .unwrap_or(parent_uri);
+    PathBuf::from(local_parent)
+}
+
 fn required_manifest_str<'a>(
     manifest: &'a serde_json::Value,
     key: &str,
@@ -4119,8 +4143,70 @@ fn build_training_retraining_output(
             String::from_utf8_lossy(&output.stderr)
         );
     }
-    serde_json::from_slice::<CompleteRetrainingJobPayload>(&output.stdout)
-        .context("parse model training output")
+    let output = serde_json::from_slice::<CompleteRetrainingJobPayload>(&output.stdout)
+        .context("parse model training output")?;
+    enrich_retraining_output_with_rust_feature_set(output, training_manifest)
+}
+
+fn enrich_retraining_output_with_rust_feature_set(
+    mut output: CompleteRetrainingJobPayload,
+    training_manifest: &str,
+) -> anyhow::Result<CompleteRetrainingJobPayload> {
+    let feature_set_output_dir =
+        artifact_parent_path(&output.artifact_uri).join("rust_feature_set");
+    let feature_set_id = format!(
+        "{}:{}",
+        output.candidate_model_version, "rust_feature_set_v1"
+    );
+    let feature_set = build_feature_set(
+        training_manifest,
+        &feature_set_output_dir,
+        Some(&feature_set_id),
+    )
+    .context("build Rust feature set for retraining output")?;
+    let feature_set_manifest_uri = feature_set_output_dir
+        .join("feature_set_manifest.json")
+        .to_string_lossy()
+        .into_owned();
+
+    let Some(metrics) = output.metrics_json.as_object_mut() else {
+        bail!("training output metrics_json must be an object");
+    };
+    if let Some(existing_hash) = metrics
+        .get("feature_reproducibility_hash")
+        .and_then(|value| value.as_str())
+    {
+        metrics.insert(
+            "trainer_feature_reproducibility_hash".into(),
+            serde_json::Value::String(existing_hash.to_string()),
+        );
+    }
+    metrics.insert(
+        "feature_reproducibility_hash".into(),
+        serde_json::Value::String(feature_set.feature_reproducibility_hash.clone()),
+    );
+    metrics.insert(
+        "rust_feature_set_manifest_uri".into(),
+        serde_json::Value::String(feature_set_manifest_uri.clone()),
+    );
+    metrics.insert(
+        "rust_feature_set_status".into(),
+        serde_json::Value::String("passed".into()),
+    );
+    metrics.insert(
+        "feature_store_materialization_status".into(),
+        serde_json::Value::String("passed".into()),
+    );
+
+    let evidence_ref = format!("feature_set_manifests:{feature_set_manifest_uri}");
+    if !output
+        .evidence_refs
+        .iter()
+        .any(|reference| reference == &evidence_ref)
+    {
+        output.evidence_refs.push(evidence_ref);
+    }
+    Ok(output)
 }
 
 fn build_mock_retraining_output(
@@ -4162,6 +4248,9 @@ fn build_mock_retraining_output(
         notes: "Candidate model and validation report registered by worker.".into(),
         candidate_model_version,
         artifact_uri,
+        artifact_sha256: None,
+        training_artifact_uri: None,
+        training_artifact_sha256: None,
         endpoint_url: None,
         validation_report_uri,
         evaluation_run_id,
@@ -4805,6 +4894,14 @@ mod tests {
             "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rust_serving_artifact.json"
         );
         assert_eq!(
+            handoff["artifact_contract"]["rust_feature_set_manifest_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rust_feature_set/feature_set_manifest.json"
+        );
+        assert_eq!(
+            handoff["feature_set_contract"]["builder"],
+            "worker build-feature-set"
+        );
+        assert_eq!(
             handoff["output_contract"]["submit_path"],
             "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
         );
@@ -4812,6 +4909,14 @@ mod tests {
             handoff["data_contract"]["source"],
             "same_parquet_dataset_manifest"
         );
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("feature_set_manifests")));
     }
 
     #[test]
@@ -4954,6 +5059,99 @@ mod tests {
         assert!(output_dir.join("feature_set_manifest.json").is_file());
         assert!(output_dir.join("feature_columns.json").is_file());
         assert!(output_dir.join("feature_split_summary.json").is_file());
+    }
+
+    #[test]
+    fn enriches_training_output_with_rust_feature_set_evidence() {
+        let root = temp_root("training-output-feature-set");
+        let pack = build_demo_ml_datasets(&root, "2026-06-training-feature-set")
+            .expect("demo ML datasets");
+        let artifact_dir = root.join("artifacts/baseline_fwa/0.1.0-candidate-job");
+        fs::create_dir_all(&artifact_dir).unwrap();
+        let output = CompleteRetrainingJobPayload {
+            actor: "trainer-worker".into(),
+            notes: "training output".into(),
+            candidate_model_version: "0.1.0-candidate-job".into(),
+            artifact_uri: artifact_dir
+                .join("model.onnx")
+                .to_string_lossy()
+                .into_owned(),
+            artifact_sha256: Some("sha256:serving".into()),
+            training_artifact_uri: Some(
+                artifact_dir
+                    .join("model.joblib")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            training_artifact_sha256: Some("sha256:training".into()),
+            endpoint_url: None,
+            validation_report_uri: artifact_dir
+                .join("validation.json")
+                .to_string_lossy()
+                .into_owned(),
+            evaluation_run_id: "eval_baseline_fwa_candidate".into(),
+            auc: Some("0.82".into()),
+            ks: None,
+            precision: Some("0.70".into()),
+            recall: Some("0.68".into()),
+            f1: None,
+            accuracy: None,
+            threshold: Some("0.50".into()),
+            confusion_matrix_json: serde_json::json!({}),
+            feature_importance_uri: Some(
+                artifact_dir
+                    .join("feature_importance.parquet")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            metrics_json: serde_json::json!({
+                "feature_reproducibility_hash": "sha256:trainer-hash",
+                "feature_store_materialization_status": "passed"
+            }),
+            evidence_refs: vec![
+                format!(
+                    "model_artifacts:{}",
+                    artifact_dir.join("model.onnx").display()
+                ),
+                format!(
+                    "model_validation_reports:{}",
+                    artifact_dir.join("validation.json").display()
+                ),
+                "model_evaluations:eval_baseline_fwa_candidate".into(),
+            ],
+        };
+
+        let output =
+            enrich_retraining_output_with_rust_feature_set(output, &pack.labeled_manifest_uri)
+                .expect("enriched training output");
+
+        assert_eq!(output.artifact_sha256.as_deref(), Some("sha256:serving"));
+        assert_eq!(
+            output.training_artifact_sha256.as_deref(),
+            Some("sha256:training")
+        );
+        assert_eq!(
+            output.metrics_json["trainer_feature_reproducibility_hash"],
+            "sha256:trainer-hash"
+        );
+        assert!(output.metrics_json["feature_reproducibility_hash"]
+            .as_str()
+            .unwrap()
+            .starts_with("sha256:"));
+        assert_ne!(
+            output.metrics_json["feature_reproducibility_hash"],
+            "sha256:trainer-hash"
+        );
+        assert_eq!(output.metrics_json["rust_feature_set_status"], "passed");
+        let feature_set_manifest_uri = output.metrics_json["rust_feature_set_manifest_uri"]
+            .as_str()
+            .expect("rust feature set manifest uri");
+        assert!(Path::new(feature_set_manifest_uri).is_file());
+        assert!(output
+            .evidence_refs
+            .iter()
+            .any(|reference| reference
+                == &format!("feature_set_manifests:{feature_set_manifest_uri}")));
     }
 
     #[test]
