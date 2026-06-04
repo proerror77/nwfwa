@@ -314,6 +314,7 @@ Relevant commands and artifacts:
 - `fairness_report.json`;
 - reviewer-disagreement report;
 - label-delay report.
+- `mlops_monitoring_artifact_publication_manifest.json`.
 
 Monitoring should trigger retraining readiness or rollback review. It should not
 promote or replace a model automatically.

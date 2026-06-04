@@ -85,6 +85,7 @@ REQUIRED_TEXT = {
         "check-pilot-readiness",
         "--require-ready",
         "run-scheduled-mlops-monitoring",
+        "--artifact-base-uri",
         "build-analytics-export-plan",
         "build-ai-evidence-execution-plan",
         "build-governance-ops-plan",

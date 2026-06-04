@@ -15,7 +15,8 @@ foundation environment, not a production deployment package.
 - `demo-seed`: optional Job that loads deterministic demo data for staging demos.
 - `pilot-readiness-proof`: CronJob that runs the worker readiness gate.
 - `mlops-monitoring-runtime`: CronJob that generates the portable MLOps
-  monitoring plan and runtime report artifacts through the Rust worker.
+  monitoring plan, runtime report artifacts, and artifact publication manifest
+  through the Rust worker.
 - `analytics-export-plan`: CronJob that emits the portable analytics export
   plan for PostgreSQL-to-ClickHouse derived reporting.
 - `ai-evidence-execution-plan`: CronJob that emits the portable OCR, chunking,

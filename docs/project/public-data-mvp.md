@@ -202,13 +202,15 @@ cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
   --model-key baseline_fwa \
   --model-version public-mvp \
   --cron "0 2 * * *" \
-  --output-dir data/public-mvp/mlops-monitoring
+  --output-dir data/public-mvp/mlops-monitoring \
+  --artifact-base-uri s3://fwa-public-mvp/models/baseline_fwa/public-mvp/mlops-monitoring
 ```
 
-The scheduled monitoring proof writes the plan plus runtime report artifacts.
-For public data it proves the report URI, job-shape, and Rust execution
-contract only; reviewer disagreement and label delay need customer QA and
-outcome timestamps before their metrics are meaningful.
+The scheduled monitoring proof writes the plan, runtime report artifacts, and
+artifact publication manifest. For public data it proves the report URI,
+job-shape, checksum, target durable-URI, and Rust execution contract only;
+reviewer disagreement and label delay need customer QA and outcome timestamps
+before their metrics are meaningful.
 
 ## Production Interpretation
 

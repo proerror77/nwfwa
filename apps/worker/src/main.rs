@@ -125,16 +125,18 @@ async fn main() -> anyhow::Result<()> {
             let model_version = take_flag_value(&mut args, "--model-version")?;
             let cron = take_flag_value(&mut args, "--cron")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            let artifact_base_uri = take_optional_flag_value(&mut args, "--artifact-base-uri")?;
             if !args.is_empty() {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
             }
-            let index = worker::run_scheduled_mlops_monitoring(
+            let index = worker::run_scheduled_mlops_monitoring_with_artifact_base_uri(
                 &manifest_uri,
                 &artifact_uri,
                 &model_key,
                 &model_version,
                 &cron,
                 output_dir,
+                artifact_base_uri.as_deref(),
             )?;
             println!("{}", serde_json::to_string_pretty(&index)?);
         }

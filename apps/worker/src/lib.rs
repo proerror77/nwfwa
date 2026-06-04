@@ -3133,6 +3133,26 @@ pub fn run_scheduled_mlops_monitoring(
     cron: &str,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<serde_json::Value> {
+    run_scheduled_mlops_monitoring_with_artifact_base_uri(
+        manifest_uri,
+        artifact_uri,
+        model_key,
+        model_version,
+        cron,
+        output_dir,
+        None,
+    )
+}
+
+pub fn run_scheduled_mlops_monitoring_with_artifact_base_uri(
+    manifest_uri: &str,
+    artifact_uri: &str,
+    model_key: &str,
+    model_version: &str,
+    cron: &str,
+    output_dir: impl AsRef<Path>,
+    artifact_base_uri: Option<&str>,
+) -> anyhow::Result<serde_json::Value> {
     let output_dir = output_dir.as_ref();
     fs::create_dir_all(output_dir).with_context(|| {
         format!(
@@ -3144,7 +3164,36 @@ pub fn run_scheduled_mlops_monitoring(
         build_mlops_monitoring_plan(manifest_uri, artifact_uri, model_key, model_version, cron)?;
     let plan_uri = output_dir.join("mlops_monitoring_plan.json");
     write_json(plan_uri.clone(), &plan)?;
-    run_mlops_monitoring_plan(&plan_uri.to_string_lossy(), output_dir)
+    let mut index = run_mlops_monitoring_plan(&plan_uri.to_string_lossy(), output_dir)?;
+    if let Some(artifact_base_uri) = artifact_base_uri {
+        let artifact_base_uri =
+            required_non_empty("artifact_base_uri", artifact_base_uri)?.trim_end_matches('/');
+        if let Some(index_object) = index.as_object_mut() {
+            index_object.insert(
+                "artifact_publication_manifest".into(),
+                serde_json::json!("mlops_monitoring_artifact_publication_manifest.json"),
+            );
+            index_object.insert(
+                "artifact_publication_base_uri".into(),
+                serde_json::json!(artifact_base_uri),
+            );
+            index_object.insert(
+                "artifact_publication_status".into(),
+                serde_json::json!("publication_manifest_ready"),
+            );
+        }
+        write_json(output_dir.join("index.json"), &index)?;
+        let publication_manifest = build_mlops_monitoring_artifact_publication_manifest(
+            &index,
+            output_dir,
+            artifact_base_uri,
+        )?;
+        write_json(
+            output_dir.join("mlops_monitoring_artifact_publication_manifest.json"),
+            &publication_manifest,
+        )?;
+    }
+    Ok(index)
 }
 
 pub fn run_mlops_monitoring_plan(
@@ -3232,6 +3281,65 @@ pub fn run_mlops_monitoring_plan(
     });
     write_json(output_dir.join("index.json"), &index)?;
     Ok(index)
+}
+
+fn build_mlops_monitoring_artifact_publication_manifest(
+    index: &serde_json::Value,
+    output_dir: &Path,
+    artifact_base_uri: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let artifact_base_uri = required_non_empty("artifact_base_uri", artifact_base_uri)?
+        .trim_end_matches('/')
+        .to_string();
+    let mut files = BTreeSet::new();
+    files.insert("mlops_monitoring_plan.json".to_string());
+    files.insert("index.json".to_string());
+    let artifacts = index
+        .get("artifacts")
+        .and_then(|value| value.as_object())
+        .context("MLOps runtime index requires artifacts")?;
+    for artifact in artifacts.values() {
+        let file_name = artifact
+            .as_str()
+            .context("MLOps runtime index artifact file name must be a string")?;
+        files.insert(file_name.to_string());
+    }
+
+    let artifact_entries = files
+        .into_iter()
+        .map(|file_name| {
+            let local_path = output_dir.join(&file_name);
+            let bytes = fs::read(&local_path).with_context(|| {
+                format!("read MLOps monitoring artifact {}", local_path.display())
+            })?;
+            let checksum = sha256_prefixed_hex(&bytes);
+            Ok(serde_json::json!({
+                "file_name": file_name,
+                "local_path": local_path.to_string_lossy(),
+                "target_uri": format!("{artifact_base_uri}/{file_name}"),
+                "sha256": checksum,
+                "byte_size": bytes.len(),
+                "publication_status": "ready_for_durable_storage"
+            }))
+        })
+        .collect::<anyhow::Result<Vec<_>>>()?;
+
+    Ok(serde_json::json!({
+        "artifact_kind": "mlops_monitoring_artifact_publication_manifest",
+        "report_version": 1,
+        "model_key": index.get("model_key").cloned().unwrap_or(serde_json::Value::Null),
+        "model_version": index.get("model_version").cloned().unwrap_or(serde_json::Value::Null),
+        "artifact_base_uri": artifact_base_uri,
+        "artifact_count": artifact_entries.len(),
+        "artifacts": artifact_entries,
+        "publication_status": "ready_for_durable_storage",
+        "runtime_source": "rust_worker_monitoring_artifact_publisher",
+        "governance_boundary": "publication manifest records local artifacts, target URIs, and checksums only; it must not activate models, rollback models, assign fraud labels, or write rules"
+    }))
+}
+
+fn sha256_prefixed_hex(bytes: &[u8]) -> String {
+    format!("sha256:{:x}", Sha256::digest(bytes))
 }
 
 pub fn build_mlops_monitoring_report(
@@ -8442,6 +8550,53 @@ mod tests {
             .join("runtime/reviewer_disagreement_report.json")
             .is_file());
         assert!(root.join("runtime/label_delay_report.json").is_file());
+    }
+
+    #[test]
+    fn scheduled_mlops_monitoring_writes_artifact_publication_manifest() {
+        let root = temp_root("scheduled-mlops-monitoring-publication");
+        let index = run_scheduled_mlops_monitoring_with_artifact_base_uri(
+            "data/training/manifest.json",
+            "s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json",
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+            root.join("runtime"),
+            Some("s3://fwa-models/baseline_fwa/0.2.0/mlops-monitoring"),
+        )
+        .expect("scheduled runtime reports");
+
+        assert_eq!(
+            index["artifact_publication_status"],
+            "publication_manifest_ready"
+        );
+        let manifest_path = root
+            .join("runtime")
+            .join("mlops_monitoring_artifact_publication_manifest.json");
+        assert!(manifest_path.is_file());
+        let manifest =
+            read_json_report(&manifest_path.to_string_lossy()).expect("publication manifest");
+        assert_eq!(
+            manifest["artifact_kind"],
+            "mlops_monitoring_artifact_publication_manifest"
+        );
+        assert_eq!(manifest["artifact_count"], 7);
+        assert!(manifest["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|artifact| artifact["target_uri"]
+                == "s3://fwa-models/baseline_fwa/0.2.0/mlops-monitoring/shadow_report.json"
+                && artifact["sha256"].as_str().unwrap().starts_with("sha256:")));
+        let index_checksum = sha256_prefixed_hex(
+            &fs::read(root.join("runtime/index.json")).expect("final runtime index"),
+        );
+        assert!(manifest["artifacts"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|artifact| artifact["file_name"] == "index.json"
+                && artifact["sha256"] == index_checksum));
     }
 
     #[test]

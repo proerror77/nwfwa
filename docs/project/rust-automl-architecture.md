@@ -204,9 +204,11 @@ Current repository completion for this target architecture is approximately:
   feature-set and Rust serving evaluation evidence, and trainer-side ONNX parity
   reports and unlabeled anomaly review tasks exist; API retraining output now
   accepts governed serving manifests, and the console has provider model
-  release, promotion review, activation, and rollback actions. Customer data
-  bindings, durable artifact storage for scheduled outputs, and
-  receiver-specific monitoring inputs still need environment-specific wiring.
+  release, promotion review, activation, and rollback actions. Scheduled
+  monitoring outputs now include checksum-bound publication manifests for
+  durable artifact targets. Customer data bindings, actual environment-specific
+  object-store upload wiring, and receiver-specific monitoring inputs still need
+  environment-specific wiring.
 - 81% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, ONNX sessions are cached per artifact URI and

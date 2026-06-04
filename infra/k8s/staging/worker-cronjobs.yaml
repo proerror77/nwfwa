@@ -216,3 +216,5 @@ spec:
                 - "0 2 * * *"
                 - --output-dir
                 - /tmp/nwfwa-mlops-monitoring
+                - --artifact-base-uri
+                - s3://nwfwa-staging-artifacts/mlops-monitoring/baseline_fwa/staging

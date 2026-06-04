@@ -291,14 +291,16 @@ cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
   --model-key baseline_fwa \
   --model-version staging \
   --cron "0 2 * * *" \
-  --output-dir artifacts/mlops-monitoring
+  --output-dir artifacts/mlops-monitoring \
+  --artifact-base-uri s3://nwfwa-staging-artifacts/mlops-monitoring/baseline_fwa/staging
 ```
 
 The Rust worker writes `mlops_monitoring_plan.json`, shadow, drift, segment
-fairness, reviewer disagreement, and label delay report artifacts. These are
-staging proof artifacts only; they are not live customer shadow or drift
-evidence. Use `run-mlops-monitoring-plan --plan ...` only when replaying an
-already materialized plan file.
+fairness, reviewer disagreement, label delay report artifacts, and
+`mlops_monitoring_artifact_publication_manifest.json`. These are staging proof
+artifacts only; they are not live customer shadow or drift evidence. Use
+`run-mlops-monitoring-plan --plan ...` only when replaying an already
+materialized plan file.
 
 Run the Rust MLOps monitoring cycle executor after the runtime reports exist.
 The artifact-evaluation report comes from `evaluate-model-artifact`; the
