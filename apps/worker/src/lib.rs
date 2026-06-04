@@ -3761,6 +3761,23 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
             reasons.push(format!("{key}:{status}"));
         }
     }
+    if metrics
+        .get("rust_feature_set_status")
+        .and_then(|value| value.as_str())
+        != Some("passed")
+    {
+        reasons.push("rust_feature_set_status:missing_or_failed".into());
+    }
+    if !metrics
+        .get("rust_feature_set_manifest_uri")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        reasons.push("rust_feature_set_manifest_uri:missing".into());
+    }
+    if !automl_rust_serving_evaluation_passed(metrics) {
+        reasons.push("model_artifact_evaluation_status:missing_or_failed".into());
+    }
     if metric_object_value(metrics, "out_of_time_auc").unwrap_or(0.0) < 0.5 {
         reasons.push("out_of_time_auc:below_0_5".into());
     }
@@ -3768,6 +3785,32 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
         reasons.push("out_of_time_recall:missing_or_zero".into());
     }
     reasons
+}
+
+fn automl_rust_serving_evaluation_passed(
+    metrics: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    if metrics
+        .get("model_artifact_evaluation_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+    {
+        return true;
+    }
+    if metrics
+        .get("model_artifact_evaluation_gate_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+    {
+        return true;
+    }
+    metrics
+        .get("model_artifact_evaluation")
+        .is_some_and(|value| {
+            value.get("report_kind").and_then(|value| value.as_str())
+                == Some("model_artifact_evaluation")
+                && value.get("gate_status").and_then(|value| value.as_str()) == Some("passed")
+        })
 }
 
 fn automl_ranking_score(
@@ -5311,6 +5354,63 @@ mod tests {
         assert!(output_dir.join("automl_review_tasks.json").is_file());
     }
 
+    #[test]
+    fn automl_candidate_ranking_requires_rust_lifecycle_evidence() {
+        let root = temp_root("automl-rust-evidence");
+        let validation_report = root.join("validation.json");
+        fs::write(
+            &validation_report,
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "candidate_model_version": "0.1.0-candidate-without-rust-evidence",
+                "dataset_key": "claims_model",
+                "dataset_version": "2026-06-demo",
+                "algorithm": "xgboost",
+                "validation_metrics": {
+                    "auc": 0.84,
+                    "precision": 0.78,
+                    "recall": 0.74
+                },
+                "metrics_json": {
+                    "algorithm": "xgboost",
+                    "algorithm_family": "gradient_boosted_tree",
+                    "out_of_time_auc": 0.84,
+                    "out_of_time_average_precision": 0.80,
+                    "out_of_time_precision": 0.78,
+                    "out_of_time_recall": 0.74,
+                    "time_group_split_status": "passed",
+                    "leakage_check_status": "passed",
+                    "shadow_comparison_status": "passed",
+                    "serving_version_lock_status": "passed",
+                    "artifact_integrity_status": "passed",
+                    "feature_store_materialization_status": "passed",
+                    "segment_fairness_status": "passed",
+                    "label_provenance_status": "passed"
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
+
+        let ranking = rank_automl_candidates(
+            &[validation_report.to_string_lossy().into_owned()],
+            root.join("out"),
+        )
+        .expect("ranking");
+
+        assert_eq!(ranking.recommended_candidate_model_version, None);
+        assert_eq!(ranking.candidates[0].gate_status, "blocked");
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"rust_feature_set_status:missing_or_failed".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"rust_feature_set_manifest_uri:missing".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"model_artifact_evaluation_status:missing_or_failed".into()));
+    }
+
     #[tokio::test]
     async fn evaluates_model_artifact_with_rust_serving_parity_gate() {
         let root = temp_root("model-artifact-evaluation");
@@ -5857,7 +5957,12 @@ mod tests {
                     "serving_version_lock_status": "passed",
                     "artifact_integrity_status": "passed",
                     "feature_store_materialization_status": "passed",
+                    "rust_feature_set_status": "passed",
+                    "rust_feature_set_manifest_uri": format!(
+                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/rust_feature_set/feature_set_manifest.json"
+                    ),
                     "segment_fairness_status": "passed",
+                    "model_artifact_evaluation_status": "passed",
                     "label_provenance_status": "passed"
                 }
             })

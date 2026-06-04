@@ -376,9 +376,10 @@ The worker writes:
 Ranking uses out-of-time AUC, average precision, precision, and recall, but
 promotion gates still dominate. Candidates stay blocked when label provenance,
 time/group split, leakage, shadow comparison, serving version lock, artifact
-integrity, feature materialization, fairness, AUC, or recall evidence is
-missing or failed. The output may recommend a candidate for human review; it
-must not activate a model or publish a rule.
+integrity, Rust feature-set materialization, Rust serving artifact evaluation,
+fairness, AUC, or recall evidence is missing or failed. The output may
+recommend a candidate for human review; it must not activate a model or publish
+a rule.
 
 ## Stage 6.6: Rust Serving Artifact Evaluation
 

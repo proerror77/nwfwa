@@ -141,13 +141,14 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer clustering has a Rust-native demo
   workflow; broader graph/member/claim clustering and deep-learning serving
   remain future work.
-- 60% for Auto MLOps: worker can build feature-set manifests, enrich
+- 62% for Auto MLOps: worker can build feature-set manifests, enrich
   retraining outputs with Rust feature-set evidence, rank candidates, evaluate
   serving artifacts, mine explainable rule candidates, and backtest those
   candidates into human-review evidence, while API promotion gates now require
-  Rust feature-set materialization evidence and trainer-side ONNX parity reports
-  and unlabeled anomaly review tasks exist; activation workflows and UI/API
-  review surfaces still need implementation.
+  Rust feature-set materialization evidence, worker ranking requires Rust
+  feature-set and Rust serving evaluation evidence, and trainer-side ONNX parity
+  reports and unlabeled anomaly review tasks exist; activation workflows and
+  UI/API review surfaces still need implementation.
 - 70% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker can create Rust serving evaluation
