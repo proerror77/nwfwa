@@ -193,21 +193,22 @@ cargo run --locked -p worker -- build-training-handoff \
   --actor public-data-builder
 ```
 
-Build a scheduled monitoring plan:
+Build and run a scheduled monitoring proof:
 
 ```bash
-cargo run --locked -p worker -- build-mlops-monitoring-plan \
+cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
   --manifest-uri s3://fwa-public-mvp/datasets/public_data_mvp_claims/2026-06-public-mvp/manifest.json \
   --artifact-uri s3://fwa-public-mvp/models/baseline_fwa/public-mvp/rust_serving_artifact.json \
   --model-key baseline_fwa \
   --model-version public-mvp \
-  --cron "0 2 * * *"
+  --cron "0 2 * * *" \
+  --output-dir data/public-mvp/mlops-monitoring
 ```
 
-The monitoring plan remains a contract for an external scheduler. For public
-data it proves the report URI and job-shape contract only; reviewer
-disagreement and label delay need customer QA and outcome timestamps before
-their metrics are meaningful.
+The scheduled monitoring proof writes the plan plus runtime report artifacts.
+For public data it proves the report URI, job-shape, and Rust execution
+contract only; reviewer disagreement and label delay need customer QA and
+outcome timestamps before their metrics are meaningful.
 
 ## Production Interpretation
 

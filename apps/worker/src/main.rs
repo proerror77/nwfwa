@@ -118,6 +118,26 @@ async fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&plan)?);
         }
+        "run-scheduled-mlops-monitoring" => {
+            let manifest_uri = take_flag_value(&mut args, "--manifest-uri")?;
+            let artifact_uri = take_flag_value(&mut args, "--artifact-uri")?;
+            let model_key = take_flag_value(&mut args, "--model-key")?;
+            let model_version = take_flag_value(&mut args, "--model-version")?;
+            let cron = take_flag_value(&mut args, "--cron")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let index = worker::run_scheduled_mlops_monitoring(
+                &manifest_uri,
+                &artifact_uri,
+                &model_key,
+                &model_version,
+                &cron,
+                output_dir,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&index)?);
+        }
         "build-mlops-monitoring-report" => {
             let model_key = take_flag_value(&mut args, "--model-key")?;
             let model_version = take_flag_value(&mut args, "--model-version")?;

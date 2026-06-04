@@ -621,6 +621,22 @@ production scheduler, so customer or platform schedulers can trigger the same
 Rust job without giving the application direct control over production ML
 infrastructure.
 
+For CronJobs or other schedulers that should not parse stdout, run the combined
+Rust command:
+
+```bash
+cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
+  --manifest-uri s3://fwa-datasets/demo_claims_fwa/2026-05-demo/manifest.json \
+  --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --cron "0 2 * * *" \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring
+```
+
+This writes `mlops_monitoring_plan.json` and the runtime report artifacts in one
+worker invocation. The staging Kubernetes CronJob uses this command shape.
+
 Execute the scheduled monitoring plan with the Rust runtime report producer:
 
 ```bash
@@ -952,20 +968,21 @@ The worker can generate the portable scheduled monitoring contract that an
 external orchestrator should execute:
 
 ```bash
-cargo run --locked -p worker -- build-mlops-monitoring-plan \
+cargo run --locked -p worker -- run-scheduled-mlops-monitoring \
   --manifest-uri data/training/manifest.json \
   --artifact-uri s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json \
   --model-key baseline_fwa \
   --model-version 0.2.0 \
-  --cron "0 2 * * *"
+  --cron "0 2 * * *" \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring
 ```
 
-The generated plan contains shadow traffic evaluation, drift monitoring,
-segment fairness review, reviewer disagreement review, and label delay review
-jobs. It uses the same governed Parquet dataset manifest and derives the
-expected report URIs from the active serving artifact location. A production
-scheduler should execute the plan and publish the resulting reports back into
-the model governance evidence set. The worker can then run
+The generated plan and runtime report artifacts cover shadow traffic
+evaluation, drift monitoring, segment fairness review, reviewer disagreement
+review, and label delay review jobs. They use the same governed Parquet dataset
+manifest and derive the expected report URIs from the active serving artifact
+location. A production scheduler should publish durable versions of those
+reports back into the model governance evidence set. The worker can then run
 `build-mlops-monitoring-report` over those reports to open review tasks or
 prepare retraining without automatic promotion.
 

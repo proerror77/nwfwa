@@ -84,7 +84,7 @@ REQUIRED_TEXT = {
         "kind: CronJob",
         "check-pilot-readiness",
         "--require-ready",
-        "build-mlops-monitoring-plan",
+        "run-scheduled-mlops-monitoring",
         "build-analytics-export-plan",
         "build-ai-evidence-execution-plan",
         "build-governance-ops-plan",

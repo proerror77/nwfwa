@@ -307,6 +307,7 @@ Operational states:
 Relevant commands and artifacts:
 
 - `cargo run --locked -p worker -- build-mlops-monitoring-plan`;
+- `cargo run --locked -p worker -- run-scheduled-mlops-monitoring`;
 - `cargo run --locked -p worker -- run-mlops-monitoring-plan`;
 - `shadow_report.json`;
 - `drift_report.json`;

@@ -59,6 +59,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "mlops_monitoring_plan_runner",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "rule_candidate_miner",
                 status: "ok",
             },
@@ -3119,6 +3123,28 @@ pub fn build_mlops_monitoring_plan(
             }
         ]
     }))
+}
+
+pub fn run_scheduled_mlops_monitoring(
+    manifest_uri: &str,
+    artifact_uri: &str,
+    model_key: &str,
+    model_version: &str,
+    cron: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let output_dir = output_dir.as_ref();
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "create scheduled MLOps monitoring output dir {}",
+            output_dir.display()
+        )
+    })?;
+    let plan =
+        build_mlops_monitoring_plan(manifest_uri, artifact_uri, model_key, model_version, cron)?;
+    let plan_uri = output_dir.join("mlops_monitoring_plan.json");
+    write_json(plan_uri.clone(), &plan)?;
+    run_mlops_monitoring_plan(&plan_uri.to_string_lossy(), output_dir)
 }
 
 pub fn run_mlops_monitoring_plan(
@@ -8382,6 +8408,39 @@ mod tests {
             index["artifacts"]["label_delay_review"],
             "label_delay_report.json"
         );
+        assert!(root.join("runtime/label_delay_report.json").is_file());
+    }
+
+    #[test]
+    fn runs_scheduled_mlops_monitoring_from_parameters() {
+        let root = temp_root("scheduled-mlops-monitoring");
+        let index = run_scheduled_mlops_monitoring(
+            "data/training/manifest.json",
+            "s3://fwa-models/baseline_fwa/0.2.0/rust_serving_artifact.json",
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+            root.join("runtime"),
+        )
+        .expect("scheduled runtime reports");
+
+        assert_eq!(
+            index["artifact_kind"],
+            "rust_mlops_monitoring_runtime_reports"
+        );
+        assert_eq!(
+            index["plan_uri"].as_str(),
+            Some(
+                root.join("runtime/mlops_monitoring_plan.json")
+                    .to_string_lossy()
+                    .as_ref()
+            )
+        );
+        assert!(root.join("runtime/mlops_monitoring_plan.json").is_file());
+        assert!(root.join("runtime/shadow_report.json").is_file());
+        assert!(root
+            .join("runtime/reviewer_disagreement_report.json")
+            .is_file());
         assert!(root.join("runtime/label_delay_report.json").is_file());
     }
 

@@ -174,7 +174,7 @@ spec:
 apiVersion: batch/v1
 kind: CronJob
 metadata:
-  name: mlops-monitoring-plan
+  name: mlops-monitoring-runtime
   labels:
     app.kubernetes.io/name: worker
     app.kubernetes.io/part-of: nwfwa-staging
@@ -203,7 +203,7 @@ spec:
                     name: nwfwa-staging-secrets
               command:
                 - worker
-                - build-mlops-monitoring-plan
+                - run-scheduled-mlops-monitoring
                 - --manifest-uri
                 - s3://nwfwa-staging-artifacts/datasets/public-mvp/manifest.json
                 - --artifact-uri
@@ -214,3 +214,5 @@ spec:
                 - staging
                 - --cron
                 - "0 2 * * *"
+                - --output-dir
+                - /tmp/nwfwa-mlops-monitoring
