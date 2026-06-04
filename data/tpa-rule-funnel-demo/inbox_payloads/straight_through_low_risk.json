@@ -11,7 +11,7 @@
     },
     "accidentReason": "demo health claim",
     "calculateRisk": "Y",
-    "claimAmount": 300,
+    "claimAmount": 12000,
     "claimReceiveDate": 1768867200000,
     "medicalRecordInfoList": [
       {
@@ -36,18 +36,18 @@
               }
             ],
             "endDate": 1768435200000,
-            "feeAmount": 300,
+            "feeAmount": 12000,
             "feeList": [
               {
                 "feeCategory": "treatmentFee",
                 "feeDetailList": [
                   {
-                    "amount": 300,
+                    "amount": 12000,
                     "detailId": "LINE-CLM-DEMO-LOW-001",
-                    "name": "Routine consultation"
+                    "name": "Covered rehabilitation therapy package"
                   }
                 ],
-                "medicareAmount": 120.0
+                "medicareAmount": 4800.0
               }
             ],
             "hospitalCode": "PRV-CLM-DEMO-LOW-001",

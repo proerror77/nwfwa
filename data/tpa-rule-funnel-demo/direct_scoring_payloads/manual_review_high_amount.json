@@ -6,7 +6,18 @@
     "external_claim_id": "CLM-DEMO-HIGH-001",
     "service_date": "2026-01-15"
   },
-  "documents": [],
+  "documents": [
+    {
+      "document_type": "medical_record",
+      "external_document_id": "DOC-MR-CLM-DEMO-HIGH-001",
+      "linked_item_codes": []
+    },
+    {
+      "document_type": "invoice",
+      "external_document_id": "DOC-INV-CLM-DEMO-HIGH-001",
+      "linked_item_codes": []
+    }
+  ],
   "items": [
     {
       "description": "Inpatient room and board",

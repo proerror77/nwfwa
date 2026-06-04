@@ -12,7 +12,7 @@ use fwa_core::{RecommendedAction, RuleActionClass};
 use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest, ModelScorer};
 use fwa_rules::{Condition, RequiredEvidence, Rule, RuleAction};
 use fwa_scoring::{ConfidenceThresholds, RiskThresholds, RoutingPolicy};
-use std::sync::Arc;
+use std::{fs, path::Path, sync::Arc};
 use tower::ServiceExt;
 
 fn test_config() -> AppConfig {
@@ -1020,6 +1020,114 @@ async fn pending_evidence_rule_returns_required_evidence() {
         request["missing_evidence"],
         serde_json::json!(["dental_xray"])
     );
+}
+
+#[tokio::test]
+async fn generated_tpa_rule_funnel_demo_payloads_match_expected_outcomes() {
+    let app = build_app(test_config());
+    let dataset_root = Path::new(env!("CARGO_MANIFEST_DIR"))
+        .join("../..")
+        .join("data/tpa-rule-funnel-demo");
+    let manifest: serde_json::Value = serde_json::from_slice(
+        &fs::read(dataset_root.join("manifest.json")).expect("TPA demo manifest"),
+    )
+    .expect("TPA demo manifest JSON");
+
+    for case in manifest["cases"].as_array().expect("manifest cases") {
+        let case_id = case["case_id"].as_str().expect("case_id");
+        let expected = &case["expected"];
+
+        if let Some(expected_outcome) = expected["decision_outcome"].as_str() {
+            let payload_path = dataset_root.join(
+                case["direct_scoring_payload"]
+                    .as_str()
+                    .expect("direct scoring payload path"),
+            );
+            let payload = fs::read_to_string(&payload_path).expect("direct scoring payload");
+            let request = Request::builder()
+                .method("POST")
+                .uri("/api/v1/claims/score")
+                .header("content-type", "application/json")
+                .header("x-api-key", "dev-secret")
+                .body(Body::from(payload))
+                .unwrap();
+            let response = app.clone().oneshot(request).await.unwrap();
+            let status = response.status();
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            assert_eq!(
+                status,
+                StatusCode::OK,
+                "{case_id} should score successfully: {}",
+                String::from_utf8_lossy(&body)
+            );
+            let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(
+                body["decision_outcome"],
+                expected_outcome,
+                "{case_id} decision_outcome: risk_score={}, risk_level={}, recommended_action={}, alerts={}, clinical_evidence={}",
+                body["risk_score"],
+                body["risk_level"],
+                body["recommended_action"],
+                body["alerts"],
+                body["clinical_evidence"]
+            );
+
+            let expected_evidence = expected["required_evidence"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            let actual_evidence = body["alerts"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .flat_map(|alert| {
+                    alert["required_evidence"]
+                        .as_array()
+                        .cloned()
+                        .unwrap_or_default()
+                })
+                .filter_map(|item| item["evidence_type"].as_str().map(str::to_string))
+                .collect::<std::collections::BTreeSet<_>>();
+            for evidence in expected_evidence {
+                let evidence = evidence.as_str().unwrap();
+                assert!(
+                    actual_evidence.contains(evidence),
+                    "{case_id} should require {evidence}; actual {actual_evidence:?}"
+                );
+            }
+        }
+
+        if expected["normalize_scoring_ready"].as_bool() == Some(false) {
+            let payload_path =
+                dataset_root.join(case["inbox_payload"].as_str().expect("inbox payload path"));
+            let payload = fs::read_to_string(&payload_path).expect("inbox payload");
+            let request = Request::builder()
+                .method("POST")
+                .uri("/api/v1/inbox/claims/normalize")
+                .header("content-type", "application/json")
+                .header("x-api-key", "dev-secret")
+                .body(Body::from(payload))
+                .unwrap();
+            let response = app.clone().oneshot(request).await.unwrap();
+            assert_eq!(
+                response.status(),
+                StatusCode::OK,
+                "{case_id} should normalize with warnings"
+            );
+            let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+            let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+            assert_eq!(body["scoring_ready"], false, "{case_id} scoring_ready");
+            let expected_path = expected["validation_field_path"].as_str().unwrap();
+            assert!(
+                body["validation_errors"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .any(|error| error["field_path"] == expected_path),
+                "{case_id} should report validation path {expected_path}"
+            );
+        }
+    }
 }
 
 #[tokio::test]

@@ -37,7 +37,9 @@ def direct_payload(
     documents: list[dict[str, Any]] | None = None,
     provider_profile: dict[str, Any] | None = None,
     provider_relationships: dict[str, Any] | None = None,
+    line_count: int = 1,
 ) -> dict[str, Any]:
+    line_amount = claim_amount / line_count
     payload = {
         "source_system": SOURCE_SYSTEM,
         "claim": {
@@ -49,13 +51,14 @@ def direct_payload(
         },
         "items": [
             {
-                "item_code": item_code,
+                "item_code": item_code if line_count == 1 else f"{item_code}-{index + 1}",
                 "item_type": item_type,
                 "description": description,
                 "quantity": 1,
-                "unit_amount": money(claim_amount),
-                "total_amount": money(claim_amount),
+                "unit_amount": money(line_amount),
+                "total_amount": money(line_amount),
             }
+            for index in range(line_count)
         ],
         "member": {
             "external_member_id": f"MBR-{claim_id}",
@@ -84,6 +87,21 @@ def direct_payload(
     if provider_relationships is not None:
         payload["provider_relationships"] = provider_relationships
     return payload
+
+
+def baseline_documents(claim_id: str) -> list[dict[str, Any]]:
+    return [
+        {
+            "external_document_id": f"DOC-MR-{claim_id}",
+            "document_type": "medical_record",
+            "linked_item_codes": [],
+        },
+        {
+            "external_document_id": f"DOC-INV-{claim_id}",
+            "document_type": "invoice",
+            "linked_item_codes": [],
+        },
+    ]
 
 
 def inbox_payload(
@@ -186,21 +204,27 @@ def build_cases() -> list[dict[str, Any]]:
     return [
         {
             "case_id": "straight_through_low_risk",
-            "purpose": "完整低风险案件，预期可直接通过或低风险抽样",
+            "purpose": "资料完整且算法层置信度足够，预期可直接通过",
             "direct": direct_payload(
                 "CLM-DEMO-LOW-001",
-                300,
+                12_000,
                 20_000,
-                "CONS-100",
-                "consultation",
-                "Routine outpatient consultation",
-                documents=[],
+                "THER-100",
+                "therapy",
+                "Covered rehabilitation therapy package",
+                documents=baseline_documents("CLM-DEMO-LOW-001"),
+                line_count=3,
             ),
-            "inbox": inbox_payload("CLM-DEMO-LOW-001", 300, 20_000, "Routine consultation"),
+            "inbox": inbox_payload(
+                "CLM-DEMO-LOW-001",
+                12_000,
+                20_000,
+                "Covered rehabilitation therapy package",
+            ),
             "expected": {
                 "decision_outcome": "straight_through",
                 "required_evidence": [],
-                "business_assertion": "low risk with complete required baseline fields",
+                "business_assertion": "complete documentation, no blocking rules, and enough model confidence for straight-through routing",
             },
         },
         {
@@ -271,16 +295,31 @@ def build_cases() -> list[dict[str, Any]]:
                 "consultation",
                 "Routine outpatient consultation",
                 provider_risk_tier="High",
-                documents=[],
+                documents=baseline_documents("CLM-DEMO-PROVIDER-001"),
                 provider_profile={
-                    "risk_score": 92,
-                    "peer_amount_percentile": 99,
-                    "evidence_refs": ["provider_profiles:PRV-DEMO-PROVIDER-001"],
+                    "specialty": "general_clinic",
+                    "network_status": "in_network",
+                    "windows": [
+                        {
+                            "window_days": 90,
+                            "claim_count": 48,
+                            "total_claim_amount": "320000.00",
+                            "high_cost_item_ratio": 0.68,
+                            "diagnosis_procedure_mismatch_rate": 0.34,
+                            "peer_amount_percentile": 99,
+                            "peer_frequency_percentile": 97,
+                            "review_failure_count": 6,
+                            "confirmed_fwa_count": 1,
+                            "false_positive_count": 0,
+                        }
+                    ],
                 },
                 provider_relationships={
-                    "graph_risk_score": 88,
-                    "high_risk_neighbor_count": 3,
-                    "relationship_count": 12,
+                    "high_risk_neighbor_ratio": 0.36,
+                    "provider_patient_overlap_score": 0.72,
+                    "referral_concentration_score": 0.76,
+                    "connected_confirmed_fwa_count": 2,
+                    "network_component_risk_score": 88,
                     "evidence_refs": ["provider_graph:PRV-DEMO-PROVIDER-001"],
                 },
             ),
@@ -301,7 +340,7 @@ def build_cases() -> list[dict[str, Any]]:
                 "ROOM-100",
                 "room",
                 "Inpatient room and board",
-                documents=[],
+                documents=baseline_documents("CLM-DEMO-HIGH-001"),
             ),
             "inbox": inbox_payload("CLM-DEMO-HIGH-001", 18_000, 20_000, "Inpatient room and board"),
             "expected": {
@@ -320,7 +359,7 @@ def build_cases() -> list[dict[str, Any]]:
                 "CONS-300",
                 "consultation",
                 "Routine outpatient consultation",
-                documents=[],
+                documents=baseline_documents("CLM-DEMO-INBOX-BLOCK-001"),
             ),
             "inbox": inbox_payload(
                 "CLM-DEMO-INBOX-BLOCK-001",

@@ -40,7 +40,7 @@
     ]
   },
   "straight_through_low_risk": {
-    "business_assertion": "low risk with complete required baseline fields",
+    "business_assertion": "complete documentation, no blocking rules, and enough model confidence for straight-through routing",
     "decision_outcome": "straight_through",
     "required_evidence": []
   }

@@ -5,12 +5,12 @@
       "case_id": "straight_through_low_risk",
       "direct_scoring_payload": "direct_scoring_payloads/straight_through_low_risk.json",
       "expected": {
-        "business_assertion": "low risk with complete required baseline fields",
+        "business_assertion": "complete documentation, no blocking rules, and enough model confidence for straight-through routing",
         "decision_outcome": "straight_through",
         "required_evidence": []
       },
       "inbox_payload": "inbox_payloads/straight_through_low_risk.json",
-      "purpose": "完整低风险案件，预期可直接通过或低风险抽样"
+      "purpose": "资料完整且算法层置信度足够，预期可直接通过"
     },
     {
       "case_id": "pending_dental_xray",
