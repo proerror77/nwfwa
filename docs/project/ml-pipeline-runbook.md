@@ -143,6 +143,29 @@ When customer training data is not available, use the public-data MVP pack to
 exercise the data and ML engineering loop without claiming production model
 effectiveness.
 
+Rust-generated Auto MLOps demo pack:
+
+```bash
+cargo run --locked -p worker -- build-demo-ml-datasets \
+  --output-dir data/rust-automl-demo \
+  --dataset-version 2026-06-rust-automl-demo
+```
+
+This writes:
+
+- `labeled_claim_risk/manifest.json`: one labeled claim-risk dataset with
+  train, validation, and out-of-time Parquet splits and `confirmed_fwa` as a
+  weak demo label;
+- `unlabeled_shadow_scoring/manifest.json`: unlabeled claim rows for shadow
+  scoring, score-distribution, and drift exercises;
+- `unlabeled_provider_peer_clustering/manifest.json`: unlabeled provider-month
+  peer features for clustering and anomaly-discovery exercises.
+
+Only the labeled manifest should be passed to supervised training or
+`profile-parquet`. The unlabeled manifests are for scoring, clustering, and
+manual-review candidate discovery; they are not training labels or production
+promotion evidence.
+
 ```bash
 uv run --project apps/ml-service \
   python scripts/data/build_public_data_mvp.py \
@@ -229,9 +252,12 @@ The first production supervised-learning comparison should include the logistic
 baseline and an XGBoost candidate. Logistic exports both a Python `.joblib`
 artifact and a Rust JSON serving artifact for the API server's lightweight
 runtime. XGBoost exports a Python `.joblib` serving artifact for the existing
-Python scorer boundary, with feature-importance evidence and the same
-registration, promotion, shadow, drift, and human-review gates. LightGBM remains
-the next GBDT candidate after the XGBoost path is validated.
+Python scorer boundary today. The target path is ONNX export and Rust ONNX
+serving when conversion preserves feature order and prediction parity. Until
+that parity gate exists, XGBoost remains a governed candidate with
+feature-importance evidence and the same registration, promotion, shadow, drift,
+and human-review gates. LightGBM remains the next GBDT candidate after the
+XGBoost path is validated.
 
 ## Stage 6: Worker-Driven Candidate Registration
 

@@ -843,6 +843,14 @@ rules, but they must pass deterministic backtest, human promotion review, rule
 promotion gates, approval, and publication before entering the active rule
 library.
 
+The ML lifecycle should be Rust-owned even when the optimizer is not written in
+Rust. Rust should control dataset contracts, feature versions, training job
+orchestration, model registration, evaluation, backtest, shadow monitoring,
+human review, activation, rollback, and audit. XGBoost, LightGBM, and deep
+models may enter production serving through ONNX when feature-order and
+prediction-parity tests pass; otherwise they remain governed candidates or use a
+controlled fallback scorer until the Rust serving boundary is proven.
+
 Large language models or deep models may support OCR cleanup, document summary,
 medical-note extraction, clustering, and investigation drafting. They must not
 directly decide fraud status or final claim disposition.
@@ -863,10 +871,13 @@ Training becomes useful after enough customer or pilot data has stable labels:
    once stable labels exist.
 5. Record model dataset version, feature-set version, algorithm family,
    metrics, threshold, and feature importance or SHAP-style artifact.
-6. Send explainable model patterns into Rule Studio as candidate rules when
+6. Validate serving artifacts, including ONNX or Rust-native parity where
+   applicable.
+7. Send explainable model patterns into Rule Studio as candidate rules when
    they can be expressed as deterministic, auditable rule DSL.
-7. Run shadow mode against live traffic and compare against rules and human QA.
-8. Promote only when holdout, out-of-time, and pilot review metrics pass.
+8. Run shadow mode against live traffic and compare against rules and human QA.
+9. Promote only when holdout, out-of-time, pilot review, and serving-parity
+   metrics pass.
 
 Overfitting controls are product requirements, not optional data-science notes:
 

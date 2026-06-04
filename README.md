@@ -473,6 +473,19 @@ pytest
 
 ### Public Data MVP Pack
 
+Rust-owned demo datasets for the Auto MLOps loop:
+
+```bash
+cargo run --locked -p worker -- build-demo-ml-datasets \
+  --output-dir data/rust-automl-demo \
+  --dataset-version 2026-06-rust-automl-demo
+```
+
+This writes one labeled claim-risk dataset plus unlabeled shadow-scoring and
+provider-peer-clustering datasets. The labeled manifest can be profiled and used
+for training-handoff checks. The unlabeled manifests are for shadow scoring,
+drift, clustering, and anomaly-discovery demos only.
+
 ```bash
 uv run --project apps/ml-service \
   python scripts/data/build_public_data_mvp.py \
