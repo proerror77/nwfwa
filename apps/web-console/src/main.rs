@@ -14,7 +14,6 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
     (
         "Daily Work",
         &[
-            "Claim Inbox",
             "Dashboard",
             "Leads & Cases",
             "Review Workbench",
@@ -23,13 +22,13 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
     ),
     (
         "Control Rooms",
-        &["Detection Controls", "Evidence Hub", "Governance"],
+        &["Intake Ops", "Detection Controls", "Evidence Hub", "Governance"],
     ),
     ("MLOps", &["MLOps Workspace"]),
 ];
 
 const ALL_MODULES: &[&str] = &[
-    "Claim Inbox",
+    "Intake Ops",
     "Dashboard",
     "Runtime Scoring",
     "Review Workbench",
@@ -1800,7 +1799,7 @@ fn app() -> Html {
                 </div>
                 {workspace_system_map(active.as_str(), select_module.clone())}
                 <div class="workspace-content">
-                    if *active == "Claim Inbox" {
+                    if *active == "Intake Ops" {
                         <ClaimInboxPage />
                     } else if *active == "Dashboard" {
                         <DashboardPage on_navigate={select_module.clone()} />
@@ -1860,7 +1859,7 @@ fn workspace_system_map(active: &str, on_navigate: Callback<String>) -> Html {
         <section class="workspace-system-map" aria-label="FWA platform system map">
             <div class="system-map-rail"></div>
             <div class="system-map-pulse"></div>
-            {system_map_stage("Intake", "Claim Inbox", "TPA packet", "canonical claim", "Claim Inbox", "intake", active, &on_navigate)}
+            {system_map_stage("Intake", "Intake Ops", "TPA packet exceptions", "queue-ready claim", "Intake Ops", "intake", active, &on_navigate)}
             {system_map_stage("Detect", "Scored leads", "Rules + model + policy", "human queue", "Leads & Cases", "detect", active, &on_navigate)}
             {system_map_stage("Review", "Human gate", "Medical + QA", "no auto denial", "Review Workbench", "review", active, &on_navigate)}
             {system_map_stage("Evidence", "Case context", "Member / provider / KB", "trace refs", "Evidence Hub", "evidence", active, &on_navigate)}
@@ -1908,7 +1907,7 @@ fn is_known_module(module: &str) -> bool {
 
 fn module_slug(module: &str) -> &'static str {
     match module {
-        "Claim Inbox" => "claim-inbox",
+        "Intake Ops" => "intake-ops",
         "Dashboard" => "dashboard",
         "Runtime Scoring" => "runtime-scoring",
         "Review Workbench" => "review-workbench",
@@ -1974,7 +1973,9 @@ fn system_map_stage(
 
 fn module_context(module: &str) -> &'static str {
     match module {
-        "Claim Inbox" => "Normalize TPA claim payloads into governed canonical intake.",
+        "Intake Ops" => {
+            "Resolve inbound TPA packet exceptions before claims enter risk and review queues."
+        }
         "Dashboard" => "Choose the next operational action from live risk and review queues.",
         "Runtime Scoring" => {
             "Validate the scoring API contract, routing policy, evidence refs, and audit IDs."
@@ -2015,7 +2016,7 @@ fn module_context(module: &str) -> &'static str {
 
 fn module_description(module: &str) -> &'static str {
     match module {
-        "Claim Inbox" => "TPA intake",
+        "Intake Ops" => "intake exceptions",
         "Dashboard" => "next action",
         "Runtime Scoring" => "contract check",
         "Review Workbench" => "medical + QA",
@@ -2044,7 +2045,7 @@ fn module_description(module: &str) -> &'static str {
 
 fn module_icon_class(module: &str) -> &'static str {
     match module {
-        "Claim Inbox" => "icon-inbox",
+        "Intake Ops" => "icon-inbox",
         "Dashboard" => "icon-dashboard",
         "Runtime Scoring" => "icon-scoring",
         "Review Workbench" => "icon-qa",
@@ -3308,7 +3309,7 @@ fn runtime_scoring_page() -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Runtime Scoring"}</h2>
-                    <p>{"Validate the claim scoring contract and inspect audit-backed routing output. Business reviewers should work from Claim Inbox, Leads & Cases, or Review Workbench."}</p>
+                    <p>{"Validate the claim scoring contract and inspect audit-backed routing output. Business reviewers should work from Dashboard, Leads & Cases, or Review Workbench."}</p>
                 </div>
                 <span class="status-pill">{"Integration Tool"}</span>
             </div>
@@ -3747,8 +3748,8 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
             </div>
             <div class="pilot-runway-map">
                 <div class="runway-line"></div>
-                {pilot_runway_step("Principal", "Configured principal", "actor + customer scope", "Claim Inbox", "source", on_navigate)}
-                {pilot_runway_step("Inbox", &summary.suspected_claims.to_string(), "normalized claims", "Claim Inbox", "intake", on_navigate)}
+                {pilot_runway_step("Principal", "Configured principal", "actor + customer scope", "Intake Ops", "source", on_navigate)}
+                {pilot_runway_step("Intake", &summary.suspected_claims.to_string(), "normalized claims", "Intake Ops", "intake", on_navigate)}
                 {pilot_runway_step("Risk", &signal_label, &map_counts_label(&summary.rag_distribution), "Leads & Cases", "score", on_navigate)}
                 {pilot_runway_step("Case", &summary.case_sla.open_cases.to_string(), "open investigations", "Leads & Cases", "case", on_navigate)}
                 {pilot_runway_step("QA", &qa_work.to_string(), "open QA + feedback", "Review Workbench", "qa", on_navigate)}
@@ -8959,7 +8960,7 @@ fn claim_inbox_page() -> Html {
         <section class="claim-inbox">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"Claim Inbox"}</h2>
+                    <h2>{"Intake Ops"}</h2>
                     <p>{"Review inbound TPA claim packets, resolve intake blockers, and release accepted claims into the risk and review queue."}</p>
                 </div>
                 <span class="status-pill">{"Intake Ops"}</span>

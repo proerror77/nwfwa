@@ -97,6 +97,7 @@ async function main() {
     assertContains(builtText, "Operations desk", "web console visual shell bundle");
     assertContains(builtText, "Daily Work", "web console navigation bundle");
     assertContains(builtText, "Control Rooms", "web console navigation bundle");
+    assertContains(builtText, "Intake Ops", "web console navigation bundle");
     assertContains(builtText, "MLOps Workspace", "web console navigation bundle");
     assertContains(builtText, "hashchange", "web console browser history bundle");
     assertContains(builtText, "leads-cases", "web console browser history bundle");
@@ -194,6 +195,7 @@ async function main() {
     assertContains(builtText, "Retraining Readiness", "web console bundle");
     for (const expectedModule of [
       "Dashboard",
+      "Intake Ops",
       "Rules",
       "Models",
       "Routing Policies",
