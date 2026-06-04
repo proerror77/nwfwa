@@ -575,10 +575,11 @@ to use the trained `.joblib` artifact. The Rust artifact uses this shape:
 For XGBoost and LightGBM, `.joblib` remains a training artifact or Python
 fallback artifact. The trainer now writes `model.onnx` plus
 `onnx_parity_report.json`; the serving manifest points to the `.onnx` artifact
-only when probability parity passes. The current Rust runtime validates the
-ONNX manifest, feature order, and checksum, then rejects execution until the
-ONNX Runtime session is linked. This prevents a `.joblib` artifact from being
-accidentally treated as Rust serving evidence.
+only when probability parity passes. The Rust runtime validates the ONNX
+manifest, feature order, checksum, optional signature, and version lock, then
+executes the model through ONNX Runtime CPU and reads the positive-class
+probability from the exported probability tensor. This prevents a `.joblib`
+artifact from being accidentally treated as Rust serving evidence.
 
 The active serving selector is:
 

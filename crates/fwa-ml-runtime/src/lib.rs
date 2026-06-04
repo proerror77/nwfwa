@@ -2,6 +2,10 @@ use async_trait::async_trait;
 use fwa_core::{ClaimId, ScoringRunId};
 use fwa_features::FeatureMap;
 use hmac::{Hmac, Mac};
+use ort::{
+    session::{builder::GraphOptimizationLevel, Session},
+    value::Tensor,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -328,10 +332,12 @@ impl ModelScorer for ServingManifestModelScorer {
                 Ok(score)
             }
             "rust_onnx" | "xgboost_onnx" | "lightgbm_onnx" => {
-                validate_onnx_artifact(&manifest)?;
-                Err(ModelRuntimeError::InvalidResponse(
-                    "rust ONNX execution is not linked in this build; keep the model in shadow or use the governed HTTP fallback until ONNX parity is implemented".into(),
-                ))
+                score_onnx_manifest(
+                    &manifest,
+                    &request,
+                    &self.manifest_uri,
+                    self.signing_key.as_deref(),
+                )
             }
             "xgboost_classifier" | "lightgbm_classifier" => {
                 Err(ModelRuntimeError::InvalidResponse(format!(
@@ -344,6 +350,98 @@ impl ModelScorer for ServingManifestModelScorer {
             ))),
         }
     }
+}
+
+fn score_onnx_manifest(
+    manifest: &ServingManifest,
+    request: &ModelScoreRequest,
+    manifest_uri: &str,
+    signing_key: Option<&str>,
+) -> Result<ModelScore, ModelRuntimeError> {
+    let started_at = Instant::now();
+    validate_onnx_artifact(manifest)?;
+    let signature_status = verify_artifact_signature(
+        &manifest.model_key,
+        &manifest.model_version,
+        &manifest.artifact_sha256,
+        manifest.artifact_signature.as_deref(),
+        signing_key,
+    )?;
+    let artifact_path = local_artifact_path(&manifest.artifact_uri)?;
+    let feature_values = manifest
+        .feature_columns
+        .iter()
+        .map(|feature_name| {
+            request
+                .features
+                .get(feature_name)
+                .and_then(|feature| feature.value.as_f64())
+                .map(|value| value as f32)
+                .ok_or_else(|| {
+                    ModelRuntimeError::InvalidResponse(format!(
+                        "serving manifest feature must be numeric: {feature_name}"
+                    ))
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    let feature_count = feature_values.len();
+    let input_tensor = Tensor::from_array(([1usize, feature_count], feature_values))
+        .map_err(onnx_runtime_error)?;
+    let mut session = Session::builder()
+        .map_err(onnx_runtime_error)?
+        .with_optimization_level(GraphOptimizationLevel::Level3)
+        .map_err(onnx_runtime_error)?
+        .commit_from_file(artifact_path)
+        .map_err(onnx_runtime_error)?;
+    let input_name = session
+        .inputs()
+        .first()
+        .map(|input| input.name().to_string())
+        .ok_or_else(|| ModelRuntimeError::InvalidResponse("ONNX model has no inputs".into()))?;
+    let outputs = session
+        .run(ort::inputs![input_name.as_str() => input_tensor])
+        .map_err(onnx_runtime_error)?;
+    let (probability, output_name) = extract_positive_probability(&outputs)?;
+    let probability = normalize_probability(probability)?;
+    let score = (probability * 100.0).round().clamp(0.0, 100.0) as u8;
+
+    Ok(ModelScore {
+        model_key: manifest.model_key.clone(),
+        model_version: manifest.model_version.clone(),
+        runtime_kind: manifest.runtime_kind.clone(),
+        execution_provider: "onnxruntime_cpu".into(),
+        score,
+        label: if probability >= manifest.threshold {
+            "HIGH_RISK"
+        } else {
+            "LOW_RISK"
+        }
+        .into(),
+        explanations: Vec::new(),
+        metadata: serde_json::json!({
+            "artifact_uri": manifest.artifact_uri,
+            "artifact_sha256": manifest.artifact_sha256,
+            "artifact_integrity_status": "passed",
+            "artifact_signature_status": signature_status,
+            "serving_manifest_uri": manifest_uri,
+            "serving_manifest_status": "passed",
+            "serving_runtime_kind": manifest.runtime_kind,
+            "serving_feature_columns": manifest.feature_columns,
+            "serving_threshold": manifest.threshold,
+            "serving_version_lock": manifest.version_lock,
+            "serving_version_lock_status": "passed",
+            "training_artifact_uri": manifest.training_artifact_uri,
+            "feature_count": feature_count,
+            "fraud_probability": round_probability(probability),
+            "onnx_input_name": input_name,
+            "onnx_output_name": output_name
+        }),
+        latency_ms: started_at
+            .elapsed()
+            .as_millis()
+            .try_into()
+            .unwrap_or(u64::MAX),
+    })
 }
 
 fn local_artifact_path(artifact_uri: &str) -> Result<&str, ModelRuntimeError> {
@@ -424,6 +522,64 @@ fn validate_onnx_artifact(manifest: &ServingManifest) -> Result<(), ModelRuntime
         )));
     }
     Ok(())
+}
+
+fn extract_positive_probability(
+    outputs: &ort::session::SessionOutputs<'_>,
+) -> Result<(f64, String), ModelRuntimeError> {
+    if let Some(output) = outputs.get("probabilities") {
+        if let Ok((shape, values)) = output.try_extract_tensor::<f32>() {
+            if let Some(probability) = positive_probability_from_tensor(shape, values) {
+                return Ok((probability, "probabilities".into()));
+            }
+        }
+    }
+
+    let output_values = outputs.iter().collect::<Vec<_>>();
+    for (name, output) in output_values.into_iter().rev() {
+        if let Ok((shape, values)) = output.try_extract_tensor::<f32>() {
+            if let Some(probability) = positive_probability_from_tensor(shape, values) {
+                return Ok((probability, name.to_string()));
+            }
+        }
+    }
+
+    Err(ModelRuntimeError::InvalidResponse(
+        "ONNX output does not expose usable positive-class probabilities".into(),
+    ))
+}
+
+fn positive_probability_from_tensor(shape: &[i64], values: &[f32]) -> Option<f64> {
+    match shape {
+        [1, columns] if *columns >= 2 && values.len() >= *columns as usize => {
+            Some(values[1] as f64)
+        }
+        [_rows, columns] if *columns >= 2 && values.len() >= *columns as usize => {
+            Some(values[1] as f64)
+        }
+        [1] if !values.is_empty() => Some(values[0] as f64),
+        [_rows] if !values.is_empty() => Some(values[0] as f64),
+        [] if !values.is_empty() => Some(values[0] as f64),
+        _ => None,
+    }
+}
+
+fn normalize_probability(value: f64) -> Result<f64, ModelRuntimeError> {
+    if !value.is_finite() {
+        return Err(ModelRuntimeError::InvalidResponse(
+            "ONNX probability output is not finite".into(),
+        ));
+    }
+    if !(-1e-6..=1.0 + 1e-6).contains(&value) {
+        return Err(ModelRuntimeError::InvalidResponse(format!(
+            "ONNX probability output is out of range: {value}"
+        )));
+    }
+    Ok(value.clamp(0.0, 1.0))
+}
+
+fn onnx_runtime_error<T>(error: ort::Error<T>) -> ModelRuntimeError {
+    ModelRuntimeError::InvalidResponse(format!("ONNX runtime error: {error}"))
 }
 
 fn merge_serving_manifest_metadata(
@@ -1167,7 +1323,7 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn serving_manifest_scorer_validates_onnx_contract_before_runtime_execution() {
+    async fn serving_manifest_scorer_reaches_onnx_runtime_after_contract_validation() {
         let onnx_path = std::env::temp_dir().join(format!(
             "nwfwa-serving-manifest-onnx-{}.onnx",
             ScoringRunId::new()
@@ -1200,11 +1356,22 @@ mod tests {
             .await;
 
         let Err(ModelRuntimeError::InvalidResponse(message)) = result else {
-            panic!("expected invalid response for unlinked ONNX execution");
+            panic!("expected invalid response for fake ONNX model");
         };
-        assert!(message.contains("ONNX execution is not linked"));
+        assert!(message.contains("ONNX runtime error"));
         fs::remove_file(onnx_path).unwrap();
         fs::remove_file(manifest_path).unwrap();
+    }
+
+    #[test]
+    fn positive_probability_from_tensor_prefers_positive_class_column() {
+        assert_eq!(
+            positive_probability_from_tensor(&[1, 2], &[0.25, 0.75]),
+            Some(0.75)
+        );
+        let probability = positive_probability_from_tensor(&[3], &[0.61, 0.2, 0.1]).unwrap();
+        assert!((probability - 0.61).abs() < 1e-6);
+        assert_eq!(positive_probability_from_tensor(&[1, 1], &[0.2]), None);
     }
 
     fn features(

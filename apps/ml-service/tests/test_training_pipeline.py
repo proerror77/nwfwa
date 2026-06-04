@@ -204,7 +204,7 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
     assert (
         payload["metrics_json"]["rust_serving_gate_status"]
-        == "onnx_export_and_parity_passed_runtime_link_pending"
+        == "onnx_export_parity_and_rust_runtime_ready"
     )
     assert Path(payload["feature_importance_uri"]).exists()
     assert Path(payload["artifact_uri"]).exists()
@@ -260,7 +260,7 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
     assert (
         payload["metrics_json"]["rust_serving_gate_status"]
-        == "onnx_export_and_parity_passed_runtime_link_pending"
+        == "onnx_export_parity_and_rust_runtime_ready"
     )
     assert Path(payload["feature_importance_uri"]).exists()
     assert Path(payload["artifact_uri"]).exists()

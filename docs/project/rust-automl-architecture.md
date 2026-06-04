@@ -131,19 +131,23 @@ Current repository completion for this target architecture is approximately:
 - 45% for data lifecycle: labeled public/demo manifests and profiling exist;
   Rust-generated labeled/unlabeled demo packs now cover the missing dataset
   shape.
-- 55% for model portfolio: logistic has a native Rust JSON serving artifact;
+- 60% for model portfolio: logistic has a native Rust JSON serving artifact;
   XGBoost and LightGBM training now emit governed ONNX serving artifacts with
-  probability-parity reports, and provider-peer clustering has a Rust-native
-  demo workflow; broader graph/member/claim clustering and deep-learning
-  serving remain future work.
+  probability-parity reports, the Rust runtime can execute those ONNX manifests
+  after contract validation, and provider-peer clustering has a Rust-native demo
+  workflow; broader graph/member/claim clustering and deep-learning serving
+  remain future work.
 - 45% for Auto MLOps: worker can rank candidates, mine explainable rule
   candidates, and backtest those candidates into human-review evidence, while
   trainer-side ONNX parity reports and unlabeled anomaly review tasks exist;
   activation workflows and UI/API review surfaces still need implementation.
-- 20% for Rust ONNX serving: architecture is defined, but the runtime scorer and
-  ONNX Runtime session still need implementation.
+- 65% for Rust ONNX serving: serving-manifest validation, checksum/signature
+  checks, feature-order binding, CPU ONNX Runtime execution, and probability
+  extraction are implemented; production cache/reuse strategy, broader model
+  fixture tests, and latency monitoring still need hardening.
 
 The runtime now has a serving-manifest boundary for Rust logistic artifacts and
-ONNX contract validation. The next highest-leverage implementation is the real
-Rust ONNX scorer using the already-generated XGBoost and LightGBM ONNX artifacts
-and parity reports.
+real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The next
+highest-leverage implementation is an artifact-evaluation command that performs
+serving parity and latency checks from Rust before a candidate can enter
+activation review.

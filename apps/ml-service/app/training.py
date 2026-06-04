@@ -242,7 +242,7 @@ def train_from_manifest(
         ]
         if onnx_parity_report
         else None,
-        "rust_serving_gate_status": "onnx_export_and_parity_passed_runtime_link_pending"
+        "rust_serving_gate_status": "onnx_export_parity_and_rust_runtime_ready"
         if onnx_parity_report
         else "rust_native_artifact_ready",
         "feature_store_materialization_status": "passed",
