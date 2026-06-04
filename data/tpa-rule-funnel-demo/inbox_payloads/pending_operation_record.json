@@ -1,0 +1,85 @@
+{
+  "reportCase": {
+    "accidentDate": 1768435200000,
+    "accidentPerson": {
+      "birthday": 315532800000,
+      "certNo": "MASKED-CERT-CLM-DEMO-SURG-001",
+      "certType": "demo_id",
+      "gender": "U",
+      "insuredName": "Demo Member",
+      "insuredNo": "MASKED-CLM-DEMO-SURG-001"
+    },
+    "accidentReason": "demo health claim",
+    "calculateRisk": "Y",
+    "claimAmount": 15000,
+    "claimReceiveDate": 1768867200000,
+    "medicalRecordInfoList": [
+      {
+        "medicalRecordInformation": "Demo medical note. No PHI.",
+        "medicalRecordNo": "MR-CLM-DEMO-SURG-001",
+        "medicalRecordType": "demo_summary",
+        "patientName": "Demo Member",
+        "visitDate": 1768435200000
+      }
+    ],
+    "policyList": [
+      {
+        "coverageLimit": 30000,
+        "expireDate": 1798675200000,
+        "insuredName": "Demo Member",
+        "invoiceList": [
+          {
+            "diagnosisList": [
+              {
+                "detailCode": "Z00",
+                "detailName": "Demo diagnosis"
+              }
+            ],
+            "endDate": 1768435200000,
+            "feeAmount": 15000,
+            "feeList": [
+              {
+                "feeCategory": "treatmentFee",
+                "feeDetailList": [
+                  {
+                    "amount": 15000,
+                    "detailId": "LINE-CLM-DEMO-SURG-001",
+                    "name": "Complex operation"
+                  }
+                ],
+                "medicareAmount": 6000.0
+              }
+            ],
+            "hospitalCode": "PRV-CLM-DEMO-SURG-001",
+            "hospitalName": "Demo Provider",
+            "invoiceNo": "INV-CLM-DEMO-SURG-001",
+            "medicalType": "outpatient",
+            "startDate": 1768435200000
+          }
+        ],
+        "policyNo": "POL-CLM-DEMO-SURG-001",
+        "productList": [
+          {
+            "claimLiabilityList": [
+              {
+                "claimValidateDate": 1767225600000,
+                "expireDate": 1798675200000,
+                "liabilityCode": "MEDICAL-EXPENSE",
+                "liabilityName": "Demo Medical Expense",
+                "validateDate": 1767225600000
+              }
+            ],
+            "expireDate": 1798675200000,
+            "productCode": "DEMO-HEALTH",
+            "productName": "Demo Health Product",
+            "validateDate": 1767225600000
+          }
+        ],
+        "validateDate": 1767225600000
+      }
+    ],
+    "reportNo": "CLM-DEMO-SURG-001"
+  },
+  "systemCode": "tpa-demo",
+  "transNo": "TPA-DEMO-CLM-DEMO-SURG-001"
+}

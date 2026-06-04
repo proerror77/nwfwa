@@ -1,0 +1,47 @@
+{
+  "inbox_missing_coverage_limit": {
+    "business_assertion": "basic TPA field blockers are fixed before scoring",
+    "normalize_scoring_ready": false,
+    "validation_field_path": "reportCase.policyList[0].coverageLimit"
+  },
+  "manual_review_high_amount": {
+    "business_assertion": "high amount rules should review, not request unrelated documents",
+    "decision_outcome": "manual_review",
+    "required_evidence": []
+  },
+  "manual_review_provider_pattern": {
+    "business_assertion": "provider risk routes review but does not auto-deny",
+    "decision_outcome": "manual_review",
+    "required_evidence": []
+  },
+  "pending_dental_xray": {
+    "business_assertion": "dental treatment needs X-ray and medical-record support",
+    "decision_outcome": "pending_evidence",
+    "required_evidence": [
+      "dental_xray",
+      "medical_record"
+    ]
+  },
+  "pending_operation_record": {
+    "business_assertion": "surgery claim needs operation record before adjudication",
+    "decision_outcome": "pending_evidence",
+    "required_evidence": [
+      "operation_record",
+      "medical_record",
+      "invoice"
+    ]
+  },
+  "pending_prescription_detail": {
+    "business_assertion": "pharmacy claim needs medication order and prescription detail",
+    "decision_outcome": "pending_evidence",
+    "required_evidence": [
+      "medication_order",
+      "prescription_detail"
+    ]
+  },
+  "straight_through_low_risk": {
+    "business_assertion": "low risk with complete required baseline fields",
+    "decision_outcome": "straight_through",
+    "required_evidence": []
+  }
+}

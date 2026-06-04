@@ -1,0 +1,55 @@
+{
+  "claim": {
+    "claim_amount": "4000.00",
+    "currency": "CNY",
+    "diagnosis_code": "Z00",
+    "external_claim_id": "CLM-DEMO-PROVIDER-001",
+    "service_date": "2026-01-15"
+  },
+  "documents": [],
+  "items": [
+    {
+      "description": "Routine outpatient consultation",
+      "item_code": "CONS-200",
+      "item_type": "consultation",
+      "quantity": 1,
+      "total_amount": "4000.00",
+      "unit_amount": "4000.00"
+    }
+  ],
+  "member": {
+    "external_member_id": "MBR-CLM-DEMO-PROVIDER-001",
+    "gender": "U"
+  },
+  "policy": {
+    "coverage_end_date": "2026-12-31",
+    "coverage_limit": "20000.00",
+    "coverage_start_date": "2026-01-01",
+    "currency": "CNY",
+    "external_policy_id": "POL-CLM-DEMO-PROVIDER-001",
+    "product_code": "DEMO-HEALTH"
+  },
+  "provider": {
+    "external_provider_id": "PRV-CLM-DEMO-PROVIDER-001",
+    "name": "Demo Provider",
+    "provider_type": "clinic",
+    "region": "SH",
+    "risk_tier": "High"
+  },
+  "provider_profile": {
+    "evidence_refs": [
+      "provider_profiles:PRV-DEMO-PROVIDER-001"
+    ],
+    "peer_amount_percentile": 99,
+    "risk_score": 92
+  },
+  "provider_relationships": {
+    "evidence_refs": [
+      "provider_graph:PRV-DEMO-PROVIDER-001"
+    ],
+    "graph_risk_score": 88,
+    "high_risk_neighbor_count": 3,
+    "relationship_count": 12
+  },
+  "source_system": "tpa-demo"
+}

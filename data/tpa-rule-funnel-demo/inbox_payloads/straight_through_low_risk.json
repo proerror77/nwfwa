@@ -1,0 +1,85 @@
+{
+  "reportCase": {
+    "accidentDate": 1768435200000,
+    "accidentPerson": {
+      "birthday": 315532800000,
+      "certNo": "MASKED-CERT-CLM-DEMO-LOW-001",
+      "certType": "demo_id",
+      "gender": "U",
+      "insuredName": "Demo Member",
+      "insuredNo": "MASKED-CLM-DEMO-LOW-001"
+    },
+    "accidentReason": "demo health claim",
+    "calculateRisk": "Y",
+    "claimAmount": 300,
+    "claimReceiveDate": 1768867200000,
+    "medicalRecordInfoList": [
+      {
+        "medicalRecordInformation": "Demo medical note. No PHI.",
+        "medicalRecordNo": "MR-CLM-DEMO-LOW-001",
+        "medicalRecordType": "demo_summary",
+        "patientName": "Demo Member",
+        "visitDate": 1768435200000
+      }
+    ],
+    "policyList": [
+      {
+        "coverageLimit": 20000,
+        "expireDate": 1798675200000,
+        "insuredName": "Demo Member",
+        "invoiceList": [
+          {
+            "diagnosisList": [
+              {
+                "detailCode": "Z00",
+                "detailName": "Demo diagnosis"
+              }
+            ],
+            "endDate": 1768435200000,
+            "feeAmount": 300,
+            "feeList": [
+              {
+                "feeCategory": "treatmentFee",
+                "feeDetailList": [
+                  {
+                    "amount": 300,
+                    "detailId": "LINE-CLM-DEMO-LOW-001",
+                    "name": "Routine consultation"
+                  }
+                ],
+                "medicareAmount": 120.0
+              }
+            ],
+            "hospitalCode": "PRV-CLM-DEMO-LOW-001",
+            "hospitalName": "Demo Provider",
+            "invoiceNo": "INV-CLM-DEMO-LOW-001",
+            "medicalType": "outpatient",
+            "startDate": 1768435200000
+          }
+        ],
+        "policyNo": "POL-CLM-DEMO-LOW-001",
+        "productList": [
+          {
+            "claimLiabilityList": [
+              {
+                "claimValidateDate": 1767225600000,
+                "expireDate": 1798675200000,
+                "liabilityCode": "MEDICAL-EXPENSE",
+                "liabilityName": "Demo Medical Expense",
+                "validateDate": 1767225600000
+              }
+            ],
+            "expireDate": 1798675200000,
+            "productCode": "DEMO-HEALTH",
+            "productName": "Demo Health Product",
+            "validateDate": 1767225600000
+          }
+        ],
+        "validateDate": 1767225600000
+      }
+    ],
+    "reportNo": "CLM-DEMO-LOW-001"
+  },
+  "systemCode": "tpa-demo",
+  "transNo": "TPA-DEMO-CLM-DEMO-LOW-001"
+}
