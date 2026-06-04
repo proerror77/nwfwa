@@ -129,6 +129,33 @@ async fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
+        "build-automl-lifecycle-closure-report" => {
+            let demo_index = take_flag_value(&mut args, "--demo-index")?;
+            let candidate_ranking = take_flag_value(&mut args, "--candidate-ranking")?;
+            let artifact_evaluation_reports =
+                take_repeated_flag_value(&mut args, "--artifact-evaluation-report")?;
+            let rule_backtest_report = take_flag_value(&mut args, "--rule-backtest-report")?;
+            let provider_clustering_report =
+                take_flag_value(&mut args, "--provider-clustering-report")?;
+            let claim_entity_clustering_report =
+                take_flag_value(&mut args, "--claim-entity-clustering-report")?;
+            let mlops_monitoring_report = take_flag_value(&mut args, "--mlops-monitoring-report")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::build_automl_lifecycle_closure_report(
+                &demo_index,
+                &candidate_ranking,
+                &artifact_evaluation_reports,
+                &rule_backtest_report,
+                &provider_clustering_report,
+                &claim_entity_clustering_report,
+                &mlops_monitoring_report,
+                output_dir,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "rank-automl-candidates" => {
             let reports = take_repeated_flag_value(&mut args, "--validation-report")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;

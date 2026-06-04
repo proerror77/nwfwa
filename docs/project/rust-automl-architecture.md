@@ -85,7 +85,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
   output, enriching the trainer payload with the Rust feature-set manifest URI
   and reproducibility hash before API registration; when the trainer returns a
   serving manifest, it also runs Rust serving artifact evaluation and attaches
-  the report URI plus serving latency/status evidence.
+  the report URI plus serving latency/status evidence. ONNX runtime kinds must
+  also carry a passed trainer ONNX parity report before the Rust serving gate
+  can pass.
 - `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
   LightGBM, and anomaly candidates, then open human-review recommendations
   without activating any model.
@@ -107,6 +109,10 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `build-mlops-monitoring-report`: combine Rust artifact evaluation, shadow,
   drift, and fairness reports into one monitoring decision with review tasks and
   retraining preparation triggers.
+- `build-automl-lifecycle-closure-report`: summarize dataset, candidate
+  ranking, ONNX Rust-serving, rule-backtest, clustering, and monitoring
+  evidence into one closure report without auto-activating models or writing
+  rules.
 
 ## Serving Architecture
 
@@ -149,23 +155,25 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer plus claim/member/provider entity
   clustering have Rust-native demo workflows; broader graph clustering and
   deep-learning serving remain future work.
-- 70% for Auto MLOps: worker can build feature-set manifests, enrich
+- 74% for Auto MLOps: worker can build feature-set manifests, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
-  rank candidates, evaluate serving artifacts, mine explainable rule candidates,
-  backtest those candidates into human-review evidence, and summarize live
-  monitoring reports into review/retraining triggers, while API promotion gates
-  now require Rust feature-set materialization evidence, worker ranking requires
-  Rust feature-set and Rust serving evaluation evidence, and trainer-side ONNX
-  parity reports and unlabeled anomaly review tasks exist; API retraining output
-  now accepts governed serving manifests, and the console has provider model
-  release, promotion review, activation, and rollback actions. Broader graph,
-  graph clustering and live monitoring surfaces still need hardening.
-- 72% for Rust ONNX serving: serving-manifest validation, checksum/signature
+  rank candidates, evaluate serving artifacts, require ONNX parity evidence for
+  XGBoost/LightGBM gates, mine explainable rule candidates, backtest those
+  candidates into human-review evidence, summarize live monitoring reports into
+  review/retraining triggers, and produce a lifecycle closure report, while API
+  promotion gates now require Rust feature-set materialization evidence, worker
+  ranking requires Rust feature-set and Rust serving evaluation evidence, and
+  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist; API
+  retraining output now accepts governed serving manifests, and the console has
+  provider model release, promotion review, activation, and rollback actions.
+  Broader graph clustering and live monitoring surfaces still need hardening.
+- 74% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation
   evidence automatically on retraining registration when a serving manifest is
-  present; production cache/reuse strategy, broader ONNX fixture tests, and live
-  latency monitoring still need hardening.
+  present; for XGBoost/LightGBM ONNX candidates it also requires a passed ONNX
+  parity report before the gate can pass. Production cache/reuse strategy,
+  broader ONNX fixture tests, and live latency monitoring still need hardening.
 
 The runtime now has a serving-manifest boundary for Rust logistic artifacts and
 real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The worker

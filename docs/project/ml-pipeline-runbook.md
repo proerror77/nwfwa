@@ -377,6 +377,11 @@ Behavior:
   `model_artifact_evaluation_status`, `model_artifact_evaluation_report_uri`,
   `rust_serving_status`, `rust_serving_latency_status`, and
   `rust_serving_p95_latency_ms` into `metrics_json`;
+- for `xgboost_onnx` and `lightgbm_onnx`, the worker also requires the
+  trainer's `onnx_parity_report_uri`, verifies that the parity report passed,
+  and attaches `onnx_parity_gate_status`, `onnx_parity_report_uri`, and
+  `model_onnx_parity_reports:<uri>` evidence before the candidate can pass the
+  Rust serving gate;
 - the worker posts the trainer output to
   `/api/v1/ops/model-retraining-jobs/{job_id}/output`;
 - the API creates a candidate model version and evaluation record if the output
@@ -590,6 +595,30 @@ The worker writes `mlops_monitoring_report.json` and
 `mlops_monitoring_review_tasks.json`. This report may recommend monitoring,
 review, or retraining preparation, but it must not activate models, publish
 rules, or assign fraud labels.
+
+After dataset, candidate-ranking, serving, rule-backtest, clustering, and
+monitoring evidence exists, summarize the full Rust Auto MLOps lifecycle into
+one closure report:
+
+```bash
+cargo run --locked -p worker -- build-automl-lifecycle-closure-report \
+  --demo-index data/rust-automl-demo/index.json \
+  --candidate-ranking data/model-artifacts/baseline_fwa/0.2.0/ranking/automl_candidate_ranking.json \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/xgboost/artifact-evaluation/model_artifact_evaluation_report.json \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/lightgbm/artifact-evaluation/model_artifact_evaluation_report.json \
+  --rule-backtest-report data/model-artifacts/baseline_fwa/0.2.0/rule-candidates/backtest/rule_candidate_backtest_report.json \
+  --provider-clustering-report data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json \
+  --claim-entity-clustering-report data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json \
+  --mlops-monitoring-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/lifecycle-closure
+```
+
+The worker writes `rust_automl_lifecycle_closure_report.json`. The closure
+status can only pass when the evidence proves: one labeled demo dataset, at
+least two unlabeled demo datasets, XGBoost and LightGBM candidate ranking,
+XGBoost and LightGBM ONNX Rust-serving artifact gates, rule-candidate backtest
+before rule-library writeback, provider and claim-entity clustering review
+tasks, and non-blocked MLOps monitoring.
 
 ## Stage 7: Promotion Gates
 
