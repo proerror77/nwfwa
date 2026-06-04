@@ -709,6 +709,23 @@ scheduler-execution evidence refs. This is a customer alert-router handoff
 record; it does not create retraining jobs, activate models, rollback models,
 or assign fraud labels.
 
+Deliver queued MLOps alerts to a customer receiver webhook:
+
+```bash
+cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook \
+  --scheduler-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
+  --receiver-url "$FWA_ALERT_RECEIVER_URL" \
+  --receiver-id customer-alert-router-v1 \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/alert-receiver
+```
+
+The worker writes `mlops_alert_receiver_payload.json` and
+`mlops_alert_receiver_delivery_report.json`. If no alert tasks are required, it
+records `skipped_no_alerts_required` without calling the receiver. If tasks are
+present, it POSTs a governance-only payload to the receiver and records the HTTP
+status and response excerpt. This transport must not trigger retraining,
+activation, rollback, label assignment, or rule writeback.
+
 After dataset, candidate-ranking, serving, rule-backtest, clustering, and
 monitoring evidence exists, summarize the full Rust Auto MLOps lifecycle into
 one closure report:

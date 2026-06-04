@@ -188,6 +188,23 @@ async fn main() -> anyhow::Result<()> {
             .await?;
             println!("{}", serde_json::to_string_pretty(&response)?);
         }
+        "deliver-mlops-alert-receiver-webhook" => {
+            let scheduler_report = take_flag_value(&mut args, "--scheduler-report")?;
+            let receiver_url = take_flag_value(&mut args, "--receiver-url")?;
+            let receiver_id = take_flag_value(&mut args, "--receiver-id")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::deliver_mlops_alert_receiver_webhook(
+                &scheduler_report,
+                &receiver_url,
+                &receiver_id,
+                output_dir,
+            )
+            .await?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "run-mlops-monitoring-cycle" => {
             let plan = take_flag_value(&mut args, "--plan")?;
             let artifact_evaluation_report =

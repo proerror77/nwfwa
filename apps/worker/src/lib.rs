@@ -100,6 +100,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "mlops_alert_receiver_webhook_sender",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "model_artifact_evaluator",
                 status: "ok",
             },
@@ -446,6 +450,127 @@ pub async fn submit_mlops_alert_delivery_tasks(
         .json::<serde_json::Value>()
         .await
         .context("parse MLOps alert delivery response")
+}
+
+pub fn build_mlops_alert_receiver_payload(
+    scheduler_execution_report_uri: &str,
+    receiver_id: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let scheduler_execution_report_uri = required_non_empty(
+        "scheduler_execution_report_uri",
+        scheduler_execution_report_uri,
+    )?;
+    let receiver_id = required_non_empty("receiver_id", receiver_id)?;
+    let report = read_json_report(scheduler_execution_report_uri)?;
+    if json_string(&report, "report_kind").as_deref() != Some("mlops_scheduler_execution_report") {
+        bail!("alert receiver payload requires an mlops_scheduler_execution_report");
+    }
+    let model_key = json_string(&report, "model_key")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps scheduler execution report requires model_key")?;
+    let model_version = json_string(&report, "model_version")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps scheduler execution report requires model_version")?;
+    let alert_delivery_status = json_string(&report, "alert_delivery_status")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps scheduler execution report requires alert_delivery_status")?;
+    let alert_delivery_tasks = report
+        .get("alert_delivery_tasks")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let evidence_refs = report
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .chain(std::iter::once(format!(
+            "mlops_scheduler_execution_reports:{scheduler_execution_report_uri}"
+        )))
+        .collect::<BTreeSet<_>>()
+        .into_iter()
+        .collect::<Vec<_>>();
+
+    Ok(serde_json::json!({
+        "event_kind": "mlops_alert_receiver_delivery",
+        "event_version": 1,
+        "receiver_id": receiver_id,
+        "model_key": model_key,
+        "model_version": model_version,
+        "scheduler_execution_report_uri": scheduler_execution_report_uri,
+        "alert_delivery_status": alert_delivery_status,
+        "alert_delivery_task_count": alert_delivery_tasks.len(),
+        "alert_delivery_tasks": alert_delivery_tasks,
+        "evidence_refs": evidence_refs,
+        "governance_boundary": "alert receiver delivery may notify an external receiver only; it must not create retraining jobs, activate models, rollback models, assign fraud labels, or write rules"
+    }))
+}
+
+pub async fn deliver_mlops_alert_receiver_webhook(
+    scheduler_execution_report_uri: &str,
+    receiver_url: &str,
+    receiver_id: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let receiver_url = required_non_empty("receiver_url", receiver_url)?;
+    let payload = build_mlops_alert_receiver_payload(scheduler_execution_report_uri, receiver_id)?;
+    let output_dir = output_dir.as_ref();
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "create MLOps alert receiver output dir {}",
+            output_dir.display()
+        )
+    })?;
+    write_json(
+        output_dir.join("mlops_alert_receiver_payload.json"),
+        &payload,
+    )?;
+
+    let task_count = payload["alert_delivery_task_count"].as_u64().unwrap_or(0);
+    let mut report = serde_json::json!({
+        "report_kind": "mlops_alert_receiver_delivery_report",
+        "report_version": 1,
+        "receiver_id": payload["receiver_id"].clone(),
+        "model_key": payload["model_key"].clone(),
+        "model_version": payload["model_version"].clone(),
+        "scheduler_execution_report_uri": payload["scheduler_execution_report_uri"].clone(),
+        "alert_delivery_task_count": task_count,
+        "receiver_url_configured": true,
+        "delivery_status": "skipped_no_alerts_required",
+        "http_status": serde_json::Value::Null,
+        "response_body_excerpt": serde_json::Value::Null,
+        "governance_boundary": payload["governance_boundary"].clone(),
+        "evidence_refs": payload["evidence_refs"].clone()
+    });
+    if task_count > 0 {
+        let response = reqwest::Client::new()
+            .post(receiver_url)
+            .header("x-fwa-event-kind", "mlops_alert_receiver_delivery")
+            .header(
+                "x-fwa-model-key",
+                payload["model_key"].as_str().unwrap_or(""),
+            )
+            .json(&payload)
+            .send()
+            .await
+            .context("deliver MLOps alert receiver webhook")?;
+        let status = response.status();
+        let body = response.text().await.unwrap_or_default();
+        let body_excerpt = body.chars().take(256).collect::<String>();
+        report["delivery_status"] = serde_json::json!(if status.is_success() {
+            "delivered"
+        } else {
+            "failed"
+        });
+        report["http_status"] = serde_json::json!(status.as_u16());
+        report["response_body_excerpt"] = serde_json::json!(body_excerpt);
+    }
+    write_json(
+        output_dir.join("mlops_alert_receiver_delivery_report.json"),
+        &report,
+    )?;
+    Ok(report)
 }
 
 pub fn build_mlops_monitoring_cycle_evidence(
@@ -8305,6 +8430,114 @@ mod tests {
             .is_file());
         assert!(root
             .join("cycle/mlops_monitoring_cycle_report.json")
+            .is_file());
+    }
+
+    #[tokio::test]
+    async fn delivers_mlops_alert_receiver_webhook_without_model_actions() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let root = temp_root("mlops-alert-receiver-webhook");
+        let scheduler_report = root.join("mlops_scheduler_execution_report.json");
+        write_json(
+            scheduler_report.clone(),
+            &serde_json::json!({
+                "report_kind": "mlops_scheduler_execution_report",
+                "report_version": 1,
+                "model_key": "baseline_fwa",
+                "model_version": "0.2.0",
+                "alert_delivery_status": "queued_for_external_alert_router",
+                "alert_delivery_task_count": 1,
+                "alert_delivery_tasks": [
+                    {
+                        "task_kind": "mlops_alert_delivery",
+                        "trigger": "model_drift_detected",
+                        "severity": "high",
+                        "route_key": "mlops_retraining_readiness",
+                        "delivery_status": "queued_for_external_alert_router"
+                    }
+                ],
+                "evidence_refs": [
+                    "mlops_monitoring_plans:data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json",
+                    "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json"
+                ],
+                "governance_boundary": "scheduler execution evidence may queue alert delivery and review work only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels"
+            }),
+        )
+        .unwrap();
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let receiver_url = format!("http://{}/mlops-alerts", listener.local_addr().unwrap());
+        let receiver = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let mut request_bytes = Vec::new();
+            let mut buffer = [0_u8; 1024];
+            loop {
+                let read = socket.read(&mut buffer).await.unwrap();
+                if read == 0 {
+                    break;
+                }
+                request_bytes.extend_from_slice(&buffer[..read]);
+                let Some(header_end) = request_bytes
+                    .windows(4)
+                    .position(|window| window == b"\r\n\r\n")
+                else {
+                    continue;
+                };
+                let header_text = String::from_utf8_lossy(&request_bytes[..header_end]);
+                let content_length = header_text
+                    .lines()
+                    .find_map(|line| {
+                        let (name, value) = line.split_once(':')?;
+                        if name.eq_ignore_ascii_case("content-length") {
+                            value.trim().parse::<usize>().ok()
+                        } else {
+                            None
+                        }
+                    })
+                    .unwrap_or(0);
+                if request_bytes.len() >= header_end + 4 + content_length {
+                    break;
+                }
+            }
+            let request = String::from_utf8_lossy(&request_bytes).to_string();
+            socket
+                .write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 2\r\n\r\nok")
+                .await
+                .unwrap();
+            request
+        });
+
+        let report = deliver_mlops_alert_receiver_webhook(
+            &scheduler_report.to_string_lossy(),
+            &receiver_url,
+            "customer-alpha-alert-router",
+            root.join("delivery"),
+        )
+        .await
+        .expect("alert receiver delivery");
+        let request = receiver.await.unwrap();
+
+        assert!(request.starts_with("POST /mlops-alerts "));
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("x-fwa-event-kind: mlops_alert_receiver_delivery"));
+        assert!(request.contains("\"event_kind\":\"mlops_alert_receiver_delivery\""));
+        assert!(request.contains("\"trigger\":\"model_drift_detected\""));
+        assert_eq!(report["delivery_status"], "delivered");
+        assert_eq!(report["http_status"], 202);
+        assert_eq!(report["alert_delivery_task_count"], 1);
+        assert!(report["governance_boundary"]
+            .as_str()
+            .unwrap()
+            .contains("must not create retraining jobs"));
+        assert!(root
+            .join("delivery/mlops_alert_receiver_payload.json")
+            .is_file());
+        assert!(root
+            .join("delivery/mlops_alert_receiver_delivery_report.json")
             .is_file());
     }
 

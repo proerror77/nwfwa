@@ -330,6 +330,21 @@ This records delivery handoff evidence only. It does not replace the customer
 alert receiver, create retraining jobs, activate models, rollback models, or
 assign fraud labels.
 
+Send queued MLOps alert tasks to a customer receiver webhook:
+
+```bash
+cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook \
+  --scheduler-report artifacts/mlops-monitoring/cycle/scheduler/mlops_scheduler_execution_report.json \
+  --receiver-url "$FWA_ALERT_RECEIVER_URL" \
+  --receiver-id customer-alert-router-v1 \
+  --output-dir artifacts/mlops-monitoring/alert-receiver
+```
+
+This command performs the outbound POST only when alert tasks exist. It writes
+delivery evidence and keeps the receiver payload governance-only; the customer
+receiver still owns downstream notification policy, authentication, escalation,
+and acknowledgement.
+
 Analytics-scale export proof:
 
 ```bash
