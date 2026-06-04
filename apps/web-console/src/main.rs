@@ -8238,8 +8238,7 @@ fn agent_investigation_view(props: &AgentInvestigationProps) -> Html {
                             {for response.findings.iter().map(|finding| html! {
                                 <div class="metric-row">
                                     <span>{&finding.finding}</span>
-                                    <strong>{finding.evidence_refs.len()}</strong>
-                                    <small>{refs_label(&finding.evidence_refs)}</small>
+                                    <strong>{refs_count_label(&finding.evidence_refs)}</strong>
                                 </div>
                             })}
                         </div>
@@ -8258,8 +8257,8 @@ fn agent_investigation_view(props: &AgentInvestigationProps) -> Html {
                                     <div class="metric-row">
                                         <span>{&case.case_id}</span>
                                         <strong>{format!("{:.2}", case.similarity_score)}</strong>
-                                        <small>{format!("signals: {}", refs_label(&case.matched_signals))}</small>
-                                        <small>{format!("provenance: {}", refs_label(&case.provenance_refs))}</small>
+                                        <small>{format!("signals: {}", refs_count_label(&case.matched_signals))}</small>
+                                        <small>{format!("provenance: {}", refs_count_label(&case.provenance_refs))}</small>
                                     </div>
                                 })}
                             </div>
@@ -8277,7 +8276,11 @@ fn agent_investigation_view(props: &AgentInvestigationProps) -> Html {
                             <div><span>{"Document"}</span><strong>{response.evidence_refs_by_type.document.len()}</strong></div>
                             <div><span>{"Similar Case"}</span><strong>{response.evidence_refs_by_type.similar_case.len()}</strong></div>
                         </div>
-                        <small>{format!("evidence: {}", refs_label(&response.evidence_refs))}</small>
+                        <small>{format!("evidence: {}", refs_count_label(&response.evidence_refs))}</small>
+                        <details class="data-source-detail governance-detail">
+                            <summary>{"Investigation evidence detail"}</summary>
+                            <small>{refs_label(&response.evidence_refs)}</small>
+                        </details>
                     </>
                 },
             }}
@@ -8395,7 +8398,7 @@ fn agent_runs_view(props: &AgentRunsProps) -> Html {
                                 {for runs.iter().take(8).map(|run| html! {
                                     <div class="factor-card">
                                         <div>
-                                            <strong>{format!("{} / {}", run.agent_run_id, run.claim_id)}</strong>
+                                            <strong>{&run.claim_id}</strong>
                                             <span>{format!("{} / {}", run.status, run.decision_boundary)}</span>
                                         </div>
                                         <div class="summary-grid">
@@ -8403,10 +8406,16 @@ fn agent_runs_view(props: &AgentRunsProps) -> Html {
                                             <div><span>{"Tool Calls"}</span><strong>{run.tool_calls.len()}</strong></div>
                                             <div><span>{"Policy Checks"}</span><strong>{run.policy_checks.len()}</strong></div>
                                             <div><span>{"Approvals"}</span><strong>{run.approvals.len()}</strong></div>
+                                            <div><span>{"Evidence"}</span><strong>{refs_count_label(&run.evidence_refs)}</strong></div>
                                         </div>
                                         <small>{format!("created: {} / completed: {}", run.created_at.as_deref().unwrap_or("unknown"), run.completed_at.as_deref().unwrap_or("pending"))}</small>
-                                        <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
-                                        <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
+                                        <small>{format!("approval: {}", approval_count_label(&run.approvals))}</small>
+                                        <details class="data-source-detail governance-detail">
+                                            <summary>{"Agent run evidence detail"}</summary>
+                                            <small>{format!("agent run: {}", run.agent_run_id)}</small>
+                                            <small>{format!("evidence: {}", refs_label(&run.evidence_refs))}</small>
+                                            <small>{format!("approval: {}", approval_summary(&run.approvals))}</small>
+                                        </details>
                                     </div>
                                 })}
                             </div>
@@ -12182,6 +12191,9 @@ fn empty_label(value: &str) -> &str {
 }
 
 fn approval_summary(approvals: &[AgentApprovalView]) -> String {
+    if approvals.is_empty() {
+        return "none".into();
+    }
     approvals
         .iter()
         .map(|approval| {
@@ -12198,6 +12210,14 @@ fn approval_summary(approvals: &[AgentApprovalView]) -> String {
         })
         .collect::<Vec<_>>()
         .join(", ")
+}
+
+fn approval_count_label(approvals: &[AgentApprovalView]) -> String {
+    if approvals.is_empty() {
+        "none".into()
+    } else {
+        format!("{} approval records", approvals.len())
+    }
 }
 
 fn yes_no(value: bool) -> &'static str {
