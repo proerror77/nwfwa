@@ -5686,7 +5686,10 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                                                 <span class={classes!("status-token", if field.nullable { "neutral" } else { "strong" })}>
                                                                     {if field.nullable { "nullable" } else { "required" }}
                                                                 </span>
-                                                                <small>{payload_keys_label(&field.profile_json)}</small>
+                                                                <details class="data-source-detail field-profile-detail">
+                                                                    <summary>{payload_signal_count_label(&field.profile_json, "profile signals")}</summary>
+                                                                    <small>{payload_keys_label(&field.profile_json)}</small>
+                                                                </details>
                                                             </div>
                                                         })}
                                                     </div>
@@ -5718,9 +5721,12 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                                 <span>{"->"}</span>
                                                 <strong>{&mapping.canonical_target}</strong>
                                             </div>
-                                            <span>{mapping.feature_name.as_deref().unwrap_or("no feature")}</span>
-                                            <span class={classes!("status-token", status_tone(&mapping.status))}>{&mapping.status}</span>
-                                            <small>{format!("{}:{} / {} / transform {}", dataset.dataset_key, dataset.dataset_version, mapping.transform_kind, payload_keys_label(&mapping.transform_json))}</small>
+                                                <span>{mapping.feature_name.as_deref().unwrap_or("no feature")}</span>
+                                                <span class={classes!("status-token", status_tone(&mapping.status))}>{&mapping.status}</span>
+                                            <details class="data-source-detail">
+                                                <summary>{format!("{}:{} / {}", dataset.dataset_key, dataset.dataset_version, mapping.transform_kind)}</summary>
+                                                <small>{format!("transform {}", payload_keys_label(&mapping.transform_json))}</small>
+                                            </details>
                                         </div>
                                     })}
                                 </div>
@@ -5759,7 +5765,15 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                                 <strong>{optional_metric(&evaluation.precision)}</strong>
                                                 <strong>{optional_metric(&evaluation.recall)}</strong>
                                                 <span>{lineage_data_quality_label(lineage)}</span>
-                                                <small class="row-detail">{format!("source {} / f1 {} / threshold {} / metrics {} / confusion {} / feature importance {}", lineage_source_label(lineage), optional_metric(&evaluation.f1), optional_metric(&evaluation.threshold), payload_keys_label(&evaluation.metrics_json), payload_keys_label(&evaluation.confusion_matrix_json), evaluation.feature_importance_uri.as_deref().unwrap_or("none"))}</small>
+                                                <details class="row-detail data-source-detail evaluation-evidence-detail">
+                                                    <summary>{format!("Evaluation evidence detail: f1 {} / threshold {}", optional_metric(&evaluation.f1), optional_metric(&evaluation.threshold))}</summary>
+                                                    <div class="data-source-detail-grid">
+                                                        <small>{format!("source {}", lineage_source_label(lineage))}</small>
+                                                        <small>{format!("metrics {}", payload_signal_count_label(&evaluation.metrics_json, "metric fields"))}</small>
+                                                        <small>{format!("confusion {}", payload_signal_count_label(&evaluation.confusion_matrix_json, "confusion fields"))}</small>
+                                                        <small>{format!("feature importance {}", evaluation.feature_importance_uri.as_deref().unwrap_or("none"))}</small>
+                                                    </div>
+                                                </details>
                                             </div>
                                         }
                                     })}
@@ -11971,6 +11985,19 @@ fn payload_keys_label(value: &Value) -> String {
                 "empty object".into()
             } else {
                 object.keys().cloned().collect::<Vec<_>>().join(", ")
+            }
+        })
+        .unwrap_or_else(|| display_value(value))
+}
+
+fn payload_signal_count_label(value: &Value, noun: &str) -> String {
+    value
+        .as_object()
+        .map(|object| {
+            if object.is_empty() {
+                "empty object".into()
+            } else {
+                format!("{} {}", object.len(), noun)
             }
         })
         .unwrap_or_else(|| display_value(value))

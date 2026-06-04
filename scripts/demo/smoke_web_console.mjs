@@ -270,6 +270,7 @@ async function main() {
       "Split And Schema Coverage",
       "Field Mapping Lineage",
       "Model Evaluation Lineage",
+      "Evaluation evidence detail",
       "Factor Cards",
       "AUC Gain",
       "Field Governance",

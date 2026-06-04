@@ -5994,9 +5994,37 @@ pre {
   border-radius: 7px;
 }
 
-.field-row > small {
+.field-row > small,
+.field-row > details {
   color: var(--muted);
   white-space: nowrap;
+}
+
+.data-source-detail {
+  min-width: 0;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.data-source-detail summary {
+  cursor: pointer;
+  font-weight: 800;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.data-source-detail small {
+  display: block;
+  margin-top: 6px;
+  color: var(--muted);
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+
+.data-source-detail-grid {
+  display: grid;
+  gap: 4px;
 }
 
 .lineage-row {
@@ -6027,7 +6055,8 @@ pre {
   font-weight: 900;
 }
 
-.lineage-row small {
+.lineage-row small,
+.lineage-row details {
   grid-column: 1 / -1;
   color: var(--muted);
   overflow-wrap: anywhere;
@@ -6182,7 +6211,9 @@ pre {
 
   .ops-table-row > span,
   .ops-table-row > strong,
-  .field-row > small {
+  .field-row > small,
+  .field-row > details,
+  .data-source-detail summary {
     white-space: normal;
   }
 }
