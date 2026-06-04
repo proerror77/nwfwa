@@ -482,8 +482,10 @@ back to `approved`.
 
 Governed retraining boundary: retraining jobs model the offline worker contract,
 artifact evidence, validation metrics, MLOps reports, and candidate
-registration. They do not represent automatic production promotion or automatic
-customer-environment deployment.
+registration. When a retraining output includes `serving_manifest_uri`, the API
+requires serving-manifest evidence and stores that URI in the evaluation
+metrics. Retraining output registration still does not represent automatic
+production promotion or automatic customer-environment deployment.
 
 Promotion gates should be read as the policy checklist for activation. They
 cover data quality, label provenance, drift, promotion review evidence, feature

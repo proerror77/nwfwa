@@ -5416,6 +5416,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "minLength": 1,
                             "description": "Optional sha256 digest for training_artifact_uri."
                         },
+                        "serving_manifest_uri": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional Rust serving manifest URI. Must point to serving_manifest.json when provided."
+                        },
                         "endpoint_url": { "type": ["string", "null"], "minLength": 1 },
                         "validation_report_uri": {
                             "type": "string",
@@ -5427,7 +5432,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "minItems": 1,
                             "items": { "type": "string", "minLength": 1 },
-                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, and model_training_artifacts when training_artifact_uri is present."
+                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, model_training_artifacts when training_artifact_uri is present, and model_serving_manifests or serving_manifests when serving_manifest_uri is present."
                         },
                         "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
