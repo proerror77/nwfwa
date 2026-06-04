@@ -432,10 +432,11 @@
 
       .process.compact {
         grid-template-columns: repeat(3, minmax(0, 1fr));
+        min-height: 194px;
       }
 
       .process.compact .process-step {
-        min-height: 132px;
+        min-height: 156px;
       }
 
       .process.compact .process-step .title {
@@ -635,13 +636,13 @@
       data-width="1920"
       data-height="1080"
       data-start="0"
-      data-duration="50"
+      data-duration="30"
     >
       <div class="top-bar" data-layout-ignore></div>
       <div class="brand"><span class="mark" aria-hidden="true"></span><span>Nova FWA</span></div>
       <div class="deck-meta">Executive briefing | Risk operations platform</div>
 
-      <section id="scene-1" class="clip" data-start="0" data-duration="8" data-track-index="1">
+      <section id="scene-1" class="clip" data-start="0" data-duration="5" data-track-index="1">
         <div class="scene-content two-col">
           <div>
             <div class="headline-rule"></div>
@@ -664,7 +665,7 @@
         <div class="slide-number">01 / 05</div>
       </section>
 
-      <section id="scene-2" class="clip" data-start="8" data-duration="10" data-track-index="1">
+      <section id="scene-2" class="clip" data-start="5" data-duration="6" data-track-index="1">
         <div class="scene-content visual-split">
           <div>
             <div class="eyebrow">Problem framing</div>
@@ -692,7 +693,7 @@
         <div class="slide-number">02 / 05</div>
       </section>
 
-      <section id="scene-3" class="clip" data-start="18" data-duration="11" data-track-index="1">
+      <section id="scene-3" class="clip" data-start="11" data-duration="6.5" data-track-index="1">
         <div class="scene-content">
           <div class="section-layout">
             <div>
@@ -715,7 +716,7 @@
         <div class="slide-number">03 / 05</div>
       </section>
 
-      <section id="scene-4" class="clip" data-start="29" data-duration="11" data-track-index="1">
+      <section id="scene-4" class="clip" data-start="17.5" data-duration="6.5" data-track-index="1">
         <div class="scene-content visual-split">
           <div>
             <div class="eyebrow">Operating model</div>
@@ -723,7 +724,7 @@
             <p class="body" style="margin-top: 24px">
               Nova FWA links scoring, casework, medical review, QA feedback, and governance without replacing customer adjudication.
             </p>
-            <div class="process compact" style="margin-top: 34px">
+            <div class="process compact" style="margin-top: 34px" data-layout-allow-overflow>
               <div class="process-step"><div class="num">01</div><div class="title">Score</div><div class="desc">Generate evidence-backed risk.</div></div>
               <div class="process-step"><div class="num">02</div><div class="title">Review</div><div class="desc">Route to human operators.</div></div>
               <div class="process-step"><div class="num">03</div><div class="title">Govern</div><div class="desc">Record outcomes and audit trail.</div></div>
@@ -742,7 +743,7 @@
         <div class="slide-number">04 / 05</div>
       </section>
 
-      <section id="scene-5" class="clip" data-start="40" data-duration="10" data-track-index="1">
+      <section id="scene-5" class="clip" data-start="24" data-duration="6" data-track-index="1">
         <div class="scene-content">
           <div class="closing-layout">
             <div class="closing">
@@ -768,7 +769,7 @@
         window.__timelines = window.__timelines || {};
 
         const tl = gsap.timeline({ paused: true });
-        const sceneStarts = [0, 8, 18, 29, 40];
+        const sceneStarts = [0, 5, 11, 17.5, 24];
 
         function fromIfPresent(selector, vars, position) {
           const targets = gsap.utils.toArray(selector);
@@ -784,15 +785,15 @@
           fromIfPresent(`${scene} h1, ${scene} h2`, { y: 24, opacity: 0, duration: 0.55, ease: "power3.out" }, start + 0.38);
           fromIfPresent(`${scene} .body, ${scene} .boundary`, { y: 18, opacity: 0, duration: 0.45, ease: "power2.out" }, start + 0.75);
           fromIfPresent(`${scene} .briefing-panel, ${scene} .proof-card, ${scene} .process-step, ${scene} .architecture-exhibit, ${scene} .visual-card, ${scene} .image-panel`, { y: 22, opacity: 0, duration: 0.5, stagger: 0.055, ease: "power2.out" }, start + 1.0);
-          fromIfPresent(`${scene} .visual-card img, ${scene} .image-panel img`, { scale: 1.035, duration: 7.5, ease: "none" }, start + 1.0);
+          fromIfPresent(`${scene} .visual-card img, ${scene} .image-panel img`, { scale: 1.035, duration: 4.1, ease: "none" }, start + 0.8);
           fromIfPresent(`${scene} .signal-tag, ${scene} .focus-box`, { y: 10, opacity: 0, duration: 0.42, stagger: 0.08, ease: "power2.out" }, start + 1.45);
           fromIfPresent(`${scene} .trace-line`, { scaleX: 0, opacity: 0, duration: 0.55, stagger: 0.06, ease: "power2.out" }, start + 1.62);
           fromIfPresent(`${scene} .insight, ${scene} .exhibit-row`, { x: 18, opacity: 0, duration: 0.36, stagger: 0.045, ease: "power2.out" }, start + 1.25);
           fromIfPresent(`${scene} .closing-montage`, { x: 28, opacity: 0, duration: 0.56, ease: "power2.out" }, start + 0.95);
           fromIfPresent(`${scene} .montage-card`, { y: 28, opacity: 0, duration: 0.55, stagger: 0.09, ease: "power2.out" }, start + 1.2);
           fromIfPresent(`${scene} .montage-label`, { x: -14, opacity: 0, duration: 0.45, ease: "power2.out" }, start + 1.42);
-          fromIfPresent(`${scene} .montage-card img`, { scale: 1.05, duration: 7.8, ease: "none" }, start + 1.2);
-          tl.to(scene, { opacity: 0, duration: 0.45, ease: "power2.inOut" }, start + (index === 4 ? 9.5 : sceneStarts[index + 1] - start - 0.45));
+          fromIfPresent(`${scene} .montage-card img`, { scale: 1.05, duration: 4.4, ease: "none" }, start + 1.2);
+          tl.to(scene, { opacity: 0, duration: 0.45, ease: "power2.inOut" }, start + (index === 4 ? 5.55 : sceneStarts[index + 1] - start - 0.45));
         });
 
         tl.from(".top-bar", { y: -88, duration: 0.45, ease: "power2.out" }, 0);
