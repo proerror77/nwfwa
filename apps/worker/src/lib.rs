@@ -6,6 +6,7 @@ use fwa_features::{FeatureMap, FeatureValue};
 use fwa_ml_runtime::{ModelScoreRequest, ModelScorer, ServingManifestModelScorer};
 use parquet::arrow::{arrow_reader::ParquetRecordBatchReaderBuilder, ArrowWriter};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs::{self, File},
@@ -40,6 +41,10 @@ pub fn worker_health() -> WorkerHealthResponse {
             },
             WorkerHealthCheck {
                 name: "parquet_profiler",
+                status: "ok",
+            },
+            WorkerHealthCheck {
+                name: "feature_set_builder",
                 status: "ok",
             },
             WorkerHealthCheck {
@@ -691,6 +696,40 @@ pub struct DemoMlDatasetSummary {
     pub row_count: usize,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct FeatureSetManifest {
+    pub manifest_kind: String,
+    pub manifest_version: u8,
+    pub feature_set_id: String,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub source_manifest_uri: String,
+    pub sample_grain: String,
+    pub label_column: String,
+    pub entity_keys: Vec<String>,
+    pub feature_columns: Vec<FeatureSetColumn>,
+    pub split_summaries: Vec<FeatureSetSplitSummary>,
+    pub feature_reproducibility_hash: String,
+    pub governance_boundary: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct FeatureSetColumn {
+    pub name: String,
+    pub logical_type: String,
+    pub nullable: bool,
+    pub source: String,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct FeatureSetSplitSummary {
+    pub split_name: String,
+    pub row_count: u64,
+    pub positive_count: Option<u64>,
+    pub negative_count: Option<u64>,
+}
+
 #[derive(Debug, Clone)]
 struct DemoLabeledClaim {
     claim_id: &'static str,
@@ -956,6 +995,11 @@ pub fn build_demo_ml_datasets(
                 labeled_dir.display()
             ),
             format!(
+                "cargo run --locked -p worker -- build-feature-set --manifest {} --output-dir {}/feature-set",
+                labeled_dir.join("manifest.json").display(),
+                labeled_dir.display()
+            ),
+            format!(
                 "cargo run --locked -p worker -- build-training-handoff --manifest {} --artifact-base-uri s3://fwa-models --model-key baseline_fwa --base-model-version 0.1.0 --job-id model_retraining_job_1 --actor trainer-worker",
                 labeled_dir.join("manifest.json").display()
             ),
@@ -968,6 +1012,96 @@ pub fn build_demo_ml_datasets(
     };
     write_json(output_dir.join("index.json"), &pack)?;
     Ok(pack)
+}
+
+pub fn build_feature_set(
+    manifest_path: impl AsRef<Path>,
+    output_dir: impl AsRef<Path>,
+    feature_set_id: Option<&str>,
+) -> anyhow::Result<FeatureSetManifest> {
+    let manifest_path = manifest_path.as_ref();
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read manifest {}", manifest_path.display()))?;
+    let manifest: ParquetDatasetManifest =
+        serde_json::from_str(&manifest_json).context("parse parquet dataset manifest")?;
+    let base_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let profile = profile_manifest(&manifest, base_dir)?;
+    let feature_columns = profile
+        .schema
+        .fields
+        .iter()
+        .filter(|field| field.semantic_role == "feature")
+        .filter(|field| is_numeric_logical_type(&field.logical_type))
+        .map(|field| FeatureSetColumn {
+            name: field.field_name.clone(),
+            logical_type: field.logical_type.clone(),
+            nullable: field.nullable,
+            source: "parquet_manifest_column".into(),
+        })
+        .collect::<Vec<_>>();
+    if feature_columns.is_empty() {
+        bail!("feature set must include at least one numeric feature column");
+    }
+
+    let split_summaries = profile
+        .catalog
+        .splits
+        .iter()
+        .map(|split| FeatureSetSplitSummary {
+            split_name: split.split_name.clone(),
+            row_count: split.row_count,
+            positive_count: split.positive_count,
+            negative_count: split.negative_count,
+        })
+        .collect::<Vec<_>>();
+    let feature_set_id = feature_set_id
+        .map(|value| required_non_empty("feature_set_id", value))
+        .transpose()?
+        .map(str::to_string)
+        .unwrap_or_else(|| {
+            format!(
+                "{}:{}:{}",
+                manifest.dataset_key, manifest.dataset_version, manifest.sample_grain
+            )
+        });
+    let mut feature_set = FeatureSetManifest {
+        manifest_kind: "rust_feature_set_manifest".into(),
+        manifest_version: 1,
+        feature_set_id,
+        dataset_key: manifest.dataset_key,
+        dataset_version: manifest.dataset_version,
+        source_manifest_uri: manifest_path.to_string_lossy().into_owned(),
+        sample_grain: manifest.sample_grain,
+        label_column: manifest.label_column,
+        entity_keys: manifest.entity_keys,
+        feature_columns,
+        split_summaries,
+        feature_reproducibility_hash: String::new(),
+        governance_boundary:
+            "feature set is training and evaluation evidence only; it does not approve labels, promote models, or publish rules"
+                .into(),
+        evidence_refs: vec![
+            format!("dataset_manifest:{}", manifest_path.display()),
+            "feature_materialization:rust_worker_build_feature_set".into(),
+        ],
+    };
+    feature_set.feature_reproducibility_hash = feature_reproducibility_hash(&feature_set)?;
+
+    fs::create_dir_all(output_dir.as_ref())
+        .with_context(|| format!("create output dir {}", output_dir.as_ref().display()))?;
+    write_json(
+        output_dir.as_ref().join("feature_set_manifest.json"),
+        &feature_set,
+    )?;
+    write_json(
+        output_dir.as_ref().join("feature_columns.json"),
+        &feature_set.feature_columns,
+    )?;
+    write_json(
+        output_dir.as_ref().join("feature_split_summary.json"),
+        &feature_set.split_summaries,
+    )?;
+    Ok(feature_set)
 }
 
 fn demo_labeled_claims() -> Vec<DemoLabeledClaim> {
@@ -4312,6 +4446,30 @@ fn schema_hash(fields: &[FieldSchemaOutput]) -> String {
     format!("fnv64:{hash:016x}")
 }
 
+fn is_numeric_logical_type(logical_type: &str) -> bool {
+    matches!(
+        logical_type,
+        "Float64"
+            | "Float32"
+            | "Int8"
+            | "Int16"
+            | "Int32"
+            | "Int64"
+            | "UInt8"
+            | "UInt16"
+            | "UInt32"
+            | "UInt64"
+    )
+}
+
+fn feature_reproducibility_hash(feature_set: &FeatureSetManifest) -> anyhow::Result<String> {
+    let mut hash_input = feature_set.clone();
+    hash_input.feature_reproducibility_hash.clear();
+    let bytes = serde_json::to_vec(&hash_input).context("serialize feature set for hash")?;
+    let digest = Sha256::digest(bytes);
+    Ok(format!("sha256:{digest:x}"))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -4355,6 +4513,10 @@ mod tests {
         }));
         assert!(health.checks.contains(&WorkerHealthCheck {
             name: "parquet_profiler",
+            status: "ok"
+        }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "feature_set_builder",
             status: "ok"
         }));
         assert!(health.checks.contains(&WorkerHealthCheck {
@@ -4729,7 +4891,69 @@ mod tests {
         assert!(pack
             .next_worker_commands
             .iter()
+            .any(|command| command.contains("build-feature-set")));
+        assert!(pack
+            .next_worker_commands
+            .iter()
             .any(|command| command.contains("cluster-provider-peers")));
+    }
+
+    #[test]
+    fn builds_feature_set_manifest_from_labeled_parquet_manifest() {
+        let root = temp_root("feature-set");
+        let pack = build_demo_ml_datasets(&root, "2026-06-feature-set").expect("demo ML datasets");
+        let output_dir = root.join("feature-set-output");
+
+        let feature_set = build_feature_set(
+            &pack.labeled_manifest_uri,
+            &output_dir,
+            Some("claims-risk-demo-features-v1"),
+        )
+        .expect("feature set");
+        let repeated = build_feature_set(
+            &pack.labeled_manifest_uri,
+            root.join("feature-set-output-repeat"),
+            Some("claims-risk-demo-features-v1"),
+        )
+        .expect("repeat feature set");
+
+        assert_eq!(feature_set.manifest_kind, "rust_feature_set_manifest");
+        assert_eq!(feature_set.feature_set_id, "claims-risk-demo-features-v1");
+        assert_eq!(feature_set.dataset_key, "rust_demo_claim_risk_labeled");
+        assert_eq!(feature_set.label_column, "confirmed_fwa");
+        assert_eq!(
+            feature_set.entity_keys,
+            vec![
+                "claim_id".to_string(),
+                "member_id".to_string(),
+                "policy_id".to_string(),
+                "provider_id".to_string()
+            ]
+        );
+        let feature_names = feature_set
+            .feature_columns
+            .iter()
+            .map(|column| column.name.as_str())
+            .collect::<Vec<_>>();
+        assert!(feature_names.contains(&"claim_amount"));
+        assert!(feature_names.contains(&"amount_to_limit_ratio"));
+        assert!(!feature_names.contains(&"confirmed_fwa"));
+        assert!(!feature_names.contains(&"claim_id"));
+        assert_eq!(feature_set.split_summaries.len(), 3);
+        assert_eq!(feature_set.split_summaries[0].row_count, 8);
+        assert!(feature_set
+            .feature_reproducibility_hash
+            .starts_with("sha256:"));
+        assert_eq!(
+            feature_set.feature_reproducibility_hash,
+            repeated.feature_reproducibility_hash
+        );
+        assert!(feature_set
+            .governance_boundary
+            .contains("does not approve labels"));
+        assert!(output_dir.join("feature_set_manifest.json").is_file());
+        assert!(output_dir.join("feature_columns.json").is_file());
+        assert!(output_dir.join("feature_split_summary.json").is_file());
     }
 
     #[test]

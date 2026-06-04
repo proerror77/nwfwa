@@ -137,6 +137,35 @@ Approval checks:
 - public research data is not treated as customer/pilot validation evidence;
 - training data usage is compatible with the customer or pilot contract.
 
+## Stage 4.5: Feature Set Materialization
+
+Purpose: bind the exact Rust-visible feature columns and split summaries before
+training so model artifacts, evaluation reports, and promotion gates can refer
+to an immutable feature-set version.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- build-feature-set \
+  --manifest data/training/manifest.json \
+  --output-dir data/training/feature-set \
+  --feature-set-id claims_model_2026_06_02_features_v1
+```
+
+The worker reads the same labeled Parquet manifest used by profiling and
+training, excludes entity keys and the label column, keeps numeric feature
+columns in deterministic order, and writes:
+
+- `feature_set_manifest.json`;
+- `feature_columns.json`;
+- `feature_split_summary.json`.
+
+The manifest includes `feature_reproducibility_hash`, ordered feature columns,
+label column, entity keys, row counts, label counts by split, source manifest
+URI, and evidence refs. This is training and promotion evidence only. It does
+not approve labels, promote models, publish rules, or allow unlabeled anomaly
+outputs to become supervised labels.
+
 ## Public Data MVP Path
 
 When customer training data is not available, use the public-data MVP pack to
@@ -165,6 +194,16 @@ Only the labeled manifest should be passed to supervised training or
 `profile-parquet`. The unlabeled manifests are for scoring, clustering, and
 manual-review candidate discovery; they are not training labels or production
 promotion evidence.
+
+Build a Rust feature-set manifest for the labeled demo dataset before
+supervised training:
+
+```bash
+cargo run --locked -p worker -- build-feature-set \
+  --manifest data/rust-automl-demo/labeled_claim_risk/manifest.json \
+  --output-dir data/rust-automl-demo/labeled_claim_risk/feature-set \
+  --feature-set-id rust_demo_claim_risk_labeled_features_v1
+```
 
 Run the Rust provider-peer clustering demo on the unlabeled provider manifest:
 

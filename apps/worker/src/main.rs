@@ -47,6 +47,17 @@ async fn main() -> anyhow::Result<()> {
                 "parquet profile written"
             );
         }
+        "build-feature-set" => {
+            let manifest = take_flag_value(&mut args, "--manifest")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            let feature_set_id = take_optional_flag_value(&mut args, "--feature-set-id")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let result =
+                worker::build_feature_set(manifest, output_dir, feature_set_id.as_deref())?;
+            println!("{}", serde_json::to_string_pretty(&result)?);
+        }
         "build-demo-ml-datasets" => {
             let output_dir = take_flag_value(&mut args, "--output-dir")?;
             let dataset_version = take_optional_flag_value(&mut args, "--dataset-version")?
