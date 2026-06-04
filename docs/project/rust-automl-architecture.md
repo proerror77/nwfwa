@@ -88,6 +88,8 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `run-rule-candidate-backtest`: select deterministic thresholds, calculate
   split-level rule metrics, and create review evidence while keeping
   rule-library writeback blocked.
+- `cluster-provider-peers`: run Rust-native clustering over unlabeled provider
+  peer features, then create anomaly review tasks without assigning labels.
 - `build-mlops-monitoring-plan`: define scheduled shadow, drift, fairness,
   reviewer-disagreement, and label-delay checks.
 
@@ -129,14 +131,15 @@ Current repository completion for this target architecture is approximately:
 - 45% for data lifecycle: labeled public/demo manifests and profiling exist;
   Rust-generated labeled/unlabeled demo packs now cover the missing dataset
   shape.
-- 50% for model portfolio: logistic has a native Rust JSON serving artifact;
+- 55% for model portfolio: logistic has a native Rust JSON serving artifact;
   XGBoost and LightGBM training now emit governed ONNX serving artifacts with
-  probability-parity reports; clustering and deep-learning serving remain
-  future work.
+  probability-parity reports, and provider-peer clustering has a Rust-native
+  demo workflow; broader graph/member/claim clustering and deep-learning
+  serving remain future work.
 - 45% for Auto MLOps: worker can rank candidates, mine explainable rule
   candidates, and backtest those candidates into human-review evidence, while
-  trainer-side ONNX parity reports exist for GBDT candidates; activation
-  workflows and UI/API review surfaces still need implementation.
+  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist;
+  activation workflows and UI/API review surfaces still need implementation.
 - 20% for Rust ONNX serving: architecture is defined, but the runtime scorer and
   ONNX Runtime session still need implementation.
 

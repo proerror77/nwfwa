@@ -226,8 +226,9 @@ and production-operations gaps rather than missing demo mechanics:
 - Rust ONNX runtime execution for XGBoost and LightGBM; training already writes
   governed ONNX artifacts and parity reports, but the Rust scorer still needs
   the ONNX Runtime session;
-- clustering and anomaly-discovery jobs over unlabeled provider, member, claim,
-  and graph features, with output treated as review candidates only;
+- production clustering and anomaly-discovery jobs over unlabeled member,
+  claim, and graph features; the Rust worker now covers provider-peer demo
+  clustering with output treated as review candidates only;
 - production feature store or scheduled feature materialization beyond the
   current manifest-backed offline baseline;
 - calibrated probability outputs with calibration evidence and disjoint

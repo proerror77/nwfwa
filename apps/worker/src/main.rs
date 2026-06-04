@@ -129,6 +129,15 @@ async fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
+        "cluster-provider-peers" => {
+            let manifest = take_flag_value(&mut args, "--manifest")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::cluster_provider_peers(&manifest, output_dir)?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "build-analytics-export-plan" => {
             let object_storage_uri = take_flag_value(&mut args, "--object-storage-uri")?;
             let clickhouse_url = take_flag_value(&mut args, "--clickhouse-url")?;

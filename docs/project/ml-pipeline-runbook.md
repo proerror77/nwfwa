@@ -166,6 +166,22 @@ Only the labeled manifest should be passed to supervised training or
 manual-review candidate discovery; they are not training labels or production
 promotion evidence.
 
+Run the Rust provider-peer clustering demo on the unlabeled provider manifest:
+
+```bash
+cargo run --locked -p worker -- cluster-provider-peers \
+  --manifest data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json \
+  --output-dir data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters
+```
+
+This writes:
+
+- `provider_peer_clustering_report.json`;
+- `provider_anomaly_review_tasks.json`.
+
+The output is an anomaly-candidate workflow only. It must not create confirmed
+FWA labels, supervised-training labels, or automatic claim disposition.
+
 ```bash
 uv run --project apps/ml-service \
   python scripts/data/build_public_data_mvp.py \

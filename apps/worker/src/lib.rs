@@ -56,6 +56,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "provider_peer_clusterer",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "retraining_job_runner",
                 status: "ok",
             },
@@ -671,6 +675,86 @@ struct DemoProviderPeerRow {
     community_id: i32,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderPeerClusteringReport {
+    pub report_kind: String,
+    pub report_version: u8,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub algorithm: String,
+    pub label_policy: String,
+    pub governance_boundary: String,
+    pub feature_columns: Vec<String>,
+    pub cluster_count: usize,
+    pub cluster_summaries: Vec<ProviderPeerClusterSummary>,
+    pub provider_assignments: Vec<ProviderPeerClusterAssignment>,
+    pub anomaly_candidates: Vec<ProviderPeerAnomalyCandidate>,
+    pub review_tasks: Vec<ProviderPeerReviewTask>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderPeerClusterSummary {
+    pub cluster_id: usize,
+    pub provider_count: usize,
+    pub average_outlier_score: f64,
+    pub average_claim_count: f64,
+    pub average_high_cost_rate: f64,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderPeerClusterAssignment {
+    pub provider_id: String,
+    pub cohort_key: String,
+    pub service_month: String,
+    pub cluster_id: usize,
+    pub outlier_score: f64,
+    pub anomaly_candidate: bool,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderPeerAnomalyCandidate {
+    pub provider_id: String,
+    pub cohort_key: String,
+    pub service_month: String,
+    pub cluster_id: usize,
+    pub outlier_score: f64,
+    pub reason: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct ProviderPeerReviewTask {
+    pub task_kind: String,
+    pub provider_id: String,
+    pub review_queue: String,
+    pub required_review: String,
+    pub decision_options: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct UnlabeledDatasetManifest {
+    dataset_key: String,
+    dataset_version: String,
+    label_policy: String,
+    #[serde(default)]
+    label_column: Option<String>,
+    splits: Vec<ParquetSplitManifest>,
+}
+
+#[derive(Debug, Clone)]
+struct ProviderPeerFeatureRow {
+    provider_id: String,
+    cohort_key: String,
+    service_month: String,
+    claim_count: f64,
+    avg_claim_amount: f64,
+    high_cost_rate: f64,
+    peer_z_score: f64,
+    graph_degree: f64,
+}
+
 pub fn build_demo_ml_datasets(
     output_dir: impl AsRef<Path>,
     dataset_version: &str,
@@ -812,6 +896,11 @@ pub fn build_demo_ml_datasets(
             format!(
                 "cargo run --locked -p worker -- build-training-handoff --manifest {} --artifact-base-uri s3://fwa-models --model-key baseline_fwa --base-model-version 0.1.0 --job-id model_retraining_job_1 --actor trainer-worker",
                 labeled_dir.join("manifest.json").display()
+            ),
+            format!(
+                "cargo run --locked -p worker -- cluster-provider-peers --manifest {} --output-dir {}/clusters",
+                provider_dir.join("manifest.json").display(),
+                provider_dir.display()
             ),
         ],
     };
@@ -2592,6 +2681,387 @@ fn parse_label(value: &str) -> Option<bool> {
     }
 }
 
+pub fn cluster_provider_peers(
+    manifest_path: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<ProviderPeerClusteringReport> {
+    let manifest_path = Path::new(manifest_path);
+    let manifest_json = fs::read_to_string(manifest_path)
+        .with_context(|| format!("read provider peer manifest {}", manifest_path.display()))?;
+    let manifest: UnlabeledDatasetManifest =
+        serde_json::from_str(&manifest_json).context("parse provider peer manifest")?;
+    if manifest.label_column.is_some() {
+        bail!("provider peer clustering requires an unlabeled manifest");
+    }
+    if !manifest.label_policy.contains("unlabeled") {
+        bail!("provider peer clustering requires an unlabeled label_policy");
+    }
+    let base_dir = manifest_path.parent().unwrap_or_else(|| Path::new("."));
+    let rows = read_provider_peer_rows(&manifest, base_dir)?;
+    if rows.len() < 2 {
+        bail!("provider peer clustering requires at least two provider rows");
+    }
+
+    let feature_columns = vec![
+        "claim_count".into(),
+        "avg_claim_amount".into(),
+        "high_cost_rate".into(),
+        "peer_z_score".into(),
+        "graph_degree".into(),
+    ];
+    let normalized = normalize_provider_rows(&rows);
+    let cluster_count = rows.len().clamp(1, 3);
+    let cluster_ids = assign_provider_clusters(&normalized, cluster_count);
+    let distances = cluster_distances(&normalized, &cluster_ids, cluster_count);
+    let threshold = anomaly_threshold(&distances);
+    let mut provider_assignments = Vec::new();
+    let mut anomaly_candidates = Vec::new();
+    for (index, row) in rows.iter().enumerate() {
+        let outlier_score = round4(distances[index]);
+        let anomaly_candidate = distances[index] >= threshold;
+        provider_assignments.push(ProviderPeerClusterAssignment {
+            provider_id: row.provider_id.clone(),
+            cohort_key: row.cohort_key.clone(),
+            service_month: row.service_month.clone(),
+            cluster_id: cluster_ids[index],
+            outlier_score,
+            anomaly_candidate,
+        });
+        if anomaly_candidate {
+            anomaly_candidates.push(ProviderPeerAnomalyCandidate {
+                provider_id: row.provider_id.clone(),
+                cohort_key: row.cohort_key.clone(),
+                service_month: row.service_month.clone(),
+                cluster_id: cluster_ids[index],
+                outlier_score,
+                reason: "Provider-month is far from its peer-cluster centroid; review as an anomaly candidate, not a confirmed FWA label.".into(),
+                evidence_refs: vec![
+                    format!("dataset_manifest:{}", manifest_path.display()),
+                    format!("provider_peer_cluster:{}:{}", manifest.dataset_key, row.provider_id),
+                ],
+            });
+        }
+    }
+    anomaly_candidates.sort_by(|left, right| {
+        right
+            .outlier_score
+            .partial_cmp(&left.outlier_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.provider_id.cmp(&right.provider_id))
+    });
+
+    let review_tasks = anomaly_candidates
+        .iter()
+        .map(|candidate| ProviderPeerReviewTask {
+            task_kind: "provider_peer_anomaly_review".into(),
+            provider_id: candidate.provider_id.clone(),
+            review_queue: "provider_anomaly_candidate_review".into(),
+            required_review: "human_review_required_before_case_creation_or_label_assignment"
+                .into(),
+            decision_options: vec![
+                "dismiss_as_peer_variation".into(),
+                "request_more_evidence".into(),
+                "open_investigation_candidate".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let cluster_summaries =
+        summarize_provider_clusters(&rows, &cluster_ids, &distances, cluster_count);
+    let report = ProviderPeerClusteringReport {
+        report_kind: "provider_peer_clustering".into(),
+        report_version: 1,
+        dataset_key: manifest.dataset_key,
+        dataset_version: manifest.dataset_version,
+        algorithm: "rust_standardized_kmeans_v1".into(),
+        label_policy: manifest.label_policy,
+        governance_boundary:
+            "unlabeled clustering creates anomaly review candidates only; it must not create confirmed FWA labels or automatic claim disposition"
+                .into(),
+        feature_columns,
+        cluster_count,
+        cluster_summaries,
+        provider_assignments,
+        anomaly_candidates,
+        review_tasks,
+        evidence_refs: vec![format!("dataset_manifest:{}", manifest_path.display())],
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create provider peer clustering output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_peer_clustering_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_anomaly_review_tasks.json"),
+        &report.review_tasks,
+    )?;
+    Ok(report)
+}
+
+fn read_provider_peer_rows(
+    manifest: &UnlabeledDatasetManifest,
+    base_dir: &Path,
+) -> anyhow::Result<Vec<ProviderPeerFeatureRow>> {
+    let mut rows = Vec::new();
+    for split in &manifest.splits {
+        reject_csv_uri(&split.data_uri)?;
+        let parquet_files = resolve_parquet_files(base_dir, &split.data_uri)?;
+        if parquet_files.is_empty() {
+            bail!("split {} has no parquet files", split.split_name);
+        }
+        for parquet_file in parquet_files {
+            let file = File::open(&parquet_file)
+                .with_context(|| format!("open parquet file {}", parquet_file.display()))?;
+            let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+                .with_context(|| format!("read parquet metadata {}", parquet_file.display()))?;
+            let mut reader = builder.with_batch_size(4096).build()?;
+            for batch in &mut reader {
+                let batch = batch?;
+                for row_index in 0..batch.num_rows() {
+                    rows.push(ProviderPeerFeatureRow {
+                        provider_id: required_string_cell(&batch, "provider_id", row_index)?,
+                        cohort_key: required_string_cell(&batch, "cohort_key", row_index)?,
+                        service_month: required_string_cell(&batch, "service_month", row_index)?,
+                        claim_count: required_numeric_cell(&batch, "claim_count", row_index)?,
+                        avg_claim_amount: required_numeric_cell(
+                            &batch,
+                            "avg_claim_amount",
+                            row_index,
+                        )?,
+                        high_cost_rate: required_numeric_cell(&batch, "high_cost_rate", row_index)?,
+                        peer_z_score: required_numeric_cell(&batch, "peer_z_score", row_index)?,
+                        graph_degree: required_numeric_cell(&batch, "graph_degree", row_index)?,
+                    });
+                }
+            }
+        }
+    }
+    Ok(rows)
+}
+
+fn required_string_cell(
+    batch: &RecordBatch,
+    column_name: &str,
+    row_index: usize,
+) -> anyhow::Result<String> {
+    let column_index = batch
+        .schema()
+        .index_of(column_name)
+        .with_context(|| format!("missing provider peer column {column_name}"))?;
+    column_value_at(batch.column(column_index).as_ref(), row_index)
+        .filter(|value| !value.trim().is_empty())
+        .with_context(|| format!("missing provider peer value {column_name} at row {row_index}"))
+}
+
+fn required_numeric_cell(
+    batch: &RecordBatch,
+    column_name: &str,
+    row_index: usize,
+) -> anyhow::Result<f64> {
+    let value = required_string_cell(batch, column_name, row_index)?;
+    value
+        .parse::<f64>()
+        .with_context(|| format!("invalid numeric provider peer value {column_name}: {value}"))
+}
+
+fn normalize_provider_rows(rows: &[ProviderPeerFeatureRow]) -> Vec<[f64; 5]> {
+    let raw = rows
+        .iter()
+        .map(|row| {
+            [
+                row.claim_count,
+                row.avg_claim_amount,
+                row.high_cost_rate,
+                row.peer_z_score,
+                row.graph_degree,
+            ]
+        })
+        .collect::<Vec<_>>();
+    let mut means = [0.0; 5];
+    for values in &raw {
+        for index in 0..5 {
+            means[index] += values[index];
+        }
+    }
+    for mean in &mut means {
+        *mean /= raw.len() as f64;
+    }
+    let mut stddevs = [0.0; 5];
+    for values in &raw {
+        for index in 0..5 {
+            stddevs[index] += (values[index] - means[index]).powi(2);
+        }
+    }
+    for stddev in &mut stddevs {
+        *stddev = (*stddev / raw.len() as f64).sqrt();
+        if *stddev == 0.0 {
+            *stddev = 1.0;
+        }
+    }
+    raw.iter()
+        .map(|values| {
+            let mut normalized = [0.0; 5];
+            for index in 0..5 {
+                normalized[index] = (values[index] - means[index]) / stddevs[index];
+            }
+            normalized
+        })
+        .collect()
+}
+
+fn assign_provider_clusters(rows: &[[f64; 5]], cluster_count: usize) -> Vec<usize> {
+    let mut ordered = rows.iter().enumerate().collect::<Vec<_>>();
+    ordered.sort_by(|left, right| {
+        left.1[3]
+            .partial_cmp(&right.1[3])
+            .unwrap_or(std::cmp::Ordering::Equal)
+    });
+    let mut centroids = (0..cluster_count)
+        .map(|cluster_index| {
+            let source_index = cluster_index * (ordered.len() - 1) / cluster_count.max(1);
+            *ordered[source_index].1
+        })
+        .collect::<Vec<_>>();
+    let mut assignments = vec![0; rows.len()];
+    for _ in 0..12 {
+        for (row_index, row) in rows.iter().enumerate() {
+            assignments[row_index] = nearest_centroid(row, &centroids);
+        }
+        let mut sums = vec![[0.0; 5]; cluster_count];
+        let mut counts = vec![0_usize; cluster_count];
+        for (row, cluster_id) in rows.iter().zip(assignments.iter()) {
+            counts[*cluster_id] += 1;
+            for index in 0..5 {
+                sums[*cluster_id][index] += row[index];
+            }
+        }
+        for cluster_id in 0..cluster_count {
+            if counts[cluster_id] == 0 {
+                continue;
+            }
+            for index in 0..5 {
+                centroids[cluster_id][index] = sums[cluster_id][index] / counts[cluster_id] as f64;
+            }
+        }
+    }
+    assignments
+}
+
+fn nearest_centroid(row: &[f64; 5], centroids: &[[f64; 5]]) -> usize {
+    centroids
+        .iter()
+        .enumerate()
+        .min_by(|(_, left), (_, right)| {
+            squared_distance(row, left)
+                .partial_cmp(&squared_distance(row, right))
+                .unwrap_or(std::cmp::Ordering::Equal)
+        })
+        .map(|(index, _)| index)
+        .unwrap_or(0)
+}
+
+fn cluster_distances(rows: &[[f64; 5]], assignments: &[usize], cluster_count: usize) -> Vec<f64> {
+    let mut sums = vec![[0.0; 5]; cluster_count];
+    let mut counts = vec![0_usize; cluster_count];
+    for (row, cluster_id) in rows.iter().zip(assignments.iter()) {
+        counts[*cluster_id] += 1;
+        for index in 0..5 {
+            sums[*cluster_id][index] += row[index];
+        }
+    }
+    let mut centroids = vec![[0.0; 5]; cluster_count];
+    for cluster_id in 0..cluster_count {
+        if counts[cluster_id] == 0 {
+            continue;
+        }
+        for index in 0..5 {
+            centroids[cluster_id][index] = sums[cluster_id][index] / counts[cluster_id] as f64;
+        }
+    }
+    rows.iter()
+        .zip(assignments.iter())
+        .map(|(row, cluster_id)| squared_distance(row, &centroids[*cluster_id]).sqrt())
+        .collect()
+}
+
+fn squared_distance(left: &[f64; 5], right: &[f64; 5]) -> f64 {
+    (0..5)
+        .map(|index| (left[index] - right[index]).powi(2))
+        .sum()
+}
+
+fn anomaly_threshold(distances: &[f64]) -> f64 {
+    let mean = distances.iter().sum::<f64>() / distances.len() as f64;
+    let variance = distances
+        .iter()
+        .map(|distance| (distance - mean).powi(2))
+        .sum::<f64>()
+        / distances.len() as f64;
+    let threshold = mean + variance.sqrt();
+    if distances.iter().any(|distance| *distance >= threshold) {
+        threshold
+    } else {
+        distances
+            .iter()
+            .copied()
+            .fold(0.0, |current, distance| current.max(distance))
+    }
+}
+
+fn summarize_provider_clusters(
+    rows: &[ProviderPeerFeatureRow],
+    assignments: &[usize],
+    distances: &[f64],
+    cluster_count: usize,
+) -> Vec<ProviderPeerClusterSummary> {
+    (0..cluster_count)
+        .map(|cluster_id| {
+            let indexes = assignments
+                .iter()
+                .enumerate()
+                .filter_map(|(index, assigned)| (*assigned == cluster_id).then_some(index))
+                .collect::<Vec<_>>();
+            let provider_count = indexes.len();
+            let divisor = provider_count.max(1) as f64;
+            ProviderPeerClusterSummary {
+                cluster_id,
+                provider_count,
+                average_outlier_score: round4(
+                    indexes.iter().map(|index| distances[*index]).sum::<f64>() / divisor,
+                ),
+                average_claim_count: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].claim_count)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+                average_high_cost_rate: round4(
+                    indexes
+                        .iter()
+                        .map(|index| rows[*index].high_cost_rate)
+                        .sum::<f64>()
+                        / divisor,
+                ),
+            }
+        })
+        .collect()
+}
+
+fn round4(value: f64) -> f64 {
+    (value * 10_000.0).round() / 10_000.0
+}
+
 fn read_feature_importance(path: &Path) -> anyhow::Result<Vec<FeatureImportanceRow>> {
     ensure_parquet_path(path)?;
     let file = File::open(path)
@@ -3512,6 +3982,10 @@ mod tests {
             status: "ok"
         }));
         assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "provider_peer_clusterer",
+            status: "ok"
+        }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
             name: "retraining_job_runner",
             status: "ok"
         }));
@@ -3860,6 +4334,48 @@ mod tests {
         assert!(profile_dir.join("schema.json").is_file());
         assert!(profile_dir.join("profile.json").is_file());
         assert!(profile_dir.join("catalog.json").is_file());
+        assert!(pack
+            .next_worker_commands
+            .iter()
+            .any(|command| command.contains("cluster-provider-peers")));
+    }
+
+    #[test]
+    fn clusters_unlabeled_provider_peers_without_label_assignment() {
+        let root = temp_root("provider-peer-clustering");
+        let pack =
+            build_demo_ml_datasets(&root, "2026-06-clustering-demo").expect("demo ML datasets");
+        let provider_manifest = pack
+            .unlabeled_manifest_uris
+            .iter()
+            .find(|uri| uri.contains("unlabeled_provider_peer_clustering"))
+            .expect("provider peer manifest");
+        let output_dir = root.join("clusters");
+
+        let report =
+            cluster_provider_peers(provider_manifest, &output_dir).expect("provider clustering");
+
+        assert_eq!(report.report_kind, "provider_peer_clustering");
+        assert_eq!(report.dataset_key, "rust_demo_provider_peer_unlabeled");
+        assert_eq!(report.algorithm, "rust_standardized_kmeans_v1");
+        assert_eq!(report.label_policy, "unlabeled_clustering_discovery_only");
+        assert!(report
+            .governance_boundary
+            .contains("must not create confirmed FWA labels"));
+        assert_eq!(report.cluster_count, 3);
+        assert_eq!(report.provider_assignments.len(), 6);
+        assert!(!report.anomaly_candidates.is_empty());
+        assert_eq!(report.review_tasks.len(), report.anomaly_candidates.len());
+        assert_eq!(
+            report.review_tasks[0].required_review,
+            "human_review_required_before_case_creation_or_label_assignment"
+        );
+        assert!(output_dir
+            .join("provider_peer_clustering_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("provider_anomaly_review_tasks.json")
+            .is_file());
     }
 
     #[test]
