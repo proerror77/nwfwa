@@ -80,6 +80,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `build-training-handoff`: create the reproducible external training contract.
 - `run-retraining-job`: claim a candidate job, execute the trainer, and register
   output.
+- `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
+  LightGBM, and anomaly candidates, then open human-review recommendations
+  without activating any model.
 - `build-mlops-monitoring-plan`: define scheduled shadow, drift, fairness,
   reviewer-disagreement, and label-delay checks.
 
@@ -90,8 +93,6 @@ Future worker commands should add:
 - `mine-rule-candidates`: translate model explanation patterns into Rule Studio
   draft candidates;
 - `run-rule-candidate-backtest`: backtest drafts before human review;
-- `rank-automl-candidates`: compare logistic, XGBoost, LightGBM, and anomaly
-  candidates without activating them.
 
 ## Serving Architecture
 

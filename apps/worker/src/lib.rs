@@ -44,6 +44,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "automl_candidate_ranker",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "retraining_job_runner",
                 status: "ok",
             },
@@ -225,6 +229,50 @@ struct CompleteRetrainingJobPayload {
     feature_importance_uri: Option<String>,
     metrics_json: serde_json::Value,
     evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AutoMlCandidateRanking {
+    pub plan_kind: String,
+    pub plan_version: u8,
+    pub promotion_boundary: String,
+    pub generated_from_reports: Vec<String>,
+    pub recommended_candidate_model_version: Option<String>,
+    pub candidates: Vec<AutoMlCandidateRank>,
+    pub review_tasks: Vec<AutoMlReviewTask>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AutoMlCandidateRank {
+    pub rank: usize,
+    pub model_key: String,
+    pub candidate_model_version: String,
+    pub algorithm: String,
+    pub algorithm_family: String,
+    pub dataset_key: Option<String>,
+    pub dataset_version: Option<String>,
+    pub validation_report_uri: String,
+    pub ranking_score: f64,
+    pub validation_auc: Option<f64>,
+    pub out_of_time_auc: Option<f64>,
+    pub out_of_time_average_precision: Option<f64>,
+    pub out_of_time_precision: Option<f64>,
+    pub out_of_time_recall: Option<f64>,
+    pub gate_status: String,
+    pub blocking_reasons: Vec<String>,
+    pub recommended_action: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AutoMlReviewTask {
+    pub task_kind: String,
+    pub candidate_model_version: String,
+    pub review_queue: String,
+    pub required_review: String,
+    pub decision_options: Vec<String>,
+    pub evidence_refs: Vec<String>,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1854,6 +1902,246 @@ pub fn build_mlops_monitoring_plan(
     }))
 }
 
+pub fn rank_automl_candidates(
+    validation_reports: &[String],
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<AutoMlCandidateRanking> {
+    if validation_reports.is_empty() {
+        bail!("at least one validation report is required");
+    }
+
+    let mut candidates = Vec::new();
+    for report_uri in validation_reports {
+        let report_path = Path::new(report_uri);
+        let report_json = fs::read_to_string(report_path)
+            .with_context(|| format!("read validation report {}", report_path.display()))?;
+        let report: serde_json::Value =
+            serde_json::from_str(&report_json).context("parse validation report")?;
+        candidates.push(build_automl_candidate_rank(report_uri, &report)?);
+    }
+
+    candidates.sort_by(|left, right| {
+        eligible_sort_key(right)
+            .partial_cmp(&eligible_sort_key(left))
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                left.candidate_model_version
+                    .cmp(&right.candidate_model_version)
+            })
+    });
+
+    for (index, candidate) in candidates.iter_mut().enumerate() {
+        candidate.rank = index + 1;
+    }
+
+    let recommended_candidate_model_version = candidates
+        .iter()
+        .find(|candidate| candidate.gate_status == "passed")
+        .map(|candidate| candidate.candidate_model_version.clone());
+    let review_tasks = candidates
+        .iter()
+        .map(|candidate| AutoMlReviewTask {
+            task_kind: "model_candidate_human_review".into(),
+            candidate_model_version: candidate.candidate_model_version.clone(),
+            review_queue: if candidate.gate_status == "passed" {
+                "model_governance_review".into()
+            } else {
+                "mlops_remediation_review".into()
+            },
+            required_review: "human_approval_required_before_shadow_or_activation".into(),
+            decision_options: vec![
+                "reject".into(),
+                "request_more_evidence".into(),
+                "approve_shadow_only".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let ranking = AutoMlCandidateRanking {
+        plan_kind: "automl_candidate_ranking".into(),
+        plan_version: 1,
+        promotion_boundary:
+            "ranking opens human review only; no automatic model promotion or rule publication"
+                .into(),
+        generated_from_reports: validation_reports.to_vec(),
+        recommended_candidate_model_version,
+        candidates,
+        review_tasks,
+        evidence_refs: validation_reports
+            .iter()
+            .map(|report| format!("model_validation_reports:{report}"))
+            .collect(),
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create Auto MLOps ranking output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir.as_ref().join("automl_candidate_ranking.json"),
+        &ranking,
+    )?;
+    write_json(
+        output_dir.as_ref().join("automl_review_tasks.json"),
+        &ranking.review_tasks,
+    )?;
+    Ok(ranking)
+}
+
+fn build_automl_candidate_rank(
+    validation_report_uri: &str,
+    report: &serde_json::Value,
+) -> anyhow::Result<AutoMlCandidateRank> {
+    let model_key = required_manifest_str(report, "model_key")?.to_string();
+    let candidate_model_version =
+        required_manifest_str(report, "candidate_model_version")?.to_string();
+    let algorithm = required_manifest_str(report, "algorithm")?.to_string();
+    let metrics = report
+        .get("metrics_json")
+        .and_then(|value| value.as_object())
+        .ok_or_else(|| anyhow!("validation report missing metrics_json"))?;
+    let validation_metrics = report
+        .get("validation_metrics")
+        .unwrap_or(&serde_json::Value::Null);
+    let algorithm_family = metrics
+        .get("algorithm_family")
+        .and_then(|value| value.as_str())
+        .unwrap_or("unknown")
+        .to_string();
+    let validation_auc = metric_at(validation_metrics, "auc");
+    let out_of_time_auc = metric_object_value(metrics, "out_of_time_auc");
+    let out_of_time_average_precision =
+        metric_object_value(metrics, "out_of_time_average_precision");
+    let out_of_time_precision = metric_object_value(metrics, "out_of_time_precision");
+    let out_of_time_recall = metric_object_value(metrics, "out_of_time_recall");
+
+    let blocking_reasons = automl_blocking_reasons(metrics);
+    let gate_status = if blocking_reasons.is_empty() {
+        "passed"
+    } else {
+        "blocked"
+    }
+    .to_string();
+    let recommended_action = if gate_status == "passed" {
+        "open_human_review"
+    } else {
+        "keep_blocked"
+    }
+    .to_string();
+
+    Ok(AutoMlCandidateRank {
+        rank: 0,
+        model_key,
+        candidate_model_version: candidate_model_version.clone(),
+        algorithm,
+        algorithm_family,
+        dataset_key: report
+            .get("dataset_key")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string),
+        dataset_version: report
+            .get("dataset_version")
+            .and_then(|value| value.as_str())
+            .map(ToString::to_string),
+        validation_report_uri: validation_report_uri.into(),
+        ranking_score: automl_ranking_score(
+            out_of_time_auc,
+            out_of_time_average_precision,
+            out_of_time_precision,
+            out_of_time_recall,
+            &gate_status,
+        ),
+        validation_auc,
+        out_of_time_auc,
+        out_of_time_average_precision,
+        out_of_time_precision,
+        out_of_time_recall,
+        gate_status,
+        blocking_reasons,
+        recommended_action,
+        evidence_refs: vec![
+            format!("model_validation_reports:{validation_report_uri}"),
+            format!(
+                "model_evaluations:{}",
+                safe_id_segment(&candidate_model_version)
+            ),
+        ],
+    })
+}
+
+fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>) -> Vec<String> {
+    let required_statuses = [
+        "time_group_split_status",
+        "leakage_check_status",
+        "shadow_comparison_status",
+        "serving_version_lock_status",
+        "artifact_integrity_status",
+        "feature_store_materialization_status",
+        "segment_fairness_status",
+        "label_provenance_status",
+    ];
+    let mut reasons = Vec::new();
+    for key in required_statuses {
+        let status = metrics
+            .get(key)
+            .and_then(|value| value.as_str())
+            .unwrap_or("missing");
+        if status != "passed" {
+            reasons.push(format!("{key}:{status}"));
+        }
+    }
+    if metric_object_value(metrics, "out_of_time_auc").unwrap_or(0.0) < 0.5 {
+        reasons.push("out_of_time_auc:below_0_5".into());
+    }
+    if metric_object_value(metrics, "out_of_time_recall").unwrap_or(0.0) <= 0.0 {
+        reasons.push("out_of_time_recall:missing_or_zero".into());
+    }
+    reasons
+}
+
+fn automl_ranking_score(
+    out_of_time_auc: Option<f64>,
+    average_precision: Option<f64>,
+    precision: Option<f64>,
+    recall: Option<f64>,
+    gate_status: &str,
+) -> f64 {
+    let score = out_of_time_auc.unwrap_or(0.0) * 60.0
+        + average_precision.unwrap_or(0.0) * 20.0
+        + precision.unwrap_or(0.0) * 10.0
+        + recall.unwrap_or(0.0) * 10.0;
+    let penalty = if gate_status == "passed" { 0.0 } else { 100.0 };
+    ((score - penalty) * 10_000.0).round() / 10_000.0
+}
+
+fn eligible_sort_key(candidate: &AutoMlCandidateRank) -> f64 {
+    if candidate.gate_status == "passed" {
+        candidate.ranking_score
+    } else {
+        candidate.ranking_score - 1_000.0
+    }
+}
+
+fn metric_at(value: &serde_json::Value, key: &str) -> Option<f64> {
+    value.get(key).and_then(metric_value)
+}
+
+fn metric_object_value(
+    metrics: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> Option<f64> {
+    metrics.get(key).and_then(metric_value)
+}
+
+fn metric_value(value: &serde_json::Value) -> Option<f64> {
+    if let Some(value) = value.as_f64() {
+        return Some(value);
+    }
+    value.as_str().and_then(|value| value.parse::<f64>().ok())
+}
+
 pub fn build_analytics_export_plan(
     object_storage_uri: &str,
     clickhouse_url: &str,
@@ -2506,6 +2794,10 @@ mod tests {
             status: "ok"
         }));
         assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "automl_candidate_ranker",
+            status: "ok"
+        }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
             name: "retraining_job_runner",
             status: "ok"
         }));
@@ -2896,6 +3188,86 @@ mod tests {
     }
 
     #[test]
+    fn ranks_automl_candidates_and_blocks_missing_governance_gates() {
+        let root = temp_root("automl-ranking");
+        let logistic_report = root.join("logistic-validation.json");
+        let xgboost_report = root.join("xgboost-validation.json");
+        let lightgbm_report = root.join("lightgbm-validation.json");
+        write_validation_report(
+            &logistic_report,
+            "0.1.0-candidate-logistic",
+            "logistic_regression",
+            "linear_baseline",
+            0.72,
+            0.68,
+            0.66,
+            "passed",
+        );
+        write_validation_report(
+            &xgboost_report,
+            "0.1.0-xgboost-candidate",
+            "xgboost",
+            "gradient_boosted_tree",
+            0.84,
+            0.78,
+            0.74,
+            "passed",
+        );
+        write_validation_report(
+            &lightgbm_report,
+            "0.1.0-lightgbm-candidate",
+            "lightgbm",
+            "gradient_boosted_tree",
+            0.86,
+            0.80,
+            0.77,
+            "failed",
+        );
+
+        let report_uris = vec![
+            logistic_report.to_string_lossy().into_owned(),
+            xgboost_report.to_string_lossy().into_owned(),
+            lightgbm_report.to_string_lossy().into_owned(),
+        ];
+        let output_dir = root.join("out");
+        let ranking = rank_automl_candidates(&report_uris, &output_dir).expect("ranking");
+
+        assert_eq!(ranking.plan_kind, "automl_candidate_ranking");
+        assert_eq!(
+            ranking.recommended_candidate_model_version.as_deref(),
+            Some("0.1.0-xgboost-candidate")
+        );
+        assert_eq!(
+            ranking.candidates[0].candidate_model_version,
+            "0.1.0-xgboost-candidate"
+        );
+        assert_eq!(ranking.candidates[0].gate_status, "passed");
+        assert_eq!(
+            ranking.candidates[0].recommended_action,
+            "open_human_review"
+        );
+        assert_eq!(
+            ranking.candidates[1].candidate_model_version,
+            "0.1.0-candidate-logistic"
+        );
+        assert_eq!(
+            ranking.candidates[2].candidate_model_version,
+            "0.1.0-lightgbm-candidate"
+        );
+        assert_eq!(ranking.candidates[2].gate_status, "blocked");
+        assert!(ranking.candidates[2]
+            .blocking_reasons
+            .contains(&"leakage_check_status:failed".to_string()));
+        assert_eq!(ranking.review_tasks.len(), 3);
+        assert_eq!(
+            ranking.review_tasks[0].required_review,
+            "human_approval_required_before_shadow_or_activation"
+        );
+        assert!(output_dir.join("automl_candidate_ranking.json").is_file());
+        assert!(output_dir.join("automl_review_tasks.json").is_file());
+    }
+
+    #[test]
     fn builds_scheduled_analytics_export_plan() {
         let plan = build_analytics_export_plan(
             "s3://nwfwa-staging-artifacts",
@@ -3137,6 +3509,51 @@ mod tests {
         let mut writer = ArrowWriter::try_new(file, schema, None).unwrap();
         writer.write(&batch).unwrap();
         writer.close().unwrap();
+    }
+
+    fn write_validation_report(
+        path: &Path,
+        candidate_model_version: &str,
+        algorithm: &str,
+        algorithm_family: &str,
+        auc: f64,
+        precision: f64,
+        recall: f64,
+        leakage_status: &str,
+    ) {
+        fs::write(
+            path,
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "candidate_model_version": candidate_model_version,
+                "dataset_key": "claims_model",
+                "dataset_version": "2026-06-demo",
+                "algorithm": algorithm,
+                "validation_metrics": {
+                    "auc": auc,
+                    "precision": precision,
+                    "recall": recall
+                },
+                "metrics_json": {
+                    "algorithm": algorithm,
+                    "algorithm_family": algorithm_family,
+                    "out_of_time_auc": auc,
+                    "out_of_time_average_precision": auc - 0.04,
+                    "out_of_time_precision": precision,
+                    "out_of_time_recall": recall,
+                    "time_group_split_status": "passed",
+                    "leakage_check_status": leakage_status,
+                    "shadow_comparison_status": "passed",
+                    "serving_version_lock_status": "passed",
+                    "artifact_integrity_status": "passed",
+                    "feature_store_materialization_status": "passed",
+                    "segment_fairness_status": "passed",
+                    "label_provenance_status": "passed"
+                }
+            })
+            .to_string(),
+        )
+        .unwrap();
     }
 
     fn temp_root(prefix: &str) -> PathBuf {

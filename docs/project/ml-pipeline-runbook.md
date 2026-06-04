@@ -288,6 +288,33 @@ Behavior:
 - the API creates a candidate model version and evaluation record if the output
   contract passes validation.
 
+## Stage 6.5: Auto MLOps Candidate Ranking
+
+Purpose: compare candidate validation reports and open human-review work without
+promoting a model automatically.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- rank-automl-candidates \
+  --validation-report data/model-artifacts/baseline_fwa/<logistic-version>/validation.json \
+  --validation-report data/model-artifacts/baseline_fwa/<xgboost-version>/validation.json \
+  --validation-report data/model-artifacts/baseline_fwa/<lightgbm-version>/validation.json \
+  --output-dir data/model-artifacts/baseline_fwa/automl-ranking
+```
+
+The worker writes:
+
+- `automl_candidate_ranking.json`;
+- `automl_review_tasks.json`.
+
+Ranking uses out-of-time AUC, average precision, precision, and recall, but
+promotion gates still dominate. Candidates stay blocked when label provenance,
+time/group split, leakage, shadow comparison, serving version lock, artifact
+integrity, feature materialization, fairness, AUC, or recall evidence is
+missing or failed. The output may recommend a candidate for human review; it
+must not activate a model or publish a rule.
+
 ## External Training Platform Boundary
 
 Training may run on a separate ML platform such as a customer notebook
@@ -313,7 +340,7 @@ Required boundary:
 - the API remains responsible for candidate registration, promotion gates,
   activation, rollback, and audit events;
 - Rust serving remains independent of the training platform by loading the
-  activated artifact URI through `FWA_MODEL_ARTIFACT_URI`.
+  activated serving manifest through `FWA_MODEL_SERVING_MANIFEST_URI`.
 
 This keeps training portable without forking the data source. The local Python
 trainer is only the compatibility implementation of the same contract.

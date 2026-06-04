@@ -95,6 +95,15 @@ async fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&plan)?);
         }
+        "rank-automl-candidates" => {
+            let reports = take_repeated_flag_value(&mut args, "--validation-report")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let ranking = worker::rank_automl_candidates(&reports, output_dir)?;
+            println!("{}", serde_json::to_string_pretty(&ranking)?);
+        }
         "build-analytics-export-plan" => {
             let object_storage_uri = take_flag_value(&mut args, "--object-storage-uri")?;
             let clickhouse_url = take_flag_value(&mut args, "--clickhouse-url")?;
@@ -222,6 +231,21 @@ fn take_optional_flag_value(args: &mut Vec<String>, flag: &str) -> anyhow::Resul
         anyhow::bail!("missing value for flag {flag}");
     }
     Ok(Some(args.remove(index)))
+}
+
+fn take_repeated_flag_value(args: &mut Vec<String>, flag: &str) -> anyhow::Result<Vec<String>> {
+    let mut values = Vec::new();
+    while let Some(index) = args.iter().position(|arg| arg == flag) {
+        args.remove(index);
+        if index >= args.len() {
+            anyhow::bail!("missing value for flag {flag}");
+        }
+        values.push(args.remove(index));
+    }
+    if values.is_empty() {
+        anyhow::bail!("missing required flag {flag}");
+    }
+    Ok(values)
 }
 
 fn take_bool_flag(args: &mut Vec<String>, flag: &str) -> bool {
