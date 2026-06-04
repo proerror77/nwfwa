@@ -85,6 +85,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
   without activating any model.
 - `mine-rule-candidates`: translate feature-importance evidence into draft rule
   candidates plus required backtest and human-review work items.
+- `run-rule-candidate-backtest`: select deterministic thresholds, calculate
+  split-level rule metrics, and create review evidence while keeping
+  rule-library writeback blocked.
 - `build-mlops-monitoring-plan`: define scheduled shadow, drift, fairness,
   reviewer-disagreement, and label-delay checks.
 
@@ -92,7 +95,6 @@ Future worker commands should add:
 
 - `build-feature-set`: materialize feature versions from registered datasets;
 - `evaluate-model-artifact`: run offline metrics and serving parity tests;
-- `run-rule-candidate-backtest`: backtest drafts before human review;
 
 ## Serving Architecture
 
@@ -129,9 +131,10 @@ Current repository completion for this target architecture is approximately:
   shape.
 - 35% for model portfolio: logistic and XGBoost training paths exist; LightGBM,
   clustering, and ONNX serving are still future work.
-- 30% for Auto MLOps: worker has plan and retraining primitives, but candidate
-  ranking, rule mining, parity tests, and automatic review task creation are not
-  implemented yet.
+- 45% for Auto MLOps: worker can rank candidates, mine explainable rule
+  candidates, and backtest those candidates into human-review evidence, but
+  parity tests, activation workflows, and UI/API review surfaces still need
+  implementation.
 - 20% for Rust ONNX serving: architecture is defined, but the runtime scorer and
   parity tests still need implementation.
 

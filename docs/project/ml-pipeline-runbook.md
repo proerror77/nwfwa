@@ -342,6 +342,31 @@ pass deterministic backtest, false-positive review, human promotion review,
 customer policy or model-governance approval, and shadow or limited rollout
 when impact is high.
 
+## Stage 6.7: Rule Candidate Backtest
+
+Purpose: turn draft rule candidates into auditable backtest evidence before a
+human reviewer decides whether they can move toward Rule Studio publication.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- run-rule-candidate-backtest \
+  --candidate-plan data/model-artifacts/baseline_fwa/<candidate-version>/rule-candidates/rule_candidate_mining_plan.json \
+  --dataset-manifest data/rust-automl-demo/labeled_claim_risk/manifest.json \
+  --output-dir data/model-artifacts/baseline_fwa/<candidate-version>/rule-candidates/backtest
+```
+
+The worker writes:
+
+- `rule_candidate_backtest_report.json`;
+- `rule_candidate_backtest_review_tasks.json`.
+
+The backtest selects a deterministic threshold from the training split and
+reports hit rate, precision, recall, F1, false positives, false negatives, and
+manual-review capacity impact for each dataset split. The report still sets
+`rule_library_writeback_status` to blocked until human review and policy or
+model-governance approval are complete.
+
 ## External Training Platform Boundary
 
 Training may run on a separate ML platform such as a customer notebook

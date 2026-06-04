@@ -115,6 +115,20 @@ async fn main() -> anyhow::Result<()> {
                 worker::mine_rule_candidates(&validation_report, &feature_importance, output_dir)?;
             println!("{}", serde_json::to_string_pretty(&candidates)?);
         }
+        "run-rule-candidate-backtest" => {
+            let candidate_plan = take_flag_value(&mut args, "--candidate-plan")?;
+            let dataset_manifest = take_flag_value(&mut args, "--dataset-manifest")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::run_rule_candidate_backtest(
+                &candidate_plan,
+                &dataset_manifest,
+                output_dir,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "build-analytics-export-plan" => {
             let object_storage_uri = take_flag_value(&mut args, "--object-storage-uri")?;
             let clickhouse_url = take_flag_value(&mut args, "--clickhouse-url")?;
