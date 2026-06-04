@@ -223,8 +223,10 @@ and production-operations gaps rather than missing demo mechanics:
 
 - real customer or pilot labels with provenance, delayed-label handling, and
   reviewer-disagreement measurement;
-- production-grade ONNX fixture coverage, runtime cache/reuse, latency SLOs, and
-  monitoring around XGBoost, LightGBM, and deep-learning ONNX serving;
+- production-grade ONNX fixture coverage, latency SLOs, and monitoring around
+  XGBoost, LightGBM, and deep-learning ONNX serving; the Rust runtime now has an
+  artifact URI plus checksum-bound ONNX session cache, but it still needs
+  customer-scale load and failure-mode evidence;
 - production clustering and anomaly-discovery jobs over customer-scale unlabeled
   member, claim, provider, and graph features; the Rust worker covers demo
   provider-peer, provider graph-community, and claim-entity clustering with

@@ -8,8 +8,9 @@ use ort::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
+use std::collections::{btree_map::Entry, BTreeMap};
 use std::fs;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use thiserror::Error;
 
@@ -114,10 +115,29 @@ impl ArtifactModelScorer {
     }
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct ServingManifestModelScorer {
     manifest_uri: String,
     signing_key: Option<String>,
+    onnx_sessions: Arc<Mutex<BTreeMap<String, CachedOnnxSession>>>,
+}
+
+impl std::fmt::Debug for ServingManifestModelScorer {
+    fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        formatter
+            .debug_struct("ServingManifestModelScorer")
+            .field("manifest_uri", &self.manifest_uri)
+            .field(
+                "signing_key",
+                &self.signing_key.as_ref().map(|_| "<configured>"),
+            )
+            .finish_non_exhaustive()
+    }
+}
+
+struct CachedOnnxSession {
+    session: Session,
+    input_name: String,
 }
 
 impl ServingManifestModelScorer {
@@ -125,6 +145,7 @@ impl ServingManifestModelScorer {
         Self {
             manifest_uri: manifest_uri.into(),
             signing_key: None,
+            onnx_sessions: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 
@@ -137,6 +158,7 @@ impl ServingManifestModelScorer {
         Self {
             manifest_uri: manifest_uri.into(),
             signing_key: signing_key.filter(|value| !value.trim().is_empty()),
+            onnx_sessions: Arc::new(Mutex::new(BTreeMap::new())),
         }
     }
 }
@@ -337,6 +359,7 @@ impl ModelScorer for ServingManifestModelScorer {
                     &request,
                     &self.manifest_uri,
                     self.signing_key.as_deref(),
+                    &self.onnx_sessions,
                 )
             }
             "xgboost_classifier" | "lightgbm_classifier" => {
@@ -357,6 +380,7 @@ fn score_onnx_manifest(
     request: &ModelScoreRequest,
     manifest_uri: &str,
     signing_key: Option<&str>,
+    onnx_sessions: &Mutex<BTreeMap<String, CachedOnnxSession>>,
 ) -> Result<ModelScore, ModelRuntimeError> {
     let started_at = Instant::now();
     validate_onnx_artifact(manifest)?;
@@ -387,18 +411,21 @@ fn score_onnx_manifest(
     let feature_count = feature_values.len();
     let input_tensor = Tensor::from_array(([1usize, feature_count], feature_values))
         .map_err(onnx_runtime_error)?;
-    let mut session = Session::builder()
-        .map_err(onnx_runtime_error)?
-        .with_optimization_level(GraphOptimizationLevel::Level3)
-        .map_err(onnx_runtime_error)?
-        .commit_from_file(artifact_path)
-        .map_err(onnx_runtime_error)?;
-    let input_name = session
-        .inputs()
-        .first()
-        .map(|input| input.name().to_string())
-        .ok_or_else(|| ModelRuntimeError::InvalidResponse("ONNX model has no inputs".into()))?;
-    let outputs = session
+    let cache_key = onnx_session_cache_key(manifest);
+    let mut sessions = onnx_sessions.lock().map_err(|_| {
+        ModelRuntimeError::InvalidResponse("ONNX session cache lock poisoned".into())
+    })?;
+    let mut cache_status = "hit";
+    let cached = match sessions.entry(cache_key) {
+        Entry::Occupied(entry) => entry.into_mut(),
+        Entry::Vacant(entry) => {
+            cache_status = "miss";
+            entry.insert(build_cached_onnx_session(artifact_path)?)
+        }
+    };
+    let input_name = cached.input_name.clone();
+    let outputs = cached
+        .session
         .run(ort::inputs![input_name.as_str() => input_tensor])
         .map_err(onnx_runtime_error)?;
     let (probability, output_name) = extract_positive_probability(&outputs)?;
@@ -434,13 +461,36 @@ fn score_onnx_manifest(
             "feature_count": feature_count,
             "fraud_probability": round_probability(probability),
             "onnx_input_name": input_name,
-            "onnx_output_name": output_name
+            "onnx_output_name": output_name,
+            "onnx_session_cache_status": cache_status
         }),
         latency_ms: started_at
             .elapsed()
             .as_millis()
             .try_into()
             .unwrap_or(u64::MAX),
+    })
+}
+
+fn onnx_session_cache_key(manifest: &ServingManifest) -> String {
+    format!("{}|{}", manifest.artifact_uri, manifest.artifact_sha256)
+}
+
+fn build_cached_onnx_session(artifact_path: &str) -> Result<CachedOnnxSession, ModelRuntimeError> {
+    let session = Session::builder()
+        .map_err(onnx_runtime_error)?
+        .with_optimization_level(GraphOptimizationLevel::Level3)
+        .map_err(onnx_runtime_error)?
+        .commit_from_file(artifact_path)
+        .map_err(onnx_runtime_error)?;
+    let input_name = session
+        .inputs()
+        .first()
+        .map(|input| input.name().to_string())
+        .ok_or_else(|| ModelRuntimeError::InvalidResponse("ONNX model has no inputs".into()))?;
+    Ok(CachedOnnxSession {
+        session,
+        input_name,
     })
 }
 
@@ -1406,6 +1456,35 @@ mod tests {
         assert!(message.contains("ONNX runtime error"));
         fs::remove_file(onnx_path).unwrap();
         fs::remove_file(manifest_path).unwrap();
+    }
+
+    #[test]
+    fn onnx_session_cache_key_binds_artifact_uri_and_checksum() {
+        let base = ServingManifest {
+            model_key: "baseline_fwa".into(),
+            model_version: "0.3.0-xgboost-onnx".into(),
+            runtime_kind: "xgboost_onnx".into(),
+            artifact_uri: "/tmp/model-a.onnx".into(),
+            artifact_sha256: "sha256:a".into(),
+            artifact_signature: None,
+            version_lock: "0.3.0-xgboost-onnx".into(),
+            feature_columns: vec!["claim_amount_to_limit_ratio".into()],
+            threshold: 0.5,
+            training_artifact_uri: None,
+        };
+        let mut changed_checksum = base.clone();
+        changed_checksum.artifact_sha256 = "sha256:b".into();
+        let mut changed_uri = base.clone();
+        changed_uri.artifact_uri = "/tmp/model-b.onnx".into();
+
+        assert_ne!(
+            onnx_session_cache_key(&base),
+            onnx_session_cache_key(&changed_checksum)
+        );
+        assert_ne!(
+            onnx_session_cache_key(&base),
+            onnx_session_cache_key(&changed_uri)
+        );
     }
 
     #[test]

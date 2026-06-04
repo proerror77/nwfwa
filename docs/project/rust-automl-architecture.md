@@ -207,13 +207,14 @@ Current repository completion for this target architecture is approximately:
   release, promotion review, activation, and rollback actions. Customer data
   bindings, durable artifact storage for scheduled outputs, and
   receiver-specific monitoring inputs still need environment-specific wiring.
-- 78% for Rust ONNX serving: serving-manifest validation, checksum/signature
+- 81% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
-  extraction are implemented, and the worker now creates Rust serving evaluation
-  evidence automatically on retraining registration when a serving manifest is
-  present; for XGBoost, LightGBM, and deep-learning ONNX candidates it also
-  requires a passed ONNX parity report before the gate can pass. Production
-  cache/reuse strategy, broader real ONNX fixture tests, and live latency
+  extraction are implemented, ONNX sessions are cached per artifact URI and
+  checksum inside the Rust serving manifest scorer, and the worker now creates
+  Rust serving evaluation evidence automatically on retraining registration when
+  a serving manifest is present; for XGBoost, LightGBM, and deep-learning ONNX
+  candidates it also requires a passed ONNX parity report before the gate can
+  pass. Broader real ONNX fixture tests, production SLO policy, and live latency
   monitoring still need hardening.
 
 The runtime now has a serving-manifest boundary for Rust logistic artifacts and
