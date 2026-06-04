@@ -16,7 +16,6 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
         &[
             "Dashboard",
             "Leads & Cases",
-            "TPA Demo Runner",
             "Review Workbench",
             "Bootstrap Ops",
         ],
@@ -48,7 +47,6 @@ const ALL_MODULES: &[&str] = &[
     "Data Sources",
     "Factor Factory",
     "Leads & Cases",
-    "TPA Demo Runner",
     "Member Profile",
     "Provider Risk",
     "Medical Review",
@@ -225,83 +223,6 @@ const SAMPLE_RUNTIME_SCORE_REQUEST: &str = r#"{
   "review_mode": "pre_payment",
   "claim_id": "CLM-0287"
 }"#;
-
-#[derive(Clone, Copy, Debug, PartialEq)]
-struct TpaDemoCase {
-    case_id: &'static str,
-    title: &'static str,
-    purpose: &'static str,
-    expected_outcome: Option<&'static str>,
-    expected_evidence: &'static [&'static str],
-    direct_payload: &'static str,
-    inbox_payload: &'static str,
-}
-
-const TPA_DEMO_CASES: &[TpaDemoCase] = &[
-    TpaDemoCase {
-        case_id: "straight_through_low_risk",
-        title: "Straight-through",
-        purpose: "资料完整，规则未阻断，算法置信度足够，预期直通。",
-        expected_outcome: Some("straight_through"),
-        expected_evidence: &[],
-        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/straight_through_low_risk.json"),
-        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/straight_through_low_risk.json"),
-    },
-    TpaDemoCase {
-        case_id: "pending_dental_xray",
-        title: "Dental X-ray required",
-        purpose: "牙科植牙缺 X 光片，规则应进入补件。",
-        expected_outcome: Some("pending_evidence"),
-        expected_evidence: &["dental_xray", "medical_record"],
-        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/pending_dental_xray.json"),
-        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/pending_dental_xray.json"),
-    },
-    TpaDemoCase {
-        case_id: "pending_prescription_detail",
-        title: "Prescription detail required",
-        purpose: "药品缺处方/药单明细，规则应进入补件。",
-        expected_outcome: Some("pending_evidence"),
-        expected_evidence: &["medication_order", "prescription_detail"],
-        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/pending_prescription_detail.json"),
-        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/pending_prescription_detail.json"),
-    },
-    TpaDemoCase {
-        case_id: "pending_operation_record",
-        title: "Operation record required",
-        purpose: "手术缺手术记录，规则应进入补件。",
-        expected_outcome: Some("pending_evidence"),
-        expected_evidence: &["operation_record", "medical_record", "invoice"],
-        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/pending_operation_record.json"),
-        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/pending_operation_record.json"),
-    },
-    TpaDemoCase {
-        case_id: "manual_review_provider_pattern",
-        title: "Provider pattern review",
-        purpose: "Provider / graph 风险高，但不是确定性拒赔，只能进入人工复核。",
-        expected_outcome: Some("manual_review"),
-        expected_evidence: &[],
-        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/manual_review_provider_pattern.json"),
-        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/manual_review_provider_pattern.json"),
-    },
-    TpaDemoCase {
-        case_id: "manual_review_high_amount",
-        title: "High amount review",
-        purpose: "高额度/接近保额但资料不缺，进入人工审核而不是补件。",
-        expected_outcome: Some("manual_review"),
-        expected_evidence: &[],
-        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/manual_review_high_amount.json"),
-        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/manual_review_high_amount.json"),
-    },
-    TpaDemoCase {
-        case_id: "inbox_missing_coverage_limit",
-        title: "Inbox blocker",
-        purpose: "TPA 原始包缺保额，normalize 应 scoring_ready=false。",
-        expected_outcome: None,
-        expected_evidence: &["reportCase.policyList[0].coverageLimit"],
-        direct_payload: include_str!("../../../data/tpa-rule-funnel-demo/direct_scoring_payloads/inbox_missing_coverage_limit.json"),
-        inbox_payload: include_str!("../../../data/tpa-rule-funnel-demo/inbox_payloads/inbox_missing_coverage_limit.json"),
-    },
-];
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct InboxNormalizeResponse {
@@ -1810,9 +1731,32 @@ enum ApiState<T> {
     Failed(String),
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Language {
+    En,
+    Zh,
+}
+
+impl Language {
+    fn toggle(self) -> Self {
+        match self {
+            Self::En => Self::Zh,
+            Self::Zh => Self::En,
+        }
+    }
+
+    fn code(self) -> &'static str {
+        match self {
+            Self::En => "EN",
+            Self::Zh => "中文",
+        }
+    }
+}
+
 #[function_component(App)]
 fn app() -> Html {
     let active = use_state(active_module_from_location);
+    let language = use_state(|| Language::En);
     let select_module = {
         let active = active.clone();
         Callback::from(move |module: String| {
@@ -1822,16 +1766,19 @@ fn app() -> Html {
             }
         })
     };
+    let toggle_language = {
+        let language = language.clone();
+        Callback::from(move |_| language.set((*language).toggle()))
+    };
 
     {
         let active = active.clone();
         use_effect_with((), move |_| {
             let listener = web_sys::window().and_then(|window| {
                 let active = active.clone();
-                let callback =
-                    Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_| {
-                        active.set(active_module_from_location());
-                    }));
+                let callback = Closure::<dyn FnMut(web_sys::Event)>::wrap(Box::new(move |_| {
+                    active.set(active_module_from_location());
+                }));
                 window
                     .add_event_listener_with_callback(
                         "hashchange",
@@ -1857,12 +1804,12 @@ fn app() -> Html {
                 <div class="brand-block">
                     <span>{"NOVA FWA"}</span>
                     <h1>{"FWA Platform"}</h1>
-                    <p>{"Operations desk for claim scoring, case triage, reviewer queues, and pilot governance."}</p>
+                    <p>{brand_description(*language)}</p>
                 </div>
                 <nav class="module-nav" aria-label="FWA operations modules">
                     {for NAV_SECTIONS.iter().map(|(section, modules)| html! {
                         <div class="nav-section">
-                            <p class="nav-section-title">{section}</p>
+                            <p class="nav-section-title">{section_label(section, *language)}</p>
                             {for modules.iter().map(|module| {
                                 let select_module = select_module.clone();
                                 let module_name = (*module).to_string();
@@ -1874,8 +1821,8 @@ fn app() -> Html {
                                     >
                                         <span class={classes!("nav-icon", module_icon_class(module))}></span>
                                         <span class="nav-copy">
-                                            <span class="nav-label">{module}</span>
-                                            <span class="nav-description">{module_description(module)}</span>
+                                            <span class="nav-label">{module_label(module, *language)}</span>
+                                            <span class="nav-description">{module_description(module, *language)}</span>
                                         </span>
                                     </button>
                                 }
@@ -1887,15 +1834,18 @@ fn app() -> Html {
             <main class="workspace">
                 <div class="workspace-topbar">
                     <div class="topbar-context">
-                        <span class="eyebrow">{"Real-time operations"}</span>
-                        <strong>{module_context(&active)}</strong>
+                        <span class="eyebrow">{tr(*language, "Real-time operations", "实时运营")}</span>
+                        <strong>{module_context(&active, *language)}</strong>
                     </div>
                     <div class="topbar-actions">
                         <span class="api-chip status-live">{"live"}</span>
                         <span class="user-chip">{"Pilot Ops"}</span>
+                        <button class="language-toggle" onclick={toggle_language}>
+                            {(*language).code()}
+                        </button>
                     </div>
                 </div>
-                {workspace_system_map(active.as_str(), select_module.clone())}
+                {workspace_system_map(active.as_str(), select_module.clone(), *language)}
                 <div class="workspace-content">
                     if *active == "Intake Ops" {
                         <ClaimInboxPage />
@@ -1926,8 +1876,6 @@ fn app() -> Html {
                     } else if *active == "Factor Factory" {
                         <FactorFactoryPage />
                     } else if *active == "Leads & Cases" {
-                    } else if *active == "TPA Demo Runner" {
-                        <TpaDemoRunnerPage />
                         <LeadsCasesPage />
                     } else if *active == "Member Profile" {
                         <MemberProfilePage />
@@ -1954,17 +1902,17 @@ fn app() -> Html {
     }
 }
 
-fn workspace_system_map(active: &str, on_navigate: Callback<String>) -> Html {
+fn workspace_system_map(active: &str, on_navigate: Callback<String>, language: Language) -> Html {
     html! {
         <section class="workspace-system-map" aria-label="FWA platform system map">
             <div class="system-map-rail"></div>
             <div class="system-map-pulse"></div>
-            {system_map_stage("Intake", "Intake Ops", "TPA packet exceptions", "queue-ready claim", "Intake Ops", "intake", active, &on_navigate)}
-            {system_map_stage("Detect", "Scored leads", "Rules + model + policy", "human queue", "Leads & Cases", "detect", active, &on_navigate)}
-            {system_map_stage("Review", "Human gate", "Medical + QA", "no auto denial", "Review Workbench", "review", active, &on_navigate)}
-            {system_map_stage("Evidence", "Case context", "Member / provider / KB", "trace refs", "Evidence Hub", "evidence", active, &on_navigate)}
-            {system_map_stage("Govern", "Audit trail", "Policy + approval", "pilot ready", "Governance", "govern", active, &on_navigate)}
-            {system_map_stage("Value", "Value proof", "Savings evidence", "dashboard", "Dashboard", "value", active, &on_navigate)}
+            {system_map_stage("Intake", tr(language, "Intake Ops", "进件处理"), tr(language, "TPA packet exceptions", "TPA 案件资料异常"), tr(language, "queue-ready claim", "可进入评分队列"), "Intake Ops", "intake", active, &on_navigate)}
+            {system_map_stage("Detect", tr(language, "Scored leads", "已评分线索"), tr(language, "Rules + model + policy", "规则 + 模型 + 路由政策"), tr(language, "human queue", "人工队列"), "Leads & Cases", "detect", active, &on_navigate)}
+            {system_map_stage("Review", tr(language, "Human gate", "人工关卡"), tr(language, "Medical + QA", "医疗复核 + QA"), tr(language, "no auto denial", "不由模型自动拒赔"), "Review Workbench", "review", active, &on_navigate)}
+            {system_map_stage("Evidence", tr(language, "Case context", "案件上下文"), tr(language, "Member / provider / KB", "会员 / Provider / 知识库"), tr(language, "trace refs", "证据链"), "Evidence Hub", "evidence", active, &on_navigate)}
+            {system_map_stage("Govern", tr(language, "Audit trail", "审计轨迹"), tr(language, "Policy + approval", "政策 + 审批"), tr(language, "pilot ready", "试点就绪"), "Governance", "govern", active, &on_navigate)}
+            {system_map_stage("Value", tr(language, "Value proof", "价值证明"), tr(language, "Savings evidence", "节省金额证据"), tr(language, "dashboard", "仪表盘"), "Dashboard", "value", active, &on_navigate)}
         </section>
     }
 }
@@ -2005,6 +1953,58 @@ fn is_known_module(module: &str) -> bool {
     ALL_MODULES.contains(&module)
 }
 
+fn tr(language: Language, en: &'static str, zh: &'static str) -> &'static str {
+    match language {
+        Language::En => en,
+        Language::Zh => zh,
+    }
+}
+
+fn brand_description(language: Language) -> &'static str {
+    tr(
+        language,
+        "Operations desk for claim scoring, case triage, reviewer queues, and pilot governance.",
+        "用于理赔评分、案件分流、审核队列和试点治理的风控运营台。",
+    )
+}
+
+fn section_label(section: &str, language: Language) -> &'static str {
+    match section {
+        "Daily Work" => tr(language, "Daily Work", "日常作业"),
+        "Control Rooms" => tr(language, "Control Rooms", "控制室"),
+        _ => "Section",
+    }
+}
+
+fn module_label(module: &str, language: Language) -> &'static str {
+    match module {
+        "Intake Ops" => tr(language, "Intake Ops", "进件处理"),
+        "Dashboard" => tr(language, "Dashboard", "运营仪表盘"),
+        "Detection Releases" => tr(language, "Detection Releases", "检测发布"),
+        "Runtime Scoring" => tr(language, "Runtime Scoring", "实时评分"),
+        "Review Workbench" => tr(language, "Review Workbench", "复核工作台"),
+        "Bootstrap Ops" => tr(language, "Bootstrap Ops", "冷启动作业"),
+        "Evidence Hub" => tr(language, "Evidence Hub", "证据中心"),
+        "Provider Model Intake" => tr(language, "Provider Model Intake", "Provider 模型接入"),
+        "Evidence Runtime" => tr(language, "Evidence Runtime", "证据运行时"),
+        "Rules" => tr(language, "Rules", "规则"),
+        "Models" => tr(language, "Models", "模型"),
+        "Routing Policies" => tr(language, "Routing Policies", "路由策略"),
+        "Factor Factory" => tr(language, "Factor Factory", "因子工厂"),
+        "Data Sources" => tr(language, "Data Sources", "数据源"),
+        "Leads & Cases" => tr(language, "Leads & Cases", "线索与案件"),
+        "Member Profile" => tr(language, "Member Profile", "会员画像"),
+        "Provider Risk" => tr(language, "Provider Risk", "Provider 风险"),
+        "Medical Review" => tr(language, "Medical Review", "医疗复核"),
+        "Audit Sampling" => tr(language, "Audit Sampling", "审计抽样"),
+        "Knowledge Base" => tr(language, "Knowledge Base", "知识库"),
+        "Agent Investigator" => tr(language, "Agent Investigator", "辅助调查"),
+        "QA Review" => tr(language, "QA Review", "QA 复核"),
+        "Governance" => tr(language, "Governance", "治理"),
+        _ => "Module",
+    }
+}
+
 fn module_slug(module: &str) -> &'static str {
     match module {
         "Intake Ops" => "intake-ops",
@@ -2021,7 +2021,6 @@ fn module_slug(module: &str) -> &'static str {
         "Routing Policies" => "routing-policies",
         "Data Sources" => "data-sources",
         "Factor Factory" => "factor-factory",
-        "TPA Demo Runner" => "tpa-demo-runner",
         "Leads & Cases" => "leads-cases",
         "Member Profile" => "member-profile",
         "Provider Risk" => "provider-risk",
@@ -2072,79 +2071,157 @@ fn system_map_stage(
     }
 }
 
-fn module_context(module: &str) -> &'static str {
+fn module_context(module: &str, language: Language) -> &'static str {
     match module {
-        "Intake Ops" => {
-            "Resolve inbound TPA packet exceptions before claims enter risk and review queues."
-        }
-        "Dashboard" => "Choose the next operational action from live risk and review queues.",
-        "Detection Releases" => "Accept, compare, approve, or reject provider-delivered detection candidates.",
-        "Runtime Scoring" => {
-            "Validate the scoring API contract, routing policy, evidence refs, and audit IDs."
-        }
-        "Review Workbench" => "Resolve clinical and QA review queues from one place.",
-        "Bootstrap Ops" => {
-            "Replay historical leads, request missing evidence, and govern bootstrap labels."
-        }
-        "Evidence Hub" => {
-            "Open member, provider, knowledge, and dataset context from one evidence hub."
-        }
-        "Provider Model Intake" => {
-            "Review provider-trained model candidates and decide release, shadow, or rollback."
-        }
-        "Evidence Runtime" => {
-            "Register document, OCR, chunk, embedding, and retrieval metadata with audit trace."
-        }
-        "Rules" => {
-            "Review offline-mined rule candidates before they enter the active rule library."
-        }
-        "Models" => "Review model readiness, thresholds, and production evidence.",
-        "Routing Policies" => "Inspect routing boundaries for model and policy execution.",
-        "Factor Factory" => "Govern feature readiness, ownership, and online availability.",
-        "Data Sources" => "Control datasets, schema mappings, and model evaluation lineage.",
-        "Leads & Cases" => "Move scored leads into investigation and case workflows.",
-        "Member Profile" => "Inspect member-level risk evidence and utilization context.",
-        "Provider Risk" => "Review provider graph signals and suspicious practice patterns.",
-        "Medical Review" => "Route clinical evidence to human review with traceable outcomes.",
-        "TPA Demo Runner" => {
-            "Run deterministic TPA fixtures through intake normalization and risk scoring."
-        }
-        "Audit Sampling" => "Sample decisions for QA, compliance, and model governance.",
-        "Knowledge Base" => "Search confirmed evidence without crossing adjudication boundaries.",
-        "Agent Investigator" => "Run assistive investigation with human decision gates.",
-        "QA Review" => "Close feedback loops for findings, calibration, and reviewer quality.",
-        "Governance" => "Audit API calls, agent boundaries, and evidence trace coverage.",
-        _ => "Operate the FWA pilot workspace.",
+        "Intake Ops" => tr(
+            language,
+            "Resolve inbound TPA packet exceptions before claims enter risk and review queues.",
+            "先处理 TPA 进件资料异常，再让案件进入评分和复核队列。",
+        ),
+        "Dashboard" => tr(
+            language,
+            "Choose the next operational action from live risk and review queues.",
+            "从实时风险与复核队列中选择下一步运营动作。",
+        ),
+        "Detection Releases" => tr(
+            language,
+            "Accept, compare, approve, or reject provider-delivered detection candidates.",
+            "接收、比较、审批或拒绝 Provider 提交的检测候选版本。",
+        ),
+        "Runtime Scoring" => tr(
+            language,
+            "Validate the scoring API contract, routing policy, evidence refs, and audit IDs.",
+            "验证评分 API 契约、路由策略、证据引用和审计 ID。",
+        ),
+        "Review Workbench" => tr(
+            language,
+            "Resolve clinical and QA review queues from one place.",
+            "在一个入口处理医疗复核和 QA 队列。",
+        ),
+        "Bootstrap Ops" => tr(
+            language,
+            "Replay historical leads, request missing evidence, and govern bootstrap labels.",
+            "回放历史线索、发起补件请求，并治理冷启动标签。",
+        ),
+        "Evidence Hub" => tr(
+            language,
+            "Open member, provider, knowledge, and dataset context from one evidence hub.",
+            "在证据中心查看会员、Provider、知识库和数据集上下文。",
+        ),
+        "Provider Model Intake" => tr(
+            language,
+            "Review provider-trained model candidates and decide release, shadow, or rollback.",
+            "审查 Provider 训练的模型候选，并决定发布、影子运行或回滚。",
+        ),
+        "Evidence Runtime" => tr(
+            language,
+            "Register document, OCR, chunk, embedding, and retrieval metadata with audit trace.",
+            "登记文件、OCR、切块、embedding 和检索元数据，并保留审计轨迹。",
+        ),
+        "Rules" => tr(
+            language,
+            "Review offline-mined rule candidates before they enter the active rule library.",
+            "审查离线挖掘出的规则候选，再决定是否进入启用规则库。",
+        ),
+        "Models" => tr(
+            language,
+            "Review model readiness, thresholds, and production evidence.",
+            "审查模型就绪度、阈值和生产证据。",
+        ),
+        "Routing Policies" => tr(
+            language,
+            "Inspect routing boundaries for model and policy execution.",
+            "检查模型与政策执行的路由边界。",
+        ),
+        "Factor Factory" => tr(
+            language,
+            "Govern feature readiness, ownership, and online availability.",
+            "治理特征就绪度、负责人和在线可用性。",
+        ),
+        "Data Sources" => tr(
+            language,
+            "Control datasets, schema mappings, and model evaluation lineage.",
+            "管理数据集、字段映射和模型评估血缘。",
+        ),
+        "Leads & Cases" => tr(
+            language,
+            "Move scored leads into investigation and case workflows.",
+            "把已评分线索推进调查和案件流程。",
+        ),
+        "Member Profile" => tr(
+            language,
+            "Inspect member-level risk evidence and utilization context.",
+            "查看会员层级的风险证据和使用情况。",
+        ),
+        "Provider Risk" => tr(
+            language,
+            "Review provider graph signals and suspicious practice patterns.",
+            "查看 Provider 图谱信号和可疑执业模式。",
+        ),
+        "Medical Review" => tr(
+            language,
+            "Route clinical evidence to human review with traceable outcomes.",
+            "把临床证据送入人工医疗复核并保留可追溯结论。",
+        ),
+        "Audit Sampling" => tr(
+            language,
+            "Sample decisions for QA, compliance, and model governance.",
+            "抽样检查决策，用于 QA、合规和模型治理。",
+        ),
+        "Knowledge Base" => tr(
+            language,
+            "Search confirmed evidence without crossing adjudication boundaries.",
+            "搜索已确认案例证据，但不越过理赔裁决边界。",
+        ),
+        "Agent Investigator" => tr(
+            language,
+            "Run assistive investigation with human decision gates.",
+            "运行辅助调查，但关键决策保留人工关卡。",
+        ),
+        "QA Review" => tr(
+            language,
+            "Close feedback loops for findings, calibration, and reviewer quality.",
+            "闭环发现、校准和审核质量反馈。",
+        ),
+        "Governance" => tr(
+            language,
+            "Audit API calls, agent boundaries, and evidence trace coverage.",
+            "审计 API 调用、Agent 边界和证据链覆盖率。",
+        ),
+        _ => tr(
+            language,
+            "Operate the FWA pilot workspace.",
+            "操作 FWA 试点工作台。",
+        ),
     }
 }
 
-fn module_description(module: &str) -> &'static str {
+fn module_description(module: &str, language: Language) -> &'static str {
     match module {
-        "Intake Ops" => "intake exceptions",
-        "Dashboard" => "next action",
-        "Detection Releases" => "candidate releases",
-        "Runtime Scoring" => "contract check",
-        "Review Workbench" => "medical + QA",
-        "Bootstrap Ops" => "labels + evidence",
-        "Evidence Hub" => "context lookup",
-        "Provider Model Intake" => "model candidate release",
-        "Evidence Runtime" => "document evidence",
-        "Rules" => "rule candidate release",
-        "Models" => "threshold evidence",
-        "Routing Policies" => "execution routing",
-        "Factor Factory" => "feature readiness",
-        "Data Sources" => "catalog & lineage",
-        "Leads & Cases" => "investigation queue",
-        "Member Profile" => "member context",
-        "Provider Risk" => "provider signals",
-        "Medical Review" => "clinical review",
-        "TPA Demo Runner" => "fixture funnel",
-        "Audit Sampling" => "sample governance",
-        "Knowledge Base" => "confirmed evidence",
-        "Agent Investigator" => "assistive agent",
-        "QA Review" => "feedback closure",
-        "Governance" => "audit boundary",
-        _ => "module",
+        "Intake Ops" => tr(language, "intake exceptions", "进件异常"),
+        "Dashboard" => tr(language, "next action", "下一步动作"),
+        "Detection Releases" => tr(language, "candidate releases", "候选发布"),
+        "Runtime Scoring" => tr(language, "contract check", "契约检查"),
+        "Review Workbench" => tr(language, "medical + QA", "医疗 + QA"),
+        "Bootstrap Ops" => tr(language, "labels + evidence", "标签 + 证据"),
+        "Evidence Hub" => tr(language, "context lookup", "上下文查询"),
+        "Provider Model Intake" => tr(language, "model candidate release", "模型候选发布"),
+        "Evidence Runtime" => tr(language, "document evidence", "文件证据"),
+        "Rules" => tr(language, "rule candidate release", "规则候选发布"),
+        "Models" => tr(language, "threshold evidence", "阈值证据"),
+        "Routing Policies" => tr(language, "execution routing", "执行路由"),
+        "Factor Factory" => tr(language, "feature readiness", "特征就绪"),
+        "Data Sources" => tr(language, "catalog & lineage", "目录与血缘"),
+        "Leads & Cases" => tr(language, "investigation queue", "调查队列"),
+        "Member Profile" => tr(language, "member context", "会员上下文"),
+        "Provider Risk" => tr(language, "provider signals", "Provider 信号"),
+        "Medical Review" => tr(language, "clinical review", "临床复核"),
+        "Audit Sampling" => tr(language, "sample governance", "抽样治理"),
+        "Knowledge Base" => tr(language, "confirmed evidence", "已确认案例"),
+        "Agent Investigator" => tr(language, "assistive agent", "辅助调查"),
+        "QA Review" => tr(language, "feedback closure", "反馈闭环"),
+        "Governance" => tr(language, "audit boundary", "审计边界"),
+        _ => tr(language, "module", "模块"),
     }
 }
 
@@ -2168,7 +2245,6 @@ fn module_icon_class(module: &str) -> &'static str {
         "Member Profile" => "icon-member",
         "Provider Risk" => "icon-provider",
         "Medical Review" => "icon-medical",
-        "TPA Demo Runner" => "icon-scoring",
         "Audit Sampling" => "icon-audit",
         "Knowledge Base" => "icon-knowledge",
         "Agent Investigator" => "icon-agent",
@@ -3530,250 +3606,6 @@ fn runtime_scoring_page() -> Html {
 #[derive(Properties, PartialEq)]
 struct RuntimeScoreProps {
     state: ApiState<ScoreResponse>,
-}
-#[function_component(TpaDemoRunnerPage)]
-fn tpa_demo_runner_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
-    let selected_case_id = use_state(|| TPA_DEMO_CASES[0].case_id.to_string());
-    let normalize_state = use_state(|| ApiState::<InboxNormalizeResponse>::Idle);
-    let score_state = use_state(|| ApiState::<ScoreResponse>::Idle);
-    let selected_case = tpa_demo_case_by_id((*selected_case_id).as_str());
-
-    let select_case = {
-        let selected_case_id = selected_case_id.clone();
-        let normalize_state = normalize_state.clone();
-        let score_state = score_state.clone();
-        Callback::from(move |case_id: String| {
-            selected_case_id.set(case_id);
-            normalize_state.set(ApiState::Idle);
-            score_state.set(ApiState::Idle);
-        })
-    };
-
-    let run_normalize = {
-        let api_key = api_key.clone();
-        let normalize_state = normalize_state.clone();
-        Callback::from(move |_| {
-            let api_key = (*api_key).clone();
-            let normalize_state = normalize_state.clone();
-            match parse_demo_payload(selected_case.inbox_payload, "inbox payload") {
-                Ok(payload) => {
-                    normalize_state.set(ApiState::Loading);
-                    spawn_local(async move {
-                        normalize_state.set(match normalize_claim(payload, api_key).await {
-                            Ok(response) => ApiState::Ready(response),
-                            Err(error) => ApiState::Failed(error),
-                        });
-                    });
-                }
-                Err(error) => normalize_state.set(ApiState::Failed(error)),
-            }
-        })
-    };
-
-    let run_scoring = {
-        let api_key = api_key.clone();
-        let score_state = score_state.clone();
-        Callback::from(move |_| {
-            let api_key = (*api_key).clone();
-            let score_state = score_state.clone();
-            match parse_demo_payload(selected_case.direct_payload, "direct scoring payload") {
-                Ok(payload) => {
-                    score_state.set(ApiState::Loading);
-                    spawn_local(async move {
-                        score_state.set(match score_canonical_claim(payload, api_key).await {
-                            Ok(response) => ApiState::Ready(response),
-                            Err(error) => ApiState::Failed(error),
-                        });
-                    });
-                }
-                Err(error) => score_state.set(ApiState::Failed(error)),
-            }
-        })
-    };
-
-    let run_full_demo = {
-        let api_key = api_key.clone();
-        let normalize_state = normalize_state.clone();
-        let score_state = score_state.clone();
-        Callback::from(move |_| {
-            let api_key = (*api_key).clone();
-            let normalize_state = normalize_state.clone();
-            let score_state = score_state.clone();
-            let inbox_payload =
-                match parse_demo_payload(selected_case.inbox_payload, "inbox payload") {
-                    Ok(payload) => payload,
-                    Err(error) => {
-                        normalize_state.set(ApiState::Failed(error));
-                        return;
-                    }
-                };
-            let direct_payload =
-                match parse_demo_payload(selected_case.direct_payload, "direct scoring payload") {
-                    Ok(payload) => payload,
-                    Err(error) => {
-                        score_state.set(ApiState::Failed(error));
-                        return;
-                    }
-                };
-            normalize_state.set(ApiState::Loading);
-            score_state.set(ApiState::Loading);
-            spawn_local(async move {
-                normalize_state.set(
-                    match normalize_claim(inbox_payload, api_key.clone()).await {
-                        Ok(response) => ApiState::Ready(response),
-                        Err(error) => ApiState::Failed(error),
-                    },
-                );
-                score_state.set(match score_canonical_claim(direct_payload, api_key).await {
-                    Ok(response) => ApiState::Ready(response),
-                    Err(error) => ApiState::Failed(error),
-                });
-            });
-        })
-    };
-
-    let normalize_hints = match &*normalize_state {
-        ApiState::Ready(response) => correction_hints_for(response),
-        _ => Vec::new(),
-    };
-
-    html! {
-        <section class="module-status tpa-demo-runner">
-            <div class="dashboard-header">
-                <div>
-                    <h2>{"TPA Demo Runner"}</h2>
-                    <p>{"Run checked-in TPA fixtures through intake normalization and direct scoring to explain the rule plus algorithm funnel."}</p>
-                </div>
-                <span class="status-pill">{"Demo UAT"}</span>
-            </div>
-
-            <section class="panel tpa-demo-command">
-                <div class="section-header compact">
-                    <div>
-                        <h3>{"Fixture Control"}</h3>
-                        <p>{"These cases are deterministic demo labels for UAT. They are not production claim truth labels."}</p>
-                    </div>
-                    <label class="compact-field">
-                        {"Dev API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                </div>
-                <div class="tpa-demo-picker">
-                    <div class="current-demo-case">
-                        <span>{"Selected case"}</span>
-                        <strong>{selected_case.title}</strong>
-                        <small>{selected_case.case_id}</small>
-                    </div>
-                    <div class="button-row">
-                        <button onclick={run_normalize.clone()} disabled={matches!(&*normalize_state, ApiState::Loading)}>
-                            {if matches!(&*normalize_state, ApiState::Loading) { "Normalizing..." } else { "Run intake normalize" }}
-                        </button>
-                        <button onclick={run_scoring.clone()} disabled={matches!(&*score_state, ApiState::Loading)}>
-                            {if matches!(&*score_state, ApiState::Loading) { "Scoring..." } else { "Run direct scoring" }}
-                        </button>
-                        <button onclick={run_full_demo} disabled={matches!(&*normalize_state, ApiState::Loading) || matches!(&*score_state, ApiState::Loading)}>
-                            {"Run full demo"}
-                        </button>
-                    </div>
-                </div>
-            </section>
-
-            <div class="tpa-demo-grid">
-                <section class="panel result-stack">
-                    <h3>{"Demo Cases"}</h3>
-                    <div class="tpa-case-list">
-                        {for TPA_DEMO_CASES.iter().map(|demo_case| {
-                            let case_id = demo_case.case_id.to_string();
-                            let select_case = select_case.clone();
-                            let is_active = demo_case.case_id == selected_case.case_id;
-                            html! {
-                                <button
-                                    class={classes!("tpa-case-button", is_active.then_some("active"))}
-                                    onclick={Callback::from(move |_| select_case.emit(case_id.clone()))}
-                                >
-                                    <span>{demo_case.title}</span>
-                                    <strong>{demo_case.expected_outcome.unwrap_or("normalize_blocker")}</strong>
-                                    <small>{demo_case.case_id}</small>
-                                </button>
-                            }
-                        })}
-                    </div>
-                </section>
-
-                <section class="panel result-stack">
-                    <h3>{"Expected Business Outcome"}</h3>
-                    <div class="demo-outcome-card">
-                        <span>{selected_case.case_id}</span>
-                        <strong>{selected_case.expected_outcome.unwrap_or("normalize_scoring_ready=false")}</strong>
-                        <p>{selected_case.purpose}</p>
-                    </div>
-                    <div class="summary-grid">
-                        <div><span>{"Direct payload"}</span><strong>{"claims/score"}</strong></div>
-                        <div><span>{"Inbox payload"}</span><strong>{"inbox normalize"}</strong></div>
-                        <div><span>{"Required evidence"}</span><strong>{if selected_case.expected_evidence.is_empty() { "none".into() } else { selected_case.expected_evidence.join(", ") }}</strong></div>
-                    </div>
-                    {tpa_demo_funnel_visual(selected_case)}
-                    <details>
-                        <summary>{"Direct scoring JSON"}</summary>
-                        <pre>{selected_case.direct_payload}</pre>
-                    </details>
-                    <details>
-                        <summary>{"TPA inbox JSON"}</summary>
-                        <pre>{selected_case.inbox_payload}</pre>
-                    </details>
-                </section>
-            </div>
-
-            <div class="inbox-grid">
-                <NormalizeResultView state={(*normalize_state).clone()} hints={normalize_hints} />
-                <RuntimeScoreView state={(*score_state).clone()} />
-            </div>
-        </section>
-    }
-}
-
-fn tpa_demo_case_by_id(case_id: &str) -> &'static TpaDemoCase {
-    TPA_DEMO_CASES
-        .iter()
-        .find(|demo_case| demo_case.case_id == case_id)
-        .unwrap_or(&TPA_DEMO_CASES[0])
-}
-
-fn parse_demo_payload(payload: &str, label: &str) -> Result<Value, String> {
-    serde_json::from_str::<Value>(payload)
-        .map_err(|error| format!("{label} JSON is invalid: {error}"))
-}
-
-fn tpa_demo_funnel_visual(demo_case: &TpaDemoCase) -> Html {
-    let outcome = demo_case.expected_outcome.unwrap_or("normalize_blocker");
-    html! {
-        <div class="tpa-funnel">
-            {tpa_funnel_step("TPA", "raw packet", demo_case.case_id)}
-            {tpa_funnel_step("Normalize", "field gate", if demo_case.expected_outcome.is_some() { "scoring candidate" } else { "not scoring ready" })}
-            {tpa_funnel_step("Rules", "hard controls", if demo_case.expected_evidence.is_empty() { "no evidence blocker" } else { "evidence required" })}
-            {tpa_funnel_step("Algorithms", "risk fusion", "model + anomaly + provider")}
-            {tpa_funnel_step("Outcome", "route", outcome)}
-        </div>
-    }
-}
-
-fn tpa_funnel_step(label: &str, caption: &str, value: &str) -> Html {
-    html! {
-        <div class="tpa-funnel-step">
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <small>{caption}</small>
-        </div>
-    }
 }
 
 #[function_component(RuntimeScoreView)]
@@ -8002,8 +7834,9 @@ fn qa_queue_card(item: &QaQueueItem) -> Html {
     let conclusion = item.qa_conclusion.as_deref().unwrap_or("pending");
     let issue = item.issue_type.as_deref().unwrap_or("pending");
     let feedback = item.feedback_target.as_deref().unwrap_or("not routed");
-    let evidence_count =
-        item.evidence_refs.len() + item.canonical_source_refs.len() + item.canonical_evidence_refs.len();
+    let evidence_count = item.evidence_refs.len()
+        + item.canonical_source_refs.len()
+        + item.canonical_evidence_refs.len();
 
     html! {
         <div class="factor-card qa-review-card">
@@ -9242,9 +9075,7 @@ fn pilot_configuration_summary(health: &HealthResponse) -> Html {
         .iter()
         .filter(|check| status_tone(&check.status) == "success")
         .count();
-    let needs_setup_count = configuration_checks
-        .len()
-        .saturating_sub(configured_count);
+    let needs_setup_count = configuration_checks.len().saturating_sub(configured_count);
 
     html! {
         <>

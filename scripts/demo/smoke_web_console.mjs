@@ -98,12 +98,12 @@ async function main() {
     assertContains(builtText, "Daily Work", "web console navigation bundle");
     assertContains(builtText, "Control Rooms", "web console navigation bundle");
     assertContains(builtText, "Intake Ops", "web console navigation bundle");
-    assertContains(builtText, "TPA Demo Runner", "web console demo runner bundle");
-    assertContains(builtText, "Run full demo", "web console demo runner bundle");
-    assertContains(builtText, "Fixture Control", "web console demo runner bundle");
-    assertContains(builtText, "Expected Business Outcome", "web console demo runner bundle");
-    assertContains(builtText, "pending_dental_xray", "web console demo fixture bundle");
-    assertContains(builtText, "inbox_missing_coverage_limit", "web console demo fixture bundle");
+    assertContains(builtText, "中文", "web console language toggle bundle");
+    assertContains(builtText, "实时运营", "web console language toggle bundle");
+    assertContains(builtText, "日常作业", "web console bilingual navigation bundle");
+    assertContains(builtText, "控制室", "web console bilingual navigation bundle");
+    assertContains(builtText, "线索与案件", "web console bilingual navigation bundle");
+    assertNotContains(builtText, "TPA Demo Runner", "web console business navigation bundle");
     assertContains(builtText, "Detection Releases", "web console navigation bundle");
     assertNotContains(builtText, "Advanced", "web console business navigation bundle");
     assertContains(builtText, "Provider Model Intake", "web console model release drilldown bundle");
