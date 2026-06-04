@@ -2328,6 +2328,210 @@ pub fn build_mlops_monitoring_plan(
     }))
 }
 
+pub fn build_mlops_monitoring_report(
+    model_key: &str,
+    model_version: &str,
+    artifact_evaluation_report_uri: &str,
+    shadow_report_uri: &str,
+    drift_report_uri: &str,
+    fairness_report_uri: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let model_key = required_non_empty("model_key", model_key)?;
+    let model_version = required_non_empty("model_version", model_version)?;
+    let artifact_evaluation_report_uri = required_non_empty(
+        "artifact_evaluation_report_uri",
+        artifact_evaluation_report_uri,
+    )?;
+    let shadow_report_uri = required_non_empty("shadow_report_uri", shadow_report_uri)?;
+    let drift_report_uri = required_non_empty("drift_report_uri", drift_report_uri)?;
+    let fairness_report_uri = required_non_empty("fairness_report_uri", fairness_report_uri)?;
+
+    let artifact_evaluation_report = read_json_report(artifact_evaluation_report_uri)?;
+    let shadow_report = read_json_report(shadow_report_uri)?;
+    let drift_report = read_json_report(drift_report_uri)?;
+    let fairness_report = read_json_report(fairness_report_uri)?;
+
+    let artifact_gate_status =
+        json_string(&artifact_evaluation_report, "gate_status").unwrap_or_else(|| "missing".into());
+    let rust_serving_status = json_string(&artifact_evaluation_report, "rust_serving_status")
+        .unwrap_or_else(|| "missing".into());
+    let latency_status = json_string(&artifact_evaluation_report, "latency_status")
+        .unwrap_or_else(|| "missing".into());
+    let p95_latency_ms = json_u64(&artifact_evaluation_report, "p95_latency_ms");
+    let shadow_status = json_string(&shadow_report, "status").unwrap_or_else(|| "missing".into());
+    let drift_status = json_string(&drift_report, "status").unwrap_or_else(|| "missing".into());
+    let fairness_status =
+        json_string(&fairness_report, "status").unwrap_or_else(|| "missing".into());
+
+    let mut triggers = Vec::new();
+    if artifact_gate_status != "passed" || rust_serving_status != "passed" {
+        triggers.push("rust_serving_artifact_evaluation_blocked");
+    }
+    if latency_status == "failed" {
+        triggers.push("rust_serving_latency_budget_failed");
+    }
+    if shadow_status != "passed" {
+        triggers.push("shadow_comparison_review_required");
+    }
+    match drift_status.as_str() {
+        "drift" => triggers.push("model_drift_detected"),
+        "watch" => triggers.push("model_drift_watch"),
+        _ => {}
+    }
+    if fairness_status != "passed" {
+        triggers.push("segment_fairness_review_required");
+    }
+
+    let retraining_recommendation =
+        if artifact_gate_status != "passed" || rust_serving_status != "passed" {
+            "blocked"
+        } else if latency_status == "failed"
+            || shadow_status != "passed"
+            || drift_status == "drift"
+            || fairness_status != "passed"
+        {
+            "prepare_retraining"
+        } else {
+            "monitor"
+        };
+    let overall_status = if retraining_recommendation == "blocked" {
+        "blocked"
+    } else if triggers.is_empty() {
+        "passed"
+    } else {
+        "watch"
+    };
+    let review_tasks = mlops_monitoring_review_tasks(model_key, model_version, &triggers);
+
+    let report = serde_json::json!({
+        "report_kind": "mlops_monitoring_report",
+        "report_version": 1,
+        "model_key": model_key,
+        "model_version": model_version,
+        "overall_status": overall_status,
+        "retraining_recommendation": retraining_recommendation,
+        "signals": {
+            "artifact_evaluation": {
+                "report_uri": artifact_evaluation_report_uri,
+                "gate_status": artifact_gate_status,
+                "rust_serving_status": rust_serving_status,
+                "latency_status": latency_status,
+                "p95_latency_ms": p95_latency_ms
+            },
+            "shadow": {
+                "report_uri": shadow_report_uri,
+                "status": shadow_status,
+                "comparison_count": json_u64(&shadow_report, "comparison_count"),
+                "average_abs_probability_delta": metric_at(&shadow_report, "average_abs_probability_delta"),
+                "max_abs_probability_delta": metric_at(&shadow_report, "max_abs_probability_delta")
+            },
+            "drift": {
+                "report_uri": drift_report_uri,
+                "status": drift_status,
+                "score_psi": metric_at(&drift_report, "score_psi"),
+                "max_feature_psi": metric_at(&drift_report, "max_feature_psi")
+            },
+            "fairness": {
+                "report_uri": fairness_report_uri,
+                "status": fairness_status,
+                "segment_count": fairness_report
+                    .get("segments")
+                    .and_then(|value| value.as_array())
+                    .map(|segments| segments.len())
+                    .unwrap_or(0)
+            }
+        },
+        "triggers": triggers,
+        "review_tasks": review_tasks,
+        "promotion_boundary": "monitoring can open review or retraining preparation only; it must not activate models, publish rules, or assign fraud labels",
+        "evidence_refs": [
+            format!("model_artifact_evaluations:{artifact_evaluation_report_uri}"),
+            format!("model_shadow_reports:{shadow_report_uri}"),
+            format!("model_drift_reports:{drift_report_uri}"),
+            format!("model_fairness_reports:{fairness_report_uri}")
+        ]
+    });
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create MLOps monitoring report output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir.as_ref().join("mlops_monitoring_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("mlops_monitoring_review_tasks.json"),
+        &report["review_tasks"],
+    )?;
+    Ok(report)
+}
+
+fn mlops_monitoring_review_tasks(
+    model_key: &str,
+    model_version: &str,
+    triggers: &[&str],
+) -> Vec<serde_json::Value> {
+    triggers
+        .iter()
+        .map(|trigger| {
+            let (review_queue, required_review) = match *trigger {
+                "rust_serving_artifact_evaluation_blocked"
+                | "rust_serving_latency_budget_failed" => {
+                    ("mlops_serving_review", "review Rust serving runtime evidence")
+                }
+                "model_drift_detected" | "model_drift_watch" => {
+                    ("mlops_drift_review", "review drift and retraining readiness")
+                }
+                "shadow_comparison_review_required" => {
+                    ("mlops_shadow_review", "review shadow traffic comparison")
+                }
+                "segment_fairness_review_required" => {
+                    ("model_governance_review", "review segment fairness evidence")
+                }
+                _ => ("mlops_review", "review MLOps monitoring trigger"),
+            };
+            serde_json::json!({
+                "task_kind": "mlops_monitoring_review",
+                "model_key": model_key,
+                "model_version": model_version,
+                "trigger": trigger,
+                "review_queue": review_queue,
+                "required_review": required_review,
+                "decision_options": ["acknowledge_monitoring", "prepare_retraining", "open_governance_review"]
+            })
+        })
+        .collect()
+}
+
+fn read_json_report(uri: &str) -> anyhow::Result<serde_json::Value> {
+    let path = Path::new(uri);
+    let report_json =
+        fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
+    serde_json::from_str(&report_json).with_context(|| format!("parse report {}", path.display()))
+}
+
+fn json_string(value: &serde_json::Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+}
+
+fn json_u64(value: &serde_json::Value, key: &str) -> Option<u64> {
+    value.get(key).and_then(|value| {
+        value
+            .as_u64()
+            .or_else(|| value.as_str().and_then(|value| value.parse::<u64>().ok()))
+    })
+}
+
 pub fn rank_automl_candidates(
     validation_reports: &[String],
     output_dir: impl AsRef<Path>,
@@ -5454,6 +5658,148 @@ mod tests {
         assert_eq!(
             plan["jobs"][4]["label_delay_report_uri"],
             "s3://fwa-models/baseline_fwa/0.2.0/label_delay_report.json"
+        );
+    }
+
+    #[test]
+    fn builds_mlops_monitoring_report_from_runtime_reports() {
+        let root = temp_root("mlops-monitoring-report");
+        let artifact_eval = root.join("artifact-evaluation.json");
+        let shadow = root.join("shadow.json");
+        let drift = root.join("drift.json");
+        let fairness = root.join("fairness.json");
+        write_json(
+            artifact_eval.clone(),
+            &serde_json::json!({
+                "report_kind": "model_artifact_evaluation",
+                "gate_status": "passed",
+                "rust_serving_status": "passed",
+                "latency_status": "passed",
+                "p95_latency_ms": 18
+            }),
+        )
+        .unwrap();
+        write_json(
+            shadow.clone(),
+            &serde_json::json!({
+                "status": "passed",
+                "comparison_count": 100,
+                "average_abs_probability_delta": 0.08,
+                "max_abs_probability_delta": 0.18
+            }),
+        )
+        .unwrap();
+        write_json(
+            drift.clone(),
+            &serde_json::json!({
+                "status": "stable",
+                "score_psi": 0.04,
+                "max_feature_psi": 0.06
+            }),
+        )
+        .unwrap();
+        write_json(
+            fairness.clone(),
+            &serde_json::json!({
+                "status": "passed",
+                "segments": [
+                    {"segment_column": "provider_type", "segment_value": "clinic"}
+                ]
+            }),
+        )
+        .unwrap();
+
+        let report = build_mlops_monitoring_report(
+            "baseline_fwa",
+            "0.2.0",
+            &artifact_eval.to_string_lossy(),
+            &shadow.to_string_lossy(),
+            &drift.to_string_lossy(),
+            &fairness.to_string_lossy(),
+            root.join("out"),
+        )
+        .expect("mlops monitoring report");
+
+        assert_eq!(report["report_kind"], "mlops_monitoring_report");
+        assert_eq!(report["overall_status"], "passed");
+        assert_eq!(report["retraining_recommendation"], "monitor");
+        assert_eq!(
+            report["signals"]["artifact_evaluation"]["p95_latency_ms"],
+            18
+        );
+        assert_eq!(report["signals"]["fairness"]["segment_count"], 1);
+        assert!(report["triggers"].as_array().unwrap().is_empty());
+        assert!(root.join("out/mlops_monitoring_report.json").is_file());
+        assert!(root
+            .join("out/mlops_monitoring_review_tasks.json")
+            .is_file());
+    }
+
+    #[test]
+    fn mlops_monitoring_report_opens_reviews_for_drift_and_latency() {
+        let root = temp_root("mlops-monitoring-report-watch");
+        let artifact_eval = root.join("artifact-evaluation.json");
+        let shadow = root.join("shadow.json");
+        let drift = root.join("drift.json");
+        let fairness = root.join("fairness.json");
+        write_json(
+            artifact_eval.clone(),
+            &serde_json::json!({
+                "gate_status": "passed",
+                "rust_serving_status": "passed",
+                "latency_status": "failed",
+                "p95_latency_ms": 250
+            }),
+        )
+        .unwrap();
+        write_json(
+            shadow.clone(),
+            &serde_json::json!({
+                "status": "watch",
+                "comparison_count": 100,
+                "average_abs_probability_delta": 0.42
+            }),
+        )
+        .unwrap();
+        write_json(
+            drift.clone(),
+            &serde_json::json!({
+                "status": "drift",
+                "score_psi": 0.34,
+                "max_feature_psi": 0.41
+            }),
+        )
+        .unwrap();
+        write_json(
+            fairness.clone(),
+            &serde_json::json!({
+                "status": "passed",
+                "segments": []
+            }),
+        )
+        .unwrap();
+
+        let report = build_mlops_monitoring_report(
+            "baseline_fwa",
+            "0.2.0",
+            &artifact_eval.to_string_lossy(),
+            &shadow.to_string_lossy(),
+            &drift.to_string_lossy(),
+            &fairness.to_string_lossy(),
+            root.join("out"),
+        )
+        .expect("mlops monitoring report");
+
+        assert_eq!(report["overall_status"], "watch");
+        assert_eq!(report["retraining_recommendation"], "prepare_retraining");
+        let triggers = report["triggers"].as_array().unwrap();
+        assert!(triggers.contains(&serde_json::json!("rust_serving_latency_budget_failed")));
+        assert!(triggers.contains(&serde_json::json!("model_drift_detected")));
+        assert!(triggers.contains(&serde_json::json!("shadow_comparison_review_required")));
+        assert_eq!(report["review_tasks"].as_array().unwrap().len(), 3);
+        assert_eq!(
+            report["promotion_boundary"],
+            "monitoring can open review or retraining preparation only; it must not activate models, publish rules, or assign fraud labels"
         );
     }
 

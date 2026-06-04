@@ -553,6 +553,25 @@ The output is a `scheduled_mlops_monitoring` plan with five jobs:
 scheduler, so customer or platform schedulers can run it without giving the
 application direct control over production ML infrastructure.
 
+After the scheduled jobs publish their reports, summarize them into the Rust
+Auto MLOps monitoring decision:
+
+```bash
+cargo run --locked -p worker -- build-mlops-monitoring-report \
+  --model-key baseline_fwa \
+  --model-version 0.2.0 \
+  --artifact-evaluation-report data/model-artifacts/baseline_fwa/0.2.0/artifact-evaluation/model_artifact_evaluation_report.json \
+  --shadow-report data/model-artifacts/baseline_fwa/0.2.0/shadow_report.json \
+  --drift-report data/model-artifacts/baseline_fwa/0.2.0/drift_report.json \
+  --fairness-report data/model-artifacts/baseline_fwa/0.2.0/fairness_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring
+```
+
+The worker writes `mlops_monitoring_report.json` and
+`mlops_monitoring_review_tasks.json`. This report may recommend monitoring,
+review, or retraining preparation, but it must not activate models, publish
+rules, or assign fraud labels.
+
 ## Stage 7: Promotion Gates
 
 Purpose: block candidate models until the required evidence exists.
@@ -744,7 +763,9 @@ segment fairness review, reviewer disagreement review, and label delay review
 jobs. It uses the same governed Parquet dataset manifest and derives the
 expected report URIs from the active serving artifact location. A production
 scheduler should execute the plan and publish the resulting reports back into
-the model governance evidence set.
+the model governance evidence set. The worker can then run
+`build-mlops-monitoring-report` over those reports to open review tasks or
+prepare retraining without automatic promotion.
 
 ## Stage 12: Retraining Or Rollback
 

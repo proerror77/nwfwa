@@ -101,6 +101,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
   peer features, then create anomaly review tasks without assigning labels.
 - `build-mlops-monitoring-plan`: define scheduled shadow, drift, fairness,
   reviewer-disagreement, and label-delay checks.
+- `build-mlops-monitoring-report`: combine Rust artifact evaluation, shadow,
+  drift, and fairness reports into one monitoring decision with review tasks and
+  retraining preparation triggers.
 
 ## Serving Architecture
 
@@ -143,16 +146,17 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer clustering has a Rust-native demo
   workflow; broader graph/member/claim clustering and deep-learning serving
   remain future work.
-- 68% for Auto MLOps: worker can build feature-set manifests, enrich
+- 70% for Auto MLOps: worker can build feature-set manifests, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, mine explainable rule candidates,
-  and backtest those candidates into human-review evidence, while API promotion
-  gates now require Rust feature-set materialization evidence, worker ranking
-  requires Rust feature-set and Rust serving evaluation evidence, and
-  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist; API
-  retraining output now accepts governed serving manifests, and the console has
-  provider model release, promotion review, activation, and rollback actions.
-  Artifact report drill-down and live monitoring surfaces still need hardening.
+  backtest those candidates into human-review evidence, and summarize live
+  monitoring reports into review/retraining triggers, while API promotion gates
+  now require Rust feature-set materialization evidence, worker ranking requires
+  Rust feature-set and Rust serving evaluation evidence, and trainer-side ONNX
+  parity reports and unlabeled anomaly review tasks exist; API retraining output
+  now accepts governed serving manifests, and the console has provider model
+  release, promotion review, activation, and rollback actions. Broader graph,
+  member, and claim clustering still need hardening.
 - 72% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation
