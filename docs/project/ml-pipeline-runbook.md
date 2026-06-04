@@ -352,6 +352,12 @@ Behavior:
 - if the trainer also returned a feature hash, the worker preserves it as
   `trainer_feature_reproducibility_hash` while making the Rust feature-set hash
   the promotion-gate hash;
+- when the trainer returns `serving_manifest_uri`, the worker runs the Rust
+  serving artifact evaluator before API registration, writes
+  `artifact-evaluation/model_artifact_evaluation_report.json`, and injects
+  `model_artifact_evaluation_status`, `model_artifact_evaluation_report_uri`,
+  `rust_serving_status`, `rust_serving_latency_status`, and
+  `rust_serving_p95_latency_ms` into `metrics_json`;
 - the worker posts the trainer output to
   `/api/v1/ops/model-retraining-jobs/{job_id}/output`;
 - the API creates a candidate model version and evaluation record if the output
@@ -411,6 +417,11 @@ optional signature, Rust scorer execution, and P95 latency. The worker writes
 `model_artifact_evaluation_report.json` with `gate_status`, blocking reasons,
 sample scores, probability deltas, latency, and evidence refs. The report is
 activation-review evidence only; it does not activate the model.
+
+`run-retraining-job` calls this evaluator automatically when the trainer output
+includes `serving_manifest_uri`. The standalone command remains useful for
+reruns, tighter parity thresholds, larger sample windows, or evaluating an
+externally supplied artifact before it is registered.
 
 ## Stage 6.7: Explainable Rule Candidate Mining
 
@@ -499,6 +510,11 @@ evidence. A generic `feature_store_materialization_status = passed` is not
 enough; the evaluation metrics must also include
 `rust_feature_set_status = passed` and a non-empty
 `rust_feature_set_manifest_uri`.
+
+AutoML ranking also treats Rust serving evaluation as required evidence. A
+candidate can rank for human review only after its metrics include a passing
+`model_artifact_evaluation_status` and `rust_serving_status`; these signals are
+normally produced by `run-retraining-job` when `serving_manifest_uri` is present.
 
 External handoff command:
 

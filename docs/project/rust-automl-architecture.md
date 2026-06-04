@@ -83,7 +83,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `build-training-handoff`: create the reproducible external training contract.
 - `run-retraining-job`: claim a candidate job, execute the trainer, and register
   output, enriching the trainer payload with the Rust feature-set manifest URI
-  and reproducibility hash before API registration.
+  and reproducibility hash before API registration; when the trainer returns a
+  serving manifest, it also runs Rust serving artifact evaluation and attaches
+  the report URI plus serving latency/status evidence.
 - `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
   LightGBM, and anomaly candidates, then open human-review recommendations
   without activating any model.
@@ -131,7 +133,7 @@ Current repository completion for this target architecture is approximately:
 - 63% for governance skeleton: model jobs, approval gates, worker handoff,
   Rust feature-set promotion gating, monitoring-plan contract, and
   documentation exist.
-- 55% for data lifecycle: labeled public/demo manifests, profiling, and
+- 56% for data lifecycle: labeled public/demo manifests, profiling, and
   Rust-built feature-set manifests exist, and worker-driven retraining now
   injects Rust feature-set evidence into candidate registration; Rust-generated
   labeled/unlabeled demo packs now cover the missing dataset shape.
@@ -141,23 +143,25 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer clustering has a Rust-native demo
   workflow; broader graph/member/claim clustering and deep-learning serving
   remain future work.
-- 62% for Auto MLOps: worker can build feature-set manifests, enrich
-  retraining outputs with Rust feature-set evidence, rank candidates, evaluate
-  serving artifacts, mine explainable rule candidates, and backtest those
-  candidates into human-review evidence, while API promotion gates now require
-  Rust feature-set materialization evidence, worker ranking requires Rust
-  feature-set and Rust serving evaluation evidence, and trainer-side ONNX parity
-  reports and unlabeled anomaly review tasks exist; activation workflows and
-  UI/API review surfaces still need implementation.
-- 70% for Rust ONNX serving: serving-manifest validation, checksum/signature
+- 65% for Auto MLOps: worker can build feature-set manifests, enrich
+  retraining outputs with Rust feature-set and Rust serving evaluation evidence,
+  rank candidates, evaluate serving artifacts, mine explainable rule candidates,
+  and backtest those candidates into human-review evidence, while API promotion
+  gates now require Rust feature-set materialization evidence, worker ranking
+  requires Rust feature-set and Rust serving evaluation evidence, and
+  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist;
+  activation workflows and UI/API review surfaces still need implementation.
+- 72% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
-  extraction are implemented, and the worker can create Rust serving evaluation
-  evidence; production cache/reuse strategy, broader ONNX fixture tests, and
-  live latency monitoring still need hardening.
+  extraction are implemented, and the worker now creates Rust serving evaluation
+  evidence automatically on retraining registration when a serving manifest is
+  present; production cache/reuse strategy, broader ONNX fixture tests, and live
+  latency monitoring still need hardening.
 
 The runtime now has a serving-manifest boundary for Rust logistic artifacts and
 real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The worker
 now has an artifact-evaluation gate for Rust serving parity and latency
-evidence before a candidate can enter activation review. The next
-highest-leverage implementation is wiring those reports into API/UI model
-promotion gates.
+evidence before a candidate can enter activation review, and `run-retraining-job`
+attaches that evidence before candidate registration when the trainer returns a
+serving manifest. The next highest-leverage implementation is wiring those
+reports into API/UI model promotion review surfaces.
