@@ -1,0 +1,44 @@
+{
+  "pack_kind": "rust_automl_demo_datasets",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "output_dir": "data/rust-automl-demo",
+  "labeled_manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
+  "unlabeled_manifest_uris": [
+    "data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json",
+    "data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json"
+  ],
+  "dataset_manifests": [
+    {
+      "dataset_key": "rust_demo_claim_risk_labeled",
+      "sample_grain": "claim",
+      "label_policy": "weak_rust_demo_label_not_production_evidence",
+      "label_column": "confirmed_fwa",
+      "manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
+      "split_count": 3,
+      "row_count": 16
+    },
+    {
+      "dataset_key": "rust_demo_claim_shadow_unlabeled",
+      "sample_grain": "claim",
+      "label_policy": "unlabeled_shadow_scoring_only",
+      "manifest_uri": "data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json",
+      "split_count": 1,
+      "row_count": 6
+    },
+    {
+      "dataset_key": "rust_demo_provider_peer_unlabeled",
+      "sample_grain": "provider_month",
+      "label_policy": "unlabeled_clustering_discovery_only",
+      "manifest_uri": "data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+      "split_count": 1,
+      "row_count": 6
+    }
+  ],
+  "governance_boundary": "demo data only; unlabeled datasets cannot train supervised models; labeled data is weak demo evidence only",
+  "next_worker_commands": [
+    "cargo run --locked -p worker -- profile-parquet --manifest data/rust-automl-demo/labeled_claim_risk/manifest.json --output-dir data/rust-automl-demo/labeled_claim_risk/profile",
+    "cargo run --locked -p worker -- build-feature-set --manifest data/rust-automl-demo/labeled_claim_risk/manifest.json --output-dir data/rust-automl-demo/labeled_claim_risk/feature-set",
+    "cargo run --locked -p worker -- build-training-handoff --manifest data/rust-automl-demo/labeled_claim_risk/manifest.json --artifact-base-uri s3://fwa-models --model-key baseline_fwa --base-model-version 0.1.0 --job-id model_retraining_job_1 --actor trainer-worker",
+    "cargo run --locked -p worker -- cluster-provider-peers --manifest data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json --output-dir data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters"
+  ]
+}

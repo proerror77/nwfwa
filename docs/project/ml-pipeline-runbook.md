@@ -180,6 +180,10 @@ cargo run --locked -p worker -- build-demo-ml-datasets \
   --dataset-version 2026-06-rust-automl-demo
 ```
 
+A checked-in demo pack already exists under `data/rust-automl-demo` for local
+verification. Regenerate it with the command above when the worker dataset
+contract changes.
+
 This writes:
 
 - `labeled_claim_risk/manifest.json`: one labeled claim-risk dataset with

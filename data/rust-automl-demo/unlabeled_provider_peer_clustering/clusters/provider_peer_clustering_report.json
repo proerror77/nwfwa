@@ -1,0 +1,151 @@
+{
+  "report_kind": "provider_peer_clustering",
+  "report_version": 1,
+  "dataset_key": "rust_demo_provider_peer_unlabeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "algorithm": "rust_standardized_kmeans_v1",
+  "label_policy": "unlabeled_clustering_discovery_only",
+  "governance_boundary": "unlabeled clustering creates anomaly review candidates only; it must not create confirmed FWA labels or automatic claim disposition",
+  "feature_columns": [
+    "claim_count",
+    "avg_claim_amount",
+    "high_cost_rate",
+    "peer_z_score",
+    "graph_degree"
+  ],
+  "cluster_count": 3,
+  "cluster_summaries": [
+    {
+      "cluster_id": 0,
+      "provider_count": 2,
+      "average_outlier_score": 0.3574,
+      "average_claim_count": 48.0,
+      "average_high_cost_rate": 0.09
+    },
+    {
+      "cluster_id": 1,
+      "provider_count": 1,
+      "average_outlier_score": 0.0,
+      "average_claim_count": 61.0,
+      "average_high_cost_rate": 0.03
+    },
+    {
+      "cluster_id": 2,
+      "provider_count": 3,
+      "average_outlier_score": 0.7451,
+      "average_claim_count": 135.6667,
+      "average_high_cost_rate": 0.4067
+    }
+  ],
+  "provider_assignments": [
+    {
+      "provider_id": "PRV-201",
+      "cohort_key": "orthopedic_urban",
+      "service_month": "2026-04",
+      "cluster_id": 0,
+      "outlier_score": 0.3574,
+      "anomaly_candidate": false
+    },
+    {
+      "provider_id": "PRV-202",
+      "cohort_key": "orthopedic_urban",
+      "service_month": "2026-04",
+      "cluster_id": 2,
+      "outlier_score": 0.0605,
+      "anomaly_candidate": false
+    },
+    {
+      "provider_id": "PRV-203",
+      "cohort_key": "primary_care_suburban",
+      "service_month": "2026-04",
+      "cluster_id": 1,
+      "outlier_score": 0.0,
+      "anomaly_candidate": false
+    },
+    {
+      "provider_id": "PRV-204",
+      "cohort_key": "primary_care_suburban",
+      "service_month": "2026-04",
+      "cluster_id": 2,
+      "outlier_score": 1.1089,
+      "anomaly_candidate": true
+    },
+    {
+      "provider_id": "PRV-205",
+      "cohort_key": "imaging_urban",
+      "service_month": "2026-04",
+      "cluster_id": 0,
+      "outlier_score": 0.3574,
+      "anomaly_candidate": false
+    },
+    {
+      "provider_id": "PRV-206",
+      "cohort_key": "imaging_urban",
+      "service_month": "2026-04",
+      "cluster_id": 2,
+      "outlier_score": 1.066,
+      "anomaly_candidate": true
+    }
+  ],
+  "anomaly_candidates": [
+    {
+      "provider_id": "PRV-204",
+      "cohort_key": "primary_care_suburban",
+      "service_month": "2026-04",
+      "cluster_id": 2,
+      "outlier_score": 1.1089,
+      "reason": "Provider-month is far from its peer-cluster centroid; review as an anomaly candidate, not a confirmed FWA label.",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_peer_cluster:rust_demo_provider_peer_unlabeled:PRV-204"
+      ]
+    },
+    {
+      "provider_id": "PRV-206",
+      "cohort_key": "imaging_urban",
+      "service_month": "2026-04",
+      "cluster_id": 2,
+      "outlier_score": 1.066,
+      "reason": "Provider-month is far from its peer-cluster centroid; review as an anomaly candidate, not a confirmed FWA label.",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_peer_cluster:rust_demo_provider_peer_unlabeled:PRV-206"
+      ]
+    }
+  ],
+  "review_tasks": [
+    {
+      "task_kind": "provider_peer_anomaly_review",
+      "provider_id": "PRV-204",
+      "review_queue": "provider_anomaly_candidate_review",
+      "required_review": "human_review_required_before_case_creation_or_label_assignment",
+      "decision_options": [
+        "dismiss_as_peer_variation",
+        "request_more_evidence",
+        "open_investigation_candidate"
+      ],
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_peer_cluster:rust_demo_provider_peer_unlabeled:PRV-204"
+      ]
+    },
+    {
+      "task_kind": "provider_peer_anomaly_review",
+      "provider_id": "PRV-206",
+      "review_queue": "provider_anomaly_candidate_review",
+      "required_review": "human_review_required_before_case_creation_or_label_assignment",
+      "decision_options": [
+        "dismiss_as_peer_variation",
+        "request_more_evidence",
+        "open_investigation_candidate"
+      ],
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+        "provider_peer_cluster:rust_demo_provider_peer_unlabeled:PRV-206"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json"
+  ]
+}

@@ -1,0 +1,33 @@
+{
+  "business_domain": "health_fwa",
+  "dataset_key": "rust_demo_provider_peer_unlabeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "description": "Rust-generated provider peer features for clustering and anomaly discovery exercises.",
+  "display_name": "Rust Demo Provider Peer Clustering Unlabeled",
+  "entity_keys": [
+    "provider_id"
+  ],
+  "governance": {
+    "allowed_uses": [
+      "provider_peer_clustering",
+      "anomaly_candidate_discovery",
+      "manual_review_prioritization_demo"
+    ],
+    "blocked_uses": [
+      "supervised_training",
+      "confirmed_fwa_labeling",
+      "automatic_claim_disposition"
+    ]
+  },
+  "label_policy": "unlabeled_clustering_discovery_only",
+  "owner": "ml-ops",
+  "sample_grain": "provider_month",
+  "splits": [
+    {
+      "data_uri": "split=analysis/",
+      "split_name": "analysis"
+    }
+  ],
+  "status": "demo_only",
+  "time_split_field": "service_month"
+}

@@ -1,0 +1,20 @@
+[
+  {
+    "split_name": "train",
+    "row_count": 8,
+    "positive_count": 4,
+    "negative_count": 4
+  },
+  {
+    "split_name": "validation",
+    "row_count": 4,
+    "positive_count": 2,
+    "negative_count": 2
+  },
+  {
+    "split_name": "out_of_time",
+    "row_count": 4,
+    "positive_count": 2,
+    "negative_count": 2
+  }
+]

@@ -1,0 +1,86 @@
+{
+  "manifest_kind": "rust_feature_set_manifest",
+  "manifest_version": 1,
+  "feature_set_id": "rust_demo_claim_risk_labeled_features_v1",
+  "dataset_key": "rust_demo_claim_risk_labeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "source_manifest_uri": "data/rust-automl-demo/labeled_claim_risk/manifest.json",
+  "sample_grain": "claim",
+  "label_column": "confirmed_fwa",
+  "entity_keys": [
+    "claim_id",
+    "member_id",
+    "policy_id",
+    "provider_id"
+  ],
+  "feature_columns": [
+    {
+      "name": "amount_to_limit_ratio",
+      "logical_type": "Float64",
+      "nullable": false,
+      "source": "parquet_manifest_column"
+    },
+    {
+      "name": "claim_amount",
+      "logical_type": "Float64",
+      "nullable": false,
+      "source": "parquet_manifest_column"
+    },
+    {
+      "name": "diagnosis_procedure_mismatch",
+      "logical_type": "Int8",
+      "nullable": false,
+      "source": "parquet_manifest_column"
+    },
+    {
+      "name": "high_cost_item_ratio",
+      "logical_type": "Float64",
+      "nullable": false,
+      "source": "parquet_manifest_column"
+    },
+    {
+      "name": "item_count",
+      "logical_type": "Int32",
+      "nullable": false,
+      "source": "parquet_manifest_column"
+    },
+    {
+      "name": "peer_percentile",
+      "logical_type": "Float64",
+      "nullable": false,
+      "source": "parquet_manifest_column"
+    },
+    {
+      "name": "provider_risk_tier",
+      "logical_type": "Int32",
+      "nullable": false,
+      "source": "parquet_manifest_column"
+    }
+  ],
+  "split_summaries": [
+    {
+      "split_name": "train",
+      "row_count": 8,
+      "positive_count": 4,
+      "negative_count": 4
+    },
+    {
+      "split_name": "validation",
+      "row_count": 4,
+      "positive_count": 2,
+      "negative_count": 2
+    },
+    {
+      "split_name": "out_of_time",
+      "row_count": 4,
+      "positive_count": 2,
+      "negative_count": 2
+    }
+  ],
+  "feature_reproducibility_hash": "sha256:b26817abcde8c2009bab16230c3ff99e61257853945ff0cf200702bcac60167b",
+  "governance_boundary": "feature set is training and evaluation evidence only; it does not approve labels, promote models, or publish rules",
+  "evidence_refs": [
+    "dataset_manifest:data/rust-automl-demo/labeled_claim_risk/manifest.json",
+    "feature_materialization:rust_worker_build_feature_set"
+  ]
+}
