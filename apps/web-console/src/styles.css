@@ -4753,6 +4753,55 @@ pre {
   background: #ffffff;
 }
 
+.qa-review-card {
+  gap: 12px;
+}
+
+.qa-evidence-details {
+  margin-top: 4px;
+  padding: 10px 12px;
+  background: #f8fbff;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.qa-evidence-details summary {
+  cursor: pointer;
+  color: #17436f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.qa-evidence-detail-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.qa-evidence-detail-grid > div {
+  display: grid;
+  gap: 4px;
+  padding: 8px;
+  background: #ffffff;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.qa-evidence-detail-grid span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.qa-evidence-detail-grid small {
+  max-height: 92px;
+  overflow: auto;
+  overflow-wrap: anywhere;
+  color: #425b78;
+  line-height: 1.35;
+}
+
 .audit-sampling-cockpit {
   display: grid;
   grid-template-columns: minmax(200px, 0.76fr) minmax(460px, 1.58fr) minmax(220px, 0.86fr);

@@ -7351,25 +7351,7 @@ fn qa_review_view(props: &QaReviewProps) -> Html {
                                 <p class="empty">{"No sampled QA cases in the queue."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.queue.iter().take(8).map(|item| html! {
-                                        <div class="factor-card">
-                                            <div>
-                                                <strong>{format!("{} / {}", item.qa_case_id, item.claim_id)}</strong>
-                                                <span>{format!("{} / {} / {}", item.scheme_family, item.rag, item.assignment_queue)}</span>
-                                            </div>
-                                            <div class="summary-grid">
-                                                <div><span>{"Risk Score"}</span><strong>{item.risk_score}</strong></div>
-                                                <div><span>{"Status"}</span><strong>{&item.status}</strong></div>
-                                                <div><span>{"Reviewer"}</span><strong>{&item.reviewer}</strong></div>
-                                                <div><span>{"Conclusion"}</span><strong>{item.qa_conclusion.as_deref().unwrap_or("pending")}</strong></div>
-                                                <div><span>{"Issue"}</span><strong>{item.issue_type.as_deref().unwrap_or("pending")}</strong></div>
-                                                <div><span>{"Feedback"}</span><strong>{item.feedback_target.as_deref().unwrap_or("none")}</strong></div>
-                                            </div>
-                                            <small>{format!("sample: {} / lead: {}", item.sample_id, item.lead_id)}</small>
-                                            <small>{format!("evidence: {}", refs_label(&item.evidence_refs))}</small>
-                                            <small>{format!("canonical: {} / {}", refs_label(&item.canonical_source_refs), refs_label(&item.canonical_evidence_refs))}</small>
-                                        </div>
-                                    })}
+                                    {for snapshot.queue.iter().take(8).map(qa_queue_card)}
                                 </div>
                             }
                         </section>
@@ -7380,26 +7362,7 @@ fn qa_review_view(props: &QaReviewProps) -> Html {
                                 <p class="empty">{"No QA feedback items returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.feedback_items.iter().take(8).map(|item| html! {
-                                        <div class="factor-card">
-                                            <div>
-                                                <strong>{format!("{} / {}", item.feedback_id, item.feedback_target)}</strong>
-                                                <span>{format!("{} / {} / {}", item.priority, item.status, item.source)}</span>
-                                            </div>
-                                            <p>{&item.summary}</p>
-                                            <div class="summary-grid">
-                                                <div><span>{"Claim"}</span><strong>{&item.claim_id}</strong></div>
-                                                <div><span>{"QA Case"}</span><strong>{&item.qa_case_id}</strong></div>
-                                                <div><span>{"Issue"}</span><strong>{&item.issue_type}</strong></div>
-                                                <div><span>{"Conclusion"}</span><strong>{&item.qa_conclusion}</strong></div>
-                                                <div><span>{"Notes"}</span><strong>{yes_no(item.note_present)}</strong></div>
-                                                <div><span>{"Updated By"}</span><strong>{item.status_updated_by.as_deref().unwrap_or("pending")}</strong></div>
-                                            </div>
-                                            <small>{format!("created: {} / updated: {}", item.created_at.as_deref().unwrap_or("unknown"), item.status_updated_at.as_deref().unwrap_or("pending"))}</small>
-                                            <small>{format!("status audit: {}", item.status_audit_id.as_deref().unwrap_or("pending"))}</small>
-                                            <small>{format!("evidence: {} / status evidence: {}", refs_label(&item.evidence_refs), refs_label(&item.status_evidence_refs))}</small>
-                                        </div>
-                                    })}
+                                    {for snapshot.feedback_items.iter().take(8).map(qa_feedback_card)}
                                 </div>
                             }
                         </section>
@@ -7447,12 +7410,19 @@ fn qa_feedback_loop_cockpit(snapshot: &QaReviewSnapshot) -> Html {
     let status_audit = selected_feedback
         .and_then(|item| item.status_audit_id.as_deref())
         .unwrap_or("audit pending");
-    let evidence_ref = selected_queue
-        .and_then(|item| item.evidence_refs.first().map(String::as_str))
-        .or_else(|| {
-            selected_feedback.and_then(|item| item.evidence_refs.first().map(String::as_str))
+    let evidence_count = selected_queue
+        .map(|item| {
+            item.evidence_refs.len()
+                + item.canonical_source_refs.len()
+                + item.canonical_evidence_refs.len()
         })
-        .unwrap_or("evidence pending");
+        .or_else(|| selected_feedback.map(|item| item.evidence_refs.len()))
+        .unwrap_or(0);
+    let evidence_label = if evidence_count == 0 {
+        "evidence pending".into()
+    } else {
+        format!("{evidence_count} evidence refs")
+    };
     html! {
         <section class="panel result-stack">
             <div class="section-header">
@@ -7505,7 +7475,7 @@ fn qa_feedback_loop_cockpit(snapshot: &QaReviewSnapshot) -> Html {
                     </div>
                     <div class="qa-node evidence">
                         <span>{"Canonical evidence"}</span>
-                        <strong>{evidence_ref}</strong>
+                        <strong>{evidence_label}</strong>
                     </div>
                     <div class="qa-node audit">
                         <span>{"Audit status"}</span>
@@ -7522,6 +7492,88 @@ fn qa_feedback_loop_cockpit(snapshot: &QaReviewSnapshot) -> Html {
                 </aside>
             </div>
         </section>
+    }
+}
+
+fn qa_queue_card(item: &QaQueueItem) -> Html {
+    let conclusion = item.qa_conclusion.as_deref().unwrap_or("pending");
+    let issue = item.issue_type.as_deref().unwrap_or("pending");
+    let feedback = item.feedback_target.as_deref().unwrap_or("not routed");
+    let evidence_count =
+        item.evidence_refs.len() + item.canonical_source_refs.len() + item.canonical_evidence_refs.len();
+
+    html! {
+        <div class="factor-card qa-review-card">
+            <div>
+                <strong>{format!("{} / {}", item.qa_case_id, item.claim_id)}</strong>
+                <span>{format!("{} / {} / {}", item.scheme_family, item.rag, item.assignment_queue)}</span>
+            </div>
+            <div class="summary-grid">
+                <div><span>{"Risk Score"}</span><strong>{item.risk_score}</strong></div>
+                <div><span>{"Status"}</span><strong>{&item.status}</strong></div>
+                <div><span>{"Reviewer"}</span><strong>{&item.reviewer}</strong></div>
+                <div><span>{"Conclusion"}</span><strong>{conclusion}</strong></div>
+                <div><span>{"Issue"}</span><strong>{issue}</strong></div>
+                <div><span>{"Feedback target"}</span><strong>{feedback}</strong></div>
+                <div><span>{"Evidence package"}</span><strong>{format!("{} refs", evidence_count)}</strong></div>
+                <div><span>{"Sample"}</span><strong>{&item.sample_id}</strong></div>
+            </div>
+            <small>{format!("lead: {}", item.lead_id)}</small>
+            {qa_evidence_details(
+                "QA evidence detail",
+                &[
+                    ("Operational refs", &item.evidence_refs),
+                    ("Source trace", &item.canonical_source_refs),
+                    ("Canonical evidence", &item.canonical_evidence_refs),
+                ],
+            )}
+        </div>
+    }
+}
+
+fn qa_feedback_card(item: &QaFeedbackItem) -> Html {
+    html! {
+        <div class="factor-card qa-review-card">
+            <div>
+                <strong>{format!("{} / {}", item.feedback_id, item.feedback_target)}</strong>
+                <span>{format!("{} / {} / {}", item.priority, item.status, item.source)}</span>
+            </div>
+            <p>{&item.summary}</p>
+            <div class="summary-grid">
+                <div><span>{"Claim"}</span><strong>{&item.claim_id}</strong></div>
+                <div><span>{"QA Case"}</span><strong>{&item.qa_case_id}</strong></div>
+                <div><span>{"Issue"}</span><strong>{&item.issue_type}</strong></div>
+                <div><span>{"Conclusion"}</span><strong>{&item.qa_conclusion}</strong></div>
+                <div><span>{"Notes"}</span><strong>{yes_no(item.note_present)}</strong></div>
+                <div><span>{"Updated By"}</span><strong>{item.status_updated_by.as_deref().unwrap_or("pending")}</strong></div>
+                <div><span>{"Status audit"}</span><strong>{item.status_audit_id.as_deref().unwrap_or("pending")}</strong></div>
+            </div>
+            <small>{format!("created: {} / updated: {}", item.created_at.as_deref().unwrap_or("unknown"), item.status_updated_at.as_deref().unwrap_or("pending"))}</small>
+            {qa_evidence_details(
+                "Closure evidence detail",
+                &[
+                    ("Feedback evidence", &item.evidence_refs),
+                    ("Status evidence", &item.status_evidence_refs),
+                ],
+            )}
+        </div>
+    }
+}
+
+fn qa_evidence_details(title: &str, groups: &[(&str, &Vec<String>)]) -> Html {
+    let total_refs: usize = groups.iter().map(|(_, refs)| refs.len()).sum();
+    html! {
+        <details class="qa-evidence-details">
+            <summary>{format!("{title}: {total_refs} refs")}</summary>
+            <div class="qa-evidence-detail-grid">
+                {for groups.iter().map(|(label, refs)| html! {
+                    <div>
+                        <span>{format!("{} ({})", label, refs.len())}</span>
+                        <small>{refs_label(refs)}</small>
+                    </div>
+                })}
+            </div>
+        </details>
     }
 }
 
