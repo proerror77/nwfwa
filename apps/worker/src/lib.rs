@@ -4,6 +4,7 @@ use arrow_schema::{DataType, Field, Schema};
 use fwa_core::{ClaimId, ScoringRunId};
 use fwa_features::{FeatureMap, FeatureValue};
 use fwa_ml_runtime::{ModelScoreRequest, ModelScorer, ServingManifestModelScorer};
+use hmac::{Hmac, Mac};
 use parquet::arrow::{arrow_reader::ParquetRecordBatchReaderBuilder, ArrowWriter};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -14,6 +15,8 @@ use std::{
     process::Command,
     sync::Arc,
 };
+
+type HmacSha256 = Hmac<Sha256>;
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 pub struct WorkerHealthResponse {
@@ -511,10 +514,25 @@ pub async fn deliver_mlops_alert_receiver_webhook(
     scheduler_execution_report_uri: &str,
     receiver_url: &str,
     receiver_id: &str,
+    receiver_token: Option<&str>,
+    receiver_secret: Option<&str>,
+    max_attempts: u32,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<serde_json::Value> {
     let receiver_url = required_non_empty("receiver_url", receiver_url)?;
+    let receiver_token = receiver_token
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let receiver_secret = receiver_secret
+        .map(str::trim)
+        .filter(|value| !value.is_empty());
+    let max_attempts = max_attempts.clamp(1, 5);
     let payload = build_mlops_alert_receiver_payload(scheduler_execution_report_uri, receiver_id)?;
+    let payload_body =
+        serde_json::to_string(&payload).context("serialize MLOps alert receiver payload")?;
+    let signature = receiver_secret
+        .map(|secret| mlops_alert_receiver_signature(secret, payload_body.as_bytes()))
+        .transpose()?;
     let output_dir = output_dir.as_ref();
     fs::create_dir_all(output_dir).with_context(|| {
         format!(
@@ -537,6 +555,10 @@ pub async fn deliver_mlops_alert_receiver_webhook(
         "scheduler_execution_report_uri": payload["scheduler_execution_report_uri"].clone(),
         "alert_delivery_task_count": task_count,
         "receiver_url_configured": true,
+        "receiver_auth_configured": receiver_token.is_some(),
+        "receiver_signature_configured": signature.is_some(),
+        "max_attempts": max_attempts,
+        "attempt_count": 0,
         "delivery_status": "skipped_no_alerts_required",
         "http_status": serde_json::Value::Null,
         "response_body_excerpt": serde_json::Value::Null,
@@ -544,33 +566,72 @@ pub async fn deliver_mlops_alert_receiver_webhook(
         "evidence_refs": payload["evidence_refs"].clone()
     });
     if task_count > 0 {
-        let response = reqwest::Client::new()
-            .post(receiver_url)
-            .header("x-fwa-event-kind", "mlops_alert_receiver_delivery")
-            .header(
-                "x-fwa-model-key",
-                payload["model_key"].as_str().unwrap_or(""),
-            )
-            .json(&payload)
-            .send()
-            .await
-            .context("deliver MLOps alert receiver webhook")?;
-        let status = response.status();
-        let body = response.text().await.unwrap_or_default();
-        let body_excerpt = body.chars().take(256).collect::<String>();
-        report["delivery_status"] = serde_json::json!(if status.is_success() {
-            "delivered"
-        } else {
-            "failed"
-        });
-        report["http_status"] = serde_json::json!(status.as_u16());
-        report["response_body_excerpt"] = serde_json::json!(body_excerpt);
+        let client = reqwest::Client::new();
+        for attempt in 1..=max_attempts {
+            report["attempt_count"] = serde_json::json!(attempt);
+            let mut request = client
+                .post(receiver_url)
+                .header("content-type", "application/json")
+                .header("x-fwa-event-kind", "mlops_alert_receiver_delivery")
+                .header("x-fwa-delivery-attempt", attempt.to_string())
+                .header(
+                    "x-fwa-model-key",
+                    payload["model_key"].as_str().unwrap_or(""),
+                );
+            if let Some(token) = receiver_token {
+                request = request.bearer_auth(token);
+            }
+            if let Some(signature) = &signature {
+                request = request.header("x-fwa-signature-sha256", signature);
+            }
+            let response = request.body(payload_body.clone()).send().await;
+            match response {
+                Ok(response) => {
+                    let status = response.status();
+                    let body = response.text().await.unwrap_or_default();
+                    let body_excerpt = body.chars().take(256).collect::<String>();
+                    report["delivery_status"] = serde_json::json!(if status.is_success() {
+                        "delivered"
+                    } else {
+                        "failed"
+                    });
+                    report["http_status"] = serde_json::json!(status.as_u16());
+                    report["response_body_excerpt"] = serde_json::json!(body_excerpt);
+                    if status.is_success() {
+                        break;
+                    }
+                }
+                Err(error) => {
+                    report["delivery_status"] = serde_json::json!("failed");
+                    report["response_body_excerpt"] =
+                        serde_json::json!(error.to_string().chars().take(256).collect::<String>());
+                }
+            }
+        }
     }
     write_json(
         output_dir.join("mlops_alert_receiver_delivery_report.json"),
         &report,
     )?;
     Ok(report)
+}
+
+fn mlops_alert_receiver_signature(secret: &str, body: &[u8]) -> anyhow::Result<String> {
+    let mut mac = HmacSha256::new_from_slice(secret.as_bytes())
+        .context("create MLOps alert receiver HMAC")?;
+    mac.update(body);
+    let bytes = mac.finalize().into_bytes();
+    Ok(format!("hmac-sha256={}", lowercase_hex(&bytes)))
+}
+
+fn lowercase_hex(bytes: &[u8]) -> String {
+    const HEX: &[u8; 16] = b"0123456789abcdef";
+    let mut output = String::with_capacity(bytes.len() * 2);
+    for byte in bytes {
+        output.push(HEX[(byte >> 4) as usize] as char);
+        output.push(HEX[(byte & 0x0f) as usize] as char);
+    }
+    output
 }
 
 pub fn build_mlops_monitoring_cycle_evidence(
@@ -8471,63 +8532,85 @@ mod tests {
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let receiver_url = format!("http://{}/mlops-alerts", listener.local_addr().unwrap());
         let receiver = tokio::spawn(async move {
-            let (mut socket, _) = listener.accept().await.unwrap();
-            let mut request_bytes = Vec::new();
-            let mut buffer = [0_u8; 1024];
-            loop {
-                let read = socket.read(&mut buffer).await.unwrap();
-                if read == 0 {
-                    break;
+            let mut requests = Vec::new();
+            for response in [
+                b"HTTP/1.1 503 Service Unavailable\r\nContent-Length: 5\r\n\r\nretry".as_slice(),
+                b"HTTP/1.1 202 Accepted\r\nContent-Length: 2\r\n\r\nok".as_slice(),
+            ] {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request_bytes = Vec::new();
+                let mut buffer = [0_u8; 1024];
+                loop {
+                    let read = socket.read(&mut buffer).await.unwrap();
+                    if read == 0 {
+                        break;
+                    }
+                    request_bytes.extend_from_slice(&buffer[..read]);
+                    let Some(header_end) = request_bytes
+                        .windows(4)
+                        .position(|window| window == b"\r\n\r\n")
+                    else {
+                        continue;
+                    };
+                    let header_text = String::from_utf8_lossy(&request_bytes[..header_end]);
+                    let content_length = header_text
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            if name.eq_ignore_ascii_case("content-length") {
+                                value.trim().parse::<usize>().ok()
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(0);
+                    if request_bytes.len() >= header_end + 4 + content_length {
+                        break;
+                    }
                 }
-                request_bytes.extend_from_slice(&buffer[..read]);
-                let Some(header_end) = request_bytes
-                    .windows(4)
-                    .position(|window| window == b"\r\n\r\n")
-                else {
-                    continue;
-                };
-                let header_text = String::from_utf8_lossy(&request_bytes[..header_end]);
-                let content_length = header_text
-                    .lines()
-                    .find_map(|line| {
-                        let (name, value) = line.split_once(':')?;
-                        if name.eq_ignore_ascii_case("content-length") {
-                            value.trim().parse::<usize>().ok()
-                        } else {
-                            None
-                        }
-                    })
-                    .unwrap_or(0);
-                if request_bytes.len() >= header_end + 4 + content_length {
-                    break;
-                }
+                requests.push(String::from_utf8_lossy(&request_bytes).to_string());
+                socket.write_all(response).await.unwrap();
             }
-            let request = String::from_utf8_lossy(&request_bytes).to_string();
-            socket
-                .write_all(b"HTTP/1.1 202 Accepted\r\nContent-Length: 2\r\n\r\nok")
-                .await
-                .unwrap();
-            request
+            requests
         });
 
         let report = deliver_mlops_alert_receiver_webhook(
             &scheduler_report.to_string_lossy(),
             &receiver_url,
             "customer-alpha-alert-router",
+            Some("receiver-token"),
+            Some("receiver-secret"),
+            2,
             root.join("delivery"),
         )
         .await
         .expect("alert receiver delivery");
-        let request = receiver.await.unwrap();
+        let requests = receiver.await.unwrap();
+        let request = requests.last().unwrap();
+        let first_request = requests.first().unwrap();
 
+        assert_eq!(requests.len(), 2);
         assert!(request.starts_with("POST /mlops-alerts "));
         assert!(request
             .to_ascii_lowercase()
             .contains("x-fwa-event-kind: mlops_alert_receiver_delivery"));
+        assert!(first_request
+            .to_ascii_lowercase()
+            .contains("x-fwa-delivery-attempt: 1"));
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("x-fwa-delivery-attempt: 2"));
+        assert!(request.contains("Bearer receiver-token"));
+        assert!(request
+            .to_ascii_lowercase()
+            .contains("x-fwa-signature-sha256: hmac-sha256="));
         assert!(request.contains("\"event_kind\":\"mlops_alert_receiver_delivery\""));
         assert!(request.contains("\"trigger\":\"model_drift_detected\""));
         assert_eq!(report["delivery_status"], "delivered");
         assert_eq!(report["http_status"], 202);
+        assert_eq!(report["attempt_count"], 2);
+        assert_eq!(report["receiver_auth_configured"], true);
+        assert_eq!(report["receiver_signature_configured"], true);
         assert_eq!(report["alert_delivery_task_count"], 1);
         assert!(report["governance_boundary"]
             .as_str()

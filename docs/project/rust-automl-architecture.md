@@ -178,7 +178,7 @@ Current repository completion for this target architecture is approximately:
   generic Rust ONNX, and `deep_learning_onnx` manifests after contract
   validation, and provider-peer, provider graph-community, and
   claim/member/provider entity clustering have Rust-native demo workflows.
-- 94% for Auto MLOps: worker can build feature-set manifests, create
+- 96% for Auto MLOps: worker can build feature-set manifests, create
   algorithm-aware training handoffs, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, require ONNX parity evidence for
@@ -188,15 +188,16 @@ Current repository completion for this target architecture is approximately:
   produce scheduler execution and alert-delivery evidence, submit scheduler
   alert-router handoff evidence into API governance audit, run the Rust
   monitoring cycle executor from plan plus runtime reports, POST queued alert
-  tasks to a customer receiver webhook, produce a lifecycle closure report, and
-  generate a checked-in demo lifecycle evidence pack, while API promotion gates
-  now require Rust feature-set materialization evidence, worker ranking requires
-  Rust feature-set and Rust serving evaluation evidence, and trainer-side ONNX
-  parity reports and unlabeled anomaly review tasks exist; API retraining output
-  now accepts governed serving manifests, and the console has provider model
+  tasks to a customer receiver webhook with bearer auth, HMAC signature, and
+  bounded retry evidence, produce a lifecycle closure report, and generate a
+  checked-in demo lifecycle evidence pack, while API promotion gates now require
+  Rust feature-set materialization evidence, worker ranking requires Rust
+  feature-set and Rust serving evaluation evidence, and trainer-side ONNX parity
+  reports and unlabeled anomaly review tasks exist; API retraining output now
+  accepts governed serving manifests, and the console has provider model
   release, promotion review, activation, and rollback actions. Customer-side
-  runtime report producers, production cron deployment, and receiver
-  authentication/signature/retry policy still need environment-specific wiring.
+  runtime report producers and production cron deployment still need
+  environment-specific wiring.
 - 78% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation

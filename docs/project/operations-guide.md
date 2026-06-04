@@ -337,13 +337,17 @@ cargo run --locked -p worker -- deliver-mlops-alert-receiver-webhook \
   --scheduler-report artifacts/mlops-monitoring/cycle/scheduler/mlops_scheduler_execution_report.json \
   --receiver-url "$FWA_ALERT_RECEIVER_URL" \
   --receiver-id customer-alert-router-v1 \
+  --receiver-token "$FWA_ALERT_RECEIVER_TOKEN" \
+  --receiver-secret "$FWA_ALERT_RECEIVER_SIGNING_SECRET" \
+  --max-attempts 3 \
   --output-dir artifacts/mlops-monitoring/alert-receiver
 ```
 
 This command performs the outbound POST only when alert tasks exist. It writes
-delivery evidence and keeps the receiver payload governance-only; the customer
-receiver still owns downstream notification policy, authentication, escalation,
-and acknowledgement.
+delivery evidence and keeps the receiver payload governance-only. The worker can
+attach bearer auth, HMAC signature, and bounded retry evidence; the customer
+receiver still owns downstream notification policy, escalation, and
+acknowledgement.
 
 Analytics-scale export proof:
 

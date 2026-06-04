@@ -3973,6 +3973,7 @@ dependencies = [
  "fwa-core",
  "fwa-features",
  "fwa-ml-runtime",
+ "hmac",
  "parquet",
  "reqwest",
  "serde",
