@@ -84,6 +84,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "mlops_monitoring_report_submitter",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "model_artifact_evaluator",
                 status: "ok",
             },
@@ -164,6 +168,20 @@ pub struct PilotReadinessReport {
     pub evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct MlopsMonitoringReportSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub model_version: String,
+    pub overall_status: String,
+    pub retraining_recommendation: String,
+    pub triggers: Vec<String>,
+    pub review_tasks: Vec<serde_json::Value>,
+    pub evidence_refs: Vec<String>,
+}
+
 pub async fn check_pilot_readiness(
     api_base_url: &str,
     api_key: Option<&str>,
@@ -222,6 +240,100 @@ pub fn build_pilot_readiness_report(health: ApiHealthResponse) -> PilotReadiness
         remediation_summary,
         evidence_refs,
     }
+}
+
+pub fn build_mlops_monitoring_report_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<(String, MlopsMonitoringReportSubmission)> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report = read_json_report(report_uri)?;
+    let model_key = json_string(&report, "model_key")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps monitoring report requires model_key")?;
+    let model_version = json_string(&report, "model_version")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps monitoring report requires model_version")?;
+    let report_kind = json_string(&report, "report_kind")
+        .filter(|value| value == "mlops_monitoring_report")
+        .context("MLOps monitoring report_kind must be mlops_monitoring_report")?;
+    let overall_status = json_string(&report, "overall_status")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps monitoring report requires overall_status")?;
+    let retraining_recommendation = json_string(&report, "retraining_recommendation")
+        .filter(|value| !value.trim().is_empty())
+        .context("MLOps monitoring report requires retraining_recommendation")?;
+    let triggers = report
+        .get("triggers")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    let review_tasks = report
+        .get("review_tasks")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let mut evidence_refs = report
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    evidence_refs.push(format!("model_versions:{model_key}:{model_version}"));
+    evidence_refs.push(format!("model_monitoring_reports:{report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    Ok((
+        model_key,
+        MlopsMonitoringReportSubmission {
+            actor: actor.into(),
+            notes: notes.into(),
+            report_uri: report_uri.into(),
+            report_kind,
+            model_version,
+            overall_status,
+            retraining_recommendation,
+            triggers,
+            review_tasks,
+            evidence_refs,
+        },
+    ))
+}
+
+pub async fn submit_mlops_monitoring_report(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let (model_key, payload) = build_mlops_monitoring_report_submission(report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            &format!("/api/v1/ops/models/{model_key}/mlops-monitoring-reports"),
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit MLOps monitoring report")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit MLOps monitoring report failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse MLOps monitoring report response")
 }
 
 #[derive(Debug, Clone, Deserialize, Serialize)]
@@ -7343,6 +7455,26 @@ mod tests {
         assert!(root
             .join("out/mlops_monitoring_review_tasks.json")
             .is_file());
+
+        let (model_key, submission) = build_mlops_monitoring_report_submission(
+            &root
+                .join("out/mlops_monitoring_report.json")
+                .to_string_lossy(),
+            "mlops-worker",
+            "submit monitoring report",
+        )
+        .expect("monitoring report submission");
+        assert_eq!(model_key, "baseline_fwa");
+        assert_eq!(submission.report_kind, "mlops_monitoring_report");
+        assert_eq!(submission.model_version, "0.2.0");
+        assert_eq!(submission.overall_status, "passed");
+        assert!(submission
+            .evidence_refs
+            .contains(&"model_versions:baseline_fwa:0.2.0".into()));
+        assert!(submission
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.starts_with("model_monitoring_reports:")));
     }
 
     #[test]

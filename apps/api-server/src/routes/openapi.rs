@@ -1853,6 +1853,46 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/mlops-monitoring-reports": {
+                "post": {
+                    "summary": "Submit a Rust MLOps monitoring report into governance audit",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitMlopsMonitoringReportRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded MLOps monitoring report governance event",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/SubmitMlopsMonitoringReportResponse" }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid monitoring report submission",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/model-retraining-jobs/{job_id}/status": {
                 "post": {
                     "summary": "Update model retraining job status",
@@ -5369,6 +5409,59 @@ pub async fn openapi_schema() -> Json<Value> {
                             "minLength": 1,
                             "description": "Model retraining notes must not contain PII."
                         }
+                    }
+                },
+                "SubmitMlopsMonitoringReportRequest": {
+                    "type": "object",
+                    "required": ["actor", "notes", "report_uri", "report_kind", "model_version", "overall_status", "retraining_recommendation", "triggers", "review_tasks", "evidence_refs"],
+                    "properties": {
+                        "actor": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Monitoring notes must not contain PII."
+                        },
+                        "report_uri": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "URI of mlops_monitoring_report.json."
+                        },
+                        "report_kind": { "type": "string", "enum": ["mlops_monitoring_report"] },
+                        "model_version": { "type": "string", "minLength": 1 },
+                        "overall_status": { "type": "string", "enum": ["passed", "watch", "blocked"] },
+                        "retraining_recommendation": { "type": "string", "enum": ["monitor", "prepare_retraining", "blocked"] },
+                        "triggers": {
+                            "type": "array",
+                            "items": { "type": "string", "minLength": 1 }
+                        },
+                        "review_tasks": {
+                            "type": "array",
+                            "items": { "type": "object", "minProperties": 1 }
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 },
+                            "description": "Must include model_versions:{model_key}:{model_version} and model_monitoring_reports:{report_uri}."
+                        }
+                    }
+                },
+                "SubmitMlopsMonitoringReportResponse": {
+                    "type": "object",
+                    "required": ["model_key", "model_version", "report_uri", "monitoring_status", "retraining_recommendation", "trigger_count", "review_task_count", "next_actions", "governance_boundary"],
+                    "properties": {
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "report_uri": { "type": "string" },
+                        "monitoring_status": { "type": "string", "enum": ["passed", "watch", "blocked"] },
+                        "retraining_recommendation": { "type": "string", "enum": ["monitor", "prepare_retraining", "blocked"] },
+                        "trigger_count": { "type": "integer" },
+                        "review_task_count": { "type": "integer" },
+                        "next_actions": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "governance_boundary": { "type": "string" }
                     }
                 },
                 "UpdateModelRetrainingJobStatusRequest": {

@@ -639,6 +639,22 @@ The worker writes `mlops_monitoring_report.json` and
 review, or retraining preparation, but it must not activate models, publish
 rules, or assign fraud labels.
 
+Submit the report into the governed API audit surface:
+
+```bash
+cargo run --locked -p worker -- submit-mlops-monitoring-report \
+  --api-url http://127.0.0.1:8080 \
+  --api-key "$FWA_API_KEY" \
+  --report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
+  --actor mlops-worker \
+  --notes "Rust monitoring report submitted for human review."
+```
+
+The API records `model.mlops_monitoring.report_submitted` with model-version
+and monitoring-report evidence refs. It returns next actions such as continued
+monitoring or retraining preparation, but it does not create retraining jobs,
+activate models, or rollback models automatically.
+
 After dataset, candidate-ranking, serving, rule-backtest, clustering, and
 monitoring evidence exists, summarize the full Rust Auto MLOps lifecycle into
 one closure report:

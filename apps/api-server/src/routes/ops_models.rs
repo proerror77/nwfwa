@@ -117,6 +117,33 @@ pub struct CreateModelRetrainingJobRequest {
 }
 
 #[derive(Debug, Deserialize)]
+pub struct SubmitMlopsMonitoringReportRequest {
+    pub actor: String,
+    pub notes: String,
+    pub report_uri: String,
+    pub report_kind: String,
+    pub model_version: String,
+    pub overall_status: String,
+    pub retraining_recommendation: String,
+    pub triggers: Vec<String>,
+    pub review_tasks: Vec<Value>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct SubmitMlopsMonitoringReportResponse {
+    pub model_key: String,
+    pub model_version: String,
+    pub report_uri: String,
+    pub monitoring_status: String,
+    pub retraining_recommendation: String,
+    pub trigger_count: usize,
+    pub review_task_count: usize,
+    pub next_actions: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct UpdateModelRetrainingJobStatusRequest {
     pub status: String,
     pub actor: String,
@@ -300,6 +327,42 @@ pub async fn create_model_retraining_job(
         .await
         .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
     Ok(Json(job))
+}
+
+pub async fn submit_mlops_monitoring_report(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+    Json(request): Json<SubmitMlopsMonitoringReportRequest>,
+) -> Result<Json<SubmitMlopsMonitoringReportResponse>, ApiError> {
+    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    validate_mlops_monitoring_report_request(&request)?;
+    let model = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| model.model_key == model_key && model.version == request.model_version)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_VERSION_NOT_FOUND",
+                "model version not found",
+            )
+        })?;
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &model.model_key,
+        &model.version,
+        "MLOps monitoring report",
+    )?;
+    validate_monitoring_report_evidence(&request)?;
+    let response = build_mlops_monitoring_report_response(&model, &request);
+    record_mlops_monitoring_audit(&state, &actor, &model, &request, &response)
+        .await
+        .map_err(internal_error("MLOPS_MONITORING_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(response))
 }
 
 pub async fn update_model_retraining_job_status(
@@ -770,6 +833,146 @@ fn validate_retraining_output_request(
         )?;
     }
     Ok(())
+}
+
+fn validate_mlops_monitoring_report_request(
+    request: &SubmitMlopsMonitoringReportRequest,
+) -> Result<(), ApiError> {
+    for (value, code, message) in [
+        (
+            request.actor.as_str(),
+            "INVALID_MLOPS_MONITORING_ACTOR",
+            "actor is required",
+        ),
+        (
+            request.notes.as_str(),
+            "INVALID_MLOPS_MONITORING_NOTES",
+            "MLOps monitoring notes are required",
+        ),
+        (
+            request.report_uri.as_str(),
+            "INVALID_MLOPS_MONITORING_REPORT_URI",
+            "report_uri is required",
+        ),
+        (
+            request.model_version.as_str(),
+            "INVALID_MLOPS_MONITORING_MODEL_VERSION",
+            "model_version is required",
+        ),
+    ] {
+        if value.trim().is_empty() {
+            return Err(ApiError::new(StatusCode::BAD_REQUEST, code, message));
+        }
+    }
+    if request.report_kind != "mlops_monitoring_report" {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REPORT_KIND",
+            "report_kind must be mlops_monitoring_report",
+        ));
+    }
+    if !matches!(
+        request.overall_status.as_str(),
+        "passed" | "watch" | "blocked"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_STATUS",
+            "overall_status must be passed, watch, or blocked",
+        ));
+    }
+    if !matches!(
+        request.retraining_recommendation.as_str(),
+        "monitor" | "prepare_retraining" | "blocked"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_RETRAINING_RECOMMENDATION",
+            "retraining_recommendation must be monitor, prepare_retraining, or blocked",
+        ));
+    }
+    validate_json_artifact_uri(
+        &request.report_uri,
+        "INVALID_MLOPS_MONITORING_REPORT_URI",
+        "MLOps monitoring report_uri must point to a JSON report",
+    )?;
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_EVIDENCE",
+            "MLOps monitoring evidence_refs are required",
+        ));
+    }
+    if request
+        .triggers
+        .iter()
+        .any(|trigger| trigger.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_TRIGGER",
+            "MLOps monitoring triggers must not be blank",
+        ));
+    }
+    if request
+        .review_tasks
+        .iter()
+        .any(|task| match task.as_object() {
+            Some(object) => object.is_empty(),
+            None => true,
+        })
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK",
+            "MLOps monitoring review_tasks must be non-empty objects",
+        ));
+    }
+    if request.overall_status != "passed" && request.review_tasks.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK",
+            "watch or blocked monitoring reports require review_tasks",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.actor.as_str())
+            .chain(std::iter::once(request.notes.as_str()))
+            .chain(std::iter::once(request.report_uri.as_str()))
+            .chain(request.triggers.iter().map(String::as_str))
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REPORT",
+            "MLOps monitoring actor, notes, report_uri, triggers, and evidence_refs must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
+fn validate_monitoring_report_evidence(
+    request: &SubmitMlopsMonitoringReportRequest,
+) -> Result<(), ApiError> {
+    let expected_ref = format!("model_monitoring_reports:{}", request.report_uri);
+    if request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_EVIDENCE",
+            format!("MLOps monitoring evidence_refs must include {expected_ref}"),
+        ))
+    }
 }
 
 fn validate_retraining_output_evidence_refs(
@@ -1799,6 +2002,46 @@ fn build_model_retraining_readiness(
     }
 }
 
+fn build_mlops_monitoring_report_response(
+    model: &ModelVersionRecord,
+    request: &SubmitMlopsMonitoringReportRequest,
+) -> SubmitMlopsMonitoringReportResponse {
+    let mut next_actions = Vec::new();
+    match request.retraining_recommendation.as_str() {
+        "prepare_retraining" => {
+            next_actions.push("review_monitoring_report".into());
+            next_actions.push("prepare_retraining_job_after_human_approval".into());
+        }
+        "blocked" => {
+            next_actions.push("open_model_governance_review".into());
+            next_actions.push("consider_rollback_review_after_human_approval".into());
+        }
+        _ => next_actions.push("continue_monitoring".into()),
+    }
+    if request.triggers.iter().any(|trigger| {
+        trigger == "rust_serving_latency_budget_failed"
+            || trigger == "segment_fairness_review_required"
+    }) {
+        next_actions.push("open_serving_or_fairness_review".into());
+    }
+    next_actions.sort();
+    next_actions.dedup();
+
+    SubmitMlopsMonitoringReportResponse {
+        model_key: model.model_key.clone(),
+        model_version: model.version.clone(),
+        report_uri: request.report_uri.clone(),
+        monitoring_status: request.overall_status.clone(),
+        retraining_recommendation: request.retraining_recommendation.clone(),
+        trigger_count: request.triggers.len(),
+        review_task_count: request.review_tasks.len(),
+        next_actions,
+        governance_boundary:
+            "monitoring report submission records review and retraining readiness only; it must not auto-create retraining jobs, activate models, or rollback models"
+                .into(),
+    }
+}
+
 fn is_unresolved_feedback_status(status: &str) -> bool {
     matches!(status, "open" | "in_progress")
 }
@@ -2145,6 +2388,53 @@ async fn record_model_retraining_audit(
                 "output_evaluation_id": &job.output_evaluation_id,
             }),
             evidence_refs,
+        })
+        .await
+}
+
+async fn record_mlops_monitoring_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    model: &ModelVersionRecord,
+    request: &SubmitMlopsMonitoringReportRequest,
+    response: &SubmitMlopsMonitoringReportResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "model.mlops_monitoring.report_submitted".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "MLOps monitoring report submitted: {}",
+                request.overall_status
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "model_key": model.model_key,
+                "model_version": model.version,
+                "report_uri": request.report_uri,
+                "report_kind": request.report_kind,
+                "monitoring_status": request.overall_status,
+                "retraining_recommendation": request.retraining_recommendation,
+                "trigger_count": request.triggers.len(),
+                "review_task_count": request.review_tasks.len(),
+                "next_actions": response.next_actions,
+                "submitted_by": request.actor,
+                "note_present": !request.notes.trim().is_empty(),
+                "governance_boundary": response.governance_boundary,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
         })
         .await
 }

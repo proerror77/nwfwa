@@ -1351,6 +1351,107 @@ async fn model_retraining_readiness_prepares_when_drift_and_labels_are_ready() {
 }
 
 #[tokio::test]
+async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Rust monitoring loop found drift and shadow review signals.",
+          "report_uri": "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected", "shadow_comparison_review_required"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_MLOPS_MONITORING_EVIDENCE");
+
+    let (status, response) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-reports",
+        r#"{
+          "actor": "mlops-worker",
+          "notes": "Rust monitoring loop found drift and shadow review signals.",
+          "report_uri": "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+          "report_kind": "mlops_monitoring_report",
+          "model_version": "0.1.0",
+          "overall_status": "watch",
+          "retraining_recommendation": "prepare_retraining",
+          "triggers": ["model_drift_detected", "shadow_comparison_review_required"],
+          "review_tasks": [
+            {"task_kind": "mlops_monitoring_review", "trigger": "model_drift_detected"}
+          ],
+          "evidence_refs": [
+            "model_versions:baseline_fwa:0.1.0",
+            "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(response["model_key"], "baseline_fwa");
+    assert_eq!(response["model_version"], "0.1.0");
+    assert_eq!(response["monitoring_status"], "watch");
+    assert_eq!(response["retraining_recommendation"], "prepare_retraining");
+    assert_eq!(response["trigger_count"], 2);
+    assert_eq!(response["review_task_count"], 1);
+    assert!(response["next_actions"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "prepare_retraining_job_after_human_approval"
+        )));
+    assert!(response["governance_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("must not auto-create retraining jobs"));
+
+    let (status, jobs) = get_json(
+        app.clone(),
+        "/api/v1/ops/models/baseline_fwa/retraining-jobs",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(jobs["jobs"].as_array().unwrap().is_empty());
+
+    let (status, audit) = get_json(
+        app,
+        "/api/v1/ops/audit-events?event_type=model.mlops_monitoring.report_submitted&model_key=baseline_fwa&model_version=0.1.0&limit=5",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let event = &audit["events"][0];
+    assert_eq!(
+        event["event_type"],
+        "model.mlops_monitoring.report_submitted"
+    );
+    assert_eq!(event["payload"]["monitoring_status"], "watch");
+    assert_eq!(
+        event["payload"]["retraining_recommendation"],
+        "prepare_retraining"
+    );
+    assert!(event["evidence_refs"].as_array().unwrap().contains(
+        &serde_json::json!(
+            "model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
+        )
+    ));
+}
+
+#[tokio::test]
 async fn blocks_model_retraining_job_when_readiness_is_blocked() {
     let app = build_app(test_config());
 
