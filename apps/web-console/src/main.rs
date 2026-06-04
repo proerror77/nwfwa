@@ -40,7 +40,7 @@ const ALL_MODULES: &[&str] = &[
     "Review Workbench",
     "Bootstrap Ops",
     "Evidence Hub",
-    "MLOps Workspace",
+    "Provider Model Intake",
     "Evidence Runtime",
     "Rules",
     "Models",
@@ -66,7 +66,7 @@ const CONTRACT_PANELS: &[&str] = &[
     "Candidate Source",
     "Threshold Integrity",
     "Model Governance",
-    "MLOps Workspace",
+    "Provider Model Intake",
     "Training Jobs",
     "Model Candidates",
     "Offline Training Handoff",
@@ -1911,7 +1911,7 @@ fn app() -> Html {
                         {detection_releases_page(select_module.clone())}
                     } else if *active == "Evidence Hub" {
                         {evidence_hub_page(select_module.clone())}
-                    } else if *active == "MLOps Workspace" {
+                    } else if *active == "Provider Model Intake" {
                         <MlopsWorkspacePage />
                     } else if *active == "Evidence Runtime" {
                         <EvidenceRuntimePage />
@@ -2014,7 +2014,7 @@ fn module_slug(module: &str) -> &'static str {
         "Review Workbench" => "review-workbench",
         "Bootstrap Ops" => "bootstrap-ops",
         "Evidence Hub" => "evidence-hub",
-        "MLOps Workspace" => "mlops-workspace",
+        "Provider Model Intake" => "mlops-workspace",
         "Evidence Runtime" => "evidence-runtime",
         "Rules" => "rules",
         "Models" => "models",
@@ -2089,13 +2089,15 @@ fn module_context(module: &str) -> &'static str {
         "Evidence Hub" => {
             "Open member, provider, knowledge, and dataset context from one evidence hub."
         }
-        "MLOps Workspace" => {
-            "Inspect provider model handoff artifacts and promotion evidence."
+        "Provider Model Intake" => {
+            "Review provider-trained model candidates and decide release, shadow, or rollback."
         }
         "Evidence Runtime" => {
             "Register document, OCR, chunk, embedding, and retrieval metadata with audit trace."
         }
-        "Rules" => "Operate deterministic FWA controls and promotion gates.",
+        "Rules" => {
+            "Review offline-mined rule candidates before they enter the active rule library."
+        }
         "Models" => "Review model readiness, thresholds, and production evidence.",
         "Routing Policies" => "Inspect routing boundaries for model and policy execution.",
         "Factor Factory" => "Govern feature readiness, ownership, and online availability.",
@@ -2125,9 +2127,9 @@ fn module_description(module: &str) -> &'static str {
         "Review Workbench" => "medical + QA",
         "Bootstrap Ops" => "labels + evidence",
         "Evidence Hub" => "context lookup",
-        "MLOps Workspace" => "provider handoff",
+        "Provider Model Intake" => "model candidate release",
         "Evidence Runtime" => "document evidence",
-        "Rules" => "deterministic controls",
+        "Rules" => "rule candidate release",
         "Models" => "threshold evidence",
         "Routing Policies" => "execution routing",
         "Factor Factory" => "feature readiness",
@@ -2155,7 +2157,7 @@ fn module_icon_class(module: &str) -> &'static str {
         "Review Workbench" => "icon-qa",
         "Bootstrap Ops" => "icon-audit",
         "Evidence Hub" => "icon-knowledge",
-        "MLOps Workspace" => "icon-models",
+        "Provider Model Intake" => "icon-models",
         "Evidence Runtime" => "icon-audit",
         "Rules" => "icon-rules",
         "Models" => "icon-models",
@@ -3018,7 +3020,7 @@ fn detection_releases_page(on_navigate: Callback<String>) -> Html {
 
             <div class="workflow-card-grid">
                 {workflow_action_card("Rule Candidate Queue", "Rules discovered from offline mining, case feedback, or explainable model patterns must pass deterministic backtest and approval before entering the active rule library.", "Review rule evidence", "Rules", "strong", &on_navigate)}
-                {workflow_action_card("Provider Model Queue", "Provider training output arrives as candidate versions. Compare holdout, out-of-time, shadow, drift, and review-capacity metrics before activation.", "Review model evidence", "MLOps Workspace", "warning", &on_navigate)}
+                {workflow_action_card("Provider Model Queue", "Provider training output arrives as candidate versions. Compare holdout, out-of-time, shadow, drift, and review-capacity metrics before activation.", "Review model evidence", "Provider Model Intake", "warning", &on_navigate)}
                 {workflow_action_card("Routing Impact", "Check whether an approved release affects pre-payment, post-payment, manual review, pending evidence, QA sample, or straight-through routing.", "Check impact", "Routing Policies", "neutral", &on_navigate)}
                 {workflow_action_card("Evidence Package", "Inspect dataset, feature-set, split, schema, and evaluation lineage that supports the release decision.", "Validate evidence", "Data Sources", "success", &on_navigate)}
                 {workflow_action_card("Release History", "Audit approvals, activation, rollback, API call records, and agent/routing boundaries after release.", "Open governance", "Governance", "strong", &on_navigate)}
@@ -3528,6 +3530,7 @@ fn runtime_scoring_page() -> Html {
 #[derive(Properties, PartialEq)]
 struct RuntimeScoreProps {
     state: ApiState<ScoreResponse>,
+}
 #[function_component(TpaDemoRunnerPage)]
 fn tpa_demo_runner_page() -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
@@ -3771,8 +3774,6 @@ fn tpa_funnel_step(label: &str, caption: &str, value: &str) -> Html {
             <small>{caption}</small>
         </div>
     }
-}
-
 }
 
 #[function_component(RuntimeScoreView)]
@@ -4412,10 +4413,10 @@ fn rules_page() -> Html {
         <section class="module-status">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"Rules"}</h2>
-                    <p>{"Convert explainable model signals into governed rule candidates, then inspect backtest evidence and promotion readiness."}</p>
+                    <h2>{"Rule Candidate Review"}</h2>
+                    <p>{"Review rules pushed from offline discovery, QA feedback, or explainable model patterns. Business users approve candidate entry into the governed rule library; they do not tune raw rule logic here."}</p>
                 </div>
-                <span class="status-pill">{"Rule Governance"}</span>
+                <span class="status-pill">{"Candidate rule release"}</span>
             </div>
 
             <section class="panel result-stack">
@@ -4915,8 +4916,9 @@ fn mlops_workspace_page() -> Html {
     let actor = use_state(|| "mlops-operator".to_string());
     let reviewer = use_state(|| "risk-model-owner".to_string());
     let promotion_decision = use_state(|| "approved".to_string());
-    let action_notes =
-        use_state(|| "non-PII governed MLOps lifecycle review for demo evidence".to_string());
+    let action_notes = use_state(|| {
+        "non-PII governed provider model release review for demo evidence".to_string()
+    });
     let evidence_refs = use_state(|| "model_versions:baseline_fwa:v1".to_string());
     let snapshot_state = use_state(|| ApiState::<MlopsWorkspaceSnapshot>::Idle);
     let action_state = use_state(|| ApiState::<Value>::Idle);
@@ -5005,7 +5007,7 @@ fn mlops_workspace_page() -> Html {
                     <h2>{"Provider Model Intake"}</h2>
                     <p>{"Review provider-delivered model candidates after offline training. Operators compare evidence and decide shadow, limited rollout, activation, rejection, or rollback."}</p>
                 </div>
-                <span class="status-pill">{"Provider handoff"}</span>
+                <span class="status-pill">{"Provider candidate release"}</span>
             </div>
 
             <div class="mlops-cockpit">
@@ -5116,8 +5118,8 @@ fn mlops_workspace_page() -> Html {
                         </div>
                     </div>
                     <div class="button-row mlops-action-buttons">
-                        <button onclick={governed_action("queue_retraining")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Queue retraining job"}</button>
-                        <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit promotion review"}</button>
+                        <button onclick={governed_action("queue_retraining")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Request provider retraining"}</button>
+                        <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit release review"}</button>
                         <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
                         <button onclick={governed_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback active model"}</button>
                     </div>
@@ -5140,18 +5142,18 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
     html! {
         <>
             {match &props.state {
-                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load the MLOps workspace to inspect model lifecycle evidence."}</p></section> },
-                ApiState::Loading => html! { <section class="panel"><p>{"Loading MLOps workspace..."}</p></section> },
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load provider model intake to inspect candidate release evidence."}</p></section> },
+                ApiState::Loading => html! { <section class="panel"><p>{"Loading provider model intake..."}</p></section> },
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
                     <div class="mlops-workspace-grid">
-                        {mlops_command_center(snapshot)}
-                        {mlops_training_handoff(snapshot)}
-                        {mlops_dataset_readiness(snapshot)}
-                        {mlops_training_jobs(snapshot)}
+                        {provider_model_release_summary(snapshot)}
                         {mlops_model_candidates(snapshot)}
                         {mlops_promotion_gates(snapshot)}
                         {mlops_monitoring_summary(snapshot)}
+                        {mlops_training_handoff(snapshot)}
+                        {mlops_dataset_readiness(snapshot)}
+                        {mlops_training_jobs(snapshot)}
                     </div>
                 },
             }}
@@ -5159,23 +5161,24 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
     }
 }
 
-fn mlops_command_center(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+fn provider_model_release_summary(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     let active_model = active_model_version(&snapshot.model_ops);
+    let release_decision = provider_release_decision_label(snapshot);
     html! {
         <section class="panel data-command-center">
             <div class="section-header">
                 <div>
-                    <h3>{"MLOps Control Plane"}</h3>
-                    <p>{"Model lifecycle evidence stays separate from claim review work: data readiness, offline training, candidate review, human promotion, and serving monitoring."}</p>
+                    <h3>{"Provider Candidate Release Control"}</h3>
+                    <p>{"This is the business release desk for provider-trained model candidates. Operators do not train or tune models here; they decide shadow, limited rollout, activation, rejection, or rollback from evidence."}</p>
                 </div>
                 <span class={classes!("status-token", status_tone(&snapshot.model_ops.gates.decision))}>{&snapshot.model_ops.gates.decision}</span>
             </div>
             <div class="ops-stat-strip">
-                <div><span>{"Datasets"}</span><strong>{snapshot.data_sources.datasets.len()}</strong><small>{"registered manifests"}</small></div>
-                <div><span>{"Evaluations"}</span><strong>{snapshot.data_sources.evaluations.len()}</strong><small>{"candidate evidence"}</small></div>
-                <div><span>{"Training Jobs"}</span><strong>{snapshot.retraining_jobs.len()}</strong><small>{"offline queue"}</small></div>
-                <div><span>{"Active Version"}</span><strong>{active_model.map(|model| model.version.as_str()).unwrap_or("none")}</strong><small>{"serving lock target"}</small></div>
-                <div><span>{"Drift"}</span><strong>{&snapshot.model_ops.performance.drift_status}</strong><small>{"monitoring signal"}</small></div>
+                <div><span>{"Candidate"}</span><strong>{&snapshot.model_ops.gates.model_version}</strong><small>{&snapshot.model_ops.performance.model_key}</small></div>
+                <div><span>{"Evidence"}</span><strong>{format!("{} / {}", snapshot.model_ops.gates.passed_count, snapshot.model_ops.gates.total_count)}</strong><small>{"promotion gates"}</small></div>
+                <div><span>{"Current Active"}</span><strong>{active_model.map(|model| model.version.as_str()).unwrap_or("none")}</strong><small>{"serving lock target"}</small></div>
+                <div><span>{"Shadow Signal"}</span><strong>{&snapshot.model_ops.performance.drift_status}</strong><small>{optional_number(snapshot.model_ops.performance.score_psi)}</small></div>
+                <div><span>{"Next Decision"}</span><strong>{release_decision}</strong><small>{"human gate"}</small></div>
             </div>
         </section>
     }
@@ -5193,20 +5196,23 @@ fn mlops_training_handoff(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 </div>
                 <span class="status-token strong">{"human review required"}</span>
             </div>
-            <div class="summary-grid">
-                <div><span>{"Dataset manifest"}</span><strong>{dataset.map(|item| item.manifest_uri.as_str()).unwrap_or("missing")}</strong></div>
-                <div><span>{"Dataset version"}</span><strong>{dataset.map(dataset_version_label).unwrap_or_else(|| "missing".into())}</strong></div>
-                <div><span>{"Model key"}</span><strong>{&snapshot.model_ops.performance.model_key}</strong></div>
-                <div><span>{"Base version"}</span><strong>{active_model.map(|model| model.version.as_str()).unwrap_or("none")}</strong></div>
-                <div><span>{"Expected output"}</span><strong>{"/api/v1/ops/model-retraining-jobs/{job_id}/output"}</strong></div>
-                <div><span>{"Artifact boundary"}</span><strong>{active_model.and_then(|model| model.artifact_uri.as_deref()).unwrap_or("candidate artifact pending")}</strong></div>
-            </div>
-            <div class="factor-card-grid mlops-stage-grid">
-                {mlops_handoff_step("1", "Dataset approval", "Use a governed Parquet manifest with time and group split evidence.")}
-                {mlops_handoff_step("2", "Offline training", "External platform writes model, validation, feature, shadow, drift, and fairness artifacts.")}
-                {mlops_handoff_step("3", "Candidate registration", "Training output creates a candidate model and evaluation through the API.")}
-                {mlops_handoff_step("4", "Human promotion", "Promotion gates and reviewer decision decide shadow, activation, or rejection.")}
-            </div>
+            <details class="data-source-detail governance-detail release-evidence-detail">
+                <summary>{"Provider training handoff detail"}</summary>
+                <div class="summary-grid">
+                    <div><span>{"Dataset manifest"}</span><strong>{dataset.map(|item| item.manifest_uri.as_str()).unwrap_or("missing")}</strong></div>
+                    <div><span>{"Dataset version"}</span><strong>{dataset.map(dataset_version_label).unwrap_or_else(|| "missing".into())}</strong></div>
+                    <div><span>{"Model key"}</span><strong>{&snapshot.model_ops.performance.model_key}</strong></div>
+                    <div><span>{"Base version"}</span><strong>{active_model.map(|model| model.version.as_str()).unwrap_or("none")}</strong></div>
+                    <div><span>{"Expected output"}</span><strong>{"/api/v1/ops/model-retraining-jobs/{job_id}/output"}</strong></div>
+                    <div><span>{"Artifact boundary"}</span><strong>{active_model.and_then(|model| model.artifact_uri.as_deref()).unwrap_or("candidate artifact pending")}</strong></div>
+                </div>
+                <div class="factor-card-grid mlops-stage-grid">
+                    {mlops_handoff_step("1", "Dataset approval", "Use a governed Parquet manifest with time and group split evidence.")}
+                    {mlops_handoff_step("2", "Provider training", "External platform writes model, validation, feature, shadow, drift, and fairness artifacts.")}
+                    {mlops_handoff_step("3", "Candidate registration", "Training output creates a candidate model and evaluation through the API.")}
+                    {mlops_handoff_step("4", "Human release", "Promotion gates and reviewer decision decide shadow, activation, or rejection.")}
+                </div>
+            </details>
         </section>
     }
 }
@@ -5231,30 +5237,33 @@ fn mlops_dataset_readiness(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 </div>
             </div>
             if snapshot.data_sources.datasets.is_empty() {
-                <p class="empty">{"No datasets registered for MLOps review."}</p>
+                <p class="empty">{"No datasets registered for provider model review."}</p>
             } else {
-                <div class="factor-card-grid">
-                    {for snapshot.data_sources.datasets.iter().take(6).map(|dataset| {
-                        let health = health_for_dataset(&snapshot.data_sources.health, &dataset.dataset_id);
-                        html! {
-                            <div class="factor-card">
-                                <div>
-                                    <strong>{dataset_version_label(dataset)}</strong>
-                                    <span>{format!("{} / {} / {}", dataset.business_domain, dataset.sample_grain, dataset.storage_format)}</span>
+                <details class="data-source-detail governance-detail release-evidence-detail">
+                    <summary>{format!("Release dataset evidence detail: {} datasets", snapshot.data_sources.datasets.len())}</summary>
+                    <div class="factor-card-grid">
+                        {for snapshot.data_sources.datasets.iter().take(6).map(|dataset| {
+                            let health = health_for_dataset(&snapshot.data_sources.health, &dataset.dataset_id);
+                            html! {
+                                <div class="factor-card">
+                                    <div>
+                                        <strong>{dataset_version_label(dataset)}</strong>
+                                        <span>{format!("{} / {} / {}", dataset.business_domain, dataset.sample_grain, dataset.storage_format)}</span>
+                                    </div>
+                                    <div class="summary-grid">
+                                        <div><span>{"Rows"}</span><strong>{dataset.row_count}</strong></div>
+                                        <div><span>{"Splits"}</span><strong>{dataset.splits.len()}</strong></div>
+                                        <div><span>{"Fields"}</span><strong>{dataset.fields.len()}</strong></div>
+                                        <div><span>{"Mappings"}</span><strong>{dataset.mappings.len()}</strong></div>
+                                        <div><span>{"Label"}</span><strong>{empty_label(&dataset.label_column)}</strong></div>
+                                        <div><span>{"Quality"}</span><strong>{health.map(|item| item.data_quality_status.as_str()).unwrap_or("missing")}</strong></div>
+                                    </div>
+                                    <small>{format!("manifest: {}", dataset.manifest_uri)}</small>
                                 </div>
-                                <div class="summary-grid">
-                                    <div><span>{"Rows"}</span><strong>{dataset.row_count}</strong></div>
-                                    <div><span>{"Splits"}</span><strong>{dataset.splits.len()}</strong></div>
-                                    <div><span>{"Fields"}</span><strong>{dataset.fields.len()}</strong></div>
-                                    <div><span>{"Mappings"}</span><strong>{dataset.mappings.len()}</strong></div>
-                                    <div><span>{"Label"}</span><strong>{empty_label(&dataset.label_column)}</strong></div>
-                                    <div><span>{"Quality"}</span><strong>{health.map(|item| item.data_quality_status.as_str()).unwrap_or("missing")}</strong></div>
-                                </div>
-                                <small>{format!("manifest: {}", dataset.manifest_uri)}</small>
-                            </div>
-                        }
-                    })}
-                </div>
+                            }
+                        })}
+                    </div>
+                </details>
             }
         </section>
     }
@@ -5273,28 +5282,31 @@ fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
             if snapshot.retraining_jobs.is_empty() {
                 <p class="empty">{"No retraining jobs returned for this model."}</p>
             } else {
-                <div class="ops-table">
-                    <div class="ops-table-head">
-                        <span>{"Job"}</span>
-                        <span>{"Status"}</span>
-                        <span>{"Dataset"}</span>
-                        <span>{"Candidate"}</span>
-                        <span>{"Updated"}</span>
-                    </div>
-                    {for snapshot.retraining_jobs.iter().take(8).map(|job| html! {
-                        <div class="ops-table-row">
-                            <div class="primary-cell">
-                                <strong>{&job.job_id}</strong>
-                                <span>{format!("{} {} / requested by {}", job.model_key, job.model_version, job.requested_by)}</span>
-                            </div>
-                            <span class={classes!("status-token", status_tone(&job.status))}>{&job.status}</span>
-                            <span>{format!("{} / {}", job.source_dataset_id, job.source_data_quality_status)}</span>
-                            <span>{job.candidate_model_version.as_deref().unwrap_or("pending")}</span>
-                            <span>{job.updated_at.as_deref().unwrap_or("missing")}</span>
-                            <small class="row-detail">{format!("trigger {} / blocker {} / output {}", refs_label(&job.trigger_summary), refs_label(&job.blocker_summary), job.output_evaluation_id.as_deref().unwrap_or("none"))}</small>
+                <details class="data-source-detail governance-detail release-evidence-detail">
+                    <summary>{format!("Provider training job detail: {} jobs", snapshot.retraining_jobs.len())}</summary>
+                    <div class="ops-table">
+                        <div class="ops-table-head">
+                            <span>{"Job"}</span>
+                            <span>{"Status"}</span>
+                            <span>{"Dataset"}</span>
+                            <span>{"Candidate"}</span>
+                            <span>{"Updated"}</span>
                         </div>
-                    })}
-                </div>
+                        {for snapshot.retraining_jobs.iter().take(8).map(|job| html! {
+                            <div class="ops-table-row">
+                                <div class="primary-cell">
+                                    <strong>{&job.job_id}</strong>
+                                    <span>{format!("{} {} / requested by {}", job.model_key, job.model_version, job.requested_by)}</span>
+                                </div>
+                                <span class={classes!("status-token", status_tone(&job.status))}>{&job.status}</span>
+                                <span>{format!("{} / {}", job.source_dataset_id, job.source_data_quality_status)}</span>
+                                <span>{job.candidate_model_version.as_deref().unwrap_or("pending")}</span>
+                                <span>{job.updated_at.as_deref().unwrap_or("missing")}</span>
+                                <small class="row-detail">{format!("trigger {} / blocker {} / output {}", refs_label(&job.trigger_summary), refs_label(&job.blocker_summary), job.output_evaluation_id.as_deref().unwrap_or("none"))}</small>
+                            </div>
+                        })}
+                    </div>
+                </details>
             }
         </section>
     }
@@ -5355,16 +5367,19 @@ fn mlops_promotion_gates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                     {for snapshot.model_ops.gates.blockers.iter().map(|blocker| html! { <li>{blocker}</li> })}
                 </ul>
             }
-            <div class="factor-card-grid">
-                {for snapshot.model_ops.gates.gates.iter().map(|gate| html! {
-                    <div class="metric-row">
-                        <span>{&gate.label}</span>
-                        <strong>{if gate.passed { "passed" } else { "blocked" }}</strong>
-                        <small>{&gate.evidence_source}</small>
-                        <small>{&gate.blocker}</small>
-                    </div>
-                })}
-            </div>
+            <details class="data-source-detail governance-detail release-evidence-detail">
+                <summary>{format!("Promotion gate detail: {} gates", snapshot.model_ops.gates.gates.len())}</summary>
+                <div class="governance-check-list">
+                    {for snapshot.model_ops.gates.gates.iter().map(|gate| html! {
+                        <div>
+                            <strong>{&gate.label}</strong>
+                            <span class={classes!("status-token", if gate.passed { "success" } else { "danger" })}>{if gate.passed { "passed" } else { "blocked" }}</span>
+                            <small>{&gate.evidence_source}</small>
+                            <small>{&gate.blocker}</small>
+                        </div>
+                    })}
+                </div>
+            </details>
         </section>
     }
 }
@@ -5412,7 +5427,9 @@ fn mlops_action_view(props: &MlopsActionProps) -> Html {
         ApiState::Idle => {
             html! { <p class="empty">{"Choose an action only after evidence and reviewer context are ready."}</p> }
         }
-        ApiState::Loading => html! { <p>{"Submitting governed MLOps action..."}</p> },
+        ApiState::Loading => {
+            html! { <p>{"Submitting governed provider model release action..."}</p> }
+        }
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(response) => html! {
             <>
@@ -11678,7 +11695,7 @@ fn model_monitoring_cockpit(snapshot: &ModelOpsSnapshot) -> Html {
                     <div class="model-monitoring-link diagonal-a"></div>
                     <div class="model-monitoring-link diagonal-b"></div>
                     <div class="model-monitoring-core">
-                        <span>{"MLOps"}</span>
+                        <span>{"Release gate"}</span>
                         <strong>{&snapshot.performance.model_key}</strong>
                     </div>
                     {model_monitoring_node("Version lock", active_model.map(|model| model.version.as_str()).unwrap_or("pending"), "top", "version")}
@@ -12018,6 +12035,30 @@ fn active_model_version(snapshot: &ModelOpsSnapshot) -> Option<&ModelVersion> {
         .iter()
         .find(|model| model.status == "active")
         .or_else(|| snapshot.models.first())
+}
+
+fn provider_release_decision_label(snapshot: &MlopsWorkspaceSnapshot) -> &'static str {
+    if !snapshot.model_ops.gates.blockers.is_empty() {
+        "resolve blockers"
+    } else if snapshot
+        .model_ops
+        .gates
+        .decision
+        .to_ascii_lowercase()
+        .contains("allowed")
+    {
+        "approve rollout"
+    } else if snapshot
+        .model_ops
+        .retraining
+        .recommendation
+        .to_ascii_lowercase()
+        .contains("retraining")
+    {
+        "request retraining"
+    } else {
+        "keep monitoring"
+    }
 }
 
 fn latest_dataset(datasets: &[DatasetRecord]) -> Option<&DatasetRecord> {
