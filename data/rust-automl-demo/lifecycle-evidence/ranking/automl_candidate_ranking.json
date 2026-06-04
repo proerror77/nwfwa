@@ -1,0 +1,94 @@
+{
+  "plan_kind": "automl_candidate_ranking",
+  "plan_version": 1,
+  "promotion_boundary": "ranking opens human review only; no automatic model promotion or rule publication",
+  "generated_from_reports": [
+    "data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+    "data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json"
+  ],
+  "recommended_candidate_model_version": "0.2.0-xgboost-candidate",
+  "candidates": [
+    {
+      "rank": 1,
+      "model_key": "baseline_fwa",
+      "candidate_model_version": "0.2.0-xgboost-candidate",
+      "algorithm": "xgboost",
+      "algorithm_family": "gradient_boosted_tree",
+      "dataset_key": "rust_demo_claim_risk_labeled",
+      "dataset_version": "2026-06-rust-automl-demo",
+      "validation_report_uri": "data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "ranking_score": 82.2,
+      "validation_auc": 0.86,
+      "out_of_time_auc": 0.84,
+      "out_of_time_average_precision": 0.8099999999999999,
+      "out_of_time_precision": 0.8,
+      "out_of_time_recall": 0.76,
+      "gate_status": "passed",
+      "blocking_reasons": [],
+      "recommended_action": "open_human_review",
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "rank": 2,
+      "model_key": "baseline_fwa",
+      "candidate_model_version": "0.2.0-lightgbm-candidate",
+      "algorithm": "lightgbm",
+      "algorithm_family": "gradient_boosted_tree",
+      "dataset_key": "rust_demo_claim_risk_labeled",
+      "dataset_version": "2026-06-rust-automl-demo",
+      "validation_report_uri": "data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json",
+      "ranking_score": 81.2,
+      "validation_auc": 0.85,
+      "out_of_time_auc": 0.83,
+      "out_of_time_average_precision": 0.7999999999999999,
+      "out_of_time_precision": 0.79,
+      "out_of_time_recall": 0.75,
+      "gate_status": "passed",
+      "blocking_reasons": [],
+      "recommended_action": "open_human_review",
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json",
+        "model_evaluations:0_2_0_lightgbm_candidate"
+      ]
+    }
+  ],
+  "review_tasks": [
+    {
+      "task_kind": "model_candidate_human_review",
+      "candidate_model_version": "0.2.0-xgboost-candidate",
+      "review_queue": "model_governance_review",
+      "required_review": "human_approval_required_before_shadow_or_activation",
+      "decision_options": [
+        "reject",
+        "request_more_evidence",
+        "approve_shadow_only"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+        "model_evaluations:0_2_0_xgboost_candidate"
+      ]
+    },
+    {
+      "task_kind": "model_candidate_human_review",
+      "candidate_model_version": "0.2.0-lightgbm-candidate",
+      "review_queue": "model_governance_review",
+      "required_review": "human_approval_required_before_shadow_or_activation",
+      "decision_options": [
+        "reject",
+        "request_more_evidence",
+        "approve_shadow_only"
+      ],
+      "evidence_refs": [
+        "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json",
+        "model_evaluations:0_2_0_lightgbm_candidate"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+    "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json"
+  ]
+}

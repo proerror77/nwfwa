@@ -1,0 +1,65 @@
+[
+  {
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+    "backtest_kind": "deterministic_rule_candidate_backtest",
+    "required_dataset_splits": [
+      "train",
+      "validation",
+      "out_of_time"
+    ],
+    "minimum_evidence": [
+      "hit_rate_by_split",
+      "precision_recall_by_split",
+      "false_positive_review",
+      "rule_only_baseline_comparison",
+      "manual_review_capacity_impact"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+      "model_evaluations:0_2_0_xgboost_candidate"
+    ]
+  },
+  {
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+    "backtest_kind": "deterministic_rule_candidate_backtest",
+    "required_dataset_splits": [
+      "train",
+      "validation",
+      "out_of_time"
+    ],
+    "minimum_evidence": [
+      "hit_rate_by_split",
+      "precision_recall_by_split",
+      "false_positive_review",
+      "rule_only_baseline_comparison",
+      "manual_review_capacity_impact"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+      "model_evaluations:0_2_0_xgboost_candidate"
+    ]
+  },
+  {
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+    "backtest_kind": "deterministic_rule_candidate_backtest",
+    "required_dataset_splits": [
+      "train",
+      "validation",
+      "out_of_time"
+    ],
+    "minimum_evidence": [
+      "hit_rate_by_split",
+      "precision_recall_by_split",
+      "false_positive_review",
+      "rule_only_baseline_comparison",
+      "manual_review_capacity_impact"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+      "model_evaluations:0_2_0_xgboost_candidate"
+    ]
+  }
+]

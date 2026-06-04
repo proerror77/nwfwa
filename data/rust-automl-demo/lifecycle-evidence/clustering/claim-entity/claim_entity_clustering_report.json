@@ -1,0 +1,138 @@
+{
+  "report_kind": "claim_entity_clustering",
+  "report_version": 1,
+  "dataset_key": "rust_demo_claim_shadow_unlabeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "algorithm": "rust_standardized_entity_kmeans_v1",
+  "label_policy": "unlabeled_shadow_scoring_only",
+  "governance_boundary": "unlabeled entity clustering creates anomaly review candidates only; it must not create confirmed FWA labels, automatic claim disposition, or rule-library writeback",
+  "feature_columns": [
+    "claim_amount",
+    "amount_to_limit_ratio",
+    "peer_percentile",
+    "item_count",
+    "high_cost_item_ratio",
+    "provider_risk_tier",
+    "diagnosis_procedure_mismatch",
+    "member_degree",
+    "provider_degree"
+  ],
+  "cluster_count": 4,
+  "cluster_summaries": [
+    {
+      "cluster_id": 0,
+      "claim_count": 1,
+      "average_outlier_score": 0.0,
+      "average_claim_amount": 380.0,
+      "average_provider_degree": 1.0
+    },
+    {
+      "cluster_id": 1,
+      "claim_count": 1,
+      "average_outlier_score": 0.0,
+      "average_claim_amount": 610.0,
+      "average_provider_degree": 1.0
+    },
+    {
+      "cluster_id": 2,
+      "claim_count": 1,
+      "average_outlier_score": 0.0,
+      "average_claim_amount": 740.0,
+      "average_provider_degree": 1.0
+    },
+    {
+      "cluster_id": 3,
+      "claim_count": 3,
+      "average_outlier_score": 0.869,
+      "average_claim_amount": 1916.6667,
+      "average_provider_degree": 1.0
+    }
+  ],
+  "entity_assignments": [
+    {
+      "claim_id": "CLM-S001",
+      "member_id": "MBR-S001",
+      "provider_id": "PRV-201",
+      "cluster_id": 0,
+      "outlier_score": 0.0,
+      "anomaly_candidate": false
+    },
+    {
+      "claim_id": "CLM-S002",
+      "member_id": "MBR-S002",
+      "provider_id": "PRV-202",
+      "cluster_id": 3,
+      "outlier_score": 0.4323,
+      "anomaly_candidate": false
+    },
+    {
+      "claim_id": "CLM-S003",
+      "member_id": "MBR-S003",
+      "provider_id": "PRV-203",
+      "cluster_id": 2,
+      "outlier_score": 0.0,
+      "anomaly_candidate": false
+    },
+    {
+      "claim_id": "CLM-S004",
+      "member_id": "MBR-S004",
+      "provider_id": "PRV-204",
+      "cluster_id": 3,
+      "outlier_score": 0.9007,
+      "anomaly_candidate": false
+    },
+    {
+      "claim_id": "CLM-S005",
+      "member_id": "MBR-S005",
+      "provider_id": "PRV-205",
+      "cluster_id": 1,
+      "outlier_score": 0.0,
+      "anomaly_candidate": false
+    },
+    {
+      "claim_id": "CLM-S006",
+      "member_id": "MBR-S006",
+      "provider_id": "PRV-206",
+      "cluster_id": 3,
+      "outlier_score": 1.2741,
+      "anomaly_candidate": true
+    }
+  ],
+  "anomaly_candidates": [
+    {
+      "claim_id": "CLM-S006",
+      "member_id": "MBR-S006",
+      "provider_id": "PRV-206",
+      "cluster_id": 3,
+      "outlier_score": 1.2741,
+      "reason": "Claim/member/provider entity context is far from its cluster centroid; review as an anomaly candidate, not a confirmed FWA label.",
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json",
+        "claim_entity_cluster:rust_demo_claim_shadow_unlabeled:CLM-S006"
+      ]
+    }
+  ],
+  "review_tasks": [
+    {
+      "task_kind": "claim_entity_anomaly_review",
+      "claim_id": "CLM-S006",
+      "member_id": "MBR-S006",
+      "provider_id": "PRV-206",
+      "review_queue": "claim_entity_anomaly_candidate_review",
+      "required_review": "human_review_required_before_case_creation_label_assignment_or_rule_writeback",
+      "decision_options": [
+        "dismiss_as_entity_variation",
+        "request_more_evidence",
+        "open_investigation_candidate",
+        "prepare_rule_candidate_backtest"
+      ],
+      "evidence_refs": [
+        "dataset_manifest:data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json",
+        "claim_entity_cluster:rust_demo_claim_shadow_unlabeled:CLM-S006"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "dataset_manifest:data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json"
+  ]
+}

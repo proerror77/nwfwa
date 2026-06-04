@@ -1,0 +1,50 @@
+[
+  {
+    "task_kind": "rule_candidate_human_review",
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+    "review_queue": "rule_studio_candidate_review",
+    "required_review": "human_approval_required_before_rule_library_writeback",
+    "decision_options": [
+      "reject",
+      "request_backtest_changes",
+      "approve_draft_for_backtest"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+      "model_evaluations:0_2_0_xgboost_candidate"
+    ]
+  },
+  {
+    "task_kind": "rule_candidate_human_review",
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+    "review_queue": "rule_studio_candidate_review",
+    "required_review": "human_approval_required_before_rule_library_writeback",
+    "decision_options": [
+      "reject",
+      "request_backtest_changes",
+      "approve_draft_for_backtest"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+      "model_evaluations:0_2_0_xgboost_candidate"
+    ]
+  },
+  {
+    "task_kind": "rule_candidate_human_review",
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+    "review_queue": "rule_studio_candidate_review",
+    "required_review": "human_approval_required_before_rule_library_writeback",
+    "decision_options": [
+      "reject",
+      "request_backtest_changes",
+      "approve_draft_for_backtest"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "model_feature_importance:data/rust-automl-demo/lifecycle-evidence/feature-importance/feature_importance.parquet",
+      "model_evaluations:0_2_0_xgboost_candidate"
+    ]
+  }
+]

@@ -1,0 +1,44 @@
+{
+  "evidence_refs": [
+    "model_artifact_evaluations:data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/xgboost_model_artifact_evaluation.json",
+    "model_shadow_reports:data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/shadow_report.json",
+    "model_drift_reports:data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/drift_report.json",
+    "model_fairness_reports:data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/fairness_report.json"
+  ],
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate",
+  "overall_status": "passed",
+  "promotion_boundary": "monitoring can open review or retraining preparation only; it must not activate models, publish rules, or assign fraud labels",
+  "report_kind": "mlops_monitoring_report",
+  "report_version": 1,
+  "retraining_recommendation": "monitor",
+  "review_tasks": [],
+  "signals": {
+    "artifact_evaluation": {
+      "gate_status": "passed",
+      "latency_status": "passed",
+      "p95_latency_ms": 24,
+      "report_uri": "data/rust-automl-demo/lifecycle-evidence/artifact-evaluation/xgboost_model_artifact_evaluation.json",
+      "rust_serving_status": "passed"
+    },
+    "drift": {
+      "max_feature_psi": 0.08,
+      "report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/drift_report.json",
+      "score_psi": 0.05,
+      "status": "stable"
+    },
+    "fairness": {
+      "report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/fairness_report.json",
+      "segment_count": 2,
+      "status": "passed"
+    },
+    "shadow": {
+      "average_abs_probability_delta": 0.04,
+      "comparison_count": 128,
+      "max_abs_probability_delta": 0.12,
+      "report_uri": "data/rust-automl-demo/lifecycle-evidence/monitoring-inputs/shadow_report.json",
+      "status": "passed"
+    }
+  },
+  "triggers": []
+}

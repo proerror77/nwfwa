@@ -1,0 +1,13 @@
+{
+  "segments": [
+    {
+      "segment_column": "provider_risk_tier",
+      "segment_value": "low"
+    },
+    {
+      "segment_column": "provider_risk_tier",
+      "segment_value": "high"
+    }
+  ],
+  "status": "passed"
+}

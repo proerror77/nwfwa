@@ -41,6 +41,7 @@
     "cargo run --locked -p worker -- build-training-handoff --manifest data/rust-automl-demo/labeled_claim_risk/manifest.json --artifact-base-uri s3://fwa-models --model-key baseline_fwa --base-model-version 0.1.0 --job-id model_retraining_job_1 --actor trainer-worker",
     "cargo run --locked -p worker -- build-training-handoff --manifest data/rust-automl-demo/labeled_claim_risk/manifest.json --artifact-base-uri s3://fwa-models --model-key baseline_fwa --base-model-version 0.1.0 --job-id model_retraining_job_1 --actor trainer-worker --algorithm xgboost",
     "cargo run --locked -p worker -- cluster-provider-peers --manifest data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json --output-dir data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters",
-    "cargo run --locked -p worker -- cluster-claim-entities --manifest data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json --output-dir data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters"
+    "cargo run --locked -p worker -- cluster-claim-entities --manifest data/rust-automl-demo/unlabeled_shadow_scoring/manifest.json --output-dir data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters",
+    "cargo run --locked -p worker -- build-demo-automl-lifecycle-evidence --demo-root data/rust-automl-demo --output-dir data/rust-automl-demo/lifecycle-evidence"
   ]
 }

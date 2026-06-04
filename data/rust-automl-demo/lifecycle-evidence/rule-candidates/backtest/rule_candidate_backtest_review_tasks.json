@@ -1,0 +1,47 @@
+[
+  {
+    "task_kind": "rule_candidate_backtest_review",
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+    "review_queue": "rule_studio_candidate_review",
+    "required_review": "human_approval_required_after_backtest_before_rule_library_writeback",
+    "decision_options": [
+      "reject",
+      "request_threshold_or_feature_changes",
+      "approve_for_policy_governance_review"
+    ],
+    "evidence_refs": [
+      "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+      "source_feature:amount_to_limit_ratio"
+    ]
+  },
+  {
+    "task_kind": "rule_candidate_backtest_review",
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+    "review_queue": "rule_studio_candidate_review",
+    "required_review": "human_approval_required_after_backtest_before_rule_library_writeback",
+    "decision_options": [
+      "reject",
+      "request_threshold_or_feature_changes",
+      "approve_for_policy_governance_review"
+    ],
+    "evidence_refs": [
+      "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+      "source_feature:peer_percentile"
+    ]
+  },
+  {
+    "task_kind": "rule_candidate_backtest_review",
+    "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+    "review_queue": "rule_studio_candidate_review",
+    "required_review": "human_approval_required_after_backtest_before_rule_library_writeback",
+    "decision_options": [
+      "reject",
+      "request_threshold_or_feature_changes",
+      "approve_for_policy_governance_review"
+    ],
+    "evidence_refs": [
+      "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+      "source_feature:high_cost_item_ratio"
+    ]
+  }
+]

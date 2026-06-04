@@ -76,6 +76,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "demo_automl_lifecycle_evidence_builder",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "model_artifact_evaluator",
                 status: "ok",
             },
@@ -2849,6 +2853,343 @@ pub fn build_automl_lifecycle_closure_report(
         &report,
     )?;
     Ok(report)
+}
+
+pub fn build_demo_automl_lifecycle_evidence(
+    demo_root: impl AsRef<Path>,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let demo_root = demo_root.as_ref();
+    let output_dir = output_dir.as_ref();
+    let index_uri = demo_root.join("index.json");
+    let labeled_manifest = demo_root.join("labeled_claim_risk/manifest.json");
+    let provider_manifest = demo_root.join("unlabeled_provider_peer_clustering/manifest.json");
+    let claim_manifest = demo_root.join("unlabeled_shadow_scoring/manifest.json");
+    for required_file in [
+        &index_uri,
+        &labeled_manifest,
+        &provider_manifest,
+        &claim_manifest,
+    ] {
+        if !required_file.is_file() {
+            bail!(
+                "demo lifecycle evidence requires existing demo file {}",
+                required_file.display()
+            );
+        }
+    }
+    fs::create_dir_all(output_dir).with_context(|| {
+        format!(
+            "create demo lifecycle evidence dir {}",
+            output_dir.display()
+        )
+    })?;
+
+    let validation_dir = output_dir.join("validation");
+    fs::create_dir_all(&validation_dir)
+        .with_context(|| format!("create validation dir {}", validation_dir.display()))?;
+    let xgboost_validation = validation_dir.join("xgboost_validation.json");
+    let lightgbm_validation = validation_dir.join("lightgbm_validation.json");
+    write_demo_validation_report(
+        &xgboost_validation,
+        "0.2.0-xgboost-candidate",
+        "xgboost",
+        "xgboost_onnx",
+        0.86,
+        0.80,
+        0.76,
+    )?;
+    write_demo_validation_report(
+        &lightgbm_validation,
+        "0.2.0-lightgbm-candidate",
+        "lightgbm",
+        "lightgbm_onnx",
+        0.85,
+        0.79,
+        0.75,
+    )?;
+
+    let feature_importance_dir = output_dir.join("feature-importance");
+    fs::create_dir_all(&feature_importance_dir).with_context(|| {
+        format!(
+            "create feature importance dir {}",
+            feature_importance_dir.display()
+        )
+    })?;
+    let feature_importance_uri = feature_importance_dir.join("feature_importance.parquet");
+    write_demo_feature_importance_parquet(&feature_importance_uri)?;
+
+    let ranking = rank_automl_candidates(
+        &[
+            xgboost_validation.to_string_lossy().into_owned(),
+            lightgbm_validation.to_string_lossy().into_owned(),
+        ],
+        output_dir.join("ranking"),
+    )?;
+
+    let artifact_eval_dir = output_dir.join("artifact-evaluation");
+    fs::create_dir_all(&artifact_eval_dir).with_context(|| {
+        format!(
+            "create artifact evaluation dir {}",
+            artifact_eval_dir.display()
+        )
+    })?;
+    let xgboost_artifact_eval = artifact_eval_dir.join("xgboost_model_artifact_evaluation.json");
+    let lightgbm_artifact_eval = artifact_eval_dir.join("lightgbm_model_artifact_evaluation.json");
+    write_demo_artifact_evaluation_report(
+        &xgboost_artifact_eval,
+        "0.2.0-xgboost-candidate",
+        "xgboost_onnx",
+        24,
+    )?;
+    write_demo_artifact_evaluation_report(
+        &lightgbm_artifact_eval,
+        "0.2.0-lightgbm-candidate",
+        "lightgbm_onnx",
+        21,
+    )?;
+
+    let rule_candidate_dir = output_dir.join("rule-candidates");
+    mine_rule_candidates(
+        &xgboost_validation.to_string_lossy(),
+        &feature_importance_uri.to_string_lossy(),
+        &rule_candidate_dir,
+    )?;
+    let rule_backtest_dir = rule_candidate_dir.join("backtest");
+    run_rule_candidate_backtest(
+        &rule_candidate_dir
+            .join("rule_candidate_mining_plan.json")
+            .to_string_lossy(),
+        &labeled_manifest.to_string_lossy(),
+        &rule_backtest_dir,
+    )?;
+
+    let provider_cluster_dir = output_dir.join("clustering/provider-peer");
+    let provider_clustering =
+        cluster_provider_peers(&provider_manifest.to_string_lossy(), &provider_cluster_dir)?;
+    let claim_cluster_dir = output_dir.join("clustering/claim-entity");
+    let claim_clustering =
+        cluster_claim_entities(&claim_manifest.to_string_lossy(), &claim_cluster_dir)?;
+
+    let monitoring_inputs_dir = output_dir.join("monitoring-inputs");
+    fs::create_dir_all(&monitoring_inputs_dir).with_context(|| {
+        format!(
+            "create monitoring input dir {}",
+            monitoring_inputs_dir.display()
+        )
+    })?;
+    let shadow_report = monitoring_inputs_dir.join("shadow_report.json");
+    let drift_report = monitoring_inputs_dir.join("drift_report.json");
+    let fairness_report = monitoring_inputs_dir.join("fairness_report.json");
+    write_json(
+        shadow_report.clone(),
+        &serde_json::json!({
+            "status": "passed",
+            "comparison_count": 128,
+            "average_abs_probability_delta": 0.04,
+            "max_abs_probability_delta": 0.12
+        }),
+    )?;
+    write_json(
+        drift_report.clone(),
+        &serde_json::json!({
+            "status": "stable",
+            "score_psi": 0.05,
+            "max_feature_psi": 0.08
+        }),
+    )?;
+    write_json(
+        fairness_report.clone(),
+        &serde_json::json!({
+            "status": "passed",
+            "segments": [
+                {"segment_column": "provider_risk_tier", "segment_value": "low"},
+                {"segment_column": "provider_risk_tier", "segment_value": "high"}
+            ]
+        }),
+    )?;
+    build_mlops_monitoring_report(
+        "baseline_fwa",
+        "0.2.0-xgboost-candidate",
+        &xgboost_artifact_eval.to_string_lossy(),
+        &shadow_report.to_string_lossy(),
+        &drift_report.to_string_lossy(),
+        &fairness_report.to_string_lossy(),
+        output_dir.join("monitoring"),
+    )?;
+
+    let closure = build_automl_lifecycle_closure_report(
+        &index_uri.to_string_lossy(),
+        &output_dir
+            .join("ranking/automl_candidate_ranking.json")
+            .to_string_lossy(),
+        &[
+            xgboost_artifact_eval.to_string_lossy().into_owned(),
+            lightgbm_artifact_eval.to_string_lossy().into_owned(),
+        ],
+        &rule_backtest_dir
+            .join("rule_candidate_backtest_report.json")
+            .to_string_lossy(),
+        &provider_cluster_dir
+            .join("provider_peer_clustering_report.json")
+            .to_string_lossy(),
+        &claim_cluster_dir
+            .join("claim_entity_clustering_report.json")
+            .to_string_lossy(),
+        &output_dir
+            .join("monitoring/mlops_monitoring_report.json")
+            .to_string_lossy(),
+        output_dir.join("closure"),
+    )?;
+
+    let index = serde_json::json!({
+        "evidence_pack_kind": "rust_automl_demo_lifecycle_evidence",
+        "evidence_pack_version": 1,
+        "demo_root": demo_root.to_string_lossy(),
+        "output_dir": output_dir.to_string_lossy(),
+        "recommended_candidate_model_version": ranking.recommended_candidate_model_version,
+        "provider_anomaly_candidate_count": provider_clustering.anomaly_candidates.len(),
+        "claim_entity_anomaly_candidate_count": claim_clustering.anomaly_candidates.len(),
+        "closure_status": closure["closure_status"],
+        "artifacts": {
+            "xgboost_validation_report": xgboost_validation,
+            "lightgbm_validation_report": lightgbm_validation,
+            "candidate_ranking": output_dir.join("ranking/automl_candidate_ranking.json"),
+            "xgboost_artifact_evaluation": xgboost_artifact_eval,
+            "lightgbm_artifact_evaluation": lightgbm_artifact_eval,
+            "feature_importance": feature_importance_uri,
+            "rule_candidate_plan": rule_candidate_dir.join("rule_candidate_mining_plan.json"),
+            "rule_backtest_report": rule_backtest_dir.join("rule_candidate_backtest_report.json"),
+            "provider_clustering_report": provider_cluster_dir.join("provider_peer_clustering_report.json"),
+            "claim_entity_clustering_report": claim_cluster_dir.join("claim_entity_clustering_report.json"),
+            "mlops_monitoring_report": output_dir.join("monitoring/mlops_monitoring_report.json"),
+            "lifecycle_closure_report": output_dir.join("closure/rust_automl_lifecycle_closure_report.json")
+        },
+        "governance_boundary": "demo evidence only; the pack proves the Rust AutoML lifecycle contract but must not activate models, assign fraud labels, or write rules without the recorded human gates"
+    });
+    write_json(
+        output_dir.join("demo_lifecycle_evidence_index.json"),
+        &index,
+    )?;
+    Ok(index)
+}
+
+fn write_demo_validation_report(
+    path: &Path,
+    candidate_model_version: &str,
+    algorithm: &str,
+    runtime_kind: &str,
+    auc: f64,
+    precision: f64,
+    recall: f64,
+) -> anyhow::Result<()> {
+    write_json(
+        path.to_path_buf(),
+        &serde_json::json!({
+            "model_key": "baseline_fwa",
+            "candidate_model_version": candidate_model_version,
+            "dataset_key": "rust_demo_claim_risk_labeled",
+            "dataset_version": "2026-06-rust-automl-demo",
+            "algorithm": algorithm,
+            "validation_metrics": {
+                "auc": auc,
+                "precision": precision,
+                "recall": recall
+            },
+            "metrics_json": {
+                "algorithm": algorithm,
+                "algorithm_family": "gradient_boosted_tree",
+                "runtime_kind": runtime_kind,
+                "out_of_time_auc": auc - 0.02,
+                "out_of_time_average_precision": auc - 0.05,
+                "out_of_time_precision": precision,
+                "out_of_time_recall": recall,
+                "time_group_split_status": "passed",
+                "leakage_check_status": "passed",
+                "shadow_comparison_status": "passed",
+                "serving_version_lock_status": "passed",
+                "artifact_integrity_status": "passed",
+                "feature_store_materialization_status": "passed",
+                "rust_feature_set_status": "passed",
+                "rust_feature_set_manifest_uri": format!("data/rust-automl-demo/labeled_claim_risk/feature-set/feature_set_manifest.json"),
+                "segment_fairness_status": "passed",
+                "model_artifact_evaluation_status": "passed",
+                "onnx_parity_status": "passed",
+                "onnx_parity_gate_status": "passed",
+                "onnx_parity_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/onnx-parity/{candidate_model_version}_onnx_parity_report.json"),
+                "label_provenance_status": "passed"
+            }
+        }),
+    )
+}
+
+fn write_demo_artifact_evaluation_report(
+    path: &Path,
+    model_version: &str,
+    runtime_kind: &str,
+    p95_latency_ms: u64,
+) -> anyhow::Result<()> {
+    write_json(
+        path.to_path_buf(),
+        &serde_json::json!({
+            "report_kind": "model_artifact_evaluation",
+            "report_version": 1,
+            "model_key": "baseline_fwa",
+            "model_version": model_version,
+            "runtime_kind": runtime_kind,
+            "serving_manifest_uri": format!("data/rust-automl-demo/lifecycle-evidence/serving/{model_version}/serving_manifest.json"),
+            "dataset_key": "rust_demo_claim_risk_labeled",
+            "dataset_version": "2026-06-rust-automl-demo",
+            "evaluated_split": "validation",
+            "row_count": 4,
+            "contract_status": "passed",
+            "rust_serving_status": "passed",
+            "parity_status": "passed",
+            "latency_status": "passed",
+            "gate_status": "passed",
+            "max_abs_probability_delta": 0.00001,
+            "average_abs_probability_delta": 0.000004,
+            "p95_latency_ms": p95_latency_ms,
+            "latency_budget_ms": 100,
+            "blocking_reasons": [],
+            "sample_results": [],
+            "evidence_refs": [
+                format!("model_onnx_parity_reports:data/rust-automl-demo/lifecycle-evidence/onnx-parity/{model_version}_onnx_parity_report.json")
+            ]
+        }),
+    )
+}
+
+fn write_demo_feature_importance_parquet(path: &Path) -> anyhow::Result<()> {
+    let rows = [
+        ("amount_to_limit_ratio", 0.39),
+        ("peer_percentile", 0.28),
+        ("high_cost_item_ratio", 0.20),
+        ("provider_risk_tier", 0.08),
+        ("diagnosis_procedure_mismatch", 0.05),
+    ];
+    let schema = Arc::new(Schema::new(vec![
+        Field::new("feature", DataType::Utf8, false),
+        Field::new("coefficient", DataType::Float64, true),
+        Field::new("importance", DataType::Float64, false),
+        Field::new("importance_kind", DataType::Utf8, false),
+    ]));
+    let batch = RecordBatch::try_new(
+        schema.clone(),
+        vec![
+            Arc::new(StringArray::from(
+                rows.iter().map(|(feature, _)| *feature).collect::<Vec<_>>(),
+            )),
+            Arc::new(Float64Array::from(vec![None; rows.len()])),
+            Arc::new(Float64Array::from(
+                rows.iter()
+                    .map(|(_, importance)| *importance)
+                    .collect::<Vec<_>>(),
+            )),
+            Arc::new(StringArray::from(vec!["feature_importance"; rows.len()])),
+        ],
+    )?;
+    write_parquet(path.to_path_buf(), schema, &batch)
 }
 
 fn lifecycle_stage(
@@ -6994,6 +7335,51 @@ mod tests {
             .contains("must not auto-activate models"));
         assert!(root
             .join("closure/rust_automl_lifecycle_closure_report.json")
+            .is_file());
+    }
+
+    #[test]
+    fn builds_demo_automl_lifecycle_evidence_pack() {
+        let root = temp_root("demo-automl-lifecycle-evidence");
+        let demo_root = root.join("demo");
+        build_demo_ml_datasets(&demo_root, "2026-06-rust-automl-demo").expect("demo ML datasets");
+        let output_dir = root.join("lifecycle-evidence");
+
+        let index = build_demo_automl_lifecycle_evidence(&demo_root, &output_dir)
+            .expect("demo lifecycle evidence");
+
+        assert_eq!(
+            index["evidence_pack_kind"],
+            "rust_automl_demo_lifecycle_evidence"
+        );
+        assert_eq!(
+            index["closure_status"],
+            "closed_with_human_governance_gates"
+        );
+        assert_eq!(
+            index["recommended_candidate_model_version"],
+            "0.2.0-xgboost-candidate"
+        );
+        assert!(output_dir
+            .join("ranking/automl_candidate_ranking.json")
+            .is_file());
+        assert!(output_dir
+            .join("rule-candidates/backtest/rule_candidate_backtest_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("clustering/provider-peer/provider_peer_clustering_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("clustering/claim-entity/claim_entity_clustering_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("monitoring/mlops_monitoring_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("closure/rust_automl_lifecycle_closure_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("demo_lifecycle_evidence_index.json")
             .is_file());
     }
 

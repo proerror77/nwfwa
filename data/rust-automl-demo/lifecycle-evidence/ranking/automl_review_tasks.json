@@ -1,0 +1,32 @@
+[
+  {
+    "task_kind": "model_candidate_human_review",
+    "candidate_model_version": "0.2.0-xgboost-candidate",
+    "review_queue": "model_governance_review",
+    "required_review": "human_approval_required_before_shadow_or_activation",
+    "decision_options": [
+      "reject",
+      "request_more_evidence",
+      "approve_shadow_only"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/xgboost_validation.json",
+      "model_evaluations:0_2_0_xgboost_candidate"
+    ]
+  },
+  {
+    "task_kind": "model_candidate_human_review",
+    "candidate_model_version": "0.2.0-lightgbm-candidate",
+    "review_queue": "model_governance_review",
+    "required_review": "human_approval_required_before_shadow_or_activation",
+    "decision_options": [
+      "reject",
+      "request_more_evidence",
+      "approve_shadow_only"
+    ],
+    "evidence_refs": [
+      "model_validation_reports:data/rust-automl-demo/lifecycle-evidence/validation/lightgbm_validation.json",
+      "model_evaluations:0_2_0_lightgbm_candidate"
+    ]
+  }
+]

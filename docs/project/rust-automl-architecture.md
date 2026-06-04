@@ -75,6 +75,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
 
 - `build-demo-ml-datasets`: generate labeled and unlabeled Parquet datasets for
   pipeline validation.
+- `build-demo-automl-lifecycle-evidence`: generate a checked-in golden-path
+  evidence pack from the demo datasets, including ranking, rule backtest,
+  clustering, monitoring, and lifecycle closure reports.
 - `profile-parquet`: validate labeled training manifests and write schema,
   profile, and catalog artifacts.
 - `build-feature-set`: materialize feature-set manifests from labeled Parquet
@@ -156,19 +159,20 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer plus claim/member/provider entity
   clustering have Rust-native demo workflows; broader graph clustering and
   deep-learning serving remain future work.
-- 76% for Auto MLOps: worker can build feature-set manifests, create
+- 80% for Auto MLOps: worker can build feature-set manifests, create
   algorithm-aware training handoffs, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, require ONNX parity evidence for
   XGBoost/LightGBM gates, mine explainable rule candidates, backtest those
   candidates into human-review evidence, summarize live monitoring reports into
-  review/retraining triggers, and produce a lifecycle closure report, while API
-  promotion gates now require Rust feature-set materialization evidence, worker
-  ranking requires Rust feature-set and Rust serving evaluation evidence, and
-  trainer-side ONNX parity reports and unlabeled anomaly review tasks exist; API
-  retraining output now accepts governed serving manifests, and the console has
-  provider model release, promotion review, activation, and rollback actions.
-  Broader graph clustering and live monitoring surfaces still need hardening.
+  review/retraining triggers, produce a lifecycle closure report, and generate
+  a checked-in demo lifecycle evidence pack, while API promotion gates now
+  require Rust feature-set materialization evidence, worker ranking requires
+  Rust feature-set and Rust serving evaluation evidence, and trainer-side ONNX
+  parity reports and unlabeled anomaly review tasks exist; API retraining output
+  now accepts governed serving manifests, and the console has provider model
+  release, promotion review, activation, and rollback actions. Broader graph
+  clustering and live monitoring surfaces still need hardening.
 - 74% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation

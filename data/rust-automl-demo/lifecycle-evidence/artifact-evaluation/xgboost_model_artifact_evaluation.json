@@ -1,0 +1,26 @@
+{
+  "average_abs_probability_delta": 4e-6,
+  "blocking_reasons": [],
+  "contract_status": "passed",
+  "dataset_key": "rust_demo_claim_risk_labeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "evaluated_split": "validation",
+  "evidence_refs": [
+    "model_onnx_parity_reports:data/rust-automl-demo/lifecycle-evidence/onnx-parity/0.2.0-xgboost-candidate_onnx_parity_report.json"
+  ],
+  "gate_status": "passed",
+  "latency_budget_ms": 100,
+  "latency_status": "passed",
+  "max_abs_probability_delta": 0.00001,
+  "model_key": "baseline_fwa",
+  "model_version": "0.2.0-xgboost-candidate",
+  "p95_latency_ms": 24,
+  "parity_status": "passed",
+  "report_kind": "model_artifact_evaluation",
+  "report_version": 1,
+  "row_count": 4,
+  "runtime_kind": "xgboost_onnx",
+  "rust_serving_status": "passed",
+  "sample_results": [],
+  "serving_manifest_uri": "data/rust-automl-demo/lifecycle-evidence/serving/0.2.0-xgboost-candidate/serving_manifest.json"
+}

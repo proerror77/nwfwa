@@ -1,0 +1,250 @@
+{
+  "report_kind": "deterministic_rule_candidate_backtest",
+  "report_version": 1,
+  "source_plan_kind": "explainable_model_rule_candidate_mining",
+  "source_model_key": "baseline_fwa",
+  "source_candidate_model_version": "0.2.0-xgboost-candidate",
+  "dataset_key": "rust_demo_claim_risk_labeled",
+  "dataset_version": "2026-06-rust-automl-demo",
+  "label_column": "confirmed_fwa",
+  "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval",
+  "candidate_results": [
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+      "source_feature": "amount_to_limit_ratio",
+      "selected_operator": "gte",
+      "selected_threshold": 0.64,
+      "threshold_selection_split": "train",
+      "metrics_by_split": {
+        "out_of_time": {
+          "row_count": 4,
+          "positive_count": 2,
+          "hit_count": 2,
+          "hit_rate": 0.5,
+          "true_positive": 2,
+          "false_positive": 0,
+          "true_negative": 2,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        },
+        "train": {
+          "row_count": 8,
+          "positive_count": 4,
+          "hit_count": 4,
+          "hit_rate": 0.5,
+          "true_positive": 4,
+          "false_positive": 0,
+          "true_negative": 4,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        },
+        "validation": {
+          "row_count": 4,
+          "positive_count": 2,
+          "hit_count": 2,
+          "hit_rate": 0.5,
+          "true_positive": 2,
+          "false_positive": 0,
+          "true_negative": 2,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        }
+      },
+      "gate_status": "backtested_but_blocked_until_human_review",
+      "required_before_rule_library_writeback": [
+        "false_positive_review",
+        "human_rule_promotion_review",
+        "customer_policy_or_model_governance_approval",
+        "shadow_or_limited_rollout_if_high_impact"
+      ],
+      "evidence_refs": [
+        "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+        "source_feature:amount_to_limit_ratio"
+      ]
+    },
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+      "source_feature": "peer_percentile",
+      "selected_operator": "gte",
+      "selected_threshold": 0.79,
+      "threshold_selection_split": "train",
+      "metrics_by_split": {
+        "out_of_time": {
+          "row_count": 4,
+          "positive_count": 2,
+          "hit_count": 2,
+          "hit_rate": 0.5,
+          "true_positive": 2,
+          "false_positive": 0,
+          "true_negative": 2,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        },
+        "train": {
+          "row_count": 8,
+          "positive_count": 4,
+          "hit_count": 4,
+          "hit_rate": 0.5,
+          "true_positive": 4,
+          "false_positive": 0,
+          "true_negative": 4,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        },
+        "validation": {
+          "row_count": 4,
+          "positive_count": 2,
+          "hit_count": 2,
+          "hit_rate": 0.5,
+          "true_positive": 2,
+          "false_positive": 0,
+          "true_negative": 2,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        }
+      },
+      "gate_status": "backtested_but_blocked_until_human_review",
+      "required_before_rule_library_writeback": [
+        "false_positive_review",
+        "human_rule_promotion_review",
+        "customer_policy_or_model_governance_approval",
+        "shadow_or_limited_rollout_if_high_impact"
+      ],
+      "evidence_refs": [
+        "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+        "source_feature:peer_percentile"
+      ]
+    },
+    {
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+      "source_feature": "high_cost_item_ratio",
+      "selected_operator": "gte",
+      "selected_threshold": 0.4,
+      "threshold_selection_split": "train",
+      "metrics_by_split": {
+        "out_of_time": {
+          "row_count": 4,
+          "positive_count": 2,
+          "hit_count": 2,
+          "hit_rate": 0.5,
+          "true_positive": 2,
+          "false_positive": 0,
+          "true_negative": 2,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        },
+        "train": {
+          "row_count": 8,
+          "positive_count": 4,
+          "hit_count": 4,
+          "hit_rate": 0.5,
+          "true_positive": 4,
+          "false_positive": 0,
+          "true_negative": 4,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        },
+        "validation": {
+          "row_count": 4,
+          "positive_count": 2,
+          "hit_count": 2,
+          "hit_rate": 0.5,
+          "true_positive": 2,
+          "false_positive": 0,
+          "true_negative": 2,
+          "false_negative": 0,
+          "precision": 1.0,
+          "recall": 1.0,
+          "f1": 1.0,
+          "manual_review_capacity_impact": 0.5
+        }
+      },
+      "gate_status": "backtested_but_blocked_until_human_review",
+      "required_before_rule_library_writeback": [
+        "false_positive_review",
+        "human_rule_promotion_review",
+        "customer_policy_or_model_governance_approval",
+        "shadow_or_limited_rollout_if_high_impact"
+      ],
+      "evidence_refs": [
+        "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+        "source_feature:high_cost_item_ratio"
+      ]
+    }
+  ],
+  "review_tasks": [
+    {
+      "task_kind": "rule_candidate_backtest_review",
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+      "review_queue": "rule_studio_candidate_review",
+      "required_review": "human_approval_required_after_backtest_before_rule_library_writeback",
+      "decision_options": [
+        "reject",
+        "request_threshold_or_feature_changes",
+        "approve_for_policy_governance_review"
+      ],
+      "evidence_refs": [
+        "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_amount_to_limit_ratio",
+        "source_feature:amount_to_limit_ratio"
+      ]
+    },
+    {
+      "task_kind": "rule_candidate_backtest_review",
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+      "review_queue": "rule_studio_candidate_review",
+      "required_review": "human_approval_required_after_backtest_before_rule_library_writeback",
+      "decision_options": [
+        "reject",
+        "request_threshold_or_feature_changes",
+        "approve_for_policy_governance_review"
+      ],
+      "evidence_refs": [
+        "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_peer_percentile",
+        "source_feature:peer_percentile"
+      ]
+    },
+    {
+      "task_kind": "rule_candidate_backtest_review",
+      "candidate_rule_key": "model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+      "review_queue": "rule_studio_candidate_review",
+      "required_review": "human_approval_required_after_backtest_before_rule_library_writeback",
+      "decision_options": [
+        "reject",
+        "request_threshold_or_feature_changes",
+        "approve_for_policy_governance_review"
+      ],
+      "evidence_refs": [
+        "rule_candidate_backtest:model_pattern_0_2_0_xgboost_candidate_high_cost_item_ratio",
+        "source_feature:high_cost_item_ratio"
+      ]
+    }
+  ],
+  "evidence_refs": [
+    "rule_candidate_mining_plan:data/rust-automl-demo/lifecycle-evidence/rule-candidates/rule_candidate_mining_plan.json",
+    "dataset_manifest:data/rust-automl-demo/labeled_claim_risk/manifest.json"
+  ]
+}

@@ -244,6 +244,22 @@ The output is also an anomaly-candidate workflow only. It can prepare review or
 rule-candidate backtest work, but it must not write back to the rule library
 until backtesting and human review are complete.
 
+Build the checked-in Rust Auto MLOps golden-path evidence pack:
+
+```bash
+cargo run --locked -p worker -- build-demo-automl-lifecycle-evidence \
+  --demo-root data/rust-automl-demo \
+  --output-dir data/rust-automl-demo/lifecycle-evidence
+```
+
+This writes `demo_lifecycle_evidence_index.json`, validation reports for
+XGBoost and LightGBM, AutoML candidate ranking, ONNX Rust-serving artifact
+evaluation reports, feature-importance evidence, rule-candidate mining and
+backtest reports, provider and claim-entity clustering reports, MLOps
+monitoring reports, and the final lifecycle closure report. The checked-in
+closure report is `data/rust-automl-demo/lifecycle-evidence/closure/rust_automl_lifecycle_closure_report.json`
+and should stay `closed_with_human_governance_gates`.
+
 ```bash
 uv run --project apps/ml-service \
   python scripts/data/build_public_data_mvp.py \

@@ -1,0 +1,32 @@
+[
+  {
+    "task_kind": "provider_peer_anomaly_review",
+    "provider_id": "PRV-204",
+    "review_queue": "provider_anomaly_candidate_review",
+    "required_review": "human_review_required_before_case_creation_or_label_assignment",
+    "decision_options": [
+      "dismiss_as_peer_variation",
+      "request_more_evidence",
+      "open_investigation_candidate"
+    ],
+    "evidence_refs": [
+      "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+      "provider_peer_cluster:rust_demo_provider_peer_unlabeled:PRV-204"
+    ]
+  },
+  {
+    "task_kind": "provider_peer_anomaly_review",
+    "provider_id": "PRV-206",
+    "review_queue": "provider_anomaly_candidate_review",
+    "required_review": "human_review_required_before_case_creation_or_label_assignment",
+    "decision_options": [
+      "dismiss_as_peer_variation",
+      "request_more_evidence",
+      "open_investigation_candidate"
+    ],
+    "evidence_refs": [
+      "dataset_manifest:data/rust-automl-demo/unlabeled_provider_peer_clustering/manifest.json",
+      "provider_peer_cluster:rust_demo_provider_peer_unlabeled:PRV-206"
+    ]
+  }
+]
