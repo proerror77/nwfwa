@@ -2409,20 +2409,7 @@ fn bootstrap_ops_page() -> Html {
 
             <section class="panel">
                 <h3>{"Bootstrap Source"}</h3>
-                <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                </div>
+                <p class="empty">{"Using the configured pilot operations principal for historical replay, evidence requests, and label governance."}</p>
                 <div class="action-bar">
                     <button onclick={refresh_click} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh queues" }}
@@ -3088,18 +3075,6 @@ fn evidence_runtime_page() -> Html {
                 <h3>{"Runtime Source"}</h3>
                 <div class="form-grid">
                     <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
                         {"Selected document id"}
                         <input
                             value={(*selected_document_id).clone()}
@@ -3665,13 +3640,13 @@ fn runtime_signal_node(label: &str, value: &str, tone: &str) -> Html {
 
 fn runtime_layer_business_label(layer: &RuntimeLayerScore) -> String {
     match layer.layer_id.as_str() {
-        "L1" => format!("Peer benchmark signal / {}", layer.name),
-        "L2" => format!("Deterministic control signal / {}", layer.name),
-        "L3" => format!("Anomaly signal / {}", layer.name),
-        "L4" => format!("Model signal / {}", layer.name),
-        "L5" => format!("Clinical reasonableness signal / {}", layer.name),
-        "L6" => format!("Provider network signal / {}", layer.name),
-        "L7" => format!("Routing policy output / {}", layer.name),
+        "L1" => "Peer benchmark signal".into(),
+        "L2" => "Deterministic control signal".into(),
+        "L3" => "Anomaly signal".into(),
+        "L4" => "Model signal".into(),
+        "L5" => "Clinical reasonableness signal".into(),
+        "L6" => "Provider network signal".into(),
+        "L7" => "Routing policy output".into(),
         _ => layer.name.clone(),
     }
 }
@@ -3737,20 +3712,7 @@ fn dashboard_page(props: &DashboardPageProps) -> Html {
 
             <section class="panel">
                 <h3>{"Dashboard Source"}</h3>
-                <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                </div>
+                <p class="empty">{"Using the configured pilot operations principal for queue, value, review-load, and governance signals."}</p>
                 <div class="button-row">
                     <button onclick={refresh} disabled={matches!(&*summary_state, ApiState::Loading)}>
                         {if matches!(&*summary_state, ApiState::Loading) { "Refreshing..." } else { "Refresh dashboard" }}
@@ -4104,18 +4066,6 @@ fn rules_page() -> Html {
                 {rule_backfill_pipeline(&discovery_state, &backtest_state, &save_state, &snapshot_state)}
                 <div class="form-grid">
                     <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
                         {"Gate Rule ID"}
                         <input
                             value={(*rule_id).clone()}
@@ -4412,18 +4362,6 @@ fn models_page() -> Html {
             <section class="panel">
                 <h3>{"Model Source"}</h3>
                 <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
                     <label>
                         {"Model key"}
                         <input
@@ -5173,7 +5111,7 @@ fn routing_policies_page() -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Routing Policies"}</h2>
-                    <p>{"Govern L7 risk fusion thresholds, confidence gates, provider review routing, approvals, activation, and rollback evidence."}</p>
+                    <p>{"Govern risk bands, confidence gates, provider review thresholds, approvals, activation, and rollback evidence before routing affects claim handling."}</p>
                 </div>
                 <span class="status-pill">{"Risk Fusion Routing"}</span>
             </div>
@@ -5181,7 +5119,6 @@ fn routing_policies_page() -> Html {
             <section class="panel">
                 <h3>{"Routing Policy Control"}</h3>
                 <div class="form-grid">
-                    {text_input("API key", &api_key)}
                     {text_input("Policy ID", &policy_id)}
                     {text_input("Review mode", &review_mode)}
                     {text_input("Version", &version)}
@@ -5214,7 +5151,7 @@ fn routing_policies_view(props: &RoutingPoliciesProps) -> Html {
     html! {
         <>
             {match &props.state {
-                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load routing policies to inspect L7 routing governance."}</p></section> },
+                ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load routing policies to inspect routing governance."}</p></section> },
                 ApiState::Loading => html! { <section class="panel"><p>{"Loading routing policies..."}</p></section> },
                 ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
                 ApiState::Ready(snapshot) => html! {
@@ -5301,7 +5238,7 @@ fn routing_policy_cockpit(snapshot: &RoutingPolicySnapshot) -> Html {
             <section class="panel result-stack">
                 <div class="section-header">
                     <div>
-                        <h3>{"L7 Routing Decision Map"}</h3>
+                        <h3>{"Routing Decision Map"}</h3>
                         <p>{"How fused risk score, confidence, provider graph pressure, and governance gates route claims without automatic adjudication."}</p>
                     </div>
                     <span class={classes!("status-token", status_tone(&policy.status))}>{&policy.status}</span>
@@ -5321,13 +5258,13 @@ fn routing_policy_cockpit(snapshot: &RoutingPolicySnapshot) -> Html {
                     <div class="routing-decision-map">
                         <div class="routing-map-title">
                             <span>{"Risk fusion and routing"}</span>
-                            <strong>{"L1-L6 scores -> L7 policy -> human-safe action"}</strong>
+                            <strong>{"risk signals + confidence + policy gate -> human-safe route"}</strong>
                         </div>
                         <div class="routing-link horizontal"></div>
                         <div class="routing-link diagonal-a"></div>
                         <div class="routing-link diagonal-b"></div>
                         <div class="routing-core">
-                            <span>{"L7 Fusion"}</span>
+                            <span>{"Routing gate"}</span>
                             <strong>{&policy.review_mode}</strong>
                         </div>
                         {routing_node("Green band", &format!("0-{}", policy.risk_thresholds.low_max), "low")}
@@ -5353,7 +5290,7 @@ fn routing_policy_cockpit(snapshot: &RoutingPolicySnapshot) -> Html {
     } else {
         html! {
             <section class="panel">
-                <p class="empty">{"No routing policy available for L7 routing decision map."}</p>
+                <p class="empty">{"No routing policy available for routing decision map."}</p>
             </section>
         }
     }
@@ -5438,20 +5375,7 @@ fn factor_factory_page() -> Html {
 
             <section class="panel">
                 <h3>{"Readiness Source"}</h3>
-                <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                </div>
+                <p class="empty">{"Using governed dataset and feature metadata from the configured pilot workspace."}</p>
                 <div class="button-row">
                     <button onclick={refresh} disabled={matches!(&*readiness_state, ApiState::Loading)}>
                         {if matches!(&*readiness_state, ApiState::Loading) { "Refreshing..." } else { "Refresh readiness" }}
@@ -5586,20 +5510,7 @@ fn data_sources_page() -> Html {
 
             <section class="panel">
                 <h3>{"Data Source Control"}</h3>
-                <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                </div>
+                <p class="empty">{"Using the configured data-governance workspace for catalog, schema, and evaluation lineage."}</p>
                 <div class="button-row">
                     <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh data sources" }}
@@ -6030,18 +5941,7 @@ fn leads_cases_page() -> Html {
             <section class="panel queue-source-panel">
                 <div class="queue-source-bar">
                     <h3>{"Queue Source"}</h3>
-                    <label>
-                            {"API key"}
-                            <input
-                                value={(*api_key).clone()}
-                                oninput={{
-                                    let api_key = api_key.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
+                    <span class="status-token neutral">{"configured queue source"}</span>
                     <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh queue" }}
                     </button>
@@ -6393,7 +6293,6 @@ fn member_profile_page() -> Html {
             <section class="panel">
                 <h3>{"Member Profile Source"}</h3>
                 <div class="form-grid">
-                    {text_input("API key", &api_key)}
                     {text_input("Member ID", &member_id)}
                 </div>
                 <div class="button-row">
@@ -6545,16 +6444,14 @@ fn provider_risk_page() -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Provider Risk"}</h2>
-                    <p>{"Inspect L6 provider and graph risk profiles, review routing, outlier flags, graph reasons, and evidence refs for provider-focused investigation."}</p>
+                    <p>{"Inspect provider network and graph risk profiles, review routing, outlier flags, graph reasons, and evidence refs for provider-focused investigation."}</p>
                 </div>
                 <span class="status-pill">{"Provider Graph Risk"}</span>
             </div>
 
             <section class="panel">
                 <h3>{"Provider Risk Source"}</h3>
-                <div class="form-grid">
-                    {text_input("API key", &api_key)}
-                </div>
+                <p class="empty">{"Using the configured provider-risk workspace for graph and peer-pattern signals."}</p>
                 <div class="button-row">
                     <button onclick={refresh} disabled={matches!(&*summary_state, ApiState::Loading)}>
                         {if matches!(&*summary_state, ApiState::Loading) { "Refreshing..." } else { "Refresh provider risk" }}
@@ -6657,7 +6554,7 @@ fn provider_graph_cockpit(summary: &ProviderRiskSummary) -> Html {
                     <div class="graph-ring"></div>
                     <div class="graph-ring inner"></div>
                     <div class="graph-center provider-risk-center">
-                        <span>{"L6 Provider"}</span>
+                        <span>{"Provider Network"}</span>
                         <strong>{&provider.provider_id}</strong>
                     </div>
                     {provider_graph_entity("Risk tier", &provider.risk_tier, "top", "lead")}
@@ -6826,7 +6723,6 @@ fn audit_sampling_page() -> Html {
             <section class="panel result-stack">
                 <h3>{"Audit Sample Control"}</h3>
                 <div class="form-grid">
-                    {text_input("API key", &api_key)}
                     {text_input("Sample mode", &sample_mode)}
                     {text_input("Population", &population_definition)}
                     {text_input("Sample size", &sample_size)}
@@ -7191,18 +7087,6 @@ fn medical_review_page() -> Html {
                 <h3>{"Review Source"}</h3>
                 <div class="form-grid">
                     <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
                         {"Limit"}
                         <input
                             value={(*limit).clone()}
@@ -7406,20 +7290,7 @@ fn qa_review_page() -> Html {
 
             <section class="panel">
                 <h3>{"QA Source"}</h3>
-                <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                </div>
+                <p class="empty">{"Using the configured QA feedback workspace for sampled reviews, unresolved feedback, and closure signals."}</p>
                 <div class="button-row">
                     <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh QA review" }}
@@ -7723,18 +7594,6 @@ fn knowledge_base_page() -> Html {
             <section class="panel">
                 <h3>{"Similar Case Search"}</h3>
                 <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
                     <label>
                         {"Claim ID"}
                         <input
@@ -8073,7 +7932,7 @@ fn agent_investigator_page() -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Agent Investigator"}</h2>
-                    <p>{"Generate an assistive-only investigation package from seven-layer risk output and inspect the governed Agent run evidence trail."}</p>
+                    <p>{"Generate an assistive-only investigation package from governed risk signals and inspect the Agent run evidence trail."}</p>
                 </div>
                 <span class="status-pill">{"Assistive Investigation"}</span>
             </div>
@@ -8083,7 +7942,6 @@ fn agent_investigator_page() -> Html {
             <section class="panel result-stack">
                 <h3>{"Investigation Request"}</h3>
                 <div class="form-grid">
-                    {text_input("API key", &api_key)}
                     {text_input("Claim ID", &claim_id)}
                     {text_input("Risk score", &risk_score)}
                     {text_input("RAG", &rag)}
@@ -8130,7 +7988,7 @@ fn agent_investigator_blueprint() -> Html {
                 <span>{"Agent investigation blueprint"}</span>
                 <strong>{"assistive, evidence-bound, human-gated"}</strong>
                 <dl>
-                    <div><dt>{"Input"}</dt><dd>{"7-layer score + top reasons"}</dd></div>
+                    <div><dt>{"Input"}</dt><dd>{"risk signals + top reasons"}</dd></div>
                     <div><dt>{"Tools"}</dt><dd>{"claims, rules, models, KB, documents"}</dd></div>
                     <div><dt>{"Output"}</dt><dd>{"risk summary + checklist + QA draft"}</dd></div>
                     <div><dt>{"Boundary"}</dt><dd>{"no auto denial"}</dd></div>
@@ -8140,7 +7998,7 @@ fn agent_investigator_blueprint() -> Html {
                 <div class="agent-blueprint-rail"></div>
                 <div class="agent-blueprint-node risk">
                     <span>{"Risk context"}</span>
-                    <strong>{"L1-L7 findings"}</strong>
+                    <strong>{"risk signal findings"}</strong>
                     <small>{"score, RAG, reasons"}</small>
                 </div>
                 <div class="agent-blueprint-node evidence">
@@ -8403,29 +8261,35 @@ fn agent_run_governance_cockpit(run: &AgentRunRecord) -> Html {
     let policy_label = run
         .policy_checks
         .first()
-        .map(payload_keys_label)
+        .map(compact_payload_label)
         .unwrap_or_else(|| "no policy check".into());
     let tool_label = run
         .tool_calls
         .first()
-        .map(payload_keys_label)
+        .map(compact_payload_label)
         .unwrap_or_else(|| "no tool call".into());
     let result_label = run
         .tool_results
         .first()
-        .map(payload_keys_label)
+        .map(compact_payload_label)
         .unwrap_or_else(|| "no tool result".into());
     let context_label = run
         .context_snapshots
         .first()
-        .map(payload_keys_label)
+        .map(compact_payload_label)
         .unwrap_or_else(|| "no context snapshot".into());
     let step_label = run
         .steps
         .first()
-        .map(payload_keys_label)
+        .map(compact_payload_label)
         .unwrap_or_else(|| "no step".into());
-    let approval_label = approval_summary(&run.approvals);
+    let approval_label = if run.approvals.is_empty() {
+        "no approval record".into()
+    } else {
+        format!("{} approval records", run.approvals.len())
+    };
+    let evidence_label = format!("{} evidence refs", run.evidence_refs.len());
+    let output_label = compact_payload_label(&run.output_json);
 
     html! {
         <div class="agent-run-cockpit">
@@ -8457,7 +8321,7 @@ fn agent_run_governance_cockpit(run: &AgentRunRecord) -> Html {
                 {agent_run_node("Tool allowlist", &tool_label, "tool")}
                 {agent_run_node("Tool result", &result_label, "result")}
                 {agent_run_node("Human approval gate", &approval_label, "approval")}
-                {agent_run_node("Evidence audit trail", &refs_label(&run.evidence_refs), "audit")}
+                {agent_run_node("Evidence audit trail", &evidence_label, "audit")}
             </div>
 
             <aside class="agent-run-trace">
@@ -8467,7 +8331,7 @@ fn agent_run_governance_cockpit(run: &AgentRunRecord) -> Html {
                     {provider_signal_row("Policy checks", &run.policy_checks.len().to_string(), "strong")}
                     {provider_signal_row("Tool calls", &run.tool_calls.len().to_string(), "warning")}
                     {provider_signal_row("Approvals", &run.approvals.len().to_string(), "danger")}
-                    {provider_signal_row("Output JSON", &payload_keys_label(&run.output_json), "neutral")}
+                    {provider_signal_row("Output JSON", &output_label, "neutral")}
                 </div>
             </aside>
         </div>
@@ -8533,18 +8397,6 @@ fn governance_page() -> Html {
             <section class="panel">
                 <h3>{"Governance Source"}</h3>
                 <div class="form-grid">
-                    <label>
-                        {"API key"}
-                        <input
-                            value={(*api_key).clone()}
-                            oninput={{
-                                let api_key = api_key.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
                     <label>
                         {"Audit event group"}
                         <input
@@ -11740,7 +11592,7 @@ fn medical_review_cockpit(items: &[MedicalReviewQueueItem]) -> Html {
             <div class="section-header">
                 <div>
                     <h3>{"Clinical evidence cockpit"}</h3>
-                    <p>{"L5 medical reasonableness workbench linking diagnosis support, bill item evidence, missing records, reviewer outcome, and audit trace."}</p>
+                    <p>{"Clinical reasonableness workbench linking diagnosis support, bill item evidence, missing records, reviewer outcome, and audit trace."}</p>
                 </div>
                 <span class={classes!("status-token", status_tone(&item.evidence_status))}>{&item.evidence_status}</span>
             </div>
@@ -12070,6 +11922,19 @@ fn payload_keys_label(value: &Value) -> String {
             }
         })
         .unwrap_or_else(|| display_value(value))
+}
+
+fn compact_payload_label(value: &Value) -> String {
+    value
+        .as_object()
+        .map(|object| {
+            if object.is_empty() {
+                "empty object".into()
+            } else {
+                format!("{} fields", object.len())
+            }
+        })
+        .unwrap_or_else(|| "payload recorded".into())
 }
 
 fn empty_label(value: &str) -> &str {
