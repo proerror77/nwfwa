@@ -52,8 +52,18 @@ pub struct ModelPromotionGatesResponse {
     pub unresolved_model_feedback_count: usize,
     pub approved_label_count: usize,
     pub needs_review_label_count: usize,
+    pub artifact_evidence: ModelArtifactEvidenceSummary,
     pub gates: Vec<ModelPromotionGate>,
     pub blockers: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelArtifactEvidenceSummary {
+    pub serving_manifest_uri: Option<String>,
+    pub model_artifact_evaluation_report_uri: Option<String>,
+    pub rust_serving_status: Option<String>,
+    pub rust_serving_latency_status: Option<String>,
+    pub rust_serving_p95_latency_ms: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -1531,6 +1541,7 @@ fn build_model_promotion_gates(
         .filter(|label| label.governance_status == "needs_review")
         .count();
     let label_governance = approved_model_labels > 0 && needs_review_model_labels == 0;
+    let artifact_evidence = model_artifact_evidence_summary(metrics);
 
     let gates = vec![
         gate(
@@ -1699,6 +1710,7 @@ fn build_model_promotion_gates(
         unresolved_model_feedback_count,
         approved_label_count: approved_model_labels,
         needs_review_label_count: needs_review_model_labels,
+        artifact_evidence,
         gates,
         blockers,
     }
@@ -1941,6 +1953,35 @@ fn rust_serving_evaluation_gate(metrics: &Value) -> bool {
                 == Some("model_artifact_evaluation")
                 && value.get("gate_status").and_then(|value| value.as_str()) == Some("passed")
         })
+}
+
+fn model_artifact_evidence_summary(metrics: &Value) -> ModelArtifactEvidenceSummary {
+    ModelArtifactEvidenceSummary {
+        serving_manifest_uri: optional_metric_string(metrics, "serving_manifest_uri"),
+        model_artifact_evaluation_report_uri: optional_metric_string(
+            metrics,
+            "model_artifact_evaluation_report_uri",
+        ),
+        rust_serving_status: optional_metric_string(metrics, "rust_serving_status"),
+        rust_serving_latency_status: optional_metric_string(metrics, "rust_serving_latency_status"),
+        rust_serving_p95_latency_ms: optional_metric_u64(metrics, "rust_serving_p95_latency_ms"),
+    }
+}
+
+fn optional_metric_string(metrics: &Value, key: &str) -> Option<String> {
+    metrics
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+}
+
+fn optional_metric_u64(metrics: &Value, key: &str) -> Option<u64> {
+    metrics.get(key).and_then(|value| {
+        value
+            .as_u64()
+            .or_else(|| value.as_str().and_then(|value| value.parse::<u64>().ok()))
+    })
 }
 
 fn source_data_quality_gate(

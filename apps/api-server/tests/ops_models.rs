@@ -335,9 +335,11 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "rust_feature_set_manifest_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/rust_feature_set/feature_set_manifest.json",
                 "segment_fairness_status": "passed",
                 "model_artifact_evaluation_status": "passed",
+                "serving_manifest_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/serving_manifest.json",
                 "model_artifact_evaluation_report_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/artifact-evaluation/model_artifact_evaluation_report.json",
                 "rust_serving_status": "passed",
                 "rust_serving_latency_status": "passed",
+                "rust_serving_p95_latency_ms": 17,
                 "feature_reproducibility_hash": "sha256:activation-features",
                 "label_provenance_status": "passed",
                 "label_reviewer_source": "qa_review",
@@ -800,6 +802,14 @@ async fn model_promotion_gates_require_rust_feature_set_evidence() {
         .unwrap();
     assert_eq!(gate["passed"], false);
     assert_eq!(gate["evidence_source"], "missing");
+    assert_eq!(
+        body["artifact_evidence"]["serving_manifest_uri"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        body["artifact_evidence"]["rust_serving_status"],
+        serde_json::Value::Null
+    );
 }
 
 #[tokio::test]
@@ -2334,6 +2344,32 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
     .await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(review["model_version"], candidate_version);
+
+    let (status, gates) = get_json(
+        app.clone(),
+        "/api/v1/ops/models/baseline_fwa/promotion-gates",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        gates["artifact_evidence"]["serving_manifest_uri"],
+        format!("s3://fwa-models/baseline_fwa/{candidate_version}/serving_manifest.json")
+    );
+    assert_eq!(
+        gates["artifact_evidence"]["model_artifact_evaluation_report_uri"],
+        format!(
+            "s3://fwa-models/baseline_fwa/{candidate_version}/artifact-evaluation/model_artifact_evaluation_report.json"
+        )
+    );
+    assert_eq!(gates["artifact_evidence"]["rust_serving_status"], "passed");
+    assert_eq!(
+        gates["artifact_evidence"]["rust_serving_latency_status"],
+        "passed"
+    );
+    assert_eq!(
+        gates["artifact_evidence"]["rust_serving_p95_latency_ms"],
+        17
+    );
 
     let (status, body) = json_request(
         app.clone(),

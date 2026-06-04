@@ -578,6 +578,9 @@ Promotion-ready evidence must include:
 - human approval.
 
 The candidate should remain blocked when any gate is missing.
+The promotion-gates API also returns `artifact_evidence` so human release
+reviewers can inspect the serving manifest, Rust artifact evaluation report,
+Rust serving status, latency status, and P95 latency from the same gate response.
 
 ## Stage 8: Human Promotion Review
 

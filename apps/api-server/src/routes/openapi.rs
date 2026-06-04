@@ -5248,9 +5248,20 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "ModelArtifactEvidenceSummary": {
+                    "type": "object",
+                    "required": ["serving_manifest_uri", "model_artifact_evaluation_report_uri", "rust_serving_status", "rust_serving_latency_status", "rust_serving_p95_latency_ms"],
+                    "properties": {
+                        "serving_manifest_uri": { "type": ["string", "null"] },
+                        "model_artifact_evaluation_report_uri": { "type": ["string", "null"] },
+                        "rust_serving_status": { "type": ["string", "null"] },
+                        "rust_serving_latency_status": { "type": ["string", "null"] },
+                        "rust_serving_p95_latency_ms": { "type": ["integer", "null"] }
+                    }
+                },
                 "ModelPromotionGatesResponse": {
                     "type": "object",
-                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "data_status", "scored_runs", "open_model_feedback_count", "unresolved_model_feedback_count", "approved_label_count", "needs_review_label_count", "gates", "blockers"],
+                    "required": ["model_key", "model_version", "review_mode", "decision", "passed_count", "total_count", "latest_evaluation_id", "source_dataset_id", "source_data_quality_score", "source_data_quality_status", "data_status", "scored_runs", "open_model_feedback_count", "unresolved_model_feedback_count", "approved_label_count", "needs_review_label_count", "artifact_evidence", "gates", "blockers"],
                     "properties": {
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
@@ -5268,6 +5279,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "unresolved_model_feedback_count": { "type": "integer" },
                         "approved_label_count": { "type": "integer" },
                         "needs_review_label_count": { "type": "integer" },
+                        "artifact_evidence": { "$ref": "#/components/schemas/ModelArtifactEvidenceSummary" },
                         "gates": {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ModelPromotionGate" }

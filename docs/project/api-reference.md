@@ -490,7 +490,9 @@ production promotion or automatic customer-environment deployment.
 Promotion gates should be read as the policy checklist for activation. They
 cover data quality, label provenance, drift, promotion review evidence, feature
 reproducibility, explanation artifacts, Rust serving artifact evaluation, and
-validation quality.
+validation quality. The response includes `artifact_evidence` with the serving
+manifest URI, model artifact evaluation report URI, Rust serving status, latency
+status, and P95 latency for release-review drill-down.
 
 ## AI Evidence Runtime Metadata
 

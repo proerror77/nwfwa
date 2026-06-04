@@ -683,8 +683,18 @@ struct ModelPromotionGates {
     source_data_quality_status: String,
     unresolved_model_feedback_count: u32,
     approved_label_count: u32,
+    artifact_evidence: ModelArtifactEvidence,
     gates: Vec<ModelPromotionGate>,
     blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelArtifactEvidence {
+    serving_manifest_uri: Option<String>,
+    model_artifact_evaluation_report_uri: Option<String>,
+    rust_serving_status: Option<String>,
+    rust_serving_latency_status: Option<String>,
+    rust_serving_p95_latency_ms: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -5192,6 +5202,12 @@ fn mlops_promotion_gates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 <div><span>{"Evaluation"}</span><strong>{&snapshot.model_ops.gates.latest_evaluation_id}</strong></div>
                 <div><span>{"Approved Labels"}</span><strong>{snapshot.model_ops.gates.approved_label_count}</strong></div>
             </div>
+            <div class="summary-grid">
+                <div><span>{"Serving Manifest"}</span><strong>{snapshot.model_ops.gates.artifact_evidence.serving_manifest_uri.as_deref().unwrap_or("missing")}</strong></div>
+                <div><span>{"Artifact Report"}</span><strong>{snapshot.model_ops.gates.artifact_evidence.model_artifact_evaluation_report_uri.as_deref().unwrap_or("missing")}</strong></div>
+                <div><span>{"Rust Serving"}</span><strong>{snapshot.model_ops.gates.artifact_evidence.rust_serving_status.as_deref().unwrap_or("missing")}</strong></div>
+                <div><span>{"P95 Latency"}</span><strong>{model_latency_label(&snapshot.model_ops.gates.artifact_evidence)}</strong></div>
+            </div>
             if snapshot.model_ops.gates.blockers.is_empty() {
                 <p class="empty">{"No promotion blockers returned."}</p>
             } else {
@@ -5213,6 +5229,18 @@ fn mlops_promotion_gates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 </div>
             </details>
         </section>
+    }
+}
+
+fn model_latency_label(evidence: &ModelArtifactEvidence) -> String {
+    match (
+        evidence.rust_serving_latency_status.as_deref(),
+        evidence.rust_serving_p95_latency_ms,
+    ) {
+        (Some(status), Some(ms)) => format!("{status} / {ms}ms"),
+        (Some(status), None) => status.to_string(),
+        (None, Some(ms)) => format!("{ms}ms"),
+        (None, None) => "missing".into(),
     }
 }
 
