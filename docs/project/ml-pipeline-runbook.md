@@ -655,6 +655,20 @@ and monitoring-report evidence refs. It returns next actions such as continued
 monitoring or retraining preparation, but it does not create retraining jobs,
 activate models, or rollback models automatically.
 
+Build the Rust scheduler execution and alert-delivery evidence package:
+
+```bash
+cargo run --locked -p worker -- build-mlops-scheduler-execution-report \
+  --plan data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_plan.json \
+  --monitoring-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
+  --output-dir data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler
+```
+
+The worker writes `mlops_scheduler_execution_report.json` and
+`mlops_alert_delivery_tasks.json`. Alert tasks are queued for the external
+alert router only; they must not create retraining jobs, activate models,
+rollback models, or assign fraud labels.
+
 After dataset, candidate-ranking, serving, rule-backtest, clustering, and
 monitoring evidence exists, summarize the full Rust Auto MLOps lifecycle into
 one closure report:
@@ -670,6 +684,7 @@ cargo run --locked -p worker -- build-automl-lifecycle-closure-report \
   --provider-graph-report data/rust-automl-demo/unlabeled_provider_peer_clustering/graph-communities/provider_graph_community_report.json \
   --claim-entity-clustering-report data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json \
   --mlops-monitoring-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/mlops_monitoring_report.json \
+  --mlops-scheduler-execution-report data/model-artifacts/baseline_fwa/0.2.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json \
   --output-dir data/model-artifacts/baseline_fwa/0.2.0/lifecycle-closure
 ```
 
@@ -678,7 +693,8 @@ status can only pass when the evidence proves: one labeled demo dataset, at
 least two unlabeled demo datasets, XGBoost and LightGBM candidate ranking,
 XGBoost and LightGBM ONNX Rust-serving artifact gates, rule-candidate backtest
 before rule-library writeback, provider-peer, provider graph-community, and
-claim-entity clustering review tasks, and non-blocked MLOps monitoring.
+claim-entity clustering review tasks, non-blocked MLOps monitoring, and
+scheduler/alert-delivery evidence.
 
 ## Stage 7: Promotion Gates
 

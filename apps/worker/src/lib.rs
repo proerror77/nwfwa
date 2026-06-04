@@ -88,6 +88,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "mlops_scheduler_execution_reporter",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "model_artifact_evaluator",
                 status: "ok",
             },
@@ -2820,6 +2824,135 @@ pub fn build_mlops_monitoring_report(
     Ok(report)
 }
 
+pub fn build_mlops_scheduler_execution_report(
+    plan_uri: &str,
+    monitoring_report_uri: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let plan_uri = required_non_empty("plan_uri", plan_uri)?;
+    let monitoring_report_uri = required_non_empty("monitoring_report_uri", monitoring_report_uri)?;
+    let plan = read_json_report(plan_uri)?;
+    let monitoring_report = read_json_report(monitoring_report_uri)?;
+    if json_string(&plan, "plan_kind").as_deref() != Some("scheduled_mlops_monitoring") {
+        bail!("MLOps scheduler execution requires a scheduled_mlops_monitoring plan");
+    }
+    if json_string(&monitoring_report, "report_kind").as_deref() != Some("mlops_monitoring_report")
+    {
+        bail!("MLOps scheduler execution requires an mlops_monitoring_report");
+    }
+    let model_key = nested_json_string(&plan, &["model", "model_key"])
+        .context("MLOps monitoring plan requires model.model_key")?;
+    let model_version = nested_json_string(&plan, &["model", "model_version"])
+        .context("MLOps monitoring plan requires model.model_version")?;
+    if json_string(&monitoring_report, "model_key").as_deref() != Some(model_key.as_str())
+        || json_string(&monitoring_report, "model_version").as_deref()
+            != Some(model_version.as_str())
+    {
+        bail!("MLOps monitoring report model does not match scheduler plan");
+    }
+    let jobs = plan
+        .get("jobs")
+        .and_then(|value| value.as_array())
+        .context("MLOps monitoring plan requires jobs")?;
+    let reported_uris = mlops_monitoring_report_uris(&monitoring_report);
+    let job_executions = jobs
+        .iter()
+        .map(|job| {
+            let job_kind = json_string(job, "job_kind").unwrap_or_else(|| "unknown".into());
+            let output_uri = mlops_plan_job_output_uri(job);
+            let output_status = output_uri
+                .as_ref()
+                .map(|uri| reported_uris.contains(uri))
+                .unwrap_or(false);
+            serde_json::json!({
+                "job_kind": job_kind,
+                "output_ref": json_string(job, "output_ref"),
+                "output_uri": output_uri,
+                "execution_status": if output_status {
+                    "reported_in_monitoring_summary"
+                } else {
+                    "scheduled_pending_external_report"
+                },
+                "routing_impact": "none"
+            })
+        })
+        .collect::<Vec<_>>();
+    let pending_job_count = job_executions
+        .iter()
+        .filter(|execution| {
+            execution["execution_status"].as_str() == Some("scheduled_pending_external_report")
+        })
+        .count();
+    let triggers = monitoring_report
+        .get("triggers")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    let alert_delivery_tasks = triggers
+        .iter()
+        .map(|trigger| {
+            mlops_alert_delivery_task(
+                &model_key,
+                &model_version,
+                trigger,
+                plan_uri,
+                monitoring_report_uri,
+            )
+        })
+        .collect::<Vec<_>>();
+    let alert_delivery_status = if alert_delivery_tasks.is_empty() {
+        "no_alerts_required"
+    } else {
+        "queued_for_external_alert_router"
+    };
+    let scheduler_status = if pending_job_count == 0 {
+        "completed"
+    } else {
+        "completed_with_pending_external_reports"
+    };
+    let report = serde_json::json!({
+        "report_kind": "mlops_scheduler_execution_report",
+        "report_version": 1,
+        "plan_uri": plan_uri,
+        "monitoring_report_uri": monitoring_report_uri,
+        "model_key": model_key,
+        "model_version": model_version,
+        "schedule": plan["schedule"].clone(),
+        "scheduler_status": scheduler_status,
+        "pending_external_report_count": pending_job_count,
+        "job_executions": job_executions,
+        "alert_delivery_status": alert_delivery_status,
+        "alert_delivery_task_count": alert_delivery_tasks.len(),
+        "alert_delivery_tasks": alert_delivery_tasks,
+        "governance_boundary": "scheduler execution evidence may queue alert delivery and review work only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels",
+        "evidence_refs": [
+            format!("mlops_monitoring_plans:{plan_uri}"),
+            format!("model_monitoring_reports:{monitoring_report_uri}"),
+            format!("model_versions:{model_key}:{model_version}")
+        ]
+    });
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create MLOps scheduler execution output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("mlops_scheduler_execution_report.json"),
+        &report,
+    )?;
+    write_json(
+        output_dir.as_ref().join("mlops_alert_delivery_tasks.json"),
+        &report["alert_delivery_tasks"],
+    )?;
+    Ok(report)
+}
+
 pub fn build_automl_lifecycle_closure_report(
     demo_index_uri: &str,
     candidate_ranking_uri: &str,
@@ -2829,6 +2962,7 @@ pub fn build_automl_lifecycle_closure_report(
     provider_graph_clustering_report_uri: &str,
     claim_entity_clustering_report_uri: &str,
     mlops_monitoring_report_uri: &str,
+    mlops_scheduler_execution_report_uri: &str,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<serde_json::Value> {
     let demo_index_uri = required_non_empty("demo_index_uri", demo_index_uri)?;
@@ -2852,6 +2986,10 @@ pub fn build_automl_lifecycle_closure_report(
     )?;
     let mlops_monitoring_report_uri =
         required_non_empty("mlops_monitoring_report_uri", mlops_monitoring_report_uri)?;
+    let mlops_scheduler_execution_report_uri = required_non_empty(
+        "mlops_scheduler_execution_report_uri",
+        mlops_scheduler_execution_report_uri,
+    )?;
 
     let demo_index = read_json_report(demo_index_uri)?;
     let candidate_ranking = read_json_report(candidate_ranking_uri)?;
@@ -2864,6 +3002,7 @@ pub fn build_automl_lifecycle_closure_report(
     let provider_graph_clustering = read_json_report(provider_graph_clustering_report_uri)?;
     let claim_entity_clustering = read_json_report(claim_entity_clustering_report_uri)?;
     let mlops_monitoring = read_json_report(mlops_monitoring_report_uri)?;
+    let mlops_scheduler_execution = read_json_report(mlops_scheduler_execution_report_uri)?;
 
     let dataset_manifests = demo_index
         .get("dataset_manifests")
@@ -2936,6 +3075,15 @@ pub fn build_automl_lifecycle_closure_report(
         && monitoring_status != "blocked"
         && json_string(&mlops_monitoring, "promotion_boundary")
             .is_some_and(|boundary| boundary.contains("must not activate models"));
+    let scheduler_status = json_string(&mlops_scheduler_execution, "scheduler_status")
+        .unwrap_or_else(|| "missing".into());
+    let alert_delivery_status = json_string(&mlops_scheduler_execution, "alert_delivery_status")
+        .unwrap_or_else(|| "missing".into());
+    let scheduler_loop_passed = mlops_scheduler_execution["report_kind"]
+        == "mlops_scheduler_execution_report"
+        && scheduler_status.starts_with("completed")
+        && json_string(&mlops_scheduler_execution, "governance_boundary")
+            .is_some_and(|boundary| boundary.contains("must not create retraining jobs"));
 
     let stages = vec![
         lifecycle_stage(
@@ -2992,9 +3140,16 @@ pub fn build_automl_lifecycle_closure_report(
         ),
         lifecycle_stage(
             "mlops_monitoring_loop",
-            monitoring_loop_passed,
-            format!("monitoring status: {monitoring_status}"),
-            vec![format!("mlops_monitoring_reports:{mlops_monitoring_report_uri}")],
+            monitoring_loop_passed && scheduler_loop_passed,
+            format!(
+                "monitoring status: {monitoring_status}; scheduler: {scheduler_status}; alert delivery: {alert_delivery_status}"
+            ),
+            vec![
+                format!("mlops_monitoring_reports:{mlops_monitoring_report_uri}"),
+                format!(
+                    "mlops_scheduler_execution_reports:{mlops_scheduler_execution_report_uri}"
+                ),
+            ],
         ),
     ];
     let closure_status = if stages
@@ -3025,7 +3180,8 @@ pub fn build_automl_lifecycle_closure_report(
             format!("provider_peer_clustering:{provider_clustering_report_uri}"),
             format!("provider_graph_clustering:{provider_graph_clustering_report_uri}"),
             format!("claim_entity_clustering:{claim_entity_clustering_report_uri}"),
-            format!("mlops_monitoring_reports:{mlops_monitoring_report_uri}")
+            format!("mlops_monitoring_reports:{mlops_monitoring_report_uri}"),
+            format!("mlops_scheduler_execution_reports:{mlops_scheduler_execution_report_uri}")
         ],
         "artifact_evaluation_refs": artifact_evaluation_report_uris
             .iter()
@@ -3206,6 +3362,20 @@ pub fn build_demo_automl_lifecycle_evidence(
             ]
         }),
     )?;
+    let scheduler_dir = output_dir.join("monitoring/scheduler");
+    fs::create_dir_all(&scheduler_dir)
+        .with_context(|| format!("create MLOps scheduler dir {}", scheduler_dir.display()))?;
+    let monitoring_plan = build_mlops_monitoring_plan(
+        &labeled_manifest.to_string_lossy(),
+        &monitoring_inputs_dir
+            .join("rust_serving_artifact.json")
+            .to_string_lossy(),
+        "baseline_fwa",
+        "0.2.0-xgboost-candidate",
+        "0 2 * * *",
+    )?;
+    let monitoring_plan_uri = scheduler_dir.join("mlops_monitoring_plan.json");
+    write_json(monitoring_plan_uri.clone(), &monitoring_plan)?;
     build_mlops_monitoring_report(
         "baseline_fwa",
         "0.2.0-xgboost-candidate",
@@ -3214,6 +3384,13 @@ pub fn build_demo_automl_lifecycle_evidence(
         &drift_report.to_string_lossy(),
         &fairness_report.to_string_lossy(),
         output_dir.join("monitoring"),
+    )?;
+    build_mlops_scheduler_execution_report(
+        &monitoring_plan_uri.to_string_lossy(),
+        &output_dir
+            .join("monitoring/mlops_monitoring_report.json")
+            .to_string_lossy(),
+        &scheduler_dir,
     )?;
 
     let closure = build_automl_lifecycle_closure_report(
@@ -3239,6 +3416,9 @@ pub fn build_demo_automl_lifecycle_evidence(
             .to_string_lossy(),
         &output_dir
             .join("monitoring/mlops_monitoring_report.json")
+            .to_string_lossy(),
+        &scheduler_dir
+            .join("mlops_scheduler_execution_report.json")
             .to_string_lossy(),
         output_dir.join("closure"),
     )?;
@@ -3266,6 +3446,8 @@ pub fn build_demo_automl_lifecycle_evidence(
             "provider_graph_report": provider_graph_dir.join("provider_graph_community_report.json"),
             "claim_entity_clustering_report": claim_cluster_dir.join("claim_entity_clustering_report.json"),
             "mlops_monitoring_report": output_dir.join("monitoring/mlops_monitoring_report.json"),
+            "mlops_monitoring_plan": monitoring_plan_uri,
+            "mlops_scheduler_execution_report": scheduler_dir.join("mlops_scheduler_execution_report.json"),
             "lifecycle_closure_report": output_dir.join("closure/rust_automl_lifecycle_closure_report.json")
         },
         "governance_boundary": "demo evidence only; the pack proves the Rust AutoML lifecycle contract but must not activate models, assign fraud labels, or write rules without the recorded human gates"
@@ -3459,6 +3641,17 @@ fn read_json_report(uri: &str) -> anyhow::Result<serde_json::Value> {
     let report_json =
         fs::read_to_string(path).with_context(|| format!("read report {}", path.display()))?;
     serde_json::from_str(&report_json).with_context(|| format!("parse report {}", path.display()))
+}
+
+fn nested_json_string(value: &serde_json::Value, path: &[&str]) -> Option<String> {
+    let mut current = value;
+    for key in path {
+        current = current.get(key)?;
+    }
+    current
+        .as_str()
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
 }
 
 fn json_string(value: &serde_json::Value, key: &str) -> Option<String> {
@@ -5487,6 +5680,100 @@ fn automl_rust_serving_evaluation_passed(
                 == Some("model_artifact_evaluation")
                 && value.get("gate_status").and_then(|value| value.as_str()) == Some("passed")
         })
+}
+
+fn mlops_monitoring_report_uris(report: &serde_json::Value) -> BTreeSet<String> {
+    let mut uris = BTreeSet::new();
+    if let Some(signals) = report.get("signals").and_then(|value| value.as_object()) {
+        for signal in signals.values() {
+            if let Some(uri) = json_string(signal, "report_uri") {
+                uris.insert(uri);
+            }
+        }
+    }
+    if let Some(evidence_refs) = report
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+    {
+        for evidence_ref in evidence_refs {
+            let Some(evidence_ref) = evidence_ref.as_str() else {
+                continue;
+            };
+            if let Some((_, uri)) = evidence_ref.split_once(':') {
+                uris.insert(uri.to_string());
+            }
+        }
+    }
+    uris
+}
+
+fn mlops_plan_job_output_uri(job: &serde_json::Value) -> Option<String> {
+    job.as_object().and_then(|object| {
+        object.iter().find_map(|(key, value)| {
+            if key.ends_with("_uri") {
+                value.as_str().map(str::to_string)
+            } else {
+                None
+            }
+        })
+    })
+}
+
+fn mlops_alert_delivery_task(
+    model_key: &str,
+    model_version: &str,
+    trigger: &str,
+    plan_uri: &str,
+    monitoring_report_uri: &str,
+) -> serde_json::Value {
+    let (severity, route_key, recommended_action) = match trigger {
+        "rust_serving_artifact_evaluation_blocked" => (
+            "critical",
+            "mlops_serving_runtime",
+            "open serving artifact governance review",
+        ),
+        "rust_serving_latency_budget_failed" => (
+            "high",
+            "mlops_serving_runtime",
+            "review latency budget before rollout or rollback decision",
+        ),
+        "model_drift_detected" => (
+            "high",
+            "mlops_retraining_readiness",
+            "prepare retraining review after human approval",
+        ),
+        "model_drift_watch" => (
+            "medium",
+            "mlops_retraining_readiness",
+            "monitor drift and schedule next comparison",
+        ),
+        "shadow_comparison_review_required" => (
+            "high",
+            "mlops_shadow_review",
+            "review shadow comparison before promotion",
+        ),
+        "segment_fairness_review_required" => (
+            "high",
+            "model_governance",
+            "open segment fairness governance review",
+        ),
+        _ => ("medium", "mlops_review", "review monitoring trigger"),
+    };
+    serde_json::json!({
+        "task_kind": "mlops_alert_delivery",
+        "model_key": model_key,
+        "model_version": model_version,
+        "trigger": trigger,
+        "severity": severity,
+        "route_key": route_key,
+        "delivery_status": "queued_for_external_alert_router",
+        "recommended_action": recommended_action,
+        "evidence_refs": [
+            format!("mlops_monitoring_plans:{plan_uri}"),
+            format!("model_monitoring_reports:{monitoring_report_uri}"),
+            format!("model_versions:{model_key}:{model_version}")
+        ]
+    })
 }
 
 fn automl_ranking_score(
@@ -7546,6 +7833,101 @@ mod tests {
     }
 
     #[test]
+    fn builds_mlops_scheduler_execution_report_and_alert_delivery_tasks() {
+        let root = temp_root("mlops-scheduler-execution");
+        let plan = build_mlops_monitoring_plan(
+            "data/training/manifest.json",
+            &root.join("rust_serving_artifact.json").to_string_lossy(),
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+        )
+        .expect("monitoring plan");
+        let plan_uri = root.join("mlops_monitoring_plan.json");
+        write_json(plan_uri.clone(), &plan).unwrap();
+        let artifact_eval = root.join("artifact-evaluation.json");
+        let shadow = root.join("shadow_report.json");
+        let drift = root.join("drift_report.json");
+        let fairness = root.join("fairness_report.json");
+        write_json(
+            artifact_eval.clone(),
+            &serde_json::json!({
+                "gate_status": "passed",
+                "rust_serving_status": "passed",
+                "latency_status": "failed",
+                "p95_latency_ms": 250
+            }),
+        )
+        .unwrap();
+        write_json(
+            shadow.clone(),
+            &serde_json::json!({"status": "passed", "comparison_count": 100}),
+        )
+        .unwrap();
+        write_json(
+            drift.clone(),
+            &serde_json::json!({"status": "drift", "score_psi": 0.34}),
+        )
+        .unwrap();
+        write_json(
+            fairness.clone(),
+            &serde_json::json!({"status": "passed", "segments": []}),
+        )
+        .unwrap();
+        build_mlops_monitoring_report(
+            "baseline_fwa",
+            "0.2.0",
+            &artifact_eval.to_string_lossy(),
+            &shadow.to_string_lossy(),
+            &drift.to_string_lossy(),
+            &fairness.to_string_lossy(),
+            root.join("monitoring"),
+        )
+        .expect("monitoring report");
+
+        let report = build_mlops_scheduler_execution_report(
+            &plan_uri.to_string_lossy(),
+            &root
+                .join("monitoring/mlops_monitoring_report.json")
+                .to_string_lossy(),
+            root.join("scheduler"),
+        )
+        .expect("scheduler execution report");
+
+        assert_eq!(report["report_kind"], "mlops_scheduler_execution_report");
+        assert_eq!(report["model_key"], "baseline_fwa");
+        assert_eq!(
+            report["alert_delivery_status"],
+            "queued_for_external_alert_router"
+        );
+        assert_eq!(report["alert_delivery_task_count"], 2);
+        assert!(report["governance_boundary"]
+            .as_str()
+            .unwrap()
+            .contains("must not create retraining jobs"));
+        assert!(report["job_executions"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|job| {
+                job["job_kind"] == "drift_monitoring"
+                    && job["execution_status"] == "reported_in_monitoring_summary"
+            }));
+        assert!(report["alert_delivery_tasks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|task| task["trigger"] == "model_drift_detected"
+                && task["route_key"] == "mlops_retraining_readiness"));
+        assert!(root
+            .join("scheduler/mlops_scheduler_execution_report.json")
+            .is_file());
+        assert!(root
+            .join("scheduler/mlops_alert_delivery_tasks.json")
+            .is_file());
+    }
+
+    #[test]
     fn onnx_runtime_requires_passed_parity_report() {
         let root = temp_root("onnx-parity-gate");
         let parity_report = root.join("onnx_parity_report.json");
@@ -7731,6 +8113,24 @@ mod tests {
             root.join("monitoring"),
         )
         .expect("monitoring report");
+        let monitoring_plan = build_mlops_monitoring_plan(
+            &pack.labeled_manifest_uri,
+            &root.join("rust_serving_artifact.json").to_string_lossy(),
+            "baseline_fwa",
+            "0.2.0",
+            "0 2 * * *",
+        )
+        .expect("monitoring plan");
+        let monitoring_plan_uri = root.join("monitoring-plan.json");
+        write_json(monitoring_plan_uri.clone(), &monitoring_plan).unwrap();
+        build_mlops_scheduler_execution_report(
+            &monitoring_plan_uri.to_string_lossy(),
+            &root
+                .join("monitoring/mlops_monitoring_report.json")
+                .to_string_lossy(),
+            root.join("scheduler"),
+        )
+        .expect("scheduler execution report");
 
         let report = build_automl_lifecycle_closure_report(
             &root.join("index.json").to_string_lossy(),
@@ -7753,6 +8153,9 @@ mod tests {
                 .to_string_lossy(),
             &root
                 .join("monitoring/mlops_monitoring_report.json")
+                .to_string_lossy(),
+            &root
+                .join("scheduler/mlops_scheduler_execution_report.json")
                 .to_string_lossy(),
             root.join("closure"),
         )
@@ -7787,6 +8190,20 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .starts_with("provider_graph_clustering:")));
+        let monitoring_stage = report["lifecycle_stages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|stage| stage["stage"] == "mlops_monitoring_loop")
+            .expect("monitoring stage");
+        assert!(monitoring_stage["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|evidence_ref| evidence_ref
+                .as_str()
+                .unwrap()
+                .starts_with("mlops_scheduler_execution_reports:")));
         assert!(root
             .join("closure/rust_automl_lifecycle_closure_report.json")
             .is_file());
@@ -7831,6 +8248,15 @@ mod tests {
             .is_file());
         assert!(output_dir
             .join("monitoring/mlops_monitoring_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("monitoring/scheduler/mlops_monitoring_plan.json")
+            .is_file());
+        assert!(output_dir
+            .join("monitoring/scheduler/mlops_scheduler_execution_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("monitoring/scheduler/mlops_alert_delivery_tasks.json")
             .is_file());
         assert!(output_dir
             .join("closure/rust_automl_lifecycle_closure_report.json")

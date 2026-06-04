@@ -155,6 +155,20 @@ async fn main() -> anyhow::Result<()> {
                     .await?;
             println!("{}", serde_json::to_string_pretty(&response)?);
         }
+        "build-mlops-scheduler-execution-report" => {
+            let plan = take_flag_value(&mut args, "--plan")?;
+            let monitoring_report = take_flag_value(&mut args, "--monitoring-report")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::build_mlops_scheduler_execution_report(
+                &plan,
+                &monitoring_report,
+                output_dir,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "build-automl-lifecycle-closure-report" => {
             let demo_index = take_flag_value(&mut args, "--demo-index")?;
             let candidate_ranking = take_flag_value(&mut args, "--candidate-ranking")?;
@@ -167,6 +181,8 @@ async fn main() -> anyhow::Result<()> {
             let claim_entity_clustering_report =
                 take_flag_value(&mut args, "--claim-entity-clustering-report")?;
             let mlops_monitoring_report = take_flag_value(&mut args, "--mlops-monitoring-report")?;
+            let mlops_scheduler_execution_report =
+                take_flag_value(&mut args, "--mlops-scheduler-execution-report")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;
             if !args.is_empty() {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
@@ -180,6 +196,7 @@ async fn main() -> anyhow::Result<()> {
                 &provider_graph_report,
                 &claim_entity_clustering_report,
                 &mlops_monitoring_report,
+                &mlops_scheduler_execution_report,
                 output_dir,
             )?;
             println!("{}", serde_json::to_string_pretty(&report)?);

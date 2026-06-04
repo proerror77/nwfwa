@@ -119,6 +119,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `submit-mlops-monitoring-report`: submit the monitoring decision into the API
   governance audit surface without automatically creating retraining jobs,
   activating models, or rolling models back.
+- `build-mlops-scheduler-execution-report`: turn a scheduled monitoring plan
+  and monitoring report into scheduler execution evidence plus external
+  alert-delivery tasks.
 - `build-automl-lifecycle-closure-report`: summarize dataset, candidate
   ranking, ONNX Rust-serving, rule-backtest, clustering, and monitoring
   evidence into one closure report without auto-activating models or writing
@@ -166,21 +169,22 @@ Current repository completion for this target architecture is approximately:
   generic Rust ONNX, and `deep_learning_onnx` manifests after contract
   validation, and provider-peer, provider graph-community, and
   claim/member/provider entity clustering have Rust-native demo workflows.
-- 84% for Auto MLOps: worker can build feature-set manifests, create
+- 87% for Auto MLOps: worker can build feature-set manifests, create
   algorithm-aware training handoffs, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, require ONNX parity evidence for
   XGBoost/LightGBM gates, mine explainable rule candidates, backtest those
   candidates into human-review evidence, summarize live monitoring reports into
   review/retraining triggers, submit those reports into API governance audit,
-  produce a lifecycle closure report, and generate a checked-in demo lifecycle
-  evidence pack, while API promotion gates now require Rust feature-set
-  materialization evidence, worker ranking requires Rust feature-set and Rust
-  serving evaluation evidence, and trainer-side ONNX parity reports and
-  unlabeled anomaly review tasks exist; API retraining output now accepts
-  governed serving manifests, and the console has provider model release,
-  promotion review, activation, and rollback actions. Scheduler execution and
-  alert-delivery hardening still need production wiring.
+  produce scheduler execution and alert-delivery evidence, produce a lifecycle
+  closure report, and generate a checked-in demo lifecycle evidence pack, while
+  API promotion gates now require Rust feature-set materialization evidence,
+  worker ranking requires Rust feature-set and Rust serving evaluation evidence,
+  and trainer-side ONNX parity reports and unlabeled anomaly review tasks exist;
+  API retraining output now accepts governed serving manifests, and the console
+  has provider model release, promotion review, activation, and rollback
+  actions. Production cron deployment and customer alert-router delivery still
+  need environment-specific wiring.
 - 78% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation
