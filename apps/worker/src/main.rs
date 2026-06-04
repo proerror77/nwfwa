@@ -47,6 +47,16 @@ async fn main() -> anyhow::Result<()> {
                 "parquet profile written"
             );
         }
+        "build-demo-ml-datasets" => {
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            let dataset_version = take_optional_flag_value(&mut args, "--dataset-version")?
+                .unwrap_or_else(|| "2026-06-rust-automl-demo".into());
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let pack = worker::build_demo_ml_datasets(output_dir, &dataset_version)?;
+            println!("{}", serde_json::to_string_pretty(&pack)?);
+        }
         "build-training-handoff" => {
             let manifest = take_flag_value(&mut args, "--manifest")?;
             let artifact_base_uri = take_flag_value(&mut args, "--artifact-base-uri")?;

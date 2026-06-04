@@ -19,6 +19,8 @@ the technical stack fits together, and what is ready for demo or pilot use.
   table responsibilities.
 - [ML Algorithm Strategy](ml-algorithm-strategy.md): researched model plan,
   current baseline boundaries, validation gates, and production ML roadmap.
+- [Rust Auto MLOps Architecture](rust-automl-architecture.md): Rust-owned ML
+  lifecycle, ONNX serving boundary, Auto MLOps loop, and algorithm portfolio.
 - [Public Data MVP Pack](public-data-mvp.md): CMS/OIG public-data boundary,
   manifest generation commands, and production interpretation.
 - [AI Evidence Foundation](ai-evidence-foundation.md): document registry,
