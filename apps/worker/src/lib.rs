@@ -48,6 +48,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "rule_candidate_miner",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "retraining_job_runner",
                 status: "ok",
             },
@@ -273,6 +277,58 @@ pub struct AutoMlReviewTask {
     pub required_review: String,
     pub decision_options: Vec<String>,
     pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct RuleCandidateMiningPlan {
+    pub plan_kind: String,
+    pub plan_version: u8,
+    pub source_model_key: String,
+    pub source_candidate_model_version: String,
+    pub source_algorithm: String,
+    pub promotion_boundary: String,
+    pub candidate_rules: Vec<RuleCandidateDraft>,
+    pub backtest_requests: Vec<RuleCandidateBacktestRequest>,
+    pub review_tasks: Vec<RuleCandidateReviewTask>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct RuleCandidateDraft {
+    pub candidate_rule_key: String,
+    pub source_feature: String,
+    pub source_importance: f64,
+    pub source_importance_kind: String,
+    pub draft_rule_template: serde_json::Value,
+    pub gate_status: String,
+    pub required_before_rule_library_writeback: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct RuleCandidateBacktestRequest {
+    pub candidate_rule_key: String,
+    pub backtest_kind: String,
+    pub required_dataset_splits: Vec<String>,
+    pub minimum_evidence: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct RuleCandidateReviewTask {
+    pub task_kind: String,
+    pub candidate_rule_key: String,
+    pub review_queue: String,
+    pub required_review: String,
+    pub decision_options: Vec<String>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct FeatureImportanceRow {
+    feature: String,
+    importance: f64,
+    importance_kind: String,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -1990,6 +2046,210 @@ pub fn rank_automl_candidates(
     Ok(ranking)
 }
 
+pub fn mine_rule_candidates(
+    validation_report: &str,
+    feature_importance_uri: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<RuleCandidateMiningPlan> {
+    let validation_path = Path::new(validation_report);
+    let report_json = fs::read_to_string(validation_path)
+        .with_context(|| format!("read validation report {}", validation_path.display()))?;
+    let report: serde_json::Value =
+        serde_json::from_str(&report_json).context("parse validation report")?;
+    let model_key = required_manifest_str(&report, "model_key")?.to_string();
+    let candidate_model_version =
+        required_manifest_str(&report, "candidate_model_version")?.to_string();
+    let algorithm = required_manifest_str(&report, "algorithm")?.to_string();
+    let feature_importance = read_feature_importance(Path::new(feature_importance_uri))?;
+    if feature_importance.is_empty() {
+        bail!("feature importance artifact contains no candidate features");
+    }
+
+    let candidate_rules = feature_importance
+        .into_iter()
+        .take(3)
+        .map(|feature| {
+            let candidate_rule_key = format!(
+                "model_pattern_{}_{}",
+                safe_id_segment(&candidate_model_version),
+                safe_id_segment(&feature.feature)
+            );
+            RuleCandidateDraft {
+                candidate_rule_key: candidate_rule_key.clone(),
+                source_feature: feature.feature.clone(),
+                source_importance: feature.importance,
+                source_importance_kind: feature.importance_kind.clone(),
+                draft_rule_template: serde_json::json!({
+                    "rule_id": candidate_rule_key,
+                    "version": 0,
+                    "name": format!("Model pattern: {}", feature.feature),
+                    "review_mode": "both",
+                    "scheme_family": "model_explanation_pattern",
+                    "conditions": [
+                        {
+                            "field": feature.feature,
+                            "operator": "threshold_selected_by_backtest",
+                            "value": {
+                                "threshold_source": "run_rule_candidate_backtest_required"
+                            }
+                        }
+                    ],
+                    "action": {
+                        "score": "selected_by_backtest",
+                        "recommended_action": "manual_review",
+                        "action_class": "score_only_or_manual_review_after_approval",
+                        "required_evidence": [],
+                        "reason": "Explainable model pattern candidate; not publishable before deterministic backtest and human approval."
+                    }
+                }),
+                gate_status: "blocked_until_backtest_and_human_review".into(),
+                required_before_rule_library_writeback: vec![
+                    "deterministic_backtest".into(),
+                    "false_positive_review".into(),
+                    "human_rule_promotion_review".into(),
+                    "customer_policy_or_model_governance_approval".into(),
+                    "shadow_or_limited_rollout_if_high_impact".into(),
+                ],
+                evidence_refs: vec![
+                    format!("model_validation_reports:{validation_report}"),
+                    format!("model_feature_importance:{feature_importance_uri}"),
+                    format!("model_evaluations:{}", safe_id_segment(&candidate_model_version)),
+                ],
+            }
+        })
+        .collect::<Vec<_>>();
+    let backtest_requests = candidate_rules
+        .iter()
+        .map(|candidate| RuleCandidateBacktestRequest {
+            candidate_rule_key: candidate.candidate_rule_key.clone(),
+            backtest_kind: "deterministic_rule_candidate_backtest".into(),
+            required_dataset_splits: vec![
+                "train".into(),
+                "validation".into(),
+                "out_of_time".into(),
+            ],
+            minimum_evidence: vec![
+                "hit_rate_by_split".into(),
+                "precision_recall_by_split".into(),
+                "false_positive_review".into(),
+                "rule_only_baseline_comparison".into(),
+                "manual_review_capacity_impact".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let review_tasks = candidate_rules
+        .iter()
+        .map(|candidate| RuleCandidateReviewTask {
+            task_kind: "rule_candidate_human_review".into(),
+            candidate_rule_key: candidate.candidate_rule_key.clone(),
+            review_queue: "rule_studio_candidate_review".into(),
+            required_review: "human_approval_required_before_rule_library_writeback".into(),
+            decision_options: vec![
+                "reject".into(),
+                "request_backtest_changes".into(),
+                "approve_draft_for_backtest".into(),
+            ],
+            evidence_refs: candidate.evidence_refs.clone(),
+        })
+        .collect::<Vec<_>>();
+    let plan = RuleCandidateMiningPlan {
+        plan_kind: "explainable_model_rule_candidate_mining".into(),
+        plan_version: 1,
+        source_model_key: model_key,
+        source_candidate_model_version: candidate_model_version,
+        source_algorithm: algorithm,
+        promotion_boundary:
+            "candidate rules are drafts only; backtest and human review are required before rule library writeback"
+                .into(),
+        candidate_rules,
+        backtest_requests,
+        review_tasks,
+        evidence_refs: vec![
+            format!("model_validation_reports:{validation_report}"),
+            format!("model_feature_importance:{feature_importance_uri}"),
+        ],
+    };
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create rule candidate mining output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir.as_ref().join("rule_candidate_mining_plan.json"),
+        &plan,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("rule_candidate_backtest_requests.json"),
+        &plan.backtest_requests,
+    )?;
+    write_json(
+        output_dir.as_ref().join("rule_candidate_review_tasks.json"),
+        &plan.review_tasks,
+    )?;
+    Ok(plan)
+}
+
+fn read_feature_importance(path: &Path) -> anyhow::Result<Vec<FeatureImportanceRow>> {
+    ensure_parquet_path(path)?;
+    let file = File::open(path)
+        .with_context(|| format!("open feature importance parquet {}", path.display()))?;
+    let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+        .with_context(|| format!("read feature importance metadata {}", path.display()))?;
+    let mut reader = builder.with_batch_size(4096).build()?;
+    let mut rows = Vec::new();
+    for batch in &mut reader {
+        let batch = batch?;
+        let feature_index = batch
+            .schema()
+            .index_of("feature")
+            .context("feature importance missing feature column")?;
+        let importance_index = batch
+            .schema()
+            .index_of("importance")
+            .context("feature importance missing importance column")?;
+        let kind_index = batch
+            .schema()
+            .index_of("importance_kind")
+            .context("feature importance missing importance_kind column")?;
+        let feature_values = column_values(batch.column(feature_index).as_ref());
+        let importance_values = column_values(batch.column(importance_index).as_ref());
+        let kind_values = column_values(batch.column(kind_index).as_ref());
+        for row_index in 0..batch.num_rows() {
+            let Some(feature) = feature_values.get(row_index) else {
+                continue;
+            };
+            let Some(importance) = importance_values
+                .get(row_index)
+                .and_then(|value| value.parse::<f64>().ok())
+            else {
+                continue;
+            };
+            let importance_kind = kind_values
+                .get(row_index)
+                .cloned()
+                .unwrap_or_else(|| "unknown".into());
+            rows.push(FeatureImportanceRow {
+                feature: feature.clone(),
+                importance,
+                importance_kind,
+            });
+        }
+    }
+    rows.sort_by(|left, right| {
+        right
+            .importance
+            .partial_cmp(&left.importance)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.feature.cmp(&right.feature))
+    });
+    Ok(rows)
+}
+
 fn build_automl_candidate_rank(
     validation_report_uri: &str,
     report: &serde_json::Value,
@@ -2798,6 +3058,10 @@ mod tests {
             status: "ok"
         }));
         assert!(health.checks.contains(&WorkerHealthCheck {
+            name: "rule_candidate_miner",
+            status: "ok"
+        }));
+        assert!(health.checks.contains(&WorkerHealthCheck {
             name: "retraining_job_runner",
             status: "ok"
         }));
@@ -3268,6 +3532,86 @@ mod tests {
     }
 
     #[test]
+    fn mines_rule_candidates_from_feature_importance_without_rule_library_writeback() {
+        let root = temp_root("rule-candidate-mining");
+        let validation_report = root.join("validation.json");
+        let feature_importance = root.join("feature_importance.parquet");
+        write_validation_report(
+            &validation_report,
+            "0.1.0-xgboost-candidate",
+            "xgboost",
+            "gradient_boosted_tree",
+            0.84,
+            0.78,
+            0.74,
+            "passed",
+        );
+        write_feature_importance_parquet(
+            &feature_importance,
+            &[
+                ("claim_amount_to_limit_ratio", 0.91),
+                ("provider_profile_score", 0.72),
+                ("high_cost_item_ratio", 0.53),
+                ("service_date_ord", 0.12),
+            ],
+        );
+
+        let output_dir = root.join("out");
+        let plan = mine_rule_candidates(
+            &validation_report.to_string_lossy(),
+            &feature_importance.to_string_lossy(),
+            &output_dir,
+        )
+        .expect("rule candidate mining");
+
+        assert_eq!(plan.plan_kind, "explainable_model_rule_candidate_mining");
+        assert_eq!(plan.source_algorithm, "xgboost");
+        assert_eq!(plan.candidate_rules.len(), 3);
+        assert_eq!(
+            plan.candidate_rules
+                .iter()
+                .map(|candidate| candidate.source_feature.as_str())
+                .collect::<Vec<_>>(),
+            vec![
+                "claim_amount_to_limit_ratio",
+                "provider_profile_score",
+                "high_cost_item_ratio"
+            ]
+        );
+        assert!(plan
+            .promotion_boundary
+            .contains("backtest and human review"));
+        assert_eq!(
+            plan.candidate_rules[0].gate_status,
+            "blocked_until_backtest_and_human_review"
+        );
+        assert!(plan.candidate_rules[0]
+            .required_before_rule_library_writeback
+            .contains(&"deterministic_backtest".to_string()));
+        assert_eq!(
+            plan.candidate_rules[0].draft_rule_template["conditions"][0]["operator"],
+            "threshold_selected_by_backtest"
+        );
+        assert_eq!(plan.backtest_requests.len(), 3);
+        assert_eq!(
+            plan.backtest_requests[0].backtest_kind,
+            "deterministic_rule_candidate_backtest"
+        );
+        assert_eq!(plan.review_tasks.len(), 3);
+        assert_eq!(
+            plan.review_tasks[0].required_review,
+            "human_approval_required_before_rule_library_writeback"
+        );
+        assert!(output_dir.join("rule_candidate_mining_plan.json").is_file());
+        assert!(output_dir
+            .join("rule_candidate_backtest_requests.json")
+            .is_file());
+        assert!(output_dir
+            .join("rule_candidate_review_tasks.json")
+            .is_file());
+    }
+
+    #[test]
     fn builds_scheduled_analytics_export_plan() {
         let plan = build_analytics_export_plan(
             "s3://nwfwa-staging-artifacts",
@@ -3554,6 +3898,35 @@ mod tests {
             .to_string(),
         )
         .unwrap();
+    }
+
+    fn write_feature_importance_parquet(path: &Path, rows: &[(&str, f64)]) {
+        let schema = Arc::new(Schema::new(vec![
+            Field::new("feature", DataType::Utf8, false),
+            Field::new("coefficient", DataType::Float64, true),
+            Field::new("importance", DataType::Float64, false),
+            Field::new("importance_kind", DataType::Utf8, false),
+        ]));
+        let batch = RecordBatch::try_new(
+            schema.clone(),
+            vec![
+                Arc::new(StringArray::from(
+                    rows.iter().map(|(feature, _)| *feature).collect::<Vec<_>>(),
+                )),
+                Arc::new(Float64Array::from(vec![None; rows.len()])),
+                Arc::new(Float64Array::from(
+                    rows.iter()
+                        .map(|(_, importance)| *importance)
+                        .collect::<Vec<_>>(),
+                )),
+                Arc::new(StringArray::from(vec!["feature_importance"; rows.len()])),
+            ],
+        )
+        .unwrap();
+        let file = File::create(path).unwrap();
+        let mut writer = ArrowWriter::try_new(file, schema, None).unwrap();
+        writer.write(&batch).unwrap();
+        writer.close().unwrap();
     }
 
     fn temp_root(prefix: &str) -> PathBuf {

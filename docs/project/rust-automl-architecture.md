@@ -83,6 +83,8 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
   LightGBM, and anomaly candidates, then open human-review recommendations
   without activating any model.
+- `mine-rule-candidates`: translate feature-importance evidence into draft rule
+  candidates plus required backtest and human-review work items.
 - `build-mlops-monitoring-plan`: define scheduled shadow, drift, fairness,
   reviewer-disagreement, and label-delay checks.
 
@@ -90,8 +92,6 @@ Future worker commands should add:
 
 - `build-feature-set`: materialize feature versions from registered datasets;
 - `evaluate-model-artifact`: run offline metrics and serving parity tests;
-- `mine-rule-candidates`: translate model explanation patterns into Rule Studio
-  draft candidates;
 - `run-rule-candidate-backtest`: backtest drafts before human review;
 
 ## Serving Architecture

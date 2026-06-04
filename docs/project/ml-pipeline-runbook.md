@@ -315,6 +315,33 @@ integrity, feature materialization, fairness, AUC, or recall evidence is
 missing or failed. The output may recommend a candidate for human review; it
 must not activate a model or publish a rule.
 
+## Stage 6.6: Explainable Rule Candidate Mining
+
+Purpose: turn explainable model evidence into draft Rule Studio candidates
+without writing to the active rule library.
+
+Command:
+
+```bash
+cargo run --locked -p worker -- mine-rule-candidates \
+  --validation-report data/model-artifacts/baseline_fwa/<candidate-version>/validation.json \
+  --feature-importance data/model-artifacts/baseline_fwa/<candidate-version>/feature_importance.parquet \
+  --output-dir data/model-artifacts/baseline_fwa/<candidate-version>/rule-candidates
+```
+
+The worker writes:
+
+- `rule_candidate_mining_plan.json`;
+- `rule_candidate_backtest_requests.json`;
+- `rule_candidate_review_tasks.json`.
+
+The output is intentionally blocked from rule-library writeback. Each candidate
+rule template keeps `threshold_selected_by_backtest` instead of a publishable
+threshold. Before a candidate can enter Rule Studio publication flow, it must
+pass deterministic backtest, false-positive review, human promotion review,
+customer policy or model-governance approval, and shadow or limited rollout
+when impact is high.
+
 ## External Training Platform Boundary
 
 Training may run on a separate ML platform such as a customer notebook

@@ -104,6 +104,17 @@ async fn main() -> anyhow::Result<()> {
             let ranking = worker::rank_automl_candidates(&reports, output_dir)?;
             println!("{}", serde_json::to_string_pretty(&ranking)?);
         }
+        "mine-rule-candidates" => {
+            let validation_report = take_flag_value(&mut args, "--validation-report")?;
+            let feature_importance = take_flag_value(&mut args, "--feature-importance")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let candidates =
+                worker::mine_rule_candidates(&validation_report, &feature_importance, output_dir)?;
+            println!("{}", serde_json::to_string_pretty(&candidates)?);
+        }
         "build-analytics-export-plan" => {
             let object_storage_uri = take_flag_value(&mut args, "--object-storage-uri")?;
             let clickhouse_url = take_flag_value(&mut args, "--clickhouse-url")?;
