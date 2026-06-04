@@ -91,6 +91,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "demo_automl_lifecycle_verifier",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "mlops_monitoring_report_submitter",
                 status: "ok",
             },
@@ -4168,6 +4172,281 @@ pub fn build_demo_automl_lifecycle_evidence(
     Ok(index)
 }
 
+pub fn verify_demo_automl_lifecycle(
+    demo_root: impl AsRef<Path>,
+    evidence_dir: impl AsRef<Path>,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let demo_root = demo_root.as_ref();
+    let evidence_dir = evidence_dir.as_ref();
+    let demo_index_uri = demo_root.join("index.json");
+    let evidence_index_uri = evidence_dir.join("demo_lifecycle_evidence_index.json");
+
+    let demo_index = read_json_report(&demo_index_uri.to_string_lossy())?;
+    let evidence_index = read_json_report(&evidence_index_uri.to_string_lossy())?;
+    let artifacts = evidence_index
+        .get("artifacts")
+        .and_then(|value| value.as_object())
+        .context("demo lifecycle evidence index requires artifacts")?;
+
+    let mut checks = Vec::new();
+    let mut blocking_reasons = Vec::new();
+
+    let dataset_manifests = demo_index
+        .get("dataset_manifests")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    let labeled_datasets = dataset_manifests
+        .iter()
+        .filter(|dataset| json_string(dataset, "label_column").is_some())
+        .collect::<Vec<_>>();
+    let unlabeled_datasets = dataset_manifests
+        .iter()
+        .filter(|dataset| json_string(dataset, "label_column").is_none())
+        .collect::<Vec<_>>();
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "demo_dataset_portfolio",
+        demo_index["pack_kind"] == "rust_automl_demo_datasets"
+            && labeled_datasets.len() == 1
+            && unlabeled_datasets.len() >= 2,
+        format!(
+            "{} labeled dataset(s), {} unlabeled dataset(s)",
+            labeled_datasets.len(),
+            unlabeled_datasets.len()
+        ),
+        vec![format!("demo_dataset_index:{}", demo_index_uri.display())],
+    );
+
+    let labeled_manifest_uri =
+        json_string(&demo_index, "labeled_manifest_uri").context("missing labeled_manifest_uri")?;
+    let labeled_manifest = read_json_report(&labeled_manifest_uri)?;
+    let labeled_split_names = labeled_manifest
+        .get("splits")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|split| json_string(split, "split_name"))
+        .collect::<BTreeSet<_>>();
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "labeled_supervised_dataset",
+        json_string(&labeled_manifest, "label_column").as_deref() == Some("confirmed_fwa")
+            && json_string(&labeled_manifest, "label_policy")
+                .is_some_and(|policy| policy.contains("weak_rust_demo_label"))
+            && labeled_split_names.contains("train")
+            && labeled_split_names.contains("validation")
+            && labeled_split_names.contains("out_of_time"),
+        "labeled claim-risk manifest carries confirmed_fwa and train/validation/out_of_time splits"
+            .into(),
+        vec![format!("dataset_manifest:{labeled_manifest_uri}")],
+    );
+
+    let unlabeled_manifest_uris = demo_index
+        .get("unlabeled_manifest_uris")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str())
+        .collect::<Vec<_>>();
+    let unlabeled_contract_passed = unlabeled_manifest_uris.len() >= 2
+        && unlabeled_manifest_uris.iter().all(|uri| {
+            read_json_report(uri).is_ok_and(|manifest| {
+                json_string(&manifest, "label_column").is_none()
+                    && json_string(&manifest, "label_policy")
+                        .is_some_and(|policy| policy.starts_with("unlabeled_"))
+                    && nested_json_array_contains(
+                        &manifest,
+                        &["governance", "blocked_uses"],
+                        "supervised_training",
+                    )
+            })
+        });
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "unlabeled_dataset_boundaries",
+        unlabeled_contract_passed,
+        "unlabeled manifests carry no label column and block supervised training".into(),
+        unlabeled_manifest_uris
+            .iter()
+            .map(|uri| format!("dataset_manifest:{uri}"))
+            .collect(),
+    );
+
+    let xgboost_validation_uri = required_artifact_uri(artifacts, "xgboost_validation_report")?;
+    let lightgbm_validation_uri = required_artifact_uri(artifacts, "lightgbm_validation_report")?;
+    let xgboost_validation = read_json_report(&xgboost_validation_uri)?;
+    let lightgbm_validation = read_json_report(&lightgbm_validation_uri)?;
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "supervised_algorithm_portfolio",
+        validation_report_matches(&xgboost_validation, "xgboost", "xgboost_onnx")
+            && validation_report_matches(&lightgbm_validation, "lightgbm", "lightgbm_onnx"),
+        "XGBoost and LightGBM validation reports carry ONNX runtime and parity gate evidence"
+            .into(),
+        vec![
+            format!("model_validation_reports:{xgboost_validation_uri}"),
+            format!("model_validation_reports:{lightgbm_validation_uri}"),
+        ],
+    );
+
+    let xgboost_artifact_uri = required_artifact_uri(artifacts, "xgboost_artifact_evaluation")?;
+    let lightgbm_artifact_uri = required_artifact_uri(artifacts, "lightgbm_artifact_evaluation")?;
+    let xgboost_artifact = read_json_report(&xgboost_artifact_uri)?;
+    let lightgbm_artifact = read_json_report(&lightgbm_artifact_uri)?;
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "rust_onnx_serving_gate",
+        artifact_evaluation_matches(&xgboost_artifact, "xgboost_onnx")
+            && artifact_evaluation_matches(&lightgbm_artifact, "lightgbm_onnx"),
+        "XGBoost and LightGBM artifact evaluations pass Rust serving gates".into(),
+        vec![
+            format!("model_artifact_evaluations:{xgboost_artifact_uri}"),
+            format!("model_artifact_evaluations:{lightgbm_artifact_uri}"),
+        ],
+    );
+
+    let rule_backtest_uri = required_artifact_uri(artifacts, "rule_backtest_report")?;
+    let rule_backtest = read_json_report(&rule_backtest_uri)?;
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "rule_candidate_backtest_before_writeback",
+        rule_backtest["report_kind"] == "deterministic_rule_candidate_backtest"
+            && json_string(&rule_backtest, "rule_library_writeback_status")
+                .is_some_and(|status| status.contains("blocked_pending_human_review"))
+            && json_array_len(&rule_backtest, "review_tasks") > 0,
+        "explainable rule candidates are backtested and blocked before rule-library writeback"
+            .into(),
+        vec![format!("rule_candidate_backtests:{rule_backtest_uri}")],
+    );
+
+    let provider_clustering_uri = required_artifact_uri(artifacts, "provider_clustering_report")?;
+    let provider_graph_uri = required_artifact_uri(artifacts, "provider_graph_report")?;
+    let claim_entity_uri = required_artifact_uri(artifacts, "claim_entity_clustering_report")?;
+    let provider_clustering = read_json_report(&provider_clustering_uri)?;
+    let provider_graph = read_json_report(&provider_graph_uri)?;
+    let claim_entity = read_json_report(&claim_entity_uri)?;
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "unlabeled_clustering_review_only",
+        clustering_report_matches(
+            &provider_clustering,
+            "provider_peer_clustering",
+            "must not create confirmed FWA labels",
+        ) && clustering_report_matches(
+            &provider_graph,
+            "provider_graph_community_clustering",
+            "must not create confirmed FWA labels",
+        ) && clustering_report_matches(
+            &claim_entity,
+            "claim_entity_clustering",
+            "rule-library writeback",
+        ),
+        "provider-peer, graph-community, and claim-entity clustering create review candidates only"
+            .into(),
+        vec![
+            format!("provider_peer_clustering:{provider_clustering_uri}"),
+            format!("provider_graph_clustering:{provider_graph_uri}"),
+            format!("claim_entity_clustering:{claim_entity_uri}"),
+        ],
+    );
+
+    let monitoring_report_uri = required_artifact_uri(artifacts, "mlops_monitoring_report")?;
+    let scheduler_report_uri =
+        required_artifact_uri(artifacts, "mlops_scheduler_execution_report")?;
+    let monitoring_cycle_uri = required_artifact_uri(artifacts, "mlops_monitoring_cycle_report")?;
+    let monitoring_report = read_json_report(&monitoring_report_uri)?;
+    let scheduler_report = read_json_report(&scheduler_report_uri)?;
+    let monitoring_cycle = read_json_report(&monitoring_cycle_uri)?;
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "auto_mlops_monitoring_loop",
+        monitoring_report["report_kind"] == "mlops_monitoring_report"
+            && json_string(&monitoring_report, "promotion_boundary")
+                .is_some_and(|boundary| boundary.contains("must not activate models"))
+            && scheduler_report["report_kind"] == "mlops_scheduler_execution_report"
+            && json_string(&scheduler_report, "governance_boundary")
+                .is_some_and(|boundary| boundary.contains("must not create retraining jobs"))
+            && monitoring_cycle["report_kind"] == "mlops_monitoring_cycle_execution"
+            && json_string(&monitoring_cycle, "governance_boundary")
+                .is_some_and(|boundary| boundary.contains("must not create retraining jobs")),
+        "monitoring, scheduler, and cycle reports are evidence-only and do not perform lifecycle actions"
+            .into(),
+        vec![
+            format!("mlops_monitoring_reports:{monitoring_report_uri}"),
+            format!("mlops_scheduler_execution_reports:{scheduler_report_uri}"),
+            format!("mlops_monitoring_cycles:{monitoring_cycle_uri}"),
+        ],
+    );
+
+    let closure_report_uri = required_artifact_uri(artifacts, "lifecycle_closure_report")?;
+    let closure_report = read_json_report(&closure_report_uri)?;
+    let closure_stage_count = closure_report
+        .get("lifecycle_stages")
+        .and_then(|value| value.as_array())
+        .map(|stages| stages.len())
+        .unwrap_or(0);
+    let closure_stages_passed = closure_report
+        .get("lifecycle_stages")
+        .and_then(|value| value.as_array())
+        .is_some_and(|stages| stages.iter().all(|stage| stage["status"] == "passed"));
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "lifecycle_closure_report",
+        closure_report["report_kind"] == "rust_automl_lifecycle_closure"
+            && closure_report["closure_status"] == "closed_with_human_governance_gates"
+            && closure_stages_passed
+            && closure_stage_count >= 6
+            && json_array_len(&closure_report, "required_human_gates") >= 4,
+        format!("{closure_stage_count} lifecycle stage(s) closed with human governance gates"),
+        vec![format!("automl_lifecycle_closure:{closure_report_uri}")],
+    );
+
+    let verification_status = if blocking_reasons.is_empty() {
+        "passed"
+    } else {
+        "blocked"
+    };
+    let report = serde_json::json!({
+        "report_kind": "rust_automl_demo_lifecycle_verification",
+        "report_version": 1,
+        "verification_status": verification_status,
+        "demo_root": demo_root.to_string_lossy(),
+        "evidence_dir": evidence_dir.to_string_lossy(),
+        "checks": checks,
+        "blocking_reasons": blocking_reasons,
+        "evidence_refs": [
+            format!("demo_dataset_index:{}", demo_index_uri.display()),
+            format!("demo_lifecycle_evidence_index:{}", evidence_index_uri.display()),
+            format!("automl_lifecycle_closure:{closure_report_uri}")
+        ],
+        "governance_boundary": "verification proves the Rust Auto MLOps demo lifecycle evidence pack only; it must not activate models, assign labels, or publish rules"
+    });
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create Auto MLOps lifecycle verification output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("rust_automl_lifecycle_verification_report.json"),
+        &report,
+    )?;
+    Ok(report)
+}
+
 fn write_demo_validation_report(
     path: &Path,
     candidate_model_version: &str,
@@ -4300,6 +4579,70 @@ fn lifecycle_stage(
     })
 }
 
+fn push_verification_check(
+    checks: &mut Vec<serde_json::Value>,
+    blocking_reasons: &mut Vec<String>,
+    check: &str,
+    passed: bool,
+    summary: String,
+    evidence_refs: Vec<String>,
+) {
+    if !passed {
+        blocking_reasons.push(format!("{check}: {summary}"));
+    }
+    checks.push(serde_json::json!({
+        "check": check,
+        "status": if passed { "passed" } else { "blocked" },
+        "summary": summary,
+        "evidence_refs": evidence_refs
+    }));
+}
+
+fn required_artifact_uri(
+    artifacts: &serde_json::Map<String, serde_json::Value>,
+    key: &str,
+) -> anyhow::Result<String> {
+    artifacts
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .with_context(|| format!("demo lifecycle evidence index requires artifacts.{key}"))
+}
+
+fn validation_report_matches(
+    report: &serde_json::Value,
+    algorithm: &str,
+    runtime_kind: &str,
+) -> bool {
+    json_string(report, "algorithm").as_deref() == Some(algorithm)
+        && nested_json_string(report, &["metrics_json", "runtime_kind"]).as_deref()
+            == Some(runtime_kind)
+        && nested_json_string(report, &["metrics_json", "onnx_parity_gate_status"]).as_deref()
+            == Some("passed")
+        && nested_json_string(report, &["metrics_json", "onnx_parity_report_uri"]).is_some()
+}
+
+fn artifact_evaluation_matches(report: &serde_json::Value, runtime_kind: &str) -> bool {
+    report["report_kind"] == "model_artifact_evaluation"
+        && json_string(report, "runtime_kind").as_deref() == Some(runtime_kind)
+        && json_string(report, "gate_status").as_deref() == Some("passed")
+        && json_string(report, "rust_serving_status").as_deref() == Some("passed")
+        && json_string(report, "latency_status").as_deref() == Some("passed")
+}
+
+fn clustering_report_matches(
+    report: &serde_json::Value,
+    report_kind: &str,
+    required_boundary_text: &str,
+) -> bool {
+    report["report_kind"] == report_kind
+        && json_string(report, "governance_boundary")
+            .is_some_and(|boundary| boundary.contains(required_boundary_text))
+        && json_array_len(report, "anomaly_candidates") > 0
+        && json_array_len(report, "review_tasks") > 0
+}
+
 fn json_array_len(value: &serde_json::Value, key: &str) -> usize {
     value
         .get(key)
@@ -4361,6 +4704,19 @@ fn nested_json_string(value: &serde_json::Value, path: &[&str]) -> Option<String
         .as_str()
         .filter(|value| !value.trim().is_empty())
         .map(str::to_string)
+}
+
+fn nested_json_array_contains(value: &serde_json::Value, path: &[&str], expected: &str) -> bool {
+    let mut current = value;
+    for key in path {
+        let Some(next) = current.get(key) else {
+            return false;
+        };
+        current = next;
+    }
+    current
+        .as_array()
+        .is_some_and(|items| items.iter().any(|item| item.as_str() == Some(expected)))
 }
 
 fn json_string(value: &serde_json::Value, key: &str) -> Option<String> {
@@ -9595,6 +9951,63 @@ mod tests {
         assert!(output_dir
             .join("demo_lifecycle_evidence_index.json")
             .is_file());
+    }
+
+    #[test]
+    fn verifies_demo_automl_lifecycle_evidence_pack() {
+        let root = temp_root("verify-demo-automl-lifecycle");
+        let demo_root = root.join("demo");
+        let evidence_dir = root.join("lifecycle-evidence");
+        let verification_dir = root.join("verification");
+        build_demo_ml_datasets(&demo_root, "2026-06-rust-automl-demo").expect("demo ML datasets");
+        build_demo_automl_lifecycle_evidence(&demo_root, &evidence_dir)
+            .expect("demo lifecycle evidence");
+
+        let report = verify_demo_automl_lifecycle(&demo_root, &evidence_dir, &verification_dir)
+            .expect("verification report");
+
+        assert_eq!(
+            report["report_kind"],
+            "rust_automl_demo_lifecycle_verification"
+        );
+        assert_eq!(report["verification_status"], "passed");
+        assert!(report["checks"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|check| check["status"] == "passed"));
+        assert!(verification_dir
+            .join("rust_automl_lifecycle_verification_report.json")
+            .is_file());
+    }
+
+    #[test]
+    fn demo_automl_lifecycle_verification_blocks_labeled_unlabeled_manifest() {
+        let root = temp_root("verify-demo-automl-lifecycle-blocked");
+        let demo_root = root.join("demo");
+        let evidence_dir = root.join("lifecycle-evidence");
+        build_demo_ml_datasets(&demo_root, "2026-06-rust-automl-demo").expect("demo ML datasets");
+        build_demo_automl_lifecycle_evidence(&demo_root, &evidence_dir)
+            .expect("demo lifecycle evidence");
+        let shadow_manifest_uri = demo_root.join("unlabeled_shadow_scoring/manifest.json");
+        let mut shadow_manifest =
+            read_json_report(&shadow_manifest_uri.to_string_lossy()).expect("shadow manifest");
+        shadow_manifest["label_column"] = serde_json::json!("confirmed_fwa");
+        write_json(shadow_manifest_uri, &shadow_manifest).expect("write polluted manifest");
+
+        let report =
+            verify_demo_automl_lifecycle(&demo_root, &evidence_dir, root.join("verification"))
+                .expect("verification report");
+
+        assert_eq!(report["verification_status"], "blocked");
+        assert!(report["blocking_reasons"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reason| reason
+                .as_str()
+                .unwrap()
+                .contains("unlabeled_dataset_boundaries")));
     }
 
     #[test]

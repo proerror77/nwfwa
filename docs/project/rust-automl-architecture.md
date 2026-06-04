@@ -78,6 +78,11 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `build-demo-automl-lifecycle-evidence`: generate a checked-in golden-path
   evidence pack from the demo datasets, including ranking, rule backtest,
   clustering, monitoring, and lifecycle closure reports.
+- `verify-demo-automl-lifecycle`: validate that the checked-in demo pack still
+  contains one labeled supervised dataset, at least two unlabeled review-only
+  datasets, XGBoost and LightGBM ONNX Rust-serving gates, rule-candidate
+  backtest evidence, clustering review tasks, monitoring evidence, and a closed
+  human-governed lifecycle report.
 - `profile-parquet`: validate labeled training manifests and write schema,
   profile, and catalog artifacts.
 - `build-feature-set`: materialize feature-set manifests from labeled Parquet

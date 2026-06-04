@@ -278,6 +278,23 @@ checked-in
 closure report is `data/rust-automl-demo/lifecycle-evidence/closure/rust_automl_lifecycle_closure_report.json`
 and should stay `closed_with_human_governance_gates`.
 
+Verify the checked-in demo pack without regenerating it:
+
+```bash
+cargo run --locked -p worker -- verify-demo-automl-lifecycle \
+  --demo-root data/rust-automl-demo \
+  --evidence-dir data/rust-automl-demo/lifecycle-evidence \
+  --output-dir data/rust-automl-demo/lifecycle-evidence/verification
+```
+
+This writes
+`data/rust-automl-demo/lifecycle-evidence/verification/rust_automl_lifecycle_verification_report.json`
+and exits non-zero if the pack no longer proves the expected lifecycle shape:
+one labeled supervised dataset, at least two unlabeled review-only datasets,
+XGBoost and LightGBM ONNX Rust-serving gates, rule-candidate backtest,
+clustering review tasks, monitoring reports, and the final human-governed
+closure report.
+
 ```bash
 uv run --project apps/ml-service \
   python scripts/data/build_public_data_mvp.py \
