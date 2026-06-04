@@ -149,8 +149,17 @@ Candidate order:
 
 1. Logistic regression with calibration for an interpretable baseline.
 2. Decision tree or shallow tree ensemble for transparent rules-of-thumb.
-3. XGBoost or LightGBM only if it beats rule-only and baseline models under
-   strict validation, and only with feature importance or SHAP artifacts.
+3. XGBoost as the first primary supervised-learning challenger for structured
+   claim-risk scoring, compared against the logistic and rule-only baselines.
+4. LightGBM as the second gradient-boosted-tree candidate when training
+   platform constraints or customer stack preference make it a better fit.
+
+XGBoost or LightGBM candidates must carry feature importance or SHAP-style
+artifacts, threshold evidence tied to review capacity, and strict time/group
+validation. Their high-contribution feature patterns may be sent into Rule
+Studio as candidate rules, but those candidates still require backtest, human
+review, promotion gates, approval, and publication before they become active
+rules.
 
 Do not make deep learning the default for structured claims scoring. Keep deep
 or LLM models limited to OCR cleanup, document summarization, medical-note
@@ -212,6 +221,7 @@ and production-operations gaps rather than missing demo mechanics:
 
 - real customer or pilot labels with provenance, delayed-label handling, and
   reviewer-disagreement measurement;
+- LightGBM training/export support after the XGBoost path is validated;
 - production feature store or scheduled feature materialization beyond the
   current manifest-backed offline baseline;
 - calibrated probability outputs with calibration evidence and disjoint
@@ -229,7 +239,8 @@ and production-operations gaps rather than missing demo mechanics:
 
 ## Decision
 
-Keep the current algorithm architecture. Do not replace it with a deep-learning
-first approach. The next correct step is to preserve the demo baseline while
-building the real offline training and evaluation pipeline behind the existing
-governance gates.
+Keep the current algorithm architecture, but make the structured supervised
+learning direction explicit: logistic regression is the baseline, XGBoost is the
+primary production candidate, LightGBM is the next GBDT candidate, and deep
+learning remains limited to non-structured evidence workflows unless a later
+customer-approved validation package proves otherwise.

@@ -830,10 +830,18 @@ MVP should use:
 Production model candidates should start with interpretable or inspectable
 structured models:
 
-- logistic regression for calibrated baselines;
+- logistic regression for calibrated baselines and rule-only comparison;
 - decision trees for transparent rules-of-thumb;
-- gradient-boosted trees, such as XGBoost or LightGBM, only with feature
-  importance, SHAP-style explanation, and strict validation gates.
+- gradient-boosted trees, such as XGBoost or LightGBM, as the primary
+  supervised-learning candidates for structured claim-risk scoring, provided
+  they carry feature importance or SHAP-style explanation and pass strict
+  validation gates.
+
+Explainable supervised model outputs should also feed Rule Studio. High-value
+feature contributions, tree paths, or SHAP-style patterns may become candidate
+rules, but they must pass deterministic backtest, human promotion review, rule
+promotion gates, approval, and publication before entering the active rule
+library.
 
 Large language models or deep models may support OCR cleanup, document summary,
 medical-note extraction, clustering, and investigation drafting. They must not
@@ -851,10 +859,14 @@ Training becomes useful after enough customer or pilot data has stable labels:
 2. Split by time and by leakage-sensitive groups such as member, policy,
    provider, and case family.
 3. Train offline only; do not let the trained model influence decisions.
-4. Record model dataset version, feature-set version, metrics, threshold, and
-   feature importance artifact.
-5. Run shadow mode against live traffic and compare against rules and human QA.
-6. Promote only when holdout, out-of-time, and pilot review metrics pass.
+4. Train a logistic baseline plus at least one gradient-boosted tree candidate
+   once stable labels exist.
+5. Record model dataset version, feature-set version, algorithm family,
+   metrics, threshold, and feature importance or SHAP-style artifact.
+6. Send explainable model patterns into Rule Studio as candidate rules when
+   they can be expressed as deterministic, auditable rule DSL.
+7. Run shadow mode against live traffic and compare against rules and human QA.
+8. Promote only when holdout, out-of-time, and pilot review metrics pass.
 
 Overfitting controls are product requirements, not optional data-science notes:
 

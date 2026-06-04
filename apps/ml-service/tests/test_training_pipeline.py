@@ -11,7 +11,7 @@ def write_split(path: Path, rows: list[dict[str, object]]) -> None:
     pd.DataFrame(rows).to_parquet(path, index=False)
 
 
-def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Path):
+def write_training_manifest(tmp_path: Path) -> Path:
     dataset_root = tmp_path / "dataset"
     common_rows = [
         {
@@ -89,6 +89,11 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     }
     manifest_path = dataset_root / "manifest.json"
     manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return manifest_path
+
+
+def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Path):
+    manifest_path = write_training_manifest(tmp_path)
 
     payload = train_from_manifest(
         manifest_path=manifest_path,
@@ -121,6 +126,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["artifact_sha256"].startswith("sha256:")
     assert payload["artifact_signature"].startswith("hmac-sha256:")
     assert payload["metrics_json"]["runtime_kind"] == "rust_logistic_regression"
+    assert payload["metrics_json"]["algorithm"] == "logistic_regression"
+    assert payload["metrics_json"]["algorithm_family"] == "linear_baseline"
     assert payload["metrics_json"]["training_artifact_uri"].endswith("/model.joblib")
     assert payload["metrics_json"]["time_group_split_status"] == "passed"
     assert payload["metrics_json"]["leakage_check_status"] == "passed"
@@ -170,3 +177,43 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
         "high_cost_item_ratio",
     ]
     assert feature_store_manifest["split_row_counts"]["train"] == 4
+
+
+def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
+    manifest_path = write_training_manifest(tmp_path)
+
+    payload = train_from_manifest(
+        manifest_path=manifest_path,
+        artifact_base_uri=tmp_path / "artifacts",
+        model_key="baseline_fwa",
+        base_model_version="0.1.0",
+        job_id="model_retraining_job_1",
+        actor="trainer-worker",
+        algorithm="xgboost",
+    )
+
+    assert payload["candidate_model_version"] == "0.1.0-xgboost-candidate-model_retraining_job_1"
+    assert payload["artifact_uri"].endswith("/model.joblib")
+    assert payload["training_artifact_uri"] == payload["artifact_uri"]
+    assert not (Path(payload["artifact_uri"]).parent / "rust_serving_artifact.json").exists()
+    assert payload["metrics_json"]["algorithm"] == "xgboost"
+    assert payload["metrics_json"]["algorithm_family"] == "gradient_boosted_tree"
+    assert payload["metrics_json"]["runtime_kind"] == "xgboost_classifier"
+    assert payload["metrics_json"]["python_runtime_kind"] == "xgboost_classifier"
+    assert Path(payload["feature_importance_uri"]).exists()
+
+    serving_manifest = json.loads(
+        Path(payload["serving_manifest_uri"]).read_text(encoding="utf-8")
+    )
+    assert serving_manifest["runtime_kind"] == "xgboost_classifier"
+    assert serving_manifest["artifact_uri"] == payload["artifact_uri"]
+    assert serving_manifest["training_artifact_uri"] == payload["training_artifact_uri"]
+
+    feature_importance = pd.read_parquet(payload["feature_importance_uri"])
+    assert set(feature_importance["feature"]) == {
+        "service_date_ord",
+        "claim_amount_to_limit_ratio",
+        "provider_profile_score",
+        "high_cost_item_ratio",
+    }
+    assert set(feature_importance["importance_kind"]) == {"feature_importance"}

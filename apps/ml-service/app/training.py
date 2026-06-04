@@ -22,6 +22,11 @@ from sklearn.metrics import (
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 
+try:
+    from xgboost import XGBClassifier
+except ImportError:  # pragma: no cover - exercised only in incomplete envs
+    XGBClassifier = None
+
 from .mlops import (
     artifact_signature,
     build_drift_report,
@@ -34,6 +39,8 @@ from .mlops import (
 
 
 DEFAULT_THRESHOLD = 0.5
+DEFAULT_ALGORITHM = "logistic_regression"
+SUPPORTED_ALGORITHMS = {DEFAULT_ALGORITHM, "xgboost"}
 
 
 def train_from_manifest(
@@ -43,6 +50,7 @@ def train_from_manifest(
     base_model_version: str,
     job_id: str,
     actor: str,
+    algorithm: str | None = None,
 ) -> dict[str, Any]:
     manifest_path = Path(manifest_path)
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
@@ -51,6 +59,7 @@ def train_from_manifest(
     entity_keys = set(manifest.get("entity_keys", []))
     time_split_field = required_str(manifest, "time_split_field")
     group_split_fields = list(manifest.get("group_split_fields", []))
+    model_algorithm = normalize_algorithm(algorithm or manifest.get("algorithm", DEFAULT_ALGORITHM))
     splits = load_splits(manifest, dataset_root)
 
     train = required_split(splits, "train")
@@ -62,26 +71,12 @@ def train_from_manifest(
     if not feature_columns:
         raise ValueError("training manifest must expose at least one numeric feature column")
 
-    pipeline = Pipeline(
-        [
-            ("scale", StandardScaler()),
-            (
-                "model",
-                LogisticRegression(
-                    class_weight="balanced",
-                    max_iter=1000,
-                    random_state=42,
-                ),
-            ),
-        ]
-    )
+    pipeline = build_pipeline(model_algorithm, train[label_column])
     pipeline.fit(train[feature_columns], train[label_column].astype(int))
 
     validation_metrics = evaluate_split(pipeline, validation, feature_columns, label_column)
     oot_metrics = evaluate_split(pipeline, out_of_time, feature_columns, label_column)
-    candidate_model_version = (
-        f"{safe_path_segment(base_model_version)}-candidate-{safe_path_segment(job_id)}"
-    )
+    candidate_model_version = candidate_version(base_model_version, job_id, model_algorithm)
     artifact_root = Path(artifact_base_uri) / safe_path_segment(model_key) / candidate_model_version
     artifact_root.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_root / "model.joblib"
@@ -94,10 +89,12 @@ def train_from_manifest(
     drift_report_path = artifact_root / "drift_report.json"
     fairness_report_path = artifact_root / "fairness_report.json"
 
+    runtime_kind = runtime_kind_for_algorithm(model_algorithm)
     model_bundle = {
         "model_key": model_key,
         "model_version": candidate_model_version,
-        "runtime_kind": "sklearn_logistic_regression",
+        "algorithm": model_algorithm,
+        "runtime_kind": runtime_kind,
         "execution_provider": "cpu",
         "threshold": DEFAULT_THRESHOLD,
         "feature_columns": feature_columns,
@@ -105,22 +102,25 @@ def train_from_manifest(
         "pipeline": pipeline,
     }
     joblib.dump(model_bundle, artifact_path)
-    rust_artifact = build_rust_serving_artifact(
-        pipeline=pipeline,
-        model_key=model_key,
-        model_version=candidate_model_version,
-        feature_columns=feature_columns,
-        threshold=DEFAULT_THRESHOLD,
-    )
-    rust_artifact_path.write_text(
-        json.dumps(rust_artifact, indent=2, sort_keys=True),
-        encoding="utf-8",
-    )
+    serving_artifact_path = artifact_path
+    if model_algorithm == DEFAULT_ALGORITHM:
+        rust_artifact = build_rust_serving_artifact(
+            pipeline=pipeline,
+            model_key=model_key,
+            model_version=candidate_model_version,
+            feature_columns=feature_columns,
+            threshold=DEFAULT_THRESHOLD,
+        )
+        rust_artifact_path.write_text(
+            json.dumps(rust_artifact, indent=2, sort_keys=True),
+            encoding="utf-8",
+        )
+        serving_artifact_path = rust_artifact_path
 
     feature_importance = build_feature_importance(pipeline, feature_columns)
     feature_importance.to_parquet(feature_importance_path, index=False)
     training_artifact_sha256 = file_sha256(artifact_path)
-    artifact_sha256 = file_sha256(rust_artifact_path)
+    artifact_sha256 = file_sha256(serving_artifact_path)
     artifact_signature_value = artifact_signature(
         model_key,
         candidate_model_version,
@@ -130,13 +130,13 @@ def train_from_manifest(
     build_serving_manifest(
         model_key=model_key,
         model_version=candidate_model_version,
-        artifact_uri=str(rust_artifact_path),
+        artifact_uri=str(serving_artifact_path),
         artifact_sha256=artifact_sha256,
         artifact_signature_value=artifact_signature_value,
         feature_columns=feature_columns,
         threshold=DEFAULT_THRESHOLD,
         output_path=serving_manifest_path,
-        runtime_kind="rust_logistic_regression",
+        runtime_kind=serving_runtime_kind_for_algorithm(model_algorithm),
         training_artifact_uri=str(artifact_path),
     )
     build_feature_store_manifest(
@@ -169,7 +169,8 @@ def train_from_manifest(
     )
 
     metrics_json = {
-        "algorithm": "logistic_regression",
+        "algorithm": model_algorithm,
+        "algorithm_family": algorithm_family(model_algorithm),
         "out_of_time_auc": oot_metrics["auc"],
         "out_of_time_average_precision": oot_metrics["average_precision"],
         "out_of_time_precision": oot_metrics["precision"],
@@ -182,7 +183,8 @@ def train_from_manifest(
         "review_capacity_threshold_status": "passed",
         "serving_version_lock_status": "passed",
         "artifact_integrity_status": "passed",
-        "runtime_kind": "rust_logistic_regression",
+        "runtime_kind": serving_runtime_kind_for_algorithm(model_algorithm),
+        "python_runtime_kind": runtime_kind,
         "training_artifact_uri": str(artifact_path),
         "training_artifact_sha256": training_artifact_sha256,
         "feature_store_materialization_status": "passed",
@@ -206,6 +208,7 @@ def train_from_manifest(
         "dataset_key": manifest.get("dataset_key"),
         "dataset_version": manifest.get("dataset_version"),
         "feature_columns": feature_columns,
+        "algorithm": model_algorithm,
         "validation_metrics": validation_metrics,
         "out_of_time_metrics": oot_metrics,
         "metrics_json": metrics_json,
@@ -220,7 +223,7 @@ def train_from_manifest(
         "actor": actor,
         "notes": "Candidate model and validation report registered by production training pipeline.",
         "candidate_model_version": candidate_model_version,
-        "artifact_uri": str(rust_artifact_path),
+        "artifact_uri": str(serving_artifact_path),
         "training_artifact_uri": str(artifact_path),
         "training_artifact_sha256": training_artifact_sha256,
         "artifact_sha256": artifact_sha256,
@@ -245,7 +248,7 @@ def train_from_manifest(
         "metrics_json": metrics_json,
         "evidence_refs": [
             f"model_retraining_jobs:{job_id}",
-            f"model_artifacts:{rust_artifact_path}",
+            f"model_artifacts:{serving_artifact_path}",
             f"model_training_artifacts:{artifact_path}",
             f"model_serving_manifests:{serving_manifest_path}",
             f"feature_store_manifests:{feature_store_manifest_path}",
@@ -256,6 +259,86 @@ def train_from_manifest(
             f"model_evaluations:{evaluation_run_id}",
         ],
     }
+
+
+def normalize_algorithm(value: Any) -> str:
+    algorithm = str(value).strip().lower().replace("-", "_")
+    if algorithm not in SUPPORTED_ALGORITHMS:
+        supported = ", ".join(sorted(SUPPORTED_ALGORITHMS))
+        raise ValueError(f"algorithm must be one of: {supported}")
+    if algorithm == "xgboost" and XGBClassifier is None:
+        raise ValueError("xgboost training requires the xgboost package")
+    return algorithm
+
+
+def build_pipeline(algorithm: str, labels: pd.Series) -> Pipeline:
+    if algorithm == DEFAULT_ALGORITHM:
+        return Pipeline(
+            [
+                ("scale", StandardScaler()),
+                (
+                    "model",
+                    LogisticRegression(
+                        class_weight="balanced",
+                        max_iter=1000,
+                        random_state=42,
+                    ),
+                ),
+            ]
+        )
+    positive_count = int((labels.astype(int) == 1).sum())
+    negative_count = int((labels.astype(int) == 0).sum())
+    scale_pos_weight = negative_count / positive_count if positive_count else 1.0
+    return Pipeline(
+        [
+            (
+                "model",
+                XGBClassifier(
+                    n_estimators=8,
+                    max_depth=3,
+                    learning_rate=0.08,
+                    subsample=0.9,
+                    colsample_bytree=0.9,
+                    objective="binary:logistic",
+                    eval_metric="logloss",
+                    tree_method="hist",
+                    n_jobs=1,
+                    scale_pos_weight=scale_pos_weight,
+                    random_state=42,
+                    verbosity=0,
+                ),
+            )
+        ]
+    )
+
+
+def candidate_version(base_model_version: str, job_id: str, algorithm: str) -> str:
+    base = safe_path_segment(base_model_version)
+    job = safe_path_segment(job_id)
+    if algorithm == DEFAULT_ALGORITHM:
+        return f"{base}-candidate-{job}"
+    return f"{base}-{safe_path_segment(algorithm)}-candidate-{job}"
+
+
+def runtime_kind_for_algorithm(algorithm: str) -> str:
+    return {
+        DEFAULT_ALGORITHM: "sklearn_logistic_regression",
+        "xgboost": "xgboost_classifier",
+    }[algorithm]
+
+
+def serving_runtime_kind_for_algorithm(algorithm: str) -> str:
+    return {
+        DEFAULT_ALGORITHM: "rust_logistic_regression",
+        "xgboost": "xgboost_classifier",
+    }[algorithm]
+
+
+def algorithm_family(algorithm: str) -> str:
+    return {
+        DEFAULT_ALGORITHM: "linear_baseline",
+        "xgboost": "gradient_boosted_tree",
+    }[algorithm]
 
 
 def build_rust_serving_artifact(
@@ -405,12 +488,25 @@ def ks_statistic(y_true: pd.Series, probabilities: Any) -> float:
 
 def build_feature_importance(pipeline: Pipeline, feature_columns: list[str]) -> pd.DataFrame:
     model = pipeline.named_steps["model"]
-    coefficients = model.coef_[0]
+    if hasattr(model, "coef_"):
+        coefficients = model.coef_[0]
+        return pd.DataFrame(
+            {
+                "feature": feature_columns,
+                "coefficient": coefficients,
+                "importance": abs(coefficients),
+                "importance_kind": "coefficient_abs",
+            }
+        ).sort_values("importance", ascending=False)
+    importances = getattr(model, "feature_importances_", None)
+    if importances is None:
+        raise TypeError("model does not expose coefficients or feature_importances_")
     return pd.DataFrame(
         {
             "feature": feature_columns,
-            "coefficient": coefficients,
-            "importance": abs(coefficients),
+            "coefficient": [None] * len(feature_columns),
+            "importance": importances,
+            "importance_kind": "feature_importance",
         }
     ).sort_values("importance", ascending=False)
 

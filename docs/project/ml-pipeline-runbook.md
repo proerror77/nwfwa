@@ -205,12 +205,14 @@ python -m app.train \
   --model-key baseline_fwa \
   --base-model-version 0.1.0 \
   --job-id model_retraining_job_1 \
-  --actor trainer-worker
+  --actor trainer-worker \
+  --algorithm xgboost
 ```
 
 Current implementation:
 
-- logistic regression baseline;
+- logistic regression baseline by default, plus `--algorithm xgboost` for the
+  first gradient-boosted-tree supervised-learning candidate;
 - numeric feature columns from the manifest dataset;
 - `.joblib` model artifact;
 - `validation.json`;
@@ -223,9 +225,13 @@ Current implementation:
 - `fairness_report.json` with segment precision and recall slices;
 - retraining output payload printed to stdout.
 
-The first production candidate should remain interpretable. Gradient-boosted
-trees may be added later only when validation, explanation, and shadow evidence
-are in place.
+The first production supervised-learning comparison should include the logistic
+baseline and an XGBoost candidate. Logistic exports both a Python `.joblib`
+artifact and a Rust JSON serving artifact for the API server's lightweight
+runtime. XGBoost exports a Python `.joblib` serving artifact for the existing
+Python scorer boundary, with feature-importance evidence and the same
+registration, promotion, shadow, drift, and human-review gates. LightGBM remains
+the next GBDT candidate after the XGBoost path is validated.
 
 ## Stage 6: Worker-Driven Candidate Registration
 
