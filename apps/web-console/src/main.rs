@@ -6997,11 +6997,26 @@ fn medical_review_page() -> Html {
     let selected_audit_id = use_state(String::new);
     let reviewer = use_state(|| "medical-reviewer-1".to_string());
     let decision = use_state(|| "request_more_evidence".to_string());
-    let clinical_outcomes = use_state(String::new);
+    let clinical_outcomes = use_state(|| "insufficient_evidence".to_string());
     let notes = use_state(|| "Medical review recorded from Operations Studio.".to_string());
     let evidence_refs = use_state(String::new);
     let queue_state = use_state(|| ApiState::<Vec<MedicalReviewQueueItem>>::Idle);
     let result_state = use_state(|| ApiState::<MedicalReviewResultResponse>::Idle);
+
+    let selected_review_summary = match &*queue_state {
+        ApiState::Ready(items) => selected_medical_item(items, &selected_audit_id).map(|item| {
+            (
+                item.claim_id.clone(),
+                item.audit_id.clone(),
+                item.first_issue_type
+                    .clone()
+                    .unwrap_or_else(|| "issue pending".into()),
+                format!("{} / {}", item.review_route, item.evidence_status),
+            )
+        }),
+        _ => None,
+    };
+    let has_selected_review = selected_review_summary.is_some();
 
     let load_queue = {
         let api_key = api_key.clone();
@@ -7133,35 +7148,79 @@ fn medical_review_page() -> Html {
                 </div>
             </section>
 
-            <section class="panel result-stack">
-                <h3>{"Review Writeback"}</h3>
-                <div class="form-grid">
-                    {text_input("Reviewer", &reviewer)}
-                    {text_input("Decision", &decision)}
-                    {text_input("Clinical outcomes", &clinical_outcomes)}
-                    {text_input("Evidence refs", &evidence_refs)}
+            <div class="leads-cases-workflow medical-review-workflow">
+                <div class="queue-column">
+                    <MedicalReviewQueueView state={(*queue_state).clone()} />
                 </div>
-                <label>
-                    {"Notes"}
-                    <textarea
-                        value={(*notes).clone()}
-                        oninput={{
-                            let notes = notes.clone();
-                            Callback::from(move |event: InputEvent| {
-                                notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                            })
-                        }}
-                    />
-                </label>
-                <div class="button-row">
-                    <button onclick={submit_review} disabled={matches!(&*result_state, ApiState::Loading)}>
-                        {if matches!(&*result_state, ApiState::Loading) { "Submitting..." } else { "Submit review result" }}
-                    </button>
-                </div>
-                <MedicalReviewResultView state={(*result_state).clone()} />
-            </section>
 
-            <MedicalReviewQueueView state={(*queue_state).clone()} />
+                <aside class="panel result-stack case-action-panel">
+                    <h3>{"Human Clinical Decision"}</h3>
+                    <div class="selected-work-item">
+                        <span>{"Selected review"}</span>
+                        <strong>{selected_review_summary.as_ref().map(|item| item.0.as_str()).unwrap_or("none")}</strong>
+                        <small>
+                            {selected_review_summary.as_ref().map(|item| {
+                                format!("{} / {} / {}", item.1, item.2, item.3)
+                            }).unwrap_or_else(|| "Load the queue, then enter a scoring audit ID or use the first queue item.".into())}
+                        </small>
+                    </div>
+                    <div class="form-grid action-form-grid">
+                        {text_input("Reviewer", &reviewer)}
+                        <label>
+                            {"Decision"}
+                            <select
+                                onchange={{
+                                    let decision = decision.clone();
+                                    Callback::from(move |event: Event| {
+                                        decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="request_more_evidence" selected={(*decision).as_str() == "request_more_evidence"}>{"Request more evidence"}</option>
+                                <option value="evidence_sufficient" selected={(*decision).as_str() == "evidence_sufficient"}>{"Evidence sufficient"}</option>
+                                <option value="medical_necessity_issue" selected={(*decision).as_str() == "medical_necessity_issue"}>{"Medical necessity issue"}</option>
+                                <option value="no_medical_issue" selected={(*decision).as_str() == "no_medical_issue"}>{"No medical issue"}</option>
+                            </select>
+                        </label>
+                        <label>
+                            {"Controlled outcome"}
+                            <select
+                                onchange={{
+                                    let clinical_outcomes = clinical_outcomes.clone();
+                                    Callback::from(move |event: Event| {
+                                        clinical_outcomes.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="insufficient_evidence" selected={(*clinical_outcomes).as_str() == "insufficient_evidence"}>{"Insufficient evidence"}</option>
+                                <option value="documentation_issue" selected={(*clinical_outcomes).as_str() == "documentation_issue"}>{"Documentation issue"}</option>
+                                <option value="medical_necessity_review_required" selected={(*clinical_outcomes).as_str() == "medical_necessity_review_required"}>{"Medical necessity review required"}</option>
+                                <option value="clinical_evidence_sufficient" selected={(*clinical_outcomes).as_str() == "clinical_evidence_sufficient"}>{"Clinical evidence sufficient"}</option>
+                                <option value="no_medical_issue" selected={(*clinical_outcomes).as_str() == "no_medical_issue"}>{"No medical issue"}</option>
+                            </select>
+                        </label>
+                        {text_input("Evidence refs", &evidence_refs)}
+                    </div>
+                    <label class="compact-note">
+                        {"Notes"}
+                        <textarea
+                            value={(*notes).clone()}
+                            oninput={{
+                                let notes = notes.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <div class="button-row">
+                        <button onclick={submit_review} disabled={!has_selected_review || matches!(&*result_state, ApiState::Loading)}>
+                            {if matches!(&*result_state, ApiState::Loading) { "Submitting..." } else { "Confirm clinical review" }}
+                        </button>
+                    </div>
+                    <MedicalReviewResultView state={(*result_state).clone()} />
+                </aside>
+            </div>
         </section>
     }
 }
@@ -7241,7 +7300,7 @@ struct MedicalReviewResultProps {
 fn medical_review_result_view(props: &MedicalReviewResultProps) -> Html {
     match &props.state {
         ApiState::Idle => {
-            html! { <p class="empty">{"Supported decisions: evidence_sufficient, request_more_evidence, medical_necessity_issue, no_medical_issue."}</p> }
+            html! { <p class="empty">{"Select a queue item and confirm a controlled clinical outcome."}</p> }
         }
         ApiState::Loading => html! { <p>{"Submitting medical review result..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },

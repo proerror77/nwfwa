@@ -5731,6 +5731,14 @@ pre {
   align-items: start;
 }
 
+.medical-review-workflow .clinical-cockpit {
+  grid-template-columns: 1fr;
+}
+
+.medical-review-workflow .clinical-outcome-grid {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
 .queue-column,
 .queue-list {
   display: grid;
@@ -6323,6 +6331,10 @@ pre {
 
   .case-action-panel {
     position: static;
+  }
+
+  .medical-review-workflow .case-action-panel {
+    order: -1;
   }
 
   .risk-flow,
