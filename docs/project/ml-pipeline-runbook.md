@@ -489,6 +489,12 @@ Required boundary:
 This keeps training portable without forking the data source. The local Python
 trainer is only the compatibility implementation of the same contract.
 
+The model promotion gate treats feature materialization as Rust-governed
+evidence. A generic `feature_store_materialization_status = passed` is not
+enough; the evaluation metrics must also include
+`rust_feature_set_status = passed` and a non-empty
+`rust_feature_set_manifest_uri`.
+
 External handoff command:
 
 ```bash
@@ -504,9 +510,9 @@ cargo run --locked -p worker -- build-training-handoff \
 The command prints a handoff JSON document with `handoff_kind =
 external_training_platform`. It names the same Parquet manifest, expected Rust
 serving artifact, Python training artifact, serving manifest, validation
-report, feature-store manifest, shadow report, drift report, fairness report,
-and retraining output submit path. This is the contract an external training
-platform should execute and return to the API.
+report, Rust feature-set manifest, feature-store manifest, shadow report, drift
+report, fairness report, and retraining output submit path. This is the
+contract an external training platform should execute and return to the API.
 
 Scheduled MLOps monitoring plan command:
 

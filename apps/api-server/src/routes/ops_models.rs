@@ -1416,10 +1416,7 @@ fn build_model_promotion_gates(
         .get("artifact_integrity_status")
         .and_then(|value| value.as_str())
         == Some("passed");
-    let feature_store_materialization = metrics
-        .get("feature_store_materialization_status")
-        .and_then(|value| value.as_str())
-        == Some("passed");
+    let feature_store_materialization = feature_materialization_gate(metrics);
     let segment_fairness = metrics
         .get("segment_fairness_status")
         .and_then(|value| value.as_str())
@@ -1549,7 +1546,7 @@ fn build_model_promotion_gates(
         gate(
             "Feature materialization",
             feature_store_materialization,
-            "feature-store materialization missing",
+            "rust feature-set materialization missing",
             evidence_source(feature_store_materialization, "evaluation"),
         ),
         gate(
@@ -1814,6 +1811,22 @@ fn time_group_split_strategy_gate(metrics: &serde_json::Value) -> bool {
         })
         .unwrap_or(false);
     status_passed && has_time_field && has_group_field
+}
+
+fn feature_materialization_gate(metrics: &serde_json::Value) -> bool {
+    let feature_store_status = metrics
+        .get("feature_store_materialization_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let rust_feature_set_status = metrics
+        .get("rust_feature_set_status")
+        .and_then(|value| value.as_str())
+        == Some("passed");
+    let has_rust_feature_set_manifest = metrics
+        .get("rust_feature_set_manifest_uri")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty());
+    feature_store_status && rust_feature_set_status && has_rust_feature_set_manifest
 }
 
 fn pilot_customer_validation_gate(metrics: &serde_json::Value) -> bool {

@@ -128,8 +128,9 @@ Every production model version must record:
 
 Current repository completion for this target architecture is approximately:
 
-- 60% for governance skeleton: model jobs, approval gates, worker handoff,
-  monitoring-plan contract, and documentation exist.
+- 63% for governance skeleton: model jobs, approval gates, worker handoff,
+  Rust feature-set promotion gating, monitoring-plan contract, and
+  documentation exist.
 - 55% for data lifecycle: labeled public/demo manifests, profiling, and
   Rust-built feature-set manifests exist, and worker-driven retraining now
   injects Rust feature-set evidence into candidate registration; Rust-generated
@@ -140,10 +141,11 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer clustering has a Rust-native demo
   workflow; broader graph/member/claim clustering and deep-learning serving
   remain future work.
-- 58% for Auto MLOps: worker can build feature-set manifests, enrich
+- 60% for Auto MLOps: worker can build feature-set manifests, enrich
   retraining outputs with Rust feature-set evidence, rank candidates, evaluate
   serving artifacts, mine explainable rule candidates, and backtest those
-  candidates into human-review evidence, while trainer-side ONNX parity reports
+  candidates into human-review evidence, while API promotion gates now require
+  Rust feature-set materialization evidence and trainer-side ONNX parity reports
   and unlabeled anomaly review tasks exist; activation workflows and UI/API
   review surfaces still need implementation.
 - 70% for Rust ONNX serving: serving-manifest validation, checksum/signature
