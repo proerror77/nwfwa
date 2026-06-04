@@ -1360,6 +1360,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
                 alert_code: "EARLY_HIGH_AMOUNT_CANDIDATE".into(),
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
+                required_evidence: vec![],
                 reason: "保单生效早期发生高额理赔".into(),
             },
         },
@@ -1379,6 +1380,7 @@ fn candidate_rule_templates() -> Vec<Rule> {
                 alert_code: "HIGH_AMOUNT_RATIO_CANDIDATE".into(),
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
+                required_evidence: vec![],
                 reason: "理赔金额接近保障额度".into(),
             },
         },
@@ -1426,6 +1428,7 @@ fn model_explanation_candidate_rules(request: &RuleDiscoveryRequest) -> Vec<Rule
                     alert_code: format!("ML_{}", feature_slug.to_uppercase()),
                     recommended_action: RecommendedAction::ManualReview,
                     action_class: RuleActionClass::ManualReview,
+                    required_evidence: vec![],
                     reason: format!(
                         "模型解释显示 {} 对风险贡献较高：{}",
                         explanation.feature, explanation.reason

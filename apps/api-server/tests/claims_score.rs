@@ -10,7 +10,7 @@ use axum::{
 };
 use fwa_core::{RecommendedAction, RuleActionClass};
 use fwa_ml_runtime::{ModelRuntimeError, ModelScore, ModelScoreRequest, ModelScorer};
-use fwa_rules::{Condition, Rule, RuleAction};
+use fwa_rules::{Condition, RequiredEvidence, Rule, RuleAction};
 use fwa_scoring::{ConfidenceThresholds, RiskThresholds, RoutingPolicy};
 use std::sync::Arc;
 use tower::ServiceExt;
@@ -104,6 +104,7 @@ async fn activate_post_payment_rule(repository: SharedRepository) {
                     alert_code: "POST_PAYMENT_LIMIT_USAGE".into(),
                     recommended_action: RecommendedAction::PostPaymentAudit,
                     action_class: RuleActionClass::ScoreOnly,
+                    required_evidence: vec![],
                     reason: "赔后规则仅用于高额度使用审计".into(),
                 },
             },
@@ -115,6 +116,46 @@ async fn activate_post_payment_rule(repository: SharedRepository) {
         .update_rule_status(rule_id, "active")
         .await
         .expect("post-payment rule activation");
+}
+
+async fn activate_pending_evidence_rule(repository: SharedRepository) {
+    let rule_id = "rule_dental_xray_required";
+    repository
+        .save_rule_candidate(
+            Rule {
+                rule_id: rule_id.into(),
+                version: 1,
+                name: "Dental X-ray required".into(),
+                review_mode: "pre_payment".into(),
+                scheme_family: Some("medically_unnecessary_service".into()),
+                conditions: vec![Condition {
+                    field: "claim_amount_to_limit_ratio".into(),
+                    operator: ">=".into(),
+                    value: serde_json::json!(0.7),
+                }],
+                action: RuleAction {
+                    score: 0,
+                    alert_code: "DENTAL_XRAY_REQUIRED".into(),
+                    recommended_action: RecommendedAction::RequestEvidence,
+                    action_class: RuleActionClass::PendingEvidence,
+                    required_evidence: vec![RequiredEvidence {
+                        evidence_type: "dental_xray".into(),
+                        evidence_request_type: Some("document_request".into()),
+                        blocking: true,
+                        policy_authority_ref: Some("policy:dental:evidence:v1".into()),
+                        exception_check: Some("xray_waiver_not_present".into()),
+                    }],
+                    reason: "牙科高额治疗需要 X 光佐证".into(),
+                },
+            },
+            "rules-ops".into(),
+        )
+        .await
+        .expect("pending evidence rule save");
+    repository
+        .update_rule_status(rule_id, "active")
+        .await
+        .expect("pending evidence rule activation");
 }
 
 struct HighRiskScorer;
@@ -451,7 +492,7 @@ async fn scores_spec_style_top_level_full_payload() {
         .header("x-api-key", "dev-secret")
         .body(Body::empty())
         .unwrap();
-    let audit_response = app.oneshot(audit_request).await.unwrap();
+    let audit_response = app.clone().oneshot(audit_request).await.unwrap();
     assert_eq!(audit_response.status(), StatusCode::OK);
     let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
         .await
@@ -603,7 +644,7 @@ async fn scores_inbox_canonical_claim_context() {
         .header("x-api-key", "dev-secret")
         .body(Body::empty())
         .unwrap();
-    let audit_response = app.oneshot(audit_request).await.unwrap();
+    let audit_response = app.clone().oneshot(audit_request).await.unwrap();
     assert_eq!(audit_response.status(), StatusCode::OK);
     let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
         .await
@@ -853,6 +894,131 @@ async fn scores_claim_with_review_mode_and_audits_routing_policy() {
     assert_eq!(
         scoring_event["payload"]["decision_outcome"],
         "post_payment_audit"
+    );
+}
+
+#[tokio::test]
+async fn pending_evidence_rule_returns_required_evidence() {
+    let repository = InMemoryScoringRepository::shared();
+    activate_pending_evidence_rule(repository.clone()).await;
+    let app = build_app_with_parts(test_config(), Arc::new(RequestEchoScorer), repository);
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "claim": {
+                "external_claim_id": "CLM-PENDING-EVIDENCE",
+                "claim_amount": "8000",
+                "currency": "CNY"
+              },
+              "policy": {
+                "external_policy_id": "POL-PENDING-EVIDENCE",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              },
+              "member": {
+                "external_member_id": "MBR-PENDING-EVIDENCE"
+              },
+              "provider": {
+                "external_provider_id": "PRV-PENDING-EVIDENCE",
+                "name": "Northwind Hospital",
+                "provider_type": "hospital",
+                "region": "SH"
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+    let body: serde_json::Value = serde_json::from_slice(&body).unwrap();
+
+    assert_eq!(body["decision_outcome"], "pending_evidence");
+    assert_eq!(body["decision_authority"], "customer_policy_rule");
+    assert_eq!(body["decision_confidence"], "deterministic");
+    assert_eq!(body["reason_code"], "DENTAL_XRAY_REQUIRED");
+    let alert = body["alerts"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|alert| alert["alert_code"] == "DENTAL_XRAY_REQUIRED")
+        .expect("pending evidence rule alert");
+    assert_eq!(
+        alert["required_evidence"][0]["evidence_type"],
+        "dental_xray"
+    );
+    assert_eq!(
+        alert["required_evidence"][0]["evidence_request_type"],
+        "document_request"
+    );
+    assert_eq!(alert["required_evidence"][0]["blocking"], true);
+    assert_eq!(
+        alert["required_evidence"][0]["policy_authority_ref"],
+        "policy:dental:evidence:v1"
+    );
+    assert_eq!(
+        alert["required_evidence"][0]["exception_check"],
+        "xray_waiver_not_present"
+    );
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-PENDING-EVIDENCE")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.clone().oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    let triggered_rule = scoring_event["payload"]["triggered_rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|alert| alert["alert_code"] == "DENTAL_XRAY_REQUIRED")
+        .expect("audit payload should include pending evidence rule");
+    assert_eq!(
+        triggered_rule["required_evidence"][0]["evidence_type"],
+        "dental_xray"
+    );
+
+    let evidence_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/ops/evidence-requests")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let evidence_response = app.oneshot(evidence_request).await.unwrap();
+    assert_eq!(evidence_response.status(), StatusCode::OK);
+    let evidence_body = to_bytes(evidence_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let evidence_body: serde_json::Value = serde_json::from_slice(&evidence_body).unwrap();
+    let request = evidence_body["requests"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|request| request["claim_id"] == "CLM-PENDING-EVIDENCE")
+        .expect("rule required evidence should create an evidence request");
+    assert_eq!(request["request_reason"], "rule_required_evidence");
+    assert_eq!(
+        request["missing_evidence"],
+        serde_json::json!(["dental_xray"])
     );
 }
 
@@ -2420,6 +2586,30 @@ async fn exposes_openapi_schema_for_scoring_contract() {
     assert_eq!(
         response_properties["model_score"]["$ref"],
         "#/components/schemas/ModelScore"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AlertResponse"]["properties"]["required_evidence"]
+            ["items"]["$ref"],
+        "#/components/schemas/RequiredEvidence"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RequiredEvidence"]["required"],
+        serde_json::json!(["evidence_type", "blocking"])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleAction"]["properties"]["action_class"]["enum"],
+        serde_json::json!([
+            "hard_deny",
+            "straight_through",
+            "pending_evidence",
+            "manual_review",
+            "score_only"
+        ])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["RuleAction"]["properties"]["required_evidence"]["items"]
+            ["$ref"],
+        "#/components/schemas/RequiredEvidence"
     );
     assert_eq!(
         schema["components"]["schemas"]["ModelScore"]["properties"]["metadata"]["properties"]

@@ -41,11 +41,30 @@ pub struct RuleAction {
     pub recommended_action: RecommendedAction,
     #[serde(default = "default_rule_action_class")]
     pub action_class: RuleActionClass,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_evidence: Vec<RequiredEvidence>,
     pub reason: String,
 }
 
 fn default_rule_action_class() -> RuleActionClass {
     RuleActionClass::ManualReview
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct RequiredEvidence {
+    pub evidence_type: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub evidence_request_type: Option<String>,
+    #[serde(default = "default_required_evidence_blocking")]
+    pub blocking: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub policy_authority_ref: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exception_check: Option<String>,
+}
+
+fn default_required_evidence_blocking() -> bool {
+    true
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -57,6 +76,8 @@ pub struct RuleMatch {
     pub reason: String,
     pub recommended_action: RecommendedAction,
     pub action_class: RuleActionClass,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub required_evidence: Vec<RequiredEvidence>,
     #[serde(default)]
     pub evidence_refs: Vec<Value>,
 }
@@ -81,6 +102,7 @@ pub fn evaluate_rules(rules: &[Rule], features: &FeatureMap) -> Result<Vec<RuleM
                 reason: rule.action.reason.clone(),
                 recommended_action: rule.action.recommended_action,
                 action_class: rule.action.action_class,
+                required_evidence: rule.action.required_evidence.clone(),
                 evidence_refs: rule_evidence_refs(rule, features),
             });
         }
@@ -169,6 +191,7 @@ mod tests {
                 alert_code: "EARLY_CLAIM".into(),
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
+                required_evidence: vec![],
                 reason: "保单生效后 7 天内发生理赔".into(),
             },
         }];
@@ -207,6 +230,7 @@ mod tests {
                 alert_code: "MISSING".into(),
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
+                required_evidence: vec![],
                 reason: "missing".into(),
             },
         }];
@@ -226,5 +250,53 @@ mod tests {
         .unwrap();
 
         assert_eq!(action.action_class, RuleActionClass::ManualReview);
+        assert!(action.required_evidence.is_empty());
+    }
+
+    #[test]
+    fn carries_required_evidence_from_pending_rule() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "dental_xray_missing".into(),
+            FeatureValue {
+                name: "dental_xray_missing".into(),
+                version: 1,
+                value: serde_json::json!(1),
+                evidence_refs: vec![],
+            },
+        );
+        let rules = vec![Rule {
+            rule_id: "rule_dental_xray_required".into(),
+            version: 1,
+            name: "Dental X-ray required".into(),
+            review_mode: "pre_payment".into(),
+            scheme_family: Some("medically_unnecessary_service".into()),
+            conditions: vec![Condition {
+                field: "dental_xray_missing".into(),
+                operator: "==".into(),
+                value: serde_json::json!(1),
+            }],
+            action: RuleAction {
+                score: 0,
+                alert_code: "DENTAL_XRAY_REQUIRED".into(),
+                recommended_action: RecommendedAction::RequestEvidence,
+                action_class: RuleActionClass::PendingEvidence,
+                required_evidence: vec![RequiredEvidence {
+                    evidence_type: "dental_xray".into(),
+                    evidence_request_type: Some("document_request".into()),
+                    blocking: true,
+                    policy_authority_ref: Some("policy:dental:evidence:v1".into()),
+                    exception_check: Some("xray_waiver_not_present".into()),
+                }],
+                reason: "牙科治疗需要 X 光佐证".into(),
+            },
+        }];
+
+        let matches = evaluate_rules(&rules, &features).unwrap();
+
+        assert_eq!(matches.len(), 1);
+        assert_eq!(matches[0].action_class, RuleActionClass::PendingEvidence);
+        assert_eq!(matches[0].required_evidence[0].evidence_type, "dental_xray");
+        assert!(matches[0].required_evidence[0].blocking);
     }
 }

@@ -22,7 +22,7 @@ use fwa_provider::{
     ProviderProfileInput, ProviderProfileWindow, ProviderRelationshipGraphAssessment,
     ProviderRelationshipGraphInput,
 };
-use fwa_rules::{evaluate_rules, RuleMatch};
+use fwa_rules::{evaluate_rules, RequiredEvidence, RuleMatch};
 use fwa_scoring::DetectionLayerScore;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -210,6 +210,7 @@ pub struct AlertResponse {
     pub reason: String,
     pub rule_id: String,
     pub rule_version: u32,
+    pub required_evidence: Vec<RequiredEvidence>,
 }
 
 pub async fn score_claim(
@@ -548,6 +549,7 @@ pub async fn score_claim(
             reason: rule_match.reason.clone(),
             rule_id: rule_match.rule_id.clone(),
             rule_version: rule_match.rule_version,
+            required_evidence: rule_match.required_evidence.clone(),
         })
         .collect();
     let scores = ScoreBreakdown {
@@ -646,6 +648,17 @@ pub async fn score_claim(
         })
         .await
         .map_err(internal_error("SCORING_PERSISTENCE_FAILED"))?;
+    persist_rule_evidence_request(RuleEvidenceRequestInput {
+        state: &state,
+        run_id: &run_id,
+        audit_id: &audit_id,
+        context: &context,
+        actor: &actor,
+        source_system: &request.source_system,
+        alerts: &alerts,
+        evidence_refs: &evidence_refs,
+    })
+    .await?;
 
     Ok(Json(ScoreClaimResponse {
         run_id: run_id.to_string(),
@@ -678,6 +691,90 @@ pub async fn score_claim(
         evidence_refs,
         agent_investigation_prefill,
     }))
+}
+
+struct RuleEvidenceRequestInput<'a> {
+    state: &'a AppState,
+    run_id: &'a ScoringRunId,
+    audit_id: &'a AuditEventId,
+    context: &'a ClaimContext,
+    actor: &'a ActorContext,
+    source_system: &'a str,
+    alerts: &'a [AlertResponse],
+    evidence_refs: &'a [serde_json::Value],
+}
+
+async fn persist_rule_evidence_request(
+    input: RuleEvidenceRequestInput<'_>,
+) -> Result<(), ApiError> {
+    let mut required_evidence = Vec::new();
+    for alert in input.alerts {
+        for evidence in &alert.required_evidence {
+            if !required_evidence
+                .iter()
+                .any(|existing: &RequiredEvidence| existing.evidence_type == evidence.evidence_type)
+            {
+                required_evidence.push(evidence.clone());
+            }
+        }
+    }
+    if required_evidence.is_empty() {
+        return Ok(());
+    }
+
+    let request_id = format!("evidence_request_{}", input.audit_id);
+    let missing_evidence = required_evidence
+        .iter()
+        .map(|evidence| evidence.evidence_type.clone())
+        .collect::<Vec<_>>();
+    let items = required_evidence
+        .iter()
+        .enumerate()
+        .map(|(index, evidence)| {
+            serde_json::json!({
+                "item_id": format!("{request_id}_item_{}", index + 1),
+                "document_type": evidence.evidence_type,
+                "status": "open",
+                "reason": evidence.evidence_request_type.as_deref().unwrap_or("rule_required_evidence"),
+                "blocking": evidence.blocking,
+                "policy_authority_ref": evidence.policy_authority_ref,
+                "exception_check": evidence.exception_check,
+            })
+        })
+        .collect::<Vec<_>>();
+    let event_audit_id = AuditEventId::new();
+    input
+        .state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: event_audit_id.to_string(),
+            run_id: input.run_id.to_string(),
+            claim_id: input.context.claim.external_claim_id.clone(),
+            source_system: input.source_system.to_string(),
+            actor_id: input.actor.actor_id.clone(),
+            actor_role: input.actor.actor_role.clone(),
+            event_type: "evidence.request.generated".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Evidence request generated: {request_id}"),
+            payload: serde_json::json!({
+                "customer_scope_id": input.actor.customer_scope_id,
+                "request_id": request_id,
+                "claim_id": input.context.claim.external_claim_id,
+                "scoring_audit_id": input.audit_id.to_string(),
+                "status": "open",
+                "request_reason": "rule_required_evidence",
+                "missing_evidence": missing_evidence,
+                "items": items,
+                "reviewer_queue": "clinical-evidence",
+                "requested_by": input.actor.actor_id,
+                "notes": "Generated from pending-evidence rule action.",
+                "source_event_type": "scoring.completed",
+            }),
+            evidence_refs: input.evidence_refs.to_vec(),
+        })
+        .await
+        .map_err(internal_error("EVIDENCE_REQUEST_SAVE_FAILED"))?;
+    Ok(())
 }
 
 fn build_agent_investigation_prefill(

@@ -290,8 +290,8 @@ preserve claim, rule, model, anomaly, document, and similar-case references.
 | GET | `/api/v1/ops/backfills` | List governed historical replay jobs. | Yes | None |
 | POST | `/api/v1/ops/backfills` | Create a historical replay backfill from existing generated leads. | Yes | Records replay job, candidate lead evidence, and audit event. |
 | GET | `/api/v1/ops/backfills/{job_id}/leads` | List candidate leads captured by a backfill job. | Yes | None |
-| GET | `/api/v1/ops/evidence-requests` | List generated clinical evidence requests. | Yes | None |
-| POST | `/api/v1/ops/evidence-requests/generate` | Generate evidence requests from scoring runs with missing clinical evidence. | Yes | Creates evidence request audit events. |
+| GET | `/api/v1/ops/evidence-requests` | List generated evidence requests. | Yes | None |
+| POST | `/api/v1/ops/evidence-requests/generate` | Generate evidence requests from scoring runs with missing clinical evidence; scoring can also create rule-required evidence requests directly. | Yes | Creates evidence request audit events. |
 | POST | `/api/v1/ops/evidence-requests/{request_id}/status` | Update evidence request collection status. | Yes | Appends status audit event and evidence refs. |
 | GET | `/api/v1/ops/label-bootstrap/queue` | List label candidates derived from governed evidence requests. | Yes | None |
 | POST | `/api/v1/ops/label-bootstrap/items/{item_id}/review` | Record human review for a bootstrap label candidate. | Yes | Appends label review audit event and can expose an approved training label. |

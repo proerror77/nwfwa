@@ -229,7 +229,7 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "/api/v1/ops/evidence-requests/generate": {
                 "post": {
-                    "summary": "Generate evidence requests from missing clinical evidence",
+                    "summary": "Generate evidence requests from scoring gaps",
                     "security": [{ "ApiKeyAuth": [] }],
                     "requestBody": {
                         "required": true,
@@ -3836,7 +3836,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "AlertResponse": {
                     "type": "object",
-                    "required": ["alert_code", "severity", "reason", "rule_id", "rule_version"],
+                    "required": ["alert_code", "severity", "reason", "rule_id", "rule_version", "required_evidence"],
                     "properties": {
                         "alert_code": {
                             "type": "string"
@@ -3852,7 +3852,22 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "rule_version": {
                             "type": "integer"
+                        },
+                        "required_evidence": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RequiredEvidence" }
                         }
+                    }
+                },
+                "RequiredEvidence": {
+                    "type": "object",
+                    "required": ["evidence_type", "blocking"],
+                    "properties": {
+                        "evidence_type": { "type": "string", "minLength": 1 },
+                        "evidence_request_type": { "type": ["string", "null"] },
+                        "blocking": { "type": "boolean", "default": true },
+                        "policy_authority_ref": { "type": ["string", "null"] },
+                        "exception_check": { "type": ["string", "null"] }
                     }
                 },
                 "ErrorResponse": {
@@ -4510,6 +4525,16 @@ pub async fn openapi_schema() -> Json<Value> {
                         "recommended_action": {
                             "type": "string",
                             "enum": ["StandardProcessing", "QaSample", "ManualReview", "RequestEvidence", "EscalateInvestigation", "PostPaymentAudit", "ProviderReview", "RecoveryReview"]
+                        },
+                        "action_class": {
+                            "type": "string",
+                            "enum": ["hard_deny", "straight_through", "pending_evidence", "manual_review", "score_only"],
+                            "default": "manual_review"
+                        },
+                        "required_evidence": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RequiredEvidence" },
+                            "default": []
                         },
                         "reason": { "type": "string" }
                     }

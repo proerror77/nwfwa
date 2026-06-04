@@ -322,6 +322,17 @@ struct RuntimeAlert {
     reason: String,
     rule_id: String,
     rule_version: u32,
+    #[serde(default)]
+    required_evidence: Vec<RuntimeRequiredEvidence>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct RuntimeRequiredEvidence {
+    evidence_type: String,
+    evidence_request_type: Option<String>,
+    blocking: bool,
+    policy_authority_ref: Option<String>,
+    exception_check: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -2663,6 +2674,7 @@ fn bootstrap_evidence_panel(requests: &[EvidenceRequestRecord]) -> Html {
                             <strong>{&request.claim_id}</strong>
                             <span>{format!("{} / {}", request.status, request.request_reason)}</span>
                             <small>{format!("missing {} / queue {}", refs_label(&request.missing_evidence), request.reviewer_queue)}</small>
+                            <small>{format!("items {}", evidence_request_items_label(&request.items))}</small>
                         </div>
                     })}
                 </div>
@@ -2751,6 +2763,7 @@ fn bootstrap_selected_evidence_request(
                 <span>{"Selected evidence request"}</span>
                 <strong>{format!("{} / {}", request.claim_id, request.request_id)}</strong>
                 <small>{format!("status {} / missing {}", request.status, refs_label(&request.missing_evidence))}</small>
+                <small>{format!("reason {} / items {}", request.request_reason, evidence_request_items_label(&request.items))}</small>
                 <small>{format!("current evidence {}", refs_label(&request.evidence_refs))}</small>
             </div>
         },
@@ -2793,6 +2806,17 @@ fn evidence_request_by_id(
         .iter()
         .find(|request| request.request_id == request_id)
         .cloned()
+}
+
+fn evidence_request_items_label(items: &[EvidenceRequestItem]) -> String {
+    if items.is_empty() {
+        return "none".into();
+    }
+    items
+        .iter()
+        .map(|item| format!("{}: {}", item.document_type, item.reason))
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 fn label_item_by_id(
@@ -3420,6 +3444,9 @@ fn runtime_score_view(props: &RuntimeScoreProps) -> Html {
                                     <strong>{&alert.severity}</strong>
                                     <small>{&alert.reason}</small>
                                     <small>{format!("rule {} v{}", alert.rule_id, alert.rule_version)}</small>
+                                    if !alert.required_evidence.is_empty() {
+                                        <small>{format!("required evidence: {}", required_evidence_label(&alert.required_evidence))}</small>
+                                    }
                                 </div>
                             })}
                         </div>
@@ -10397,6 +10424,29 @@ fn value_refs_label(refs: &[Value]) -> String {
     }
     refs.iter()
         .map(display_value)
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn required_evidence_label(items: &[RuntimeRequiredEvidence]) -> String {
+    items
+        .iter()
+        .map(|item| {
+            let mut label = item.evidence_type.clone();
+            if let Some(request_type) = item.evidence_request_type.as_deref() {
+                label = format!("{label} / {request_type}");
+            }
+            if item.blocking {
+                label.push_str(" / blocking");
+            }
+            if let Some(authority_ref) = item.policy_authority_ref.as_deref() {
+                label = format!("{label} / {authority_ref}");
+            }
+            if let Some(exception_check) = item.exception_check.as_deref() {
+                label = format!("{label} / {exception_check}");
+            }
+            label
+        })
         .collect::<Vec<_>>()
         .join(", ")
 }

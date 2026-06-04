@@ -792,6 +792,7 @@ mod tests {
             reason: "test rule".into(),
             recommended_action: RecommendedAction::ManualReview,
             action_class: RuleActionClass::ManualReview,
+            required_evidence: vec![],
             evidence_refs: vec![],
         }
     }
@@ -879,6 +880,7 @@ mod tests {
             reason: "早期高额理赔".into(),
             recommended_action: RecommendedAction::ManualReview,
             action_class: RuleActionClass::ManualReview,
+            required_evidence: vec![],
             evidence_refs: vec![],
         }];
         let model = ModelScore {
@@ -982,6 +984,7 @@ mod tests {
             reason: "layer evidence test".into(),
             recommended_action: RecommendedAction::ManualReview,
             action_class: RuleActionClass::ManualReview,
+            required_evidence: vec![],
             evidence_refs: vec![serde_json::json!("rules:rule_layer_evidence:v2")],
         }];
         let model = ModelScore {
