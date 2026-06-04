@@ -539,6 +539,8 @@ AutoML ranking also treats Rust serving evaluation as required evidence. A
 candidate can rank for human review only after its metrics include a passing
 `model_artifact_evaluation_status` and `rust_serving_status`; these signals are
 normally produced by `run-retraining-job` when `serving_manifest_uri` is present.
+For XGBoost and LightGBM, ranking also requires a passed ONNX parity status and
+non-empty `onnx_parity_report_uri`.
 
 External handoff command:
 
@@ -549,15 +551,20 @@ cargo run --locked -p worker -- build-training-handoff \
   --model-key baseline_fwa \
   --base-model-version 0.1.0 \
   --job-id model_retraining_job_1 \
-  --actor trainer-worker
+  --actor trainer-worker \
+  --algorithm xgboost
 ```
 
 The command prints a handoff JSON document with `handoff_kind =
 external_training_platform`. It names the same Parquet manifest, expected Rust
-serving artifact, Python training artifact, serving manifest, validation
-report, Rust feature-set manifest, feature-store manifest, shadow report, drift
-report, fairness report, and retraining output submit path. This is the
-contract an external training platform should execute and return to the API.
+serving artifact, Python training artifact, serving manifest, validation report,
+Rust feature-set manifest, feature-store manifest, shadow report, drift report,
+fairness report, and retraining output submit path. Omit `--algorithm` for the
+default logistic baseline. Use `--algorithm xgboost` or `--algorithm lightgbm`
+when the handoff should point the serving artifact to `model.onnx` and require
+`onnx_parity_report.json` evidence before the Rust serving gate can pass. This
+is the contract an external training platform should execute and return to the
+API.
 
 Scheduled MLOps monitoring plan command:
 

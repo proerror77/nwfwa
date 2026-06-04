@@ -80,7 +80,8 @@ The worker is the right control-plane home for scheduled and batch ML work:
 - `build-feature-set`: materialize feature-set manifests from labeled Parquet
   datasets, bind ordered numeric feature columns, split summaries, and a
   reproducibility hash before training.
-- `build-training-handoff`: create the reproducible external training contract.
+- `build-training-handoff`: create the reproducible external training contract,
+  including algorithm-aware logistic, XGBoost, and LightGBM artifact semantics.
 - `run-retraining-job`: claim a candidate job, execute the trainer, and register
   output, enriching the trainer payload with the Rust feature-set manifest URI
   and reproducibility hash before API registration; when the trainer returns a
@@ -155,7 +156,8 @@ Current repository completion for this target architecture is approximately:
   after contract validation, and provider-peer plus claim/member/provider entity
   clustering have Rust-native demo workflows; broader graph clustering and
   deep-learning serving remain future work.
-- 74% for Auto MLOps: worker can build feature-set manifests, enrich
+- 76% for Auto MLOps: worker can build feature-set manifests, create
+  algorithm-aware training handoffs, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, require ONNX parity evidence for
   XGBoost/LightGBM gates, mine explainable rule candidates, backtest those

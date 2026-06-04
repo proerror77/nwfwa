@@ -1100,6 +1100,10 @@ pub fn build_demo_ml_datasets(
                 labeled_dir.join("manifest.json").display()
             ),
             format!(
+                "cargo run --locked -p worker -- build-training-handoff --manifest {} --artifact-base-uri s3://fwa-models --model-key baseline_fwa --base-model-version 0.1.0 --job-id model_retraining_job_1 --actor trainer-worker --algorithm xgboost",
+                labeled_dir.join("manifest.json").display()
+            ),
+            format!(
                 "cargo run --locked -p worker -- cluster-provider-peers --manifest {} --output-dir {}/clusters",
                 provider_dir.join("manifest.json").display(),
                 provider_dir.display()
@@ -2257,9 +2261,30 @@ pub fn build_training_handoff(
     job_id: &str,
     actor: &str,
 ) -> anyhow::Result<serde_json::Value> {
+    build_training_handoff_with_algorithm(
+        manifest_path,
+        artifact_base_uri,
+        model_key,
+        base_model_version,
+        job_id,
+        actor,
+        "logistic_regression",
+    )
+}
+
+pub fn build_training_handoff_with_algorithm(
+    manifest_path: impl AsRef<Path>,
+    artifact_base_uri: &str,
+    model_key: &str,
+    base_model_version: &str,
+    job_id: &str,
+    actor: &str,
+    algorithm: &str,
+) -> anyhow::Result<serde_json::Value> {
     if artifact_base_uri.trim().is_empty() {
         bail!("artifact_base_uri is required");
     }
+    let algorithm = normalize_training_algorithm(algorithm)?;
     let manifest_path = manifest_path.as_ref();
     let manifest_json = fs::read_to_string(manifest_path)
         .with_context(|| format!("read training manifest {}", manifest_path.display()))?;
@@ -2288,18 +2313,36 @@ pub fn build_training_handoff(
         bail!("training manifest must include splits");
     }
 
-    let candidate_model_version = format!(
-        "{}-candidate-{}",
-        safe_path_segment(base_model_version),
-        safe_path_segment(job_id)
-    );
+    let candidate_model_version = training_candidate_version(base_model_version, job_id, algorithm);
     let artifact_root = artifact_base_uri.trim().trim_end_matches('/');
     let safe_model_key = safe_path_segment(model_key);
     let artifact_dir = format!("{artifact_root}/{safe_model_key}/{candidate_model_version}");
+    let onnx_algorithm = matches!(algorithm, "xgboost" | "lightgbm");
+    let serving_artifact_uri = if onnx_algorithm {
+        format!("{artifact_dir}/model.onnx")
+    } else {
+        format!("{artifact_dir}/rust_serving_artifact.json")
+    };
+    let runtime_kind = match algorithm {
+        "logistic_regression" => "rust_logistic_regression",
+        "xgboost" => "xgboost_onnx",
+        "lightgbm" => "lightgbm_onnx",
+        _ => unreachable!("algorithm normalized"),
+    };
+    let mut required_evidence_refs = vec![
+        "model_retraining_jobs:<job_id>".to_string(),
+        "model_artifacts:<serving_artifact_uri>".to_string(),
+        "feature_set_manifests:<rust_feature_set_manifest_uri>".to_string(),
+        "model_validation_reports:<validation_report_uri>".to_string(),
+        "model_evaluations:<evaluation_run_id>".to_string(),
+    ];
+    if onnx_algorithm {
+        required_evidence_refs.push("model_onnx_parity_reports:<onnx_parity_report_uri>".into());
+    }
 
     Ok(serde_json::json!({
         "handoff_kind": "external_training_platform",
-        "handoff_version": 1,
+        "handoff_version": 2,
         "data_contract": {
             "source": "same_parquet_dataset_manifest",
             "manifest_uri": manifest_path.to_string_lossy(),
@@ -2320,13 +2363,27 @@ pub fn build_training_handoff(
             "base_model_version": base_model_version,
             "candidate_model_version": candidate_model_version,
             "job_id": job_id,
-            "actor": actor
+            "actor": actor,
+            "algorithm": algorithm,
+            "runtime_kind": runtime_kind
         },
         "artifact_contract": {
             "artifact_dir": artifact_dir,
+            "serving_artifact_uri": serving_artifact_uri,
+            "serving_artifact_format": if onnx_algorithm { "onnx" } else { "rust_json" },
             "rust_serving_artifact_uri": format!("{artifact_dir}/rust_serving_artifact.json"),
+            "onnx_artifact_uri": if onnx_algorithm {
+                serde_json::Value::String(format!("{artifact_dir}/model.onnx"))
+            } else {
+                serde_json::Value::Null
+            },
             "training_artifact_uri": format!("{artifact_dir}/model.joblib"),
             "serving_manifest_uri": format!("{artifact_dir}/serving_manifest.json"),
+            "onnx_parity_report_uri": if onnx_algorithm {
+                serde_json::Value::String(format!("{artifact_dir}/onnx_parity_report.json"))
+            } else {
+                serde_json::Value::Null
+            },
             "validation_report_uri": format!("{artifact_dir}/validation.json"),
             "rust_feature_set_manifest_uri": format!("{artifact_dir}/rust_feature_set/feature_set_manifest.json"),
             "feature_store_manifest_uri": format!("{artifact_dir}/feature_store_manifest.json"),
@@ -2343,16 +2400,35 @@ pub fn build_training_handoff(
         },
         "output_contract": {
             "submit_path": retraining_job_output_path(job_id),
-            "artifact_uri": "artifact_contract.rust_serving_artifact_uri",
-            "required_evidence_refs": [
-                "model_retraining_jobs:<job_id>",
-                "model_artifacts:<rust_serving_artifact_uri>",
-                "feature_set_manifests:<rust_feature_set_manifest_uri>",
-                "model_validation_reports:<validation_report_uri>",
-                "model_evaluations:<evaluation_run_id>"
-            ]
+            "artifact_uri": "artifact_contract.serving_artifact_uri",
+            "serving_manifest_uri": "artifact_contract.serving_manifest_uri",
+            "onnx_parity_report_uri": if onnx_algorithm {
+                serde_json::Value::String("artifact_contract.onnx_parity_report_uri".into())
+            } else {
+                serde_json::Value::Null
+            },
+            "required_evidence_refs": required_evidence_refs
         }
     }))
+}
+
+fn normalize_training_algorithm(algorithm: &str) -> anyhow::Result<&'static str> {
+    match algorithm.trim() {
+        "" | "logistic_regression" => Ok("logistic_regression"),
+        "xgboost" => Ok("xgboost"),
+        "lightgbm" => Ok("lightgbm"),
+        other => bail!("unsupported training algorithm: {other}"),
+    }
+}
+
+fn training_candidate_version(base_model_version: &str, job_id: &str, algorithm: &str) -> String {
+    let base = safe_path_segment(base_model_version);
+    let job = safe_path_segment(job_id);
+    if algorithm == "logistic_regression" {
+        format!("{base}-candidate-{job}")
+    } else {
+        format!("{base}-{}-candidate-{job}", safe_path_segment(algorithm))
+    }
 }
 
 pub fn build_mlops_monitoring_plan(
@@ -5979,6 +6055,7 @@ mod tests {
         .expect("training handoff");
 
         assert_eq!(handoff["handoff_kind"], "external_training_platform");
+        assert_eq!(handoff["handoff_version"], 2);
         assert_eq!(handoff["dataset"]["dataset_key"], "claims_model");
         assert_eq!(handoff["dataset"]["dataset_version"], "2026-06-02");
         assert_eq!(
@@ -5986,9 +6063,22 @@ mod tests {
             serde_json::json!(manifest_path.to_string_lossy())
         );
         assert_eq!(handoff["training_job"]["model_key"], "baseline_fwa");
+        assert_eq!(handoff["training_job"]["algorithm"], "logistic_regression");
+        assert_eq!(
+            handoff["training_job"]["runtime_kind"],
+            "rust_logistic_regression"
+        );
         assert_eq!(
             handoff["training_job"]["candidate_model_version"],
             "0.1.0-candidate-model_retraining_job_1"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["serving_artifact_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rust_serving_artifact.json"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["serving_artifact_format"],
+            "rust_json"
         );
         assert_eq!(
             handoff["artifact_contract"]["rust_serving_artifact_uri"],
@@ -6007,6 +6097,10 @@ mod tests {
             "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
         );
         assert_eq!(
+            handoff["output_contract"]["artifact_uri"],
+            "artifact_contract.serving_artifact_uri"
+        );
+        assert_eq!(
             handoff["data_contract"]["source"],
             "same_parquet_dataset_manifest"
         );
@@ -6018,6 +6112,60 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("feature_set_manifests")));
+    }
+
+    #[test]
+    fn builds_xgboost_training_handoff_with_onnx_contract() {
+        let root = temp_root("xgboost-training-handoff");
+        let pack =
+            build_demo_ml_datasets(&root, "2026-06-xgboost-handoff").expect("demo ML datasets");
+
+        let handoff = build_training_handoff_with_algorithm(
+            &pack.labeled_manifest_uri,
+            "s3://fwa-models",
+            "baseline_fwa",
+            "0.1.0",
+            "model_retraining_job_1",
+            "trainer-worker",
+            "xgboost",
+        )
+        .expect("xgboost handoff");
+
+        assert_eq!(handoff["handoff_version"], 2);
+        assert_eq!(handoff["training_job"]["algorithm"], "xgboost");
+        assert_eq!(handoff["training_job"]["runtime_kind"], "xgboost_onnx");
+        assert_eq!(
+            handoff["training_job"]["candidate_model_version"],
+            "0.1.0-xgboost-candidate-model_retraining_job_1"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["serving_artifact_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-xgboost-candidate-model_retraining_job_1/model.onnx"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["serving_artifact_format"],
+            "onnx"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["onnx_artifact_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-xgboost-candidate-model_retraining_job_1/model.onnx"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["onnx_parity_report_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-xgboost-candidate-model_retraining_job_1/onnx_parity_report.json"
+        );
+        assert_eq!(
+            handoff["output_contract"]["onnx_parity_report_uri"],
+            "artifact_contract.onnx_parity_report_uri"
+        );
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("model_onnx_parity_reports")));
     }
 
     #[test]
