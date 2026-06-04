@@ -2895,6 +2895,45 @@ fn has_document_evidence_ref(refs: &[String]) -> bool {
         .any(|reference| reference.starts_with("evidence_documents:"))
 }
 
+fn detection_releases_page(on_navigate: Callback<String>) -> Html {
+    html! {
+        <section class="workflow-hub">
+            <div class="dashboard-header">
+                <div>
+                    <h2>{"Detection Releases"}</h2>
+                    <p>{"Review rule candidates and model candidates before they enter shadow, limited rollout, active routing, or rollback. Training and mining happen offline; this control room decides what is safe to release."}</p>
+                </div>
+                <span class="status-pill">{"Promotion control"}</span>
+            </div>
+
+            <section class="panel result-stack">
+                <div class="section-header">
+                    <div>
+                        <h3>{"Release Decision Path"}</h3>
+                        <p>{"Every candidate must show source, backtest or evaluation evidence, review-capacity impact, approval, and rollback path before routing impact."}</p>
+                    </div>
+                    <span class="status-token strong">{"human approval required"}</span>
+                </div>
+                <div class="inbox-pipeline release-decision-flow">
+                    {pipeline_step("Candidate", "offline mining / provider model", "done")}
+                    {pipeline_step("Evidence", "backtest + eval refs", "warning")}
+                    {pipeline_step("Shadow", "compare against current", "pending")}
+                    {pipeline_step("Approve", "reviewer gate", "pending")}
+                    {pipeline_step("Release", "limited / active / rollback", "pending")}
+                </div>
+            </section>
+
+            <div class="workflow-card-grid">
+                {workflow_action_card("Rule Candidates", "Rules discovered from offline mining, case feedback, or explainable model patterns must pass deterministic backtest and approval before entering the active rule library.", "Review candidate rules", "Rules", "strong", &on_navigate)}
+                {workflow_action_card("Model Candidates", "Provider training output arrives as candidate versions. Compare holdout, out-of-time, shadow, drift, and review-capacity metrics before activation.", "Review candidate models", "MLOps Workspace", "warning", &on_navigate)}
+                {workflow_action_card("Routing Impact", "Check whether a release affects pre-payment, post-payment, manual review, pending evidence, QA sample, or straight-through routing.", "Check routing impact", "Routing Policies", "neutral", &on_navigate)}
+                {workflow_action_card("Evidence & Backtest", "Inspect dataset, feature-set, split, schema, and evaluation lineage that supports the release decision.", "Validate evidence", "Data Sources", "success", &on_navigate)}
+                {workflow_action_card("Release History", "Audit approvals, activation, rollback, API call records, and agent/routing boundaries after release.", "Open governance", "Governance", "strong", &on_navigate)}
+            </div>
+        </section>
+    }
+}
+
 fn detection_controls_page(on_navigate: Callback<String>) -> Html {
     html! {
         <section class="workflow-hub">

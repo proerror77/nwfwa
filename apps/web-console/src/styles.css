@@ -664,6 +664,10 @@ pre {
   grid-template-columns: repeat(4, minmax(118px, 1fr));
 }
 
+.release-decision-flow {
+  grid-template-columns: repeat(5, minmax(142px, 1fr));
+}
+
 .pipeline-step {
   position: relative;
   min-width: 118px;

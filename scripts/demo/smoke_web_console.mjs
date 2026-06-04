@@ -98,6 +98,8 @@ async function main() {
     assertContains(builtText, "Daily Work", "web console navigation bundle");
     assertContains(builtText, "Control Rooms", "web console navigation bundle");
     assertContains(builtText, "Intake Ops", "web console navigation bundle");
+    assertContains(builtText, "Detection Releases", "web console navigation bundle");
+    assertContains(builtText, "Advanced", "web console navigation bundle");
     assertContains(builtText, "MLOps Workspace", "web console navigation bundle");
     assertContains(builtText, "hashchange", "web console browser history bundle");
     assertContains(builtText, "leads-cases", "web console browser history bundle");
@@ -122,7 +124,10 @@ async function main() {
     assertContains(builtText, "Model Candidates", "web console mlops workspace bundle");
     assertContains(builtText, "Training Jobs", "web console mlops workspace bundle");
     assertContains(builtText, "Review Workbench", "web console navigation bundle");
-    assertContains(builtText, "Detection Controls", "web console navigation bundle");
+    assertContains(builtText, "Rule Candidates", "web console detection release bundle");
+    assertContains(builtText, "Model Candidates", "web console detection release bundle");
+    assertContains(builtText, "Routing Impact", "web console detection release bundle");
+    assertContains(builtText, "Release History", "web console detection release bundle");
     assertContains(builtText, "Evidence Hub", "web console navigation bundle");
     assertContains(builtText, "Real-time operations", "web console workspace bundle");
     assertContains(builtText, "Scored leads", "web console global system map bundle");
@@ -196,6 +201,7 @@ async function main() {
     for (const expectedModule of [
       "Dashboard",
       "Intake Ops",
+      "Detection Releases",
       "Rules",
       "Models",
       "Routing Policies",
