@@ -331,7 +331,7 @@ impl ModelScorer for ServingManifestModelScorer {
                 merge_serving_manifest_metadata(&mut score, &self.manifest_uri, &manifest);
                 Ok(score)
             }
-            "rust_onnx" | "xgboost_onnx" | "lightgbm_onnx" => {
+            "rust_onnx" | "xgboost_onnx" | "lightgbm_onnx" | "deep_learning_onnx" => {
                 score_onnx_manifest(
                     &manifest,
                     &request,
@@ -1350,6 +1350,51 @@ mod tests {
                 claim_id: ClaimId::from_external("CLM-SERVING-MANIFEST-ONNX"),
                 model_key: "baseline_fwa".into(),
                 model_version: "0.3.0-xgboost-onnx".into(),
+                endpoint_url: None,
+                features: features([("claim_amount_to_limit_ratio", 0.82)]),
+            })
+            .await;
+
+        let Err(ModelRuntimeError::InvalidResponse(message)) = result else {
+            panic!("expected invalid response for fake ONNX model");
+        };
+        assert!(message.contains("ONNX runtime error"));
+        fs::remove_file(onnx_path).unwrap();
+        fs::remove_file(manifest_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn serving_manifest_accepts_deep_learning_onnx_runtime() {
+        let onnx_path = std::env::temp_dir().join(format!(
+            "nwfwa-serving-manifest-deep-learning-onnx-{}.onnx",
+            ScoringRunId::new()
+        ));
+        fs::write(
+            &onnx_path,
+            b"fake deep learning onnx bytes for contract validation",
+        )
+        .unwrap();
+        let manifest_path = write_artifact(
+            "serving-manifest-deep-learning-onnx",
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.4.0-deep-learning-onnx",
+                "runtime_kind": "deep_learning_onnx",
+                "artifact_uri": onnx_path.to_string_lossy(),
+                "artifact_sha256": artifact_sha256(&onnx_path),
+                "version_lock": "0.4.0-deep-learning-onnx",
+                "feature_columns": ["claim_amount_to_limit_ratio"],
+                "threshold": 0.5
+            }),
+        );
+        let scorer = ServingManifestModelScorer::new(manifest_path.to_string_lossy());
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_serving_manifest_deep_learning_onnx"),
+                claim_id: ClaimId::from_external("CLM-SERVING-MANIFEST-DL-ONNX"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.4.0-deep-learning-onnx".into(),
                 endpoint_url: None,
                 features: features([("claim_amount_to_limit_ratio", 0.82)]),
             })

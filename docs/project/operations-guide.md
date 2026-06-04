@@ -235,12 +235,13 @@ GBDT serving manifest shape:
 }
 ```
 
-When `runtime_kind` is `xgboost_onnx`, `lightgbm_onnx`, or `rust_onnx`, the
-Rust serving-manifest scorer loads `artifact_uri` with ONNX Runtime CPU after
-validating the manifest identity, ordered features, checksum, optional
-signature, and version lock. The scoring metadata records the ONNX input/output
-names and `fraud_probability`. The `.joblib` file remains the training artifact
-and must not be configured as the Rust serving artifact.
+When `runtime_kind` is `xgboost_onnx`, `lightgbm_onnx`,
+`deep_learning_onnx`, or `rust_onnx`, the Rust serving-manifest scorer loads
+`artifact_uri` with ONNX Runtime CPU after validating the manifest identity,
+ordered features, checksum, optional signature, and version lock. The scoring
+metadata records the ONNX input/output names and `fraud_probability`. The
+`.joblib` file remains the training artifact and must not be configured as the
+Rust serving artifact.
 
 Worker-driven training registration:
 

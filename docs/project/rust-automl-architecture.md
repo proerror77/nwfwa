@@ -135,7 +135,8 @@ Every production model version must record:
 
 - artifact URI and checksum;
 - serving runtime kind: `rust_serving_manifest`, `rust_artifact`,
-  `rust_onnx`, or `http_model_service`;
+  `rust_onnx`, `xgboost_onnx`, `lightgbm_onnx`, `deep_learning_onnx`, or
+  `http_model_service`;
 - feature set id and ordered feature list;
 - threshold and calibration evidence;
 - validation, shadow, drift, and fairness report URIs;
@@ -155,10 +156,11 @@ Current repository completion for this target architecture is approximately:
   labeled/unlabeled demo packs now cover the missing dataset shape.
 - 64% for model portfolio: logistic has a native Rust JSON serving artifact;
   XGBoost and LightGBM training now emit governed ONNX serving artifacts with
-  probability-parity reports, the Rust runtime can execute those ONNX manifests
-  after contract validation, and provider-peer plus claim/member/provider entity
-  clustering have Rust-native demo workflows; broader graph clustering and
-  deep-learning serving remain future work.
+  probability-parity reports, the Rust runtime can execute XGBoost, LightGBM,
+  generic Rust ONNX, and `deep_learning_onnx` manifests after contract
+  validation, and provider-peer plus claim/member/provider entity clustering
+  have Rust-native demo workflows; broader graph clustering remains future
+  work.
 - 80% for Auto MLOps: worker can build feature-set manifests, create
   algorithm-aware training handoffs, enrich
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
@@ -173,13 +175,14 @@ Current repository completion for this target architecture is approximately:
   now accepts governed serving manifests, and the console has provider model
   release, promotion review, activation, and rollback actions. Broader graph
   clustering and live monitoring surfaces still need hardening.
-- 74% for Rust ONNX serving: serving-manifest validation, checksum/signature
+- 78% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, and the worker now creates Rust serving evaluation
   evidence automatically on retraining registration when a serving manifest is
-  present; for XGBoost/LightGBM ONNX candidates it also requires a passed ONNX
-  parity report before the gate can pass. Production cache/reuse strategy,
-  broader ONNX fixture tests, and live latency monitoring still need hardening.
+  present; for XGBoost, LightGBM, and deep-learning ONNX candidates it also
+  requires a passed ONNX parity report before the gate can pass. Production
+  cache/reuse strategy, broader real ONNX fixture tests, and live latency
+  monitoring still need hardening.
 
 The runtime now has a serving-manifest boundary for Rust logistic artifacts and
 real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The worker

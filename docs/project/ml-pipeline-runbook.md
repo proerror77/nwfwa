@@ -352,7 +352,9 @@ server's lightweight runtime. XGBoost and LightGBM export Python `.joblib`
 training artifacts plus governed `.onnx` serving artifacts. Their serving
 manifests use `runtime_kind` values `xgboost_onnx` and `lightgbm_onnx` only
 after the trainer verifies validation-split probability parity with ONNX
-Runtime. They still remain governed candidates with feature-importance,
+Runtime. Deep-learning models should use `deep_learning_onnx` and the same
+Rust serving-manifest, checksum, feature-order, and parity evidence gates. They
+still remain governed candidates with feature-importance or explanation,
 shadow, drift, fairness, registration, promotion, and human-review gates; ONNX
 export alone does not activate them.
 

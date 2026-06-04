@@ -5074,7 +5074,7 @@ fn automl_requires_onnx_parity(metrics: &serde_json::Map<String, serde_json::Val
         Some("xgboost" | "lightgbm")
     ) || matches!(
         metrics.get("runtime_kind").and_then(|value| value.as_str()),
-        Some("xgboost_onnx" | "lightgbm_onnx")
+        Some("xgboost_onnx" | "lightgbm_onnx" | "deep_learning_onnx")
     )
 }
 
@@ -7141,6 +7141,8 @@ mod tests {
 
         let missing = validate_onnx_parity_for_runtime("lightgbm_onnx", None);
         assert!(missing.is_err());
+        let deep_learning_missing = validate_onnx_parity_for_runtime("deep_learning_onnx", None);
+        assert!(deep_learning_missing.is_err());
 
         write_json(
             parity_report.clone(),
