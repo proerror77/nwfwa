@@ -17,7 +17,7 @@ def main() -> None:
     parser.add_argument("--actor", required=True)
     parser.add_argument(
         "--algorithm",
-        choices=["logistic_regression", "xgboost"],
+        choices=["logistic_regression", "xgboost", "lightgbm"],
         help="Training algorithm. Defaults to manifest.algorithm or logistic_regression.",
     )
     args = parser.parse_args()

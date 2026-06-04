@@ -223,8 +223,8 @@ and production-operations gaps rather than missing demo mechanics:
   reviewer-disagreement measurement;
 - ONNX export and Rust ONNX serving for XGBoost when conversion preserves
   feature order, threshold semantics, and prediction parity;
-- LightGBM training/export support after the XGBoost path is validated, using
-  the same ONNX/parity boundary where possible;
+- ONNX export and Rust ONNX serving for LightGBM using the same manifest and
+  parity boundary as XGBoost;
 - clustering and anomaly-discovery jobs over unlabeled provider, member, claim,
   and graph features, with output treated as review candidates only;
 - production feature store or scheduled feature materialization beyond the

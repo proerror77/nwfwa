@@ -27,6 +27,11 @@ try:
 except ImportError:  # pragma: no cover - exercised only in incomplete envs
     XGBClassifier = None
 
+try:
+    from lightgbm import LGBMClassifier
+except ImportError:  # pragma: no cover - exercised only in incomplete envs
+    LGBMClassifier = None
+
 from .mlops import (
     artifact_signature,
     build_drift_report,
@@ -40,7 +45,7 @@ from .mlops import (
 
 DEFAULT_THRESHOLD = 0.5
 DEFAULT_ALGORITHM = "logistic_regression"
-SUPPORTED_ALGORITHMS = {DEFAULT_ALGORITHM, "xgboost"}
+SUPPORTED_ALGORITHMS = {DEFAULT_ALGORITHM, "xgboost", "lightgbm"}
 
 
 def train_from_manifest(
@@ -268,6 +273,8 @@ def normalize_algorithm(value: Any) -> str:
         raise ValueError(f"algorithm must be one of: {supported}")
     if algorithm == "xgboost" and XGBClassifier is None:
         raise ValueError("xgboost training requires the xgboost package")
+    if algorithm == "lightgbm" and LGBMClassifier is None:
+        raise ValueError("lightgbm training requires the lightgbm package")
     return algorithm
 
 
@@ -289,27 +296,35 @@ def build_pipeline(algorithm: str, labels: pd.Series) -> Pipeline:
     positive_count = int((labels.astype(int) == 1).sum())
     negative_count = int((labels.astype(int) == 0).sum())
     scale_pos_weight = negative_count / positive_count if positive_count else 1.0
-    return Pipeline(
-        [
-            (
-                "model",
-                XGBClassifier(
-                    n_estimators=8,
-                    max_depth=3,
-                    learning_rate=0.08,
-                    subsample=0.9,
-                    colsample_bytree=0.9,
-                    objective="binary:logistic",
-                    eval_metric="logloss",
-                    tree_method="hist",
-                    n_jobs=1,
-                    scale_pos_weight=scale_pos_weight,
-                    random_state=42,
-                    verbosity=0,
-                ),
-            )
-        ]
-    )
+    if algorithm == "xgboost":
+        model = XGBClassifier(
+            n_estimators=8,
+            max_depth=3,
+            learning_rate=0.08,
+            subsample=0.9,
+            colsample_bytree=0.9,
+            objective="binary:logistic",
+            eval_metric="logloss",
+            tree_method="hist",
+            n_jobs=1,
+            scale_pos_weight=scale_pos_weight,
+            random_state=42,
+            verbosity=0,
+        )
+    else:
+        model = LGBMClassifier(
+            n_estimators=12,
+            max_depth=3,
+            learning_rate=0.08,
+            objective="binary",
+            class_weight="balanced",
+            min_child_samples=1,
+            min_data_in_bin=1,
+            num_leaves=7,
+            random_state=42,
+            verbose=-1,
+        )
+    return Pipeline([("model", model)])
 
 
 def candidate_version(base_model_version: str, job_id: str, algorithm: str) -> str:
@@ -324,6 +339,7 @@ def runtime_kind_for_algorithm(algorithm: str) -> str:
     return {
         DEFAULT_ALGORITHM: "sklearn_logistic_regression",
         "xgboost": "xgboost_classifier",
+        "lightgbm": "lightgbm_classifier",
     }[algorithm]
 
 
@@ -331,6 +347,7 @@ def serving_runtime_kind_for_algorithm(algorithm: str) -> str:
     return {
         DEFAULT_ALGORITHM: "rust_logistic_regression",
         "xgboost": "xgboost_classifier",
+        "lightgbm": "lightgbm_classifier",
     }[algorithm]
 
 
@@ -338,6 +355,7 @@ def algorithm_family(algorithm: str) -> str:
     return {
         DEFAULT_ALGORITHM: "linear_baseline",
         "xgboost": "gradient_boosted_tree",
+        "lightgbm": "gradient_boosted_tree",
     }[algorithm]
 
 

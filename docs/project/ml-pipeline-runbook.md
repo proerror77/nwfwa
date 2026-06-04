@@ -234,8 +234,9 @@ python -m app.train \
 
 Current implementation:
 
-- logistic regression baseline by default, plus `--algorithm xgboost` for the
-  first gradient-boosted-tree supervised-learning candidate;
+- logistic regression baseline by default, plus `--algorithm xgboost` and
+  `--algorithm lightgbm` for gradient-boosted-tree supervised-learning
+  candidates;
 - numeric feature columns from the manifest dataset;
 - `.joblib` model artifact;
 - `validation.json`;
@@ -249,15 +250,15 @@ Current implementation:
 - retraining output payload printed to stdout.
 
 The first production supervised-learning comparison should include the logistic
-baseline and an XGBoost candidate. Logistic exports both a Python `.joblib`
-artifact and a Rust JSON serving artifact for the API server's lightweight
-runtime. XGBoost exports a Python `.joblib` serving artifact for the existing
-Python scorer boundary today. The target path is ONNX export and Rust ONNX
-serving when conversion preserves feature order and prediction parity. Until
-that parity gate exists, XGBoost remains a governed candidate with
-feature-importance evidence and the same registration, promotion, shadow, drift,
-and human-review gates. LightGBM remains the next GBDT candidate after the
-XGBoost path is validated.
+baseline, an XGBoost candidate, and a LightGBM candidate. Logistic exports both
+a Python `.joblib` artifact and a Rust JSON serving artifact for the API
+server's lightweight runtime. XGBoost and LightGBM export Python `.joblib`
+training artifacts and serving manifests for the existing Python scorer
+boundary today. The target path is ONNX export and Rust ONNX serving when
+conversion preserves feature order and prediction parity. Until that parity gate
+exists, both GBDT candidates remain governed candidates with feature-importance
+evidence and the same registration, promotion, shadow, drift, and human-review
+gates.
 
 ## Stage 6: Worker-Driven Candidate Registration
 
