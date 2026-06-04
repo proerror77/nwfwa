@@ -29,17 +29,6 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
             "Governance",
         ],
     ),
-    (
-        "Advanced",
-        &[
-            "Rules",
-            "Models",
-            "Routing Policies",
-            "Factor Factory",
-            "Data Sources",
-            "MLOps Workspace",
-        ],
-    ),
 ];
 
 const ALL_MODULES: &[&str] = &[
@@ -49,7 +38,6 @@ const ALL_MODULES: &[&str] = &[
     "Runtime Scoring",
     "Review Workbench",
     "Bootstrap Ops",
-    "Detection Controls",
     "Evidence Hub",
     "MLOps Workspace",
     "Evidence Runtime",
@@ -1842,8 +1830,6 @@ fn app() -> Html {
                         <BootstrapOpsPage />
                     } else if *active == "Detection Releases" {
                         {detection_releases_page(select_module.clone())}
-                    } else if *active == "Detection Controls" {
-                        {detection_controls_page(select_module.clone())}
                     } else if *active == "Evidence Hub" {
                         {evidence_hub_page(select_module.clone())}
                     } else if *active == "MLOps Workspace" {
@@ -1946,7 +1932,6 @@ fn module_slug(module: &str) -> &'static str {
         "Runtime Scoring" => "runtime-scoring",
         "Review Workbench" => "review-workbench",
         "Bootstrap Ops" => "bootstrap-ops",
-        "Detection Controls" => "detection-controls",
         "Evidence Hub" => "evidence-hub",
         "MLOps Workspace" => "mlops-workspace",
         "Evidence Runtime" => "evidence-runtime",
@@ -2011,9 +1996,7 @@ fn module_context(module: &str) -> &'static str {
             "Resolve inbound TPA packet exceptions before claims enter risk and review queues."
         }
         "Dashboard" => "Choose the next operational action from live risk and review queues.",
-        "Detection Releases" => {
-            "Approve rule and model candidates before they affect routing."
-        }
+        "Detection Releases" => "Accept, compare, approve, or reject provider-delivered detection candidates.",
         "Runtime Scoring" => {
             "Validate the scoring API contract, routing policy, evidence refs, and audit IDs."
         }
@@ -2021,14 +2004,11 @@ fn module_context(module: &str) -> &'static str {
         "Bootstrap Ops" => {
             "Replay historical leads, request missing evidence, and govern bootstrap labels."
         }
-        "Detection Controls" => {
-            "Promote rules, models, routing, and features through one control room."
-        }
         "Evidence Hub" => {
             "Open member, provider, knowledge, and dataset context from one evidence hub."
         }
         "MLOps Workspace" => {
-            "Govern offline training, model candidates, promotion gates, and monitoring evidence."
+            "Inspect provider model handoff artifacts and promotion evidence."
         }
         "Evidence Runtime" => {
             "Register document, OCR, chunk, embedding, and retrieval metadata with audit trace."
@@ -2055,13 +2035,12 @@ fn module_description(module: &str) -> &'static str {
     match module {
         "Intake Ops" => "intake exceptions",
         "Dashboard" => "next action",
-        "Detection Releases" => "rule + model releases",
+        "Detection Releases" => "candidate releases",
         "Runtime Scoring" => "contract check",
         "Review Workbench" => "medical + QA",
         "Bootstrap Ops" => "labels + evidence",
-        "Detection Controls" => "rules + models",
         "Evidence Hub" => "context lookup",
-        "MLOps Workspace" => "model lifecycle",
+        "MLOps Workspace" => "provider handoff",
         "Evidence Runtime" => "document evidence",
         "Rules" => "deterministic controls",
         "Models" => "threshold evidence",
@@ -2089,7 +2068,6 @@ fn module_icon_class(module: &str) -> &'static str {
         "Runtime Scoring" => "icon-scoring",
         "Review Workbench" => "icon-qa",
         "Bootstrap Ops" => "icon-audit",
-        "Detection Controls" => "icon-rules",
         "Evidence Hub" => "icon-knowledge",
         "MLOps Workspace" => "icon-models",
         "Evidence Runtime" => "icon-audit",
@@ -2901,21 +2879,21 @@ fn detection_releases_page(on_navigate: Callback<String>) -> Html {
             <div class="dashboard-header">
                 <div>
                     <h2>{"Detection Releases"}</h2>
-                    <p>{"Review rule candidates and model candidates before they enter shadow, limited rollout, active routing, or rollback. Training and mining happen offline; this control room decides what is safe to release."}</p>
+                    <p>{"Use this as the single business entry for new rules and model versions. Offline mining and provider training create candidates; this console decides whether they can enter shadow, limited rollout, active routing, or rollback."}</p>
                 </div>
-                <span class="status-pill">{"Promotion control"}</span>
+                <span class="status-pill">{"Candidate release control"}</span>
             </div>
 
             <section class="panel result-stack">
                 <div class="section-header">
                     <div>
                         <h3>{"Release Decision Path"}</h3>
-                        <p>{"Every candidate must show source, backtest or evaluation evidence, review-capacity impact, approval, and rollback path before routing impact."}</p>
+                        <p>{"Every candidate must show source, backtest or evaluation evidence, review-capacity impact, approval, and rollback path before it can affect routing."}</p>
                     </div>
                     <span class="status-token strong">{"human approval required"}</span>
                 </div>
                 <div class="inbox-pipeline release-decision-flow">
-                    {pipeline_step("Candidate", "offline mining / provider model", "done")}
+                    {pipeline_step("Candidate", "provider push / offline mining", "done")}
                     {pipeline_step("Evidence", "backtest + eval refs", "warning")}
                     {pipeline_step("Shadow", "compare against current", "pending")}
                     {pipeline_step("Approve", "reviewer gate", "pending")}
@@ -2923,32 +2901,28 @@ fn detection_releases_page(on_navigate: Callback<String>) -> Html {
                 </div>
             </section>
 
-            <div class="workflow-card-grid">
-                {workflow_action_card("Rule Candidates", "Rules discovered from offline mining, case feedback, or explainable model patterns must pass deterministic backtest and approval before entering the active rule library.", "Review candidate rules", "Rules", "strong", &on_navigate)}
-                {workflow_action_card("Model Candidates", "Provider training output arrives as candidate versions. Compare holdout, out-of-time, shadow, drift, and review-capacity metrics before activation.", "Review candidate models", "MLOps Workspace", "warning", &on_navigate)}
-                {workflow_action_card("Routing Impact", "Check whether a release affects pre-payment, post-payment, manual review, pending evidence, QA sample, or straight-through routing.", "Check routing impact", "Routing Policies", "neutral", &on_navigate)}
-                {workflow_action_card("Evidence & Backtest", "Inspect dataset, feature-set, split, schema, and evaluation lineage that supports the release decision.", "Validate evidence", "Data Sources", "success", &on_navigate)}
-                {workflow_action_card("Release History", "Audit approvals, activation, rollback, API call records, and agent/routing boundaries after release.", "Open governance", "Governance", "strong", &on_navigate)}
-            </div>
-        </section>
-    }
-}
-
-fn detection_controls_page(on_navigate: Callback<String>) -> Html {
-    html! {
-        <section class="workflow-hub">
-            <div class="dashboard-header">
-                <div>
-                    <h2>{"Detection Controls"}</h2>
-                    <p>{"Control fraud logic from the promotion path instead of scattering rules, models, routing, and features across unrelated screens."}</p>
+            <section class="panel result-stack">
+                <div class="section-header">
+                    <div>
+                        <h3>{"What Operators Decide Here"}</h3>
+                        <p>{"Business users do not tune raw features or train models here. They accept or reject governed candidates based on evidence."}</p>
+                    </div>
+                    <span class="status-token neutral">{"release governance only"}</span>
                 </div>
-                <span class="status-pill">{"Promotion path"}</span>
-            </div>
+                <div class="summary-grid">
+                    <div><span>{"Rule intake"}</span><strong>{"New candidate rules from offline discovery, QA feedback, or explainable model patterns"}</strong></div>
+                    <div><span>{"Model intake"}</span><strong>{"Provider-trained model versions with dataset, split, metric, drift, and artifact evidence"}</strong></div>
+                    <div><span>{"Decision"}</span><strong>{"Reject, keep in shadow, approve limited rollout, activate, or rollback"}</strong></div>
+                    <div><span>{"Not here"}</span><strong>{"No ad hoc model training, no raw feature engineering, no autonomous denial"}</strong></div>
+                </div>
+            </section>
+
             <div class="workflow-card-grid">
-                {workflow_action_card("Rules", "Operate deterministic controls, backtests, false-positive history, and promotion gates.", "Review rules", "Rules", "strong", &on_navigate)}
-                {workflow_action_card("Models", "Inspect threshold readiness, drift, precision, recall, and production evidence.", "Review models", "Models", "warning", &on_navigate)}
-                {workflow_action_card("Routing Policies", "Check which engine path receives each score request and where manual review is required.", "Review routing", "Routing Policies", "neutral", &on_navigate)}
-                {workflow_action_card("Factor Factory", "Confirm feature availability, ownership, leakage checks, and online readiness.", "Review factors", "Factor Factory", "success", &on_navigate)}
+                {workflow_action_card("Rule Candidate Queue", "Rules discovered from offline mining, case feedback, or explainable model patterns must pass deterministic backtest and approval before entering the active rule library.", "Review rule evidence", "Rules", "strong", &on_navigate)}
+                {workflow_action_card("Provider Model Queue", "Provider training output arrives as candidate versions. Compare holdout, out-of-time, shadow, drift, and review-capacity metrics before activation.", "Review model evidence", "MLOps Workspace", "warning", &on_navigate)}
+                {workflow_action_card("Routing Impact", "Check whether an approved release affects pre-payment, post-payment, manual review, pending evidence, QA sample, or straight-through routing.", "Check impact", "Routing Policies", "neutral", &on_navigate)}
+                {workflow_action_card("Evidence Package", "Inspect dataset, feature-set, split, schema, and evaluation lineage that supports the release decision.", "Validate evidence", "Data Sources", "success", &on_navigate)}
+                {workflow_action_card("Release History", "Audit approvals, activation, rollback, API call records, and agent/routing boundaries after release.", "Open governance", "Governance", "strong", &on_navigate)}
             </div>
         </section>
     }
@@ -4688,33 +4662,21 @@ fn mlops_workspace_page() -> Html {
         <section class="module-status">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"MLOps Workspace"}</h2>
-                    <p>{"A separate model governance workspace for datasets, offline training jobs, candidates, promotion gates, and monitoring evidence."}</p>
+                    <h2>{"Provider Model Intake"}</h2>
+                    <p>{"Review provider-delivered model candidates after offline training. Operators compare evidence and decide shadow, limited rollout, activation, rejection, or rollback."}</p>
                 </div>
-                <span class="status-pill">{"Offline ML Governance"}</span>
+                <span class="status-pill">{"Provider handoff"}</span>
             </div>
 
             <div class="mlops-cockpit">
                 <section class="panel mlops-source-panel">
                     <div class="section-header compact">
                         <div>
-                            <h3>{"MLOps Source"}</h3>
-                            <p>{"Select the governed model workspace."}</p>
+                            <h3>{"Candidate Source"}</h3>
+                            <p>{"Select the provider-trained model candidate to inspect."}</p>
                         </div>
                     </div>
                     <div class="form-grid">
-                        <label>
-                            {"API key"}
-                            <input
-                                value={(*api_key).clone()}
-                                oninput={{
-                                    let api_key = api_key.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        api_key.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
                         <label>
                             {"Model key"}
                             <input

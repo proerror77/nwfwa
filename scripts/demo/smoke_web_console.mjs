@@ -99,8 +99,11 @@ async function main() {
     assertContains(builtText, "Control Rooms", "web console navigation bundle");
     assertContains(builtText, "Intake Ops", "web console navigation bundle");
     assertContains(builtText, "Detection Releases", "web console navigation bundle");
-    assertContains(builtText, "Advanced", "web console navigation bundle");
-    assertContains(builtText, "MLOps Workspace", "web console navigation bundle");
+    assertNotContains(builtText, "Advanced", "web console business navigation bundle");
+    assertContains(builtText, "Provider Model Intake", "web console model release drilldown bundle");
+    assertContains(builtText, "Rule Candidate Queue", "web console detection release bundle");
+    assertContains(builtText, "Provider Model Queue", "web console detection release bundle");
+    assertContains(builtText, "No ad hoc model training", "web console detection release boundary bundle");
     assertContains(builtText, "hashchange", "web console browser history bundle");
     assertContains(builtText, "leads-cases", "web console browser history bundle");
     assertContains(builtText, "Bootstrap Ops", "web console navigation bundle");
@@ -113,7 +116,7 @@ async function main() {
     assertContains(builtText, "Label Review", "web console bootstrap ops bundle");
     assertContains(builtText, "Mark selected request received", "web console bootstrap ops bundle");
     assertContains(builtText, "Review selected label", "web console bootstrap ops bundle");
-    assertContains(builtText, "Offline ML Governance", "web console mlops workspace bundle");
+    assertContains(builtText, "Provider handoff", "web console mlops workspace bundle");
     assertContains(builtText, "MLOps Control Plane", "web console mlops workspace bundle");
     assertContains(builtText, "Offline Training Handoff", "web console mlops workspace bundle");
     assertContains(builtText, "Governed Actions", "web console mlops workspace bundle");
@@ -124,8 +127,8 @@ async function main() {
     assertContains(builtText, "Model Candidates", "web console mlops workspace bundle");
     assertContains(builtText, "Training Jobs", "web console mlops workspace bundle");
     assertContains(builtText, "Review Workbench", "web console navigation bundle");
-    assertContains(builtText, "Rule Candidates", "web console detection release bundle");
-    assertContains(builtText, "Model Candidates", "web console detection release bundle");
+    assertContains(builtText, "Rule Candidate Queue", "web console detection release bundle");
+    assertContains(builtText, "Provider Model Queue", "web console detection release bundle");
     assertContains(builtText, "Routing Impact", "web console detection release bundle");
     assertContains(builtText, "Release History", "web console detection release bundle");
     assertContains(builtText, "Evidence Hub", "web console navigation bundle");
@@ -162,7 +165,7 @@ async function main() {
     assertContains(builtText, "Review", "web console dashboard queue bundle");
     assertContains(builtText, "Govern", "web console dashboard queue bundle");
     assertContains(builtText, "Open clinical queue", "web console review workbench bundle");
-    assertContains(builtText, "Review rules", "web console detection workbench bundle");
+    assertContains(builtText, "Review rule evidence", "web console detection release bundle");
     assertContains(builtText, "Search evidence", "web console evidence workbench bundle");
     assertContains(builtText, "Rule command path", "web console rules visual bundle");
     assertContains(builtText, "Rule Backfill Workbench", "web console rule discovery workbench bundle");
@@ -246,7 +249,7 @@ async function main() {
       "Candidate Source",
       "Threshold Integrity",
       "Model Governance",
-      "MLOps Workspace",
+      "Provider Model Intake",
       "Governed Actions",
       "Offline Training Handoff",
       "Model Candidates",
