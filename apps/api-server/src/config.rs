@@ -51,7 +51,9 @@ impl AppConfig {
     }
 
     pub fn model_runtime_kind(&self) -> &'static str {
-        if self.model_artifact_uri().is_some() {
+        if self.model_serving_manifest_uri().is_some() {
+            "rust_serving_manifest"
+        } else if self.model_artifact_uri().is_some() {
             "rust_artifact"
         } else if self.model_service_url == "heuristic"
             || self.model_service_url.starts_with("heuristic://")
@@ -63,7 +65,9 @@ impl AppConfig {
     }
 
     pub fn model_service_configuration_status(&self) -> &'static str {
-        if self.model_artifact_uri().is_some() {
+        if self.model_serving_manifest_uri().is_some() {
+            "configured"
+        } else if self.model_artifact_uri().is_some() {
             "configured"
         } else if self.model_service_url == "heuristic"
             || self.model_service_url.starts_with("heuristic://")
@@ -78,6 +82,10 @@ impl AppConfig {
 
     pub fn model_artifact_uri(&self) -> Option<String> {
         configured_env_value("FWA_MODEL_ARTIFACT_URI")
+    }
+
+    pub fn model_serving_manifest_uri(&self) -> Option<String> {
+        configured_env_value("FWA_MODEL_SERVING_MANIFEST_URI")
     }
 
     pub fn model_version_lock(&self) -> Option<String> {

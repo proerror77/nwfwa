@@ -197,7 +197,12 @@ async fn openapi_includes_operations_paths() {
     );
     assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["runtime_kind"]["enum"],
-        serde_json::json!(["python_http", "heuristic", "rust_artifact"])
+        serde_json::json!([
+            "python_http",
+            "heuristic",
+            "rust_artifact",
+            "rust_serving_manifest"
+        ])
     );
     assert_eq!(
         schema["components"]["schemas"]["HealthCheck"]["properties"]["remediation"]["type"],

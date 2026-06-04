@@ -3914,7 +3914,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "runtime_kind": {
                             "type": "string",
-                            "enum": ["python_http", "heuristic", "rust_artifact"],
+                            "enum": ["python_http", "heuristic", "rust_artifact", "rust_serving_manifest"],
                             "description": "Model scorer runtime boundary when the check is model_scorer. Internal service URLs are intentionally not exposed."
                         },
                         "remediation": {

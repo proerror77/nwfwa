@@ -97,17 +97,20 @@ Future worker commands should add:
 
 Serving should follow a layered runtime:
 
-1. Native Rust scorers for deterministic rules, heuristics, logistic baselines,
+1. Serving manifest scorer for governed artifact metadata, feature order,
+   checksum, version lock, and signature validation.
+2. Native Rust scorers for deterministic rules, heuristics, logistic baselines,
    and small transparent artifacts.
-2. Rust ONNX scorer for exported XGBoost, LightGBM, and deep models where
+3. Rust ONNX scorer for exported XGBoost, LightGBM, and deep models where
    conversion preserves feature order and output parity.
-3. HTTP scorer only as a controlled fallback for models that cannot yet be
+4. HTTP scorer only as a controlled fallback for models that cannot yet be
    exported safely.
 
 Every production model version must record:
 
 - artifact URI and checksum;
-- serving runtime kind: `rust_artifact`, `rust_onnx`, or `http_model_service`;
+- serving runtime kind: `rust_serving_manifest`, `rust_artifact`,
+  `rust_onnx`, or `http_model_service`;
 - feature set id and ordered feature list;
 - threshold and calibration evidence;
 - validation, shadow, drift, and fairness report URIs;
@@ -131,6 +134,7 @@ Current repository completion for this target architecture is approximately:
 - 20% for Rust ONNX serving: architecture is defined, but the runtime scorer and
   parity tests still need implementation.
 
-After the Rust demo dataset builder, the next highest-leverage implementation is
-the Rust ONNX scorer with feature-order validation and parity tests against the
-training artifact.
+The runtime now has a serving-manifest boundary for Rust logistic artifacts and
+ONNX contract validation. The next highest-leverage implementation is the real
+Rust ONNX scorer with parity tests against XGBoost and LightGBM training
+artifacts.

@@ -110,6 +110,33 @@ impl ArtifactModelScorer {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct ServingManifestModelScorer {
+    manifest_uri: String,
+    signing_key: Option<String>,
+}
+
+impl ServingManifestModelScorer {
+    pub fn new(manifest_uri: impl Into<String>) -> Self {
+        Self {
+            manifest_uri: manifest_uri.into(),
+            signing_key: None,
+        }
+    }
+
+    pub fn with_signing_key(mut self, signing_key: impl Into<String>) -> Self {
+        self.signing_key = Some(signing_key.into());
+        self
+    }
+
+    pub fn from_env(manifest_uri: impl Into<String>, signing_key: Option<String>) -> Self {
+        Self {
+            manifest_uri: manifest_uri.into(),
+            signing_key: signing_key.filter(|value| !value.trim().is_empty()),
+        }
+    }
+}
+
 #[derive(Debug, Deserialize)]
 struct LogisticRegressionArtifact {
     model_key: String,
@@ -123,6 +150,20 @@ struct LogisticRegressionArtifact {
     feature_columns: Vec<String>,
     intercept: f64,
     coefficients: BTreeMap<String, f64>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+struct ServingManifest {
+    model_key: String,
+    model_version: String,
+    runtime_kind: String,
+    artifact_uri: String,
+    artifact_sha256: String,
+    artifact_signature: Option<String>,
+    version_lock: String,
+    feature_columns: Vec<String>,
+    threshold: f64,
+    training_artifact_uri: Option<String>,
 }
 
 fn default_artifact_runtime_kind() -> String {
@@ -257,6 +298,54 @@ impl ModelScorer for ArtifactModelScorer {
     }
 }
 
+#[async_trait]
+impl ModelScorer for ServingManifestModelScorer {
+    async fn score(&self, request: ModelScoreRequest) -> Result<ModelScore, ModelRuntimeError> {
+        let manifest_path = local_artifact_path(&self.manifest_uri)?;
+        let manifest_bytes = fs::read(manifest_path)
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        let manifest: ServingManifest = serde_json::from_slice(&manifest_bytes)
+            .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+        validate_serving_manifest(&manifest, &request)?;
+        validate_manifest_feature_order(&manifest, &request)?;
+
+        match manifest.runtime_kind.as_str() {
+            "rust_logistic_regression" => {
+                let mut result = ArtifactModelScorer::new(manifest.artifact_uri.clone())
+                    .with_expected_sha256(manifest.artifact_sha256.clone())
+                    .with_version_lock(manifest.version_lock.clone());
+                if let Some(signature) = manifest.artifact_signature.clone() {
+                    if let Some(signing_key) = self.signing_key.clone() {
+                        result = result.with_signature(signature, signing_key);
+                    } else {
+                        return Err(ModelRuntimeError::InvalidResponse(
+                            "model artifact signature key missing".into(),
+                        ));
+                    }
+                }
+                let mut score = result.score(request).await?;
+                merge_serving_manifest_metadata(&mut score, &self.manifest_uri, &manifest);
+                Ok(score)
+            }
+            "rust_onnx" | "xgboost_onnx" | "lightgbm_onnx" => {
+                validate_onnx_artifact(&manifest)?;
+                Err(ModelRuntimeError::InvalidResponse(
+                    "rust ONNX execution is not linked in this build; keep the model in shadow or use the governed HTTP fallback until ONNX parity is implemented".into(),
+                ))
+            }
+            "xgboost_classifier" | "lightgbm_classifier" => {
+                Err(ModelRuntimeError::InvalidResponse(format!(
+                    "{} is a training artifact runtime, not a Rust serving runtime; export ONNX or use the governed HTTP fallback",
+                    manifest.runtime_kind
+                )))
+            }
+            other => Err(ModelRuntimeError::InvalidResponse(format!(
+                "unsupported serving manifest runtime_kind: {other}"
+            ))),
+        }
+    }
+}
+
 fn local_artifact_path(artifact_uri: &str) -> Result<&str, ModelRuntimeError> {
     if artifact_uri.is_empty() {
         return Err(ModelRuntimeError::InvalidResponse(
@@ -267,6 +356,109 @@ fn local_artifact_path(artifact_uri: &str) -> Result<&str, ModelRuntimeError> {
         .strip_prefix("artifact://")
         .or_else(|| artifact_uri.strip_prefix("file://"))
         .unwrap_or(artifact_uri))
+}
+
+fn validate_serving_manifest(
+    manifest: &ServingManifest,
+    request: &ModelScoreRequest,
+) -> Result<(), ModelRuntimeError> {
+    if manifest.model_key != request.model_key || manifest.model_version != request.model_version {
+        return Err(ModelRuntimeError::InvalidResponse(format!(
+            "serving manifest model identity mismatch: expected {}:{}, got {}:{}",
+            request.model_key, request.model_version, manifest.model_key, manifest.model_version
+        )));
+    }
+    if manifest.version_lock != manifest.model_version {
+        return Err(ModelRuntimeError::InvalidResponse(format!(
+            "serving manifest version_lock mismatch: expected {}, got {}",
+            manifest.model_version, manifest.version_lock
+        )));
+    }
+    if manifest.artifact_sha256.trim().is_empty() {
+        return Err(ModelRuntimeError::InvalidResponse(
+            "serving manifest artifact_sha256 is required".into(),
+        ));
+    }
+    if manifest.feature_columns.is_empty() {
+        return Err(ModelRuntimeError::InvalidResponse(
+            "serving manifest feature_columns must not be empty".into(),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_manifest_feature_order(
+    manifest: &ServingManifest,
+    request: &ModelScoreRequest,
+) -> Result<(), ModelRuntimeError> {
+    for feature_name in &manifest.feature_columns {
+        let Some(feature) = request.features.get(feature_name) else {
+            return Err(ModelRuntimeError::InvalidResponse(format!(
+                "serving manifest feature missing from request: {feature_name}"
+            )));
+        };
+        if feature.value.as_f64().is_none() {
+            return Err(ModelRuntimeError::InvalidResponse(format!(
+                "serving manifest feature must be numeric: {feature_name}"
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn validate_onnx_artifact(manifest: &ServingManifest) -> Result<(), ModelRuntimeError> {
+    if !manifest.artifact_uri.ends_with(".onnx") {
+        return Err(ModelRuntimeError::InvalidResponse(format!(
+            "{} requires an .onnx artifact_uri",
+            manifest.runtime_kind
+        )));
+    }
+    let artifact_path = local_artifact_path(&manifest.artifact_uri)?;
+    let artifact_bytes = fs::read(artifact_path)
+        .map_err(|error| ModelRuntimeError::InvalidResponse(error.to_string()))?;
+    let artifact_sha256 = sha256_hex(&artifact_bytes);
+    if artifact_sha256 != manifest.artifact_sha256 {
+        return Err(ModelRuntimeError::InvalidResponse(format!(
+            "ONNX artifact checksum mismatch: expected {}, got {}",
+            manifest.artifact_sha256, artifact_sha256
+        )));
+    }
+    Ok(())
+}
+
+fn merge_serving_manifest_metadata(
+    score: &mut ModelScore,
+    manifest_uri: &str,
+    manifest: &ServingManifest,
+) {
+    if let Some(metadata) = score.metadata.as_object_mut() {
+        metadata.insert(
+            "serving_manifest_uri".into(),
+            serde_json::json!(manifest_uri),
+        );
+        metadata.insert(
+            "serving_manifest_status".into(),
+            serde_json::json!("passed"),
+        );
+        metadata.insert(
+            "serving_runtime_kind".into(),
+            serde_json::json!(manifest.runtime_kind),
+        );
+        metadata.insert(
+            "serving_feature_columns".into(),
+            serde_json::json!(manifest.feature_columns.clone()),
+        );
+        metadata.insert(
+            "serving_threshold".into(),
+            serde_json::json!(manifest.threshold),
+        );
+        if let Some(training_artifact_uri) = &manifest.training_artifact_uri {
+            metadata.insert(
+                "training_artifact_uri".into(),
+                serde_json::json!(training_artifact_uri),
+            );
+        }
+    }
 }
 
 fn sha256_hex(bytes: &[u8]) -> String {
@@ -809,6 +1001,210 @@ mod tests {
 
         assert!(matches!(result, Err(ModelRuntimeError::InvalidResponse(_))));
         fs::remove_file(artifact_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn serving_manifest_scorer_scores_rust_logistic_artifact() {
+        let artifact_path = write_artifact(
+            "serving-manifest-rust-logistic-artifact",
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.3.0-active",
+                "runtime_kind": "rust_logistic_regression",
+                "execution_provider": "cpu",
+                "threshold": 0.5,
+                "feature_columns": ["claim_amount_to_limit_ratio", "provider_profile_score"],
+                "intercept": -1.5,
+                "coefficients": {
+                    "claim_amount_to_limit_ratio": 3.0,
+                    "provider_profile_score": 0.02
+                }
+            }),
+        );
+        let artifact_sha256 = artifact_sha256(&artifact_path);
+        let signature = artifact_signature(
+            "baseline_fwa",
+            "0.3.0-active",
+            &artifact_sha256,
+            "test-signing-key",
+        );
+        let manifest_path = write_artifact(
+            "serving-manifest-rust-logistic",
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.3.0-active",
+                "runtime_kind": "rust_logistic_regression",
+                "artifact_uri": artifact_path.to_string_lossy(),
+                "artifact_sha256": artifact_sha256,
+                "artifact_signature": signature,
+                "signature_algorithm": "hmac-sha256",
+                "version_lock": "0.3.0-active",
+                "feature_columns": ["claim_amount_to_limit_ratio", "provider_profile_score"],
+                "threshold": 0.5,
+                "training_artifact_uri": "/tmp/model.joblib"
+            }),
+        );
+        let scorer = ServingManifestModelScorer::new(manifest_path.to_string_lossy())
+            .with_signing_key("test-signing-key");
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_serving_manifest"),
+                claim_id: ClaimId::from_external("CLM-SERVING-MANIFEST"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.3.0-active".into(),
+                endpoint_url: None,
+                features: features([
+                    ("claim_amount_to_limit_ratio", 0.82),
+                    ("provider_profile_score", 18.0),
+                ]),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.runtime_kind, "rust_logistic_regression");
+        assert_eq!(
+            result.metadata["serving_manifest_status"],
+            serde_json::json!("passed")
+        );
+        assert_eq!(
+            result.metadata["serving_runtime_kind"],
+            serde_json::json!("rust_logistic_regression")
+        );
+        assert_eq!(
+            result.metadata["training_artifact_uri"],
+            serde_json::json!("/tmp/model.joblib")
+        );
+        assert_eq!(
+            result.metadata["artifact_signature_status"],
+            serde_json::json!("passed")
+        );
+
+        fs::remove_file(artifact_path).unwrap();
+        fs::remove_file(manifest_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn serving_manifest_scorer_rejects_missing_ordered_feature() {
+        let artifact_path = write_artifact(
+            "serving-manifest-missing-feature-artifact",
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.3.0-active",
+                "feature_columns": ["claim_amount_to_limit_ratio"],
+                "intercept": 0.0,
+                "coefficients": {"claim_amount_to_limit_ratio": 1.0}
+            }),
+        );
+        let manifest_path = write_artifact(
+            "serving-manifest-missing-feature",
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.3.0-active",
+                "runtime_kind": "rust_logistic_regression",
+                "artifact_uri": artifact_path.to_string_lossy(),
+                "artifact_sha256": artifact_sha256(&artifact_path),
+                "version_lock": "0.3.0-active",
+                "feature_columns": ["claim_amount_to_limit_ratio", "provider_profile_score"],
+                "threshold": 0.5
+            }),
+        );
+        let scorer = ServingManifestModelScorer::new(manifest_path.to_string_lossy());
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_serving_manifest_missing_feature"),
+                claim_id: ClaimId::from_external("CLM-SERVING-MANIFEST-MISSING-FEATURE"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.3.0-active".into(),
+                endpoint_url: None,
+                features: features([("claim_amount_to_limit_ratio", 0.82)]),
+            })
+            .await;
+
+        assert!(matches!(result, Err(ModelRuntimeError::InvalidResponse(_))));
+        fs::remove_file(artifact_path).unwrap();
+        fs::remove_file(manifest_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn serving_manifest_scorer_rejects_joblib_xgboost_as_rust_serving() {
+        let artifact_path =
+            write_artifact("serving-manifest-xgboost-joblib", serde_json::json!({}));
+        let manifest_path = write_artifact(
+            "serving-manifest-xgboost-joblib-manifest",
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.3.0-xgboost",
+                "runtime_kind": "xgboost_classifier",
+                "artifact_uri": artifact_path.to_string_lossy(),
+                "artifact_sha256": artifact_sha256(&artifact_path),
+                "version_lock": "0.3.0-xgboost",
+                "feature_columns": ["claim_amount_to_limit_ratio"],
+                "threshold": 0.5,
+                "training_artifact_uri": artifact_path.to_string_lossy()
+            }),
+        );
+        let scorer = ServingManifestModelScorer::new(manifest_path.to_string_lossy());
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_serving_manifest_joblib"),
+                claim_id: ClaimId::from_external("CLM-SERVING-MANIFEST-JOBLIB"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.3.0-xgboost".into(),
+                endpoint_url: None,
+                features: features([("claim_amount_to_limit_ratio", 0.82)]),
+            })
+            .await;
+
+        let Err(ModelRuntimeError::InvalidResponse(message)) = result else {
+            panic!("expected invalid response for xgboost joblib serving manifest");
+        };
+        assert!(message.contains("not a Rust serving runtime"));
+        fs::remove_file(artifact_path).unwrap();
+        fs::remove_file(manifest_path).unwrap();
+    }
+
+    #[tokio::test]
+    async fn serving_manifest_scorer_validates_onnx_contract_before_runtime_execution() {
+        let onnx_path = std::env::temp_dir().join(format!(
+            "nwfwa-serving-manifest-onnx-{}.onnx",
+            ScoringRunId::new()
+        ));
+        fs::write(&onnx_path, b"fake onnx bytes for contract validation").unwrap();
+        let manifest_path = write_artifact(
+            "serving-manifest-xgboost-onnx",
+            serde_json::json!({
+                "model_key": "baseline_fwa",
+                "model_version": "0.3.0-xgboost-onnx",
+                "runtime_kind": "xgboost_onnx",
+                "artifact_uri": onnx_path.to_string_lossy(),
+                "artifact_sha256": artifact_sha256(&onnx_path),
+                "version_lock": "0.3.0-xgboost-onnx",
+                "feature_columns": ["claim_amount_to_limit_ratio"],
+                "threshold": 0.5
+            }),
+        );
+        let scorer = ServingManifestModelScorer::new(manifest_path.to_string_lossy());
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_serving_manifest_onnx"),
+                claim_id: ClaimId::from_external("CLM-SERVING-MANIFEST-ONNX"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.3.0-xgboost-onnx".into(),
+                endpoint_url: None,
+                features: features([("claim_amount_to_limit_ratio", 0.82)]),
+            })
+            .await;
+
+        let Err(ModelRuntimeError::InvalidResponse(message)) = result else {
+            panic!("expected invalid response for unlinked ONNX execution");
+        };
+        assert!(message.contains("ONNX execution is not linked"));
+        fs::remove_file(onnx_path).unwrap();
+        fs::remove_file(manifest_path).unwrap();
     }
 
     fn features(

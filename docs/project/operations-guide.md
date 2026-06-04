@@ -186,12 +186,17 @@ FWA_MODEL_SHADOW_HEURISTIC=true \
 python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
 ```
 
-Rust runtime artifact scoring is available for local JSON logistic-regression
-artifacts. Configure the API server with `FWA_MODEL_ARTIFACT_URI` plus the same
-optional checksum, signature, and version lock variables. When this is set,
-`/api/v1/health` reports `model_scorer.runtime_kind = rust_artifact` and the
-scoring response model metadata includes artifact integrity, signature, and
-serving version lock status.
+Rust runtime manifest scoring is available for governed serving manifests.
+Configure the API server with `FWA_MODEL_SERVING_MANIFEST_URI` and, when the
+manifest includes `artifact_signature`, `FWA_MODEL_SIGNATURE_KEY`. When this is
+set, `/api/v1/health` reports
+`model_scorer.runtime_kind = rust_serving_manifest`, and the scoring response
+model metadata includes manifest status, artifact integrity, signature, feature
+order, and serving version lock status.
+
+Direct `FWA_MODEL_ARTIFACT_URI` scoring remains available for local JSON
+logistic-regression artifacts. Use it only when you intentionally bypass the
+serving manifest contract.
 
 Minimal Rust artifact shape:
 

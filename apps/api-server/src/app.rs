@@ -11,7 +11,10 @@ use axum::{
     routing::{get, post},
     Router,
 };
-use fwa_ml_runtime::{ArtifactModelScorer, HeuristicModelScorer, HttpModelScorer, ModelScorer};
+use fwa_ml_runtime::{
+    ArtifactModelScorer, HeuristicModelScorer, HttpModelScorer, ModelScorer,
+    ServingManifestModelScorer,
+};
 use std::sync::Arc;
 
 #[derive(Clone)]
@@ -27,7 +30,12 @@ pub fn build_app(config: AppConfig) -> Router {
 }
 
 pub fn configured_model_scorer(config: &AppConfig) -> Arc<dyn ModelScorer> {
-    if let Some(artifact_uri) = config.model_artifact_uri() {
+    if let Some(manifest_uri) = config.model_serving_manifest_uri() {
+        Arc::new(ServingManifestModelScorer::from_env(
+            manifest_uri,
+            config.model_signature_key(),
+        ))
+    } else if let Some(artifact_uri) = config.model_artifact_uri() {
         Arc::new(ArtifactModelScorer::from_env(
             artifact_uri,
             config.model_version_lock(),
@@ -390,6 +398,7 @@ mod tests {
 
     fn clear_model_artifact_env() {
         for name in [
+            "FWA_MODEL_SERVING_MANIFEST_URI",
             "FWA_MODEL_ARTIFACT_URI",
             "FWA_MODEL_VERSION_LOCK",
             "FWA_MODEL_ARTIFACT_SHA256",
@@ -504,6 +513,63 @@ mod tests {
         fs::remove_file(artifact_path).unwrap();
     }
 
+    #[tokio::test]
+    async fn configured_model_scorer_prefers_serving_manifest_uri() {
+        let artifact_path = write_artifact(serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.3.0-active",
+            "runtime_kind": "rust_logistic_regression",
+            "execution_provider": "cpu",
+            "threshold": 0.5,
+            "feature_columns": ["claim_amount_to_limit_ratio"],
+            "intercept": -1.0,
+            "coefficients": {"claim_amount_to_limit_ratio": 4.0}
+        }));
+        let manifest_path = write_artifact(serde_json::json!({
+            "model_key": "baseline_fwa",
+            "model_version": "0.3.0-active",
+            "runtime_kind": "rust_logistic_regression",
+            "artifact_uri": artifact_path.to_string_lossy(),
+            "artifact_sha256": artifact_sha256(&artifact_path),
+            "version_lock": "0.3.0-active",
+            "feature_columns": ["claim_amount_to_limit_ratio"],
+            "threshold": 0.5,
+            "training_artifact_uri": "/tmp/model.joblib"
+        }));
+        let scorer = {
+            let _guard = scorer_env_lock().lock().unwrap();
+            clear_model_artifact_env();
+            std::env::set_var("FWA_MODEL_SERVING_MANIFEST_URI", &manifest_path);
+            let scorer = configured_model_scorer(&config("http://127.0.0.1:1".into()));
+            clear_model_artifact_env();
+            scorer
+        };
+
+        let result = scorer
+            .score(ModelScoreRequest {
+                run_id: ScoringRunId::from_external("run_configured_serving_manifest"),
+                claim_id: ClaimId::from_external("CLM-CONFIGURED-SERVING-MANIFEST"),
+                model_key: "baseline_fwa".into(),
+                model_version: "0.3.0-active".into(),
+                endpoint_url: None,
+                features: features([("claim_amount_to_limit_ratio", 0.8)]),
+            })
+            .await
+            .unwrap();
+
+        assert_eq!(result.runtime_kind, "rust_logistic_regression");
+        assert_eq!(
+            result.metadata["serving_manifest_status"],
+            serde_json::json!("passed")
+        );
+        assert_eq!(
+            result.metadata["training_artifact_uri"],
+            serde_json::json!("/tmp/model.joblib")
+        );
+        fs::remove_file(artifact_path).unwrap();
+        fs::remove_file(manifest_path).unwrap();
+    }
+
     fn features(
         values: impl IntoIterator<Item = (&'static str, f64)>,
     ) -> BTreeMap<String, FeatureValue> {
@@ -528,5 +594,12 @@ mod tests {
             std::env::temp_dir().join(format!("nwfwa-api-artifact-{}.json", ScoringRunId::new()));
         fs::write(&path, serde_json::to_vec(&payload).unwrap()).unwrap();
         path
+    }
+
+    fn artifact_sha256(path: &PathBuf) -> String {
+        use sha2::{Digest, Sha256};
+
+        let digest = Sha256::digest(fs::read(path).unwrap());
+        format!("sha256:{digest:x}")
     }
 }
