@@ -447,6 +447,19 @@ medical review, similar-case search, agent packages, investigation writeback,
 QA writeback, API call records, claim audit history, labels, and dashboard
 rollups.
 
+For a focused business demo of a real-time TPA packet becoming a confirmed
+prevented-payment outcome:
+
+```bash
+python3 scripts/demo/tpa_realtime_fwa_demo.py \
+  --base-url http://127.0.0.1:8080 \
+  --api-key dev-secret
+```
+
+The output includes the inbox run, scoring run, generated lead, opened case,
+investigation writeback idempotency key, Dashboard value before/after, and UI
+hash links for Intake, Leads & Cases, and Dashboard.
+
 See [docs/engineering/demo-runbook.md](docs/engineering/demo-runbook.md) for the
 full demo script.
 

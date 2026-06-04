@@ -66,14 +66,28 @@ Expected demo signal:
   carry non-empty `evidence_refs`
 - response includes `run_id`, `audit_id`, `top_reasons`, and `evidence_refs`
 
+For a business-facing real-time TPA demo, run the focused chain instead of the
+full regression smoke:
+
+```bash
+python3 scripts/demo/tpa_realtime_fwa_demo.py \
+  --base-url http://127.0.0.1:8080 \
+  --api-key dev-secret
+```
+
+The script sends a raw TPA inbox payload through normalization, scoring, lead
+triage, case opening, investigation writeback, and Dashboard value refresh. The
+default writeback records confirmed `prevented_payment`, so a confirmed blocked
+claim amount is counted as observed prevented payment rather than estimated ROI.
+
 ## 4. Show Operations Studio
 
 Use API key `dev-secret` in the UI pages.
 
-- Dashboard: suspected claims, risk amount, RAG distribution, rule hits, model scores, seven-layer coverage, QA and investigation writebacks, and saving attribution lineage
+- Dashboard: suspected claims, risk amount, RAG distribution, confirmed prevented payment, recovered amount, estimated impact, rule hits, model scores, seven-layer coverage, QA and investigation writebacks, and saving attribution lineage
 - Data Sources: profiled Parquet dataset, splits, field governance, and model evaluation
 - Factor Factory: factor cards with source, readiness, and predictive metrics from dataset field profiles
-- Leads & Cases: lead triage, investigation writeback, case evidence sufficiency, and SLA governance
+- Leads & Cases: lead triage, case status, investigation result writeback, confirmed amount, case evidence sufficiency, and SLA governance
 - Audit Sampling: deterministic QA samples, control cohorts, and missed-risk/false-positive calibration signals
 - Provider Risk: provider profile, peer outlier, graph/network risk, evidence refs, and graph evidence gap status
 - Routing Policies: L7 routing policy lifecycle, threshold integrity, route boundary, promotion gates, and audit trail

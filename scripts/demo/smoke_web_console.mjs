@@ -150,8 +150,7 @@ async function main() {
     assertContains(builtText, "downstream human queue", "web console risk signal visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
-    assertContains(builtText, "Value status", "web console dashboard value wording bundle");
-    assertContains(builtText, "Pending confirmation", "web console dashboard value wording bundle");
+    assertContains(builtText, "confirmed prevented payment", "web console dashboard value wording bundle");
     assertContains(builtText, "Savings / review cost", "web console dashboard value wording bundle");
     assertContains(builtText, "Costs are tracked as pilot investment", "web console dashboard value wording bundle");
     assertNotContains(builtText, "Net value", "web console dashboard value wording bundle");
@@ -235,6 +234,10 @@ async function main() {
     for (const expectedPanel of [
       "Management Dashboard",
       "Executive KPIs",
+      "Value proof",
+      "Confirmed prevented payment",
+      "Investigation Writeback",
+      "Confirm and write back",
       "Integration Tool",
       "Scoring Request",
       "Scoring Response",

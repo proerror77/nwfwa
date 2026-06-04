@@ -1687,6 +1687,17 @@ struct UpdateCaseStatusRecord {
     audit_id: String,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct PilotWritebackResponse {
+    claim_id: String,
+    event_type: String,
+    event_status: String,
+    audit_id: String,
+    run_id: String,
+    idempotency_key: String,
+    evidence_refs: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct LeadsCasesSnapshot {
     leads: Vec<LeadRecord>,
@@ -3957,6 +3968,7 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                                 <div><span>{"RAG Distribution"}</span><strong>{map_counts_label(&summary.rag_distribution)}</strong></div>
                                 <div><span>{"Schemes"}</span><strong>{map_counts_label(&summary.scheme_distribution)}</strong></div>
                             </div>
+                            {dashboard_value_proof(summary)}
                             <div class="visual-board">
                                 {distribution_bars("Risk distribution", &summary.rag_distribution)}
                                 {distribution_bars("Scheme mix", &summary.scheme_distribution)}
@@ -3968,6 +3980,41 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                 },
             }}
         </>
+    }
+}
+
+fn dashboard_value_proof(summary: &DashboardSummary) -> Html {
+    let value = &summary.value_measurement;
+    html! {
+        <div class="visual-panel wide-visual value-proof-panel">
+            <div class="panel-heading-row">
+                <h4>{"Value proof"}</h4>
+                <span class="status-token success">{"confirmed vs estimated"}</span>
+            </div>
+            <div class="summary-grid">
+                <div>
+                    <span>{"Confirmed prevented payment"}</span>
+                    <strong>{format!("{} {}", value.currency, value.prevented_payment)}</strong>
+                </div>
+                <div>
+                    <span>{"Recovered amount"}</span>
+                    <strong>{format!("{} {}", value.currency, value.recovered_amount)}</strong>
+                </div>
+                <div>
+                    <span>{"Estimated impact"}</span>
+                    <strong>{format!("{} {}", value.currency, value.estimated_impact)}</strong>
+                </div>
+                <div>
+                    <span>{"Review cost"}</span>
+                    <strong>{format!("{} {}", value.currency, value.review_cost)}</strong>
+                </div>
+                <div>
+                    <span>{"Reviewer hours"}</span>
+                    <strong>{&value.reviewer_capacity_hours}</strong>
+                </div>
+            </div>
+            <p class="empty">{&value.evidence_caveat}</p>
+        </div>
     }
 }
 
@@ -3996,7 +4043,7 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
                 {pilot_runway_step("Case", &summary.case_sla.open_cases.to_string(), "open investigations", "Leads & Cases", "case", on_navigate)}
                 {pilot_runway_step("QA", &qa_work.to_string(), "open QA + feedback", "Review Workbench", "qa", on_navigate)}
                 {pilot_runway_step("Audit", &audit_label, "canonical trace coverage", "Governance", "audit", on_navigate)}
-                {pilot_runway_step("Value status", "Pending confirmation", "savings evidence", "Dashboard", "roi", on_navigate)}
+                {pilot_runway_step("Value", &summary.value_measurement.prevented_payment, "confirmed prevented payment", "Dashboard", "roi", on_navigate)}
             </div>
             <div class="pilot-runway-proof">
                 <div>
@@ -6082,9 +6129,18 @@ fn leads_cases_page() -> Html {
     let case_notes =
         use_state(|| "Status updated from Operations Studio case workflow.".to_string());
     let case_evidence_refs = use_state(String::new);
+    let investigation_outcome = use_state(|| "confirmed_fwa_prevented_payment".to_string());
+    let investigation_confirmed = use_state(|| true);
+    let financial_impact_type = use_state(|| "prevented_payment".to_string());
+    let saving_amount = use_state(String::new);
+    let investigation_notes = use_state(|| {
+        "Reviewer confirmed the pre-payment FWA intervention and prevented payment.".to_string()
+    });
+    let investigation_evidence_refs = use_state(String::new);
     let snapshot_state = use_state(|| ApiState::<LeadsCasesSnapshot>::Idle);
     let triage_state = use_state(|| ApiState::<TriageLeadRecord>::Idle);
     let case_update_state = use_state(|| ApiState::<UpdateCaseStatusRecord>::Idle);
+    let investigation_state = use_state(|| ApiState::<PilotWritebackResponse>::Idle);
 
     let load_cases = {
         let api_key = api_key.clone();
@@ -6198,6 +6254,68 @@ fn leads_cases_page() -> Html {
                         });
                     }
                     Err(error) => case_update_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
+    let write_investigation_result = {
+        let api_key = api_key.clone();
+        let selected_case_id = selected_case_id.clone();
+        let investigation_outcome = investigation_outcome.clone();
+        let investigation_confirmed = investigation_confirmed.clone();
+        let financial_impact_type = financial_impact_type.clone();
+        let saving_amount = saving_amount.clone();
+        let investigation_notes = investigation_notes.clone();
+        let investigation_evidence_refs = investigation_evidence_refs.clone();
+        let snapshot_state = snapshot_state.clone();
+        let investigation_state = investigation_state.clone();
+        Callback::from(move |_| {
+            let ApiState::Ready(snapshot) = &*snapshot_state else {
+                investigation_state.set(ApiState::Failed("load cases before investigation writeback".into()));
+                return;
+            };
+            let case = selected_case(snapshot, &selected_case_id);
+            let Some(case) = case else {
+                investigation_state.set(ApiState::Failed("select a case to write back".into()));
+                return;
+            };
+            if saving_amount.trim().is_empty() {
+                investigation_state.set(ApiState::Failed("confirmed amount is required".into()));
+                return;
+            }
+            let api_key = (*api_key).clone();
+            let case_id = case.case_id.clone();
+            let claim_id = case.claim_id.clone();
+            let fallback_refs = vec![
+                format!("investigation_cases:{}", case.case_id),
+                format!("leads:{}", case.lead_id),
+            ];
+            let payload = json!({
+                "case_id": case_id,
+                "claim_id": claim_id,
+                "investigation_id": format!("INV-UI-{}", case.case_id),
+                "outcome": (*investigation_outcome).clone(),
+                "confirmed_fwa": *investigation_confirmed,
+                "financial_impact_type": (*financial_impact_type).clone(),
+                "saving_amount": (*saving_amount).clone(),
+                "currency": "CNY",
+                "notes": (*investigation_notes).clone(),
+                "evidence_refs": refs_or_fallback(&investigation_evidence_refs, fallback_refs),
+            });
+            let investigation_state = investigation_state.clone();
+            let snapshot_state = snapshot_state.clone();
+            investigation_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match post_investigation_result(api_key.clone(), payload).await {
+                    Ok(record) => {
+                        investigation_state.set(ApiState::Ready(record));
+                        snapshot_state.set(match get_leads_cases_snapshot(api_key).await {
+                            Ok(snapshot) => ApiState::Ready(snapshot),
+                            Err(error) => ApiState::Failed(error),
+                        });
+                    }
+                    Err(error) => investigation_state.set(ApiState::Failed(error)),
                 }
             });
         })
@@ -6357,6 +6475,68 @@ fn leads_cases_page() -> Html {
                                         </div>
                                         <CaseUpdateResultView state={(*case_update_state).clone()} />
                                     </section>
+
+                                    <section class="action-card">
+                                        <div class="selected-work-item">
+                                            <span>{"Selected case"}</span>
+                                            <strong>{case.map(|case| case.claim_id.as_str()).unwrap_or("none")}</strong>
+                                            <small>{case.and_then(|case| case.final_outcome.as_deref()).unwrap_or("No investigation result written back yet.")}</small>
+                                        </div>
+                                        <h4>{"Investigation Writeback"}</h4>
+                                        <div class="form-grid action-form-grid">
+                                            {text_input("Outcome", &investigation_outcome)}
+                                            <label>
+                                                {"Impact type"}
+                                                <select
+                                                    onchange={{
+                                                        let financial_impact_type = financial_impact_type.clone();
+                                                        Callback::from(move |event: Event| {
+                                                            financial_impact_type.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                                        })
+                                                    }}
+                                                >
+                                                    <option value="prevented_payment" selected={(*financial_impact_type).as_str() == "prevented_payment"}>{"Prevented payment"}</option>
+                                                    <option value="recovered_amount" selected={(*financial_impact_type).as_str() == "recovered_amount"}>{"Recovered amount"}</option>
+                                                    <option value="estimated_impact" selected={(*financial_impact_type).as_str() == "estimated_impact"}>{"Estimated impact"}</option>
+                                                    <option value="avoided_future_exposure" selected={(*financial_impact_type).as_str() == "avoided_future_exposure"}>{"Avoided exposure"}</option>
+                                                    <option value="deterrence_estimate" selected={(*financial_impact_type).as_str() == "deterrence_estimate"}>{"Deterrence estimate"}</option>
+                                                </select>
+                                            </label>
+                                            {text_input("Confirmed amount", &saving_amount)}
+                                            {text_input("Evidence refs", &investigation_evidence_refs)}
+                                        </div>
+                                        <label class="checkbox-row">
+                                            <input
+                                                type="checkbox"
+                                                checked={*investigation_confirmed}
+                                                onchange={{
+                                                    let investigation_confirmed = investigation_confirmed.clone();
+                                                    Callback::from(move |event: Event| {
+                                                        investigation_confirmed.set(event.target_unchecked_into::<HtmlInputElement>().checked());
+                                                    })
+                                                }}
+                                            />
+                                            {"Confirmed by reviewer"}
+                                        </label>
+                                        <label class="compact-note">
+                                            {"Notes"}
+                                            <textarea
+                                                value={(*investigation_notes).clone()}
+                                                oninput={{
+                                                    let investigation_notes = investigation_notes.clone();
+                                                    Callback::from(move |event: InputEvent| {
+                                                        investigation_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                                    })
+                                                }}
+                                            />
+                                        </label>
+                                        <div class="button-row">
+                                            <button onclick={write_investigation_result} disabled={case.is_none() || matches!(&*investigation_state, ApiState::Loading)}>
+                                                {if matches!(&*investigation_state, ApiState::Loading) { "Writing back..." } else { "Confirm and write back" }}
+                                            </button>
+                                        </div>
+                                        <InvestigationWritebackResultView state={(*investigation_state).clone()} />
+                                    </section>
                                 </>
                             }
                         }
@@ -6475,6 +6655,9 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                                         <strong>{format!("{} / {}", case.case_id, case.claim_id)}</strong>
                                                         <span>{&case.routing_reason}</span>
                                                         <small>{format!("{} / reviewer {} / lead {}", case.assignee, case.reviewer, case.lead_id)}</small>
+                                                        {case.final_outcome.as_ref().map(|outcome| html! {
+                                                            <small>{format!("outcome: {} / writeback {}", outcome, case.investigation_result_id.as_deref().unwrap_or("pending"))}</small>
+                                                        }).unwrap_or_else(|| html! {})}
                                                     </div>
                                                     <div class="queue-row-meta">
                                                         <span class="status-token strong">{&case.priority}</span>
@@ -6531,6 +6714,28 @@ fn case_update_result_view(props: &CaseUpdateResultProps) -> Html {
                 <div><span>{"Audit"}</span><strong>{&record.audit_id}</strong></div>
                 <div><span>{"Case"}</span><strong>{&record.case.case_id}</strong></div>
                 <div><span>{"Status"}</span><strong>{&record.case.status}</strong></div>
+            </div>
+        },
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct InvestigationWritebackResultProps {
+    state: ApiState<PilotWritebackResponse>,
+}
+
+#[function_component(InvestigationWritebackResultView)]
+fn investigation_writeback_result_view(props: &InvestigationWritebackResultProps) -> Html {
+    match &props.state {
+        ApiState::Idle => html! {},
+        ApiState::Loading => html! { <p>{"Writing investigation result..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(record) => html! {
+            <div class="summary-grid">
+                <div><span>{"Claim"}</span><strong>{&record.claim_id}</strong></div>
+                <div><span>{"Audit"}</span><strong>{&record.audit_id}</strong></div>
+                <div><span>{"Writeback"}</span><strong>{&record.event_status}</strong></div>
+                <div><span>{"Idempotency"}</span><strong>{&record.idempotency_key}</strong></div>
             </div>
         },
     }
@@ -9334,7 +9539,7 @@ fn claim_inbox_page() -> Html {
                 let score_state = score_state.clone();
                 let payload = json!({
                     "source_system": source_system_from_context(&response.canonical_claim_context),
-                    "canonical_claim_context": response.canonical_claim_context,
+                    "inbox_run_id": response.run_id.clone(),
                 });
                 score_state.set(ApiState::Loading);
                 spawn_local(async move {
@@ -9855,6 +10060,13 @@ async fn post_case_status(
         payload,
     )
     .await
+}
+
+async fn post_investigation_result(
+    api_key: String,
+    payload: Value,
+) -> Result<PilotWritebackResponse, String> {
+    request_json("/api/v1/investigations/results", api_key, payload).await
 }
 
 async fn get_member_profile_summary(
