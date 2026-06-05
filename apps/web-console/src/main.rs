@@ -6141,6 +6141,7 @@ fn leads_cases_page() -> Html {
     let triage_state = use_state(|| ApiState::<TriageLeadRecord>::Idle);
     let case_update_state = use_state(|| ApiState::<UpdateCaseStatusRecord>::Idle);
     let investigation_state = use_state(|| ApiState::<PilotWritebackResponse>::Idle);
+    let case_agent_state = use_state(|| ApiState::<AgentInvestigationResponse>::Idle);
 
     let load_cases = {
         let api_key = api_key.clone();
@@ -6321,6 +6322,63 @@ fn leads_cases_page() -> Html {
         })
     };
 
+    let generate_case_investigation_package = {
+        let api_key = api_key.clone();
+        let selected_lead_id = selected_lead_id.clone();
+        let selected_case_id = selected_case_id.clone();
+        let snapshot_state = snapshot_state.clone();
+        let case_agent_state = case_agent_state.clone();
+        Callback::from(move |_| {
+            let ApiState::Ready(snapshot) = &*snapshot_state else {
+                case_agent_state.set(ApiState::Failed(
+                    "load cases before generating the agent package".into(),
+                ));
+                return;
+            };
+            let case = selected_case(snapshot, &selected_case_id);
+            let Some(case) = case else {
+                case_agent_state.set(ApiState::Failed("select a case for investigation".into()));
+                return;
+            };
+            let lead = lead_for_case(snapshot, case).or_else(|| selected_lead(snapshot, &selected_lead_id));
+            let top_reasons = lead
+                .map(|lead| lead.reason.clone())
+                .filter(|reason| !reason.trim().is_empty())
+                .unwrap_or_else(|| case.routing_reason.clone());
+            let payload = agent_investigation_payload(
+                case.claim_id.clone(),
+                lead.map(|lead| lead.risk_score.to_string())
+                    .unwrap_or_else(|| "70".to_string()),
+                lead.map(|lead| lead.rag.to_ascii_uppercase())
+                    .unwrap_or_else(|| "RED".to_string()),
+                case.scheme_family.clone(),
+                top_reasons,
+                "case-review".to_string(),
+                case.source_system.clone(),
+                format!(
+                    "{},{},{},{}",
+                    case.scheme_family, case.review_mode, case.lead_source, case.provider_id
+                ),
+            );
+            let payload = match payload {
+                Ok(payload) => payload,
+                Err(error) => {
+                    case_agent_state.set(ApiState::Failed(error));
+                    return;
+                }
+            };
+            let api_key = (*api_key).clone();
+            let case_agent_state = case_agent_state.clone();
+            case_agent_state.set(ApiState::Loading);
+            spawn_local(async move {
+                case_agent_state.set(match post_agent_investigation(api_key, payload).await {
+                    Ok(response) => ApiState::Ready(response),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
+        })
+    };
+
     {
         let load_cases = load_cases.clone();
         use_effect_with((), move |_| {
@@ -6336,7 +6394,11 @@ fn leads_cases_page() -> Html {
 
     let select_case = {
         let selected_case_id = selected_case_id.clone();
-        Callback::from(move |case_id: String| selected_case_id.set(case_id))
+        let case_agent_state = case_agent_state.clone();
+        Callback::from(move |case_id: String| {
+            selected_case_id.set(case_id);
+            case_agent_state.set(ApiState::Idle);
+        })
     };
 
     html! {
@@ -6371,7 +6433,7 @@ fn leads_cases_page() -> Html {
                 </div>
 
                 <aside class="panel result-stack case-action-panel">
-                    <h3>{"Selected Actions"}</h3>
+                    <h3>{"Case Investigation Workspace"}</h3>
                     {match &*snapshot_state {
                         ApiState::Ready(snapshot) => {
                             let lead = selected_lead(snapshot, &selected_lead_id);
@@ -6382,7 +6444,7 @@ fn leads_cases_page() -> Html {
                                         <div class="selected-work-item">
                                             <span>{"Selected lead"}</span>
                                             <strong>{lead.map(|lead| lead.lead_id.as_str()).unwrap_or("none")}</strong>
-                                            <small>{lead.map(|lead| lead.reason.as_str()).unwrap_or("Select a lead from the queue.")}</small>
+                                            <small>{lead.map(|lead| lead.reason.as_str()).unwrap_or("Lead is only the risk candidate before case work starts.")}</small>
                                         </div>
                                         <h4>{"Lead Triage"}</h4>
                                         <div class="form-grid action-form-grid">
@@ -6431,54 +6493,49 @@ fn leads_cases_page() -> Html {
                                         <div class="selected-work-item">
                                             <span>{"Selected case"}</span>
                                             <strong>{case.map(|case| case.case_id.as_str()).unwrap_or("none")}</strong>
-                                            <small>{case.map(|case| case.routing_reason.as_str()).unwrap_or("Select a case from the queue.")}</small>
+                                            <small>{case.map(|case| case.routing_reason.as_str()).unwrap_or("Case is the human investigation work item.")}</small>
                                         </div>
-                                        <h4>{"Case Status Update"}</h4>
-                                        <div class="form-grid action-form-grid">
-                                            <label>
-                                                {"Status"}
-                                                <select
-                                                    onchange={{
-                                                        let case_status = case_status.clone();
-                                                        Callback::from(move |event: Event| {
-                                                            case_status.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                                        })
-                                                    }}
-                                                >
-                                                    <option value="triage" selected={(*case_status).as_str() == "triage"}>{"Triage"}</option>
-                                                    <option value="investigating" selected={(*case_status).as_str() == "investigating"}>{"Investigating"}</option>
-                                                    <option value="pending_evidence" selected={(*case_status).as_str() == "pending_evidence"}>{"Pending evidence"}</option>
-                                                    <option value="confirmed" selected={(*case_status).as_str() == "confirmed"}>{"Confirmed"}</option>
-                                                    <option value="rejected" selected={(*case_status).as_str() == "rejected"}>{"Rejected"}</option>
-                                                    <option value="closed" selected={(*case_status).as_str() == "closed"}>{"Closed"}</option>
-                                                </select>
-                                            </label>
-                                            {text_input("Actor", &case_actor)}
-                                            {text_input("Evidence refs", &case_evidence_refs)}
+                                        <h4>{"Case Brief"}</h4>
+                                        {case.map(|case| html! {
+                                            <>
+                                                <div class="score-hero">
+                                                    <div><span>{"Claim"}</span><strong>{&case.claim_id}</strong></div>
+                                                    <div><span>{"SLA"}</span><strong>{format!("{} / {}h", case.sla_status, case.sla_target_hours)}</strong></div>
+                                                    <div><span>{"Reviewer"}</span><strong>{&case.reviewer}</strong></div>
+                                                </div>
+                                                <div class="summary-grid">
+                                                    <div><span>{"Scheme"}</span><strong>{&case.scheme_family}</strong></div>
+                                                    <div><span>{"Status"}</span><strong>{&case.status}</strong></div>
+                                                    <div><span>{"Review mode"}</span><strong>{&case.review_mode}</strong></div>
+                                                    <div><span>{"Outcome"}</span><strong>{case.final_outcome.as_deref().unwrap_or("human review pending")}</strong></div>
+                                                </div>
+                                            </>
+                                        }).unwrap_or_else(|| html! { <p class="empty">{"Select a case to open the investigation workspace."}</p> })}
+                                        <div class="tag-grid compact-tags">
+                                            <span>{"Assistive only"}</span>
+                                            <span>{"Human writeback required"}</span>
+                                            <span>{"Evidence refs required"}</span>
                                         </div>
-                                        <label class="compact-note">
-                                            {"Notes"}
-                                            <textarea
-                                                value={(*case_notes).clone()}
-                                                oninput={{
-                                                    let case_notes = case_notes.clone();
-                                                    Callback::from(move |event: InputEvent| {
-                                                        case_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                                    })
-                                                }}
-                                            />
-                                        </label>
-                                        <div class="button-row">
-                                            <button onclick={update_case} disabled={case.is_none() || matches!(&*case_update_state, ApiState::Loading)}>
-                                                {if matches!(&*case_update_state, ApiState::Loading) { "Updating..." } else { "Update case status" }}
-                                            </button>
-                                        </div>
-                                        <CaseUpdateResultView state={(*case_update_state).clone()} />
                                     </section>
 
                                     <section class="action-card">
                                         <div class="selected-work-item">
-                                            <span>{"Selected case"}</span>
+                                            <span>{"Agent-assisted case package"}</span>
+                                            <strong>{case.map(|case| case.claim_id.as_str()).unwrap_or("none")}</strong>
+                                            <small>{"Draft only: checklist, similar cases, evidence summary, and writeback hints. Reviewer decides."}</small>
+                                        </div>
+                                        <div class="button-row">
+                                            <button onclick={generate_case_investigation_package} disabled={case.is_none() || matches!(&*case_agent_state, ApiState::Loading)}>
+                                                {if matches!(&*case_agent_state, ApiState::Loading) { "Generating..." } else { "Generate case package" }}
+                                            </button>
+                                        </div>
+                                    </section>
+
+                                    <AgentInvestigationView state={(*case_agent_state).clone()} />
+
+                                    <section class="action-card">
+                                        <div class="selected-work-item">
+                                            <span>{"Human Decision / Writeback"}</span>
                                             <strong>{case.map(|case| case.claim_id.as_str()).unwrap_or("none")}</strong>
                                             <small>{case.and_then(|case| case.final_outcome.as_deref()).unwrap_or("No investigation result written back yet.")}</small>
                                         </div>
@@ -6536,6 +6593,50 @@ fn leads_cases_page() -> Html {
                                             </button>
                                         </div>
                                         <InvestigationWritebackResultView state={(*investigation_state).clone()} />
+
+                                        <details class="data-source-detail governance-detail">
+                                            <summary>{"Case status maintenance"}</summary>
+                                            <div class="form-grid action-form-grid">
+                                                <label>
+                                                    {"Status"}
+                                                    <select
+                                                        onchange={{
+                                                            let case_status = case_status.clone();
+                                                            Callback::from(move |event: Event| {
+                                                                case_status.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                                            })
+                                                        }}
+                                                    >
+                                                        <option value="triage" selected={(*case_status).as_str() == "triage"}>{"Triage"}</option>
+                                                        <option value="investigating" selected={(*case_status).as_str() == "investigating"}>{"Investigating"}</option>
+                                                        <option value="pending_evidence" selected={(*case_status).as_str() == "pending_evidence"}>{"Pending evidence"}</option>
+                                                        <option value="confirmed" selected={(*case_status).as_str() == "confirmed"}>{"Confirmed"}</option>
+                                                        <option value="rejected" selected={(*case_status).as_str() == "rejected"}>{"Rejected"}</option>
+                                                        <option value="closed" selected={(*case_status).as_str() == "closed"}>{"Closed"}</option>
+                                                    </select>
+                                                </label>
+                                                {text_input("Actor", &case_actor)}
+                                                {text_input("Evidence refs", &case_evidence_refs)}
+                                            </div>
+                                            <label class="compact-note">
+                                                {"Notes"}
+                                                <textarea
+                                                    value={(*case_notes).clone()}
+                                                    oninput={{
+                                                        let case_notes = case_notes.clone();
+                                                        Callback::from(move |event: InputEvent| {
+                                                            case_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                                        })
+                                                    }}
+                                                />
+                                            </label>
+                                            <div class="button-row">
+                                                <button onclick={update_case} disabled={case.is_none() || matches!(&*case_update_state, ApiState::Loading)}>
+                                                    {if matches!(&*case_update_state, ApiState::Loading) { "Updating..." } else { "Update case status" }}
+                                                </button>
+                                            </div>
+                                            <CaseUpdateResultView state={(*case_update_state).clone()} />
+                                        </details>
                                     </section>
                                 </>
                             }
@@ -12253,6 +12354,13 @@ fn selected_case<'a>(
             .iter()
             .find(|case| case.case_id == selected_case_id)
     }
+}
+
+fn lead_for_case<'a>(
+    snapshot: &'a LeadsCasesSnapshot,
+    case: &CaseRecord,
+) -> Option<&'a LeadRecord> {
+    snapshot.leads.iter().find(|lead| lead.lead_id == case.lead_id)
 }
 
 fn selected_medical_item<'a>(

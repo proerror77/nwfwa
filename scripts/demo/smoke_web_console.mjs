@@ -192,9 +192,13 @@ async function main() {
     assertContains(builtText, "Queue Source", "web console leads cases queue bundle");
     assertContains(builtText, "Generated Leads", "web console leads cases queue bundle");
     assertContains(builtText, "Investigation Cases", "web console leads cases queue bundle");
-    assertContains(builtText, "Selected Actions", "web console leads cases action bundle");
+    assertContains(builtText, "Case Investigation Workspace", "web console leads cases action bundle");
     assertContains(builtText, "Selected lead", "web console leads cases action bundle");
     assertContains(builtText, "Selected case", "web console leads cases action bundle");
+    assertContains(builtText, "Agent-assisted case package", "web console leads cases agent bundle");
+    assertContains(builtText, "Generate case package", "web console leads cases agent bundle");
+    assertContains(builtText, "Human writeback required", "web console leads cases human gate bundle");
+    assertContains(builtText, "Case status maintenance", "web console leads cases maintenance bundle");
     assertContains(builtText, "Inbound Claim Packet", "web console claim inbox release bundle");
     assertContains(builtText, "Correction Worklist", "web console claim inbox release bundle");
     assertContains(builtText, "Release accepted claim", "web console claim inbox release bundle");
@@ -296,7 +300,7 @@ async function main() {
       "Case Workflow",
       "Queue Source",
       "Lead Triage",
-      "Case Status Update",
+      "Case status maintenance",
       "Profile Summary API",
       "Member Profile Source",
       "Member Profile Summary",
