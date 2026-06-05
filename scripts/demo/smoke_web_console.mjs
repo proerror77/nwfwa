@@ -190,6 +190,10 @@ async function main() {
     assertContains(builtText, "no auto denial", "web console agent blueprint bundle");
     assertContains(builtText, "Model telemetry map", "web console models visual bundle");
     assertContains(builtText, "Queue Source", "web console leads cases queue bundle");
+    assertContains(builtText, "Investigation Control", "web console leads cases queue bundle");
+    assertContains(builtText, "SLA attention", "web console leads cases queue bundle");
+    assertContains(builtText, "Lead movement", "web console leads cases queue bundle");
+    assertContains(builtText, "Case movement", "web console leads cases queue bundle");
     assertContains(builtText, "Generated Leads", "web console leads cases queue bundle");
     assertContains(builtText, "Investigation Cases", "web console leads cases queue bundle");
     assertContains(builtText, "Case Investigation Workspace", "web console leads cases action bundle");

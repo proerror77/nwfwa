@@ -2107,7 +2107,7 @@ fn module_label(module: &str, language: Language) -> &'static str {
     match module {
         "Intake Ops" => tr(language, "Intake Ops", "进件处理"),
         "Dashboard" => tr(language, "Dashboard", "运营仪表盘"),
-        "Detection Releases" => tr(language, "Detection Releases", "检测发布"),
+        "Detection Releases" => tr(language, "Discovery Review", "发现评审"),
         "Runtime Scoring" => tr(language, "Runtime Scoring", "实时评分"),
         "Review Workbench" => tr(language, "Review Workbench", "复核工作台"),
         "Bootstrap Ops" => tr(language, "Bootstrap Ops", "冷启动作业"),
@@ -2212,8 +2212,8 @@ fn module_context(module: &str, language: Language) -> &'static str {
         ),
         "Detection Releases" => tr(
             language,
-            "Accept, compare, approve, or reject provider-delivered detection candidates.",
-            "接收、比较、审批或拒绝 Provider 提交的检测候选版本。",
+            "Review ML-discovered rules and provider model candidates before shadow, release, or rejection.",
+            "在影子运行、发布或拒绝前，审查模型发现的规则和 Provider 模型候选。",
         ),
         "Runtime Scoring" => tr(
             language,
@@ -2327,7 +2327,7 @@ fn module_description(module: &str, language: Language) -> &'static str {
     match module {
         "Intake Ops" => tr(language, "intake exceptions", "进件异常"),
         "Dashboard" => tr(language, "next action", "下一步动作"),
-        "Detection Releases" => tr(language, "candidate releases", "候选发布"),
+        "Detection Releases" => tr(language, "ML review gate", "模型评审关卡"),
         "Runtime Scoring" => tr(language, "contract check", "契约检查"),
         "Review Workbench" => tr(language, "medical + QA", "医疗 + QA"),
         "Bootstrap Ops" => tr(language, "labels + evidence", "标签 + 证据"),
@@ -3182,25 +3182,25 @@ fn detection_releases_page(on_navigate: Callback<String>) -> Html {
         <section class="workflow-hub">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"Detection Releases"}</h2>
-                    <p>{"Use this as the single business entry for new rules and model versions. Offline mining and provider training create candidates; this console decides whether they can enter shadow, limited rollout, active routing, or rollback."}</p>
+                    <h2>{"Rule & Model Discovery Review"}</h2>
+                    <p>{"Use this as the single business entry for ML-discovered rule candidates and provider-trained model versions. Operators compare evidence, run backtests, inspect shadow gates, then accept or reject before anything can affect routing."}</p>
                 </div>
-                <span class="status-pill">{"Candidate release control"}</span>
+                <span class="status-pill">{"ML governance control"}</span>
             </div>
 
             <section class="panel result-stack">
                 <div class="section-header">
                     <div>
-                        <h3>{"Release Decision Path"}</h3>
-                        <p>{"Every candidate must show source, backtest or evaluation evidence, review-capacity impact, approval, and rollback path before it can affect routing."}</p>
+                        <h3>{"Candidate Review Path"}</h3>
+                        <p>{"Every candidate must show source, backtest or evaluation evidence, shadow comparison, review-capacity impact, human decision, and rollback path before it can affect routing."}</p>
                     </div>
                     <span class="status-token strong">{"human approval required"}</span>
                 </div>
                 <div class="inbox-pipeline release-decision-flow">
-                    {pipeline_step("Candidate", "provider push / offline mining", "done")}
+                    {pipeline_step("Candidate", "ML discovery / provider model", "done")}
                     {pipeline_step("Evidence", "backtest + eval refs", "warning")}
-                    {pipeline_step("Shadow", "compare against current", "pending")}
-                    {pipeline_step("Approve", "reviewer gate", "pending")}
+                    {pipeline_step("Shadow", "compare against current routing", "pending")}
+                    {pipeline_step("Review", "accept / reject", "pending")}
                     {pipeline_step("Release", "limited / active / rollback", "pending")}
                 </div>
             </section>
@@ -3209,20 +3209,20 @@ fn detection_releases_page(on_navigate: Callback<String>) -> Html {
                 <div class="section-header">
                     <div>
                         <h3>{"What Operators Decide Here"}</h3>
-                        <p>{"Business users do not tune raw features or train models here. They accept or reject governed candidates based on evidence."}</p>
+                        <p>{"Business users do not tune raw features or train models here. They accept or reject explainable candidates based on backtest, shadow, and governance evidence."}</p>
                     </div>
                     <span class="status-token neutral">{"release governance only"}</span>
                 </div>
                 <div class="summary-grid">
-                    <div><span>{"Rule intake"}</span><strong>{"New candidate rules from offline discovery, QA feedback, or explainable model patterns"}</strong></div>
+                    <div><span>{"ML rule intake"}</span><strong>{"Model-discovered rules from explanations, offline mining, or QA feedback"}</strong></div>
                     <div><span>{"Model intake"}</span><strong>{"Provider-trained model versions with dataset, split, metric, drift, and artifact evidence"}</strong></div>
-                    <div><span>{"Decision"}</span><strong>{"Reject, keep in shadow, approve limited rollout, activate, or rollback"}</strong></div>
+                    <div><span>{"Decision"}</span><strong>{"Reject weak explanations, keep in shadow, accept for review, approve limited rollout, activate, or rollback"}</strong></div>
                     <div><span>{"Not here"}</span><strong>{"No ad hoc model training, no raw feature engineering, no autonomous denial"}</strong></div>
                 </div>
             </section>
 
             <div class="workflow-card-grid">
-                {workflow_action_card("Rule Candidate Queue", "Rules discovered from offline mining, case feedback, or explainable model patterns must pass deterministic backtest and approval before entering the active rule library.", "Review rule evidence", "Rules", "strong", &on_navigate)}
+                {workflow_action_card("ML Rule Review Queue", "Rules discovered from model explanations, offline mining, or case feedback must pass backtest, shadow review, and human accept/reject before entering the governed rule library.", "Review discovered rules", "Rules", "strong", &on_navigate)}
                 {workflow_action_card("Provider Model Queue", "Provider training output arrives as candidate versions. Compare holdout, out-of-time, shadow, drift, and review-capacity metrics before activation.", "Review model evidence", "Provider Model Intake", "warning", &on_navigate)}
                 {workflow_action_card("Routing Impact", "Check whether an approved release affects pre-payment, post-payment, manual review, pending evidence, QA sample, or straight-through routing.", "Check impact", "Routing Policies", "neutral", &on_navigate)}
                 {workflow_action_card("Evidence Package", "Inspect dataset, feature-set, split, schema, and evaluation lineage that supports the release decision.", "Validate evidence", "Data Sources", "success", &on_navigate)}
@@ -4206,10 +4206,18 @@ fn rules_page() -> Html {
         use_state(|| "data/eval/baseline_fwa/v3/feature_importance.parquet".to_string());
     let candidate_owner = use_state(|| "rule-discovery".to_string());
     let selected_candidate_id = use_state(String::new);
+    let rule_reviewer = use_state(|| "rule-review".to_string());
+    let rule_review_notes = use_state(|| {
+        "Explainable signal reviewed against backtest evidence and shadow gate readiness."
+            .to_string()
+    });
+    let rule_review_evidence_refs =
+        use_state(|| "rules:discovery-candidate:v1, backtest:demo, shadow:gate-check".to_string());
     let snapshot_state = use_state(|| ApiState::<RuleOpsSnapshot>::Idle);
     let discovery_state = use_state(|| ApiState::<RuleDiscoveryResponse>::Idle);
     let backtest_state = use_state(|| ApiState::<RuleBacktestResponse>::Idle);
     let save_state = use_state(|| ApiState::<Value>::Idle);
+    let review_state = use_state(|| ApiState::<Value>::Idle);
 
     let load_rules = {
         let api_key = api_key.clone();
@@ -4253,6 +4261,7 @@ fn rules_page() -> Html {
         let discovery_state = discovery_state.clone();
         let backtest_state = backtest_state.clone();
         let save_state = save_state.clone();
+        let review_state = review_state.clone();
         Callback::from(move |_| {
             let Ok(contribution) = explanation_contribution.trim().parse::<f64>() else {
                 discovery_state.set(ApiState::Failed(
@@ -4275,6 +4284,7 @@ fn rules_page() -> Html {
             discovery_state.set(ApiState::Loading);
             backtest_state.set(ApiState::Idle);
             save_state.set(ApiState::Idle);
+            review_state.set(ApiState::Idle);
             spawn_local(async move {
                 match request_json::<RuleDiscoveryResponse>(
                     "/api/v1/ops/rules/discover",
@@ -4346,6 +4356,7 @@ fn rules_page() -> Html {
         let discovery_state = discovery_state.clone();
         let snapshot_state = snapshot_state.clone();
         let save_state = save_state.clone();
+        let review_state = review_state.clone();
         let rule_id = rule_id.clone();
         Callback::from(move |_| {
             let candidate_rule = match &*discovery_state {
@@ -4365,9 +4376,11 @@ fn rules_page() -> Html {
             let owner = (*candidate_owner).clone();
             let snapshot_state = snapshot_state.clone();
             let save_state = save_state.clone();
+            let review_state = review_state.clone();
             let rule_id = rule_id.clone();
             let payload = json!({ "owner": owner, "rule": rule });
             save_state.set(ApiState::Loading);
+            review_state.set(ApiState::Idle);
             spawn_local(async move {
                 match request_json::<Value>(
                     "/api/v1/ops/rules/candidates",
@@ -4403,19 +4416,69 @@ fn rules_page() -> Html {
         &*discovery_state,
         ApiState::Ready(response) if selected_rule_candidate(response, &selected_candidate_id).is_some()
     );
+    let saved_candidate_available = saved_rule_candidate_id(&save_state).is_some();
+
+    let candidate_review_action = |action: &'static str| {
+        let api_key = api_key.clone();
+        let save_state = save_state.clone();
+        let snapshot_state = snapshot_state.clone();
+        let review_state = review_state.clone();
+        let rule_reviewer = rule_reviewer.clone();
+        let rule_review_notes = rule_review_notes.clone();
+        let rule_review_evidence_refs = rule_review_evidence_refs.clone();
+        Callback::from(move |_| {
+            let Some(candidate_rule_id) = saved_rule_candidate_id(&save_state) else {
+                review_state.set(ApiState::Failed(
+                    "save the discovered rule candidate before review".into(),
+                ));
+                return;
+            };
+            let evidence_refs = parse_tags(&rule_review_evidence_refs);
+            let api_key = (*api_key).clone();
+            let reviewer = (*rule_reviewer).clone();
+            let notes = (*rule_review_notes).clone();
+            let snapshot_state = snapshot_state.clone();
+            let review_state = review_state.clone();
+            review_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match execute_rule_candidate_review_action(
+                    api_key.clone(),
+                    candidate_rule_id.clone(),
+                    action,
+                    reviewer,
+                    notes,
+                    evidence_refs,
+                )
+                .await
+                {
+                    Ok(response) => {
+                        review_state.set(ApiState::Ready(response));
+                        snapshot_state.set(ApiState::Loading);
+                        snapshot_state.set(
+                            match get_rule_ops_snapshot(api_key, candidate_rule_id).await {
+                                Ok(snapshot) => ApiState::Ready(snapshot),
+                                Err(error) => ApiState::Failed(error),
+                            },
+                        );
+                    }
+                    Err(error) => review_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
 
     html! {
         <section class="module-status">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"Rule Candidate Review"}</h2>
-                    <p>{"Review rules pushed from offline discovery, QA feedback, or explainable model patterns. Business users approve candidate entry into the governed rule library; they do not tune raw rule logic here."}</p>
+                    <h2>{"ML Rule Candidate Review"}</h2>
+                    <p>{"Review rules discovered from model explanations, offline mining, or QA feedback. Operators run backtests, inspect shadow gates, and accept or reject the candidate before it can enter the governed rule library."}</p>
                 </div>
-                <span class="status-pill">{"Candidate rule release"}</span>
+                <span class="status-pill">{"Human review gate"}</span>
             </div>
 
             <section class="panel result-stack">
-                <h3>{"Rule Backfill Workbench"}</h3>
+                <h3>{"Rule Discovery Workbench"}</h3>
                 {rule_backfill_pipeline(&discovery_state, &backtest_state, &save_state, &snapshot_state)}
                 <div class="form-grid">
                     <label>
@@ -4502,7 +4565,43 @@ fn rules_page() -> Html {
                             }}
                         />
                     </label>
+                    <label>
+                        {"Reviewer"}
+                        <input
+                            value={(*rule_reviewer).clone()}
+                            oninput={{
+                                let rule_reviewer = rule_reviewer.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    rule_reviewer.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Review Evidence Refs"}
+                        <input
+                            value={(*rule_review_evidence_refs).clone()}
+                            oninput={{
+                                let rule_review_evidence_refs = rule_review_evidence_refs.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    rule_review_evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
                 </div>
+                <label class="full-field">
+                    {"Human Review Notes"}
+                    <textarea
+                        value={(*rule_review_notes).clone()}
+                        oninput={{
+                            let rule_review_notes = rule_review_notes.clone();
+                            Callback::from(move |event: InputEvent| {
+                                rule_review_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                            })
+                        }}
+                    />
+                </label>
                 <div class="button-row">
                     <button onclick={discover_candidates} disabled={matches!(&*discovery_state, ApiState::Loading)}>
                         {if matches!(&*discovery_state, ApiState::Loading) { "Discovering..." } else { "Discover candidates" }}
@@ -4513,10 +4612,20 @@ fn rules_page() -> Html {
                     <button onclick={save_candidate} disabled={!selected_candidate_available || matches!(&*save_state, ApiState::Loading)}>
                         {if matches!(&*save_state, ApiState::Loading) { "Saving..." } else { "Save draft rule" }}
                     </button>
+                    <button onclick={candidate_review_action("shadow_review")} disabled={!saved_candidate_available || matches!(&*review_state, ApiState::Loading)}>
+                        {if matches!(&*review_state, ApiState::Loading) { "Submitting..." } else { "Submit for shadow review" }}
+                    </button>
+                    <button onclick={candidate_review_action("accept")} disabled={!saved_candidate_available || matches!(&*review_state, ApiState::Loading)}>
+                        {"Accept discovered rule"}
+                    </button>
+                    <button onclick={candidate_review_action("reject")} disabled={!saved_candidate_available || matches!(&*review_state, ApiState::Loading)}>
+                        {"Reject discovered rule"}
+                    </button>
                     <button onclick={refresh} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh gates" }}
                     </button>
                 </div>
+                {rule_candidate_review_state(&review_state)}
                 {rule_candidate_workflow(
                     &discovery_state,
                     &backtest_state,
@@ -6379,7 +6488,9 @@ fn leads_cases_page() -> Html {
         let investigation_state = investigation_state.clone();
         Callback::from(move |_| {
             let ApiState::Ready(snapshot) = &*snapshot_state else {
-                investigation_state.set(ApiState::Failed("load cases before investigation writeback".into()));
+                investigation_state.set(ApiState::Failed(
+                    "load cases before investigation writeback".into(),
+                ));
                 return;
             };
             let case = selected_case(snapshot, &selected_case_id);
@@ -6446,7 +6557,8 @@ fn leads_cases_page() -> Html {
                 case_agent_state.set(ApiState::Failed("select a case for investigation".into()));
                 return;
             };
-            let lead = lead_for_case(snapshot, case).or_else(|| selected_lead(snapshot, &selected_lead_id));
+            let lead = lead_for_case(snapshot, case)
+                .or_else(|| selected_lead(snapshot, &selected_lead_id));
             let top_reasons = lead
                 .map(|lead| lead.reason.clone())
                 .filter(|reason| !reason.trim().is_empty())
@@ -6779,18 +6891,33 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                         <section class="panel result-stack">
                             <div class="section-header">
                                 <div>
-                                    <h3>{"Queue Summary"}</h3>
+                                    <h3>{"Investigation Control"}</h3>
+                                    <p>{"Workload, urgency, and queue movement for the human investigation desk."}</p>
                                 </div>
                             </div>
-                            <div class="score-hero">
-                                <div><span>{"Leads"}</span><strong>{snapshot.leads.len()}</strong></div>
-                                <div><span>{"Cases"}</span><strong>{snapshot.cases.len()}</strong></div>
-                                <div><span>{"SLA Breached"}</span><strong>{snapshot.cases.iter().filter(|case| case.sla_status == "breached").count()}</strong></div>
+                            <div class="case-control-rail">
+                                <div><strong>{open_lead_count(&snapshot.leads)}</strong><span>{"open leads"}</span></div>
+                                <div><strong>{active_case_count(&snapshot.cases)}</strong><span>{"active cases"}</span></div>
+                                <div><strong>{breached_case_count(&snapshot.cases)}</strong><span>{"SLA attention"}</span></div>
                             </div>
-                            <div class="summary-grid">
-                                <div><span>{"Lead Status"}</span><strong>{lead_status_summary(&snapshot.leads)}</strong></div>
-                                <div><span>{"Case Status"}</span><strong>{case_status_summary(&snapshot.cases)}</strong></div>
-                                <div><span>{"Schemes"}</span><strong>{lead_scheme_summary(&snapshot.leads)}</strong></div>
+                            <div class="case-control-grid">
+                                <div class="queue-meter-card">
+                                    <span>{"Lead movement"}</span>
+                                    {queue_meter("New", lead_status_count(&snapshot.leads, "new"), snapshot.leads.len(), "warning")}
+                                    {queue_meter("Needs evidence", lead_status_count(&snapshot.leads, "pending_evidence"), snapshot.leads.len(), "danger")}
+                                    {queue_meter("Case opened", lead_status_count(&snapshot.leads, "triaged"), snapshot.leads.len(), "success")}
+                                </div>
+                                <div class="queue-meter-card">
+                                    <span>{"Case movement"}</span>
+                                    {queue_meter("Investigating", case_status_count(&snapshot.cases, "investigating"), snapshot.cases.len(), "warning")}
+                                    {queue_meter("Confirmed", case_status_count(&snapshot.cases, "confirmed"), snapshot.cases.len(), "success")}
+                                    {queue_meter("Closed", case_status_count(&snapshot.cases, "closed"), snapshot.cases.len(), "neutral")}
+                                </div>
+                                <div class="queue-meter-card case-focus-card">
+                                    <span>{"Primary pattern"}</span>
+                                    <strong>{top_scheme_label(&snapshot.leads)}</strong>
+                                    <small>{"use this to assign medical and SIU review capacity"}</small>
+                                </div>
                             </div>
                         </section>
 
@@ -6823,7 +6950,8 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                                     </div>
                                                     <div class="queue-row-meta">
                                                         <span class="status-token strong">{format!("risk {}", lead.risk_score)}</span>
-                                                        <span class={classes!("status-token", status_tone(&lead.rag))}>{format!("{} / {}", lead.rag, lead.status)}</span>
+                                                        <span class={classes!("status-token", status_tone(&lead.rag))}>{&lead.rag}</span>
+                                                        <span class={classes!("status-token", lead_stage_tone(&lead.status))}>{lead_stage_label(&lead.status)}</span>
                                                     </div>
                                                 </button>
                                             }
@@ -6847,11 +6975,6 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                             };
                                             let case_id = case.case_id.clone();
                                             let on_select_case = props.on_select_case.clone();
-                                            let sla_class = if case.sla_status == "breached" {
-                                                "status-token danger"
-                                            } else {
-                                                "status-token success"
-                                            };
                                             html! {
                                                 <button
                                                     type="button"
@@ -6867,8 +6990,9 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                                         }).unwrap_or_else(|| html! {})}
                                                     </div>
                                                     <div class="queue-row-meta">
-                                                        <span class="status-token strong">{&case.priority}</span>
-                                                        <span class={sla_class}>{format!("{} / {}", case.status, case.sla_status)}</span>
+                                                        <span class={classes!("status-token", priority_tone(&case.priority))}>{priority_label(&case.priority)}</span>
+                                                        <span class={classes!("status-token", case_stage_tone(&case.status))}>{case_stage_label(&case.status)}</span>
+                                                        <span class={classes!("status-token", sla_tone(&case.sla_status))}>{sla_label(&case.sla_status)}</span>
                                                     </div>
                                                 </button>
                                             }
@@ -12695,7 +12819,10 @@ fn lead_for_case<'a>(
     snapshot: &'a LeadsCasesSnapshot,
     case: &CaseRecord,
 ) -> Option<&'a LeadRecord> {
-    snapshot.leads.iter().find(|lead| lead.lead_id == case.lead_id)
+    snapshot
+        .leads
+        .iter()
+        .find(|lead| lead.lead_id == case.lead_id)
 }
 
 fn live_tpa_demo_payload(summary: &DashboardSummary) -> Result<Value, String> {
@@ -13010,16 +13137,138 @@ fn lineage_source_coverage(lineage: &[ModelEvaluationLineageRecord]) -> String {
     format!("{} source-linked", covered)
 }
 
-fn lead_status_summary(leads: &[LeadRecord]) -> String {
-    count_by(leads.iter().map(|lead| lead.status.as_str()))
+fn open_lead_count(leads: &[LeadRecord]) -> usize {
+    leads
+        .iter()
+        .filter(|lead| !matches!(lead.status.as_str(), "closed" | "rejected"))
+        .count()
 }
 
-fn case_status_summary(cases: &[CaseRecord]) -> String {
-    count_by(cases.iter().map(|case| case.status.as_str()))
+fn active_case_count(cases: &[CaseRecord]) -> usize {
+    cases
+        .iter()
+        .filter(|case| !matches!(case.status.as_str(), "closed" | "rejected"))
+        .count()
 }
 
-fn lead_scheme_summary(leads: &[LeadRecord]) -> String {
-    count_by(leads.iter().map(|lead| lead.scheme_family.as_str()))
+fn breached_case_count(cases: &[CaseRecord]) -> usize {
+    cases
+        .iter()
+        .filter(|case| case.sla_status == "breached")
+        .count()
+}
+
+fn lead_status_count(leads: &[LeadRecord], status: &str) -> usize {
+    leads.iter().filter(|lead| lead.status == status).count()
+}
+
+fn case_status_count(cases: &[CaseRecord], status: &str) -> usize {
+    cases.iter().filter(|case| case.status == status).count()
+}
+
+fn queue_meter(label: &str, value: usize, total: usize, tone: &str) -> Html {
+    let width = if total == 0 {
+        "0%".to_string()
+    } else {
+        percent_width(value as f64 / total as f64)
+    };
+    html! {
+        <div class={classes!("queue-meter", tone.to_string())}>
+            <div>
+                <span>{label}</span>
+                <strong>{value}</strong>
+            </div>
+            <i><b style={format!("width: {width};")}></b></i>
+        </div>
+    }
+}
+
+fn top_scheme_label(leads: &[LeadRecord]) -> String {
+    let mut counts = BTreeMap::new();
+    for lead in leads {
+        *counts.entry(lead.scheme_family.as_str()).or_insert(0_usize) += 1;
+    }
+    counts
+        .into_iter()
+        .max_by_key(|(_, count)| *count)
+        .map(|(scheme, count)| format!("{} ({})", readable_token(scheme), count))
+        .unwrap_or_else(|| "No active pattern".into())
+}
+
+fn lead_stage_label(status: &str) -> String {
+    match status {
+        "new" => "New lead".into(),
+        "pending_evidence" => "Needs evidence".into(),
+        "triaged" => "Case opened".into(),
+        "closed" => "Closed".into(),
+        other => readable_token(other),
+    }
+}
+
+fn lead_stage_tone(status: &str) -> &'static str {
+    match status {
+        "pending_evidence" => "danger",
+        "new" => "warning",
+        "triaged" | "closed" => "success",
+        _ => "neutral",
+    }
+}
+
+fn case_stage_label(status: &str) -> String {
+    match status {
+        "investigating" => "Investigating",
+        "pending_evidence" => "Waiting evidence",
+        "confirmed" => "Confirmed",
+        "closed" => "Closed",
+        "rejected" => "Rejected",
+        "triage" => "Triage",
+        other => return readable_token(other),
+    }
+    .into()
+}
+
+fn case_stage_tone(status: &str) -> &'static str {
+    match status {
+        "investigating" | "pending_evidence" | "triage" => "warning",
+        "confirmed" | "closed" => "success",
+        "rejected" => "neutral",
+        _ => "neutral",
+    }
+}
+
+fn priority_label(priority: &str) -> String {
+    match priority {
+        "high" => "High priority",
+        "medium" => "Medium priority",
+        "low" => "Low priority",
+        other => return readable_token(other),
+    }
+    .into()
+}
+
+fn priority_tone(priority: &str) -> &'static str {
+    match priority {
+        "high" => "danger",
+        "medium" => "warning",
+        "low" => "neutral",
+        _ => "strong",
+    }
+}
+
+fn sla_label(status: &str) -> &'static str {
+    match status {
+        "breached" => "Over SLA",
+        "on_track" => "On track",
+        _ => "SLA pending",
+    }
+}
+
+fn sla_tone(status: &str) -> &'static str {
+    match status {
+        "breached" => "danger",
+        "on_track" => "success",
+        _ => "neutral",
+    }
 }
 
 fn routing_review_modes(policies: &[RoutingPolicyRecord]) -> String {

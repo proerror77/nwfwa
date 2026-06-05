@@ -5769,6 +5769,129 @@ pre {
   align-content: start;
 }
 
+.case-control-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) minmax(180px, 0.7fr);
+  gap: 10px;
+}
+
+.case-control-rail {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px 26px;
+  padding: 4px 0 2px;
+  border-bottom: 1px solid #e5edf7;
+}
+
+.case-control-rail div {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+}
+
+.case-control-rail strong {
+  color: #0c315f;
+  font-size: 24px;
+  line-height: 1;
+}
+
+.case-control-rail span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.queue-meter-card {
+  display: grid;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px;
+  background: linear-gradient(180deg, #ffffff 0%, #f6f9ff 100%);
+  border: 1px solid var(--line);
+  border-radius: 7px;
+}
+
+.queue-meter-card > span {
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.queue-meter {
+  display: grid;
+  grid-template-columns: minmax(0, 132px) minmax(80px, 1fr);
+  gap: 10px;
+  align-items: center;
+}
+
+.queue-meter div {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  min-width: 0;
+  color: #17436f;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.queue-meter span {
+  min-width: 0;
+  line-height: 1.15;
+  white-space: normal;
+}
+
+.queue-meter strong {
+  color: #0c315f;
+}
+
+.queue-meter i {
+  height: 8px;
+  overflow: hidden;
+  background: #e7eef8;
+  border-radius: 999px;
+}
+
+.queue-meter b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--blue);
+}
+
+.queue-meter.success b {
+  background: #2e9f62;
+}
+
+.queue-meter.warning b {
+  background: #d7921c;
+}
+
+.queue-meter.danger b {
+  background: #d83d57;
+}
+
+.queue-meter.neutral b {
+  background: #8ea3bb;
+}
+
+.case-focus-card {
+  align-content: center;
+}
+
+.case-focus-card strong {
+  color: #0c315f;
+  font-size: 17px;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.case-focus-card small {
+  color: var(--muted);
+  font-size: 12px;
+}
+
 .lead-case-queue-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5818,6 +5941,92 @@ pre {
 .case-action-panel {
   position: sticky;
   top: 14px;
+  min-width: 0;
+}
+
+.case-action-panel .agent-cockpit {
+  grid-template-columns: 1fr;
+}
+
+.case-action-panel .agent-evidence-map {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  min-height: auto;
+  overflow: visible;
+  padding: 12px;
+}
+
+.case-action-panel .agent-map-title {
+  display: grid;
+  gap: 3px;
+}
+
+.case-action-panel .agent-map-link,
+.case-action-panel .agent-core {
+  display: none;
+}
+
+.case-action-panel .agent-node,
+.case-action-panel .agent-node.risk,
+.case-action-panel .agent-node.evidence,
+.case-action-panel .agent-node.kb,
+.case-action-panel .agent-node.qa,
+.case-action-panel .agent-node.human {
+  position: relative;
+  left: auto;
+  right: auto;
+  top: auto;
+  bottom: auto;
+  width: auto;
+  min-width: 0;
+  min-height: 0;
+  transform: none;
+  box-shadow: none;
+}
+
+.case-action-panel .agent-node strong,
+.case-action-panel .agent-map-title strong,
+.case-action-panel .agent-brief strong,
+.case-action-panel .agent-brief dd,
+.case-action-panel .timeline-item strong {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.18;
+}
+
+.case-action-panel .agent-brief dl {
+  grid-template-columns: 1fr;
+}
+
+.case-action-panel .agent-guardrail {
+  min-width: 0;
+}
+
+.case-action-panel .score-hero,
+.case-action-panel .summary-grid,
+.case-action-panel .factor-card-grid {
+  grid-template-columns: 1fr;
+}
+
+.case-action-panel .score-hero strong,
+.case-action-panel .summary-grid strong,
+.case-action-panel .metric-row strong,
+.case-action-panel .metric-row span {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.case-action-panel .metric-row {
+  grid-template-columns: 1fr;
+  align-items: start;
+}
+
+.case-action-panel .metric-row strong {
+  justify-self: start;
 }
 
 .action-card {
