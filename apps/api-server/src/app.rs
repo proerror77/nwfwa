@@ -322,6 +322,10 @@ pub fn build_app_with_parts(
                 .post(ops_models::create_model_retraining_job),
         )
         .route(
+            "/api/v1/ops/models/:model_key/mlops-monitoring-review-queue",
+            get(ops_models::model_monitoring_review_queue),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/mlops-monitoring-reports",
             post(ops_models::submit_mlops_monitoring_report),
         )

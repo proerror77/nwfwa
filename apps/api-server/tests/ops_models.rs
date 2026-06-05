@@ -1420,6 +1420,24 @@ async fn submits_mlops_monitoring_report_as_review_only_governance_event() {
         .unwrap()
         .contains("must not auto-create retraining jobs"));
 
+    let (status, review_queue) = get_json(
+        app.clone(),
+        "/api/v1/ops/models/baseline_fwa/mlops-monitoring-review-queue",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(review_queue["tasks"].as_array().unwrap().len(), 1);
+    let task = &review_queue["tasks"][0];
+    assert_eq!(task["model_key"], "baseline_fwa");
+    assert_eq!(task["model_version"], "0.1.0");
+    assert_eq!(task["task_kind"], "mlops_monitoring_review");
+    assert_eq!(task["trigger"], "model_drift_detected");
+    assert_eq!(task["review_status"], "open");
+    assert_eq!(
+        task["report_uri"],
+        "data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"
+    );
+
     let (status, jobs) = get_json(
         app.clone(),
         "/api/v1/ops/models/baseline_fwa/retraining-jobs",

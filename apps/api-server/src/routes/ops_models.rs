@@ -88,6 +88,28 @@ pub struct ModelRetrainingJobListResponse {
     pub jobs: Vec<ModelRetrainingJobRecord>,
 }
 
+#[derive(Debug, Serialize)]
+pub struct ModelMonitoringReviewQueueResponse {
+    pub tasks: Vec<ModelMonitoringReviewTask>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelMonitoringReviewTask {
+    pub task_id: String,
+    pub audit_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub report_uri: String,
+    pub monitoring_status: String,
+    pub retraining_recommendation: String,
+    pub task_kind: String,
+    pub trigger: String,
+    pub review_status: String,
+    pub task: Value,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
 struct SourceDataQualityGate {
     dataset_id: String,
     score: Option<f64>,
@@ -285,6 +307,30 @@ pub async fn list_model_retraining_jobs(
         .await
         .map_err(internal_error("MODEL_RETRAINING_JOB_LIST_FAILED"))?;
     Ok(Json(ModelRetrainingJobListResponse { jobs }))
+}
+
+pub async fn model_monitoring_review_queue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+) -> Result<Json<ModelMonitoringReviewQueueResponse>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    ensure_model_exists(&state, &model_key).await?;
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 50,
+            event_type: Some("model.mlops_monitoring.report_submitted".into()),
+            model_key: Some(model_key),
+            customer_scope_id: Some(actor.customer_scope_id),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("MODEL_MONITORING_REVIEW_QUEUE_LIST_FAILED"))?;
+
+    Ok(Json(ModelMonitoringReviewQueueResponse {
+        tasks: monitoring_review_tasks_from_events(events),
+    }))
 }
 
 pub async fn create_model_retraining_job(
@@ -1011,6 +1057,18 @@ fn validate_mlops_monitoring_report_request(
             StatusCode::BAD_REQUEST,
             "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REPORT",
             "MLOps monitoring actor, notes, report_uri, triggers, and evidence_refs must not contain PII",
+        ));
+    }
+    let review_task_text = request
+        .review_tasks
+        .iter()
+        .map(Value::to_string)
+        .collect::<Vec<_>>();
+    if pii::contains_pii(review_task_text.iter().map(String::as_str)) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REVIEW_TASK",
+            "MLOps monitoring review_tasks must not contain PII",
         ));
     }
     Ok(())
@@ -2260,6 +2318,69 @@ fn build_mlops_alert_delivery_response(
     }
 }
 
+fn monitoring_review_tasks_from_events(
+    events: Vec<crate::repository::AuditHistoryEventRecord>,
+) -> Vec<ModelMonitoringReviewTask> {
+    events
+        .into_iter()
+        .flat_map(|event| {
+            let payload = event.payload;
+            let model_key = payload["model_key"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let model_version = payload["model_version"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let report_uri = payload["report_uri"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let monitoring_status = payload["monitoring_status"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let retraining_recommendation = payload["retraining_recommendation"]
+                .as_str()
+                .unwrap_or_default()
+                .to_string();
+            let review_tasks = payload["review_tasks"]
+                .as_array()
+                .cloned()
+                .unwrap_or_default();
+            review_tasks
+                .into_iter()
+                .enumerate()
+                .map(move |(index, task)| {
+                    let task_kind = task["task_kind"]
+                        .as_str()
+                        .unwrap_or("mlops_monitoring_review")
+                        .to_string();
+                    let trigger = task["trigger"].as_str().unwrap_or_default().to_string();
+                    let review_status =
+                        task["review_status"].as_str().unwrap_or("open").to_string();
+                    ModelMonitoringReviewTask {
+                        task_id: format!("{}:{}", event.audit_id, index + 1),
+                        audit_id: event.audit_id.clone(),
+                        model_key: model_key.clone(),
+                        model_version: model_version.clone(),
+                        report_uri: report_uri.clone(),
+                        monitoring_status: monitoring_status.clone(),
+                        retraining_recommendation: retraining_recommendation.clone(),
+                        task_kind,
+                        trigger,
+                        review_status,
+                        task,
+                        evidence_refs: event.evidence_refs.clone(),
+                        created_at: event.created_at.clone(),
+                    }
+                })
+                .collect::<Vec<_>>()
+        })
+        .collect()
+}
+
 fn is_unresolved_feedback_status(status: &str) -> bool {
     matches!(status, "open" | "in_progress")
 }
@@ -2640,7 +2761,9 @@ async fn record_mlops_monitoring_audit(
                 "report_kind": request.report_kind,
                 "monitoring_status": request.overall_status,
                 "retraining_recommendation": request.retraining_recommendation,
+                "triggers": request.triggers,
                 "trigger_count": request.triggers.len(),
+                "review_tasks": request.review_tasks,
                 "review_task_count": request.review_tasks.len(),
                 "next_actions": response.next_actions,
                 "submitted_by": request.actor,

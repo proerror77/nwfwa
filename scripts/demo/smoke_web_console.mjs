@@ -129,6 +129,9 @@ async function main() {
     assertContains(builtText, "Provider candidate release", "web console provider model intake bundle");
     assertContains(builtText, "Provider Candidate Release Control", "web console provider model intake bundle");
     assertContains(builtText, "Offline Training Handoff", "web console mlops workspace bundle");
+    assertContains(builtText, "Monitoring Review Queue", "web console mlops workspace bundle");
+    assertContains(builtText, "Submitted monitoring reports open human review tasks", "web console mlops review queue bundle");
+    assertContains(builtText, "No monitoring review tasks returned for this model.", "web console mlops review queue bundle");
     assertContains(builtText, "Governed Actions", "web console mlops workspace bundle");
     assertContains(builtText, "Request provider retraining", "web console provider model action bundle");
     assertContains(builtText, "Submit release review", "web console provider model action bundle");

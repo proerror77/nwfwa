@@ -1901,6 +1901,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/mlops-monitoring-review-queue": {
+                "get": {
+                    "summary": "List human review tasks opened by submitted MLOps monitoring reports",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "MLOps monitoring review queue",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelMonitoringReviewQueueResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/mlops-monitoring-reports": {
                 "post": {
                     "summary": "Submit a Rust MLOps monitoring report into governance audit",
@@ -5589,6 +5613,38 @@ pub async fn openapi_schema() -> Json<Value> {
                         }
                     }
                 },
+                "ModelMonitoringReviewTask": {
+                    "type": "object",
+                    "required": ["task_id", "audit_id", "model_key", "model_version", "report_uri", "monitoring_status", "retraining_recommendation", "task_kind", "trigger", "review_status", "task", "evidence_refs", "created_at"],
+                    "properties": {
+                        "task_id": { "type": "string" },
+                        "audit_id": { "type": "string" },
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "report_uri": { "type": "string" },
+                        "monitoring_status": { "type": "string", "enum": ["passed", "watch", "blocked"] },
+                        "retraining_recommendation": { "type": "string", "enum": ["monitor", "prepare_retraining", "blocked"] },
+                        "task_kind": { "type": "string" },
+                        "trigger": { "type": "string" },
+                        "review_status": { "type": "string" },
+                        "task": { "type": "object", "additionalProperties": true },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "ModelMonitoringReviewQueueResponse": {
+                    "type": "object",
+                    "required": ["tasks"],
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/ModelMonitoringReviewTask" }
+                        }
+                    }
+                },
                 "CreateModelRetrainingJobRequest": {
                     "type": "object",
                     "required": ["requested_by", "notes"],
@@ -5626,6 +5682,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "review_tasks": {
                             "type": "array",
+                            "description": "Human review tasks opened by monitoring; task content must not contain PII.",
                             "items": { "type": "object", "minProperties": 1 }
                         },
                         "evidence_refs": {

@@ -1282,11 +1282,33 @@ struct ModelRetrainingJobRecord {
     updated_at: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelMonitoringReviewQueueResponse {
+    tasks: Vec<ModelMonitoringReviewTask>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct ModelMonitoringReviewTask {
+    task_id: String,
+    audit_id: String,
+    model_key: String,
+    model_version: String,
+    report_uri: String,
+    monitoring_status: String,
+    retraining_recommendation: String,
+    task_kind: String,
+    trigger: String,
+    review_status: String,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct MlopsWorkspaceSnapshot {
     data_sources: DataSourcesSnapshot,
     model_ops: ModelOpsSnapshot,
     retraining_jobs: Vec<ModelRetrainingJobRecord>,
+    monitoring_review_tasks: Vec<ModelMonitoringReviewTask>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -5845,6 +5867,7 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
                         {mlops_model_candidates(snapshot)}
                         {mlops_promotion_gates(snapshot)}
                         {mlops_monitoring_summary(snapshot)}
+                        {mlops_monitoring_review_queue(snapshot)}
                         {mlops_training_handoff(snapshot)}
                         {mlops_dataset_readiness(snapshot)}
                         {mlops_training_jobs(snapshot)}
@@ -6123,6 +6146,49 @@ fn mlops_monitoring_summary(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 <ul class="result-list compact-list">
                     {for snapshot.model_ops.retraining.retraining_triggers.iter().map(|trigger| html! { <li>{trigger}</li> })}
                 </ul>
+            }
+        </section>
+    }
+}
+
+fn mlops_monitoring_review_queue(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    html! {
+        <section class="panel result-stack mlops-monitoring-panel">
+            <div class="section-header">
+                <div>
+                    <h3>{"Monitoring Review Queue"}</h3>
+                    <p>{"Submitted monitoring reports open human review tasks for drift, shadow, serving, or fairness signals before retraining or rollback can proceed."}</p>
+                </div>
+                <span class="status-token neutral">{format!("{} tasks", snapshot.monitoring_review_tasks.len())}</span>
+            </div>
+            if snapshot.monitoring_review_tasks.is_empty() {
+                <p class="empty">{"No monitoring review tasks returned for this model."}</p>
+            } else {
+                <details class="data-source-detail governance-detail release-evidence-detail" open=true>
+                    <summary>{format!("Open monitoring review detail: {} tasks", snapshot.monitoring_review_tasks.len())}</summary>
+                    <div class="ops-table">
+                        <div class="ops-table-head">
+                            <span>{"Task"}</span>
+                            <span>{"Trigger"}</span>
+                            <span>{"Status"}</span>
+                            <span>{"Recommendation"}</span>
+                            <span>{"Evidence"}</span>
+                        </div>
+                        {for snapshot.monitoring_review_tasks.iter().take(8).map(|task| html! {
+                            <div class="ops-table-row">
+                                <div class="primary-cell">
+                                    <strong>{&task.task_kind}</strong>
+                                    <span>{format!("{} {} / {}", task.model_key, task.model_version, task.audit_id)}</span>
+                                </div>
+                                <span>{empty_label(&task.trigger)}</span>
+                                <span class={classes!("status-token", status_tone(&task.review_status))}>{&task.review_status}</span>
+                                <span>{format!("{} / {}", task.monitoring_status, task.retraining_recommendation)}</span>
+                                <span>{refs_label(&task.evidence_refs)}</span>
+                                <small class="row-detail">{format!("report {} / task {}", task.report_uri, task.task_id)}</small>
+                            </div>
+                        })}
+                    </div>
+                </details>
             }
         </section>
     }
@@ -11033,14 +11099,24 @@ async fn get_mlops_workspace_snapshot(
             "/api/v1/ops/models/{}/retraining-jobs",
             model_ops.performance.model_key
         ),
-        api_key,
+        api_key.clone(),
     )
     .await?
     .jobs;
+    let monitoring_review_tasks = request_get_json::<ModelMonitoringReviewQueueResponse>(
+        &format!(
+            "/api/v1/ops/models/{}/mlops-monitoring-review-queue",
+            model_ops.performance.model_key
+        ),
+        api_key,
+    )
+    .await?
+    .tasks;
     Ok(MlopsWorkspaceSnapshot {
         data_sources,
         model_ops,
         retraining_jobs,
+        monitoring_review_tasks,
     })
 }
 
