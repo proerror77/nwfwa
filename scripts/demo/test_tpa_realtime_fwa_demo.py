@@ -48,11 +48,33 @@ class TpaRealtimeFwaDemoTest(unittest.TestCase):
         self.assertEqual(payload["transNo"], "txn-1")
         self.assertEqual(payload["reportCase"]["reportNo"], "CLM-1")
 
+    def test_apply_source_system_changes_copy_only(self):
+        payload = {"systemCode": "tpa-demo", "reportCase": {"reportNo": "CLM-1"}}
+
+        updated = tpa_realtime_fwa_demo.apply_source_system(payload, "AiClaim Core")
+
+        self.assertEqual(updated["systemCode"], "AiClaim Core")
+        self.assertEqual(payload["systemCode"], "tpa-demo")
+
+    def test_string_evidence_refs_ignores_structured_refs(self):
+        refs = [
+            "audit:score-1",
+            {"type": "rule", "id": "HIGH_AMOUNT"},
+            "",
+            123,
+        ]
+
+        self.assertEqual(
+            tpa_realtime_fwa_demo.string_evidence_refs(refs),
+            ["audit:score-1"],
+        )
+
     def test_run_demo_completes_business_chain(self):
         args = argparse_namespace(
             base_url="http://api.test",
             web_url="http://web.test",
             api_key="dev-secret",
+            source_system=None,
             payload_file="/tmp/payload.json",
             inbox_correction_file=None,
             unique_message=False,
@@ -129,6 +151,49 @@ class TpaRealtimeFwaDemoTest(unittest.TestCase):
         self.assertEqual(summary["workflow"]["case_id"], "case-1")
         self.assertEqual(summary["dashboard_after"]["prevented_payment"], "100000.00")
         self.assertEqual(summary["ui_targets"]["cases"], "http://web.test/#leads-cases")
+
+    def test_format_story_reads_like_customer_demo_cue_card(self):
+        summary = {
+            "status": "completed",
+            "business_story": {
+                "claim_amount": "100000.00",
+                "financial_impact_type": "prevented_payment",
+            },
+            "claim": {
+                "claim_id": "CLM-1",
+                "risk_score": 90,
+                "rag": "Red",
+                "recommended_action": "ManualReview",
+                "decision_outcome": "manual_review",
+            },
+            "workflow": {
+                "inbox_run_id": "inbox:1",
+                "score_run_id": "score-1",
+                "lead_id": "lead-1",
+                "case_id": "case-1",
+                "case_status": "investigating",
+                "investigation_audit_id": "audit-investigation-1",
+                "writeback_idempotency_key": "writeback-1",
+            },
+            "dashboard_before": {"prevented_payment": "0.00"},
+            "dashboard_after": {
+                "prevented_payment": "100000.00",
+                "saving_amount": "100000.00",
+            },
+            "ui_targets": {
+                "intake": "http://web.test/#intake-ops",
+                "cases": "http://web.test/#leads-cases",
+                "dashboard": "http://web.test/#dashboard",
+            },
+        }
+
+        story = tpa_realtime_fwa_demo.format_story(summary)
+
+        self.assertIn("Live TPA FWA demo complete", story)
+        self.assertIn("TPA packet received", story)
+        self.assertIn("Lead became an investigation case", story)
+        self.assertIn("Prevented payment: 0.00 -> 100000.00", story)
+        self.assertIn("http://web.test/#leads-cases", story)
 
 
 def argparse_namespace(**kwargs):

@@ -39,6 +39,14 @@ def load_payload(payload_file, correction_file):
     return payload
 
 
+def apply_source_system(payload, source_system):
+    if not source_system:
+        return payload
+    updated = json.loads(json.dumps(payload))
+    updated["systemCode"] = source_system
+    return updated
+
+
 def make_repeatable_payload(payload, suffix):
     updated = json.loads(json.dumps(payload))
     report_case = updated.setdefault("reportCase", {})
@@ -57,6 +65,10 @@ def latest_lead_for_claim(base_url, api_key, claim_id, score_run_id):
         if lead.get("claim_id") == claim_id:
             return lead
     return None
+
+
+def string_evidence_refs(values):
+    return [value for value in values or [] if isinstance(value, str) and value]
 
 
 def open_case_from_lead(base_url, api_key, lead):
@@ -98,7 +110,7 @@ def record_confirmed_prevented_payment(base_url, api_key, case_id, claim_id, sco
         f"investigation_cases:{case_id}",
         f"audit:{score['audit_id']}",
     ]
-    evidence_refs.extend(score.get("evidence_refs") or [])
+    evidence_refs.extend(string_evidence_refs(score.get("evidence_refs")))
     return request(
         base_url,
         api_key,
@@ -137,6 +149,7 @@ def value_snapshot(base_url, api_key):
 def run_demo(args):
     suffix = str(int(time.time()))
     raw_payload = load_payload(args.payload_file, args.inbox_correction_file)
+    raw_payload = apply_source_system(raw_payload, args.source_system)
     if args.unique_message:
         raw_payload = make_repeatable_payload(raw_payload, suffix)
 
@@ -212,6 +225,60 @@ def run_demo(args):
     }
 
 
+def format_story(summary):
+    status = summary.get("status")
+    if status != "completed":
+        return "\n".join(
+            [
+                "Live TPA FWA demo stopped before completion.",
+                f"Status: {status}",
+                f"Observed response: {summary.get('observed_response', {}).get('fwa_response', 'unknown')}",
+                "Next step: fix intake validation or runtime connectivity, then rerun the demo.",
+            ]
+        )
+
+    story = summary["business_story"]
+    claim = summary["claim"]
+    workflow = summary["workflow"]
+    before = summary["dashboard_before"]
+    after = summary["dashboard_after"]
+    targets = summary["ui_targets"]
+    return "\n".join(
+        [
+            "Live TPA FWA demo complete",
+            "",
+            "1. TPA packet received",
+            f"   Claim amount: CNY {story['claim_amount']}",
+            "   Source: raw TPA inbox payload",
+            "",
+            "2. Intake normalized and released",
+            f"   Inbox run: {workflow['inbox_run_id']}",
+            f"   Score run: {workflow['score_run_id']}",
+            "",
+            "3. Risk engine routed the claim",
+            f"   Claim: {claim['claim_id']}",
+            f"   Risk: {claim['risk_score']} / {claim['rag']}",
+            f"   Recommended action: {claim['recommended_action']}",
+            f"   Decision outcome: {claim['decision_outcome']}",
+            "",
+            "4. Lead became an investigation case",
+            f"   Lead: {workflow['lead_id']}",
+            f"   Case: {workflow['case_id']} / {workflow['case_status']}",
+            "",
+            "5. Human writeback recorded prevented payment",
+            f"   Investigation audit: {workflow['investigation_audit_id']}",
+            f"   Writeback key: {workflow['writeback_idempotency_key']}",
+            f"   Prevented payment: {before.get('prevented_payment')} -> {after.get('prevented_payment')}",
+            f"   Dashboard saving amount: {after.get('saving_amount')}",
+            "",
+            "Show these UI screens:",
+            f"   Intake Ops: {targets['intake']}",
+            f"   Leads & Cases: {targets['cases']}",
+            f"   Dashboard value proof: {targets['dashboard']}",
+        ]
+    )
+
+
 def main():
     parser = argparse.ArgumentParser(
         description="Run the real-time TPA FWA demo from raw packet to prevented-payment value."
@@ -219,6 +286,11 @@ def main():
     parser.add_argument("--base-url", default=os.environ.get("FWA_API_BASE_URL", "http://127.0.0.1:8080"))
     parser.add_argument("--web-url", default=os.environ.get("FWA_WEB_URL", "http://127.0.0.1:5173"))
     parser.add_argument("--api-key", default=os.environ.get("FWA_API_KEY", "dev-secret"))
+    parser.add_argument(
+        "--source-system",
+        default=os.environ.get("FWA_SOURCE_SYSTEM"),
+        help="Override payload systemCode to match the running API source-system config.",
+    )
     parser.add_argument("--payload-file", default=str(DEFAULT_PAYLOAD_FILE))
     parser.add_argument("--inbox-correction-file")
     parser.add_argument(
@@ -227,10 +299,20 @@ def main():
         action="store_false",
         help="Reuse the payload's source transaction identifiers instead of appending a demo suffix.",
     )
+    parser.add_argument(
+        "--format",
+        choices=["story", "json"],
+        default="story",
+        help="Use story for live customer demos or json for automated verification.",
+    )
     parser.set_defaults(unique_message=True)
     args = parser.parse_args()
 
-    print(json.dumps(run_demo(args), ensure_ascii=False, indent=2, sort_keys=True))
+    summary = run_demo(args)
+    if args.format == "json":
+        print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
+    else:
+        print(format_story(summary))
     return 0
 
 

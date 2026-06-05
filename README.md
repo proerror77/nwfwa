@@ -456,9 +456,12 @@ python3 scripts/demo/tpa_realtime_fwa_demo.py \
   --api-key dev-secret
 ```
 
-The output includes the inbox run, scoring run, generated lead, opened case,
-investigation writeback idempotency key, Dashboard value before/after, and UI
-hash links for Intake, Leads & Cases, and Dashboard.
+The default output is a customer-facing story that walks through the TPA packet,
+intake run, scoring run, generated lead, opened case, investigation writeback,
+Dashboard value before/after, and UI hash links for Intake, Leads & Cases, and
+Dashboard. Use `--format json` when you need the machine-readable artifact. If
+the API was started with a non-default `FWA_SOURCE_SYSTEM`, pass
+`--source-system "<value>"` so the demo payload matches the runtime.
 
 See [docs/engineering/demo-runbook.md](docs/engineering/demo-runbook.md) for the
 full demo script.

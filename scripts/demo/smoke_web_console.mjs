@@ -200,6 +200,9 @@ async function main() {
     assertContains(builtText, "Human writeback required", "web console leads cases human gate bundle");
     assertContains(builtText, "Case status maintenance", "web console leads cases maintenance bundle");
     assertContains(builtText, "Inbound Claim Packet", "web console claim inbox release bundle");
+    assertContains(builtText, "Live TPA Demo Run", "web console live TPA demo bundle");
+    assertContains(builtText, "Run full TPA demo", "web console live TPA demo bundle");
+    assertContains(builtText, "TPA packet -> risk queue -> case -> value proof", "web console live TPA demo bundle");
     assertContains(builtText, "Correction Worklist", "web console claim inbox release bundle");
     assertContains(builtText, "Release accepted claim", "web console claim inbox release bundle");
     assertContains(builtText, "Queue Handoff", "web console claim inbox release bundle");

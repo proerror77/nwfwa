@@ -218,6 +218,94 @@ const SAMPLE_INBOX_PAYLOAD: &str = r#"{
   }
 }"#;
 
+const LIVE_TPA_DEMO_PAYLOAD: &str = r#"{
+  "systemCode": "tpa-demo",
+  "transNo": "TPA-LIVE-DEMO",
+  "reportCase": {
+    "reportNo": "CLM-LIVE-DEMO",
+    "accidentDate": 1768435200000,
+    "claimReceiveDate": 1768867200000,
+    "accidentReason": "live demo health claim",
+    "calculateRisk": "Y",
+    "claimAmount": 18000,
+    "accidentPerson": {
+      "insuredName": "Demo Member",
+      "insuredNo": "MASKED-LIVE-DEMO",
+      "certNo": "MASKED-LIVE-DEMO",
+      "certType": "demo_id",
+      "gender": "U",
+      "birthday": 315532800000
+    },
+    "medicalRecordInfoList": [
+      {
+        "medicalRecordNo": "MR-LIVE-DEMO",
+        "medicalRecordType": "demo_summary",
+        "medicalRecordInformation": "Demo medical note. No PHI.",
+        "patientName": "Demo Member",
+        "visitDate": 1768435200000
+      }
+    ],
+    "policyList": [
+      {
+        "policyNo": "POL-LIVE-DEMO",
+        "insuredName": "Demo Member",
+        "coverageLimit": 20000,
+        "validateDate": 1767225600000,
+        "expireDate": 1798675200000,
+        "productList": [
+          {
+            "productCode": "DEMO-HEALTH",
+            "productName": "Demo Health Product",
+            "validateDate": 1767225600000,
+            "expireDate": 1798675200000,
+            "claimLiabilityList": [
+              {
+                "liabilityCode": "MEDICAL-EXPENSE",
+                "liabilityName": "Demo Medical Expense",
+                "validateDate": 1767225600000,
+                "claimValidateDate": 1767225600000,
+                "expireDate": 1798675200000
+              }
+            ]
+          }
+        ],
+        "invoiceList": [
+          {
+            "invoiceNo": "INV-LIVE-DEMO",
+            "hospitalCode": "PRV-LIVE-DEMO",
+            "hospitalName": "Demo Provider",
+            "medicalType": "outpatient",
+            "startDate": 1768435200000,
+            "endDate": 1768435200000,
+            "feeAmount": 18000,
+            "diagnosisList": [
+              {
+                "detailCode": "Z00",
+                "detailName": "Demo diagnosis"
+              }
+            ],
+            "feeList": [
+              {
+                "feeCategory": "treatmentFee",
+                "medicareAmount": 7200,
+                "feeDetailList": [
+                  {
+                    "detailId": "LINE-LIVE-DEMO",
+                    "name": "Inpatient room and board",
+                    "amount": 18000
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}"#;
+
+const LIVE_TPA_DEMO_AMOUNT: &str = "18000.00";
+
 const SAMPLE_RUNTIME_SCORE_REQUEST: &str = r#"{
   "source_system": "tpa-demo",
   "review_mode": "pre_payment",
@@ -283,6 +371,24 @@ struct ScoreResponse {
     audit_id: Option<String>,
     evidence_refs: Option<Vec<Value>>,
     agent_investigation_prefill: Option<Value>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+struct LiveTpaDemoRun {
+    claim_id: String,
+    claim_amount: String,
+    inbox_run_id: String,
+    score_run_id: String,
+    risk_score: String,
+    rag: String,
+    decision_outcome: String,
+    lead_id: String,
+    case_id: String,
+    case_status: String,
+    investigation_audit_id: String,
+    prevented_before: String,
+    prevented_after: String,
+    dashboard_saving_after: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -9587,6 +9693,7 @@ fn claim_inbox_page() -> Html {
     let reviewer_approved = use_state(|| false);
     let normalize_state = use_state(|| ApiState::<InboxNormalizeResponse>::Idle);
     let score_state = use_state(|| ApiState::<ScoreResponse>::Idle);
+    let live_demo_state = use_state(|| ApiState::<LiveTpaDemoRun>::Idle);
 
     let merged_payload = use_memo(
         ((*raw_payload).clone(), (*overlay_payload).clone()),
@@ -9650,6 +9757,144 @@ fn claim_inbox_page() -> Html {
                     });
                 });
             }
+        })
+    };
+
+    let run_live_demo = {
+        let api_key = api_key.clone();
+        let normalize_state = normalize_state.clone();
+        let score_state = score_state.clone();
+        let live_demo_state = live_demo_state.clone();
+        Callback::from(move |_| {
+            let api_key = (*api_key).clone();
+            let normalize_state = normalize_state.clone();
+            let score_state = score_state.clone();
+            let live_demo_state = live_demo_state.clone();
+            normalize_state.set(ApiState::Loading);
+            score_state.set(ApiState::Idle);
+            live_demo_state.set(ApiState::Loading);
+            spawn_local(async move {
+                let result = async {
+                    let before_dashboard = get_dashboard_summary(api_key.clone()).await?;
+                    let payload = live_tpa_demo_payload(&before_dashboard)?;
+                    let normalize_response = normalize_claim(payload, api_key.clone()).await?;
+                    normalize_state.set(ApiState::Ready(normalize_response.clone()));
+                    if !normalize_response.scoring_ready {
+                        return Err("live demo packet did not pass intake normalization".into());
+                    }
+                    let score_response = score_canonical_claim(
+                        json!({
+                            "source_system": source_system_from_context(&normalize_response.canonical_claim_context),
+                            "inbox_run_id": normalize_response.run_id.clone(),
+                        }),
+                        api_key.clone(),
+                    )
+                    .await?;
+                    score_state.set(ApiState::Ready(score_response.clone()));
+                    let score_run_id = score_response
+                        .run_id
+                        .clone()
+                        .ok_or_else(|| "score response did not include a run id".to_string())?;
+                    let snapshot = get_leads_cases_snapshot(api_key.clone()).await?;
+                    let lead = latest_lead_for_score(
+                        &snapshot,
+                        &score_response.claim_id,
+                        &score_run_id,
+                    )
+                    .ok_or_else(|| {
+                        format!(
+                            "no generated lead found for {} / {}",
+                            score_response.claim_id, score_run_id
+                        )
+                    })?;
+                    let triage = post_triage_lead(
+                        api_key.clone(),
+                        lead.lead_id.clone(),
+                        json!({
+                            "decision": "open_case",
+                            "merge_target_lead_id": Value::Null,
+                            "assignee": "demo-investigator",
+                            "reviewer": "demo-reviewer",
+                            "priority": "high",
+                            "notes": "Live TPA demo opens a governed FWA investigation case.",
+                            "evidence_refs": if lead.evidence_refs.is_empty() {
+                                vec![format!("leads:{}", lead.lead_id)]
+                            } else {
+                                lead.evidence_refs.clone()
+                            },
+                        }),
+                    )
+                    .await?;
+                    let case = triage
+                        .case
+                        .ok_or_else(|| "triage did not open an investigation case".to_string())?;
+                    let case_update = post_case_status(
+                        api_key.clone(),
+                        case.case_id.clone(),
+                        json!({
+                            "status": "investigating",
+                            "actor_id": "demo-investigator",
+                            "notes": "Live TPA demo investigation started from the triaged lead.",
+                            "evidence_refs": [
+                                format!("investigation_cases:{}", case.case_id),
+                                format!("audit:{}", triage.audit_id),
+                            ],
+                        }),
+                    )
+                    .await?;
+                    let score_audit_id = score_response
+                        .audit_id
+                        .clone()
+                        .unwrap_or_else(|| score_run_id.clone());
+                    let investigation = post_investigation_result(
+                        api_key.clone(),
+                        json!({
+                            "case_id": case.case_id,
+                            "claim_id": score_response.claim_id,
+                            "investigation_id": format!("INV-LIVE-{}", score_run_id),
+                            "outcome": "confirmed_fwa_prevented_payment",
+                            "confirmed_fwa": true,
+                            "financial_impact_type": "prevented_payment",
+                            "saving_amount": LIVE_TPA_DEMO_AMOUNT,
+                            "currency": "CNY",
+                            "notes": "Demo reviewer confirmed the pre-payment FWA intervention and prevented payment.",
+                            "evidence_refs": [
+                                format!("investigation_cases:{}", case_update.case.case_id),
+                                format!("audit:{}", score_audit_id),
+                            ],
+                        }),
+                    )
+                    .await?;
+                    let after_dashboard = get_dashboard_summary(api_key).await?;
+                    Ok(LiveTpaDemoRun {
+                        claim_id: score_response.claim_id,
+                        claim_amount: LIVE_TPA_DEMO_AMOUNT.to_string(),
+                        inbox_run_id: normalize_response.run_id,
+                        score_run_id,
+                        risk_score: display_value(&score_response.risk_score),
+                        rag: score_response
+                            .rag
+                            .as_ref()
+                            .map(display_value)
+                            .unwrap_or_else(|| "missing".into()),
+                        decision_outcome: score_response
+                            .decision_outcome
+                            .unwrap_or_else(|| "review".into()),
+                        lead_id: lead.lead_id.clone(),
+                        case_id: case_update.case.case_id,
+                        case_status: case_update.case.status,
+                        investigation_audit_id: investigation.audit_id,
+                        prevented_before: before_dashboard.value_measurement.prevented_payment,
+                        prevented_after: after_dashboard.value_measurement.prevented_payment,
+                        dashboard_saving_after: after_dashboard.saving_amount,
+                    })
+                }
+                .await;
+                live_demo_state.set(match result {
+                    Ok(run) => ApiState::Ready(run),
+                    Err(error) => ApiState::Failed(error),
+                });
+            });
         })
     };
 
@@ -9725,6 +9970,29 @@ fn claim_inbox_page() -> Html {
                     }
                 </section>
             </div>
+
+            <section class="panel result-stack live-demo-panel">
+                <div class="section-header">
+                    <div>
+                        <h3>{"Live TPA Demo Run"}</h3>
+                        <p>{"Show one raw TPA packet becoming a scored lead, investigation case, human writeback, and value proof without switching scripts mid-demo."}</p>
+                    </div>
+                    <span class="status-token strong">{"TPA packet -> risk queue -> case -> value proof"}</span>
+                </div>
+                <div class="inbox-pipeline live-demo-flow">
+                    {pipeline_step("Receive", "raw TPA packet", "done")}
+                    {pipeline_step("Normalize", "canonical claim", if matches!(&*normalize_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                    {pipeline_step("Score", "risk + routing", if matches!(&*score_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                    {pipeline_step("Investigate", "lead + case", if matches!(&*live_demo_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                    {pipeline_step("Prove Value", "prevented payment", if matches!(&*live_demo_state, ApiState::Ready(_)) { "done" } else { "pending" })}
+                </div>
+                <div class="button-row">
+                    <button onclick={run_live_demo} disabled={matches!(&*live_demo_state, ApiState::Loading)}>
+                        {if matches!(&*live_demo_state, ApiState::Loading) { "Running live demo..." } else { "Run full TPA demo" }}
+                    </button>
+                </div>
+                <LiveTpaDemoView state={(*live_demo_state).clone()} />
+            </section>
 
             <div class="action-bar">
                 <button onclick={normalize.clone()} disabled={matches!(&*normalize_state, ApiState::Loading)}>
@@ -9876,6 +10144,61 @@ fn score_result_view(props: &ScoreResultProps) -> Html {
                 },
             }}
         </section>
+    }
+}
+
+#[derive(Properties, PartialEq)]
+struct LiveTpaDemoProps {
+    state: ApiState<LiveTpaDemoRun>,
+}
+
+#[function_component(LiveTpaDemoView)]
+fn live_tpa_demo_view(props: &LiveTpaDemoProps) -> Html {
+    html! {
+        <>
+            {match &props.state {
+                ApiState::Idle => html! {
+                    <p class="empty">{"Run the full TPA demo when you want the audience to see the system move from inbound packet to prevented-payment value proof."}</p>
+                },
+                ApiState::Loading => html! {
+                    <div class="handoff-status pending">
+                        <span>{"Live demo running"}</span>
+                        <strong>{"Normalizing, scoring, opening case, and writing back outcome"}</strong>
+                        <small>{"The UI is calling the same APIs that the external TPA demo script calls."}</small>
+                    </div>
+                },
+                ApiState::Failed(error) => html! {
+                    <div class="handoff-status blocked">
+                        <span>{"Live demo stopped"}</span>
+                        <strong>{"Fix the runtime before presenting"}</strong>
+                        <small>{error}</small>
+                    </div>
+                },
+                ApiState::Ready(run) => html! {
+                    <>
+                        <div class="handoff-status done">
+                            <span>{"Live demo complete"}</span>
+                            <strong>{format!("{} prevented payment recorded", run.claim_amount)}</strong>
+                            <small>{"The claim is now visible in Leads & Cases and the value proof dashboard reflects the writeback."}</small>
+                        </div>
+                        <div class="score-hero compact-metrics">
+                            <div><span>{"Claim"}</span><strong>{&run.claim_id}</strong></div>
+                            <div><span>{"Risk"}</span><strong>{format!("{} / {}", run.risk_score, run.rag)}</strong></div>
+                            <div><span>{"Decision"}</span><strong>{&run.decision_outcome}</strong></div>
+                        </div>
+                        <div class="summary-grid">
+                            <div><span>{"Inbox run"}</span><strong>{&run.inbox_run_id}</strong></div>
+                            <div><span>{"Score run"}</span><strong>{&run.score_run_id}</strong></div>
+                            <div><span>{"Lead"}</span><strong>{&run.lead_id}</strong></div>
+                            <div><span>{"Case"}</span><strong>{format!("{} / {}", run.case_id, run.case_status)}</strong></div>
+                            <div><span>{"Investigation audit"}</span><strong>{&run.investigation_audit_id}</strong></div>
+                            <div><span>{"Dashboard value"}</span><strong>{format!("{} -> {}", run.prevented_before, run.prevented_after)}</strong></div>
+                        </div>
+                        <small>{format!("confirmed dashboard saving amount: {}", run.dashboard_saving_after)}</small>
+                    </>
+                },
+            }}
+        </>
     }
 }
 
@@ -12356,11 +12679,35 @@ fn selected_case<'a>(
     }
 }
 
+fn latest_lead_for_score<'a>(
+    snapshot: &'a LeadsCasesSnapshot,
+    claim_id: &str,
+    score_run_id: &str,
+) -> Option<&'a LeadRecord> {
+    snapshot
+        .leads
+        .iter()
+        .find(|lead| lead.claim_id == claim_id && lead.run_id == score_run_id)
+        .or_else(|| snapshot.leads.iter().find(|lead| lead.claim_id == claim_id))
+}
+
 fn lead_for_case<'a>(
     snapshot: &'a LeadsCasesSnapshot,
     case: &CaseRecord,
 ) -> Option<&'a LeadRecord> {
     snapshot.leads.iter().find(|lead| lead.lead_id == case.lead_id)
+}
+
+fn live_tpa_demo_payload(summary: &DashboardSummary) -> Result<Value, String> {
+    let suffix = format!(
+        "{}-{}-{}",
+        summary.suspected_claims, summary.confirmed_fwa, summary.rule_hits
+    );
+    let mut payload = serde_json::from_str::<Value>(LIVE_TPA_DEMO_PAYLOAD)
+        .map_err(|error| format!("live demo payload JSON is invalid: {error}"))?;
+    payload["transNo"] = Value::String(format!("TPA-LIVE-DEMO-{suffix}"));
+    payload["reportCase"]["reportNo"] = Value::String(format!("CLM-LIVE-DEMO-{suffix}"));
+    Ok(payload)
 }
 
 fn selected_medical_item<'a>(

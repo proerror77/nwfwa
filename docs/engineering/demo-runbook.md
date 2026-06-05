@@ -79,6 +79,10 @@ The script sends a raw TPA inbox payload through normalization, scoring, lead
 triage, case opening, investigation writeback, and Dashboard value refresh. The
 default writeback records confirmed `prevented_payment`, so a confirmed blocked
 claim amount is counted as observed prevented payment rather than estimated ROI.
+The default output is a live demo cue card. Add `--format json` for automated
+verification or saved evidence artifacts. If the API was started with a
+non-default `FWA_SOURCE_SYSTEM`, add `--source-system "<value>"` so the payload
+passes the source-system intake gate.
 
 ## 4. Show Operations Studio
 
