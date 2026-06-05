@@ -197,6 +197,10 @@ pub fn build_app_with_parts(
             post(ops_rules::save_rule_candidate),
         )
         .route(
+            "/api/v1/ops/rules/candidate-reviews",
+            post(ops_rules::review_rule_candidate),
+        )
+        .route(
             "/api/v1/ops/rules/discover",
             post(ops_rules::discover_rules),
         )

@@ -1505,6 +1505,79 @@ async fn saves_discovered_candidate_rule_for_lifecycle() {
 }
 
 #[tokio::test]
+async fn records_rejected_discovered_candidate_review_without_saving_rule() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate-reviews",
+        r#"{
+          "decision": "rejected",
+          "reviewer": "rule-review",
+          "notes": "Rejected because this candidate is not explainable enough for the governed rule library.",
+          "evidence_refs": ["dataset:inline", "backtest:manual-review"],
+          "rule": {
+            "rule_id": "candidate_tree_rejected_review",
+            "version": 1,
+            "name": "Rejected tree candidate",
+            "scheme_family": "high_risk_claim",
+            "conditions": [
+              {
+                "field": "claim_amount_to_limit_ratio",
+                "operator": ">=",
+                "value": 0.8
+              },
+              {
+                "field": "provider_peer_payment_zscore",
+                "operator": ">=",
+                "value": 1.5
+              }
+            ],
+            "action": {
+              "score": 30,
+              "alert_code": "TREE_REJECTED_REVIEW",
+              "recommended_action": "ManualReview",
+              "reason": "测试拒绝候选规则"
+            }
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["rule_id"], "candidate_tree_rejected_review");
+    assert_eq!(body["decision"], "rejected");
+    assert_eq!(body["entered_rule_library"], false);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/rules/candidate_tree_rejected_review",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "RULE_NOT_FOUND");
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_type=rule.candidate.reviewed&rule_id=candidate_tree_rejected_review",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let event = &body["events"].as_array().unwrap()[0];
+    assert_eq!(event["event_type"], "rule.candidate.reviewed");
+    assert_eq!(event["payload"]["decision"], "rejected");
+    assert_eq!(event["payload"]["entered_rule_library"], false);
+}
+
+#[tokio::test]
 async fn deterministic_adjudication_rule_requires_customer_policy_gates() {
     let app = build_app(test_config());
 

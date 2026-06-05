@@ -459,6 +459,30 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/candidate-reviews": {
+                "post": {
+                    "summary": "Record accept or reject review for a discovered rule candidate",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ReviewRuleCandidateRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded rule candidate review",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ReviewRuleCandidateResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/{rule_id}": {
                 "get": {
                     "summary": "Get rule details and versions",
@@ -4412,6 +4436,36 @@ pub async fn openapi_schema() -> Json<Value> {
                         "notes": { "type": "string" },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "ReviewRuleCandidateRequest": {
+                    "type": "object",
+                    "required": ["rule", "decision", "reviewer", "notes", "evidence_refs"],
+                    "properties": {
+                        "rule": { "$ref": "#/components/schemas/RuleDefinition" },
+                        "decision": { "type": "string", "enum": ["accepted", "rejected"] },
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Candidate review notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Structured evidence references must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
+                    }
+                },
+                "ReviewRuleCandidateResponse": {
+                    "type": "object",
+                    "required": ["rule_id", "decision", "entered_rule_library", "evidence_refs"],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "decision": { "type": "string", "enum": ["accepted", "rejected"] },
+                        "entered_rule_library": { "type": "boolean" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },
                 "AuditHistoryEvent": {

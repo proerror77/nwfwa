@@ -4936,8 +4936,12 @@ fn rules_page() -> Html {
     };
 
     let reject_candidate = {
+        let api_key = api_key.clone();
         let selected_candidate_id = selected_candidate_id.clone();
         let discovery_state = discovery_state.clone();
+        let rule_reviewer = rule_reviewer.clone();
+        let rule_review_notes = rule_review_notes.clone();
+        let rule_review_evidence_refs = rule_review_evidence_refs.clone();
         let review_state = review_state.clone();
         let accepted_candidate_ids = accepted_candidate_ids.clone();
         let rejected_candidate_ids = rejected_candidate_ids.clone();
@@ -4955,20 +4959,32 @@ fn rules_page() -> Html {
                 return;
             };
             let candidate_rule_id = rule_candidate_id(&candidate);
-            rejected_candidate_ids.set(push_unique(
-                (*rejected_candidate_ids).clone(),
-                candidate_rule_id.clone(),
-            ));
-            accepted_candidate_ids.set(remove_id(
-                (*accepted_candidate_ids).clone(),
-                &candidate_rule_id,
-            ));
-            review_state.set(ApiState::Ready(json!({
-                "rule_id": candidate_rule_id,
-                "decision": "rejected",
-                "entered_rule_library": false,
-                "summary": "Candidate rejected before entering the governed rule library."
-            })));
+            let api_key = (*api_key).clone();
+            let reviewer = (*rule_reviewer).clone();
+            let notes = (*rule_review_notes).clone();
+            let evidence_refs = parse_tags(&rule_review_evidence_refs);
+            let review_state = review_state.clone();
+            let accepted_candidate_ids = accepted_candidate_ids.clone();
+            let rejected_candidate_ids = rejected_candidate_ids.clone();
+            review_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match reject_rule_candidate(api_key, candidate.rule, reviewer, notes, evidence_refs)
+                    .await
+                {
+                    Ok(response) => {
+                        rejected_candidate_ids.set(push_unique(
+                            (*rejected_candidate_ids).clone(),
+                            candidate_rule_id.clone(),
+                        ));
+                        accepted_candidate_ids.set(remove_id(
+                            (*accepted_candidate_ids).clone(),
+                            &candidate_rule_id,
+                        ));
+                        review_state.set(ApiState::Ready(response));
+                    }
+                    Err(error) => review_state.set(ApiState::Failed(error)),
+                }
+            });
         })
     };
 
@@ -12701,6 +12717,37 @@ async fn accept_rule_candidate(
         "saved": saved,
         "review": review
     }))
+}
+
+async fn reject_rule_candidate(
+    api_key: String,
+    rule: Value,
+    reviewer: String,
+    notes: String,
+    evidence_refs: Vec<String>,
+) -> Result<Value, String> {
+    if evidence_refs.is_empty() {
+        return Err("rule review actions require evidence refs".into());
+    }
+    if reviewer.trim().is_empty() {
+        return Err("reviewer is required".into());
+    }
+    if notes.trim().is_empty() {
+        return Err("human review notes are required".into());
+    }
+
+    request_json::<Value>(
+        "/api/v1/ops/rules/candidate-reviews",
+        api_key,
+        json!({
+            "decision": "rejected",
+            "reviewer": reviewer.trim(),
+            "notes": notes.trim(),
+            "evidence_refs": evidence_refs,
+            "rule": rule,
+        }),
+    )
+    .await
 }
 
 fn rule_demo_samples() -> Vec<Value> {

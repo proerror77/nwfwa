@@ -192,6 +192,23 @@ pub struct RuleDiscoveryModelExplanation {
     pub reason: String,
 }
 
+#[derive(Debug, Deserialize)]
+pub struct ReviewRuleCandidateRequest {
+    pub rule: Rule,
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ReviewRuleCandidateResponse {
+    pub rule_id: String,
+    pub decision: String,
+    pub entered_rule_library: bool,
+    pub evidence_refs: Vec<String>,
+}
+
 #[derive(Debug, Serialize)]
 pub struct RuleDiscoveryResponse {
     pub sample_count: usize,
@@ -1034,6 +1051,103 @@ pub async fn save_rule_candidate(
     .await
     .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
     Ok(Json(detail))
+}
+
+pub async fn review_rule_candidate(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Json(request): Json<ReviewRuleCandidateRequest>,
+) -> Result<Json<ReviewRuleCandidateResponse>, ApiError> {
+    let actor = authorize_permission(&state, &headers, "ops:rules:review")?;
+    if !matches!(request.decision.as_str(), "accepted" | "rejected") {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CANDIDATE_REVIEW_DECISION",
+            "decision must be accepted or rejected",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_CANDIDATE_REVIEW_NOTES",
+            "candidate review notes are required",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_CANDIDATE_REVIEW_EVIDENCE",
+            "candidate review evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_CANDIDATE_REVIEW",
+            "candidate review notes and evidence_refs must not contain PII",
+        ));
+    }
+
+    let entered_rule_library = request.decision == "accepted";
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: format!(
+                "rule_candidate_review_{}",
+                rule_id_slug(&request.rule.rule_id)
+            ),
+            claim_id: request.rule.rule_id.clone(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "rule.candidate.reviewed".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "Rule candidate {}: {}",
+                request.rule.rule_id, request.decision
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "rule_id": request.rule.rule_id,
+                "rule_version": request.rule.version,
+                "decision": request.decision,
+                "reviewer": request.reviewer,
+                "entered_rule_library": entered_rule_library,
+                "condition_count": request.rule.conditions.len(),
+                "note_present": !request.notes.trim().is_empty(),
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+        .map_err(internal_error("RULE_CANDIDATE_REVIEW_AUDIT_SAVE_FAILED"))?;
+
+    Ok(Json(ReviewRuleCandidateResponse {
+        rule_id: request.rule.rule_id,
+        decision: request.decision,
+        entered_rule_library,
+        evidence_refs: request.evidence_refs,
+    }))
 }
 
 pub async fn submit_rule(
