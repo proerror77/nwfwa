@@ -710,6 +710,34 @@ and monitoring-report evidence refs. It returns next actions such as continued
 monitoring or retraining preparation, but it does not create retraining jobs,
 activate models, or rollback models automatically.
 
+Submitted monitoring review tasks are visible in the operator queue:
+
+```bash
+curl -H "x-api-key: $FWA_API_KEY" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-monitoring-review-queue"
+```
+
+Human reviewers close the loop by recording an explicit decision. This records
+`model.mlops_monitoring.review_task_reviewed` only; `prepare_retraining` is a
+review outcome, not an automatic retraining job:
+
+```bash
+curl -X POST \
+  -H "x-api-key: $FWA_API_KEY" \
+  -H "content-type: application/json" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-monitoring-review-tasks/<task_id>/reviews" \
+  -d '{
+    "decision": "prepare_retraining",
+    "reviewer": "model-governance",
+    "notes": "Approved monitoring signal for retraining preparation.",
+    "evidence_refs": [
+      "model_versions:baseline_fwa:0.2.0",
+      "model_monitoring_reports:<report_uri>",
+      "model_monitoring_review_tasks:<task_id>"
+    ]
+  }'
+```
+
 Run the Rust monitoring cycle executor when the plan, artifact evaluation, and
 runtime reports already exist:
 
@@ -763,6 +791,32 @@ The API records `model.mlops_alert_delivery.submitted` with model-version and
 scheduler-execution evidence refs. This is a customer alert-router handoff
 record; it does not create retraining jobs, activate models, rollback models,
 or assign fraud labels.
+
+Alert delivery tasks are also exposed as a human-confirmed queue:
+
+```bash
+curl -H "x-api-key: $FWA_API_KEY" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-alert-delivery-queue"
+```
+
+Customer receipt or escalation is recorded through an append-only review event:
+
+```bash
+curl -X POST \
+  -H "x-api-key: $FWA_API_KEY" \
+  -H "content-type: application/json" \
+  "$FWA_API_BASE_URL/api/v1/ops/models/baseline_fwa/mlops-alert-delivery-tasks/<task_id>/reviews" \
+  -d '{
+    "decision": "receipt_confirmed",
+    "reviewer": "alert-router-owner",
+    "notes": "Confirmed customer alert router receipt.",
+    "evidence_refs": [
+      "model_versions:baseline_fwa:0.2.0",
+      "mlops_scheduler_execution_reports:<scheduler_report_uri>",
+      "mlops_alert_delivery_tasks:<task_id>"
+    ]
+  }'
+```
 
 Deliver queued MLOps alerts to a customer receiver webhook:
 

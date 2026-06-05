@@ -1299,6 +1299,32 @@ struct ModelMonitoringReviewTask {
     task_kind: String,
     trigger: String,
     review_status: String,
+    reviewer: Option<String>,
+    review_audit_id: Option<String>,
+    evidence_refs: Vec<String>,
+    created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct MlopsAlertDeliveryQueueResponse {
+    tasks: Vec<MlopsAlertDeliveryTask>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct MlopsAlertDeliveryTask {
+    task_id: String,
+    audit_id: String,
+    model_key: String,
+    model_version: String,
+    scheduler_execution_report_uri: String,
+    alert_delivery_status: String,
+    task_kind: String,
+    trigger: String,
+    route_key: String,
+    delivery_status: String,
+    review_status: String,
+    reviewer: Option<String>,
+    review_audit_id: Option<String>,
     evidence_refs: Vec<String>,
     created_at: Option<String>,
 }
@@ -1309,6 +1335,7 @@ struct MlopsWorkspaceSnapshot {
     model_ops: ModelOpsSnapshot,
     retraining_jobs: Vec<ModelRetrainingJobRecord>,
     monitoring_review_tasks: Vec<ModelMonitoringReviewTask>,
+    alert_delivery_tasks: Vec<MlopsAlertDeliveryTask>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -5632,6 +5659,31 @@ fn mlops_workspace_page() -> Html {
     let actor = use_state(|| "mlops-operator".to_string());
     let reviewer = use_state(|| "risk-model-owner".to_string());
     let promotion_decision = use_state(|| "approved".to_string());
+    let monitoring_task_id = use_state(String::new);
+    let monitoring_decision = use_state(|| "acknowledged".to_string());
+    let alert_task_id = use_state(String::new);
+    let alert_decision = use_state(|| "receipt_confirmed".to_string());
+    let retraining_job_id = use_state(String::new);
+    let retraining_status = use_state(|| "validation".to_string());
+    let candidate_model_version = use_state(|| "0.2.0-candidate".to_string());
+    let candidate_artifact_uri =
+        use_state(|| "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json".to_string());
+    let validation_report_uri =
+        use_state(|| "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json".to_string());
+    let candidate_auc = use_state(|| "0.92".to_string());
+    let candidate_ks = use_state(|| "0.51".to_string());
+    let candidate_precision = use_state(|| "0.78".to_string());
+    let candidate_recall = use_state(|| "0.64".to_string());
+    let candidate_f1 = use_state(|| "0.70".to_string());
+    let candidate_accuracy = use_state(|| "0.89".to_string());
+    let candidate_threshold = use_state(|| "0.70".to_string());
+    let candidate_confusion_matrix =
+        use_state(|| r#"{"tp": 64, "fp": 18, "tn": 820, "fn": 36}"#.to_string());
+    let candidate_feature_importance_uri =
+        use_state(|| "data/eval/provider_retraining_candidate/feature_importance.parquet".to_string());
+    let candidate_metrics_json = use_state(|| {
+        r#"{"data_quality_status":"passed","split_strategy":"time_group_split","shadow_comparison_status":"passed","review_capacity_threshold_status":"passed"}"#.to_string()
+    });
     let action_notes = use_state(|| {
         "non-PII governed provider model release review for demo evidence".to_string()
     });
@@ -5670,6 +5722,25 @@ fn mlops_workspace_page() -> Html {
         let actor = actor.clone();
         let reviewer = reviewer.clone();
         let promotion_decision = promotion_decision.clone();
+        let monitoring_task_id = monitoring_task_id.clone();
+        let monitoring_decision = monitoring_decision.clone();
+        let alert_task_id = alert_task_id.clone();
+        let alert_decision = alert_decision.clone();
+        let retraining_job_id = retraining_job_id.clone();
+        let retraining_status = retraining_status.clone();
+        let candidate_model_version = candidate_model_version.clone();
+        let candidate_artifact_uri = candidate_artifact_uri.clone();
+        let validation_report_uri = validation_report_uri.clone();
+        let candidate_auc = candidate_auc.clone();
+        let candidate_ks = candidate_ks.clone();
+        let candidate_precision = candidate_precision.clone();
+        let candidate_recall = candidate_recall.clone();
+        let candidate_f1 = candidate_f1.clone();
+        let candidate_accuracy = candidate_accuracy.clone();
+        let candidate_threshold = candidate_threshold.clone();
+        let candidate_confusion_matrix = candidate_confusion_matrix.clone();
+        let candidate_feature_importance_uri = candidate_feature_importance_uri.clone();
+        let candidate_metrics_json = candidate_metrics_json.clone();
         let action_notes = action_notes.clone();
         let evidence_refs = evidence_refs.clone();
         let action_state = action_state.clone();
@@ -5680,6 +5751,25 @@ fn mlops_workspace_page() -> Html {
             let actor = (*actor).clone();
             let reviewer = (*reviewer).clone();
             let promotion_decision = (*promotion_decision).clone();
+            let monitoring_task_id = (*monitoring_task_id).clone();
+            let monitoring_decision = (*monitoring_decision).clone();
+            let alert_task_id = (*alert_task_id).clone();
+            let alert_decision = (*alert_decision).clone();
+            let retraining_job_id = (*retraining_job_id).clone();
+            let retraining_status = (*retraining_status).clone();
+            let candidate_model_version = (*candidate_model_version).clone();
+            let candidate_artifact_uri = (*candidate_artifact_uri).clone();
+            let validation_report_uri = (*validation_report_uri).clone();
+            let candidate_auc = (*candidate_auc).clone();
+            let candidate_ks = (*candidate_ks).clone();
+            let candidate_precision = (*candidate_precision).clone();
+            let candidate_recall = (*candidate_recall).clone();
+            let candidate_f1 = (*candidate_f1).clone();
+            let candidate_accuracy = (*candidate_accuracy).clone();
+            let candidate_threshold = (*candidate_threshold).clone();
+            let candidate_confusion_matrix = (*candidate_confusion_matrix).clone();
+            let candidate_feature_importance_uri = (*candidate_feature_importance_uri).clone();
+            let candidate_metrics_json = (*candidate_metrics_json).clone();
             let action_notes = (*action_notes).clone();
             let evidence_refs = parse_tags(&evidence_refs);
             let action_state = action_state.clone();
@@ -5693,6 +5783,25 @@ fn mlops_workspace_page() -> Html {
                     actor,
                     reviewer,
                     promotion_decision,
+                    monitoring_task_id,
+                    monitoring_decision,
+                    alert_task_id,
+                    alert_decision,
+                    retraining_job_id,
+                    retraining_status,
+                    candidate_model_version,
+                    candidate_artifact_uri,
+                    validation_report_uri,
+                    candidate_auc,
+                    candidate_ks,
+                    candidate_precision,
+                    candidate_recall,
+                    candidate_f1,
+                    candidate_accuracy,
+                    candidate_threshold,
+                    candidate_confusion_matrix,
+                    candidate_feature_importance_uri,
+                    candidate_metrics_json,
                     action_notes,
                     evidence_refs,
                 )
@@ -5803,6 +5912,252 @@ fn mlops_workspace_page() -> Html {
                                 <option value="rejected">{"rejected"}</option>
                             </select>
                         </label>
+                        <label class="mlops-field">
+                            {"Monitoring task id"}
+                            <input
+                                value={(*monitoring_task_id).clone()}
+                                oninput={{
+                                    let monitoring_task_id = monitoring_task_id.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        monitoring_task_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Monitoring decision"}
+                            <select
+                                value={(*monitoring_decision).clone()}
+                                onchange={{
+                                    let monitoring_decision = monitoring_decision.clone();
+                                    Callback::from(move |event: Event| {
+                                        monitoring_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="acknowledged">{"acknowledged"}</option>
+                                <option value="rejected">{"rejected"}</option>
+                                <option value="prepare_retraining">{"prepare_retraining"}</option>
+                                <option value="open_shadow_review">{"open_shadow_review"}</option>
+                                <option value="open_rollback_review">{"open_rollback_review"}</option>
+                                <option value="closed">{"closed"}</option>
+                            </select>
+                        </label>
+                        <label class="mlops-field">
+                            {"Alert task id"}
+                            <input
+                                value={(*alert_task_id).clone()}
+                                oninput={{
+                                    let alert_task_id = alert_task_id.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        alert_task_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Alert decision"}
+                            <select
+                                value={(*alert_decision).clone()}
+                                onchange={{
+                                    let alert_decision = alert_decision.clone();
+                                    Callback::from(move |event: Event| {
+                                        alert_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="receipt_confirmed">{"receipt_confirmed"}</option>
+                                <option value="delivery_failed">{"delivery_failed"}</option>
+                                <option value="closed_no_action">{"closed_no_action"}</option>
+                                <option value="escalated_for_governance_review">{"escalated_for_governance_review"}</option>
+                            </select>
+                        </label>
+                        <label class="mlops-field">
+                            {"Training job id"}
+                            <input
+                                value={(*retraining_job_id).clone()}
+                                oninput={{
+                                    let retraining_job_id = retraining_job_id.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        retraining_job_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Training status"}
+                            <select
+                                value={(*retraining_status).clone()}
+                                onchange={{
+                                    let retraining_status = retraining_status.clone();
+                                    Callback::from(move |event: Event| {
+                                        retraining_status.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="running">{"running"}</option>
+                                <option value="validation">{"validation"}</option>
+                                <option value="completed">{"completed"}</option>
+                                <option value="failed">{"failed"}</option>
+                                <option value="cancelled">{"cancelled"}</option>
+                            </select>
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate version"}
+                            <input
+                                value={(*candidate_model_version).clone()}
+                                oninput={{
+                                    let candidate_model_version = candidate_model_version.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_model_version.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate artifact"}
+                            <input
+                                value={(*candidate_artifact_uri).clone()}
+                                oninput={{
+                                    let candidate_artifact_uri = candidate_artifact_uri.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_artifact_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Validation report"}
+                            <input
+                                value={(*validation_report_uri).clone()}
+                                oninput={{
+                                    let validation_report_uri = validation_report_uri.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        validation_report_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate AUC"}
+                            <input
+                                value={(*candidate_auc).clone()}
+                                oninput={{
+                                    let candidate_auc = candidate_auc.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_auc.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate KS"}
+                            <input
+                                value={(*candidate_ks).clone()}
+                                oninput={{
+                                    let candidate_ks = candidate_ks.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_ks.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate precision"}
+                            <input
+                                value={(*candidate_precision).clone()}
+                                oninput={{
+                                    let candidate_precision = candidate_precision.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_precision.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate recall"}
+                            <input
+                                value={(*candidate_recall).clone()}
+                                oninput={{
+                                    let candidate_recall = candidate_recall.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_recall.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate F1"}
+                            <input
+                                value={(*candidate_f1).clone()}
+                                oninput={{
+                                    let candidate_f1 = candidate_f1.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_f1.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate accuracy"}
+                            <input
+                                value={(*candidate_accuracy).clone()}
+                                oninput={{
+                                    let candidate_accuracy = candidate_accuracy.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_accuracy.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate threshold"}
+                            <input
+                                value={(*candidate_threshold).clone()}
+                                oninput={{
+                                    let candidate_threshold = candidate_threshold.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_threshold.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Feature importance URI"}
+                            <input
+                                value={(*candidate_feature_importance_uri).clone()}
+                                oninput={{
+                                    let candidate_feature_importance_uri = candidate_feature_importance_uri.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_feature_importance_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field mlops-evidence-field">
+                            {"Confusion matrix JSON"}
+                            <textarea
+                                value={(*candidate_confusion_matrix).clone()}
+                                oninput={{
+                                    let candidate_confusion_matrix = candidate_confusion_matrix.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_confusion_matrix.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field mlops-evidence-field">
+                            {"Metrics JSON"}
+                            <textarea
+                                value={(*candidate_metrics_json).clone()}
+                                oninput={{
+                                    let candidate_metrics_json = candidate_metrics_json.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_metrics_json.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
                         <label class="mlops-field mlops-evidence-field">
                             {"Evidence refs"}
                             <input
@@ -5835,6 +6190,15 @@ fn mlops_workspace_page() -> Html {
                     </div>
                     <div class="button-row mlops-action-buttons">
                         <button onclick={governed_action("queue_retraining")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Request provider retraining"}</button>
+                        <button onclick={governed_action("monitoring_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit monitoring decision"}</button>
+                        <button onclick={governed_action("monitoring_reject")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Reject task"}</button>
+                        <button onclick={governed_action("monitoring_prepare")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Prepare retraining from task"}</button>
+                        <button onclick={governed_action("monitoring_rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Open rollback review"}</button>
+                        <button onclick={governed_action("alert_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit alert decision"}</button>
+                        <button onclick={governed_action("alert_escalate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Escalate alert to review"}</button>
+                        <button onclick={governed_action("claim_retraining_job")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Claim next queued job"}</button>
+                        <button onclick={governed_action("update_retraining_job")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Update job status"}</button>
+                        <button onclick={governed_action("register_retraining_output")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Register provider output"}</button>
                         <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit release review"}</button>
                         <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
                         <button onclick={governed_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback active model"}</button>
@@ -5868,6 +6232,7 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
                         {mlops_promotion_gates(snapshot)}
                         {mlops_monitoring_summary(snapshot)}
                         {mlops_monitoring_review_queue(snapshot)}
+                        {mlops_alert_delivery_queue(snapshot)}
                         {mlops_training_handoff(snapshot)}
                         {mlops_dataset_readiness(snapshot)}
                         {mlops_training_jobs(snapshot)}
@@ -5991,7 +6356,7 @@ fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
         <section class="panel result-stack mlops-training-panel">
             <div class="section-header">
                 <div>
-                    <h3>{"Training Jobs"}</h3>
+                    <h3>{"Provider Training Job Operations"}</h3>
                     <p>{"Offline retraining jobs prove dispatch, validation output, artifact identity, and registration status without automatic promotion."}</p>
                 </div>
                 <span class="status-token neutral">{format!("{} jobs", snapshot.retraining_jobs.len())}</span>
@@ -6184,7 +6549,50 @@ fn mlops_monitoring_review_queue(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                                 <span class={classes!("status-token", status_tone(&task.review_status))}>{&task.review_status}</span>
                                 <span>{format!("{} / {}", task.monitoring_status, task.retraining_recommendation)}</span>
                                 <span>{refs_label(&task.evidence_refs)}</span>
-                                <small class="row-detail">{format!("report {} / task {}", task.report_uri, task.task_id)}</small>
+                                <small class="row-detail">{format!("required refs model_versions:{}:{}; model_monitoring_reports:{}; model_monitoring_review_tasks:{}", task.model_key, task.model_version, task.report_uri, task.task_id)}</small>
+                            </div>
+                        })}
+                    </div>
+                </details>
+            }
+        </section>
+    }
+}
+
+fn mlops_alert_delivery_queue(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+    html! {
+        <section class="panel result-stack mlops-monitoring-panel">
+            <div class="section-header">
+                <div>
+                    <h3>{"Alert Delivery Queue"}</h3>
+                    <p>{"Alert delivery tasks track customer alert-router handoff and receipt confirmation before any governance escalation."}</p>
+                </div>
+                <span class="status-token neutral">{format!("{} alerts", snapshot.alert_delivery_tasks.len())}</span>
+            </div>
+            if snapshot.alert_delivery_tasks.is_empty() {
+                <p class="empty">{"No alert delivery tasks returned for this model."}</p>
+            } else {
+                <details class="data-source-detail governance-detail release-evidence-detail" open=true>
+                    <summary>{format!("Alert delivery detail: {} tasks", snapshot.alert_delivery_tasks.len())}</summary>
+                    <div class="ops-table">
+                        <div class="ops-table-head">
+                            <span>{"Task"}</span>
+                            <span>{"Route"}</span>
+                            <span>{"Delivery"}</span>
+                            <span>{"Receipt"}</span>
+                            <span>{"Evidence"}</span>
+                        </div>
+                        {for snapshot.alert_delivery_tasks.iter().take(8).map(|task| html! {
+                            <div class="ops-table-row">
+                                <div class="primary-cell">
+                                    <strong>{&task.task_kind}</strong>
+                                    <span>{format!("{} {} / {}", task.model_key, task.model_version, task.audit_id)}</span>
+                                </div>
+                                <span>{format!("{} / {}", empty_label(&task.trigger), empty_label(&task.route_key))}</span>
+                                <span class={classes!("status-token", status_tone(&task.delivery_status))}>{&task.delivery_status}</span>
+                                <span class={classes!("status-token", status_tone(&task.review_status))}>{&task.review_status}</span>
+                                <span>{refs_label(&task.evidence_refs)}</span>
+                                <small class="row-detail">{format!("required refs model_versions:{}:{}; mlops_scheduler_execution_reports:{}; mlops_alert_delivery_tasks:{}", task.model_key, task.model_version, task.scheduler_execution_report_uri, task.task_id)}</small>
                             </div>
                         })}
                     </div>
@@ -11108,6 +11516,15 @@ async fn get_mlops_workspace_snapshot(
             "/api/v1/ops/models/{}/mlops-monitoring-review-queue",
             model_ops.performance.model_key
         ),
+        api_key.clone(),
+    )
+    .await?
+    .tasks;
+    let alert_delivery_tasks = request_get_json::<MlopsAlertDeliveryQueueResponse>(
+        &format!(
+            "/api/v1/ops/models/{}/mlops-alert-delivery-queue",
+            model_ops.performance.model_key
+        ),
         api_key,
     )
     .await?
@@ -11117,6 +11534,7 @@ async fn get_mlops_workspace_snapshot(
         model_ops,
         retraining_jobs,
         monitoring_review_tasks,
+        alert_delivery_tasks,
     })
 }
 
@@ -11127,6 +11545,25 @@ async fn execute_mlops_governed_action(
     actor: String,
     reviewer: String,
     promotion_decision: String,
+    monitoring_task_id: String,
+    monitoring_decision: String,
+    alert_task_id: String,
+    alert_decision: String,
+    retraining_job_id: String,
+    retraining_status: String,
+    candidate_model_version: String,
+    candidate_artifact_uri: String,
+    validation_report_uri: String,
+    candidate_auc: String,
+    candidate_ks: String,
+    candidate_precision: String,
+    candidate_recall: String,
+    candidate_f1: String,
+    candidate_accuracy: String,
+    candidate_threshold: String,
+    candidate_confusion_matrix: String,
+    candidate_feature_importance_uri: String,
+    candidate_metrics_json: String,
     notes: String,
     evidence_refs: Vec<String>,
 ) -> Result<Value, String> {
@@ -11139,6 +11576,142 @@ async fn execute_mlops_governed_action(
                 json!({
                     "requested_by": actor.trim(),
                     "notes": notes.trim(),
+                }),
+            )
+            .await
+        }
+        "monitoring_review" | "monitoring_reject" | "monitoring_prepare" | "monitoring_rollback" => {
+            if monitoring_task_id.trim().is_empty() {
+                return Err("monitoring review actions require a monitoring task id".into());
+            }
+            if evidence_refs.is_empty() {
+                return Err("monitoring review actions require evidence refs".into());
+            }
+            let decision = match action {
+                "monitoring_reject" => "rejected",
+                "monitoring_prepare" => "prepare_retraining",
+                "monitoring_rollback" => "open_rollback_review",
+                _ => monitoring_decision.trim(),
+            };
+            request_json(
+                &format!(
+                    "/api/v1/ops/models/{model_key}/mlops-monitoring-review-tasks/{}/reviews",
+                    monitoring_task_id.trim()
+                ),
+                api_key,
+                json!({
+                    "decision": decision,
+                    "reviewer": reviewer.trim(),
+                    "notes": notes.trim(),
+                    "evidence_refs": evidence_refs,
+                }),
+            )
+            .await
+        }
+        "alert_review" | "alert_escalate" => {
+            if alert_task_id.trim().is_empty() {
+                return Err("alert review actions require an alert task id".into());
+            }
+            if evidence_refs.is_empty() {
+                return Err("alert review actions require evidence refs".into());
+            }
+            let decision = if action == "alert_escalate" {
+                "escalated_for_governance_review"
+            } else {
+                alert_decision.trim()
+            };
+            request_json(
+                &format!(
+                    "/api/v1/ops/models/{model_key}/mlops-alert-delivery-tasks/{}/reviews",
+                    alert_task_id.trim()
+                ),
+                api_key,
+                json!({
+                    "decision": decision,
+                    "reviewer": reviewer.trim(),
+                    "notes": notes.trim(),
+                    "evidence_refs": evidence_refs,
+                }),
+            )
+            .await
+        }
+        "claim_retraining_job" => {
+            request_json(
+                "/api/v1/ops/model-retraining-jobs/claim-next",
+                api_key,
+                json!({
+                    "actor": actor.trim(),
+                    "notes": notes.trim(),
+                    "model_key": model_key,
+                }),
+            )
+            .await
+        }
+        "update_retraining_job" => {
+            if retraining_job_id.trim().is_empty() {
+                return Err("training job status updates require a training job id".into());
+            }
+            request_json(
+                &format!(
+                    "/api/v1/ops/model-retraining-jobs/{}/status",
+                    retraining_job_id.trim()
+                ),
+                api_key,
+                json!({
+                    "status": retraining_status.trim(),
+                    "actor": actor.trim(),
+                    "notes": notes.trim(),
+                }),
+            )
+            .await
+        }
+        "register_retraining_output" => {
+            if retraining_job_id.trim().is_empty() {
+                return Err("provider output registration requires a training job id".into());
+            }
+            if evidence_refs.is_empty() {
+                return Err("provider output registration requires evidence refs".into());
+            }
+            let confusion_matrix_json =
+                parse_json_object(&candidate_confusion_matrix, "confusion matrix")?;
+            let metrics_json = parse_json_object(&candidate_metrics_json, "metrics")?;
+            let auc = parse_optional_unit_metric(&candidate_auc, "AUC")?;
+            let ks = parse_optional_unit_metric(&candidate_ks, "KS")?;
+            let precision = parse_optional_unit_metric(&candidate_precision, "precision")?;
+            let recall = parse_optional_unit_metric(&candidate_recall, "recall")?;
+            let f1 = parse_optional_unit_metric(&candidate_f1, "F1")?;
+            let accuracy = parse_optional_unit_metric(&candidate_accuracy, "accuracy")?;
+            let threshold = parse_optional_unit_metric(&candidate_threshold, "threshold")?;
+            let feature_importance_uri = optional_trimmed_value(&candidate_feature_importance_uri);
+            request_json(
+                &format!(
+                    "/api/v1/ops/model-retraining-jobs/{}/output",
+                    retraining_job_id.trim()
+                ),
+                api_key,
+                json!({
+                    "actor": actor.trim(),
+                    "notes": notes.trim(),
+                    "candidate_model_version": candidate_model_version.trim(),
+                    "artifact_uri": candidate_artifact_uri.trim(),
+                    "artifact_sha256": null,
+                    "training_artifact_uri": null,
+                    "training_artifact_sha256": null,
+                    "serving_manifest_uri": null,
+                    "endpoint_url": null,
+                    "validation_report_uri": validation_report_uri.trim(),
+                    "evaluation_run_id": format!("eval_{}_{}", model_key, candidate_model_version.trim().replace('.', "_").replace('-', "_")),
+                    "evidence_refs": evidence_refs,
+                    "auc": auc,
+                    "ks": ks,
+                    "precision": precision,
+                    "recall": recall,
+                    "f1": f1,
+                    "accuracy": accuracy,
+                    "threshold": threshold,
+                    "confusion_matrix_json": confusion_matrix_json,
+                    "feature_importance_uri": feature_importance_uri,
+                    "metrics_json": metrics_json,
                 }),
             )
             .await
@@ -12744,6 +13317,37 @@ fn parse_json_array(input: &str, label: &str) -> Result<Vec<Value>, String> {
         Ok(Value::Array(_)) => Err(format!("{label} must include at least one sample")),
         Ok(_) => Err(format!("{label} must be a JSON array")),
         Err(error) => Err(format!("{label} JSON is invalid: {error}")),
+    }
+}
+
+fn parse_json_object(input: &str, label: &str) -> Result<Value, String> {
+    match serde_json::from_str::<Value>(input.trim()) {
+        Ok(value @ Value::Object(_)) => Ok(value),
+        Ok(_) => Err(format!("{label} must be a JSON object")),
+        Err(error) => Err(format!("{label} JSON is invalid: {error}")),
+    }
+}
+
+fn parse_optional_unit_metric(input: &str, label: &str) -> Result<Option<String>, String> {
+    let value = input.trim();
+    if value.is_empty() {
+        return Ok(None);
+    }
+    let parsed = value
+        .parse::<f64>()
+        .map_err(|error| format!("{label} must be a decimal between 0 and 1: {error}"))?;
+    if !(0.0..=1.0).contains(&parsed) {
+        return Err(format!("{label} must be between 0 and 1"));
+    }
+    Ok(Some(value.to_string()))
+}
+
+fn optional_trimmed_value(input: &str) -> Option<String> {
+    let value = input.trim();
+    if value.is_empty() {
+        None
+    } else {
+        Some(value.to_string())
     }
 }
 

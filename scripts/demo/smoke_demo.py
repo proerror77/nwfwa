@@ -5,6 +5,7 @@ import os
 import sys
 import time
 import urllib.error
+import urllib.parse
 import urllib.request
 from decimal import Decimal
 
@@ -2515,6 +2516,123 @@ def main():
         "retraining readiness should not have blockers",
     )
 
+    monitoring_review_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-monitoring-review-queue",
+    )
+    assert_true(
+        len(monitoring_review_queue.get("tasks", [])) >= 1,
+        "MLOps monitoring review queue should include seeded review tasks",
+    )
+    assert_true(
+        monitoring_review_queue["tasks"][0].get("review_status") in {"open", "acknowledged", "prepare_retraining"},
+        "MLOps monitoring review task missing governed review status",
+    )
+    monitoring_task = monitoring_review_queue["tasks"][0]
+    monitoring_task_id = monitoring_task["task_id"]
+    request(
+        "POST",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-monitoring-review-tasks/{urllib.parse.quote(monitoring_task_id, safe='')}/reviews",
+        {
+            "decision": "prepare_retraining",
+            "reviewer": "model-governance-demo",
+            "notes": "Demo smoke accepts this monitoring task for retraining preparation.",
+            "evidence_refs": [
+                f"model_versions:{monitoring_task['model_key']}:{monitoring_task['model_version']}",
+                f"model_monitoring_reports:{monitoring_task['report_uri']}",
+                f"model_monitoring_review_tasks:{monitoring_task_id}",
+            ],
+        },
+    )
+    monitoring_review_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-monitoring-review-queue",
+    )
+    monitoring_task = next(
+        task
+        for task in monitoring_review_queue.get("tasks", [])
+        if task.get("task_id") == monitoring_task_id
+    )
+    assert_true(
+        monitoring_task.get("review_status") == "prepare_retraining",
+        "MLOps monitoring review task should show accepted review status",
+    )
+    assert_true(
+        monitoring_task.get("reviewer") == "model-governance-demo",
+        "MLOps monitoring review task should show reviewer overlay",
+    )
+    monitoring_review_audit = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_type=model.mlops_monitoring.review_task_reviewed&model_key={MODEL_KEY}&limit=5",
+    )
+    assert_true(
+        any(
+            event.get("payload", {}).get("task_id") == monitoring_task_id
+            and event.get("payload", {}).get("notes")
+            for event in monitoring_review_audit.get("events", [])
+        ),
+        "MLOps monitoring review audit should retain human notes",
+    )
+
+    alert_delivery_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-alert-delivery-queue",
+    )
+    assert_true(
+        len(alert_delivery_queue.get("tasks", [])) >= 1,
+        "MLOps alert delivery queue should include seeded delivery tasks",
+    )
+    assert_true(
+        alert_delivery_queue["tasks"][0].get("delivery_status")
+        == "queued_for_external_alert_router",
+        "MLOps alert delivery task missing router delivery status",
+    )
+    alert_task = alert_delivery_queue["tasks"][0]
+    alert_task_id = alert_task["task_id"]
+    request(
+        "POST",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-alert-delivery-tasks/{urllib.parse.quote(alert_task_id, safe='')}/reviews",
+        {
+            "decision": "receipt_confirmed",
+            "reviewer": "alert-router-demo",
+            "notes": "Demo smoke confirms alert-router receipt.",
+            "evidence_refs": [
+                f"model_versions:{alert_task['model_key']}:{alert_task['model_version']}",
+                f"mlops_scheduler_execution_reports:{alert_task['scheduler_execution_report_uri']}",
+                f"mlops_alert_delivery_tasks:{alert_task_id}",
+            ],
+        },
+    )
+    alert_delivery_queue = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/mlops-alert-delivery-queue",
+    )
+    alert_task = next(
+        task
+        for task in alert_delivery_queue.get("tasks", [])
+        if task.get("task_id") == alert_task_id
+    )
+    assert_true(
+        alert_task.get("review_status") == "receipt_confirmed",
+        "MLOps alert delivery task should show receipt confirmation",
+    )
+    assert_true(
+        alert_task.get("reviewer") == "alert-router-demo",
+        "MLOps alert delivery task should show reviewer overlay",
+    )
+    alert_review_audit = request(
+        "GET",
+        f"/api/v1/ops/audit-events?event_type=model.mlops_alert_delivery.task_reviewed&model_key={MODEL_KEY}&limit=5",
+    )
+    assert_true(
+        any(
+            event.get("payload", {}).get("task_id") == alert_task_id
+            and event.get("payload", {}).get("notes")
+            for event in alert_review_audit.get("events", [])
+        ),
+        "MLOps alert delivery review audit should retain human notes",
+    )
+
     retraining_job = request(
         "POST",
         f"/api/v1/ops/models/{MODEL_KEY}/retraining-jobs",
@@ -2552,6 +2670,10 @@ def main():
                 "outcome_labels": label_pool["total_labels"],
                 "roi_summary": roi_summary,
                 "model_governance": model_governance,
+                "mlops_monitoring_review_tasks": len(
+                    monitoring_review_queue.get("tasks", [])
+                ),
+                "mlops_alert_delivery_tasks": len(alert_delivery_queue.get("tasks", [])),
                 "retraining_job_id": retraining_job["job_id"],
                 "discovered_rule": discovered_rule,
                 "qa_feedback_update": qa_feedback_update,

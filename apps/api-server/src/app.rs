@@ -326,12 +326,24 @@ pub fn build_app_with_parts(
             get(ops_models::model_monitoring_review_queue),
         )
         .route(
+            "/api/v1/ops/models/:model_key/mlops-monitoring-review-tasks/:task_id/reviews",
+            post(ops_models::submit_model_monitoring_review_task_review),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/mlops-monitoring-reports",
             post(ops_models::submit_mlops_monitoring_report),
         )
         .route(
             "/api/v1/ops/models/:model_key/mlops-alert-deliveries",
             post(ops_models::submit_mlops_alert_delivery),
+        )
+        .route(
+            "/api/v1/ops/models/:model_key/mlops-alert-delivery-queue",
+            get(ops_models::mlops_alert_delivery_queue),
+        )
+        .route(
+            "/api/v1/ops/models/:model_key/mlops-alert-delivery-tasks/:task_id/reviews",
+            post(ops_models::submit_mlops_alert_delivery_task_review),
         )
         .route(
             "/api/v1/ops/model-retraining-jobs/:job_id/status",

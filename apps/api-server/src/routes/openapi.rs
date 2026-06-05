@@ -1925,6 +1925,60 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/models/{model_key}/mlops-monitoring-review-tasks/{task_id}/reviews": {
+                "post": {
+                    "summary": "Record a human decision for an MLOps monitoring review task",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "task_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitModelMonitoringReviewTaskReviewRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded monitoring review task decision",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ModelMonitoringReviewTaskReviewResponse" }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid decision or missing evidence refs",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        },
+                        "404": {
+                            "description": "Monitoring review task not found",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/models/{model_key}/mlops-monitoring-reports": {
                 "post": {
                     "summary": "Submit a Rust MLOps monitoring report into governance audit",
@@ -1996,6 +2050,84 @@ pub async fn openapi_schema() -> Json<Value> {
                         },
                         "400": {
                             "description": "Invalid alert delivery submission",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/models/{model_key}/mlops-alert-delivery-queue": {
+                "get": {
+                    "summary": "List alert delivery tasks opened by submitted MLOps scheduler reports",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "responses": {
+                        "200": {
+                            "description": "MLOps alert delivery queue",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/MlopsAlertDeliveryQueueResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "/api/v1/ops/models/{model_key}/mlops-alert-delivery-tasks/{task_id}/reviews": {
+                "post": {
+                    "summary": "Record a human receipt or escalation decision for an MLOps alert delivery task",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "model_key",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        },
+                        {
+                            "name": "task_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitMlopsAlertDeliveryTaskReviewRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded alert delivery task review",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/MlopsAlertDeliveryTaskReviewResponse" }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid decision or missing evidence refs",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        },
+                        "404": {
+                            "description": "Alert delivery task not found",
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/ErrorResponse" }
@@ -5615,7 +5747,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelMonitoringReviewTask": {
                     "type": "object",
-                    "required": ["task_id", "audit_id", "model_key", "model_version", "report_uri", "monitoring_status", "retraining_recommendation", "task_kind", "trigger", "review_status", "task", "evidence_refs", "created_at"],
+                    "required": ["task_id", "audit_id", "model_key", "model_version", "report_uri", "monitoring_status", "retraining_recommendation", "task_kind", "trigger", "review_status", "reviewer", "review_audit_id", "task", "evidence_refs", "created_at"],
                     "properties": {
                         "task_id": { "type": "string" },
                         "audit_id": { "type": "string" },
@@ -5627,6 +5759,8 @@ pub async fn openapi_schema() -> Json<Value> {
                         "task_kind": { "type": "string" },
                         "trigger": { "type": "string" },
                         "review_status": { "type": "string" },
+                        "reviewer": { "type": ["string", "null"] },
+                        "review_audit_id": { "type": ["string", "null"] },
                         "task": { "type": "object", "additionalProperties": true },
                         "evidence_refs": {
                             "type": "array",
@@ -5643,6 +5777,103 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ModelMonitoringReviewTask" }
                         }
+                    }
+                },
+                "SubmitModelMonitoringReviewTaskReviewRequest": {
+                    "type": "object",
+                    "required": ["decision", "reviewer", "notes", "evidence_refs"],
+                    "properties": {
+                        "decision": { "type": "string", "enum": ["acknowledged", "rejected", "prepare_retraining", "open_shadow_review", "open_rollback_review", "closed"] },
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Review notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 },
+                            "description": "Must include model_versions:{model_key}:{model_version}, model_monitoring_reports:{report_uri}, and model_monitoring_review_tasks:{task_id}."
+                        }
+                    }
+                },
+                "ModelMonitoringReviewTaskReviewResponse": {
+                    "type": "object",
+                    "required": ["task_id", "model_key", "model_version", "decision", "reviewer", "governance_boundary"],
+                    "properties": {
+                        "task_id": { "type": "string" },
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "decision": { "type": "string" },
+                        "reviewer": { "type": "string" },
+                        "governance_boundary": { "type": "string" }
+                    }
+                },
+                "MlopsAlertDeliveryTask": {
+                    "type": "object",
+                    "required": ["task_id", "audit_id", "model_key", "model_version", "scheduler_execution_report_uri", "alert_delivery_status", "task_kind", "trigger", "route_key", "delivery_status", "review_status", "reviewer", "review_audit_id", "task", "evidence_refs", "created_at"],
+                    "properties": {
+                        "task_id": { "type": "string" },
+                        "audit_id": { "type": "string" },
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "scheduler_execution_report_uri": { "type": "string" },
+                        "alert_delivery_status": { "type": "string" },
+                        "task_kind": { "type": "string" },
+                        "trigger": { "type": "string" },
+                        "route_key": { "type": "string" },
+                        "delivery_status": { "type": "string" },
+                        "review_status": { "type": "string" },
+                        "reviewer": { "type": ["string", "null"] },
+                        "review_audit_id": { "type": ["string", "null"] },
+                        "task": { "type": "object", "additionalProperties": true },
+                        "evidence_refs": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "MlopsAlertDeliveryQueueResponse": {
+                    "type": "object",
+                    "required": ["tasks"],
+                    "properties": {
+                        "tasks": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/MlopsAlertDeliveryTask" }
+                        }
+                    }
+                },
+                "SubmitMlopsAlertDeliveryTaskReviewRequest": {
+                    "type": "object",
+                    "required": ["decision", "reviewer", "notes", "evidence_refs"],
+                    "properties": {
+                        "decision": { "type": "string", "enum": ["receipt_confirmed", "delivery_failed", "closed_no_action", "escalated_for_governance_review"] },
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Review notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 },
+                            "description": "Must include model_versions:{model_key}:{model_version}, mlops_scheduler_execution_reports:{scheduler_execution_report_uri}, and mlops_alert_delivery_tasks:{task_id}."
+                        }
+                    }
+                },
+                "MlopsAlertDeliveryTaskReviewResponse": {
+                    "type": "object",
+                    "required": ["task_id", "model_key", "model_version", "decision", "reviewer", "governance_boundary"],
+                    "properties": {
+                        "task_id": { "type": "string" },
+                        "model_key": { "type": "string" },
+                        "model_version": { "type": "string" },
+                        "decision": { "type": "string" },
+                        "reviewer": { "type": "string" },
+                        "governance_boundary": { "type": "string" }
                     }
                 },
                 "CreateModelRetrainingJobRequest": {

@@ -20,6 +20,7 @@ use fwa_core::{AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::HashMap;
 
 #[derive(Debug, Serialize)]
 pub struct ModelListResponse {
@@ -105,9 +106,29 @@ pub struct ModelMonitoringReviewTask {
     pub task_kind: String,
     pub trigger: String,
     pub review_status: String,
+    pub reviewer: Option<String>,
+    pub review_audit_id: Option<String>,
     pub task: Value,
     pub evidence_refs: Vec<String>,
     pub created_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitModelMonitoringReviewTaskReviewRequest {
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct ModelMonitoringReviewTaskReviewResponse {
+    pub task_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub decision: String,
+    pub reviewer: String,
+    pub governance_boundary: String,
 }
 
 struct SourceDataQualityGate {
@@ -186,6 +207,49 @@ pub struct SubmitMlopsAlertDeliveryResponse {
     pub alert_delivery_task_count: usize,
     pub alert_routing_policy_configured: bool,
     pub next_actions: Vec<String>,
+    pub governance_boundary: String,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MlopsAlertDeliveryQueueResponse {
+    pub tasks: Vec<MlopsAlertDeliveryTask>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MlopsAlertDeliveryTask {
+    pub task_id: String,
+    pub audit_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub scheduler_execution_report_uri: String,
+    pub alert_delivery_status: String,
+    pub task_kind: String,
+    pub trigger: String,
+    pub route_key: String,
+    pub delivery_status: String,
+    pub review_status: String,
+    pub reviewer: Option<String>,
+    pub review_audit_id: Option<String>,
+    pub task: Value,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitMlopsAlertDeliveryTaskReviewRequest {
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Serialize)]
+pub struct MlopsAlertDeliveryTaskReviewResponse {
+    pub task_id: String,
+    pub model_key: String,
+    pub model_version: String,
+    pub decision: String,
+    pub reviewer: String,
     pub governance_boundary: String,
 }
 
@@ -321,6 +385,17 @@ pub async fn model_monitoring_review_queue(
         .list_audit_events(AuditEventListFilter {
             limit: 50,
             event_type: Some("model.mlops_monitoring.report_submitted".into()),
+            model_key: Some(model_key.clone()),
+            customer_scope_id: Some(actor.customer_scope_id.clone()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("MODEL_MONITORING_REVIEW_QUEUE_LIST_FAILED"))?;
+    let review_events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 100,
+            event_type: Some("model.mlops_monitoring.review_task_reviewed".into()),
             model_key: Some(model_key),
             customer_scope_id: Some(actor.customer_scope_id),
             ..Default::default()
@@ -329,8 +404,66 @@ pub async fn model_monitoring_review_queue(
         .map_err(internal_error("MODEL_MONITORING_REVIEW_QUEUE_LIST_FAILED"))?;
 
     Ok(Json(ModelMonitoringReviewQueueResponse {
-        tasks: monitoring_review_tasks_from_events(events),
+        tasks: monitoring_review_tasks_from_events(events, review_events),
     }))
+}
+
+pub async fn submit_model_monitoring_review_task_review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((model_key, task_id)): Path<(String, String)>,
+    Json(request): Json<SubmitModelMonitoringReviewTaskReviewRequest>,
+) -> Result<Json<ModelMonitoringReviewTaskReviewResponse>, ApiError> {
+    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    validate_monitoring_review_task_review_request(&request)?;
+    ensure_model_exists(&state, &model_key).await?;
+
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 50,
+            event_type: Some("model.mlops_monitoring.report_submitted".into()),
+            model_key: Some(model_key.clone()),
+            customer_scope_id: Some(actor.customer_scope_id.clone()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("MODEL_MONITORING_REVIEW_TASK_LIST_FAILED"))?;
+    let task = monitoring_review_tasks_from_events(events, Vec::new())
+        .into_iter()
+        .find(|task| task.task_id == task_id)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MODEL_MONITORING_REVIEW_TASK_NOT_FOUND",
+                "MLOps monitoring review task not found",
+            )
+        })?;
+
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &task.model_key,
+        &task.model_version,
+        "MLOps monitoring review task review",
+    )?;
+    validate_monitoring_review_task_evidence(&request.evidence_refs, &task)?;
+
+    let response = ModelMonitoringReviewTaskReviewResponse {
+        task_id: task.task_id.clone(),
+        model_key: task.model_key.clone(),
+        model_version: task.model_version.clone(),
+        decision: request.decision.clone(),
+        reviewer: request.reviewer.clone(),
+        governance_boundary:
+            "monitoring review task decisions record human governance only; they must not auto-create retraining jobs, activate models, rollback models, or assign fraud labels"
+                .into(),
+    };
+    record_mlops_monitoring_review_task_audit(&state, &actor, &task, &request, &response)
+        .await
+        .map_err(internal_error(
+            "MLOPS_MONITORING_REVIEW_TASK_AUDIT_SAVE_FAILED",
+        ))?;
+    Ok(Json(response))
 }
 
 pub async fn create_model_retraining_job(
@@ -468,6 +601,97 @@ pub async fn submit_mlops_alert_delivery(
     record_mlops_alert_delivery_audit(&state, &actor, &model, &request, &response)
         .await
         .map_err(internal_error("MLOPS_ALERT_DELIVERY_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(response))
+}
+
+pub async fn mlops_alert_delivery_queue(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(model_key): Path<String>,
+) -> Result<Json<MlopsAlertDeliveryQueueResponse>, ApiError> {
+    let actor = authorize(&state, &headers)?;
+    ensure_model_exists(&state, &model_key).await?;
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 50,
+            event_type: Some("model.mlops_alert_delivery.submitted".into()),
+            model_key: Some(model_key.clone()),
+            customer_scope_id: Some(actor.customer_scope_id.clone()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("MLOPS_ALERT_DELIVERY_QUEUE_LIST_FAILED"))?;
+    let review_events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 100,
+            event_type: Some("model.mlops_alert_delivery.task_reviewed".into()),
+            model_key: Some(model_key),
+            customer_scope_id: Some(actor.customer_scope_id),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("MLOPS_ALERT_DELIVERY_QUEUE_LIST_FAILED"))?;
+
+    Ok(Json(MlopsAlertDeliveryQueueResponse {
+        tasks: alert_delivery_tasks_from_events(events, review_events),
+    }))
+}
+
+pub async fn submit_mlops_alert_delivery_task_review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((model_key, task_id)): Path<(String, String)>,
+    Json(request): Json<SubmitMlopsAlertDeliveryTaskReviewRequest>,
+) -> Result<Json<MlopsAlertDeliveryTaskReviewResponse>, ApiError> {
+    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    validate_alert_delivery_task_review_request(&request)?;
+    ensure_model_exists(&state, &model_key).await?;
+    let events = state
+        .repository
+        .list_audit_events(AuditEventListFilter {
+            limit: 50,
+            event_type: Some("model.mlops_alert_delivery.submitted".into()),
+            model_key: Some(model_key.clone()),
+            customer_scope_id: Some(actor.customer_scope_id.clone()),
+            ..Default::default()
+        })
+        .await
+        .map_err(internal_error("MLOPS_ALERT_DELIVERY_TASK_LIST_FAILED"))?;
+    let task = alert_delivery_tasks_from_events(events, Vec::new())
+        .into_iter()
+        .find(|task| task.task_id == task_id)
+        .ok_or_else(|| {
+            ApiError::new(
+                StatusCode::NOT_FOUND,
+                "MLOPS_ALERT_DELIVERY_TASK_NOT_FOUND",
+                "MLOps alert delivery task not found",
+            )
+        })?;
+    validate_target_model_version_evidence(
+        &request.evidence_refs,
+        &task.model_key,
+        &task.model_version,
+        "MLOps alert delivery task review",
+    )?;
+    validate_alert_delivery_task_evidence(&request.evidence_refs, &task)?;
+
+    let response = MlopsAlertDeliveryTaskReviewResponse {
+        task_id: task.task_id.clone(),
+        model_key: task.model_key.clone(),
+        model_version: task.model_version.clone(),
+        decision: request.decision.clone(),
+        reviewer: request.reviewer.clone(),
+        governance_boundary:
+            "alert delivery task reviews record customer alert-router handoff only; they must not create retraining jobs, activate models, rollback models, or assign fraud labels"
+                .into(),
+    };
+    record_mlops_alert_delivery_task_review_audit(&state, &actor, &task, &request, &response)
+        .await
+        .map_err(internal_error(
+            "MLOPS_ALERT_DELIVERY_TASK_AUDIT_SAVE_FAILED",
+        ))?;
     Ok(Json(response))
 }
 
@@ -1093,6 +1317,64 @@ fn validate_monitoring_report_evidence(
     }
 }
 
+fn validate_monitoring_review_task_review_request(
+    request: &SubmitModelMonitoringReviewTaskReviewRequest,
+) -> Result<(), ApiError> {
+    if !matches!(
+        request.decision.as_str(),
+        "acknowledged"
+            | "rejected"
+            | "prepare_retraining"
+            | "open_shadow_review"
+            | "open_rollback_review"
+            | "closed"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK_DECISION",
+            "decision must be acknowledged, rejected, prepare_retraining, open_shadow_review, open_rollback_review, or closed",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_MONITORING_REVIEW_TASK_NOTES",
+            "review notes are required",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE",
+            "monitoring review task evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.reviewer.as_str())
+            .chain(std::iter::once(request.notes.as_str()))
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_MONITORING_REVIEW_TASK_REVIEW",
+            "monitoring review task reviewer, notes, and evidence_refs must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_mlops_alert_delivery_request(
     request: &SubmitMlopsAlertDeliveryRequest,
 ) -> Result<(), ApiError> {
@@ -1200,6 +1482,62 @@ fn validate_mlops_alert_delivery_request(
     Ok(())
 }
 
+fn validate_alert_delivery_task_review_request(
+    request: &SubmitMlopsAlertDeliveryTaskReviewRequest,
+) -> Result<(), ApiError> {
+    if !matches!(
+        request.decision.as_str(),
+        "receipt_confirmed"
+            | "delivery_failed"
+            | "closed_no_action"
+            | "escalated_for_governance_review"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_ALERT_DELIVERY_TASK_DECISION",
+            "decision must be receipt_confirmed, delivery_failed, closed_no_action, or escalated_for_governance_review",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_ALERT_DELIVERY_TASK_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_MLOPS_ALERT_DELIVERY_TASK_NOTES",
+            "review notes are required",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_ALERT_DELIVERY_TASK_EVIDENCE",
+            "alert delivery task evidence_refs are required",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.reviewer.as_str())
+            .chain(std::iter::once(request.notes.as_str()))
+            .chain(request.evidence_refs.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MLOPS_ALERT_DELIVERY_TASK_REVIEW",
+            "alert delivery task reviewer, notes, and evidence_refs must not contain PII",
+        ));
+    }
+    Ok(())
+}
+
 fn validate_alert_delivery_evidence(
     request: &SubmitMlopsAlertDeliveryRequest,
 ) -> Result<(), ApiError> {
@@ -1220,6 +1558,61 @@ fn validate_alert_delivery_evidence(
             format!("MLOps alert delivery evidence_refs must include {expected_ref}"),
         ))
     }
+}
+
+fn validate_alert_delivery_task_evidence(
+    evidence_refs: &[String],
+    task: &MlopsAlertDeliveryTask,
+) -> Result<(), ApiError> {
+    let task_ref = format!("mlops_alert_delivery_tasks:{}", task.task_id);
+    if !evidence_refs.iter().any(|reference| reference == &task_ref) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_ALERT_DELIVERY_TASK_EVIDENCE",
+            format!("alert delivery task evidence_refs must include {task_ref}"),
+        ));
+    }
+    let scheduler_ref = format!(
+        "mlops_scheduler_execution_reports:{}",
+        task.scheduler_execution_report_uri
+    );
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference == &scheduler_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_ALERT_DELIVERY_TASK_EVIDENCE",
+            format!("alert delivery task evidence_refs must include {scheduler_ref}"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_monitoring_review_task_evidence(
+    evidence_refs: &[String],
+    task: &ModelMonitoringReviewTask,
+) -> Result<(), ApiError> {
+    let task_ref = format!("model_monitoring_review_tasks:{}", task.task_id);
+    if !evidence_refs.iter().any(|reference| reference == &task_ref) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE",
+            format!("monitoring review task evidence_refs must include {task_ref}"),
+        ));
+    }
+    let report_ref = format!("model_monitoring_reports:{}", task.report_uri);
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference == &report_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_MLOPS_MONITORING_REVIEW_TASK_EVIDENCE",
+            format!("monitoring review task evidence_refs must include {report_ref}"),
+        ));
+    }
+    Ok(())
 }
 
 fn validate_retraining_output_evidence_refs(
@@ -2320,65 +2713,160 @@ fn build_mlops_alert_delivery_response(
 
 fn monitoring_review_tasks_from_events(
     events: Vec<crate::repository::AuditHistoryEventRecord>,
+    review_events: Vec<crate::repository::AuditHistoryEventRecord>,
 ) -> Vec<ModelMonitoringReviewTask> {
-    events
-        .into_iter()
-        .flat_map(|event| {
-            let payload = event.payload;
-            let model_key = payload["model_key"]
+    let mut latest_reviews = HashMap::new();
+    for review_event in review_events {
+        if let Some(task_id) = review_event.payload["task_id"].as_str() {
+            latest_reviews
+                .entry(task_id.to_string())
+                .or_insert(review_event);
+        }
+    }
+    let mut tasks = Vec::new();
+    for event in events {
+        let payload = event.payload;
+        let model_key = payload["model_key"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let model_version = payload["model_version"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let report_uri = payload["report_uri"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let monitoring_status = payload["monitoring_status"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let retraining_recommendation = payload["retraining_recommendation"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let review_tasks = payload["review_tasks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        for (index, task) in review_tasks.into_iter().enumerate() {
+            let task_id = format!("{}:{}", event.audit_id, index + 1);
+            let latest_review = latest_reviews.get(&task_id);
+            let task_kind = task["task_kind"]
                 .as_str()
-                .unwrap_or_default()
+                .unwrap_or("mlops_monitoring_review")
                 .to_string();
-            let model_version = payload["model_version"]
+            let trigger = task["trigger"].as_str().unwrap_or_default().to_string();
+            let review_status = latest_review
+                .and_then(|event| event.payload["decision"].as_str())
+                .or_else(|| task["review_status"].as_str())
+                .unwrap_or("open")
+                .to_string();
+            let reviewer = latest_review
+                .and_then(|event| event.payload["reviewer"].as_str())
+                .map(str::to_string);
+            let review_audit_id = latest_review.map(|event| event.audit_id.clone());
+            tasks.push(ModelMonitoringReviewTask {
+                task_id,
+                audit_id: event.audit_id.clone(),
+                model_key: model_key.clone(),
+                model_version: model_version.clone(),
+                report_uri: report_uri.clone(),
+                monitoring_status: monitoring_status.clone(),
+                retraining_recommendation: retraining_recommendation.clone(),
+                task_kind,
+                trigger,
+                review_status,
+                reviewer,
+                review_audit_id,
+                task,
+                evidence_refs: event.evidence_refs.clone(),
+                created_at: event.created_at.clone(),
+            });
+        }
+    }
+    tasks
+}
+
+fn alert_delivery_tasks_from_events(
+    events: Vec<crate::repository::AuditHistoryEventRecord>,
+    review_events: Vec<crate::repository::AuditHistoryEventRecord>,
+) -> Vec<MlopsAlertDeliveryTask> {
+    let mut latest_reviews = HashMap::new();
+    for review_event in review_events {
+        if let Some(task_id) = review_event.payload["task_id"].as_str() {
+            latest_reviews
+                .entry(task_id.to_string())
+                .or_insert(review_event);
+        }
+    }
+    let mut tasks = Vec::new();
+    for event in events {
+        let payload = event.payload;
+        let model_key = payload["model_key"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let model_version = payload["model_version"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let scheduler_execution_report_uri = payload["scheduler_execution_report_uri"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let alert_delivery_status = payload["alert_delivery_status"]
+            .as_str()
+            .unwrap_or_default()
+            .to_string();
+        let alert_delivery_tasks = payload["alert_delivery_tasks"]
+            .as_array()
+            .cloned()
+            .unwrap_or_default();
+        for (index, task) in alert_delivery_tasks.into_iter().enumerate() {
+            let task_id = format!("{}:{}", event.audit_id, index + 1);
+            let latest_review = latest_reviews.get(&task_id);
+            let task_kind = task["task_kind"]
                 .as_str()
-                .unwrap_or_default()
+                .unwrap_or("mlops_alert_delivery")
                 .to_string();
-            let report_uri = payload["report_uri"]
+            let trigger = task["trigger"].as_str().unwrap_or_default().to_string();
+            let route_key = task["route_key"].as_str().unwrap_or_default().to_string();
+            let delivery_status = task["delivery_status"]
                 .as_str()
-                .unwrap_or_default()
+                .unwrap_or(alert_delivery_status.as_str())
                 .to_string();
-            let monitoring_status = payload["monitoring_status"]
-                .as_str()
-                .unwrap_or_default()
+            let review_status = latest_review
+                .and_then(|event| event.payload["decision"].as_str())
+                .or_else(|| task["review_status"].as_str())
+                .unwrap_or("open")
                 .to_string();
-            let retraining_recommendation = payload["retraining_recommendation"]
-                .as_str()
-                .unwrap_or_default()
-                .to_string();
-            let review_tasks = payload["review_tasks"]
-                .as_array()
-                .cloned()
-                .unwrap_or_default();
-            review_tasks
-                .into_iter()
-                .enumerate()
-                .map(move |(index, task)| {
-                    let task_kind = task["task_kind"]
-                        .as_str()
-                        .unwrap_or("mlops_monitoring_review")
-                        .to_string();
-                    let trigger = task["trigger"].as_str().unwrap_or_default().to_string();
-                    let review_status =
-                        task["review_status"].as_str().unwrap_or("open").to_string();
-                    ModelMonitoringReviewTask {
-                        task_id: format!("{}:{}", event.audit_id, index + 1),
-                        audit_id: event.audit_id.clone(),
-                        model_key: model_key.clone(),
-                        model_version: model_version.clone(),
-                        report_uri: report_uri.clone(),
-                        monitoring_status: monitoring_status.clone(),
-                        retraining_recommendation: retraining_recommendation.clone(),
-                        task_kind,
-                        trigger,
-                        review_status,
-                        task,
-                        evidence_refs: event.evidence_refs.clone(),
-                        created_at: event.created_at.clone(),
-                    }
-                })
-                .collect::<Vec<_>>()
-        })
-        .collect()
+            let reviewer = latest_review
+                .and_then(|event| event.payload["reviewer"].as_str())
+                .map(str::to_string);
+            let review_audit_id = latest_review.map(|event| event.audit_id.clone());
+            tasks.push(MlopsAlertDeliveryTask {
+                task_id,
+                audit_id: event.audit_id.clone(),
+                model_key: model_key.clone(),
+                model_version: model_version.clone(),
+                scheduler_execution_report_uri: scheduler_execution_report_uri.clone(),
+                alert_delivery_status: alert_delivery_status.clone(),
+                task_kind,
+                trigger,
+                route_key,
+                delivery_status,
+                review_status,
+                reviewer,
+                review_audit_id,
+                task,
+                evidence_refs: event.evidence_refs.clone(),
+                created_at: event.created_at.clone(),
+            });
+        }
+    }
+    tasks
 }
 
 fn is_unresolved_feedback_status(status: &str) -> bool {
@@ -2780,6 +3268,53 @@ async fn record_mlops_monitoring_audit(
         .await
 }
 
+async fn record_mlops_monitoring_review_task_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    task: &ModelMonitoringReviewTask,
+    request: &SubmitModelMonitoringReviewTaskReviewRequest,
+    response: &ModelMonitoringReviewTaskReviewResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "model.mlops_monitoring.review_task_reviewed".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "MLOps monitoring review task {} reviewed: {}",
+                task.task_id, request.decision
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "task_id": task.task_id,
+                "source_audit_id": task.audit_id,
+                "model_key": task.model_key,
+                "model_version": task.model_version,
+                "report_uri": task.report_uri,
+                "task_kind": task.task_kind,
+                "trigger": task.trigger,
+                "decision": request.decision,
+                "reviewer": request.reviewer,
+                "notes": request.notes,
+                "note_present": !request.notes.trim().is_empty(),
+                "governance_boundary": response.governance_boundary,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
 async fn record_mlops_alert_delivery_audit(
     state: &AppState,
     actor: &ActorContext,
@@ -2809,11 +3344,61 @@ async fn record_mlops_alert_delivery_audit(
                 "scheduler_execution_report_uri": request.scheduler_execution_report_uri,
                 "report_kind": request.report_kind,
                 "alert_delivery_status": request.alert_delivery_status,
+                "alert_delivery_tasks": request.alert_delivery_tasks,
                 "alert_delivery_task_count": request.alert_delivery_tasks.len(),
                 "alert_routing_policy_configured": response.alert_routing_policy_configured,
                 "alert_routing_policy_ref": "configured_alert_routing_policy",
                 "next_actions": response.next_actions,
                 "submitted_by": request.actor,
+                "note_present": !request.notes.trim().is_empty(),
+                "governance_boundary": response.governance_boundary,
+            }),
+            evidence_refs: request
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_mlops_alert_delivery_task_review_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    task: &MlopsAlertDeliveryTask,
+    request: &SubmitMlopsAlertDeliveryTaskReviewRequest,
+    response: &MlopsAlertDeliveryTaskReviewResponse,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "model.mlops_alert_delivery.task_reviewed".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "MLOps alert delivery task {} reviewed: {}",
+                task.task_id, request.decision
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "task_id": task.task_id,
+                "source_audit_id": task.audit_id,
+                "model_key": task.model_key,
+                "model_version": task.model_version,
+                "scheduler_execution_report_uri": task.scheduler_execution_report_uri,
+                "task_kind": task.task_kind,
+                "trigger": task.trigger,
+                "route_key": task.route_key,
+                "delivery_status": task.delivery_status,
+                "decision": request.decision,
+                "reviewer": request.reviewer,
+                "notes": request.notes,
                 "note_present": !request.notes.trim().is_empty(),
                 "governance_boundary": response.governance_boundary,
             }),

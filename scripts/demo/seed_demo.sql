@@ -1104,6 +1104,62 @@ VALUES
     'Seeded QA review found provider-pattern issue.',
     '{"customer_scope_id":"demo-customer","qa_case_id":"QA-9100","feedback_target":"rules"}'::jsonb,
     '["qa_reviews:QA-9100","rule_runs:HIGH_AMOUNT_TO_LIMIT"]'::jsonb
+  ),
+  (
+    'audit-demo-mlops-monitoring',
+    'run-demo-mlops-monitoring',
+    '40000000-0000-0000-0000-000000000287',
+    'seed',
+    'system',
+    'tpa-demo',
+    'model.mlops_monitoring.report_submitted',
+    'succeeded',
+    'Seeded MLOps monitoring report opened drift review.',
+    '{
+      "customer_scope_id":"demo-customer",
+      "model_key":"baseline_fwa",
+      "model_version":"0.1.0",
+      "report_uri":"data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json",
+      "report_kind":"mlops_monitoring_report",
+      "monitoring_status":"watch",
+      "retraining_recommendation":"prepare_retraining",
+      "triggers":["model_drift_detected"],
+      "trigger_count":1,
+      "review_tasks":[{"task_kind":"mlops_monitoring_review","trigger":"model_drift_detected","review_status":"open"}],
+      "review_task_count":1,
+      "next_actions":["prepare_retraining_job_after_human_approval","review_monitoring_report"],
+      "submitted_by":"mlops-worker",
+      "note_present":true,
+      "governance_boundary":"seeded monitoring report opens review only; it must not auto-create retraining jobs, activate models, or rollback models"
+    }'::jsonb,
+    '["model_versions:baseline_fwa:0.1.0","model_monitoring_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/mlops_monitoring_report.json"]'::jsonb
+  ),
+  (
+    'audit-demo-mlops-alert-delivery',
+    'run-demo-mlops-alert-delivery',
+    '40000000-0000-0000-0000-000000000287',
+    'seed',
+    'system',
+    'tpa-demo',
+    'model.mlops_alert_delivery.submitted',
+    'succeeded',
+    'Seeded MLOps alert delivery queued customer alert-router confirmation.',
+    '{
+      "customer_scope_id":"demo-customer",
+      "model_key":"baseline_fwa",
+      "model_version":"0.1.0",
+      "scheduler_execution_report_uri":"data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json",
+      "report_kind":"mlops_scheduler_execution_report",
+      "alert_delivery_status":"queued_for_external_alert_router",
+      "alert_delivery_tasks":[{"task_kind":"mlops_alert_delivery","trigger":"model_drift_detected","route_key":"mlops_retraining_readiness","delivery_status":"queued_for_external_alert_router"}],
+      "alert_delivery_task_count":1,
+      "alert_routing_policy_configured":true,
+      "alert_routing_policy_ref":"configured_alert_routing_policy",
+      "submitted_by":"mlops-worker",
+      "note_present":true,
+      "governance_boundary":"seeded alert delivery records handoff only; it must not create retraining jobs, activate models, rollback models, or assign fraud labels"
+    }'::jsonb,
+    '["model_versions:baseline_fwa:0.1.0","mlops_scheduler_execution_reports:data/model-artifacts/baseline_fwa/0.1.0/mlops-monitoring/scheduler/mlops_scheduler_execution_report.json"]'::jsonb
   )
 ON CONFLICT (audit_id) DO UPDATE
 SET run_id = EXCLUDED.run_id,
