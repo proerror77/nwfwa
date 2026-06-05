@@ -521,6 +521,56 @@ async fn backtests_candidate_rule_against_samples() {
 }
 
 #[tokio::test]
+async fn backtests_dataset_mined_rule_against_parquet_dataset() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/backtest",
+        r#"{
+          "rule": {
+            "rule_id": "candidate_mined_claim_amount_to_limit_ratio_gte_0_8",
+            "version": 1,
+            "name": "Mined amount ratio rule",
+            "conditions": [
+              {
+                "field": "claim_amount_to_limit_ratio",
+                "operator": ">=",
+                "value": 0.8
+              }
+            ],
+            "action": {
+              "score": 30,
+              "alert_code": "MINED_CLAIM_AMOUNT_TO_LIMIT_RATIO",
+              "recommended_action": "ManualReview",
+              "reason": "数据集挖掘金额比例阈值"
+            }
+          },
+          "dataset_uri": "data/public-mvp/split=train/part-00000.parquet",
+          "label_column": "confirmed_fwa",
+          "claim_id_column": "claim_id",
+          "samples": [],
+          "expected_review_capacity": 20
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["sample_count"], 18);
+    assert!(body["matched_count"].as_u64().unwrap() > 0);
+    assert!(body["precision"].as_f64().unwrap() > 0.0);
+    assert!(body["matched_claim_ids"].as_array().unwrap().len() > 0);
+    assert!(body["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "dataset:data/public-mvp/split=train/part-00000.parquet"
+        )));
+}
+
+#[tokio::test]
 async fn backtest_recommends_review_when_labeled_metrics_pass() {
     let app = build_app(test_config());
 
@@ -1006,13 +1056,26 @@ async fn discovers_candidate_rules_from_labeled_samples() {
           "min_support": 1,
           "samples": [
             {
-              "external_claim_id": "CLM-FWA-EARLY-HIGH",
+              "external_claim_id": "CLM-FWA-HIGH-1",
               "claim_amount": "9000",
               "currency": "CNY",
               "service_date": "2026-01-05",
               "confirmed_fwa": true,
               "policy": {
-                "external_policy_id": "POL-FWA-EARLY-HIGH",
+                "external_policy_id": "POL-FWA-HIGH-1",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-FWA-HIGH-2",
+              "claim_amount": "8500",
+              "currency": "CNY",
+              "service_date": "2026-01-06",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-FWA-HIGH-2",
                 "coverage_start_date": "2026-01-01",
                 "coverage_end_date": "2026-12-31",
                 "coverage_limit": "10000"
@@ -1032,8 +1095,8 @@ async fn discovers_candidate_rules_from_labeled_samples() {
               }
             },
             {
-              "external_claim_id": "CLM-NORMAL-LATE-HIGH",
-              "claim_amount": "9000",
+              "external_claim_id": "CLM-NORMAL-LATE-MEDIUM",
+              "claim_amount": "2000",
               "currency": "CNY",
               "service_date": "2026-03-01",
               "confirmed_fwa": false,
@@ -1051,25 +1114,86 @@ async fn discovers_candidate_rules_from_labeled_samples() {
 
     assert_eq!(status, StatusCode::OK);
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
-    assert_eq!(body["sample_count"], 3);
-    assert_eq!(body["positive_count"], 1);
-    let candidate = &body["candidates"][0];
-    assert_eq!(candidate["rule"]["rule_id"], "candidate_early_high_amount");
-    assert_eq!(candidate["support"], 1);
+    assert_eq!(body["sample_count"], 4);
+    assert_eq!(body["positive_count"], 2);
+    let candidate = body["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|candidate| {
+            candidate["rule"]["conditions"][0]["field"] == "claim_amount_to_limit_ratio"
+        })
+        .expect("missing amount ratio candidate");
+    assert!(candidate["rule"]["rule_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("candidate_mined_claim_amount_to_limit_ratio_gte_"));
+    assert_eq!(
+        candidate["rule"]["conditions"][0]["field"],
+        "claim_amount_to_limit_ratio"
+    );
+    assert_eq!(candidate["rule"]["conditions"][0]["operator"], ">=");
+    assert_eq!(candidate["support"], 2);
     assert_eq!(candidate["precision"], 1.0);
     assert!(candidate["lift"].as_f64().unwrap() > 1.0);
     assert_eq!(candidate["false_positive_rate"], 0.0);
-    assert_eq!(candidate["estimated_saving"], "900.00");
+    assert_eq!(candidate["estimated_saving"], "1750.00");
     assert!(candidate["condition_refs"]
         .as_array()
         .unwrap()
-        .contains(&serde_json::json!(
-            "rule_conditions:candidate_early_high_amount_v1_c1"
-        )));
+        .iter()
+        .any(|reference| reference
+            .as_str()
+            .unwrap()
+            .starts_with("rule_conditions:candidate_mined_claim_amount_to_limit_ratio_gte_")));
     assert!(candidate["explanation"]
         .as_str()
         .unwrap()
-        .contains("保单生效"));
+        .contains("单层决策树阈值规则"));
+}
+
+#[tokio::test]
+async fn discovers_candidate_rules_from_parquet_dataset() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/discover",
+        r#"{
+          "min_support": 2,
+          "dataset_uri": "data/public-mvp/split=train/part-00000.parquet",
+          "label_column": "confirmed_fwa",
+          "claim_id_column": "claim_id",
+          "candidate_feature_fields": ["claim_amount_to_limit_ratio"],
+          "samples": []
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["sample_count"], 18);
+    assert_eq!(body["positive_count"], 13);
+    let candidate = &body["candidates"][0];
+    assert_eq!(
+        candidate["rule"]["conditions"][0]["field"],
+        "claim_amount_to_limit_ratio"
+    );
+    assert!(candidate["rule"]["rule_id"]
+        .as_str()
+        .unwrap()
+        .starts_with("candidate_mined_claim_amount_to_limit_ratio_"));
+    assert!(candidate["explanation"]
+        .as_str()
+        .unwrap()
+        .contains("负样本标准差"));
+    assert!(candidate["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
+            "dataset:data/public-mvp/split=train/part-00000.parquet"
+        )));
 }
 
 #[tokio::test]
@@ -1131,9 +1255,12 @@ async fn discovers_rule_candidates_from_model_explanations() {
     let candidate = candidates
         .iter()
         .find(|candidate| {
-            candidate["rule"]["rule_id"] == "candidate_ml_claim_amount_to_limit_ratio"
+            candidate["rule"]["rule_id"]
+                .as_str()
+                .unwrap()
+                .starts_with("candidate_mined_claim_amount_to_limit_ratio_gte_")
         })
-        .expect("missing model explanation candidate rule");
+        .expect("missing mined model-supported candidate rule");
     assert_eq!(
         candidate["rule"]["conditions"][0]["field"],
         "claim_amount_to_limit_ratio"
@@ -1142,14 +1269,16 @@ async fn discovers_rule_candidates_from_model_explanations() {
     assert!(candidate["condition_refs"]
         .as_array()
         .unwrap()
-        .contains(&serde_json::json!(
-            "rule_conditions:candidate_ml_claim_amount_to_limit_ratio_v1_c1"
-        )));
+        .iter()
+        .any(|reference| reference
+            .as_str()
+            .unwrap()
+            .starts_with("rule_conditions:candidate_mined_claim_amount_to_limit_ratio_gte_")));
     assert_eq!(candidate["precision"], 1.0);
     assert!(candidate["explanation"]
         .as_str()
         .unwrap()
-        .contains("模型解释"));
+        .contains("模型解释备注"));
     assert!(candidate["evidence_refs"]
         .as_array()
         .unwrap()

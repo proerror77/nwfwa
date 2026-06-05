@@ -7,6 +7,7 @@ use crate::{
     },
     routes::pii,
 };
+use anyhow::{bail, Context};
 use axum::{
     extract::{Path, State},
     http::{HeaderMap, StatusCode},
@@ -20,10 +21,13 @@ use fwa_core::{
     Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction, RuleActionClass,
     ScoringRunId,
 };
-use fwa_features::calculate_features;
+use fwa_features::{calculate_features, FeatureMap, FeatureValue};
 use fwa_rules::{evaluate_rules, Condition, Rule, RuleAction};
+use parquet::arrow::arrow_reader::ParquetRecordBatchReaderBuilder;
+use rust_decimal::prelude::FromPrimitive;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
+use std::{collections::BTreeMap, fs::File, path::PathBuf};
 
 #[derive(Debug, Serialize)]
 pub struct RuleListResponse {
@@ -85,8 +89,12 @@ pub struct RuleLifecycleRequest {
 #[derive(Debug, Deserialize)]
 pub struct RuleBacktestRequest {
     pub rule: Rule,
+    #[serde(default)]
     pub samples: Vec<RuleBacktestSample>,
     pub expected_review_capacity: Option<usize>,
+    pub dataset_uri: Option<String>,
+    pub label_column: Option<String>,
+    pub claim_id_column: Option<String>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -153,6 +161,7 @@ impl RuleBacktestRecord {
 #[derive(Debug, Deserialize)]
 pub struct RuleDiscoveryRequest {
     pub min_support: Option<usize>,
+    #[serde(default)]
     pub samples: Vec<RuleDiscoverySample>,
     #[serde(default)]
     pub model_explanations: Vec<RuleDiscoveryModelExplanation>,
@@ -160,6 +169,11 @@ pub struct RuleDiscoveryRequest {
     pub source_model_version: Option<String>,
     pub feature_importance_uri: Option<String>,
     pub min_abs_contribution: Option<f64>,
+    pub dataset_uri: Option<String>,
+    pub label_column: Option<String>,
+    pub claim_id_column: Option<String>,
+    pub candidate_feature_fields: Option<Vec<String>>,
+    pub max_candidates: Option<usize>,
 }
 
 #[derive(Debug, Deserialize)]
@@ -786,30 +800,29 @@ pub async fn backtest_rule(
     Json(request): Json<RuleBacktestRequest>,
 ) -> Result<Json<RuleBacktestResponse>, ApiError> {
     let actor = authorize(&state, &headers)?;
+    let mining_samples =
+        backtest_mining_samples(&request).map_err(bad_request("RULE_BACKTEST_DATASET_FAILED"))?;
     let mut matched_claim_ids = Vec::new();
     let mut score_sum = 0_u32;
     let mut saving = Decimal::ZERO;
     let mut true_positive_count = 0_usize;
     let mut false_positive_count = 0_usize;
-    let positive_count = request
-        .samples
+    let positive_count = mining_samples
         .iter()
         .filter(|sample| sample.confirmed_fwa == Some(true))
         .count();
-    let reviewed_count = request
-        .samples
+    let reviewed_count = mining_samples
         .iter()
         .filter(|sample| sample.confirmed_fwa.is_some())
         .count();
     let labeled_backtest = reviewed_count > 0;
 
-    for sample in &request.samples {
-        let context = sample_context(sample);
-        let features = calculate_features(&context);
+    for sample in &mining_samples {
+        let features = feature_map_from_mining_sample(sample);
         let matches = evaluate_rules(std::slice::from_ref(&request.rule), &features)
             .map_err(internal_error("RULE_BACKTEST_FAILED"))?;
         if !matches.is_empty() {
-            matched_claim_ids.push(sample.external_claim_id.clone());
+            matched_claim_ids.push(sample.claim_id.clone());
             score_sum += matches
                 .iter()
                 .map(|rule_match| rule_match.score_contribution as u32)
@@ -829,7 +842,7 @@ pub async fn backtest_rule(
         }
     }
 
-    let sample_count = request.samples.len();
+    let sample_count = mining_samples.len();
     let matched_count = matched_claim_ids.len();
     let match_rate = if sample_count == 0 {
         0.0
@@ -911,10 +924,7 @@ pub async fn backtest_rule(
         promotion_recommendation: promotion_recommendation.into(),
         blockers,
         matched_claim_ids,
-        evidence_refs: vec![format!(
-            "rules:{}:v{}",
-            request.rule.rule_id, request.rule.version
-        )],
+        evidence_refs: backtest_evidence_refs(&request),
     };
     let record = state
         .repository
@@ -932,6 +942,17 @@ pub async fn backtest_rule(
     Ok(Json(response))
 }
 
+fn backtest_evidence_refs(request: &RuleBacktestRequest) -> Vec<String> {
+    let mut refs = vec![format!(
+        "rules:{}:v{}",
+        request.rule.rule_id, request.rule.version
+    )];
+    if let Some(dataset_uri) = normalized_optional_str(request.dataset_uri.as_deref()) {
+        refs.push(format!("dataset:{dataset_uri}"));
+    }
+    refs
+}
+
 pub async fn discover_rules(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -939,96 +960,43 @@ pub async fn discover_rules(
 ) -> Result<Json<RuleDiscoveryResponse>, ApiError> {
     authorize(&state, &headers)?;
     let min_support = request.min_support.unwrap_or(1);
-    let sample_count = request.samples.len();
-    let positive_count = request
-        .samples
+    let mining_samples =
+        discovery_mining_samples(&request).map_err(bad_request("RULE_DISCOVERY_DATASET_FAILED"))?;
+    let sample_count = mining_samples.len();
+    let positive_count = mining_samples
         .iter()
-        .filter(|sample| sample.confirmed_fwa)
+        .filter(|sample| sample.confirmed_fwa == Some(true))
         .count();
+    if sample_count == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_DISCOVERY_EMPTY_DATASET",
+            "rule discovery requires labeled samples or a parquet dataset_uri",
+        ));
+    }
+    if positive_count == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_DISCOVERY_NO_POSITIVE_LABELS",
+            "rule discovery requires at least one positive label",
+        ));
+    }
     let baseline_rate = if sample_count == 0 {
         0.0
     } else {
         positive_count as f64 / sample_count as f64
     };
 
-    let candidate_rules = candidate_rule_templates()
-        .into_iter()
-        .chain(model_explanation_candidate_rules(&request))
-        .collect::<Vec<_>>();
     let discovery_evidence_refs = rule_discovery_evidence_refs(&request);
-
-    let mut candidates = Vec::new();
-    for rule in candidate_rules {
-        let mut matched_claim_ids = Vec::new();
-        let mut true_positive_count = 0_usize;
-        let mut false_positive_count = 0_usize;
-        let mut saving = Decimal::ZERO;
-
-        for labeled_sample in &request.samples {
-            let context = sample_context(&labeled_sample.sample);
-            let features = calculate_features(&context);
-            let matches = evaluate_rules(std::slice::from_ref(&rule), &features)
-                .map_err(internal_error("RULE_DISCOVERY_FAILED"))?;
-            if matches.is_empty() {
-                continue;
-            }
-
-            matched_claim_ids.push(labeled_sample.sample.external_claim_id.clone());
-            if labeled_sample.confirmed_fwa {
-                true_positive_count += 1;
-                saving += labeled_sample.sample.claim_amount * Decimal::new(10, 2);
-            } else {
-                false_positive_count += 1;
-            }
-        }
-
-        let support = matched_claim_ids.len();
-        if support < min_support {
-            continue;
-        }
-        let precision = if support == 0 {
-            0.0
-        } else {
-            true_positive_count as f64 / support as f64
-        };
-        let recall = if positive_count == 0 {
-            0.0
-        } else {
-            true_positive_count as f64 / positive_count as f64
-        };
-        let lift = if baseline_rate == 0.0 {
-            0.0
-        } else {
-            precision / baseline_rate
-        };
-        let false_positive_rate = if support == 0 {
-            0.0
-        } else {
-            false_positive_count as f64 / support as f64
-        };
-
-        candidates.push(RuleDiscoveryCandidate {
-            explanation: explanation_for_candidate(&rule),
-            condition_refs: condition_refs_for_rule(&rule),
-            rule,
-            support,
-            precision,
-            recall,
-            lift,
-            estimated_saving: format!("{:.2}", saving.round_dp(2)),
-            false_positive_rate,
-            matched_claim_ids,
-            evidence_refs: discovery_evidence_refs.clone(),
-        });
-    }
-
-    candidates.sort_by(|left, right| {
-        right
-            .precision
-            .partial_cmp(&left.precision)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| right.support.cmp(&left.support))
-    });
+    let mut candidates = mine_statistical_rule_candidates(
+        &request,
+        &mining_samples,
+        min_support,
+        positive_count,
+        baseline_rate,
+        &discovery_evidence_refs,
+    );
+    candidates.truncate(request.max_candidates.unwrap_or(8));
 
     Ok(Json(RuleDiscoveryResponse {
         sample_count,
@@ -1469,133 +1437,346 @@ async fn record_rule_promotion_audit(
         .await
 }
 
-fn candidate_rule_templates() -> Vec<Rule> {
-    vec![
-        Rule {
-            rule_id: "candidate_early_high_amount".into(),
+#[derive(Debug, Clone)]
+struct MiningSample {
+    claim_id: String,
+    claim_amount: Decimal,
+    confirmed_fwa: Option<bool>,
+    features: BTreeMap<String, f64>,
+}
+
+#[derive(Debug)]
+struct FeatureSplitCandidate {
+    feature: String,
+    operator: &'static str,
+    threshold: f64,
+    support: usize,
+    true_positive_count: usize,
+    false_positive_count: usize,
+    precision: f64,
+    recall: f64,
+    lift: f64,
+    false_positive_rate: f64,
+    saving: Decimal,
+    matched_claim_ids: Vec<String>,
+    positive_mean: f64,
+    negative_mean: f64,
+    negative_stddev: f64,
+    statistical_threshold: f64,
+    model_reason: Option<String>,
+}
+
+fn mine_statistical_rule_candidates(
+    request: &RuleDiscoveryRequest,
+    samples: &[MiningSample],
+    min_support: usize,
+    positive_count: usize,
+    baseline_rate: f64,
+    evidence_refs: &[String],
+) -> Vec<RuleDiscoveryCandidate> {
+    let mut features = samples
+        .iter()
+        .flat_map(|sample| sample.features.keys().cloned())
+        .collect::<Vec<_>>();
+    features.sort();
+    features.dedup();
+    if let Some(requested_features) = &request.candidate_feature_fields {
+        features.retain(|feature| {
+            requested_features
+                .iter()
+                .any(|requested| requested == feature)
+        });
+    }
+
+    let mut candidates = features
+        .into_iter()
+        .filter_map(|feature| {
+            best_feature_split(
+                &feature,
+                request,
+                samples,
+                min_support,
+                positive_count,
+                baseline_rate,
+            )
+        })
+        .map(|split| split.into_response(evidence_refs))
+        .collect::<Vec<_>>();
+    candidates.sort_by(|left, right| {
+        right
+            .precision
+            .partial_cmp(&left.precision)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| {
+                right
+                    .lift
+                    .partial_cmp(&left.lift)
+                    .unwrap_or(std::cmp::Ordering::Equal)
+            })
+            .then_with(|| right.support.cmp(&left.support))
+            .then_with(|| left.rule.rule_id.cmp(&right.rule.rule_id))
+    });
+    candidates
+}
+
+fn best_feature_split(
+    feature: &str,
+    request: &RuleDiscoveryRequest,
+    samples: &[MiningSample],
+    min_support: usize,
+    positive_count: usize,
+    baseline_rate: f64,
+) -> Option<FeatureSplitCandidate> {
+    let values = samples
+        .iter()
+        .filter_map(|sample| {
+            sample
+                .features
+                .get(feature)
+                .filter(|value| value.is_finite())
+                .map(|value| (sample, *value))
+        })
+        .collect::<Vec<_>>();
+    if values.len() < min_support {
+        return None;
+    }
+
+    let positive_values = values
+        .iter()
+        .filter_map(|(sample, value)| (sample.confirmed_fwa == Some(true)).then_some(*value))
+        .collect::<Vec<_>>();
+    let negative_values = values
+        .iter()
+        .filter_map(|(sample, value)| (sample.confirmed_fwa == Some(false)).then_some(*value))
+        .collect::<Vec<_>>();
+    if positive_values.is_empty() || negative_values.is_empty() {
+        return None;
+    }
+
+    let positive_mean = mean(&positive_values);
+    let negative_mean = mean(&negative_values);
+    let negative_stddev = stddev(&negative_values, negative_mean);
+    let high_risk_when_higher = positive_mean >= negative_mean;
+    let operator = if high_risk_when_higher { ">=" } else { "<=" };
+    let statistical_threshold = if high_risk_when_higher {
+        negative_mean + (1.5 * negative_stddev)
+    } else {
+        negative_mean - (1.5 * negative_stddev)
+    };
+
+    let mut thresholds = values.iter().map(|(_, value)| *value).collect::<Vec<_>>();
+    thresholds.push(statistical_threshold);
+    thresholds.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
+    thresholds.dedup_by(|left, right| (*left - *right).abs() < 0.000001);
+
+    thresholds
+        .into_iter()
+        .filter_map(|threshold| {
+            score_feature_threshold(
+                feature,
+                operator,
+                threshold,
+                samples,
+                min_support,
+                positive_count,
+                baseline_rate,
+                positive_mean,
+                negative_mean,
+                negative_stddev,
+                statistical_threshold,
+                model_explanation_reason(request, feature),
+            )
+        })
+        .max_by(|left, right| {
+            left.precision
+                .partial_cmp(&right.precision)
+                .unwrap_or(std::cmp::Ordering::Equal)
+                .then_with(|| {
+                    left.lift
+                        .partial_cmp(&right.lift)
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .then_with(|| left.support.cmp(&right.support))
+        })
+}
+
+fn score_feature_threshold(
+    feature: &str,
+    operator: &'static str,
+    threshold: f64,
+    samples: &[MiningSample],
+    min_support: usize,
+    positive_count: usize,
+    baseline_rate: f64,
+    positive_mean: f64,
+    negative_mean: f64,
+    negative_stddev: f64,
+    statistical_threshold: f64,
+    model_reason: Option<String>,
+) -> Option<FeatureSplitCandidate> {
+    let mut matched_claim_ids = Vec::new();
+    let mut true_positive_count = 0_usize;
+    let mut false_positive_count = 0_usize;
+    let mut saving = Decimal::ZERO;
+
+    for sample in samples {
+        let Some(value) = sample.features.get(feature).copied() else {
+            continue;
+        };
+        let matched = if operator == ">=" {
+            value >= threshold
+        } else {
+            value <= threshold
+        };
+        if !matched {
+            continue;
+        }
+        matched_claim_ids.push(sample.claim_id.clone());
+        match sample.confirmed_fwa {
+            Some(true) => {
+                true_positive_count += 1;
+                saving += sample.claim_amount * Decimal::new(10, 2);
+            }
+            Some(false) => false_positive_count += 1,
+            None => {}
+        }
+    }
+
+    let support = matched_claim_ids.len();
+    if support < min_support || true_positive_count == 0 {
+        return None;
+    }
+    let precision = true_positive_count as f64 / support as f64;
+    if baseline_rate > 0.0 && precision <= baseline_rate {
+        return None;
+    }
+    let recall = true_positive_count as f64 / positive_count as f64;
+    let lift = if baseline_rate == 0.0 {
+        0.0
+    } else {
+        precision / baseline_rate
+    };
+    Some(FeatureSplitCandidate {
+        feature: feature.into(),
+        operator,
+        threshold,
+        support,
+        true_positive_count,
+        false_positive_count,
+        precision,
+        recall,
+        lift,
+        false_positive_rate: false_positive_count as f64 / support as f64,
+        saving,
+        matched_claim_ids,
+        positive_mean,
+        negative_mean,
+        negative_stddev,
+        statistical_threshold,
+        model_reason,
+    })
+}
+
+impl FeatureSplitCandidate {
+    fn into_response(self, base_evidence_refs: &[String]) -> RuleDiscoveryCandidate {
+        let feature_slug = rule_id_slug(&self.feature);
+        let threshold_slug = threshold_slug(self.threshold);
+        let op_slug = if self.operator == ">=" { "gte" } else { "lte" };
+        let rule = Rule {
+            rule_id: format!("candidate_mined_{feature_slug}_{op_slug}_{threshold_slug}"),
             version: 1,
-            name: "Early high amount candidate".into(),
-            review_mode: "both".into(),
-            scheme_family: Some("early_high_value_claim".into()),
-            conditions: vec![
-                Condition {
-                    field: "days_since_policy_start".into(),
-                    operator: "<=".into(),
-                    value: serde_json::json!(10),
-                },
-                Condition {
-                    field: "claim_amount_to_limit_ratio".into(),
-                    operator: ">=".into(),
-                    value: serde_json::json!(0.7),
-                },
-            ],
-            action: RuleAction {
-                score: 30,
-                alert_code: "EARLY_HIGH_AMOUNT_CANDIDATE".into(),
-                recommended_action: RecommendedAction::ManualReview,
-                action_class: RuleActionClass::ManualReview,
-                required_evidence: vec![],
-                adjudication_policy: None,
-                reason: "保单生效早期发生高额理赔".into(),
-            },
-        },
-        Rule {
-            rule_id: "candidate_high_amount_ratio".into(),
-            version: 1,
-            name: "High amount ratio candidate".into(),
+            name: format!(
+                "Mined rule: {} {} {}",
+                self.feature,
+                self.operator,
+                format_threshold(self.threshold)
+            ),
             review_mode: "both".into(),
             scheme_family: Some("high_risk_claim".into()),
             conditions: vec![Condition {
-                field: "claim_amount_to_limit_ratio".into(),
-                operator: ">=".into(),
-                value: serde_json::json!(0.8),
+                field: self.feature.clone(),
+                operator: self.operator.into(),
+                value: serde_json::json!(round_float(self.threshold)),
             }],
             action: RuleAction {
-                score: 20,
-                alert_code: "HIGH_AMOUNT_RATIO_CANDIDATE".into(),
+                score: mined_rule_score(self.precision, self.lift),
+                alert_code: format!("MINED_{}", feature_slug.to_uppercase()),
                 recommended_action: RecommendedAction::ManualReview,
                 action_class: RuleActionClass::ManualReview,
                 required_evidence: vec![],
                 adjudication_policy: None,
-                reason: "理赔金额接近保障额度".into(),
+                reason: format!(
+                    "数据集挖掘显示 {} {} {} 的样本 FWA 命中率高于基线，需人工解释性 review",
+                    self.feature,
+                    self.operator,
+                    format_threshold(self.threshold)
+                ),
             },
-        },
-    ]
+        };
+        let mut evidence_refs = base_evidence_refs.to_vec();
+        evidence_refs.push(format!("rule_mining:{}:decision_stump", self.feature));
+        evidence_refs.push(format!(
+            "rule_mining:{}:negative_mean_{}_stddev_{}",
+            self.feature,
+            format_threshold(self.negative_mean),
+            format_threshold(self.negative_stddev)
+        ));
+        let model_clause = self
+            .model_reason
+            .as_deref()
+            .map(|reason| format!(" 模型解释备注：{reason}"))
+            .unwrap_or_default();
+        let explanation = format!(
+            "{} {} {} 是从标签数据集挖掘出的单层决策树阈值规则：正样本均值 {}，负样本均值 {}，负样本标准差 {}，统计参考阈值 {}；该候选命中 {} 条，其中确认 FWA {} 条、非 FWA {} 条，precision {:.1}%，recall {:.1}%，lift {:.2}。{}仍需人工接受或拒绝后才可进入规则库。",
+            self.feature,
+            self.operator,
+            format_threshold(self.threshold),
+            format_threshold(self.positive_mean),
+            format_threshold(self.negative_mean),
+            format_threshold(self.negative_stddev),
+            format_threshold(self.statistical_threshold),
+            self.support,
+            self.true_positive_count,
+            self.false_positive_count,
+            self.precision * 100.0,
+            self.recall * 100.0,
+            self.lift,
+            model_clause,
+        );
+        RuleDiscoveryCandidate {
+            explanation,
+            condition_refs: condition_refs_for_rule(&rule),
+            rule,
+            support: self.support,
+            precision: self.precision,
+            recall: self.recall,
+            lift: self.lift,
+            estimated_saving: format!("{:.2}", self.saving.round_dp(2)),
+            false_positive_rate: self.false_positive_rate,
+            matched_claim_ids: self.matched_claim_ids,
+            evidence_refs,
+        }
+    }
 }
 
-fn model_explanation_candidate_rules(request: &RuleDiscoveryRequest) -> Vec<Rule> {
+fn model_explanation_reason(request: &RuleDiscoveryRequest, feature: &str) -> Option<String> {
     let min_abs_contribution = request.min_abs_contribution.unwrap_or(0.10);
-    let mut explanations = request
+    request
         .model_explanations
         .iter()
-        .filter(|explanation| {
-            explanation.direction == "increases_risk"
+        .find(|explanation| {
+            explanation.feature == feature
+                && explanation.direction == "increases_risk"
                 && explanation.contribution.is_finite()
                 && explanation.contribution.abs() >= min_abs_contribution
-                && !explanation.feature.trim().is_empty()
         })
-        .collect::<Vec<_>>();
-    explanations.sort_by(|left, right| {
-        right
-            .contribution
-            .abs()
-            .partial_cmp(&left.contribution.abs())
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
-
-    explanations
-        .into_iter()
-        .filter_map(|explanation| {
-            let threshold = positive_feature_threshold(request, &explanation.feature)?;
-            let feature_slug = rule_id_slug(&explanation.feature);
-            Some(Rule {
-                rule_id: format!("candidate_ml_{feature_slug}"),
-                version: 1,
-                name: format!("ML explanation candidate: {}", explanation.feature),
-                review_mode: "both".into(),
-                scheme_family: Some("high_risk_claim".into()),
-                conditions: vec![Condition {
-                    field: explanation.feature.clone(),
-                    operator: ">=".into(),
-                    value: serde_json::json!(threshold),
-                }],
-                action: RuleAction {
-                    score: explanation_score(explanation.contribution),
-                    alert_code: format!("ML_{}", feature_slug.to_uppercase()),
-                    recommended_action: RecommendedAction::ManualReview,
-                    action_class: RuleActionClass::ManualReview,
-                    required_evidence: vec![],
-                    adjudication_policy: None,
-                    reason: format!(
-                        "模型解释显示 {} 对风险贡献较高：{}",
-                        explanation.feature, explanation.reason
-                    ),
-                },
-            })
-        })
-        .collect()
+        .map(|explanation| explanation.reason.clone())
 }
 
-fn positive_feature_threshold(request: &RuleDiscoveryRequest, feature_name: &str) -> Option<f64> {
-    let mut values = request
-        .samples
-        .iter()
-        .filter(|sample| sample.confirmed_fwa)
-        .filter_map(|sample| {
-            let context = sample_context(&sample.sample);
-            let features = calculate_features(&context);
-            features
-                .get(feature_name)
-                .and_then(|feature| feature.value.as_f64())
-                .filter(|value| value.is_finite())
-        })
-        .collect::<Vec<_>>();
-    values.sort_by(|left, right| left.partial_cmp(right).unwrap_or(std::cmp::Ordering::Equal));
-    values.first().copied()
-}
-
-fn explanation_score(contribution: f64) -> u8 {
-    ((contribution.abs() * 20.0).round() as u8).clamp(10, 35)
+fn mined_rule_score(precision: f64, lift: f64) -> u8 {
+    ((precision * 25.0) + lift.min(4.0) * 5.0)
+        .round()
+        .clamp(10.0, 45.0) as u8
 }
 
 fn condition_refs_for_rule(rule: &Rule) -> Vec<String> {
@@ -1635,6 +1816,11 @@ fn rule_id_slug(value: &str) -> String {
 
 fn rule_discovery_evidence_refs(request: &RuleDiscoveryRequest) -> Vec<String> {
     let mut refs = Vec::new();
+    if let Some(dataset_uri) = normalized_optional_str(request.dataset_uri.as_deref()) {
+        refs.push(format!("dataset:{dataset_uri}"));
+    } else {
+        refs.push("dataset:inline_labeled_samples".into());
+    }
     if let (Some(model_key), Some(model_version)) = (
         request.source_model_key.as_deref(),
         request.source_model_version.as_deref(),
@@ -1649,19 +1835,311 @@ fn rule_discovery_evidence_refs(request: &RuleDiscoveryRequest) -> Vec<String> {
     refs
 }
 
-fn explanation_for_candidate(rule: &Rule) -> String {
-    match rule.rule_id.as_str() {
-        "candidate_early_high_amount" => {
-            "保单生效早期且理赔金额接近保障额度，历史样本中与确认 FWA 标签更集中".into()
-        }
-        "candidate_high_amount_ratio" => {
-            "理赔金额与保障额度比例偏高，可作为金额偏离类候选规则".into()
-        }
-        _ if rule.rule_id.starts_with("candidate_ml_") => {
-            "由模型解释贡献项提出，仍需回测、人工审阅和发布门禁".into()
-        }
-        _ => "基于历史标签和可解释特征生成的候选规则".into(),
+fn discovery_mining_samples(request: &RuleDiscoveryRequest) -> anyhow::Result<Vec<MiningSample>> {
+    if let Some(dataset_uri) = normalized_optional_str(request.dataset_uri.as_deref()) {
+        return read_parquet_mining_samples(
+            dataset_uri,
+            request.label_column.as_deref(),
+            request.claim_id_column.as_deref(),
+            request.candidate_feature_fields.as_deref(),
+        );
     }
+
+    Ok(request
+        .samples
+        .iter()
+        .map(|sample| {
+            mining_sample_from_backtest_sample(&sample.sample, Some(sample.confirmed_fwa))
+        })
+        .collect())
+}
+
+fn backtest_mining_samples(request: &RuleBacktestRequest) -> anyhow::Result<Vec<MiningSample>> {
+    if let Some(dataset_uri) = normalized_optional_str(request.dataset_uri.as_deref()) {
+        return read_parquet_mining_samples(
+            dataset_uri,
+            request.label_column.as_deref(),
+            request.claim_id_column.as_deref(),
+            None,
+        );
+    }
+
+    Ok(request
+        .samples
+        .iter()
+        .map(|sample| mining_sample_from_backtest_sample(sample, sample.confirmed_fwa))
+        .collect())
+}
+
+fn mining_sample_from_backtest_sample(
+    sample: &RuleBacktestSample,
+    confirmed_fwa: Option<bool>,
+) -> MiningSample {
+    let context = sample_context(sample);
+    let features = calculate_features(&context)
+        .into_iter()
+        .filter_map(|(name, feature)| feature.value.as_f64().map(|value| (name, value)))
+        .collect::<BTreeMap<_, _>>();
+    MiningSample {
+        claim_id: sample.external_claim_id.clone(),
+        claim_amount: sample.claim_amount,
+        confirmed_fwa,
+        features,
+    }
+}
+
+fn read_parquet_mining_samples(
+    dataset_uri: &str,
+    label_column: Option<&str>,
+    claim_id_column: Option<&str>,
+    candidate_feature_fields: Option<&[String]>,
+) -> anyhow::Result<Vec<MiningSample>> {
+    let label_column = label_column.unwrap_or("confirmed_fwa");
+    let claim_id_column = claim_id_column.unwrap_or("claim_id");
+    let dataset_path = resolve_dataset_path(dataset_uri)?;
+    let file =
+        File::open(&dataset_path).with_context(|| format!("open {}", dataset_path.display()))?;
+    let builder = ParquetRecordBatchReaderBuilder::try_new(file)
+        .with_context(|| format!("read parquet metadata {}", dataset_path.display()))?;
+    let mut reader = builder.with_batch_size(4096).build()?;
+    let mut samples = Vec::new();
+    for batch in &mut reader {
+        let batch = batch?;
+        let schema = batch.schema();
+        let label_index = schema
+            .index_of(label_column)
+            .with_context(|| format!("label column {label_column} not found"))?;
+        let claim_id_index = schema
+            .index_of(claim_id_column)
+            .with_context(|| format!("claim id column {claim_id_column} not found"))?;
+        let claim_amount_index = schema.index_of("claim_amount").ok();
+
+        for row_index in 0..batch.num_rows() {
+            let confirmed_fwa = bool_value_at(batch.column(label_index).as_ref(), row_index);
+            let Some(confirmed_fwa) = confirmed_fwa else {
+                continue;
+            };
+            let claim_id = string_value_at(batch.column(claim_id_index).as_ref(), row_index)
+                .unwrap_or_else(|| format!("row-{row_index}"));
+            let claim_amount = claim_amount_index
+                .and_then(|index| numeric_value_at(batch.column(index).as_ref(), row_index))
+                .and_then(Decimal::from_f64)
+                .unwrap_or(Decimal::ZERO);
+            let mut features = BTreeMap::new();
+            for (column_index, field) in schema.fields().iter().enumerate() {
+                let feature = field.name();
+                if !is_candidate_feature(
+                    feature,
+                    label_column,
+                    claim_id_column,
+                    candidate_feature_fields,
+                ) {
+                    continue;
+                }
+                if let Some(value) =
+                    numeric_value_at(batch.column(column_index).as_ref(), row_index)
+                {
+                    if value.is_finite() {
+                        features.insert(feature.clone(), value);
+                    }
+                }
+            }
+            samples.push(MiningSample {
+                claim_id,
+                claim_amount,
+                confirmed_fwa: Some(confirmed_fwa),
+                features,
+            });
+        }
+    }
+    Ok(samples)
+}
+
+fn resolve_dataset_path(dataset_uri: &str) -> anyhow::Result<PathBuf> {
+    if dataset_uri.starts_with("http://")
+        || dataset_uri.starts_with("https://")
+        || dataset_uri.starts_with("s3://")
+    {
+        bail!("only local parquet dataset_uri values are supported by rule discovery");
+    }
+    let path = PathBuf::from(dataset_uri);
+    let path = if path.is_absolute() {
+        path
+    } else {
+        let current_dir = std::env::current_dir()?;
+        let mut candidate = current_dir.join(&path);
+        if !candidate.exists() {
+            for ancestor in current_dir.ancestors() {
+                let ancestor_candidate = ancestor.join(&path);
+                if ancestor_candidate.exists() {
+                    candidate = ancestor_candidate;
+                    break;
+                }
+            }
+        }
+        candidate
+    };
+    if path.extension().and_then(|value| value.to_str()) != Some("parquet") {
+        bail!("dataset_uri must point to a parquet file");
+    }
+    if !path.exists() {
+        bail!("dataset_uri not found: {}", path.display());
+    }
+    Ok(path)
+}
+
+fn is_candidate_feature(
+    feature: &str,
+    label_column: &str,
+    claim_id_column: &str,
+    candidate_feature_fields: Option<&[String]>,
+) -> bool {
+    if let Some(candidate_feature_fields) = candidate_feature_fields {
+        return candidate_feature_fields
+            .iter()
+            .any(|candidate_feature| candidate_feature == feature);
+    }
+    feature != label_column
+        && feature != claim_id_column
+        && feature != "split"
+        && feature != "service_date"
+        && feature != "service_date_ord"
+        && !feature.ends_with("_id")
+}
+
+fn feature_map_from_mining_sample(sample: &MiningSample) -> FeatureMap {
+    sample
+        .features
+        .iter()
+        .map(|(name, value)| {
+            (
+                name.clone(),
+                FeatureValue {
+                    name: name.clone(),
+                    version: 1,
+                    value: serde_json::json!(value),
+                    evidence_refs: vec![],
+                },
+            )
+        })
+        .collect()
+}
+
+fn numeric_value_at(array: &dyn arrow_array::Array, index: usize) -> Option<f64> {
+    use arrow_array::{
+        Float32Array, Float64Array, Int16Array, Int32Array, Int64Array, Int8Array, UInt16Array,
+        UInt32Array, UInt64Array, UInt8Array,
+    };
+    if array.is_null(index) {
+        return None;
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Float64Array>() {
+        return Some(values.value(index));
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Float32Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Int8Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Int16Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Int32Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Int64Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<UInt8Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<UInt16Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<UInt32Array>() {
+        return Some(values.value(index) as f64);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<UInt64Array>() {
+        return Some(values.value(index) as f64);
+    }
+    None
+}
+
+fn bool_value_at(array: &dyn arrow_array::Array, index: usize) -> Option<bool> {
+    use arrow_array::{BooleanArray, Float64Array, Int64Array, Int8Array, StringArray};
+    if array.is_null(index) {
+        return None;
+    }
+    if let Some(values) = array.as_any().downcast_ref::<BooleanArray>() {
+        return Some(values.value(index));
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Int8Array>() {
+        return Some(values.value(index) != 0);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Int64Array>() {
+        return Some(values.value(index) != 0);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<Float64Array>() {
+        return Some(values.value(index) != 0.0);
+    }
+    if let Some(values) = array.as_any().downcast_ref::<StringArray>() {
+        return match values.value(index).to_ascii_lowercase().as_str() {
+            "true" | "1" | "yes" => Some(true),
+            "false" | "0" | "no" => Some(false),
+            _ => None,
+        };
+    }
+    None
+}
+
+fn string_value_at(array: &dyn arrow_array::Array, index: usize) -> Option<String> {
+    use arrow_array::{LargeStringArray, StringArray};
+    if array.is_null(index) {
+        return None;
+    }
+    if let Some(values) = array.as_any().downcast_ref::<StringArray>() {
+        return Some(values.value(index).into());
+    }
+    if let Some(values) = array.as_any().downcast_ref::<LargeStringArray>() {
+        return Some(values.value(index).into());
+    }
+    numeric_value_at(array, index).map(|value| format_threshold(value))
+}
+
+fn normalized_optional_str(value: Option<&str>) -> Option<&str> {
+    value.map(str::trim).filter(|value| !value.is_empty())
+}
+
+fn mean(values: &[f64]) -> f64 {
+    values.iter().sum::<f64>() / values.len() as f64
+}
+
+fn stddev(values: &[f64], mean: f64) -> f64 {
+    if values.is_empty() {
+        return 0.0;
+    }
+    let variance = values
+        .iter()
+        .map(|value| (value - mean).powi(2))
+        .sum::<f64>()
+        / values.len() as f64;
+    variance.sqrt()
+}
+
+fn threshold_slug(value: f64) -> String {
+    format_threshold(value).replace(['.', '-'], "_")
+}
+
+fn format_threshold(value: f64) -> String {
+    format!("{:.4}", round_float(value))
+        .trim_end_matches('0')
+        .trim_end_matches('.')
+        .to_string()
+}
+
+fn round_float(value: f64) -> f64 {
+    (value * 10000.0).round() / 10000.0
 }
 
 fn sample_context(sample: &RuleBacktestSample) -> ClaimContext {
@@ -1708,4 +2186,8 @@ fn sample_context(sample: &RuleBacktestSample) -> ClaimContext {
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+}
+
+fn bad_request<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
+    move |error| ApiError::new(StatusCode::BAD_REQUEST, code, error.to_string())
 }

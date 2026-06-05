@@ -4594,10 +4594,22 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RuleBacktestRequest": {
                     "type": "object",
-                    "required": ["rule", "samples"],
+                    "required": ["rule"],
                     "properties": {
                         "rule": { "$ref": "#/components/schemas/RuleDefinition" },
                         "expected_review_capacity": { "type": "integer", "minimum": 0 },
+                        "dataset_uri": {
+                            "type": "string",
+                            "description": "Optional local Parquet dataset used for backtesting dataset-mined rules."
+                        },
+                        "label_column": {
+                            "type": "string",
+                            "description": "Boolean or 0/1 label column, defaults to confirmed_fwa."
+                        },
+                        "claim_id_column": {
+                            "type": "string",
+                            "description": "Claim identifier column, defaults to claim_id."
+                        },
                         "samples": {
                             "type": "array",
                             "items": {
@@ -4705,9 +4717,26 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "RuleDiscoveryRequest": {
                     "type": "object",
-                    "required": ["samples"],
                     "properties": {
                         "min_support": { "type": "integer", "minimum": 1 },
+                        "max_candidates": { "type": "integer", "minimum": 1 },
+                        "dataset_uri": {
+                            "type": "string",
+                            "description": "Local Parquet file used for dataset-backed rule mining."
+                        },
+                        "label_column": {
+                            "type": "string",
+                            "description": "Boolean or 0/1 label column, defaults to confirmed_fwa."
+                        },
+                        "claim_id_column": {
+                            "type": "string",
+                            "description": "Claim identifier column, defaults to claim_id."
+                        },
+                        "candidate_feature_fields": {
+                            "type": "array",
+                            "description": "Optional numeric feature allowlist for mining.",
+                            "items": { "type": "string" }
+                        },
                         "source_model_key": { "type": "string" },
                         "source_model_version": { "type": "string" },
                         "feature_importance_uri": {

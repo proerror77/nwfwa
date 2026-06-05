@@ -4204,6 +4204,11 @@ fn rules_page() -> Html {
     let explanation_contribution = use_state(|| "1.40".to_string());
     let feature_importance_uri =
         use_state(|| "data/eval/baseline_fwa/v3/feature_importance.parquet".to_string());
+    let discovery_dataset_uri =
+        use_state(|| "data/public-mvp/split=train/part-00000.parquet".to_string());
+    let discovery_label_column = use_state(|| "confirmed_fwa".to_string());
+    let discovery_claim_id_column = use_state(|| "claim_id".to_string());
+    let discovery_feature_fields = use_state(String::new);
     let evaluation_dataset_json =
         use_state(|| pretty_json(&Value::Array(rule_demo_samples())));
     let candidate_owner = use_state(|| "rule-discovery".to_string());
@@ -4261,6 +4266,10 @@ fn rules_page() -> Html {
         let explanation_feature = explanation_feature.clone();
         let explanation_contribution = explanation_contribution.clone();
         let feature_importance_uri = feature_importance_uri.clone();
+        let discovery_dataset_uri = discovery_dataset_uri.clone();
+        let discovery_label_column = discovery_label_column.clone();
+        let discovery_claim_id_column = discovery_claim_id_column.clone();
+        let discovery_feature_fields = discovery_feature_fields.clone();
         let evaluation_dataset_json = evaluation_dataset_json.clone();
         let selected_candidate_id = selected_candidate_id.clone();
         let discovery_state = discovery_state.clone();
@@ -4276,12 +4285,16 @@ fn rules_page() -> Html {
                 ));
                 return;
             };
-            let samples = match parse_json_array(&evaluation_dataset_json, "evaluation dataset") {
-                Ok(samples) => samples,
-                Err(error) => {
-                    discovery_state.set(ApiState::Failed(error));
-                    return;
+            let samples = if discovery_dataset_uri.trim().is_empty() {
+                match parse_json_array(&evaluation_dataset_json, "evaluation dataset") {
+                    Ok(samples) => samples,
+                    Err(error) => {
+                        discovery_state.set(ApiState::Failed(error));
+                        return;
+                    }
                 }
+            } else {
+                Vec::new()
             };
             let payload = rule_discovery_payload(
                 &model_key,
@@ -4289,6 +4302,10 @@ fn rules_page() -> Html {
                 &explanation_feature,
                 contribution,
                 &feature_importance_uri,
+                &discovery_dataset_uri,
+                &discovery_label_column,
+                &discovery_claim_id_column,
+                &discovery_feature_fields,
                 samples,
             );
             let api_key = (*api_key).clone();
@@ -4330,6 +4347,9 @@ fn rules_page() -> Html {
     let backtest_candidate = {
         let api_key = api_key.clone();
         let selected_candidate_id = selected_candidate_id.clone();
+        let discovery_dataset_uri = discovery_dataset_uri.clone();
+        let discovery_label_column = discovery_label_column.clone();
+        let discovery_claim_id_column = discovery_claim_id_column.clone();
         let evaluation_dataset_json = evaluation_dataset_json.clone();
         let discovery_state = discovery_state.clone();
         let backtest_state = backtest_state.clone();
@@ -4347,16 +4367,26 @@ fn rules_page() -> Html {
                 ));
                 return;
             };
-            let samples = match parse_json_array(&evaluation_dataset_json, "evaluation dataset") {
-                Ok(samples) => samples,
-                Err(error) => {
-                    backtest_state.set(ApiState::Failed(error));
-                    return;
+            let samples = if discovery_dataset_uri.trim().is_empty() {
+                match parse_json_array(&evaluation_dataset_json, "evaluation dataset") {
+                    Ok(samples) => samples,
+                    Err(error) => {
+                        backtest_state.set(ApiState::Failed(error));
+                        return;
+                    }
                 }
+            } else {
+                Vec::new()
             };
             let api_key = (*api_key).clone();
             let backtest_state = backtest_state.clone();
-            let payload = rule_backtest_payload(rule, samples);
+            let payload = rule_backtest_payload(
+                rule,
+                &discovery_dataset_uri,
+                &discovery_label_column,
+                &discovery_claim_id_column,
+                samples,
+            );
             backtest_state.set(ApiState::Loading);
             spawn_local(async move {
                 backtest_state.set(
@@ -4593,6 +4623,54 @@ fn rules_page() -> Html {
                         />
                     </label>
                     <label>
+                        {"Mining Dataset URI"}
+                        <input
+                            value={(*discovery_dataset_uri).clone()}
+                            oninput={{
+                                let discovery_dataset_uri = discovery_dataset_uri.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    discovery_dataset_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Label Column"}
+                        <input
+                            value={(*discovery_label_column).clone()}
+                            oninput={{
+                                let discovery_label_column = discovery_label_column.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    discovery_label_column.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Claim ID Column"}
+                        <input
+                            value={(*discovery_claim_id_column).clone()}
+                            oninput={{
+                                let discovery_claim_id_column = discovery_claim_id_column.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    discovery_claim_id_column.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Feature Columns"}
+                        <input
+                            value={(*discovery_feature_fields).clone()}
+                            oninput={{
+                                let discovery_feature_fields = discovery_feature_fields.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    discovery_feature_fields.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
                         {"Draft Owner"}
                         <input
                             value={(*candidate_owner).clone()}
@@ -4630,7 +4708,7 @@ fn rules_page() -> Html {
                     </label>
                 </div>
                 <label class="full-field">
-                    {"Labeled Evaluation Dataset"}
+                    {"Inline Labeled Evaluation Dataset"}
                     <textarea
                         class="code-field"
                         value={(*evaluation_dataset_json).clone()}
@@ -11985,13 +12063,23 @@ fn rule_discovery_payload(
     explanation_feature: &UseStateHandle<String>,
     explanation_contribution: f64,
     feature_importance_uri: &UseStateHandle<String>,
+    dataset_uri: &UseStateHandle<String>,
+    label_column: &UseStateHandle<String>,
+    claim_id_column: &UseStateHandle<String>,
+    feature_fields: &UseStateHandle<String>,
     samples: Vec<Value>,
 ) -> Value {
+    let candidate_feature_fields = comma_separated_values(feature_fields);
     json!({
         "min_support": 1,
+        "max_candidates": 8,
         "source_model_key": (**model_key).clone(),
         "source_model_version": (**model_version).clone(),
         "feature_importance_uri": (**feature_importance_uri).clone(),
+        "dataset_uri": (**dataset_uri).clone(),
+        "label_column": (**label_column).clone(),
+        "claim_id_column": (**claim_id_column).clone(),
+        "candidate_feature_fields": candidate_feature_fields,
         "min_abs_contribution": 0.1,
         "model_explanations": [
             {
@@ -12005,12 +12093,30 @@ fn rule_discovery_payload(
     })
 }
 
-fn rule_backtest_payload(rule: Value, samples: Vec<Value>) -> Value {
+fn rule_backtest_payload(
+    rule: Value,
+    dataset_uri: &UseStateHandle<String>,
+    label_column: &UseStateHandle<String>,
+    claim_id_column: &UseStateHandle<String>,
+    samples: Vec<Value>,
+) -> Value {
     json!({
         "rule": rule,
+        "dataset_uri": (**dataset_uri).clone(),
+        "label_column": (**label_column).clone(),
+        "claim_id_column": (**claim_id_column).clone(),
         "samples": samples,
         "expected_review_capacity": 10
     })
+}
+
+fn comma_separated_values(input: &UseStateHandle<String>) -> Vec<String> {
+    (**input)
+        .split(',')
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+        .collect()
 }
 
 fn parse_json_array(input: &str, label: &str) -> Result<Vec<Value>, String> {
