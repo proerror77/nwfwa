@@ -1856,7 +1856,7 @@ pre {
 
 .visual-board {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
@@ -1924,54 +1924,6 @@ pre {
   height: 100%;
   background: linear-gradient(90deg, #1174ff 0%, #46c2ff 100%);
   border-radius: inherit;
-}
-
-.matrix-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-}
-
-.matrix-cell {
-  min-width: 0;
-  padding: 11px;
-  background: #ffffff;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-}
-
-.matrix-cell span,
-.matrix-cell small {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.matrix-cell strong {
-  display: block;
-  margin: 4px 0;
-  color: #0c315f;
-  font-size: 22px;
-}
-
-.matrix-cell.danger {
-  border-color: #ffc2d0;
-  background: var(--red-soft);
-}
-
-.matrix-cell.success {
-  border-color: #b7e4c4;
-  background: #e8f8ee;
-}
-
-.matrix-cell.warning {
-  border-color: #f1c76a;
-  background: var(--amber-soft);
-}
-
-.matrix-cell.strong {
-  border-color: #bad4fb;
-  background: var(--blue-soft);
 }
 
 .panel-heading-row {
@@ -6093,10 +6045,8 @@ pre {
 .action-card {
   display: grid;
   gap: 12px;
-  padding: 12px;
-  border: 1px solid var(--line);
-  border-radius: 7px;
-  background: linear-gradient(180deg, #ffffff 0%, #f7faff 100%);
+  padding: 0 0 14px;
+  border-bottom: 1px solid var(--line);
 }
 
 .action-card h4 {
@@ -6123,6 +6073,19 @@ pre {
 .selected-work-item small {
   min-width: 0;
   overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.case-action-panel .data-source-detail small,
+.case-action-panel .governance-detail small,
+.case-action-panel .result-list li,
+.agent-run-node strong,
+.agent-run-core strong,
+.agent-node strong,
+.agent-core strong {
+  min-width: 0;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .action-form-grid {
@@ -6662,7 +6625,6 @@ pre {
 
   .rule-bar-row,
   .bar-row,
-  .matrix-grid,
   .rule-candidate-workflow,
   .operator-queue,
   .ops-system-map,

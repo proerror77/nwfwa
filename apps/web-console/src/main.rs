@@ -4506,14 +4506,13 @@ fn dashboard_view(props: &DashboardProps) -> Html {
                                 {kpi_card("Rule Hits", &summary.rule_hits.to_string(), "rule")}
                                 {kpi_card("Investigations", &summary.investigation_results.to_string(), "case")}
                                 {kpi_card("QA Reviews", &summary.qa_reviews.to_string(), "qa")}
-                                <div><span>{"RAG Distribution"}</span><strong>{map_counts_label(&summary.rag_distribution)}</strong></div>
-                                <div><span>{"Schemes"}</span><strong>{map_counts_label(&summary.scheme_distribution)}</strong></div>
+                                <div><span>{"Risk mix"}</span><strong>{map_counts_business_label(&summary.rag_distribution)}</strong></div>
+                                <div><span>{"Schemes"}</span><strong>{map_counts_business_label(&summary.scheme_distribution)}</strong></div>
                             </div>
                             {dashboard_value_proof(summary)}
                             <div class="visual-board">
                                 {distribution_bars("Risk distribution", &summary.rag_distribution)}
                                 {distribution_bars("Scheme mix", &summary.scheme_distribution)}
-                                {risk_ops_matrix(summary)}
                             </div>
                             {operator_queue_snapshot(summary, &props.on_navigate)}
                         </section>
@@ -4580,7 +4579,7 @@ fn dashboard_pilot_runway(summary: &DashboardSummary, on_navigate: &Callback<Str
                 <div class="runway-line"></div>
                 {pilot_runway_step("Principal", "Configured principal", "actor + customer scope", "Intake Ops", "source", on_navigate)}
                 {pilot_runway_step("Intake", &summary.suspected_claims.to_string(), "normalized claims", "Intake Ops", "intake", on_navigate)}
-                {pilot_runway_step("Risk", &signal_label, &map_counts_label(&summary.rag_distribution), "Leads & Cases", "score", on_navigate)}
+                {pilot_runway_step("Risk", &signal_label, &map_counts_business_label(&summary.rag_distribution), "Leads & Cases", "score", on_navigate)}
                 {pilot_runway_step("Case", &summary.case_sla.open_cases.to_string(), "open investigations", "Leads & Cases", "case", on_navigate)}
                 {pilot_runway_step("QA", &qa_work.to_string(), "open QA + feedback", "Review Workbench", "qa", on_navigate)}
                 {pilot_runway_step("Audit", &audit_label, "canonical trace coverage", "Governance", "audit", on_navigate)}
@@ -7293,14 +7292,14 @@ fn leads_cases_page() -> Html {
                                             <>
                                                 <div class="score-hero">
                                                     <div><span>{"Claim"}</span><strong>{&case.claim_id}</strong></div>
-                                                    <div><span>{"SLA"}</span><strong>{format!("{} / {}h", case.sla_status, case.sla_target_hours)}</strong></div>
+                                                    <div><span>{"SLA"}</span><strong>{format!("{} / {}h", sla_label(&case.sla_status), case.sla_target_hours)}</strong></div>
                                                     <div><span>{"Reviewer"}</span><strong>{&case.reviewer}</strong></div>
                                                 </div>
                                                 <div class="summary-grid">
-                                                    <div><span>{"Scheme"}</span><strong>{&case.scheme_family}</strong></div>
-                                                    <div><span>{"Status"}</span><strong>{&case.status}</strong></div>
-                                                    <div><span>{"Review mode"}</span><strong>{&case.review_mode}</strong></div>
-                                                    <div><span>{"Outcome"}</span><strong>{case.final_outcome.as_deref().unwrap_or("human review pending")}</strong></div>
+                                                    <div><span>{"Scheme"}</span><strong>{business_label(&case.scheme_family)}</strong></div>
+                                                    <div><span>{"Status"}</span><strong>{case_stage_label(&case.status)}</strong></div>
+                                                    <div><span>{"Review mode"}</span><strong>{business_label(&case.review_mode)}</strong></div>
+                                                    <div><span>{"Outcome"}</span><strong>{case.final_outcome.as_deref().map(business_label).unwrap_or_else(|| "Human review pending".into())}</strong></div>
                                                 </div>
                                             </>
                                         }).unwrap_or_else(|| html! { <p class="empty">{"Select a case to open the investigation workspace."}</p> })}
@@ -7330,7 +7329,7 @@ fn leads_cases_page() -> Html {
                                         <div class="selected-work-item">
                                             <span>{"Human Decision / Writeback"}</span>
                                             <strong>{case.map(|case| case.claim_id.as_str()).unwrap_or("none")}</strong>
-                                            <small>{case.and_then(|case| case.final_outcome.as_deref()).unwrap_or("No investigation result written back yet.")}</small>
+                                            <small>{case.and_then(|case| case.final_outcome.as_deref()).map(business_label).unwrap_or_else(|| "No investigation result written back yet.".into())}</small>
                                         </div>
                                         <h4>{"Investigation Writeback"}</h4>
                                         <div class="form-grid action-form-grid">
@@ -7525,7 +7524,7 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                                     </div>
                                                     <div class="queue-row-meta">
                                                         <span class="status-token strong">{format!("risk {}", lead.risk_score)}</span>
-                                                        <span class={classes!("status-token", status_tone(&lead.rag))}>{&lead.rag}</span>
+                                                        <span class={classes!("status-token", status_tone(&lead.rag))}>{rag_label(&lead.rag)}</span>
                                                         <span class={classes!("status-token", lead_stage_tone(&lead.status))}>{lead_stage_label(&lead.status)}</span>
                                                     </div>
                                                 </button>
@@ -7561,7 +7560,7 @@ fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                                         <span>{&case.routing_reason}</span>
                                                         <small>{format!("{} / reviewer {} / lead {}", case.assignee, case.reviewer, case.lead_id)}</small>
                                                         {case.final_outcome.as_ref().map(|outcome| html! {
-                                                            <small>{format!("outcome: {} / writeback {}", outcome, case.investigation_result_id.as_deref().unwrap_or("pending"))}</small>
+                                                            <small>{format!("outcome: {} / writeback {}", business_label(outcome), case.investigation_result_id.as_deref().map(business_label).unwrap_or_else(|| "Pending".into()))}</small>
                                                         }).unwrap_or_else(|| html! {})}
                                                     </div>
                                                     <div class="queue-row-meta">
@@ -7597,7 +7596,7 @@ fn triage_result_view(props: &TriageResultProps) -> Html {
         ApiState::Ready(record) => html! {
             <div class="summary-grid">
                 <div><span>{"Audit"}</span><strong>{&record.audit_id}</strong></div>
-                <div><span>{"Lead"}</span><strong>{format!("{} / {}", record.lead.lead_id, record.lead.status)}</strong></div>
+                <div><span>{"Lead"}</span><strong>{format!("{} / {}", record.lead.lead_id, lead_stage_label(&record.lead.status))}</strong></div>
                 <div><span>{"Case"}</span><strong>{record.case.as_ref().map(|case| case.case_id.as_str()).unwrap_or("none")}</strong></div>
             </div>
         },
@@ -7619,7 +7618,7 @@ fn case_update_result_view(props: &CaseUpdateResultProps) -> Html {
             <div class="summary-grid">
                 <div><span>{"Audit"}</span><strong>{&record.audit_id}</strong></div>
                 <div><span>{"Case"}</span><strong>{&record.case.case_id}</strong></div>
-                <div><span>{"Status"}</span><strong>{&record.case.status}</strong></div>
+                <div><span>{"Status"}</span><strong>{case_stage_label(&record.case.status)}</strong></div>
             </div>
         },
     }
@@ -7640,7 +7639,7 @@ fn investigation_writeback_result_view(props: &InvestigationWritebackResultProps
             <div class="summary-grid">
                 <div><span>{"Claim"}</span><strong>{&record.claim_id}</strong></div>
                 <div><span>{"Audit"}</span><strong>{&record.audit_id}</strong></div>
-                <div><span>{"Writeback"}</span><strong>{&record.event_status}</strong></div>
+                <div><span>{"Writeback"}</span><strong>{business_label(&record.event_status)}</strong></div>
                 <div><span>{"Idempotency"}</span><strong>{&record.idempotency_key}</strong></div>
             </div>
         },
@@ -8412,7 +8411,11 @@ fn medical_review_page() -> Html {
                 item.first_issue_type
                     .clone()
                     .unwrap_or_else(|| "issue pending".into()),
-                format!("{} / {}", item.review_route, item.evidence_status),
+                format!(
+                    "{} / {}",
+                    business_label(&item.review_route),
+                    business_label(&item.evidence_status)
+                ),
             )
         }),
         _ => None,
@@ -8667,15 +8670,15 @@ fn medical_review_queue_view(props: &MedicalReviewQueueProps) -> Html {
                                         <div class="factor-card">
                                             <div>
                                                 <strong>{format!("{} / {}", item.claim_id, item.audit_id)}</strong>
-                                                <span>{format!("{} / {} / {}", item.review_route, item.evidence_status, item.review_status)}</span>
+                                                <span>{format!("{} / {} / {}", business_label(&item.review_route), business_label(&item.evidence_status), business_label(&item.review_status))}</span>
                                             </div>
                                             <div class="summary-grid">
                                                 <div><span>{"Medical Score"}</span><strong>{item.medical_reasonableness_score}</strong></div>
                                                 <div><span>{"Findings"}</span><strong>{item.item_finding_count}</strong></div>
                                                 <div><span>{"First Item"}</span><strong>{item.first_item_code.as_deref().unwrap_or("none")}</strong></div>
-                                                <div><span>{"First Issue"}</span><strong>{item.first_issue_type.as_deref().unwrap_or("none")}</strong></div>
+                                                <div><span>{"First Issue"}</span><strong>{item.first_issue_type.as_deref().map(business_label).unwrap_or_else(|| "None".into())}</strong></div>
                                                 <div><span>{"Reviewer"}</span><strong>{item.reviewer.as_deref().unwrap_or("pending")}</strong></div>
-                                                <div><span>{"Decision"}</span><strong>{item.review_decision.as_deref().unwrap_or("pending")}</strong></div>
+                                                <div><span>{"Decision"}</span><strong>{item.review_decision.as_deref().map(business_label).unwrap_or_else(|| "Pending".into())}</strong></div>
                                             </div>
                                             <small>{format!("missing evidence: {}", refs_label(&item.missing_evidence))}</small>
                                             <small>{format!("canonical: {} / {}", refs_label(&item.canonical_source_refs), refs_label(&item.canonical_evidence_refs))}</small>
@@ -8708,7 +8711,7 @@ fn medical_review_result_view(props: &MedicalReviewResultProps) -> Html {
         ApiState::Ready(response) => html! {
             <div class="summary-grid">
                 <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
-                <div><span>{"Status"}</span><strong>{&response.review_status}</strong></div>
+                <div><span>{"Status"}</span><strong>{business_label(&response.review_status)}</strong></div>
                 <div><span>{"Audit"}</span><strong>{&response.audit_id}</strong></div>
                 <div><span>{"Run"}</span><strong>{&response.run_id}</strong></div>
                 <div><span>{"Clinical Outcomes"}</span><strong>{refs_label(&response.clinical_outcomes)}</strong></div>
@@ -9588,13 +9591,13 @@ fn agent_investigation_view(props: &AgentInvestigationProps) -> Html {
                         {agent_investigation_cockpit(response)}
                         <div class="score-hero">
                             <div><span>{"Agent Run"}</span><strong>{&response.agent_run_id}</strong></div>
-                            <div><span>{"Boundary"}</span><strong>{&response.decision_boundary}</strong></div>
+                            <div><span>{"Boundary"}</span><strong>{business_label(&response.decision_boundary)}</strong></div>
                             <div><span>{"Evidence"}</span><strong>{response.evidence_refs.len()}</strong></div>
                         </div>
                         <p>{&response.risk_summary}</p>
                         <div class="summary-grid">
-                            <div><span>{"Evidence Status"}</span><strong>{&response.evidence_sufficiency.status}</strong></div>
-                            <div><span>{"Scheme"}</span><strong>{&response.evidence_sufficiency.scheme_family}</strong></div>
+                            <div><span>{"Evidence Status"}</span><strong>{business_label(&response.evidence_sufficiency.status)}</strong></div>
+                            <div><span>{"Scheme"}</span><strong>{business_label(&response.evidence_sufficiency.scheme_family)}</strong></div>
                             <div><span>{"Present"}</span><strong>{response.evidence_sufficiency.present_evidence.len()}</strong></div>
                             <div><span>{"Missing"}</span><strong>{response.evidence_sufficiency.missing_evidence.len()}</strong></div>
                         </div>
@@ -9677,10 +9680,10 @@ fn agent_investigation_cockpit(response: &AgentInvestigationResponse) -> Html {
                 <span>{"Agent investigation command"}</span>
                 <strong>{&response.agent_run_id}</strong>
                 <dl>
-                    <div><dt>{"Boundary"}</dt><dd>{&response.decision_boundary}</dd></div>
-                    <div><dt>{"Scheme"}</dt><dd>{&response.evidence_sufficiency.scheme_family}</dd></div>
+                    <div><dt>{"Boundary"}</dt><dd>{business_label(&response.decision_boundary)}</dd></div>
+                    <div><dt>{"Scheme"}</dt><dd>{business_label(&response.evidence_sufficiency.scheme_family)}</dd></div>
                     <div><dt>{"Evidence"}</dt><dd>{response.evidence_refs.len()}</dd></div>
-                    <div><dt>{"Status"}</dt><dd>{&response.evidence_sufficiency.status}</dd></div>
+                    <div><dt>{"Status"}</dt><dd>{business_label(&response.evidence_sufficiency.status)}</dd></div>
                 </dl>
                 <div class="tag-grid compact-tags">
                     <span>{format!("findings {}", response.findings.len())}</span>
@@ -9765,7 +9768,7 @@ fn agent_runs_view(props: &AgentRunsProps) -> Html {
                                     <div class="factor-card">
                                         <div>
                                             <strong>{&run.claim_id}</strong>
-                                            <span>{format!("{} / {}", run.status, run.decision_boundary)}</span>
+                                            <span>{format!("{} / {}", business_label(&run.status), business_label(&run.decision_boundary))}</span>
                                         </div>
                                         <div class="summary-grid">
                                             <div><span>{"Steps"}</span><strong>{run.steps.len()}</strong></div>
@@ -9834,8 +9837,8 @@ fn agent_run_governance_cockpit(run: &AgentRunRecord) -> Html {
                 <strong>{&run.agent_run_id}</strong>
                 <dl>
                     <div><dt>{"Claim"}</dt><dd>{&run.claim_id}</dd></div>
-                    <div><dt>{"Status"}</dt><dd>{&run.status}</dd></div>
-                    <div><dt>{"Boundary"}</dt><dd>{&run.decision_boundary}</dd></div>
+                    <div><dt>{"Status"}</dt><dd>{business_label(&run.status)}</dd></div>
+                    <div><dt>{"Boundary"}</dt><dd>{business_label(&run.decision_boundary)}</dd></div>
                     <div><dt>{"Evidence"}</dt><dd>{run.evidence_refs.len()}</dd></div>
                 </dl>
             </aside>
@@ -9850,7 +9853,7 @@ fn agent_run_governance_cockpit(run: &AgentRunRecord) -> Html {
                 <div class="agent-run-link diagonal-b"></div>
                 <div class="agent-run-core">
                     <span>{"Assistive Only"}</span>
-                    <strong>{&run.status}</strong>
+                    <strong>{business_label(&run.status)}</strong>
                 </div>
                 {agent_run_node("Context snapshot", &context_label, "context")}
                 {agent_run_node("Policy check", &policy_label, "policy")}
@@ -10741,8 +10744,8 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                 ApiState::Ready(response) => html! {
                     <>
                         <div class="score-hero compact-metrics">
-                            <div><span>{"Validation"}</span><strong>{readable_token(&response.validation_result)}</strong></div>
-                            <div><span>{"Queue Ready"}</span><strong>{if response.scoring_ready { "yes" } else { "no" }}</strong></div>
+                            <div><span>{"Validation"}</span><strong>{business_label(&response.validation_result)}</strong></div>
+                            <div><span>{"Queue Ready"}</span><strong>{if response.scoring_ready { "Ready" } else { "Needs review" }}</strong></div>
                             <div><span>{"Mapping"}</span><strong>{&response.mapping_version}</strong></div>
                         </div>
                         {inbox_pipeline_visual(response)}
@@ -10764,7 +10767,7 @@ fn normalize_result_view(props: &NormalizeResultProps) -> Html {
                                 {for props.hints.iter().map(|hint| html! {
                                     <div class="finding-row">
                                         <strong>{&hint.field_path}</strong>
-                                        <span class={classes!("severity", hint.severity.clone())}>{&hint.severity}</span>
+                                        <span class={classes!("severity", hint.severity.clone())}>{business_label(&hint.severity)}</span>
                                         <p>{&hint.next_action}</p>
                                         <small>{if hint.blocks_scoring { "blocks queue release" } else { "review signal" }}</small>
                                     </div>
@@ -10830,7 +10833,7 @@ fn score_result_view(props: &ScoreResultProps) -> Html {
                         <div class="score-hero compact-metrics">
                             <div><span>{"Claim"}</span><strong>{&response.claim_id}</strong></div>
                             <div><span>{"Risk Score"}</span><strong>{display_value(&response.risk_score)}</strong></div>
-                            <div><span>{"Queue Route"}</span><strong>{response.recommended_action.as_deref().unwrap_or("review")}</strong></div>
+                            <div><span>{"Queue Route"}</span><strong>{response.recommended_action.as_deref().map(business_label).unwrap_or_else(|| "Manual review".into())}</strong></div>
                         </div>
                         <details>
                             <summary>{"Release trace"}</summary>
@@ -10882,14 +10885,14 @@ fn live_tpa_demo_view(props: &LiveTpaDemoProps) -> Html {
                         </div>
                         <div class="score-hero compact-metrics">
                             <div><span>{"Claim"}</span><strong>{&run.claim_id}</strong></div>
-                            <div><span>{"Risk"}</span><strong>{format!("{} / {}", run.risk_score, run.rag)}</strong></div>
-                            <div><span>{"Decision"}</span><strong>{&run.decision_outcome}</strong></div>
+                            <div><span>{"Risk"}</span><strong>{format!("{} / {}", run.risk_score, rag_label(&run.rag))}</strong></div>
+                            <div><span>{"Decision"}</span><strong>{business_label(&run.decision_outcome)}</strong></div>
                         </div>
                         <div class="summary-grid">
                             <div><span>{"Inbox run"}</span><strong>{&run.inbox_run_id}</strong></div>
                             <div><span>{"Score run"}</span><strong>{&run.score_run_id}</strong></div>
                             <div><span>{"Lead"}</span><strong>{&run.lead_id}</strong></div>
-                            <div><span>{"Case"}</span><strong>{format!("{} / {}", run.case_id, run.case_status)}</strong></div>
+                            <div><span>{"Case"}</span><strong>{format!("{} / {}", run.case_id, case_stage_label(&run.case_status))}</strong></div>
                             <div><span>{"Investigation audit"}</span><strong>{&run.investigation_audit_id}</strong></div>
                             <div><span>{"Dashboard value"}</span><strong>{format!("{} -> {}", run.prevented_before, run.prevented_after)}</strong></div>
                         </div>
@@ -11971,6 +11974,91 @@ fn readable_token(value: &str) -> String {
     value.replace(['_', '-'], " ")
 }
 
+fn titleize_token(value: &str) -> String {
+    let readable = readable_token(value.trim());
+    if readable.is_empty() {
+        return "None".into();
+    }
+    readable
+        .split_whitespace()
+        .map(|word| {
+            let mut characters = word.chars();
+            characters
+                .next()
+                .map(|first| {
+                    format!(
+                        "{}{}",
+                        first.to_ascii_uppercase(),
+                        characters.as_str().to_ascii_lowercase()
+                    )
+                })
+                .unwrap_or_default()
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+fn business_label(value: &str) -> String {
+    let normalized = value.trim().to_ascii_lowercase();
+    match normalized.as_str() {
+        "" => "None".into(),
+        "red" => "High risk".into(),
+        "amber" | "yellow" => "Watchlist risk".into(),
+        "green" => "Low risk".into(),
+        "manual_review" | "review" => "Manual review".into(),
+        "request_evidence" | "request_more_evidence" => "Request evidence".into(),
+        "open_case" => "Open case".into(),
+        "reject_lead" => "Reject lead".into(),
+        "merge_lead" => "Merge lead".into(),
+        "pre_payment" => "Pre-payment review".into(),
+        "post_payment" => "Post-payment review".into(),
+        "pending_evidence" => "Waiting evidence".into(),
+        "evidence_pending" => "Evidence pending".into(),
+        "evidence_sufficient" | "clinical_evidence_sufficient" => "Evidence sufficient".into(),
+        "insufficient_evidence" => "Insufficient evidence".into(),
+        "documentation_issue" => "Documentation issue".into(),
+        "medical_necessity_review_required" => "Medical review required".into(),
+        "medical_necessity_issue" => "Medical necessity issue".into(),
+        "no_medical_issue" => "No medical issue".into(),
+        "no_auto_denial" => "No automatic denial".into(),
+        "assistive_only" => "Assistive only".into(),
+        "approved" => "Approved".into(),
+        "approved_for_training" => "Approved for training".into(),
+        "blocked" => "Blocked".into(),
+        "breached" => "Over SLA".into(),
+        "closed" => "Closed".into(),
+        "completed" => "Completed".into(),
+        "confirmed" => "Confirmed".into(),
+        "created" => "Created".into(),
+        "done" => "Done".into(),
+        "error" => "Error".into(),
+        "failed" => "Failed".into(),
+        "hold" | "held" => "Held for review".into(),
+        "investigating" => "Investigating".into(),
+        "new" => "New".into(),
+        "ok" | "passed" | "valid" => "Passed".into(),
+        "on_track" => "On track".into(),
+        "open" => "Open".into(),
+        "pending" => "Pending".into(),
+        "queued" => "Queued".into(),
+        "ready" | "scoring_ready" => "Ready".into(),
+        "received" => "Received".into(),
+        "rejected" => "Rejected".into(),
+        "triage" => "Triage".into(),
+        other if other.starts_with("completed") => "Completed".into(),
+        _ => titleize_token(value),
+    }
+}
+
+fn rag_label(value: &str) -> &'static str {
+    match value.trim().to_ascii_uppercase().as_str() {
+        "RED" => "High risk",
+        "AMBER" | "YELLOW" => "Watchlist risk",
+        "GREEN" => "Low risk",
+        _ => "Risk pending",
+    }
+}
+
 fn inbox_pipeline_visual(response: &InboxNormalizeResponse) -> Html {
     let has_blockers = response
         .validation_errors
@@ -12072,6 +12160,17 @@ fn map_counts_label(counts: &BTreeMap<String, u32>) -> String {
     counts
         .iter()
         .map(|(key, value)| format!("{key}={value}"))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn map_counts_business_label(counts: &BTreeMap<String, u32>) -> String {
+    if counts.is_empty() {
+        return "none".into();
+    }
+    counts
+        .iter()
+        .map(|(key, value)| format!("{}={value}", business_label(key)))
         .collect::<Vec<_>>()
         .join(", ")
 }
@@ -12235,7 +12334,7 @@ fn dashboard_operations_map(summary: &DashboardSummary) -> Html {
     let engine_label = format!(
         "rules + risk mix: {} / {}",
         summary.rule_hits,
-        map_counts_label(&summary.rag_distribution)
+        map_counts_business_label(&summary.rag_distribution)
     );
     html! {
         <div class="ops-system-map-shell">
@@ -12298,37 +12397,13 @@ fn distribution_bars(title: &str, counts: &BTreeMap<String, u32>) -> Html {
                     let width = scaled_width(*count, max_count);
                     html! {
                         <div class="bar-row">
-                            <span>{label}</span>
+                            <span>{business_label(label)}</span>
                             <div class="bar-track"><i style={format!("width: {width};")}></i></div>
                             <strong>{count}</strong>
                         </div>
                     }
                 })}
             </div>
-        </div>
-    }
-}
-
-fn risk_ops_matrix(summary: &DashboardSummary) -> Html {
-    html! {
-        <div class="visual-panel risk-matrix">
-            <h4>{"Risk operations matrix"}</h4>
-            <div class="matrix-grid">
-                {matrix_cell("Detect", summary.suspected_claims, "suspected", "danger")}
-                {matrix_cell("Confirm", summary.confirmed_fwa, "confirmed", "success")}
-                {matrix_cell("Investigate", summary.investigation_results, "cases", "warning")}
-                {matrix_cell("QA", summary.qa_reviews, "reviews", "strong")}
-            </div>
-        </div>
-    }
-}
-
-fn matrix_cell(label: &str, value: u32, caption: &str, tone: &str) -> Html {
-    html! {
-        <div class={classes!("matrix-cell", tone.to_string())}>
-            <span>{label}</span>
-            <strong>{value}</strong>
-            <small>{caption}</small>
         </div>
     }
 }
@@ -13645,7 +13720,7 @@ fn medical_review_cockpit(items: &[MedicalReviewQueueItem]) -> Html {
                     <h3>{"Clinical evidence cockpit"}</h3>
                     <p>{"Clinical reasonableness workbench linking diagnosis support, bill item evidence, missing records, reviewer outcome, and audit trace."}</p>
                 </div>
-                <span class={classes!("status-token", status_tone(&item.evidence_status))}>{&item.evidence_status}</span>
+                <span class={classes!("status-token", status_tone(&item.evidence_status))}>{business_label(&item.evidence_status)}</span>
             </div>
             <div class="clinical-cockpit">
                 <aside class="case-brief clinical-brief">
@@ -13653,8 +13728,8 @@ fn medical_review_cockpit(items: &[MedicalReviewQueueItem]) -> Html {
                     <strong>{&item.claim_id}</strong>
                     <dl>
                         <div><dt>{"Audit"}</dt><dd>{&item.audit_id}</dd></div>
-                        <div><dt>{"Route"}</dt><dd>{&item.review_route}</dd></div>
-                        <div><dt>{"Status"}</dt><dd>{&item.review_status}</dd></div>
+                        <div><dt>{"Route"}</dt><dd>{business_label(&item.review_route)}</dd></div>
+                        <div><dt>{"Status"}</dt><dd>{business_label(&item.review_status)}</dd></div>
                         <div><dt>{"Score"}</dt><dd>{item.medical_reasonableness_score}</dd></div>
                     </dl>
                     <div class="tag-grid compact-tags">
@@ -13695,8 +13770,8 @@ fn medical_review_cockpit(items: &[MedicalReviewQueueItem]) -> Html {
                 <aside class="case-timeline clinical-timeline">
                     <h4>{"Clinical trace"}</h4>
                     {timeline_item("Queue created", item.created_at.as_deref().unwrap_or("pending"), "done")}
-                    {timeline_item("Evidence status", &item.evidence_status, &item.evidence_status)}
-                    {timeline_item("Review decision", item.review_decision.as_deref().unwrap_or("pending"), item.review_decision.as_deref().unwrap_or("pending"))}
+                    {timeline_item("Evidence status", &business_label(&item.evidence_status), &item.evidence_status)}
+                    {timeline_item("Review decision", &item.review_decision.as_deref().map(business_label).unwrap_or_else(|| "Pending".into()), item.review_decision.as_deref().unwrap_or("pending"))}
                     {timeline_item("Review audit", item.review_audit_id.as_deref().unwrap_or("pending"), "pending")}
                 </aside>
             </div>

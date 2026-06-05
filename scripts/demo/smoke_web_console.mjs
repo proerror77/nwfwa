@@ -150,6 +150,7 @@ async function main() {
     assertContains(builtText, "Risk Signal Breakdown", "web console risk signal visual bundle");
     assertContains(builtText, "downstream human queue", "web console risk signal visual bundle");
     assertContains(builtText, "Risk distribution", "web console dashboard visual bundle");
+    assertContains(builtText, "Risk mix", "web console dashboard visual bundle");
     assertContains(builtText, "Pilot Operations", "web console dashboard visual bundle");
     assertContains(builtText, "confirmed prevented payment", "web console dashboard value wording bundle");
     assertContains(builtText, "Savings / review cost", "web console dashboard value wording bundle");
@@ -200,6 +201,9 @@ async function main() {
     assertContains(builtText, "Queue Source", "web console leads cases queue bundle");
     assertContains(builtText, "Investigation Control", "web console leads cases queue bundle");
     assertContains(builtText, "SLA attention", "web console leads cases queue bundle");
+    assertContains(builtText, "Waiting evidence", "web console business status label bundle");
+    assertContains(builtText, "Pre-payment review", "web console business status label bundle");
+    assertContains(builtText, "High risk", "web console business risk label bundle");
     assertContains(builtText, "Lead movement", "web console leads cases queue bundle");
     assertContains(builtText, "Case movement", "web console leads cases queue bundle");
     assertContains(builtText, "Generated Leads", "web console leads cases queue bundle");
@@ -221,6 +225,10 @@ async function main() {
     assertContains(builtText, "Coverage limit needs correction", "web console claim inbox release bundle");
     assertContains(builtText, "Waiting for intake check", "web console claim inbox release bundle");
     assertContains(builtText, "Queue Ready", "web console claim inbox release bundle");
+    assertContains(builtText, "Needs review", "web console claim inbox release bundle");
+    assertContains(builtText, "Manual review", "web console business action label bundle");
+    assertContains(builtText, "No automatic denial", "web console agent boundary label bundle");
+    assertContains(builtText, "Medical review required", "web console clinical label bundle");
     assertContains(builtText, "Technical payload editor", "web console claim inbox release bundle");
     assertNotContains(builtText, "Approve for scoring", "web console claim inbox release bundle");
     assertNotContains(builtText, "Scoring Release", "web console claim inbox release bundle");
