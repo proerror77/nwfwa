@@ -4720,6 +4720,12 @@ pub async fn openapi_schema() -> Json<Value> {
                     "properties": {
                         "min_support": { "type": "integer", "minimum": 1 },
                         "max_candidates": { "type": "integer", "minimum": 1 },
+                        "max_tree_depth": {
+                            "type": "integer",
+                            "minimum": 1,
+                            "maximum": 3,
+                            "description": "Maximum depth for shallow decision-tree rule mining, defaults to 2."
+                        },
                         "dataset_uri": {
                             "type": "string",
                             "description": "Local Parquet file used for dataset-backed rule mining."

@@ -4644,6 +4644,7 @@ fn rules_page() -> Html {
     let discovery_label_column = use_state(|| "confirmed_fwa".to_string());
     let discovery_claim_id_column = use_state(|| "claim_id".to_string());
     let discovery_feature_fields = use_state(String::new);
+    let discovery_tree_depth = use_state(|| "2".to_string());
     let evaluation_dataset_json = use_state(|| pretty_json(&Value::Array(rule_demo_samples())));
     let candidate_owner = use_state(|| "rule-discovery".to_string());
     let selected_candidate_id = use_state(String::new);
@@ -4704,6 +4705,7 @@ fn rules_page() -> Html {
         let discovery_label_column = discovery_label_column.clone();
         let discovery_claim_id_column = discovery_claim_id_column.clone();
         let discovery_feature_fields = discovery_feature_fields.clone();
+        let discovery_tree_depth = discovery_tree_depth.clone();
         let evaluation_dataset_json = evaluation_dataset_json.clone();
         let selected_candidate_id = selected_candidate_id.clone();
         let discovery_state = discovery_state.clone();
@@ -4740,6 +4742,7 @@ fn rules_page() -> Html {
                 &discovery_label_column,
                 &discovery_claim_id_column,
                 &discovery_feature_fields,
+                &discovery_tree_depth,
                 samples,
             );
             let api_key = (*api_key).clone();
@@ -5100,6 +5103,18 @@ fn rules_page() -> Html {
                                 let discovery_feature_fields = discovery_feature_fields.clone();
                                 Callback::from(move |event: InputEvent| {
                                     discovery_feature_fields.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                })
+                            }}
+                        />
+                    </label>
+                    <label>
+                        {"Tree Depth"}
+                        <input
+                            value={(*discovery_tree_depth).clone()}
+                            oninput={{
+                                let discovery_tree_depth = discovery_tree_depth.clone();
+                                Callback::from(move |event: InputEvent| {
+                                    discovery_tree_depth.set(event.target_unchecked_into::<HtmlInputElement>().value());
                                 })
                             }}
                         />
@@ -12501,12 +12516,15 @@ fn rule_discovery_payload(
     label_column: &UseStateHandle<String>,
     claim_id_column: &UseStateHandle<String>,
     feature_fields: &UseStateHandle<String>,
+    tree_depth: &UseStateHandle<String>,
     samples: Vec<Value>,
 ) -> Value {
     let candidate_feature_fields = comma_separated_values(feature_fields);
+    let max_tree_depth = tree_depth.trim().parse::<usize>().unwrap_or(2);
     json!({
         "min_support": 1,
         "max_candidates": 8,
+        "max_tree_depth": max_tree_depth,
         "source_model_key": (**model_key).clone(),
         "source_model_version": (**model_version).clone(),
         "feature_importance_uri": (**feature_importance_uri).clone(),

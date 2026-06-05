@@ -1197,6 +1197,122 @@ async fn discovers_candidate_rules_from_parquet_dataset() {
 }
 
 #[tokio::test]
+async fn discovers_shallow_tree_rule_candidates_from_labeled_samples() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/discover",
+        r#"{
+          "min_support": 2,
+          "max_tree_depth": 2,
+          "candidate_feature_fields": [
+            "days_since_policy_start",
+            "claim_amount_to_limit_ratio"
+          ],
+          "samples": [
+            {
+              "external_claim_id": "CLM-TREE-TP-1",
+              "claim_amount": "9000",
+              "currency": "CNY",
+              "service_date": "2026-01-03",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-TREE-TP-1",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-TREE-TP-2",
+              "claim_amount": "8500",
+              "currency": "CNY",
+              "service_date": "2026-01-04",
+              "confirmed_fwa": true,
+              "policy": {
+                "external_policy_id": "POL-TREE-TP-2",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-TREE-FP-EARLY-LOW",
+              "claim_amount": "500",
+              "currency": "CNY",
+              "service_date": "2026-01-04",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-TREE-FP-EARLY-LOW",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-TREE-FP-LATE-HIGH",
+              "claim_amount": "9000",
+              "currency": "CNY",
+              "service_date": "2026-02-15",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-TREE-FP-LATE-HIGH",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            },
+            {
+              "external_claim_id": "CLM-TREE-TN",
+              "claim_amount": "500",
+              "currency": "CNY",
+              "service_date": "2026-02-15",
+              "confirmed_fwa": false,
+              "policy": {
+                "external_policy_id": "POL-TREE-TN",
+                "coverage_start_date": "2026-01-01",
+                "coverage_end_date": "2026-12-31",
+                "coverage_limit": "10000"
+              }
+            }
+          ]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let candidate = body["candidates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|candidate| {
+            candidate["rule"]["rule_id"]
+                .as_str()
+                .unwrap()
+                .starts_with("candidate_tree_")
+        })
+        .expect("missing shallow tree candidate");
+    let conditions = candidate["rule"]["conditions"].as_array().unwrap();
+    assert_eq!(conditions.len(), 2);
+    assert!(conditions.iter().any(|condition| {
+        condition["field"] == "claim_amount_to_limit_ratio" && condition["operator"] == ">="
+    }));
+    assert!(conditions.iter().any(|condition| {
+        condition["field"] == "days_since_policy_start" && condition["operator"] == "<="
+    }));
+    assert_eq!(candidate["support"], 2);
+    assert_eq!(candidate["precision"], 1.0);
+    assert_eq!(candidate["false_positive_rate"], 0.0);
+    assert!(candidate["explanation"]
+        .as_str()
+        .unwrap()
+        .contains("浅层决策树"));
+}
+
+#[tokio::test]
 async fn discovers_rule_candidates_from_model_explanations() {
     let app = build_app(test_config());
 
