@@ -178,10 +178,12 @@ async function main() {
     assertContains(builtText, "Search evidence", "web console evidence workbench bundle");
     assertContains(builtText, "Rule command path", "web console rules visual bundle");
     assertContains(builtText, "Rule Discovery Workbench", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Labeled Evaluation Dataset", "web console rule discovery workbench bundle");
     assertContains(builtText, "Candidate rule workflow", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Submit for shadow review", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Accept discovered rule", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Reject discovered rule", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Accept into rule library", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Reject selected candidate", "web console rule discovery workbench bundle");
+    assertContains(builtText, "needs human review", "web console rule discovery workbench bundle");
+    assertContains(builtText, "entered_rule_library", "web console rule discovery workbench bundle");
     assertContains(builtText, "Discover candidates", "web console rule discovery workbench bundle");
     assertContains(builtText, "FWA Rule Pack Matrix", "web console rule pack visual bundle");
     assertContains(builtText, "duplicate billing", "web console rule pack visual bundle");
