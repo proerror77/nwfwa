@@ -861,6 +861,20 @@ pre {
   border-color: var(--line);
 }
 
+.full-field {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  color: #5b6f86;
+  font-size: 12px;
+  font-weight: 850;
+}
+
+.full-field textarea {
+  min-height: 76px;
+  resize: vertical;
+}
+
 .form-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));

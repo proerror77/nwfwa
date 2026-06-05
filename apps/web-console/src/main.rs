@@ -11964,6 +11964,54 @@ fn rule_backtest_payload(rule: Value) -> Value {
     })
 }
 
+async fn execute_rule_candidate_review_action(
+    api_key: String,
+    rule_id: String,
+    action: &str,
+    reviewer: String,
+    notes: String,
+    evidence_refs: Vec<String>,
+) -> Result<Value, String> {
+    if evidence_refs.is_empty() {
+        return Err("rule review actions require evidence refs".into());
+    }
+    match action {
+        "shadow_review" => {
+            request_json(
+                &format!("/api/v1/ops/rules/{}/submit", rule_id.trim()),
+                api_key,
+                json!({ "evidence_refs": evidence_refs }),
+            )
+            .await
+        }
+        "accept" | "reject" => {
+            if reviewer.trim().is_empty() {
+                return Err("reviewer is required".into());
+            }
+            if notes.trim().is_empty() {
+                return Err("human review notes are required".into());
+            }
+            let decision = if action == "accept" {
+                "approved"
+            } else {
+                "rejected"
+            };
+            request_json(
+                &format!("/api/v1/ops/rules/{}/promotion-reviews", rule_id.trim()),
+                api_key,
+                json!({
+                    "decision": decision,
+                    "reviewer": reviewer.trim(),
+                    "notes": notes.trim(),
+                    "evidence_refs": evidence_refs,
+                }),
+            )
+            .await
+        }
+        _ => Err(format!("unknown rule candidate review action: {action}")),
+    }
+}
+
 fn rule_demo_samples() -> Vec<Value> {
     vec![
         json!({
@@ -12027,6 +12075,16 @@ fn rule_candidate_id(candidate: &RuleDiscoveryCandidate) -> String {
         .and_then(Value::as_str)
         .unwrap_or("candidate_rule")
         .to_string()
+}
+
+fn saved_rule_candidate_id(save_state: &UseStateHandle<ApiState<Value>>) -> Option<String> {
+    match &**save_state {
+        ApiState::Ready(saved) => saved
+            .pointer("/summary/rule_id")
+            .and_then(Value::as_str)
+            .map(str::to_string),
+        _ => None,
+    }
 }
 
 fn rule_backfill_pipeline(
@@ -12176,6 +12234,22 @@ fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
                 </div>
             }
         }
+    }
+}
+
+fn rule_candidate_review_state(review_state: &UseStateHandle<ApiState<Value>>) -> Html {
+    match &**review_state {
+        ApiState::Idle => html! {
+            <p class="empty">{"Save a discovered rule, then submit it for shadow review or record a human accept/reject decision."}</p>
+        },
+        ApiState::Loading => html! { <p>{"Submitting rule candidate review action..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(response) => html! {
+            <div class="success-note">
+                <span>{"Rule candidate review action accepted."}</span>
+                <pre>{pretty_json(response)}</pre>
+            </div>
+        },
     }
 }
 
