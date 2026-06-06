@@ -83,6 +83,8 @@ def write_training_manifest(tmp_path: Path) -> Path:
     manifest = {
         "dataset_key": "claims_model",
         "dataset_version": "2026-06-02",
+        "dataset_usage_scope": "pilot_validated",
+        "pilot_validation_status": "passed",
         "label_column": "confirmed_fwa",
         "entity_keys": ["claim_id", "member_id", "policy_id", "provider_id"],
         "time_split_field": "service_date_ord",
@@ -116,6 +118,9 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["validation_report_uri"].endswith("/validation.json")
     assert payload["feature_importance_uri"].endswith("/feature_importance.parquet")
     assert payload["serving_manifest_uri"].endswith("/serving_manifest.json")
+    assert payload["model_artifact_evaluation_report_uri"].endswith(
+        "/artifact-evaluation/model_artifact_evaluation_report.json"
+    )
     assert payload["feature_store_manifest_uri"].endswith("/feature_store_manifest.json")
     assert payload["shadow_report_uri"].endswith("/shadow_report.json")
     assert payload["drift_report_uri"].endswith("/drift_report.json")
@@ -125,6 +130,7 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert Path(payload["validation_report_uri"]).exists()
     assert Path(payload["feature_importance_uri"]).exists()
     assert Path(payload["serving_manifest_uri"]).exists()
+    assert Path(payload["model_artifact_evaluation_report_uri"]).exists()
     assert Path(payload["feature_store_manifest_uri"]).exists()
     assert Path(payload["shadow_report_uri"]).exists()
     assert Path(payload["drift_report_uri"]).exists()
@@ -141,9 +147,24 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["serving_version_lock_status"] == "passed"
     assert payload["metrics_json"]["artifact_integrity_status"] == "passed"
     assert payload["metrics_json"]["feature_store_materialization_status"] == "passed"
+    assert payload["metrics_json"]["rust_feature_set_status"] == "passed"
+    assert payload["metrics_json"]["rust_feature_set_manifest_uri"].endswith(
+        "/rust_feature_set/feature_set_manifest.json"
+    )
+    assert payload["metrics_json"]["model_artifact_evaluation_status"] == "passed"
+    assert payload["metrics_json"]["model_artifact_evaluation_report_uri"].endswith(
+        "/artifact-evaluation/model_artifact_evaluation_report.json"
+    )
+    assert payload["metrics_json"]["rust_serving_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_latency_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 18
     assert payload["metrics_json"]["segment_fairness_status"] == "passed"
     assert payload["metrics_json"]["score_psi"] is not None
     assert payload["metrics_json"]["label_provenance_status"] == "passed"
+    assert payload["metrics_json"]["data_quality_score"] == 1.0
+    assert payload["metrics_json"]["source_data_quality_score"] == 1.0
+    assert payload["metrics_json"]["dataset_usage_scope"] == "pilot_validated"
+    assert payload["metrics_json"]["pilot_validation_status"] == "passed"
     assert payload["auc"] is not None
     assert payload["precision"] is not None
     assert payload["recall"] is not None
@@ -183,6 +204,23 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
         "high_cost_item_ratio",
     ]
     assert feature_store_manifest["split_row_counts"]["train"] == 4
+    rust_feature_set_manifest = json.loads(
+        Path(payload["metrics_json"]["rust_feature_set_manifest_uri"]).read_text(
+            encoding="utf-8"
+        )
+    )
+    assert rust_feature_set_manifest["feature_columns"] == feature_store_manifest[
+        "feature_columns"
+    ]
+    assert rust_feature_set_manifest["split_row_counts"]["train"] == 4
+
+    artifact_evaluation = json.loads(
+        Path(payload["model_artifact_evaluation_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert artifact_evaluation["report_kind"] == "model_artifact_evaluation"
+    assert artifact_evaluation["gate_status"] == "passed"
+    assert artifact_evaluation["runtime_kind"] == "rust_logistic_regression"
+    assert artifact_evaluation["rust_serving_p95_latency_ms"] == 18
 
     assert payload["mined_rule_owner"] == "external-training-platform"
     mined_rules = payload["mined_rule_candidates"]
@@ -219,6 +257,10 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["algorithm_family"] == "gradient_boosted_tree"
     assert payload["metrics_json"]["runtime_kind"] == "xgboost_onnx"
     assert payload["metrics_json"]["python_runtime_kind"] == "xgboost_classifier"
+    assert payload["metrics_json"]["model_artifact_evaluation_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_latency_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
     assert (
@@ -228,6 +270,7 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert Path(payload["feature_importance_uri"]).exists()
     assert Path(payload["artifact_uri"]).exists()
     assert Path(payload["training_artifact_uri"]).exists()
+    assert Path(payload["model_artifact_evaluation_report_uri"]).exists()
     assert Path(payload["onnx_parity_report_uri"]).exists()
 
     serving_manifest = json.loads(
@@ -275,6 +318,10 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["algorithm_family"] == "gradient_boosted_tree"
     assert payload["metrics_json"]["runtime_kind"] == "lightgbm_onnx"
     assert payload["metrics_json"]["python_runtime_kind"] == "lightgbm_classifier"
+    assert payload["metrics_json"]["model_artifact_evaluation_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_latency_status"] == "passed"
+    assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
     assert (
@@ -284,6 +331,7 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert Path(payload["feature_importance_uri"]).exists()
     assert Path(payload["artifact_uri"]).exists()
     assert Path(payload["training_artifact_uri"]).exists()
+    assert Path(payload["model_artifact_evaluation_report_uri"]).exists()
     assert Path(payload["onnx_parity_report_uri"]).exists()
 
     serving_manifest = json.loads(

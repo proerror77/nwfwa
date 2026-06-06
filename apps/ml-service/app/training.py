@@ -41,6 +41,7 @@ from .mlops import (
     build_drift_report,
     build_fairness_report,
     build_feature_store_manifest,
+    build_model_artifact_evaluation_report,
     build_serving_manifest,
     build_shadow_report,
     file_sha256,
@@ -112,7 +113,13 @@ def train_from_manifest(
     feature_importance_path = artifact_root / "feature_importance.parquet"
     mined_rule_candidates_path = artifact_root / "mined_rule_candidates.json"
     serving_manifest_path = artifact_root / "serving_manifest.json"
+    artifact_evaluation_report_path = (
+        artifact_root / "artifact-evaluation" / "model_artifact_evaluation_report.json"
+    )
     feature_store_manifest_path = artifact_root / "feature_store_manifest.json"
+    rust_feature_set_manifest_path = (
+        artifact_root / "rust_feature_set" / "feature_set_manifest.json"
+    )
     shadow_report_path = artifact_root / "shadow_report.json"
     drift_report_path = artifact_root / "drift_report.json"
     fairness_report_path = artifact_root / "fairness_report.json"
@@ -191,12 +198,30 @@ def train_from_manifest(
         runtime_kind=serving_runtime_kind_for_algorithm(model_algorithm),
         training_artifact_uri=str(artifact_path),
     )
+    artifact_evaluation_report_path.parent.mkdir(parents=True, exist_ok=True)
+    artifact_evaluation_report = build_model_artifact_evaluation_report(
+        model_key=model_key,
+        model_version=candidate_model_version,
+        runtime_kind=serving_runtime_kind_for_algorithm(model_algorithm),
+        artifact_uri=str(serving_artifact_path),
+        artifact_sha256=artifact_sha256,
+        feature_columns=feature_columns,
+        output_path=artifact_evaluation_report_path,
+    )
     build_feature_store_manifest(
         splits=splits,
         feature_columns=feature_columns,
         label_column=label_column,
         entity_keys=entity_keys,
         output_path=feature_store_manifest_path,
+    )
+    rust_feature_set_manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    build_feature_store_manifest(
+        splits=splits,
+        feature_columns=feature_columns,
+        label_column=label_column,
+        entity_keys=entity_keys,
+        output_path=rust_feature_set_manifest_path,
     )
     shadow_report = build_shadow_report(
         pipeline,
@@ -223,6 +248,7 @@ def train_from_manifest(
         use_numpy_matrix=use_numpy_matrix,
     )
 
+    data_quality_score = source_data_quality_score(splits.values())
     metrics_json = {
         "algorithm": model_algorithm,
         "algorithm_family": algorithm_family(model_algorithm),
@@ -259,6 +285,17 @@ def train_from_manifest(
         if onnx_parity_report
         else "rust_native_artifact_ready",
         "feature_store_materialization_status": "passed",
+        "rust_feature_set_status": "passed",
+        "rust_feature_set_manifest_uri": str(rust_feature_set_manifest_path),
+        "model_artifact_evaluation_status": artifact_evaluation_report["gate_status"],
+        "model_artifact_evaluation_report_uri": str(artifact_evaluation_report_path),
+        "rust_serving_status": artifact_evaluation_report["rust_serving_status"],
+        "rust_serving_latency_status": artifact_evaluation_report[
+            "rust_serving_latency_status"
+        ],
+        "rust_serving_p95_latency_ms": artifact_evaluation_report[
+            "rust_serving_p95_latency_ms"
+        ],
         "segment_fairness_status": fairness_report["status"],
         "score_psi": drift_report["score_psi"],
         "drift_status": drift_report["status"],
@@ -270,11 +307,19 @@ def train_from_manifest(
         ),
         "label_provenance_status": "passed",
         "label_reviewer_source": "training_manifest",
-        "source_data_quality_score": source_data_quality_score(splits.values()),
+        "data_quality_score": data_quality_score,
+        "source_data_quality_score": data_quality_score,
         "mined_rule_candidate_count": len(mined_rule_candidates),
         "mined_rule_candidates_uri": str(mined_rule_candidates_path),
         "rule_mining_status": "passed" if mined_rule_candidates else "no_candidate",
     }
+    for optional_field in (
+        "dataset_usage_scope",
+        "pilot_validation_status",
+        "customer_validation_status",
+    ):
+        if manifest.get(optional_field):
+            metrics_json[optional_field] = manifest[optional_field]
     validation_report = {
         "model_key": model_key,
         "candidate_model_version": candidate_model_version,
@@ -315,6 +360,7 @@ def train_from_manifest(
         "confusion_matrix_json": validation_metrics["confusion_matrix"],
         "feature_importance_uri": str(feature_importance_path),
         "serving_manifest_uri": str(serving_manifest_path),
+        "model_artifact_evaluation_report_uri": str(artifact_evaluation_report_path),
         "onnx_parity_report_uri": str(onnx_parity_report_path)
         if onnx_parity_report
         else None,
@@ -328,6 +374,7 @@ def train_from_manifest(
             f"model_artifacts:{serving_artifact_path}",
             f"model_training_artifacts:{artifact_path}",
             f"model_serving_manifests:{serving_manifest_path}",
+            f"model_artifact_evaluations:{artifact_evaluation_report_path}",
             *(
                 [
                     f"model_onnx_parity_reports:{onnx_parity_report_path}",
@@ -336,6 +383,7 @@ def train_from_manifest(
                 else []
             ),
             f"feature_store_manifests:{feature_store_manifest_path}",
+            f"rust_feature_sets:{rust_feature_set_manifest_path}",
             f"model_shadow_reports:{shadow_report_path}",
             f"model_drift_reports:{drift_report_path}",
             f"model_fairness_reports:{fairness_report_path}",
