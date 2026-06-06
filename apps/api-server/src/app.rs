@@ -329,6 +329,10 @@ pub fn build_app_with_parts(
             get(ops_models::model_promotion_gates),
         )
         .route(
+            "/api/v1/ops/models/:model_key/versions/:model_version/promotion-gates",
+            get(ops_models::model_version_promotion_gates),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/retraining-readiness",
             get(ops_models::model_retraining_readiness),
         )
@@ -378,8 +382,16 @@ pub fn build_app_with_parts(
             post(ops_models::submit_model_promotion_review),
         )
         .route(
+            "/api/v1/ops/models/:model_key/versions/:model_version/promotion-reviews",
+            post(ops_models::submit_model_version_promotion_review),
+        )
+        .route(
             "/api/v1/ops/models/:model_key/activate",
             post(ops_models::activate_model),
+        )
+        .route(
+            "/api/v1/ops/models/:model_key/versions/:model_version/activate",
+            post(ops_models::activate_model_version),
         )
         .route(
             "/api/v1/ops/models/:model_key/rollback",

@@ -351,6 +351,17 @@ pub async fn model_promotion_gates(
     Ok(Json(gates))
 }
 
+pub async fn model_version_promotion_gates(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((model_key, model_version)): Path<(String, String)>,
+) -> Result<Json<ModelPromotionGatesResponse>, ApiError> {
+    authorize(&state, &headers)?;
+    let (_, gates) =
+        load_model_promotion_gates_for_version(&state, &model_key, &model_version).await?;
+    Ok(Json(gates))
+}
+
 pub async fn model_retraining_readiness(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -2062,6 +2073,32 @@ pub async fn submit_model_promotion_review(
     Path(model_key): Path<String>,
     Json(request): Json<SubmitModelPromotionReviewRequest>,
 ) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
+    submit_model_promotion_review_for_target(state, headers, model_key, None, request).await
+}
+
+pub async fn submit_model_version_promotion_review(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((model_key, model_version)): Path<(String, String)>,
+    Json(request): Json<SubmitModelPromotionReviewRequest>,
+) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
+    submit_model_promotion_review_for_target(
+        state,
+        headers,
+        model_key,
+        Some(model_version),
+        request,
+    )
+    .await
+}
+
+async fn submit_model_promotion_review_for_target(
+    state: AppState,
+    headers: HeaderMap,
+    model_key: String,
+    model_version: Option<String>,
+    request: SubmitModelPromotionReviewRequest,
+) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
     let actor = authorize_permission(&state, &headers, "ops:models:review")?;
     if !matches!(request.decision.as_str(), "approved" | "rejected") {
         return Err(ApiError::new(
@@ -2106,16 +2143,7 @@ pub async fn submit_model_promotion_review(
             "promotion review notes and evidence_refs must not contain PII",
         ));
     }
-    let model = state
-        .repository
-        .list_models()
-        .await
-        .map_err(internal_error("MODEL_LIST_FAILED"))?
-        .into_iter()
-        .find(|model| model.model_key == model_key)
-        .ok_or_else(|| {
-            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
-        })?;
+    let model = load_model_target(&state, &model_key, model_version.as_deref()).await?;
     validate_target_model_version_evidence(
         &request.evidence_refs,
         &model.model_key,
@@ -2147,9 +2175,33 @@ pub async fn activate_model(
     Path(model_key): Path<String>,
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
+    activate_model_target(state, headers, model_key, None, request).await
+}
+
+pub async fn activate_model_version(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path((model_key, model_version)): Path<(String, String)>,
+    Json(request): Json<ModelLifecycleRequest>,
+) -> Result<Json<ModelLifecycleResponse>, ApiError> {
+    activate_model_target(state, headers, model_key, Some(model_version), request).await
+}
+
+async fn activate_model_target(
+    state: AppState,
+    headers: HeaderMap,
+    model_key: String,
+    model_version: Option<String>,
+    request: ModelLifecycleRequest,
+) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
     let actor = authorize_permission(&state, &headers, "ops:models:activate")?;
-    let (candidate, gates) = load_model_promotion_gates(&state, &model_key).await?;
+    let (candidate, gates) = load_model_promotion_gates_for_optional_version(
+        &state,
+        &model_key,
+        model_version.as_deref(),
+    )
+    .await?;
     if candidate.status == "active" {
         return Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -2412,16 +2464,23 @@ async fn load_model_promotion_gates(
     state: &AppState,
     model_key: &str,
 ) -> Result<(ModelVersionRecord, ModelPromotionGatesResponse), ApiError> {
-    let model = state
-        .repository
-        .list_models()
-        .await
-        .map_err(internal_error("MODEL_LIST_FAILED"))?
-        .into_iter()
-        .find(|model| model.model_key == model_key)
-        .ok_or_else(|| {
-            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
-        })?;
+    load_model_promotion_gates_for_optional_version(state, model_key, None).await
+}
+
+async fn load_model_promotion_gates_for_version(
+    state: &AppState,
+    model_key: &str,
+    model_version: &str,
+) -> Result<(ModelVersionRecord, ModelPromotionGatesResponse), ApiError> {
+    load_model_promotion_gates_for_optional_version(state, model_key, Some(model_version)).await
+}
+
+async fn load_model_promotion_gates_for_optional_version(
+    state: &AppState,
+    model_key: &str,
+    model_version: Option<&str>,
+) -> Result<(ModelVersionRecord, ModelPromotionGatesResponse), ApiError> {
+    let model = load_model_target(state, model_key, model_version).await?;
     let performance = state
         .repository
         .model_performance(model_key)
@@ -2478,6 +2537,29 @@ async fn load_model_promotion_gates(
         source_dataset.as_ref(),
     );
     Ok((model, gates))
+}
+
+async fn load_model_target(
+    state: &AppState,
+    model_key: &str,
+    model_version: Option<&str>,
+) -> Result<ModelVersionRecord, ApiError> {
+    let model = state
+        .repository
+        .list_models()
+        .await
+        .map_err(internal_error("MODEL_LIST_FAILED"))?
+        .into_iter()
+        .find(|model| {
+            model.model_key == model_key
+                && model_version
+                    .map(|version| model.version == version)
+                    .unwrap_or(true)
+        })
+        .ok_or_else(|| {
+            ApiError::new(StatusCode::NOT_FOUND, "MODEL_NOT_FOUND", "model not found")
+        })?;
+    Ok(model)
 }
 
 fn activation_blockers(gates: &ModelPromotionGatesResponse) -> Vec<String> {
@@ -2801,12 +2883,17 @@ fn build_model_retraining_readiness(
     let open_model_feedback_count = feedback_items
         .iter()
         .filter(|item| {
-            canonical_feedback_target(&item.feedback_target) == "model" && item.status == "open"
+            canonical_feedback_target(&item.feedback_target) == "model"
+                && item.status == "open"
+                && evidence_refs_apply_to_model_version(&item.evidence_refs, model)
         })
         .count();
     let model_labels = outcome_labels
         .iter()
-        .filter(|label| canonical_feedback_target(&label.feedback_target) == "model")
+        .filter(|label| {
+            canonical_feedback_target(&label.feedback_target) == "model"
+                && evidence_refs_apply_to_model_version(&label.evidence_refs, model)
+        })
         .collect::<Vec<_>>();
     let approved_label_count = model_labels
         .iter()

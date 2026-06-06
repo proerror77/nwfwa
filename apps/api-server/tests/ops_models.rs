@@ -308,6 +308,9 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "model_retraining_jobs:{job_id}",
                 "model_artifacts:s3://fwa-models/baseline_fwa/{candidate_version}/model.onnx",
                 "model_validation_reports:s3://fwa-models/baseline_fwa/{candidate_version}/validation.json",
+                "model_artifact_evaluations:s3://fwa-models/baseline_fwa/{candidate_version}/artifact-evaluation/model_artifact_evaluation_report.json",
+                "rule_candidate_backtests:s3://fwa-models/baseline_fwa/{candidate_version}/rule-candidates/backtest/rule_candidate_backtest_report.json",
+                "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/{candidate_version}/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json",
                 "model_evaluations:eval_baseline_activation_candidate"
               ],
               "auc": "0.86",
@@ -343,7 +346,11 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "feature_reproducibility_hash": "sha256:activation-features",
                 "label_provenance_status": "passed",
                 "label_reviewer_source": "qa_review",
-                "pilot_validation_status": "passed"
+                "pilot_validation_status": "passed",
+                "rule_candidate_backtest_status": "passed",
+                "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval",
+                "rule_candidate_backtest_report_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/rule-candidates/backtest/rule_candidate_backtest_report.json",
+                "rule_candidate_review_tasks_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
               }}
             }}"#
         ),
@@ -1273,6 +1280,69 @@ async fn model_retraining_readiness_blocks_without_training_inputs() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!("approved model outcome labels missing")));
+}
+
+#[tokio::test]
+async fn model_retraining_readiness_ignores_feedback_and_labels_for_other_model_versions() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/qa/results",
+        r#"{
+          "qa_case_id": "QA-RETRAINING-OTHER-VERSION-1",
+          "claim_id": "CLM-RETRAINING-OTHER-VERSION-1",
+          "qa_conclusion": "issue_found_escalate",
+          "issue_type": "model_under_scored_confirmed_issue",
+          "feedback_target": "model",
+          "notes": "Feedback belongs to an older model version only.",
+          "evidence_refs": [
+            "qa_reviews:QA-RETRAINING-OTHER-VERSION-1",
+            "model_versions:baseline_fwa:0.0.1"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/investigations/results",
+        r#"{
+          "claim_id": "CLM-RETRAINING-OTHER-VERSION-LABEL-1",
+          "investigation_id": "INV-RETRAINING-OTHER-VERSION-LABEL-1",
+          "outcome": "confirmed_fwa",
+          "confirmed_fwa": true,
+          "saving_amount": "1200.00",
+          "currency": "CNY",
+          "notes": "Confirmed FWA label belongs to an older model version only.",
+          "evidence_refs": [
+            "investigation_results:INV-RETRAINING-OTHER-VERSION-LABEL-1",
+            "model_versions:baseline_fwa:0.0.1"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) =
+        get_json(app, "/api/v1/ops/models/baseline_fwa/retraining-readiness").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["model_version"], "0.1.0");
+    assert_eq!(body["open_model_feedback_count"], 0);
+    assert_eq!(body["approved_label_count"], 0);
+    assert_eq!(body["needs_review_label_count"], 0);
+    assert!(!body["retraining_triggers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("open model QA feedback")));
+    assert!(!body["retraining_triggers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("approved model labels available")));
 }
 
 #[tokio::test]
@@ -3095,6 +3165,61 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
     assert_eq!(status, StatusCode::OK);
     assert_eq!(gates["decision"], "routing_allowed");
     assert!(gates["blockers"].as_array().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn model_promotion_and_activation_are_version_scoped() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+
+    let review_uri =
+        format!("/api/v1/ops/models/baseline_fwa/versions/{candidate_version}/promotion-reviews");
+    let (status, review) = json_request(
+        app.clone(),
+        "POST",
+        &review_uri,
+        &format!(
+            r#"{{
+              "decision": "approved",
+              "reviewer": "model-governance",
+              "notes": "Approved exact candidate version for production activation.",
+              "evidence_refs": ["model_versions:baseline_fwa:{candidate_version}"]
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(review["model_key"], "baseline_fwa");
+    assert_eq!(review["model_version"], candidate_version);
+
+    let gates_uri =
+        format!("/api/v1/ops/models/baseline_fwa/versions/{candidate_version}/promotion-gates");
+    let (status, gates) = get_json(app.clone(), &gates_uri).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(gates["model_key"], "baseline_fwa");
+    assert_eq!(gates["model_version"], candidate_version);
+    let approval_gate = gates["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Approval")
+        .unwrap();
+    assert_eq!(approval_gate["passed"], true);
+    assert_eq!(approval_gate["evidence_source"], "approval");
+
+    let activate_uri =
+        format!("/api/v1/ops/models/baseline_fwa/versions/{candidate_version}/activate");
+    let (status, activated) = json_request(
+        app,
+        "POST",
+        &activate_uri,
+        &model_lifecycle_payload("baseline_fwa", &candidate_version),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(activated["model_key"], "baseline_fwa");
+    assert_eq!(activated["version"], candidate_version);
+    assert_eq!(activated["status"], "active");
 }
 
 #[tokio::test]
