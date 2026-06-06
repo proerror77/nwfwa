@@ -2911,6 +2911,61 @@ async fn blocks_model_promotion_when_score_drift_is_detected() {
 }
 
 #[tokio::test]
+async fn version_scoped_promotion_gates_use_candidate_drift_metrics() {
+    let app = build_app(test_config());
+    let candidate_version = register_activation_candidate(app.clone()).await;
+    let model_dataset_id = register_model_dataset_for_test(app.clone(), "candidate_drift").await;
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-evaluations",
+        &format!(
+            r#"{{
+              "evaluation_run_id": "zzzz_baseline_active_drift_after_candidate",
+              "model_key": "baseline_fwa",
+              "model_version": "0.1.0",
+              "model_dataset_id": "{model_dataset_id}",
+              "scheme_family": "diagnosis_procedure_mismatch",
+              "auc": "0.81",
+              "ks": "0.42",
+              "precision": "0.73",
+              "recall": "0.68",
+              "f1": "0.70",
+              "accuracy": "0.74",
+              "threshold": "0.50",
+              "confusion_matrix_json": {{"tp": 10, "fp": 2, "tn": 12, "fn": 3}},
+              "feature_importance_uri": "data/eval/claims_model_eval_candidate_drift/v1/feature_importance.parquet",
+              "metrics_json": {{"score_psi": 0.31}}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, gates) = get_json(
+        app,
+        &format!("/api/v1/ops/models/baseline_fwa/versions/{candidate_version}/promotion-gates"),
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(gates["model_version"], candidate_version);
+    let drift_gate = gates["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Drift status")
+        .unwrap();
+    assert_eq!(drift_gate["passed"], true);
+    assert_eq!(drift_gate["evidence_source"], "evaluation");
+    assert!(!gates["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("model drift detected")));
+}
+
+#[tokio::test]
 async fn records_model_promotion_review_and_uses_it_for_approval_gate() {
     let app = build_app(test_config());
 

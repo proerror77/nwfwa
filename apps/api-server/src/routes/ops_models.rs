@@ -2697,7 +2697,8 @@ fn build_model_promotion_gates(
                 .and_then(|value| value.as_str())
                 == Some("approved")
         });
-    let drift_status = performance.drift_status.as_str();
+    let drift_status =
+        evaluation_drift_status(metrics).unwrap_or_else(|| performance.drift_status.clone());
     let drift_gate_passed = drift_status == "stable";
     let active_version = model.status == "active";
     let open_model_feedback_count = feedback_items
@@ -2840,8 +2841,8 @@ fn build_model_promotion_gates(
         gate(
             "Drift status",
             drift_gate_passed,
-            drift_blocker(drift_status),
-            drift_evidence_source(drift_status),
+            drift_blocker(&drift_status),
+            drift_evidence_source(&drift_status),
         ),
         gate(
             "Model QA feedback closure",
@@ -3264,6 +3265,23 @@ fn drift_evidence_source(status: &str) -> &'static str {
         "not_available" => "missing",
         _ => "evaluation",
     }
+}
+
+fn evaluation_drift_status(metrics: &Value) -> Option<String> {
+    metrics
+        .get("score_psi")
+        .or_else(|| metrics.get("psi"))
+        .and_then(Value::as_f64)
+        .map(|score_psi| {
+            if score_psi < 0.10 {
+                "stable"
+            } else if score_psi < 0.25 {
+                "watch"
+            } else {
+                "drift"
+            }
+            .to_string()
+        })
 }
 
 fn label_governance_blocker(approved_count: usize, needs_review_count: usize) -> &'static str {
