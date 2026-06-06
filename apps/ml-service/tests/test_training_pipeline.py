@@ -1,9 +1,15 @@
 import json
+import math
 from pathlib import Path
 
 import pandas as pd
+from fastapi.testclient import TestClient
 
+from app.main import app
 from app.training import train_from_manifest
+
+
+client = TestClient(app)
 
 
 def write_split(path: Path, rows: list[dict[str, object]]) -> None:
@@ -178,6 +184,19 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     ]
     assert feature_store_manifest["split_row_counts"]["train"] == 4
 
+    assert payload["mined_rule_owner"] == "external-training-platform"
+    mined_rules = payload["mined_rule_candidates"]
+    assert len(mined_rules) >= 1
+    amount_rule = next(
+        rule
+        for rule in mined_rules
+        if rule["conditions"][0]["field"] == "claim_amount_to_limit_ratio"
+    )
+    assert amount_rule["scheme_family"] == "high_risk_claim"
+    assert amount_rule["action"]["recommended_action"] == "ManualReview"
+    assert "negative-class mean + 1.5 standard deviations" in amount_rule["action"]["reason"]
+    assert math.isclose(amount_rule["conditions"][0]["value"], 0.244853, rel_tol=1e-5)
+
 
 def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     manifest_path = write_training_manifest(tmp_path)
@@ -289,3 +308,28 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
         "high_cost_item_ratio",
     }
     assert set(feature_importance["importance_kind"]) == {"feature_importance"}
+
+
+def test_training_api_returns_completed_training_package(tmp_path: Path):
+    manifest_path = write_training_manifest(tmp_path)
+
+    response = client.post(
+        "/train",
+        json={
+            "manifest_path": str(manifest_path),
+            "artifact_base_uri": str(tmp_path / "artifacts"),
+            "model_key": "baseline_fwa",
+            "base_model_version": "0.1.0",
+            "job_id": "model_retraining_job_1",
+            "actor": "trainer-worker",
+            "algorithm": "logistic_regression",
+        },
+    )
+
+    assert response.status_code == 200
+    payload = response.json()
+    assert payload["artifact_uri"].endswith("/rust_serving_artifact.json")
+    assert payload["serving_manifest_uri"].endswith("/serving_manifest.json")
+    assert payload["metrics_json"]["rule_mining_status"] == "passed"
+    assert payload["mined_rule_owner"] == "external-training-platform"
+    assert payload["mined_rule_candidates"][0]["scheme_family"] == "high_risk_claim"

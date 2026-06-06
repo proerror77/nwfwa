@@ -110,6 +110,7 @@ def train_from_manifest(
     onnx_parity_report_path = artifact_root / "onnx_parity_report.json"
     validation_report_path = artifact_root / "validation.json"
     feature_importance_path = artifact_root / "feature_importance.parquet"
+    mined_rule_candidates_path = artifact_root / "mined_rule_candidates.json"
     serving_manifest_path = artifact_root / "serving_manifest.json"
     feature_store_manifest_path = artifact_root / "feature_store_manifest.json"
     shadow_report_path = artifact_root / "shadow_report.json"
@@ -158,6 +159,18 @@ def train_from_manifest(
 
     feature_importance = build_feature_importance(pipeline, feature_columns)
     feature_importance.to_parquet(feature_importance_path, index=False)
+    mined_rule_candidates = build_mined_rule_candidates(
+        model_key=model_key,
+        candidate_model_version=candidate_model_version,
+        train=train,
+        feature_importance=feature_importance,
+        feature_columns=feature_columns,
+        label_column=label_column,
+    )
+    mined_rule_candidates_path.write_text(
+        json.dumps(mined_rule_candidates, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
     training_artifact_sha256 = file_sha256(artifact_path)
     artifact_sha256 = file_sha256(serving_artifact_path)
     artifact_signature_value = artifact_signature(
@@ -258,6 +271,9 @@ def train_from_manifest(
         "label_provenance_status": "passed",
         "label_reviewer_source": "training_manifest",
         "source_data_quality_score": source_data_quality_score(splits.values()),
+        "mined_rule_candidate_count": len(mined_rule_candidates),
+        "mined_rule_candidates_uri": str(mined_rule_candidates_path),
+        "rule_mining_status": "passed" if mined_rule_candidates else "no_candidate",
     }
     validation_report = {
         "model_key": model_key,
@@ -277,7 +293,7 @@ def train_from_manifest(
     )
 
     evaluation_run_id = f"eval_{safe_id_segment(model_key)}_{safe_id_segment(candidate_model_version)}"
-    return {
+    payload = {
         "actor": actor,
         "notes": "Candidate model and validation report registered by production training pipeline.",
         "candidate_model_version": candidate_model_version,
@@ -323,10 +339,15 @@ def train_from_manifest(
             f"model_shadow_reports:{shadow_report_path}",
             f"model_drift_reports:{drift_report_path}",
             f"model_fairness_reports:{fairness_report_path}",
+            f"mined_rule_candidates:{mined_rule_candidates_path}",
             f"model_validation_reports:{validation_report_path}",
             f"model_evaluations:{evaluation_run_id}",
         ],
     }
+    if mined_rule_candidates:
+        payload["mined_rule_owner"] = "external-training-platform"
+        payload["mined_rule_candidates"] = mined_rule_candidates
+    return payload
 
 
 def normalize_algorithm(value: Any) -> str:
@@ -699,6 +720,96 @@ def build_feature_importance(pipeline: Pipeline, feature_columns: list[str]) -> 
             "importance_kind": "feature_importance",
         }
     ).sort_values("importance", ascending=False)
+
+
+def build_mined_rule_candidates(
+    model_key: str,
+    candidate_model_version: str,
+    train: pd.DataFrame,
+    feature_importance: pd.DataFrame,
+    feature_columns: list[str],
+    label_column: str,
+) -> list[dict[str, Any]]:
+    candidates: list[dict[str, Any]] = []
+    ranked_features = feature_importance.sort_values("importance", ascending=False)[
+        "feature"
+    ].tolist()
+    for feature in ranked_features:
+        if feature not in feature_columns:
+            continue
+        candidate = mined_rule_candidate_for_feature(
+            model_key,
+            candidate_model_version,
+            train,
+            feature_importance,
+            feature,
+            label_column,
+        )
+        if candidate is not None:
+            candidates.append(candidate)
+        if len(candidates) >= 4:
+            break
+    candidates.sort(key=lambda rule: rule["rule_id"])
+    return candidates
+
+
+def mined_rule_candidate_for_feature(
+    model_key: str,
+    candidate_model_version: str,
+    train: pd.DataFrame,
+    feature_importance: pd.DataFrame,
+    feature: str,
+    label_column: str,
+) -> dict[str, Any] | None:
+    positives = train[train[label_column].astype(int) == 1][feature].dropna().astype(float)
+    negatives = train[train[label_column].astype(int) == 0][feature].dropna().astype(float)
+    if positives.empty or negatives.empty:
+        return None
+    positive_mean = float(positives.mean())
+    negative_mean = float(negatives.mean())
+    negative_stddev = float(negatives.std(ddof=1)) if len(negatives) > 1 else 0.0
+    operator = ">=" if positive_mean >= negative_mean else "<="
+    if operator == ">=":
+        threshold = negative_mean + 1.5 * negative_stddev
+        threshold_method = "negative-class mean + 1.5 standard deviations"
+    else:
+        threshold = negative_mean - 1.5 * negative_stddev
+        threshold_method = "negative-class mean - 1.5 standard deviations"
+    importance_row = feature_importance[feature_importance["feature"] == feature].iloc[0]
+    importance = float(importance_row["importance"])
+    importance_kind = str(importance_row["importance_kind"])
+    rule_id = "candidate_training_" + safe_id_segment(
+        f"{model_key}_{candidate_model_version}_{feature}"
+    ).lower()
+    alert_code = "TRAINING_MINED_" + safe_id_segment(feature).upper()[:48]
+    return {
+        "rule_id": rule_id,
+        "version": 1,
+        "name": f"Training mined {feature} candidate",
+        "review_mode": "both",
+        "scheme_family": "high_risk_claim",
+        "conditions": [
+            {
+                "field": feature,
+                "operator": operator,
+                "value": round(float(threshold), 6),
+            }
+        ],
+        "action": {
+            "score": mined_rule_score(importance),
+            "alert_code": alert_code,
+            "recommended_action": "ManualReview",
+            "reason": (
+                f"External training platform mined {feature} from training data: "
+                f"positive mean {positive_mean:.4f}, {threshold_method} "
+                f"{threshold:.4f}, model signal {importance_kind}={importance:.6f}. Human review is required."
+            ),
+        },
+    }
+
+
+def mined_rule_score(importance: float) -> int:
+    return max(10, min(35, int(round(15 + min(float(importance), 1.0) * 20))))
 
 
 def leakage_status(group_split_fields: list[str]) -> str:

@@ -5,7 +5,7 @@ use crate::{
         canonical_feedback_target, AuditEventListFilter, CompleteModelRetrainingJobInput,
         DatasetRecord, ModelEvaluationRecord, ModelPerformanceRecord, ModelPromotionReviewRecord,
         ModelRetrainingJobRecord, ModelVersionRecord, PersistedAuditEvent, QaFeedbackItemRecord,
-        RegisterModelEvaluationInput,
+        RegisterModelEvaluationInput, RuleDetailRecord,
     },
     routes::{ops_datasets::build_dataset_health_record, pii},
 };
@@ -16,7 +16,8 @@ use axum::{
 };
 use fwa_audit::ActorContext;
 use fwa_auth::{authenticate_api_key, validate_api_key};
-use fwa_core::{AuditEventId, ScoringRunId};
+use fwa_core::{canonical_scheme_family, AuditEventId, ScoringRunId};
+use fwa_rules::Rule;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -291,6 +292,8 @@ pub struct CompleteModelRetrainingJobRequest {
     pub confusion_matrix_json: Value,
     pub feature_importance_uri: Option<String>,
     pub metrics_json: Value,
+    pub mined_rule_owner: Option<String>,
+    pub mined_rule_candidates: Option<Vec<Rule>>,
 }
 
 #[derive(Debug, Serialize)]
@@ -298,6 +301,7 @@ pub struct CompleteModelRetrainingJobResponse {
     pub job: ModelRetrainingJobRecord,
     pub candidate_model: ModelVersionRecord,
     pub evaluation: ModelEvaluationRecord,
+    pub mined_rule_candidates: Vec<RuleDetailRecord>,
 }
 
 #[derive(Debug, Serialize)]
@@ -704,12 +708,12 @@ pub async fn update_model_retraining_job_status(
     let actor = authorize(&state, &headers)?;
     if !matches!(
         request.status.as_str(),
-        "queued" | "running" | "validation" | "completed" | "failed" | "cancelled"
+        "queued" | "running" | "validation" | "failed" | "cancelled"
     ) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_RETRAINING_JOB_STATUS",
-            "status must be queued, running, validation, completed, failed, or cancelled",
+            "status must be queued, running, validation, failed, or cancelled; completed is only set by registering external training output",
         ));
     }
     if request.actor.trim().is_empty() {
@@ -875,8 +879,8 @@ pub async fn complete_model_retraining_job(
             f1: request.f1,
             accuracy: request.accuracy,
             threshold: request.threshold,
-            confusion_matrix_json: request.confusion_matrix_json,
-            feature_importance_uri: request.feature_importance_uri,
+            confusion_matrix_json: request.confusion_matrix_json.clone(),
+            feature_importance_uri: request.feature_importance_uri.clone(),
             metrics_json,
         })
         .await
@@ -911,12 +915,14 @@ pub async fn complete_model_retraining_job(
                 "model retraining job not found",
             )
         })?;
-    record_model_retraining_audit(
+    let mined_rule_candidates =
+        save_training_package_rule_candidates(&state, &actor, &request, &completed_job).await?;
+    record_model_retraining_output_audit(
         &state,
         &actor,
         &completed_job,
-        "model.retraining.output_registered",
         &request.evidence_refs,
+        mined_rule_candidates.len(),
     )
     .await
     .map_err(internal_error("MODEL_RETRAINING_AUDIT_SAVE_FAILED"))?;
@@ -924,6 +930,7 @@ pub async fn complete_model_retraining_job(
         job: completed_job,
         candidate_model,
         evaluation,
+        mined_rule_candidates,
     }))
 }
 
@@ -1161,6 +1168,94 @@ fn validate_retraining_output_request(
             feature_importance_uri,
             "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
         )?;
+    }
+    validate_training_package_rule_candidates(request)?;
+    Ok(())
+}
+
+fn validate_training_package_rule_candidates(
+    request: &CompleteModelRetrainingJobRequest,
+) -> Result<(), ApiError> {
+    if let Some(owner) = &request.mined_rule_owner {
+        if owner.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_RETRAINING_OUTPUT_RULE_OWNER",
+                "mined_rule_owner must not be blank when provided",
+            ));
+        }
+    }
+    let Some(candidates) = &request.mined_rule_candidates else {
+        return Ok(());
+    };
+    for rule in candidates {
+        validate_training_package_rule_candidate(rule)?;
+    }
+    Ok(())
+}
+
+fn validate_training_package_rule_candidate(rule: &Rule) -> Result<(), ApiError> {
+    if rule.rule_id.trim().is_empty() || rule.name.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE",
+            "mined rule candidates require rule_id and name",
+        ));
+    }
+    let Some(scheme_family) = rule.scheme_family.as_deref() else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE",
+            "mined rule candidates require scheme_family",
+        ));
+    };
+    if canonical_scheme_family(scheme_family).is_none() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE",
+            "mined rule candidate scheme_family must map to a known FWA scheme family",
+        ));
+    }
+    if rule.conditions.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE",
+            "mined rule candidates require at least one condition",
+        ));
+    }
+    if rule.conditions.iter().any(|condition| {
+        condition.field.trim().is_empty()
+            || !matches!(condition.operator.as_str(), "<=" | ">=" | "==")
+    }) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE",
+            "mined rule candidate conditions must use supported operators: <=, >=, ==",
+        ));
+    }
+    if rule.action.alert_code.trim().is_empty() || rule.action.reason.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE",
+            "mined rule candidates require action alert_code and reason",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(rule.rule_id.as_str())
+            .chain(std::iter::once(rule.name.as_str()))
+            .chain(std::iter::once(rule.action.alert_code.as_str()))
+            .chain(std::iter::once(rule.action.reason.as_str()))
+            .chain(
+                rule.conditions
+                    .iter()
+                    .map(|condition| condition.field.as_str()),
+            ),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_MODEL_RETRAINING_JOB",
+            "mined rule candidate fields must not contain PII",
+        ));
     }
     Ok(())
 }
@@ -3167,6 +3262,149 @@ async fn record_model_promotion_audit(
                 .cloned()
                 .map(serde_json::Value::String)
                 .collect(),
+        })
+        .await
+}
+
+async fn save_training_package_rule_candidates(
+    state: &AppState,
+    actor: &ActorContext,
+    request: &CompleteModelRetrainingJobRequest,
+    job: &ModelRetrainingJobRecord,
+) -> Result<Vec<RuleDetailRecord>, ApiError> {
+    let owner = request
+        .mined_rule_owner
+        .as_deref()
+        .map(str::trim)
+        .filter(|owner| !owner.is_empty())
+        .unwrap_or("external-training-platform");
+    let mut saved = Vec::new();
+    for candidate in request.mined_rule_candidates.clone().unwrap_or_default() {
+        let mut rule = candidate;
+        if let Some(scheme_family) = rule.scheme_family.as_deref() {
+            rule.scheme_family = canonical_scheme_family(scheme_family);
+        }
+        let detail = state
+            .repository
+            .save_rule_candidate(rule, owner.to_string())
+            .await
+            .map_err(internal_error(
+                "TRAINING_PACKAGE_RULE_CANDIDATE_SAVE_FAILED",
+            ))?;
+        record_training_package_rule_candidate_audit(
+            state,
+            actor,
+            job,
+            &detail,
+            &request.evidence_refs,
+        )
+        .await
+        .map_err(internal_error(
+            "TRAINING_PACKAGE_RULE_CANDIDATE_AUDIT_FAILED",
+        ))?;
+        saved.push(detail);
+    }
+    Ok(saved)
+}
+
+async fn record_training_package_rule_candidate_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    job: &ModelRetrainingJobRecord,
+    detail: &RuleDetailRecord,
+    output_evidence_refs: &[String],
+) -> anyhow::Result<()> {
+    let mut evidence_refs = vec![
+        serde_json::json!(format!("model_retraining_jobs:{}", job.job_id)),
+        serde_json::json!(format!(
+            "rules:{}:v{}",
+            detail.summary.rule_id, detail.summary.latest_version
+        )),
+    ];
+    evidence_refs.extend(
+        output_evidence_refs
+            .iter()
+            .cloned()
+            .map(serde_json::Value::String),
+    );
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "rule.candidate.saved".into(),
+            event_status: "succeeded".into(),
+            summary: format!(
+                "External training package saved rule candidate {}",
+                detail.summary.rule_id
+            ),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "source": "external_training_platform",
+                "job_id": job.job_id,
+                "model_key": job.model_key,
+                "candidate_model_version": job.candidate_model_version,
+                "rule_id": detail.summary.rule_id,
+                "rule_version": detail.summary.latest_version,
+                "status": detail.summary.status,
+                "owner": detail.summary.owner,
+                "governance_boundary": "external training package may save mined rules as candidates only; human review is required before rule library writeback"
+            }),
+            evidence_refs,
+        })
+        .await
+}
+
+async fn record_model_retraining_output_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    job: &ModelRetrainingJobRecord,
+    output_evidence_refs: &[String],
+    mined_rule_candidate_count: usize,
+) -> anyhow::Result<()> {
+    let mut evidence_refs = vec![serde_json::json!(format!(
+        "model_retraining_jobs:{}",
+        job.job_id
+    ))];
+    evidence_refs.extend(
+        output_evidence_refs
+            .iter()
+            .cloned()
+            .map(serde_json::Value::String),
+    );
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "model.retraining.output_registered".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Model retraining job {} is {}", job.job_id, job.status),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "job_id": job.job_id,
+                "model_key": job.model_key,
+                "model_version": job.model_version,
+                "status": job.status,
+                "requested_by": job.requested_by,
+                "trigger_count": job.trigger_summary.len(),
+                "blocker_count": job.blocker_summary.len(),
+                "candidate_model_version": &job.candidate_model_version,
+                "candidate_artifact_uri": &job.candidate_artifact_uri,
+                "validation_report_uri": &job.validation_report_uri,
+                "output_evaluation_id": &job.output_evaluation_id,
+                "mined_rule_candidate_count": mined_rule_candidate_count,
+                "training_boundary": "external training platform completed model training and rule mining; FWA recorded candidate artifacts and rule drafts only"
+            }),
+            evidence_refs,
         })
         .await
 }

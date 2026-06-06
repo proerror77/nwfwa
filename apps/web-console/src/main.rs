@@ -5684,6 +5684,9 @@ fn mlops_workspace_page() -> Html {
     let candidate_metrics_json = use_state(|| {
         r#"{"data_quality_status":"passed","split_strategy":"time_group_split","shadow_comparison_status":"passed","review_capacity_threshold_status":"passed"}"#.to_string()
     });
+    let mined_rule_candidates_json = use_state(|| {
+        r#"[{"rule_id":"candidate_retraining_amount_ratio","version":1,"name":"Retraining mined amount ratio candidate","review_mode":"both","scheme_family":"high_risk_claim","conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.82}],"action":{"score":22,"alert_code":"RETRAINING_AMOUNT_RATIO_CANDIDATE","recommended_action":"ManualReview","reason":"External training platform mined this explainable candidate from feature importance and backtest evidence."}}]"#.to_string()
+    });
     let action_notes = use_state(|| {
         "non-PII governed provider model release review for demo evidence".to_string()
     });
@@ -5741,6 +5744,7 @@ fn mlops_workspace_page() -> Html {
         let candidate_confusion_matrix = candidate_confusion_matrix.clone();
         let candidate_feature_importance_uri = candidate_feature_importance_uri.clone();
         let candidate_metrics_json = candidate_metrics_json.clone();
+        let mined_rule_candidates_json = mined_rule_candidates_json.clone();
         let action_notes = action_notes.clone();
         let evidence_refs = evidence_refs.clone();
         let action_state = action_state.clone();
@@ -5770,6 +5774,7 @@ fn mlops_workspace_page() -> Html {
             let candidate_confusion_matrix = (*candidate_confusion_matrix).clone();
             let candidate_feature_importance_uri = (*candidate_feature_importance_uri).clone();
             let candidate_metrics_json = (*candidate_metrics_json).clone();
+            let mined_rule_candidates_json = (*mined_rule_candidates_json).clone();
             let action_notes = (*action_notes).clone();
             let evidence_refs = parse_tags(&evidence_refs);
             let action_state = action_state.clone();
@@ -5802,6 +5807,7 @@ fn mlops_workspace_page() -> Html {
                     candidate_confusion_matrix,
                     candidate_feature_importance_uri,
                     candidate_metrics_json,
+                    mined_rule_candidates_json,
                     action_notes,
                     evidence_refs,
                 )
@@ -6154,6 +6160,18 @@ fn mlops_workspace_page() -> Html {
                                     let candidate_metrics_json = candidate_metrics_json.clone();
                                     Callback::from(move |event: InputEvent| {
                                         candidate_metrics_json.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field mlops-evidence-field">
+                            {"Mined rule candidates JSON"}
+                            <textarea
+                                value={(*mined_rule_candidates_json).clone()}
+                                oninput={{
+                                    let mined_rule_candidates_json = mined_rule_candidates_json.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        mined_rule_candidates_json.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
                                     })
                                 }}
                             />
@@ -11564,6 +11582,7 @@ async fn execute_mlops_governed_action(
     candidate_confusion_matrix: String,
     candidate_feature_importance_uri: String,
     candidate_metrics_json: String,
+    mined_rule_candidates_json: String,
     notes: String,
     evidence_refs: Vec<String>,
 ) -> Result<Value, String> {
@@ -11683,6 +11702,8 @@ async fn execute_mlops_governed_action(
             let accuracy = parse_optional_unit_metric(&candidate_accuracy, "accuracy")?;
             let threshold = parse_optional_unit_metric(&candidate_threshold, "threshold")?;
             let feature_importance_uri = optional_trimmed_value(&candidate_feature_importance_uri);
+            let mined_rule_candidates =
+                parse_optional_json_array(&mined_rule_candidates_json, "mined rule candidates")?;
             request_json(
                 &format!(
                     "/api/v1/ops/model-retraining-jobs/{}/output",
@@ -11712,6 +11733,8 @@ async fn execute_mlops_governed_action(
                     "confusion_matrix_json": confusion_matrix_json,
                     "feature_importance_uri": feature_importance_uri,
                     "metrics_json": metrics_json,
+                    "mined_rule_owner": "external-training-platform",
+                    "mined_rule_candidates": mined_rule_candidates,
                 }),
             )
             .await
@@ -13315,6 +13338,17 @@ fn parse_json_array(input: &str, label: &str) -> Result<Vec<Value>, String> {
     match serde_json::from_str::<Value>(input.trim()) {
         Ok(Value::Array(items)) if !items.is_empty() => Ok(items),
         Ok(Value::Array(_)) => Err(format!("{label} must include at least one sample")),
+        Ok(_) => Err(format!("{label} must be a JSON array")),
+        Err(error) => Err(format!("{label} JSON is invalid: {error}")),
+    }
+}
+
+fn parse_optional_json_array(input: &str, label: &str) -> Result<Vec<Value>, String> {
+    if input.trim().is_empty() {
+        return Ok(Vec::new());
+    }
+    match serde_json::from_str::<Value>(input.trim()) {
+        Ok(Value::Array(items)) => Ok(items),
         Ok(_) => Err(format!("{label} must be a JSON array")),
         Err(error) => Err(format!("{label} JSON is invalid: {error}")),
     }

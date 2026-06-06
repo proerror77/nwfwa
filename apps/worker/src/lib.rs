@@ -844,6 +844,10 @@ struct CompleteRetrainingJobPayload {
     feature_importance_uri: Option<String>,
     metrics_json: serde_json::Value,
     evidence_refs: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    mined_rule_owner: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    mined_rule_candidates: Vec<serde_json::Value>,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -7716,6 +7720,8 @@ fn build_mock_retraining_output(
             "review_capacity_threshold_status": "passed"
         }),
         evidence_refs,
+        mined_rule_owner: None,
+        mined_rule_candidates: Vec::new(),
     })
 }
 
@@ -8117,6 +8123,62 @@ mod tests {
         assert!(report
             .evidence_refs
             .contains(&"api_health:/api/v1/health".to_string()));
+    }
+
+    #[test]
+    fn preserves_mined_rule_candidates_from_training_output() {
+        let output: CompleteRetrainingJobPayload = serde_json::from_value(serde_json::json!({
+            "actor": "trainer-worker",
+            "notes": "training output",
+            "candidate_model_version": "0.1.0-candidate-job",
+            "artifact_uri": "/tmp/model.onnx",
+            "validation_report_uri": "/tmp/validation.json",
+            "evaluation_run_id": "eval_candidate",
+            "auc": "0.8200",
+            "ks": null,
+            "precision": "0.7000",
+            "recall": "0.6800",
+            "f1": null,
+            "accuracy": null,
+            "threshold": "0.5000",
+            "confusion_matrix_json": {},
+            "feature_importance_uri": "/tmp/feature_importance.parquet",
+            "metrics_json": {},
+            "evidence_refs": [
+                "model_artifacts:/tmp/model.onnx",
+                "model_validation_reports:/tmp/validation.json",
+                "model_evaluations:eval_candidate"
+            ],
+            "mined_rule_owner": "external-training-platform",
+            "mined_rule_candidates": [
+                {
+                    "rule_id": "candidate_training_amount",
+                    "version": 1,
+                    "name": "Training mined amount candidate",
+                    "scheme_family": "high_risk_claim",
+                    "conditions": [
+                        {"field": "claim_amount_to_limit_ratio", "operator": ">=", "value": 0.244853}
+                    ],
+                    "action": {
+                        "score": 22,
+                        "alert_code": "TRAINING_MINED_AMOUNT",
+                        "recommended_action": "ManualReview",
+                        "reason": "negative-class mean + 1.5 standard deviations"
+                    }
+                }
+            ]
+        }))
+        .expect("training output payload");
+
+        let output_json = serde_json::to_value(output).expect("serialize output");
+        assert_eq!(
+            output_json["mined_rule_owner"],
+            "external-training-platform"
+        );
+        assert_eq!(
+            output_json["mined_rule_candidates"][0]["rule_id"],
+            "candidate_training_amount"
+        );
     }
 
     #[test]
@@ -8630,6 +8692,8 @@ mod tests {
                 ),
                 "model_evaluations:eval_baseline_fwa_candidate".into(),
             ],
+            mined_rule_owner: None,
+            mined_rule_candidates: Vec::new(),
         };
 
         let output =
@@ -8745,6 +8809,8 @@ mod tests {
                 "feature_store_materialization_status": "passed"
             }),
             evidence_refs: vec![format!("model_artifacts:{}", artifact_path.display())],
+            mined_rule_owner: None,
+            mined_rule_candidates: Vec::new(),
         };
 
         let output = enrich_retraining_output_with_model_artifact_evaluation(

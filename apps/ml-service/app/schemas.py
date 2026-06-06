@@ -9,6 +9,16 @@ class ScoreRequest(BaseModel):
     features: dict[str, object]
 
 
+class TrainRequest(BaseModel):
+    manifest_path: str
+    artifact_base_uri: str
+    model_key: str
+    base_model_version: str
+    job_id: str
+    actor: str
+    algorithm: str | None = None
+
+
 class ModelExplanation(BaseModel):
     feature: str
     direction: str

@@ -2033,6 +2033,20 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     let (status, body) = json_request(
         app.clone(),
         "POST",
+        &format!("/api/v1/ops/model-retraining-jobs/{job_id}/status"),
+        r#"{
+          "status": "completed",
+          "actor": "trainer-worker",
+          "notes": "Attempt to close the job without registering external training output."
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "INVALID_RETRAINING_JOB_STATUS");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
         &format!("/api/v1/ops/model-retraining-jobs/{job_id}/output"),
         r#"{
           "actor": "trainer-worker",
@@ -2115,7 +2129,29 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             "score_psi": 0.04,
             "shadow_comparison_status": "passed",
             "review_capacity_threshold_status": "passed"
-          }
+          },
+          "mined_rule_candidates": [
+            {
+              "rule_id": "candidate_retraining_amount_ratio",
+              "version": 1,
+              "name": "Retraining mined amount ratio candidate",
+              "review_mode": "both",
+              "scheme_family": "high_risk_claim",
+              "conditions": [
+                {
+                  "field": "claim_amount_to_limit_ratio",
+                  "operator": ">=",
+                  "value": 0.82
+                }
+              ],
+              "action": {
+                "score": 22,
+                "alert_code": "RETRAINING_AMOUNT_RATIO_CANDIDATE",
+                "recommended_action": "ManualReview",
+                "reason": "External training platform mined this explainable candidate from feature importance and backtest evidence."
+              }
+            }
+          ]
         }"#,
     )
     .await;
@@ -2146,6 +2182,22 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(
         completed["evaluation"]["metrics_json"]["serving_manifest_uri"],
         "s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json"
+    );
+    assert_eq!(
+        completed["mined_rule_candidates"].as_array().unwrap().len(),
+        1
+    );
+    assert_eq!(
+        completed["mined_rule_candidates"][0]["summary"]["rule_id"],
+        "candidate_retraining_amount_ratio"
+    );
+    assert_eq!(
+        completed["mined_rule_candidates"][0]["summary"]["status"],
+        "draft"
+    );
+    assert_eq!(
+        completed["mined_rule_candidates"][0]["summary"]["owner"],
+        "external-training-platform"
     );
 
     let (status, audit) = get_json(
@@ -2191,6 +2243,24 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         .contains(&serde_json::json!(
             "model_evaluations:eval_baseline_retraining_job_candidate"
         )));
+    assert_eq!(
+        output_event["payload"]["mined_rule_candidate_count"],
+        serde_json::json!(1)
+    );
+    assert_eq!(
+        output_event["payload"]["training_boundary"],
+        "external training platform completed model training and rule mining; FWA recorded candidate artifacts and rule drafts only"
+    );
+
+    let (status, rules) = get_json(app.clone(), "/api/v1/ops/rules").await;
+    assert_eq!(status, StatusCode::OK);
+    let saved_rule = rules["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|rule| rule["rule_id"] == "candidate_retraining_amount_ratio")
+        .expect("training-platform mined rule candidate should be saved");
+    assert_eq!(saved_rule["status"], "draft");
 
     let (status, models) = get_json(app, "/api/v1/ops/models").await;
     assert_eq!(status, StatusCode::OK);

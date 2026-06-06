@@ -2195,7 +2195,7 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "/api/v1/ops/model-retraining-jobs/{job_id}/output": {
                 "post": {
-                    "summary": "Register model retraining output, candidate version, and validation evaluation",
+                    "summary": "Register external training output, candidate model, validation evaluation, and mined rule candidates",
                     "security": [{ "ApiKeyAuth": [] }],
                     "parameters": [
                         {
@@ -2215,7 +2215,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     },
                     "responses": {
                         "200": {
-                            "description": "Completed model retraining job output",
+                            "description": "Completed model retraining job output and saved mined rule candidates",
                             "content": {
                                 "application/json": {
                                     "schema": { "$ref": "#/components/schemas/CompleteModelRetrainingJobResponse" }
@@ -5708,7 +5708,11 @@ pub async fn openapi_schema() -> Json<Value> {
                         "job_id": { "type": "string" },
                         "model_key": { "type": "string" },
                         "model_version": { "type": "string" },
-                        "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
+                        "status": {
+                            "type": "string",
+                            "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"],
+                            "description": "Job records reach completed only after external training output is registered through /api/v1/ops/model-retraining-jobs/{job_id}/output."
+                        },
                         "requested_by": { "type": "string" },
                         "request_notes": { "type": "string" },
                         "status_note": { "type": "string" },
@@ -5999,7 +6003,11 @@ pub async fn openapi_schema() -> Json<Value> {
                     "type": "object",
                     "required": ["status", "actor", "notes"],
                     "properties": {
-                        "status": { "type": "string", "enum": ["queued", "running", "validation", "completed", "failed", "cancelled"] },
+                        "status": {
+                            "type": "string",
+                            "enum": ["queued", "running", "validation", "failed", "cancelled"],
+                            "description": "Manual worker status updates cannot set completed; completion requires registering external training output through /api/v1/ops/model-retraining-jobs/{job_id}/output."
+                        },
                         "actor": { "type": "string", "minLength": 1 },
                         "notes": {
                             "type": "string",
@@ -6087,16 +6095,31 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "object",
                             "minProperties": 1,
                             "description": "Model governance metrics. Promotion-ready retraining outputs should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
+                        },
+                        "mined_rule_owner": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Optional owner for mined rule candidates. Defaults to external-training-platform."
+                        },
+                        "mined_rule_candidates": {
+                            "type": ["array", "null"],
+                            "items": { "$ref": "#/components/schemas/RuleDefinition" },
+                            "description": "Explainable rules mined by the external training platform. FWA stores them as draft candidates only; human review is required before rule library writeback."
                         }
                     }
                 },
                 "CompleteModelRetrainingJobResponse": {
                     "type": "object",
-                    "required": ["job", "candidate_model", "evaluation"],
+                    "required": ["job", "candidate_model", "evaluation", "mined_rule_candidates"],
                     "properties": {
                         "job": { "$ref": "#/components/schemas/ModelRetrainingJob" },
                         "candidate_model": { "$ref": "#/components/schemas/ModelVersion" },
-                        "evaluation": { "$ref": "#/components/schemas/ModelEvaluation" }
+                        "evaluation": { "$ref": "#/components/schemas/ModelEvaluation" },
+                        "mined_rule_candidates": {
+                            "type": "array",
+                            "items": { "$ref": "#/components/schemas/RuleDetailResponse" },
+                            "description": "Rule candidates saved from the external training package. These are drafts pending human review."
+                        }
                     }
                 },
                 "SubmitModelPromotionReviewRequest": {
