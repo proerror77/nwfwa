@@ -1147,6 +1147,7 @@ struct ModelEvaluationRecord {
     threshold: Option<Value>,
     confusion_matrix_json: Value,
     feature_importance_uri: Option<String>,
+    permutation_importance_uri: Option<String>,
     metrics_json: Value,
 }
 
@@ -8223,6 +8224,7 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                                         <small>{format!("metrics {}", payload_signal_count_label(&evaluation.metrics_json, "metric fields"))}</small>
                                                         <small>{format!("confusion {}", payload_signal_count_label(&evaluation.confusion_matrix_json, "confusion fields"))}</small>
                                                         <small>{format!("feature importance {}", evaluation.feature_importance_uri.as_deref().unwrap_or("none"))}</small>
+                                                        <small>{format!("permutation importance {}", evaluation.permutation_importance_uri.as_deref().unwrap_or("none"))}</small>
                                                     </div>
                                                 </details>
                                             </div>
@@ -12328,7 +12330,12 @@ async fn get_model_ops_snapshot(
     let selected_model_version = model_version
         .as_deref()
         .map(str::trim)
-        .filter(|version| !version.is_empty());
+        .filter(|version| !version.is_empty())
+        .filter(|version| {
+            models.iter().any(|model| {
+                model.model_key == selected_model_key && model.version == *version
+            })
+        });
     let gates_path = if let Some(model_version) = selected_model_version {
         format!(
             "/api/v1/ops/models/{selected_model_key}/versions/{model_version}/promotion-gates"
