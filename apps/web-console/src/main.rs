@@ -9,6 +9,8 @@ use yew::prelude::*;
 
 const API_KEY_DEFAULT: &str = "dev-secret";
 const DEFAULT_MODULE: &str = "Dashboard";
+const API_UNAVAILABLE_MESSAGE: &str =
+    "API server is unavailable. Start the API server on 127.0.0.1:8080, then refresh this workspace.";
 
 #[wasm_bindgen(inline_js = r#"
 const translations = new Map([
@@ -270,6 +272,7 @@ const translations = new Map([
   ["Agent", "Agent"],
   ["Approvals", "审批"],
   ["Action accepted by API. Workspace refresh has been requested.", "API 已接受操作，工作台刷新已发起。"],
+  ["API server is unavailable. Start the API server on 127.0.0.1:8080, then refresh this workspace.", "API 服务不可用。请先启动 127.0.0.1:8080 上的 API 服务，然后刷新当前工作台。"],
   ["No distribution records.", "暂无分布记录。"],
   ["Next actions", "下一步动作"],
   ["click to work", "点击处理"],
@@ -444,7 +447,7 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
         "Control Rooms",
         &[
             "Intake Ops",
-            "Detection Releases",
+            "Discovery Review",
             "Evidence Hub",
             "Governance",
         ],
@@ -454,7 +457,7 @@ const NAV_SECTIONS: &[(&str, &[&str])] = &[
 const ALL_MODULES: &[&str] = &[
     "Intake Ops",
     "Dashboard",
-    "Detection Releases",
+    "Discovery Review",
     "Runtime Scoring",
     "Review Workbench",
     "Bootstrap Ops",
@@ -2468,8 +2471,8 @@ fn app() -> Html {
                         {review_workbench_page(select_module.clone())}
                     } else if *active == "Bootstrap Ops" {
                         <BootstrapOpsPage />
-                    } else if *active == "Detection Releases" {
-                        {detection_releases_page(select_module.clone())}
+                    } else if *active == "Discovery Review" {
+                        {discovery_review_page(select_module.clone())}
                     } else if *active == "Evidence Hub" {
                         {evidence_hub_page(select_module.clone())}
                     } else if *active == "Provider Model Intake" {
@@ -2553,6 +2556,9 @@ fn set_module_hash(module: &str) {
 
 fn module_from_hash(hash: &str) -> Option<String> {
     let slug = hash.trim_start_matches('#');
+    if slug == "detection-releases" {
+        return Some("Discovery Review".to_string());
+    }
     ALL_MODULES
         .iter()
         .copied()
@@ -2591,7 +2597,7 @@ fn module_label(module: &str, language: Language) -> &'static str {
     match module {
         "Intake Ops" => tr(language, "Intake Ops", "进件处理"),
         "Dashboard" => tr(language, "Dashboard", "运营仪表盘"),
-        "Detection Releases" => tr(language, "Discovery Review", "发现评审"),
+        "Discovery Review" => tr(language, "Discovery Review", "发现评审"),
         "Runtime Scoring" => tr(language, "Runtime Scoring", "实时评分"),
         "Review Workbench" => tr(language, "Review Workbench", "复核工作台"),
         "Bootstrap Ops" => tr(language, "Bootstrap Ops", "冷启动作业"),
@@ -2620,7 +2626,7 @@ fn module_slug(module: &str) -> &'static str {
     match module {
         "Intake Ops" => "intake-ops",
         "Dashboard" => "dashboard",
-        "Detection Releases" => "detection-releases",
+        "Discovery Review" => "discovery-review",
         "Runtime Scoring" => "runtime-scoring",
         "Review Workbench" => "review-workbench",
         "Bootstrap Ops" => "bootstrap-ops",
@@ -2694,7 +2700,7 @@ fn module_context(module: &str, language: Language) -> &'static str {
             "Choose the next operational action from live risk and review queues.",
             "从实时风险与复核队列中选择下一步运营动作。",
         ),
-        "Detection Releases" => tr(
+        "Discovery Review" => tr(
             language,
             "Review ML-discovered rules and provider model candidates before shadow, release, or rejection.",
             "在影子运行、发布或拒绝前，审查模型发现的规则和 Provider 模型候选。",
@@ -2811,7 +2817,7 @@ fn module_description(module: &str, language: Language) -> &'static str {
     match module {
         "Intake Ops" => tr(language, "intake exceptions", "进件异常"),
         "Dashboard" => tr(language, "next action", "下一步动作"),
-        "Detection Releases" => tr(language, "ML review gate", "模型评审关卡"),
+        "Discovery Review" => tr(language, "ML review gate", "模型评审关卡"),
         "Runtime Scoring" => tr(language, "contract check", "契约检查"),
         "Review Workbench" => tr(language, "medical + QA", "医疗 + QA"),
         "Bootstrap Ops" => tr(language, "labels + evidence", "标签 + 证据"),
@@ -2840,7 +2846,7 @@ fn module_icon_class(module: &str) -> &'static str {
     match module {
         "Intake Ops" => "icon-inbox",
         "Dashboard" => "icon-dashboard",
-        "Detection Releases" => "icon-routing",
+        "Discovery Review" => "icon-routing",
         "Runtime Scoring" => "icon-scoring",
         "Review Workbench" => "icon-qa",
         "Bootstrap Ops" => "icon-audit",
@@ -3661,7 +3667,7 @@ fn has_document_evidence_ref(refs: &[String]) -> bool {
         .any(|reference| reference.starts_with("evidence_documents:"))
 }
 
-fn detection_releases_page(on_navigate: Callback<String>) -> Html {
+fn discovery_review_page(on_navigate: Callback<String>) -> Html {
     html! {
         <section class="workflow-hub">
             <div class="dashboard-header">
@@ -12358,15 +12364,8 @@ where
         .map_err(|error| error.to_string())?;
     let response = request.send().await.map_err(|error| error.to_string())?;
     let status = response.status();
-    let body: Value = response.json().await.map_err(|error| error.to_string())?;
-    if !(200..300).contains(&status) {
-        return Err(body
-            .get("message")
-            .and_then(Value::as_str)
-            .map(str::to_string)
-            .unwrap_or_else(|| format!("HTTP {status}: {}", pretty_json(&body))));
-    }
-    serde_json::from_value(body).map_err(|error| error.to_string())
+    let body = response.text().await.map_err(|error| error.to_string())?;
+    parse_json_response(path, status, &body)
 }
 
 async fn request_get_json<T>(path: &str, api_key: String) -> Result<T, String>
@@ -12379,15 +12378,38 @@ where
         .await
         .map_err(|error| error.to_string())?;
     let status = response.status();
-    let body: Value = response.json().await.map_err(|error| error.to_string())?;
+    let body = response.text().await.map_err(|error| error.to_string())?;
+    parse_json_response(path, status, &body)
+}
+
+fn parse_json_response<T>(path: &str, status: u16, body: &str) -> Result<T, String>
+where
+    T: for<'de> Deserialize<'de>,
+{
+    let body = body.trim();
     if !(200..300).contains(&status) {
-        return Err(body
+        return Err(api_error_message(path, status, body));
+    }
+    if body.is_empty() {
+        return Err(API_UNAVAILABLE_MESSAGE.to_string());
+    }
+    let body: Value = serde_json::from_str(body)
+        .map_err(|error| format!("Invalid API response from {path}: {error}"))?;
+    serde_json::from_value(body).map_err(|error| error.to_string())
+}
+
+fn api_error_message(path: &str, status: u16, body: &str) -> String {
+    if body.is_empty() {
+        return API_UNAVAILABLE_MESSAGE.to_string();
+    }
+    match serde_json::from_str::<Value>(body) {
+        Ok(body) => body
             .get("message")
             .and_then(Value::as_str)
             .map(str::to_string)
-            .unwrap_or_else(|| format!("HTTP {status}: {}", pretty_json(&body))));
+            .unwrap_or_else(|| format!("HTTP {status}: {}", pretty_json(&body))),
+        Err(_) => format!("HTTP {status} from {path}: {body}"),
     }
-    serde_json::from_value(body).map_err(|error| error.to_string())
 }
 
 fn merge_payload_text(raw_payload: &str, overlay_payload: &str) -> Result<Value, String> {

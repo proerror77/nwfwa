@@ -114,6 +114,7 @@ async function main() {
     assertContains(builtText, "No ad hoc model training", "web console detection release boundary bundle");
     assertContains(builtText, "hashchange", "web console browser history bundle");
     assertContains(builtText, "leads-cases", "web console browser history bundle");
+    assertContains(builtText, "discovery-review", "web console browser history bundle");
     assertContains(builtText, "Bootstrap Ops", "web console navigation bundle");
     assertContains(builtText, "Historical Replay", "web console bootstrap ops bundle");
     assertContains(builtText, "Backfill evidence detail", "web console bootstrap ops bundle");
@@ -267,7 +268,7 @@ async function main() {
     for (const expectedModule of [
       "Dashboard",
       "Intake Ops",
-      "Detection Releases",
+      "Discovery Review",
       "Rules",
       "Models",
       "Routing Policies",
