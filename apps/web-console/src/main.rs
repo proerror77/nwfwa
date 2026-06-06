@@ -5815,6 +5815,18 @@ fn mlops_workspace_page() -> Html {
     let mined_rule_candidates_json = use_state(|| {
         r#"[{"rule_id":"candidate_retraining_amount_ratio","version":1,"name":"Retraining mined amount ratio candidate","review_mode":"both","scheme_family":"high_risk_claim","conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.82}],"action":{"score":22,"alert_code":"RETRAINING_AMOUNT_RATIO_CANDIDATE","recommended_action":"ManualReview","reason":"External training platform mined this explainable candidate from feature importance and backtest evidence."}}]"#.to_string()
     });
+    let anomaly_candidate_kind = use_state(|| "provider_peer_anomaly".to_string());
+    let anomaly_candidate_id = use_state(|| "provider_peer:PRV-042:2026-05".to_string());
+    let anomaly_source_report_uri = use_state(|| {
+        "data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json".to_string()
+    });
+    let anomaly_decision = use_state(|| "accepted_for_review".to_string());
+    let anomaly_evidence_refs = use_state(|| {
+        "anomaly_clustering_reports:data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json, provider_peer_anomaly:PRV-042:2026-05".to_string()
+    });
+    let anomaly_candidate_payload = use_state(|| {
+        r#"{"provider_id":"PRV-042","outlier_score":0.93,"reason":"peer z-score and high-cost rate exceed cohort threshold"}"#.to_string()
+    });
     let action_notes = use_state(|| {
         "non-PII governed provider model release review for demo evidence".to_string()
     });
@@ -5966,6 +5978,61 @@ fn mlops_workspace_page() -> Html {
                     }
                     Err(error) => action_state.set(ApiState::Failed(error)),
                 }
+            });
+        })
+    };
+
+    let review_anomaly_candidate = {
+        let api_key = api_key.clone();
+        let reviewer = reviewer.clone();
+        let action_notes = action_notes.clone();
+        let anomaly_candidate_kind = anomaly_candidate_kind.clone();
+        let anomaly_candidate_id = anomaly_candidate_id.clone();
+        let anomaly_source_report_uri = anomaly_source_report_uri.clone();
+        let anomaly_decision = anomaly_decision.clone();
+        let anomaly_evidence_refs = anomaly_evidence_refs.clone();
+        let anomaly_candidate_payload = anomaly_candidate_payload.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let payload = match parse_json_object(
+                &anomaly_candidate_payload,
+                "anomaly candidate payload",
+            ) {
+                Ok(payload) => payload,
+                Err(error) => {
+                    action_state.set(ApiState::Failed(error));
+                    return;
+                }
+            };
+            let api_key = (*api_key).clone();
+            let reviewer = (*reviewer).clone();
+            let notes = (*action_notes).clone();
+            let candidate_kind = (*anomaly_candidate_kind).clone();
+            let candidate_id = (*anomaly_candidate_id).clone();
+            let source_report_uri = (*anomaly_source_report_uri).clone();
+            let decision = (*anomaly_decision).clone();
+            let evidence_refs = parse_tags(&anomaly_evidence_refs);
+            let action_state = action_state.clone();
+            action_state.set(ApiState::Loading);
+            spawn_local(async move {
+                action_state.set(
+                    match submit_anomaly_candidate_review(
+                        api_key,
+                        candidate_kind,
+                        candidate_id,
+                        source_report_uri,
+                        decision,
+                        reviewer,
+                        notes,
+                        evidence_refs,
+                        payload,
+                    )
+                    .await
+                    {
+                        Ok(response) => ApiState::Ready(response),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
             });
         })
     };
@@ -6382,6 +6449,87 @@ fn mlops_workspace_page() -> Html {
                                 }}
                             />
                         </label>
+                        <label class="mlops-field">
+                            {"Anomaly candidate kind"}
+                            <select
+                                value={(*anomaly_candidate_kind).clone()}
+                                onchange={{
+                                    let anomaly_candidate_kind = anomaly_candidate_kind.clone();
+                                    Callback::from(move |event: Event| {
+                                        anomaly_candidate_kind.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="provider_peer_anomaly">{"provider_peer_anomaly"}</option>
+                                <option value="provider_graph_anomaly">{"provider_graph_anomaly"}</option>
+                                <option value="claim_entity_anomaly">{"claim_entity_anomaly"}</option>
+                            </select>
+                        </label>
+                        <label class="mlops-field">
+                            {"Anomaly candidate id"}
+                            <input
+                                value={(*anomaly_candidate_id).clone()}
+                                oninput={{
+                                    let anomaly_candidate_id = anomaly_candidate_id.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        anomaly_candidate_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Anomaly report URI"}
+                            <input
+                                value={(*anomaly_source_report_uri).clone()}
+                                oninput={{
+                                    let anomaly_source_report_uri = anomaly_source_report_uri.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        anomaly_source_report_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Anomaly decision"}
+                            <select
+                                value={(*anomaly_decision).clone()}
+                                onchange={{
+                                    let anomaly_decision = anomaly_decision.clone();
+                                    Callback::from(move |event: Event| {
+                                        anomaly_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                                    })
+                                }}
+                            >
+                                <option value="accepted_for_review">{"accepted_for_review"}</option>
+                                <option value="rejected">{"rejected"}</option>
+                                <option value="open_investigation_review">{"open_investigation_review"}</option>
+                                <option value="request_more_evidence">{"request_more_evidence"}</option>
+                            </select>
+                        </label>
+                        <label class="mlops-field">
+                            {"Anomaly evidence refs"}
+                            <input
+                                value={(*anomaly_evidence_refs).clone()}
+                                oninput={{
+                                    let anomaly_evidence_refs = anomaly_evidence_refs.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        anomaly_evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field mlops-evidence-field">
+                            {"Anomaly candidate payload"}
+                            <textarea
+                                value={(*anomaly_candidate_payload).clone()}
+                                oninput={{
+                                    let anomaly_candidate_payload = anomaly_candidate_payload.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        anomaly_candidate_payload.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
                         <label class="mlops-field mlops-evidence-field">
                             {"Evidence refs"}
                             <input
@@ -6423,6 +6571,7 @@ fn mlops_workspace_page() -> Html {
                         <button onclick={governed_action("claim_retraining_job")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Claim next queued job"}</button>
                         <button onclick={governed_action("update_retraining_job")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Update job status"}</button>
                         <button onclick={governed_action("register_retraining_output")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Register provider output"}</button>
+                        <button onclick={review_anomaly_candidate} disabled={matches!(&*action_state, ApiState::Loading)}>{"Review anomaly candidate"}</button>
                         <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit release review"}</button>
                         <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
                         <button onclick={governed_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback active model"}</button>
@@ -13764,6 +13913,34 @@ async fn submit_rule_shadow_run(
             "notes": notes.trim(),
             "blockers": backtest.blockers,
             "evidence_refs": evidence_refs,
+        }),
+    )
+    .await
+}
+
+async fn submit_anomaly_candidate_review(
+    api_key: String,
+    candidate_kind: String,
+    candidate_id: String,
+    source_report_uri: String,
+    decision: String,
+    reviewer: String,
+    notes: String,
+    evidence_refs: Vec<String>,
+    candidate_payload: Value,
+) -> Result<Value, String> {
+    request_json::<Value>(
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
+        api_key,
+        json!({
+            "candidate_kind": candidate_kind.trim(),
+            "candidate_id": candidate_id.trim(),
+            "source_report_uri": source_report_uri.trim(),
+            "decision": decision.trim(),
+            "reviewer": reviewer.trim(),
+            "notes": notes.trim(),
+            "evidence_refs": evidence_refs,
+            "candidate_payload": candidate_payload,
         }),
     )
     .await

@@ -235,3 +235,100 @@ async fn returns_provider_graph_risk_summary_from_relationships() {
         .iter()
         .any(|evidence| evidence == "relationship_edges:PRV-PROVIDER-GRAPH-SUMMARY-1"));
 }
+
+#[tokio::test]
+async fn records_unsupervised_anomaly_candidate_review_without_auto_actions() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
+        r#"{
+          "candidate_kind": "provider_peer_anomaly",
+          "candidate_id": "provider_peer:PRV-042:2026-05",
+          "source_report_uri": "data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json",
+          "decision": "accepted_for_review",
+          "reviewer": "anomaly-reviewer",
+          "notes": "Unsupervised provider peer outlier accepted for investigation review only.",
+          "evidence_refs": [
+            "anomaly_clustering_reports:data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json",
+            "provider_peer_anomaly:PRV-042:2026-05"
+          ],
+          "candidate_payload": {
+            "provider_id": "PRV-042",
+            "outlier_score": 0.93,
+            "reason": "peer z-score and high-cost rate exceed cohort threshold"
+          }
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body["decision"], "accepted_for_review");
+    assert_eq!(body["accepted_for_review"], true);
+    assert_eq!(body["active_rule_writeback"], false);
+    assert_eq!(body["model_activation"], false);
+    assert_eq!(body["label_assignment"], false);
+    assert!(body["governance_boundary"]
+        .as_str()
+        .unwrap()
+        .contains("must not activate models"));
+
+    let (status, audit) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_type=anomaly.candidate.reviewed&limit=1",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        audit["events"][0]["event_type"],
+        "anomaly.candidate.reviewed"
+    );
+    assert_eq!(
+        audit["events"][0]["payload"]["candidate_kind"],
+        "provider_peer_anomaly"
+    );
+    assert_eq!(
+        audit["events"][0]["payload"]["active_rule_writeback"],
+        false
+    );
+    assert_eq!(audit["events"][0]["payload"]["model_activation"], false);
+    assert_eq!(audit["events"][0]["payload"]["label_assignment"], false);
+    assert!(audit["events"][0]["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|reference| reference
+            == "anomaly_clustering_reports:data/rust-automl-demo/unlabeled_provider_peer_clustering/clusters/provider_peer_clustering_report.json"));
+}
+
+#[tokio::test]
+async fn anomaly_candidate_review_requires_clustering_report_evidence() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
+        r#"{
+          "candidate_kind": "claim_entity_anomaly",
+          "candidate_id": "claim_entity:CLM-099",
+          "source_report_uri": "data/rust-automl-demo/unlabeled_shadow_scoring/entity-clusters/claim_entity_clustering_report.json",
+          "decision": "rejected",
+          "reviewer": "anomaly-reviewer",
+          "notes": "Rejected because the explanation is too weak.",
+          "evidence_refs": ["claim_entity_anomaly:CLM-099"]
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_ANOMALY_CANDIDATE_EVIDENCE");
+    assert!(body["message"]
+        .as_str()
+        .unwrap()
+        .contains("anomaly_clustering_reports:"));
+}

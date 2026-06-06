@@ -297,6 +297,10 @@ pub fn build_app_with_parts(
             get(ops_providers::provider_risk_summary),
         )
         .route(
+            "/api/v1/ops/providers/anomaly-candidate-reviews",
+            post(ops_providers::review_anomaly_candidate),
+        )
+        .route(
             "/api/v1/ops/medical-review/queue",
             get(ops_medical::medical_review_queue),
         )

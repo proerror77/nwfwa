@@ -87,6 +87,7 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/evidence/retrieval-audit-events",
         "/api/v1/ops/dashboard/summary",
         "/api/v1/ops/providers/risk-summary",
+        "/api/v1/ops/providers/anomaly-candidate-reviews",
         "/api/v1/ops/webhook-events",
         "/api/v1/ops/webhook-events/{event_id}/delivery-attempts",
         "/api/v1/ops/alerts",
@@ -2183,6 +2184,41 @@ async fn openapi_includes_operations_paths() {
             ["items"]["type"],
         "string"
     );
+    assert_eq!(
+        schema["components"]["schemas"]["ReviewAnomalyCandidateRequest"]["properties"]
+            ["candidate_kind"]["enum"],
+        serde_json::json!([
+            "provider_peer_anomaly",
+            "provider_graph_anomaly",
+            "claim_entity_anomaly"
+        ])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ReviewAnomalyCandidateRequest"]["properties"]["decision"]
+            ["enum"],
+        serde_json::json!([
+            "accepted_for_review",
+            "rejected",
+            "open_investigation_review",
+            "request_more_evidence"
+        ])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["ReviewAnomalyCandidateRequest"]["properties"]
+            ["evidence_refs"]["description"],
+        "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
+    );
+    for field in [
+        "active_rule_writeback",
+        "model_activation",
+        "label_assignment",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["ReviewAnomalyCandidateResponse"]["properties"][field]
+                ["const"],
+            false
+        );
+    }
     assert!(
         schema["components"]["schemas"]["CaseEvidencePackage"]["required"]
             .as_array()

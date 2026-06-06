@@ -1735,6 +1735,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/providers/anomaly-candidate-reviews": {
+                "post": {
+                    "summary": "Record a human review decision for an unsupervised anomaly candidate",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/ReviewAnomalyCandidateRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded anomaly candidate review decision",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ReviewAnomalyCandidateResponse" }
+                                }
+                            }
+                        },
+                        "400": {
+                            "description": "Invalid anomaly candidate review or missing clustering report evidence",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/ErrorResponse" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/medical-review/queue": {
                 "get": {
                     "summary": "List claims that require medical review from clinical evidence audit events",
@@ -3939,6 +3971,59 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "items": { "$ref": "#/components/schemas/ProviderRiskSummaryItem" }
                         }
+                    }
+                },
+                "ReviewAnomalyCandidateRequest": {
+                    "type": "object",
+                    "required": ["candidate_kind", "candidate_id", "source_report_uri", "decision", "reviewer", "notes", "evidence_refs"],
+                    "properties": {
+                        "candidate_kind": {
+                            "type": "string",
+                            "enum": ["provider_peer_anomaly", "provider_graph_anomaly", "claim_entity_anomaly"]
+                        },
+                        "candidate_id": { "type": "string", "minLength": 1 },
+                        "source_report_uri": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "URI of provider_peer_clustering_report.json, provider_graph_community_report.json, or claim_entity_clustering_report.json."
+                        },
+                        "decision": {
+                            "type": "string",
+                            "enum": ["accepted_for_review", "rejected", "open_investigation_review", "request_more_evidence"]
+                        },
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Review notes must not contain PII."
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "items": { "type": "string", "minLength": 1 },
+                            "description": "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
+                        },
+                        "candidate_payload": {
+                            "type": "object",
+                            "additionalProperties": true,
+                            "description": "Optional non-decisional candidate context from the clustering report."
+                        }
+                    }
+                },
+                "ReviewAnomalyCandidateResponse": {
+                    "type": "object",
+                    "required": ["candidate_kind", "candidate_id", "decision", "reviewer", "accepted_for_review", "active_rule_writeback", "model_activation", "label_assignment", "governance_boundary", "audit_event_type"],
+                    "properties": {
+                        "candidate_kind": { "type": "string" },
+                        "candidate_id": { "type": "string" },
+                        "decision": { "type": "string" },
+                        "reviewer": { "type": "string" },
+                        "accepted_for_review": { "type": "boolean" },
+                        "active_rule_writeback": { "type": "boolean", "const": false },
+                        "model_activation": { "type": "boolean", "const": false },
+                        "label_assignment": { "type": "boolean", "const": false },
+                        "governance_boundary": { "type": "string" },
+                        "audit_event_type": { "type": "string", "enum": ["anomaly.candidate.reviewed"] }
                     }
                 },
                 "SubmitMedicalReviewResultRequest": {

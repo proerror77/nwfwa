@@ -154,6 +154,9 @@ async function main() {
     assertContains(builtText, "Confusion matrix JSON", "web console mlops provider output bundle");
     assertContains(builtText, "Metrics JSON", "web console mlops provider output bundle");
     assertContains(builtText, "Mined rule candidates JSON", "web console mlops provider output bundle");
+    assertContains(builtText, "Anomaly candidate kind", "web console mlops anomaly review bundle");
+    assertContains(builtText, "Anomaly report URI", "web console mlops anomaly review bundle");
+    assertContains(builtText, "Review anomaly candidate", "web console mlops anomaly review bundle");
     assertContains(builtText, "Governed Actions", "web console mlops workspace bundle");
     assertContains(builtText, "Request provider retraining", "web console provider model action bundle");
     assertContains(builtText, "Submit release review", "web console provider model action bundle");
