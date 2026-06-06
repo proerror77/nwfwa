@@ -51,7 +51,14 @@ def train_provider_output(
     }
     if algorithm:
         payload["algorithm"] = algorithm
-    output = request_json(ml_service_url, "POST", "/train", payload)
+    training_job = request_json(ml_service_url, "POST", "/training-jobs", payload)
+    if training_job.get("status") != "completed":
+        raise ValueError(
+            f"training job did not complete: {training_job.get('status', 'unknown')}"
+        )
+    output = training_job.get("provider_output")
+    if not isinstance(output, dict):
+        raise ValueError("training job response missing provider_output")
     validate_provider_output(output)
     return output
 

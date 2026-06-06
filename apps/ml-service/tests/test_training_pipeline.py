@@ -410,3 +410,38 @@ def test_training_api_returns_completed_training_package(tmp_path: Path):
     assert payload["metrics_json"]["rule_mining_status"] == "passed"
     assert payload["mined_rule_owner"] == "external-training-platform"
     assert payload["mined_rule_candidates"][0]["scheme_family"] == "high_risk_claim"
+
+
+def test_training_job_api_stores_completed_provider_output(tmp_path: Path):
+    manifest_path = write_training_manifest(tmp_path)
+
+    response = client.post(
+        "/training-jobs",
+        json={
+            "manifest_path": str(manifest_path),
+            "artifact_base_uri": str(tmp_path / "artifacts"),
+            "model_key": "baseline_fwa",
+            "base_model_version": "0.1.0",
+            "job_id": "model_retraining_job_1",
+            "actor": "external-training-platform",
+            "algorithm": "logistic_regression",
+        },
+    )
+
+    assert response.status_code == 200
+    job = response.json()
+    assert job["job_id"] == "model_retraining_job_1"
+    assert job["status"] == "completed"
+    assert job["handoff_kind"] == "external_training_platform_job"
+    assert job["submit_path"] == "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
+    assert job["provider_output"]["candidate_model_version"] == (
+        "0.1.0-candidate-model_retraining_job_1"
+    )
+    assert job["provider_output"]["mined_rule_owner"] == "external-training-platform"
+    assert job["governance_boundary"].startswith("training platform owns training execution")
+
+    status_response = client.get("/training-jobs/model_retraining_job_1")
+
+    assert status_response.status_code == 200
+    stored = status_response.json()
+    assert stored == job

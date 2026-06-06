@@ -292,10 +292,10 @@ python scripts/demo/mlops_training_handoff.py \
   --write-provider-output artifacts/mlops/provider-output.json
 ```
 
-The script calls the independent ML service `POST /train`, validates the
-completed provider output, and can save it for review. Add `--register
---api-url "$FWA_API_BASE_URL" --api-key "$FWA_API_KEY"` only when the output
-should be posted to
+The script calls the independent ML service `POST /training-jobs`, waits for the
+completed job payload, validates `provider_output`, and can save it for review.
+Add `--register --api-url "$FWA_API_BASE_URL" --api-key "$FWA_API_KEY"` only
+when the output should be posted to
 `/api/v1/ops/model-retraining-jobs/{job_id}/output`. This keeps FWA on the
 consumer side of the contract: it records completed model artifacts and mined
 rule drafts, while the training platform owns training execution.

@@ -36,12 +36,23 @@ def provider_output():
     }
 
 
+def training_job():
+    output = provider_output()
+    return {
+        "job_id": "job_1",
+        "handoff_kind": "external_training_platform_job",
+        "status": "completed",
+        "submit_path": "/api/v1/ops/model-retraining-jobs/job_1/output",
+        "provider_output": output,
+    }
+
+
 class MlopsTrainingHandoffTest(unittest.TestCase):
-    def test_train_provider_output_calls_independent_ml_service(self):
+    def test_train_provider_output_calls_independent_training_job_api(self):
         with mock.patch.object(
             mlops_training_handoff,
             "request_json",
-            return_value=provider_output(),
+            return_value=training_job(),
         ) as request_mock:
             output = mlops_training_handoff.train_provider_output(
                 "http://127.0.0.1:8001",
@@ -58,7 +69,7 @@ class MlopsTrainingHandoffTest(unittest.TestCase):
         request_mock.assert_called_once_with(
             "http://127.0.0.1:8001",
             "POST",
-            "/train",
+            "/training-jobs",
             {
                 "manifest_path": "data/training/manifest.json",
                 "artifact_base_uri": "data/model-artifacts",
