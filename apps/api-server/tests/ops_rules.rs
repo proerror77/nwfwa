@@ -1257,6 +1257,35 @@ async fn discovers_candidate_rules_from_parquet_dataset() {
 }
 
 #[tokio::test]
+async fn empty_candidate_feature_fields_discovers_all_parquet_features() {
+    let app = build_app(test_config());
+
+    let (status, body) = json_request(
+        app,
+        "POST",
+        "/api/v1/ops/rules/discover",
+        r#"{
+          "min_support": 2,
+          "dataset_uri": "data/public-mvp/split=train/part-00000.parquet",
+          "label_column": "confirmed_fwa",
+          "claim_id_column": "claim_id",
+          "candidate_feature_fields": [],
+          "samples": []
+        }"#,
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["sample_count"], 18);
+    assert_eq!(body["positive_count"], 13);
+    assert!(
+        !body["candidates"].as_array().unwrap().is_empty(),
+        "empty UI feature field selection should not filter every parquet feature"
+    );
+}
+
+#[tokio::test]
 async fn discovers_shallow_tree_rule_candidates_from_labeled_samples() {
     let app = build_app(test_config());
 

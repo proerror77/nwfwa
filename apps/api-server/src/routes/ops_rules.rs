@@ -1803,11 +1803,13 @@ fn mine_statistical_rule_candidates(
     features.sort();
     features.dedup();
     if let Some(requested_features) = &request.candidate_feature_fields {
-        features.retain(|feature| {
-            requested_features
-                .iter()
-                .any(|requested| requested == feature)
-        });
+        if !requested_features.is_empty() {
+            features.retain(|feature| {
+                requested_features
+                    .iter()
+                    .any(|requested| requested == feature)
+            });
+        }
     }
 
     let mut candidates = mine_tree_rule_candidates(
@@ -2705,6 +2707,14 @@ fn is_candidate_feature(
     candidate_feature_fields: Option<&[String]>,
 ) -> bool {
     if let Some(candidate_feature_fields) = candidate_feature_fields {
+        if candidate_feature_fields.is_empty() {
+            return feature != label_column
+                && feature != claim_id_column
+                && feature != "split"
+                && feature != "service_date"
+                && feature != "service_date_ord"
+                && !feature.ends_with("_id");
+        }
         return candidate_feature_fields
             .iter()
             .any(|candidate_feature| candidate_feature == feature);
