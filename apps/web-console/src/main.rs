@@ -4905,6 +4905,11 @@ fn rules_page() -> Html {
         ApiState::Ready(backtest)
             if backtest.promotion_recommendation == "eligible_for_review" && backtest.blockers.is_empty()
     );
+    let selected_candidate_accepted = (*accepted_candidate_ids)
+        .iter()
+        .any(|id| id == selected_candidate_id.as_str());
+    let can_submit_shadow_evidence = matches!(&*backtest_state, ApiState::Ready(_))
+        && (!selected_candidate_available || selected_candidate_accepted);
     let accept_candidate = {
         let api_key = api_key.clone();
         let selected_candidate_id = selected_candidate_id.clone();
@@ -5076,6 +5081,9 @@ fn rules_page() -> Html {
     let submit_shadow_evidence = {
         let api_key = api_key.clone();
         let rule_id = rule_id.clone();
+        let selected_candidate_id = selected_candidate_id.clone();
+        let discovery_state = discovery_state.clone();
+        let accepted_candidate_ids = accepted_candidate_ids.clone();
         let snapshot_state = snapshot_state.clone();
         let backtest_state = backtest_state.clone();
         let rule_reviewer = rule_reviewer.clone();
@@ -5093,11 +5101,31 @@ fn rules_page() -> Html {
                     return;
                 }
             };
-            let (target_rule_id, target_rule_version) = match &*snapshot_state {
-                ApiState::Ready(snapshot) => {
-                    (snapshot.gates.rule_id.clone(), snapshot.gates.rule_version)
+            let selected_candidate = match &*discovery_state {
+                ApiState::Ready(response) => {
+                    selected_rule_candidate(response, &selected_candidate_id).cloned()
                 }
-                _ => ((*rule_id).clone(), 1),
+                _ => None,
+            };
+            let (target_rule_id, target_rule_version) = if let Some(candidate) = selected_candidate {
+                let candidate_rule_id = rule_candidate_id(&candidate);
+                if !(*accepted_candidate_ids)
+                    .iter()
+                    .any(|id| id == &candidate_rule_id)
+                {
+                    shadow_state.set(ApiState::Failed(
+                        "accept the discovered candidate as a draft before submitting shadow evidence for it".into(),
+                    ));
+                    return;
+                }
+                (candidate_rule_id, rule_candidate_version(&candidate))
+            } else {
+                match &*snapshot_state {
+                    ApiState::Ready(snapshot) => {
+                        (snapshot.gates.rule_id.clone(), snapshot.gates.rule_version)
+                    }
+                    _ => ((*rule_id).clone(), 1),
+                }
             };
             let report_uri = format!("artifacts/rules/{target_rule_id}/shadow_report.json");
             let rule_ref = format!("rules:{target_rule_id}:v{target_rule_version}");
@@ -5337,7 +5365,7 @@ fn rules_page() -> Html {
                     <button onclick={backtest_candidate} disabled={!selected_candidate_available || matches!(&*backtest_state, ApiState::Loading)}>
                         {if matches!(&*backtest_state, ApiState::Loading) { "Backtesting..." } else { "Run backtest" }}
                     </button>
-                    <button onclick={submit_shadow_evidence} disabled={!matches!(&*backtest_state, ApiState::Ready(_)) || matches!(&*shadow_state, ApiState::Loading)}>
+                    <button onclick={submit_shadow_evidence} disabled={!can_submit_shadow_evidence || matches!(&*shadow_state, ApiState::Loading)}>
                         {if matches!(&*shadow_state, ApiState::Loading) { "Submitting shadow..." } else { "Submit shadow evidence" }}
                     </button>
                     <button onclick={accept_candidate} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || matches!(&*review_state, ApiState::Loading)}>
@@ -5758,6 +5786,15 @@ fn mlops_workspace_page() -> Html {
     let candidate_artifact_uri = use_state(|| {
         "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json".to_string()
     });
+    let candidate_artifact_sha256 = use_state(|| "sha256:rust-serving-artifact".to_string());
+    let training_artifact_uri =
+        use_state(|| "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib".to_string());
+    let training_artifact_sha256 = use_state(|| "sha256:training-artifact".to_string());
+    let serving_manifest_uri = use_state(|| {
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json".to_string()
+    });
+    let candidate_endpoint_url =
+        use_state(|| "http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate".to_string());
     let validation_report_uri =
         use_state(|| "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json".to_string());
     let candidate_auc = use_state(|| "0.92".to_string());
@@ -5824,6 +5861,11 @@ fn mlops_workspace_page() -> Html {
         let retraining_status = retraining_status.clone();
         let candidate_model_version = candidate_model_version.clone();
         let candidate_artifact_uri = candidate_artifact_uri.clone();
+        let candidate_artifact_sha256 = candidate_artifact_sha256.clone();
+        let training_artifact_uri = training_artifact_uri.clone();
+        let training_artifact_sha256 = training_artifact_sha256.clone();
+        let serving_manifest_uri = serving_manifest_uri.clone();
+        let candidate_endpoint_url = candidate_endpoint_url.clone();
         let validation_report_uri = validation_report_uri.clone();
         let candidate_auc = candidate_auc.clone();
         let candidate_ks = candidate_ks.clone();
@@ -5850,10 +5892,16 @@ fn mlops_workspace_page() -> Html {
             let monitoring_decision = (*monitoring_decision).clone();
             let alert_task_id = (*alert_task_id).clone();
             let alert_decision = (*alert_decision).clone();
+            let retraining_job_id_state = retraining_job_id.clone();
             let retraining_job_id = (*retraining_job_id).clone();
             let retraining_status = (*retraining_status).clone();
             let candidate_model_version = (*candidate_model_version).clone();
             let candidate_artifact_uri = (*candidate_artifact_uri).clone();
+            let candidate_artifact_sha256 = (*candidate_artifact_sha256).clone();
+            let training_artifact_uri = (*training_artifact_uri).clone();
+            let training_artifact_sha256 = (*training_artifact_sha256).clone();
+            let serving_manifest_uri = (*serving_manifest_uri).clone();
+            let candidate_endpoint_url = (*candidate_endpoint_url).clone();
             let validation_report_uri = (*validation_report_uri).clone();
             let candidate_auc = (*candidate_auc).clone();
             let candidate_ks = (*candidate_ks).clone();
@@ -5887,6 +5935,11 @@ fn mlops_workspace_page() -> Html {
                     retraining_status,
                     candidate_model_version,
                     candidate_artifact_uri,
+                    candidate_artifact_sha256,
+                    training_artifact_uri,
+                    training_artifact_sha256,
+                    serving_manifest_uri,
+                    candidate_endpoint_url,
                     validation_report_uri,
                     candidate_auc,
                     candidate_ks,
@@ -5905,6 +5958,9 @@ fn mlops_workspace_page() -> Html {
                 .await;
                 match result {
                     Ok(response) => {
+                        if let Some(job_id) = response_retraining_job_id(&response) {
+                            retraining_job_id_state.set(job_id);
+                        }
                         action_state.set(ApiState::Ready(response));
                         load_workspace.emit(());
                     }
@@ -6118,6 +6174,66 @@ fn mlops_workspace_page() -> Html {
                                     let candidate_artifact_uri = candidate_artifact_uri.clone();
                                     Callback::from(move |event: InputEvent| {
                                         candidate_artifact_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate artifact SHA"}
+                            <input
+                                value={(*candidate_artifact_sha256).clone()}
+                                oninput={{
+                                    let candidate_artifact_sha256 = candidate_artifact_sha256.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_artifact_sha256.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Training artifact"}
+                            <input
+                                value={(*training_artifact_uri).clone()}
+                                oninput={{
+                                    let training_artifact_uri = training_artifact_uri.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        training_artifact_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Training artifact SHA"}
+                            <input
+                                value={(*training_artifact_sha256).clone()}
+                                oninput={{
+                                    let training_artifact_sha256 = training_artifact_sha256.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        training_artifact_sha256.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Serving manifest"}
+                            <input
+                                value={(*serving_manifest_uri).clone()}
+                                oninput={{
+                                    let serving_manifest_uri = serving_manifest_uri.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        serving_manifest_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Candidate endpoint"}
+                            <input
+                                value={(*candidate_endpoint_url).clone()}
+                                oninput={{
+                                    let candidate_endpoint_url = candidate_endpoint_url.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_endpoint_url.set(event.target_unchecked_into::<HtmlInputElement>().value());
                                     })
                                 }}
                             />
@@ -11661,6 +11777,11 @@ async fn execute_mlops_governed_action(
     retraining_status: String,
     candidate_model_version: String,
     candidate_artifact_uri: String,
+    candidate_artifact_sha256: String,
+    training_artifact_uri: String,
+    training_artifact_sha256: String,
+    serving_manifest_uri: String,
+    candidate_endpoint_url: String,
     validation_report_uri: String,
     candidate_auc: String,
     candidate_ks: String,
@@ -11674,7 +11795,7 @@ async fn execute_mlops_governed_action(
     candidate_metrics_json: String,
     mined_rule_candidates_json: String,
     notes: String,
-    evidence_refs: Vec<String>,
+    mut evidence_refs: Vec<String>,
 ) -> Result<Value, String> {
     let model_key = model_key.trim();
     match action {
@@ -11794,9 +11915,48 @@ async fn execute_mlops_governed_action(
             let f1 = parse_optional_unit_metric(&candidate_f1, "F1")?;
             let accuracy = parse_optional_unit_metric(&candidate_accuracy, "accuracy")?;
             let threshold = parse_optional_unit_metric(&candidate_threshold, "threshold")?;
+            let artifact_sha256 = optional_trimmed_value(&candidate_artifact_sha256);
+            let training_artifact_uri = optional_trimmed_value(&training_artifact_uri);
+            let training_artifact_sha256 = optional_trimmed_value(&training_artifact_sha256);
+            let serving_manifest_uri = optional_trimmed_value(&serving_manifest_uri);
+            let endpoint_url = optional_trimmed_value(&candidate_endpoint_url);
             let feature_importance_uri = optional_trimmed_value(&candidate_feature_importance_uri);
             let mined_rule_candidates =
                 parse_optional_json_array(&mined_rule_candidates_json, "mined rule candidates")?;
+            let evaluation_run_id = format!(
+                "eval_{}_{}",
+                model_key,
+                candidate_model_version
+                    .trim()
+                    .replace('.', "_")
+                    .replace('-', "_")
+            );
+            evidence_refs = push_unique(
+                evidence_refs,
+                format!("model_retraining_jobs:{}", retraining_job_id.trim()),
+            );
+            evidence_refs = push_unique(
+                evidence_refs,
+                format!("model_artifacts:{}", candidate_artifact_uri.trim()),
+            );
+            if let Some(training_artifact_uri) = &training_artifact_uri {
+                evidence_refs = push_unique(
+                    evidence_refs,
+                    format!("model_training_artifacts:{training_artifact_uri}"),
+                );
+            }
+            if let Some(serving_manifest_uri) = &serving_manifest_uri {
+                evidence_refs = push_unique(
+                    evidence_refs,
+                    format!("model_serving_manifests:{serving_manifest_uri}"),
+                );
+            }
+            evidence_refs = push_unique(
+                evidence_refs,
+                format!("model_validation_reports:{}", validation_report_uri.trim()),
+            );
+            evidence_refs =
+                push_unique(evidence_refs, format!("model_evaluations:{evaluation_run_id}"));
             request_json(
                 &format!(
                     "/api/v1/ops/model-retraining-jobs/{}/output",
@@ -11808,13 +11968,13 @@ async fn execute_mlops_governed_action(
                     "notes": notes.trim(),
                     "candidate_model_version": candidate_model_version.trim(),
                     "artifact_uri": candidate_artifact_uri.trim(),
-                    "artifact_sha256": null,
-                    "training_artifact_uri": null,
-                    "training_artifact_sha256": null,
-                    "serving_manifest_uri": null,
-                    "endpoint_url": null,
+                    "artifact_sha256": artifact_sha256,
+                    "training_artifact_uri": training_artifact_uri,
+                    "training_artifact_sha256": training_artifact_sha256,
+                    "serving_manifest_uri": serving_manifest_uri,
+                    "endpoint_url": endpoint_url,
                     "validation_report_uri": validation_report_uri.trim(),
-                    "evaluation_run_id": format!("eval_{}_{}", model_key, candidate_model_version.trim().replace('.', "_").replace('-', "_")),
+                    "evaluation_run_id": evaluation_run_id,
                     "evidence_refs": evidence_refs,
                     "auc": auc,
                     "ks": ks,
@@ -13494,6 +13654,19 @@ fn optional_trimmed_value(input: &str) -> Option<String> {
     }
 }
 
+fn response_retraining_job_id(response: &Value) -> Option<String> {
+    response
+        .get("job_id")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            response
+                .get("job")
+                .and_then(|job| job.get("job_id"))
+                .and_then(Value::as_str)
+        })
+        .map(str::to_string)
+}
+
 async fn accept_rule_candidate(
     api_key: String,
     rule: Value,
@@ -13659,6 +13832,16 @@ fn rule_candidate_id(candidate: &RuleDiscoveryCandidate) -> String {
         .and_then(Value::as_str)
         .unwrap_or("candidate_rule")
         .to_string()
+}
+
+fn rule_candidate_version(candidate: &RuleDiscoveryCandidate) -> u32 {
+    candidate
+        .rule
+        .get("version")
+        .and_then(Value::as_u64)
+        .and_then(|version| u32::try_from(version).ok())
+        .filter(|version| *version > 0)
+        .unwrap_or(1)
 }
 
 fn push_unique(mut values: Vec<String>, value: String) -> Vec<String> {

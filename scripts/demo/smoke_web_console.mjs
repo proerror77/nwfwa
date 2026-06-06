@@ -146,6 +146,10 @@ async function main() {
     assertContains(builtText, "Claim next queued job", "web console mlops training job bundle");
     assertContains(builtText, "Update job status", "web console mlops training job bundle");
     assertContains(builtText, "Register provider output", "web console mlops training job bundle");
+    assertContains(builtText, "Candidate artifact SHA", "web console mlops provider output bundle");
+    assertContains(builtText, "Training artifact", "web console mlops provider output bundle");
+    assertContains(builtText, "Serving manifest", "web console mlops provider output bundle");
+    assertContains(builtText, "Candidate endpoint", "web console mlops provider output bundle");
     assertContains(builtText, "Candidate AUC", "web console mlops provider output bundle");
     assertContains(builtText, "Confusion matrix JSON", "web console mlops provider output bundle");
     assertContains(builtText, "Metrics JSON", "web console mlops provider output bundle");
