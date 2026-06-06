@@ -240,6 +240,21 @@ async fn main() -> anyhow::Result<()> {
             .await?;
             println!("{}", serde_json::to_string_pretty(&response)?);
         }
+        "submit-anomaly-clustering-report" => {
+            let api_url = take_flag_value(&mut args, "--api-url")?;
+            let api_key = take_flag_value(&mut args, "--api-key")?;
+            let report = take_flag_value(&mut args, "--report")?;
+            let actor = take_flag_value(&mut args, "--actor")?;
+            let notes = take_flag_value(&mut args, "--notes")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let response = worker::submit_anomaly_clustering_report(
+                &api_url, &api_key, &report, &actor, &notes,
+            )
+            .await?;
+            println!("{}", serde_json::to_string_pretty(&response)?);
+        }
         "deliver-mlops-alert-receiver-webhook" => {
             let scheduler_report = take_flag_value(&mut args, "--scheduler-report")?;
             let receiver_url = take_flag_value(&mut args, "--receiver-url")?;

@@ -221,6 +221,32 @@ pub struct MlopsAlertDeliverySubmission {
     pub evidence_refs: Vec<String>,
 }
 
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AnomalyClusteringReportSubmission {
+    pub actor: String,
+    pub notes: String,
+    pub source_report_uri: String,
+    pub report_kind: String,
+    pub dataset_key: String,
+    pub dataset_version: String,
+    pub label_policy: String,
+    pub governance_boundary: String,
+    pub review_tasks: Vec<AnomalyClusteringReviewTaskSubmission>,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct AnomalyClusteringReviewTaskSubmission {
+    pub candidate_kind: String,
+    pub candidate_id: String,
+    pub task_kind: String,
+    pub review_queue: String,
+    pub required_review: String,
+    pub decision_options: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub candidate_payload: serde_json::Value,
+}
+
 pub async fn check_pilot_readiness(
     api_base_url: &str,
     api_key: Option<&str>,
@@ -461,6 +487,278 @@ pub async fn submit_mlops_alert_delivery_tasks(
         .json::<serde_json::Value>()
         .await
         .context("parse MLOps alert delivery response")
+}
+
+pub fn build_anomaly_clustering_report_submission(
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<AnomalyClusteringReportSubmission> {
+    let report_uri = required_non_empty("report_uri", report_uri)?;
+    let actor = required_non_empty("actor", actor)?;
+    let notes = required_non_empty("notes", notes)?;
+    let report = read_json_report(report_uri)?;
+    let report_kind = json_string(&report, "report_kind")
+        .filter(|value| {
+            matches!(
+                value.as_str(),
+                "provider_peer_clustering"
+                    | "provider_graph_community_clustering"
+                    | "claim_entity_clustering"
+            )
+        })
+        .context("report_kind must be provider_peer_clustering, provider_graph_community_clustering, or claim_entity_clustering")?;
+    let dataset_key = json_string(&report, "dataset_key")
+        .filter(|value| !value.trim().is_empty())
+        .context("anomaly clustering report requires dataset_key")?;
+    let dataset_version = json_string(&report, "dataset_version")
+        .filter(|value| !value.trim().is_empty())
+        .context("anomaly clustering report requires dataset_version")?;
+    let label_policy = json_string(&report, "label_policy")
+        .filter(|value| !value.trim().is_empty())
+        .context("anomaly clustering report requires label_policy")?;
+    let governance_boundary = json_string(&report, "governance_boundary")
+        .filter(|value| !value.trim().is_empty())
+        .context("anomaly clustering report requires governance_boundary")?;
+    let mut evidence_refs = report
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    evidence_refs.push(format!("anomaly_clustering_reports:{report_uri}"));
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    let review_tasks =
+        anomaly_clustering_review_tasks_from_report(report_uri, &report_kind, &report)?;
+    if review_tasks.is_empty() {
+        bail!(
+            "anomaly clustering report requires anomaly_candidates for API review queue submission"
+        );
+    }
+
+    Ok(AnomalyClusteringReportSubmission {
+        actor: actor.into(),
+        notes: notes.into(),
+        source_report_uri: report_uri.into(),
+        report_kind,
+        dataset_key,
+        dataset_version,
+        label_policy,
+        governance_boundary,
+        review_tasks,
+        evidence_refs,
+    })
+}
+
+pub async fn submit_anomaly_clustering_report(
+    api_base_url: &str,
+    api_key: &str,
+    report_uri: &str,
+    actor: &str,
+    notes: &str,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_anomaly_clustering_report_submission(report_uri, actor, notes)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            api_base_url,
+            "/api/v1/ops/providers/anomaly-clustering-reports",
+        ))
+        .header("x-api-key", api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit anomaly clustering report")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("submit anomaly clustering report failed with {status}: {body}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse anomaly clustering report response")
+}
+
+fn anomaly_clustering_review_tasks_from_report(
+    report_uri: &str,
+    report_kind: &str,
+    report: &serde_json::Value,
+) -> anyhow::Result<Vec<AnomalyClusteringReviewTaskSubmission>> {
+    let candidates = report
+        .get("anomaly_candidates")
+        .and_then(|value| value.as_array())
+        .context("anomaly clustering report requires anomaly_candidates")?;
+    let local_review_tasks = report
+        .get("review_tasks")
+        .and_then(|value| value.as_array())
+        .cloned()
+        .unwrap_or_default();
+    candidates
+        .iter()
+        .map(|candidate| {
+            let local_task =
+                matching_local_anomaly_review_task(report_kind, candidate, &local_review_tasks);
+            anomaly_clustering_review_task_from_candidate(
+                report_uri,
+                report_kind,
+                candidate,
+                local_task,
+            )
+        })
+        .collect()
+}
+
+fn anomaly_clustering_review_task_from_candidate(
+    report_uri: &str,
+    report_kind: &str,
+    candidate: &serde_json::Value,
+    local_task: Option<&serde_json::Value>,
+) -> anyhow::Result<AnomalyClusteringReviewTaskSubmission> {
+    let report_evidence_ref = format!("anomaly_clustering_reports:{report_uri}");
+    let candidate_payload = candidate.clone();
+    let candidate_evidence_refs = candidate
+        .get("evidence_refs")
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string));
+    let local_evidence_refs = local_task
+        .and_then(|task| task.get("evidence_refs"))
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string));
+    let mut evidence_refs = std::iter::once(report_evidence_ref)
+        .chain(candidate_evidence_refs)
+        .chain(local_evidence_refs)
+        .collect::<Vec<_>>();
+    evidence_refs.sort();
+    evidence_refs.dedup();
+
+    let task = match report_kind {
+        "provider_peer_clustering" => {
+            let provider_id = required_json_string(candidate, "provider_id")?;
+            let service_month = required_json_string(candidate, "service_month")?;
+            AnomalyClusteringReviewTaskSubmission {
+                candidate_kind: "provider_peer_anomaly".into(),
+                candidate_id: format!("provider_peer:{provider_id}:{service_month}"),
+                task_kind: "provider_peer_anomaly_review".into(),
+                review_queue: "provider_anomaly_candidate_review".into(),
+                required_review: "human_review_required_before_case_creation_or_label_assignment"
+                    .into(),
+                decision_options: anomaly_review_decision_options(
+                    local_task,
+                    &[
+                        "dismiss_as_peer_variation",
+                        "request_more_evidence",
+                        "open_investigation_candidate",
+                    ],
+                ),
+                evidence_refs,
+                candidate_payload,
+            }
+        }
+        "provider_graph_community_clustering" => {
+            let provider_id = required_json_string(candidate, "provider_id")?;
+            let community_id = required_json_i64(candidate, "community_id")?;
+            AnomalyClusteringReviewTaskSubmission {
+                candidate_kind: "provider_graph_anomaly".into(),
+                candidate_id: format!("provider_graph:{provider_id}:{community_id}"),
+                task_kind: "provider_graph_anomaly_review".into(),
+                review_queue: "provider_graph_anomaly_candidate_review".into(),
+                required_review: "human_review_required_before_case_creation_or_label_assignment"
+                    .into(),
+                decision_options: anomaly_review_decision_options(
+                    local_task,
+                    &[
+                        "dismiss_as_network_variation",
+                        "request_more_evidence",
+                        "open_investigation_candidate",
+                    ],
+                ),
+                evidence_refs,
+                candidate_payload,
+            }
+        }
+        "claim_entity_clustering" => {
+            let claim_id = required_json_string(candidate, "claim_id")?;
+            AnomalyClusteringReviewTaskSubmission {
+                candidate_kind: "claim_entity_anomaly".into(),
+                candidate_id: format!("claim_entity:{claim_id}"),
+                task_kind: "claim_entity_anomaly_review".into(),
+                review_queue: "claim_entity_anomaly_candidate_review".into(),
+                required_review:
+                    "human_review_required_before_case_creation_label_assignment_or_rule_writeback"
+                        .into(),
+                decision_options: anomaly_review_decision_options(
+                    local_task,
+                    &[
+                        "dismiss_as_entity_variation",
+                        "request_more_evidence",
+                        "open_investigation_candidate",
+                        "prepare_rule_candidate_backtest",
+                    ],
+                ),
+                evidence_refs,
+                candidate_payload,
+            }
+        }
+        other => bail!("unsupported anomaly clustering report_kind {other}"),
+    };
+    Ok(task)
+}
+
+fn matching_local_anomaly_review_task<'a>(
+    report_kind: &str,
+    candidate: &serde_json::Value,
+    tasks: &'a [serde_json::Value],
+) -> Option<&'a serde_json::Value> {
+    tasks.iter().find(|task| match report_kind {
+        "provider_peer_clustering" => task.get("provider_id") == candidate.get("provider_id"),
+        "provider_graph_community_clustering" => {
+            task.get("provider_id") == candidate.get("provider_id")
+                && task.get("community_id") == candidate.get("community_id")
+        }
+        "claim_entity_clustering" => task.get("claim_id") == candidate.get("claim_id"),
+        _ => false,
+    })
+}
+
+fn anomaly_review_decision_options(
+    local_task: Option<&serde_json::Value>,
+    fallback: &[&str],
+) -> Vec<String> {
+    let options = local_task
+        .and_then(|task| task.get("decision_options"))
+        .and_then(|value| value.as_array())
+        .into_iter()
+        .flatten()
+        .filter_map(|value| value.as_str().map(str::to_string))
+        .collect::<Vec<_>>();
+    if options.is_empty() {
+        fallback.iter().map(|value| (*value).into()).collect()
+    } else {
+        options
+    }
+}
+
+fn required_json_string(value: &serde_json::Value, key: &str) -> anyhow::Result<String> {
+    value
+        .get(key)
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+        .map(str::to_string)
+        .with_context(|| format!("anomaly candidate requires {key}"))
+}
+
+fn required_json_i64(value: &serde_json::Value, key: &str) -> anyhow::Result<i64> {
+    value
+        .get(key)
+        .and_then(|value| value.as_i64())
+        .with_context(|| format!("anomaly candidate requires integer {key}"))
 }
 
 pub fn build_mlops_alert_receiver_payload(
@@ -9190,6 +9488,110 @@ mod tests {
             .join("claim_entity_clustering_report.json")
             .is_file());
         assert!(output_dir.join("claim_entity_review_tasks.json").is_file());
+    }
+
+    #[test]
+    fn builds_anomaly_clustering_report_submission_payloads() {
+        let root = temp_root("anomaly-clustering-submissions");
+        let pack =
+            build_demo_ml_datasets(&root, "2026-06-clustering-demo").expect("demo ML datasets");
+        let provider_manifest = pack
+            .unlabeled_manifest_uris
+            .iter()
+            .find(|uri| uri.contains("unlabeled_provider_peer_clustering"))
+            .expect("provider peer manifest");
+        let claim_manifest = pack
+            .unlabeled_manifest_uris
+            .iter()
+            .find(|uri| uri.contains("unlabeled_shadow_scoring"))
+            .expect("claim entity manifest");
+
+        let provider_dir = root.join("provider-clusters");
+        let provider_report =
+            cluster_provider_peers(provider_manifest, &provider_dir).expect("provider clustering");
+        let provider_report_uri = provider_dir.join("provider_peer_clustering_report.json");
+        let provider_submission = build_anomaly_clustering_report_submission(
+            &provider_report_uri.to_string_lossy(),
+            "mlops-worker",
+            "Submit provider peer anomalies for human review only.",
+        )
+        .expect("provider submission");
+        let expected_provider_id = format!(
+            "provider_peer:{}:{}",
+            provider_report.anomaly_candidates[0].provider_id,
+            provider_report.anomaly_candidates[0].service_month
+        );
+        assert_eq!(provider_submission.report_kind, "provider_peer_clustering");
+        assert_eq!(
+            provider_submission.review_tasks[0].candidate_kind,
+            "provider_peer_anomaly"
+        );
+        assert_eq!(
+            provider_submission.review_tasks[0].candidate_id,
+            expected_provider_id
+        );
+        assert!(provider_submission.review_tasks[0]
+            .evidence_refs
+            .iter()
+            .any(|reference| reference
+                == &format!(
+                    "anomaly_clustering_reports:{}",
+                    provider_report_uri.to_string_lossy()
+                )));
+        assert_eq!(
+            provider_submission.review_tasks[0].candidate_payload["reason"],
+            provider_report.anomaly_candidates[0].reason
+        );
+
+        let graph_dir = root.join("provider-graph");
+        let graph_report = cluster_provider_graph_communities(provider_manifest, &graph_dir)
+            .expect("provider graph clustering");
+        let graph_report_uri = graph_dir.join("provider_graph_community_report.json");
+        let graph_submission = build_anomaly_clustering_report_submission(
+            &graph_report_uri.to_string_lossy(),
+            "mlops-worker",
+            "Submit provider graph anomalies for human review only.",
+        )
+        .expect("graph submission");
+        let expected_graph_id = format!(
+            "provider_graph:{}:{}",
+            graph_report.anomaly_candidates[0].provider_id,
+            graph_report.anomaly_candidates[0].community_id
+        );
+        assert_eq!(
+            graph_submission.review_tasks[0].candidate_kind,
+            "provider_graph_anomaly"
+        );
+        assert_eq!(
+            graph_submission.review_tasks[0].candidate_id,
+            expected_graph_id
+        );
+
+        let claim_dir = root.join("claim-clusters");
+        let claim_report =
+            cluster_claim_entities(claim_manifest, &claim_dir).expect("claim clustering");
+        let claim_report_uri = claim_dir.join("claim_entity_clustering_report.json");
+        let claim_submission = build_anomaly_clustering_report_submission(
+            &claim_report_uri.to_string_lossy(),
+            "mlops-worker",
+            "Submit claim entity anomalies for human review only.",
+        )
+        .expect("claim submission");
+        assert_eq!(
+            claim_submission.review_tasks[0].candidate_kind,
+            "claim_entity_anomaly"
+        );
+        assert_eq!(
+            claim_submission.review_tasks[0].candidate_id,
+            format!(
+                "claim_entity:{}",
+                claim_report.anomaly_candidates[0].claim_id
+            )
+        );
+        assert_eq!(
+            claim_submission.review_tasks[0].required_review,
+            "human_review_required_before_case_creation_label_assignment_or_rule_writeback"
+        );
     }
 
     #[test]

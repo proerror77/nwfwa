@@ -297,6 +297,14 @@ pub fn build_app_with_parts(
             get(ops_providers::provider_risk_summary),
         )
         .route(
+            "/api/v1/ops/providers/anomaly-clustering-reports",
+            post(ops_providers::submit_anomaly_clustering_report),
+        )
+        .route(
+            "/api/v1/ops/providers/anomaly-review-queue",
+            get(ops_providers::anomaly_review_queue),
+        )
+        .route(
             "/api/v1/ops/providers/anomaly-candidate-reviews",
             post(ops_providers::review_anomaly_candidate),
         )
