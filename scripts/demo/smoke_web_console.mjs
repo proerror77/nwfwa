@@ -131,9 +131,13 @@ async function main() {
     assertContains(builtText, "Provider candidate release", "web console provider model intake bundle");
     assertContains(builtText, "Provider Candidate Release Control", "web console provider model intake bundle");
     assertContains(builtText, "Offline Training Handoff", "web console mlops workspace bundle");
+    assertContains(sourceText, "/versions/{model_version}/promotion-gates", "web console version-scoped promotion gates API");
+    assertContains(sourceText, "/versions/{model_version}/promotion-reviews", "web console version-scoped promotion review API");
+    assertContains(sourceText, "/versions/{model_version}/activate", "web console version-scoped activation API");
     assertContains(builtText, "Monitoring Review Queue", "web console mlops workspace bundle");
     assertContains(builtText, "Submitted monitoring reports open human review tasks", "web console mlops review queue bundle");
     assertContains(builtText, "No monitoring review tasks returned for this model.", "web console mlops review queue bundle");
+    assertContains(builtText, "Use for monitoring review", "web console mlops review queue fill action bundle");
     assertContains(builtText, "Monitoring decision", "web console mlops review action bundle");
     assertContains(builtText, "Submit monitoring decision", "web console mlops review action bundle");
     assertContains(builtText, "Reject task", "web console mlops review action bundle");
@@ -143,6 +147,7 @@ async function main() {
     assertContains(builtText, "Submit alert decision", "web console mlops alert delivery bundle");
     assertContains(builtText, "Escalate alert to review", "web console mlops alert delivery bundle");
     assertContains(builtText, "Provider Output Handoff", "web console mlops output handoff bundle");
+    assertContains(builtText, "Use for output registration", "web console mlops output handoff fill action bundle");
     assertContains(builtText, "Register completed provider output", "web console mlops output handoff bundle");
     assertContains(builtText, "Activation blocked by promotion gates", "web console mlops activation gate bundle");
     assertNotContains(builtText, "Claim next queued job", "web console mlops training platform boundary bundle");

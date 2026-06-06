@@ -5722,7 +5722,7 @@ fn models_page() -> Html {
             let snapshot_state = snapshot_state.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
-                snapshot_state.set(match get_model_ops_snapshot(api_key, model_key).await {
+                snapshot_state.set(match get_model_ops_snapshot(api_key, model_key, None).await {
                     Ok(snapshot) => ApiState::Ready(snapshot),
                     Err(error) => ApiState::Failed(error),
                 });
@@ -5968,15 +5968,19 @@ fn mlops_workspace_page() -> Html {
     let load_workspace = {
         let api_key = api_key.clone();
         let model_key = model_key.clone();
+        let candidate_model_version = candidate_model_version.clone();
         let snapshot_state = snapshot_state.clone();
         Callback::from(move |_| {
             let api_key = (*api_key).clone();
             let model_key = (*model_key).clone();
+            let candidate_model_version = (*candidate_model_version).clone();
             let snapshot_state = snapshot_state.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
                 snapshot_state.set(
-                    match get_mlops_workspace_snapshot(api_key, model_key).await {
+                    match get_mlops_workspace_snapshot(api_key, model_key, candidate_model_version)
+                        .await
+                    {
                         Ok(snapshot) => ApiState::Ready(snapshot),
                         Err(error) => ApiState::Failed(error),
                     },
@@ -6188,6 +6192,66 @@ fn mlops_workspace_page() -> Html {
                 serde_json::to_string_pretty(&task.candidate_payload)
                     .unwrap_or_else(|_| "{}".into()),
             );
+        })
+    };
+
+    let select_monitoring_review_task = {
+        let monitoring_task_id = monitoring_task_id.clone();
+        let monitoring_decision = monitoring_decision.clone();
+        let evidence_refs = evidence_refs.clone();
+        Callback::from(move |task: ModelMonitoringReviewTask| {
+            let mut refs = vec![
+                format!("model_versions:{}:{}", task.model_key, task.model_version),
+                format!("model_monitoring_reports:{}", task.report_uri),
+                format!("model_monitoring_review_tasks:{}", task.task_id),
+            ];
+            for evidence_ref in task.evidence_refs {
+                refs = push_unique(refs, evidence_ref);
+            }
+            let decision = if task.retraining_recommendation == "prepare_retraining" {
+                "prepare_retraining"
+            } else if task.task_kind.contains("shadow") || task.trigger.contains("shadow") {
+                "open_shadow_review"
+            } else {
+                "acknowledged"
+            };
+            monitoring_task_id.set(task.task_id);
+            monitoring_decision.set(decision.into());
+            evidence_refs.set(refs.join(", "));
+        })
+    };
+
+    let select_retraining_job = {
+        let retraining_job_id = retraining_job_id.clone();
+        let retraining_status = retraining_status.clone();
+        let candidate_model_version = candidate_model_version.clone();
+        let candidate_artifact_uri = candidate_artifact_uri.clone();
+        let candidate_endpoint_url = candidate_endpoint_url.clone();
+        let validation_report_uri = validation_report_uri.clone();
+        let evidence_refs = evidence_refs.clone();
+        Callback::from(move |job: ModelRetrainingJobRecord| {
+            retraining_job_id.set(job.job_id.clone());
+            retraining_status.set(job.status.clone());
+            if let Some(version) = job.candidate_model_version {
+                candidate_model_version.set(version);
+            }
+            if let Some(uri) = job.candidate_artifact_uri {
+                candidate_artifact_uri.set(uri);
+            }
+            if let Some(url) = job.candidate_endpoint_url {
+                candidate_endpoint_url.set(url);
+            }
+            if let Some(uri) = job.validation_report_uri {
+                validation_report_uri.set(uri);
+            }
+            let mut refs = vec![
+                format!("model_retraining_jobs:{}", job.job_id),
+                format!("model_versions:{}:{}", job.model_key, job.model_version),
+            ];
+            if let Some(evaluation_id) = job.output_evaluation_id {
+                refs = push_unique(refs, format!("model_evaluations:{evaluation_id}"));
+            }
+            evidence_refs.set(refs.join(", "));
         })
     };
 
@@ -6752,7 +6816,9 @@ fn mlops_workspace_page() -> Html {
 
             <MlopsWorkspaceView
                 state={(*snapshot_state).clone()}
+                on_select_monitoring_task={select_monitoring_review_task}
                 on_select_anomaly={select_anomaly_review_task}
+                on_select_retraining_job={select_retraining_job}
             />
         </section>
     }
@@ -6761,7 +6827,9 @@ fn mlops_workspace_page() -> Html {
 #[derive(Properties, PartialEq)]
 struct MlopsWorkspaceProps {
     state: ApiState<MlopsWorkspaceSnapshot>,
+    on_select_monitoring_task: Callback<ModelMonitoringReviewTask>,
     on_select_anomaly: Callback<AnomalyReviewQueueTask>,
+    on_select_retraining_job: Callback<ModelRetrainingJobRecord>,
 }
 
 #[function_component(MlopsWorkspaceView)]
@@ -6778,12 +6846,12 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
                         {mlops_model_candidates(snapshot)}
                         {mlops_promotion_gates(snapshot)}
                         {mlops_monitoring_summary(snapshot)}
-                        {mlops_monitoring_review_queue(snapshot)}
+                        {mlops_monitoring_review_queue(snapshot, &props.on_select_monitoring_task)}
                         {mlops_anomaly_review_queue(snapshot, &props.on_select_anomaly)}
                         {mlops_alert_delivery_queue(snapshot)}
                         {mlops_training_handoff(snapshot)}
                         {mlops_dataset_readiness(snapshot)}
-                        {mlops_training_jobs(snapshot)}
+                        {mlops_training_jobs(snapshot, &props.on_select_retraining_job)}
                     </div>
                 },
             }}
@@ -6899,7 +6967,10 @@ fn mlops_dataset_readiness(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     }
 }
 
-fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+fn mlops_training_jobs(
+    snapshot: &MlopsWorkspaceSnapshot,
+    on_select_job: &Callback<ModelRetrainingJobRecord>,
+) -> Html {
     html! {
         <section class="panel result-stack mlops-training-panel">
             <div class="section-header">
@@ -6933,6 +7004,16 @@ fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                                 <span>{job.candidate_model_version.as_deref().unwrap_or("pending")}</span>
                                 <span>{job.updated_at.as_deref().unwrap_or("missing")}</span>
                                 <small class="row-detail">{format!("trigger {} / blocker {} / output {}", refs_label(&job.trigger_summary), refs_label(&job.blocker_summary), job.output_evaluation_id.as_deref().unwrap_or("none"))}</small>
+                                <button
+                                    class="mini-action"
+                                    onclick={{
+                                        let on_select_job = on_select_job.clone();
+                                        let job = job.clone();
+                                        Callback::from(move |_| on_select_job.emit(job.clone()))
+                                    }}
+                                >
+                                    {"Use for output registration"}
+                                </button>
                             </div>
                         })}
                     </div>
@@ -7064,7 +7145,10 @@ fn mlops_monitoring_summary(snapshot: &MlopsWorkspaceSnapshot) -> Html {
     }
 }
 
-fn mlops_monitoring_review_queue(snapshot: &MlopsWorkspaceSnapshot) -> Html {
+fn mlops_monitoring_review_queue(
+    snapshot: &MlopsWorkspaceSnapshot,
+    on_select_monitoring_task: &Callback<ModelMonitoringReviewTask>,
+) -> Html {
     html! {
         <section class="panel result-stack mlops-monitoring-panel">
             <div class="section-header">
@@ -7098,6 +7182,16 @@ fn mlops_monitoring_review_queue(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                                 <span>{format!("{} / {}", task.monitoring_status, task.retraining_recommendation)}</span>
                                 <span>{refs_label(&task.evidence_refs)}</span>
                                 <small class="row-detail">{format!("required refs model_versions:{}:{}; model_monitoring_reports:{}; model_monitoring_review_tasks:{}", task.model_key, task.model_version, task.report_uri, task.task_id)}</small>
+                                <button
+                                    class="mini-action"
+                                    onclick={{
+                                        let on_select_monitoring_task = on_select_monitoring_task.clone();
+                                        let task = task.clone();
+                                        Callback::from(move |_| on_select_monitoring_task.emit(task.clone()))
+                                    }}
+                                >
+                                    {"Use for monitoring review"}
+                                </button>
                             </div>
                         })}
                     </div>
@@ -12068,6 +12162,7 @@ async fn get_rule_ops_snapshot(
 async fn get_model_ops_snapshot(
     api_key: String,
     model_key: String,
+    model_version: Option<String>,
 ) -> Result<ModelOpsSnapshot, String> {
     let models = request_get_json::<ModelListResponse>("/api/v1/ops/models", api_key.clone())
         .await?
@@ -12083,11 +12178,18 @@ async fn get_model_ops_snapshot(
         api_key.clone(),
     )
     .await?;
-    let gates = request_get_json::<ModelPromotionGates>(
-        &format!("/api/v1/ops/models/{selected_model_key}/promotion-gates"),
-        api_key.clone(),
-    )
-    .await?;
+    let selected_model_version = model_version
+        .as_deref()
+        .map(str::trim)
+        .filter(|version| !version.is_empty());
+    let gates_path = if let Some(model_version) = selected_model_version {
+        format!(
+            "/api/v1/ops/models/{selected_model_key}/versions/{model_version}/promotion-gates"
+        )
+    } else {
+        format!("/api/v1/ops/models/{selected_model_key}/promotion-gates")
+    };
+    let gates = request_get_json::<ModelPromotionGates>(&gates_path, api_key.clone()).await?;
     let retraining = request_get_json::<ModelRetrainingReadiness>(
         &format!("/api/v1/ops/models/{selected_model_key}/retraining-readiness"),
         api_key,
@@ -12104,9 +12206,11 @@ async fn get_model_ops_snapshot(
 async fn get_mlops_workspace_snapshot(
     api_key: String,
     model_key: String,
+    candidate_model_version: String,
 ) -> Result<MlopsWorkspaceSnapshot, String> {
     let data_sources = get_data_sources_snapshot(api_key.clone()).await?;
-    let model_ops = get_model_ops_snapshot(api_key.clone(), model_key).await?;
+    let model_ops =
+        get_model_ops_snapshot(api_key.clone(), model_key, Some(candidate_model_version)).await?;
     let retraining_jobs = request_get_json::<ModelRetrainingJobListResponse>(
         &format!(
             "/api/v1/ops/models/{}/retraining-jobs",
@@ -12382,8 +12486,14 @@ async fn execute_mlops_governed_action(
             if evidence_refs.is_empty() {
                 return Err("model promotion review requires evidence refs".into());
             }
+            let model_version = candidate_model_version.trim();
+            if model_version.is_empty() {
+                return Err("model promotion review requires a candidate version".into());
+            }
             request_json(
-                &format!("/api/v1/ops/models/{model_key}/promotion-reviews"),
+                &format!(
+                    "/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-reviews"
+                ),
                 api_key,
                 json!({
                     "decision": promotion_decision.trim(),
@@ -12394,12 +12504,27 @@ async fn execute_mlops_governed_action(
             )
             .await
         }
-        "activate" | "rollback" => {
+        "activate" => {
+            if evidence_refs.is_empty() {
+                return Err("model lifecycle actions require evidence refs".into());
+            }
+            let model_version = candidate_model_version.trim();
+            if model_version.is_empty() {
+                return Err("model activation requires a candidate version".into());
+            }
+            request_json(
+                &format!("/api/v1/ops/models/{model_key}/versions/{model_version}/activate"),
+                api_key,
+                json!({ "evidence_refs": evidence_refs }),
+            )
+            .await
+        }
+        "rollback" => {
             if evidence_refs.is_empty() {
                 return Err("model lifecycle actions require evidence refs".into());
             }
             request_json(
-                &format!("/api/v1/ops/models/{model_key}/{action}"),
+                &format!("/api/v1/ops/models/{model_key}/rollback"),
                 api_key,
                 json!({ "evidence_refs": evidence_refs }),
             )
