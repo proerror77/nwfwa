@@ -6816,7 +6816,7 @@ fn mlops_workspace_page() -> Html {
                             />
                         </label>
                         <label class="mlops-field mlops-evidence-field">
-                            {"Mined rule candidates JSON"}
+                            {"Draft rule candidate payload"}
                             <textarea
                                 value={(*mined_rule_candidates_json).clone()}
                                 oninput={{
@@ -6935,7 +6935,7 @@ fn mlops_workspace_page() -> Html {
                         <div class="mlops-boundary-card">
                             <span>{"Boundary"}</span>
                             <strong>{"Evidence before action"}</strong>
-                            <small>{"model_versions:{model_key}:{model_version} is required for production promotion; public demo evidence cannot replace customer validation."}</small>
+                            <small>{"Provider rule candidates are saved as drafts only. Review them one by one in Discovery Review with backtest and shadow evidence before accepting or rejecting."}</small>
                         </div>
                     </div>
                     <div class="button-row mlops-action-buttons">
