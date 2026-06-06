@@ -4713,6 +4713,7 @@ fn rules_page() -> Html {
     let backtest_state = use_state(|| ApiState::<RuleBacktestResponse>::Idle);
     let save_state = use_state(|| ApiState::<Value>::Idle);
     let review_state = use_state(|| ApiState::<Value>::Idle);
+    let shadow_state = use_state(|| ApiState::<Value>::Idle);
     let accepted_candidate_ids = use_state(Vec::<String>::new);
     let rejected_candidate_ids = use_state(Vec::<String>::new);
 
@@ -5072,6 +5073,67 @@ fn rules_page() -> Html {
         })
     };
 
+    let submit_shadow_evidence = {
+        let api_key = api_key.clone();
+        let rule_id = rule_id.clone();
+        let snapshot_state = snapshot_state.clone();
+        let backtest_state = backtest_state.clone();
+        let rule_reviewer = rule_reviewer.clone();
+        let rule_review_notes = rule_review_notes.clone();
+        let rule_review_evidence_refs = rule_review_evidence_refs.clone();
+        let shadow_state = shadow_state.clone();
+        let load_rules = load_rules.clone();
+        Callback::from(move |_| {
+            let backtest = match &*backtest_state {
+                ApiState::Ready(response) => response.clone(),
+                _ => {
+                    shadow_state.set(ApiState::Failed(
+                        "run backtest before submitting shadow evidence".into(),
+                    ));
+                    return;
+                }
+            };
+            let (target_rule_id, target_rule_version) = match &*snapshot_state {
+                ApiState::Ready(snapshot) => {
+                    (snapshot.gates.rule_id.clone(), snapshot.gates.rule_version)
+                }
+                _ => ((*rule_id).clone(), 1),
+            };
+            let report_uri = format!("artifacts/rules/{target_rule_id}/shadow_report.json");
+            let rule_ref = format!("rules:{target_rule_id}:v{target_rule_version}");
+            let shadow_ref = format!("rule_shadow_runs:{report_uri}");
+            let mut evidence_refs = parse_tags(&rule_review_evidence_refs);
+            evidence_refs = push_unique(evidence_refs, rule_ref);
+            evidence_refs = push_unique(evidence_refs, shadow_ref);
+            let api_key = (*api_key).clone();
+            let reviewer = (*rule_reviewer).clone();
+            let notes = (*rule_review_notes).clone();
+            let shadow_state = shadow_state.clone();
+            let load_rules = load_rules.clone();
+            shadow_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match submit_rule_shadow_run(
+                    api_key,
+                    target_rule_id,
+                    target_rule_version,
+                    backtest,
+                    report_uri,
+                    reviewer,
+                    notes,
+                    evidence_refs,
+                )
+                .await
+                {
+                    Ok(response) => {
+                        shadow_state.set(ApiState::Ready(response));
+                        load_rules.emit(());
+                    }
+                    Err(error) => shadow_state.set(ApiState::Failed(error)),
+                }
+            });
+        })
+    };
+
     html! {
         <section class="module-status">
             <div class="dashboard-header">
@@ -5275,6 +5337,9 @@ fn rules_page() -> Html {
                     <button onclick={backtest_candidate} disabled={!selected_candidate_available || matches!(&*backtest_state, ApiState::Loading)}>
                         {if matches!(&*backtest_state, ApiState::Loading) { "Backtesting..." } else { "Run backtest" }}
                     </button>
+                    <button onclick={submit_shadow_evidence} disabled={!matches!(&*backtest_state, ApiState::Ready(_)) || matches!(&*shadow_state, ApiState::Loading)}>
+                        {if matches!(&*shadow_state, ApiState::Loading) { "Submitting shadow..." } else { "Submit shadow evidence" }}
+                    </button>
                     <button onclick={accept_candidate} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || matches!(&*review_state, ApiState::Loading)}>
                         {if matches!(&*review_state, ApiState::Loading) { "Reviewing..." } else { "Accept for governance review" }}
                     </button>
@@ -5285,6 +5350,7 @@ fn rules_page() -> Html {
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh gates" }}
                     </button>
                 </div>
+                {rule_shadow_run_state(&shadow_state)}
                 {rule_candidate_review_state(&review_state)}
                 {rule_candidate_workflow(
                     &discovery_state,
@@ -13490,6 +13556,46 @@ async fn reject_rule_candidate(
     .await
 }
 
+async fn submit_rule_shadow_run(
+    api_key: String,
+    rule_id: String,
+    rule_version: u32,
+    backtest: RuleBacktestResponse,
+    report_uri: String,
+    reviewer: String,
+    notes: String,
+    evidence_refs: Vec<String>,
+) -> Result<Value, String> {
+    if reviewer.trim().is_empty() {
+        return Err("reviewer is required".into());
+    }
+    if notes.trim().is_empty() {
+        return Err("shadow review notes are required".into());
+    }
+    if evidence_refs.is_empty() {
+        return Err("shadow evidence requires evidence refs".into());
+    }
+
+    request_json::<Value>(
+        &format!("/api/v1/ops/rules/{rule_id}/shadow-runs"),
+        api_key,
+        json!({
+            "rule_version": rule_version,
+            "reviewed_count": backtest.reviewed_count,
+            "matched_count": backtest.matched_count,
+            "false_positive_count": backtest.false_positive_count,
+            "false_positive_rate": backtest.false_positive_rate,
+            "report_uri": report_uri,
+            "decision": if backtest.blockers.is_empty() { "shadow_passed" } else { "shadow_blocked" },
+            "reviewer": reviewer.trim(),
+            "notes": notes.trim(),
+            "blockers": backtest.blockers,
+            "evidence_refs": evidence_refs,
+        }),
+    )
+    .await
+}
+
 fn rule_demo_samples() -> Vec<Value> {
     vec![
         json!({
@@ -13774,6 +13880,22 @@ fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
                 </div>
             }
         }
+    }
+}
+
+fn rule_shadow_run_state(shadow_state: &UseStateHandle<ApiState<Value>>) -> Html {
+    match &**shadow_state {
+        ApiState::Idle => html! {
+            <p class="empty">{"Run backtest, then submit shadow evidence before promotion review."}</p>
+        },
+        ApiState::Loading => html! { <p>{"Submitting rule shadow evidence..."}</p> },
+        ApiState::Failed(error) => html! { <p class="error">{error}</p> },
+        ApiState::Ready(response) => html! {
+            <div class="success-note">
+                <span>{"Shadow evidence submitted for promotion gates."}</span>
+                <pre>{pretty_json(response)}</pre>
+            </div>
+        },
     }
 }
 

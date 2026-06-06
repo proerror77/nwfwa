@@ -204,6 +204,8 @@ async function main() {
     assertContains(builtText, "Tree Depth", "web console rule discovery workbench bundle");
     assertContains(builtText, "Inline Labeled Evaluation Dataset", "web console rule discovery workbench bundle");
     assertContains(builtText, "Candidate rule workflow", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Submit shadow evidence", "web console rule shadow evidence bundle");
+    assertContains(builtText, "Shadow evidence submitted for promotion gates.", "web console rule shadow evidence bundle");
     assertContains(builtText, "Accept for governance review", "web console rule discovery workbench bundle");
     assertContains(builtText, "Reject selected candidate", "web console rule discovery workbench bundle");
     assertContains(builtText, "Run backtest, then accept a candidate for governance review or reject it without saving a draft.", "web console rule candidate review gate bundle");
