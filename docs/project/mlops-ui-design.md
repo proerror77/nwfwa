@@ -264,9 +264,9 @@ Allowed actions:
 
 Relevant APIs:
 
-- `GET /api/v1/ops/models/{model_key}/promotion-gates`;
-- `POST /api/v1/ops/models/{model_key}/promotion-reviews`;
-- `POST /api/v1/ops/models/{model_key}/activate`;
+- `GET /api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates`;
+- `POST /api/v1/ops/models/{model_key}/versions/{model_version}/promotion-reviews`;
+- `POST /api/v1/ops/models/{model_key}/versions/{model_version}/activate`;
 - `POST /api/v1/ops/models/{model_key}/rollback`.
 
 Activation button rules:

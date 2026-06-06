@@ -456,15 +456,18 @@ cannot serve as production promotion evidence.
 | --- | --- | --- | --- | --- |
 | GET | `/api/v1/ops/models` | List model versions. | Yes | None |
 | GET | `/api/v1/ops/models/{model_key}/performance` | Return model performance and drift summary. | Yes | None |
-| GET | `/api/v1/ops/models/{model_key}/promotion-gates` | Evaluate model promotion readiness. | Yes | None |
+| GET | `/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates` | Evaluate promotion readiness for an explicit candidate version. | Yes | None |
+| GET | `/api/v1/ops/models/{model_key}/promotion-gates` | Evaluate promotion readiness for the current/default model target. Prefer the version-scoped path for candidate review. | Yes | None |
 | GET | `/api/v1/ops/models/{model_key}/retraining-readiness` | Evaluate retraining readiness. | Yes | None |
 | GET | `/api/v1/ops/models/{model_key}/retraining-jobs` | List retraining jobs for a model. | Yes | None |
 | POST | `/api/v1/ops/models/{model_key}/retraining-jobs` | Create retraining job. | Yes | Creates job and audit evidence. |
 | POST | `/api/v1/ops/model-retraining-jobs/{job_id}/status` | Update retraining job status. | Yes | Updates job status and audit evidence. |
 | POST | `/api/v1/ops/model-retraining-jobs/claim-next` | Claim next queued retraining job. | Yes | Assigns job to worker actor. |
 | POST | `/api/v1/ops/model-retraining-jobs/{job_id}/output` | Register validation output for a retraining job. | Yes | Requires validation state, creates candidate model and evaluation evidence. |
-| POST | `/api/v1/ops/models/{model_key}/promotion-reviews` | Submit model promotion review. | Yes | Records human review evidence. |
-| POST | `/api/v1/ops/models/{model_key}/activate` | Activate the latest governed candidate that passes gates. | Yes | Demotes previous active model, activates target, and records audit trail. |
+| POST | `/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-reviews` | Submit human review for an explicit candidate version. | Yes | Records human review evidence against the target version. |
+| POST | `/api/v1/ops/models/{model_key}/promotion-reviews` | Submit review for the current/default model target. Prefer the version-scoped path for candidate review. | Yes | Records human review evidence. |
+| POST | `/api/v1/ops/models/{model_key}/versions/{model_version}/activate` | Activate an explicit governed candidate version that passes gates. | Yes | Demotes previous active model, activates target, and records audit trail. |
+| POST | `/api/v1/ops/models/{model_key}/activate` | Activate the latest governed candidate that passes gates. Prefer the version-scoped path for candidate review. | Yes | Demotes previous active model, activates target, and records audit trail. |
 | POST | `/api/v1/ops/models/{model_key}/rollback` | Roll back active model to recorded previous active version. | Yes | Restores approved previous active model and records audit trail. |
 
 Model APIs govern the demo and pilot model lifecycle. The local ML service now
