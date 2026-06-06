@@ -451,6 +451,23 @@ pub struct RuleBacktestRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct RuleShadowRunRecord {
+    pub rule_id: String,
+    pub rule_version: u32,
+    pub report_uri: String,
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
+    pub reviewed_count: u32,
+    pub matched_count: u32,
+    pub false_positive_count: u32,
+    pub false_positive_rate: f64,
+    pub blockers: Vec<String>,
+    pub evidence_refs: Vec<String>,
+    pub created_at: Option<String>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RuleConditionLibraryRecord {
     pub condition_key: String,
     pub source_rule_key: String,
@@ -1684,6 +1701,17 @@ pub trait ScoringRepository: Send + Sync {
         rule_version: u32,
     ) -> anyhow::Result<Option<RuleBacktestRecord>>;
 
+    async fn save_rule_shadow_run(
+        &self,
+        record: RuleShadowRunRecord,
+    ) -> anyhow::Result<RuleShadowRunRecord>;
+
+    async fn latest_rule_shadow_run(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RuleShadowRunRecord>>;
+
     async fn save_rule_promotion_review(
         &self,
         record: RulePromotionReviewRecord,
@@ -1983,6 +2011,7 @@ pub struct InMemoryScoringRepository {
     candidate_rules: Mutex<HashMap<String, RuleDetailRecord>>,
     rule_statuses: Mutex<HashMap<String, String>>,
     rule_backtests: Mutex<Vec<RuleBacktestRecord>>,
+    rule_shadow_runs: Mutex<Vec<RuleShadowRunRecord>>,
     rule_promotion_reviews: Mutex<Vec<RulePromotionReviewRecord>>,
     knowledge_cases: Mutex<HashMap<String, KnowledgeCaseRecord>>,
     datasets: Mutex<HashMap<String, DatasetRecord>>,
@@ -2491,6 +2520,30 @@ impl ScoringRepository for InMemoryScoringRepository {
     ) -> anyhow::Result<Option<RuleBacktestRecord>> {
         Ok(self
             .rule_backtests
+            .lock()
+            .await
+            .iter()
+            .rev()
+            .find(|record| record.rule_id == rule_id && record.rule_version == rule_version)
+            .cloned())
+    }
+
+    async fn save_rule_shadow_run(
+        &self,
+        mut record: RuleShadowRunRecord,
+    ) -> anyhow::Result<RuleShadowRunRecord> {
+        record.created_at = Some(chrono::Utc::now().to_rfc3339());
+        self.rule_shadow_runs.lock().await.push(record.clone());
+        Ok(record)
+    }
+
+    async fn latest_rule_shadow_run(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RuleShadowRunRecord>> {
+        Ok(self
+            .rule_shadow_runs
             .lock()
             .await
             .iter()
@@ -5698,6 +5751,104 @@ impl ScoringRepository for PostgresScoringRepository {
                 false_positive_rate,
                 estimated_saving,
                 promotion_recommendation,
+                blockers: json_array_to_strings(blockers),
+                evidence_refs: json_array_to_strings(evidence_refs),
+                created_at: Some(created_at.to_rfc3339()),
+            },
+        ))
+    }
+
+    async fn save_rule_shadow_run(
+        &self,
+        record: RuleShadowRunRecord,
+    ) -> anyhow::Result<RuleShadowRunRecord> {
+        let row: (chrono::DateTime<chrono::Utc>,) = sqlx::query_as(
+            "INSERT INTO rule_shadow_runs
+             (rule_id, rule_version, report_uri, decision, reviewer, notes,
+              reviewed_count, matched_count, false_positive_count, false_positive_rate,
+              blockers, evidence_refs)
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+             RETURNING created_at",
+        )
+        .bind(&record.rule_id)
+        .bind(record.rule_version as i32)
+        .bind(&record.report_uri)
+        .bind(&record.decision)
+        .bind(&record.reviewer)
+        .bind(&record.notes)
+        .bind(record.reviewed_count as i32)
+        .bind(record.matched_count as i32)
+        .bind(record.false_positive_count as i32)
+        .bind(record.false_positive_rate)
+        .bind(serde_json::json!(record.blockers.clone()))
+        .bind(serde_json::json!(record.evidence_refs.clone()))
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(RuleShadowRunRecord {
+            created_at: Some(row.0.to_rfc3339()),
+            ..record
+        })
+    }
+
+    async fn latest_rule_shadow_run(
+        &self,
+        rule_id: &str,
+        rule_version: u32,
+    ) -> anyhow::Result<Option<RuleShadowRunRecord>> {
+        let row: Option<(
+            String,
+            i32,
+            String,
+            String,
+            String,
+            String,
+            i32,
+            i32,
+            i32,
+            f64,
+            Value,
+            Value,
+            chrono::DateTime<chrono::Utc>,
+        )> = sqlx::query_as(
+            "SELECT rule_id, rule_version, report_uri, decision, reviewer, notes,
+                    reviewed_count, matched_count, false_positive_count, false_positive_rate,
+                    blockers, evidence_refs, created_at
+             FROM rule_shadow_runs
+             WHERE rule_id = $1 AND rule_version = $2
+             ORDER BY created_at DESC, id DESC
+             LIMIT 1",
+        )
+        .bind(rule_id)
+        .bind(rule_version as i32)
+        .fetch_optional(&self.pool)
+        .await?;
+
+        Ok(row.map(
+            |(
+                rule_id,
+                rule_version,
+                report_uri,
+                decision,
+                reviewer,
+                notes,
+                reviewed_count,
+                matched_count,
+                false_positive_count,
+                false_positive_rate,
+                blockers,
+                evidence_refs,
+                created_at,
+            )| RuleShadowRunRecord {
+                rule_id,
+                rule_version: rule_version as u32,
+                report_uri,
+                decision,
+                reviewer,
+                notes,
+                reviewed_count: reviewed_count.max(0) as u32,
+                matched_count: matched_count.max(0) as u32,
+                false_positive_count: false_positive_count.max(0) as u32,
+                false_positive_rate,
                 blockers: json_array_to_strings(blockers),
                 evidence_refs: json_array_to_strings(evidence_refs),
                 created_at: Some(created_at.to_rfc3339()),

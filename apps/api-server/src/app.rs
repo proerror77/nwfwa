@@ -193,6 +193,10 @@ pub fn build_app_with_parts(
             post(ops_rules::submit_rule_promotion_review),
         )
         .route(
+            "/api/v1/ops/rules/:rule_id/shadow-runs",
+            post(ops_rules::submit_rule_shadow_run),
+        )
+        .route(
             "/api/v1/ops/rules/candidates",
             post(ops_rules::save_rule_candidate),
         )

@@ -3,7 +3,7 @@ use crate::{
     error::ApiError,
     repository::{
         PersistedAuditEvent, QaFeedbackItemRecord, RuleBacktestRecord, RuleConditionLibraryRecord,
-        RulePerformanceRecord, RulePromotionReviewRecord, RuleSummaryRecord,
+        RulePerformanceRecord, RulePromotionReviewRecord, RuleShadowRunRecord, RuleSummaryRecord,
     },
     routes::pii,
 };
@@ -78,6 +78,22 @@ pub struct SubmitRulePromotionReviewRequest {
     pub decision: String,
     pub reviewer: String,
     pub notes: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+pub struct SubmitRuleShadowRunRequest {
+    pub rule_version: u32,
+    pub reviewed_count: u32,
+    pub matched_count: u32,
+    pub false_positive_count: u32,
+    pub false_positive_rate: f64,
+    pub report_uri: String,
+    pub decision: String,
+    pub reviewer: String,
+    pub notes: String,
+    #[serde(default)]
+    pub blockers: Vec<String>,
     pub evidence_refs: Vec<String>,
 }
 
@@ -333,6 +349,11 @@ async fn load_rule_promotion_gates(
         .latest_rule_backtest(&rule.rule_id, rule.latest_version)
         .await
         .map_err(internal_error("RULE_BACKTEST_LOAD_FAILED"))?;
+    let latest_shadow_run = state
+        .repository
+        .latest_rule_shadow_run(&rule.rule_id, rule.latest_version)
+        .await
+        .map_err(internal_error("RULE_SHADOW_RUN_LOAD_FAILED"))?;
     let outcome_labels = state
         .repository
         .list_outcome_labels(None)
@@ -348,6 +369,7 @@ async fn load_rule_promotion_gates(
         &rule,
         &performance,
         latest_backtest.as_ref(),
+        latest_shadow_run.as_ref(),
         &outcome_labels,
         &feedback_items,
         latest_review.as_ref(),
@@ -431,6 +453,53 @@ pub async fn submit_rule_promotion_review(
     Ok(Json(review))
 }
 
+pub async fn submit_rule_shadow_run(
+    State(state): State<AppState>,
+    headers: HeaderMap,
+    Path(rule_id): Path<String>,
+    Json(request): Json<SubmitRuleShadowRunRequest>,
+) -> Result<Json<RuleShadowRunRecord>, ApiError> {
+    let actor = authorize_permission(&state, &headers, "ops:rules:review")?;
+    validate_rule_shadow_run_request(&rule_id, &request)?;
+    let rule = state
+        .repository
+        .get_rule(&rule_id)
+        .await
+        .map_err(internal_error("RULE_LOAD_FAILED"))?
+        .ok_or_else(|| ApiError::new(StatusCode::NOT_FOUND, "RULE_NOT_FOUND", "rule not found"))?
+        .summary;
+    if request.rule_version != rule.latest_version {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_SHADOW_VERSION_MISMATCH",
+            "shadow run rule_version must match the latest rule version",
+        ));
+    }
+    let record = state
+        .repository
+        .save_rule_shadow_run(RuleShadowRunRecord {
+            rule_id: rule.rule_id.clone(),
+            rule_version: request.rule_version,
+            report_uri: request.report_uri,
+            decision: request.decision,
+            reviewer: request.reviewer,
+            notes: request.notes,
+            reviewed_count: request.reviewed_count,
+            matched_count: request.matched_count,
+            false_positive_count: request.false_positive_count,
+            false_positive_rate: request.false_positive_rate,
+            blockers: request.blockers,
+            evidence_refs: request.evidence_refs,
+            created_at: None,
+        })
+        .await
+        .map_err(internal_error("RULE_SHADOW_RUN_SAVE_FAILED"))?;
+    record_rule_shadow_run_audit(&state, &actor, &record)
+        .await
+        .map_err(internal_error("RULE_SHADOW_RUN_AUDIT_SAVE_FAILED"))?;
+    Ok(Json(record))
+}
+
 pub async fn get_rule(
     State(state): State<AppState>,
     headers: HeaderMap,
@@ -450,6 +519,7 @@ fn build_rule_promotion_gates(
     rule: &RuleSummaryRecord,
     performance: &RulePerformanceRecord,
     latest_backtest: Option<&RuleBacktestRecord>,
+    latest_shadow_run: Option<&RuleShadowRunRecord>,
     outcome_labels: &[crate::repository::OutcomeLabelRecord],
     feedback_items: &[QaFeedbackItemRecord],
     latest_review: Option<&RulePromotionReviewRecord>,
@@ -486,7 +556,17 @@ fn build_rule_promotion_gates(
     let approved = latest_review
         .map(|review| review.decision == "approved")
         .unwrap_or_else(|| matches!(rule.status.as_str(), "approved" | "active"));
-    let shadow_rollout = performance.trigger_count > 0 && performance.reviewed_count > 0;
+    let passed_shadow_run =
+        latest_shadow_run.filter(|run| run.decision == "shadow_passed" && run.blockers.is_empty());
+    let runtime_shadow_rollout = performance.trigger_count > 0 && performance.reviewed_count > 0;
+    let shadow_rollout = passed_shadow_run.is_some() || runtime_shadow_rollout;
+    let shadow_evidence_source = if passed_shadow_run.is_some() {
+        "shadow"
+    } else if runtime_shadow_rollout {
+        "runtime"
+    } else {
+        "missing"
+    };
     let rule_feedback_items = feedback_items
         .iter()
         .filter(|item| {
@@ -578,7 +658,7 @@ fn build_rule_promotion_gates(
             "Shadow or limited rollout",
             shadow_rollout,
             "shadow rollout missing",
-            if shadow_rollout { "runtime" } else { "missing" },
+            shadow_evidence_source,
         ),
         rule_gate(
             "Rollback path",
@@ -1597,6 +1677,47 @@ async fn record_rule_promotion_audit(
                 "note_present": !review.notes.trim().is_empty(),
             }),
             evidence_refs: review
+                .evidence_refs
+                .iter()
+                .cloned()
+                .map(serde_json::Value::String)
+                .collect(),
+        })
+        .await
+}
+
+async fn record_rule_shadow_run_audit(
+    state: &AppState,
+    actor: &ActorContext,
+    record: &RuleShadowRunRecord,
+) -> anyhow::Result<()> {
+    state
+        .repository
+        .save_audit_event(PersistedAuditEvent {
+            audit_id: AuditEventId::new().to_string(),
+            run_id: ScoringRunId::new().to_string(),
+            claim_id: String::new(),
+            source_system: actor.source_system.clone(),
+            actor_id: actor.actor_id.clone(),
+            actor_role: actor.actor_role.clone(),
+            event_type: "rule.shadow_run.reviewed".into(),
+            event_status: "succeeded".into(),
+            summary: format!("Rule shadow run reviewed: {}", record.decision),
+            payload: serde_json::json!({
+                "customer_scope_id": actor.customer_scope_id,
+                "rule_id": record.rule_id,
+                "rule_version": record.rule_version,
+                "decision": record.decision,
+                "reviewer": record.reviewer,
+                "report_uri": record.report_uri,
+                "reviewed_count": record.reviewed_count,
+                "matched_count": record.matched_count,
+                "false_positive_count": record.false_positive_count,
+                "false_positive_rate": record.false_positive_rate,
+                "blocker_count": record.blockers.len(),
+                "active_rule_writeback": false,
+            }),
+            evidence_refs: record
                 .evidence_refs
                 .iter()
                 .cloned()
@@ -2804,6 +2925,134 @@ fn validate_candidate_review_backtest_evidence(
             "accepted rule candidates require backtest evidence_refs",
         ))
     }
+}
+
+fn validate_rule_shadow_run_request(
+    rule_id: &str,
+    request: &SubmitRuleShadowRunRequest,
+) -> Result<(), ApiError> {
+    if request.rule_version == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_VERSION",
+            "rule_version must be greater than zero",
+        ));
+    }
+    if !matches!(
+        request.decision.as_str(),
+        "shadow_passed" | "shadow_blocked"
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_DECISION",
+            "decision must be shadow_passed or shadow_blocked",
+        ));
+    }
+    if request.reviewed_count == 0 {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_REVIEWED_COUNT",
+            "reviewed_count must be greater than zero",
+        ));
+    }
+    if request.matched_count > request.reviewed_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_MATCHED_COUNT",
+            "matched_count must not exceed reviewed_count",
+        ));
+    }
+    if request.false_positive_count > request.matched_count {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_FALSE_POSITIVE_COUNT",
+            "false_positive_count must not exceed matched_count",
+        ));
+    }
+    if !request.false_positive_rate.is_finite()
+        || !(0.0..=1.0).contains(&request.false_positive_rate)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_FALSE_POSITIVE_RATE",
+            "false_positive_rate must be between 0 and 1",
+        ));
+    }
+    if request.report_uri.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_REPORT_URI",
+            "report_uri is required",
+        ));
+    }
+    if request.reviewer.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_REVIEWER",
+            "reviewer is required",
+        ));
+    }
+    if request.notes.trim().is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RULE_SHADOW_NOTES",
+            "shadow run notes are required",
+        ));
+    }
+    if request.decision == "shadow_passed" && !request.blockers.is_empty() {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_SHADOW_PASSED_WITH_BLOCKERS",
+            "shadow_passed runs must not include blockers",
+        ));
+    }
+    if request.evidence_refs.is_empty()
+        || request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim().is_empty())
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_RULE_SHADOW_EVIDENCE",
+            "shadow run evidence_refs are required",
+        ));
+    }
+    let rule_ref = format!("rules:{rule_id}:v{}", request.rule_version);
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == rule_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_SHADOW_RULE_EVIDENCE_REQUIRED",
+            "shadow run evidence_refs must include the rule version reference",
+        ));
+    }
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim().starts_with("rule_shadow_runs:"))
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_SHADOW_RUN_EVIDENCE_REQUIRED",
+            "shadow run evidence_refs must include a rule_shadow_runs reference",
+        ));
+    }
+    if pii::contains_pii(
+        std::iter::once(request.notes.as_str())
+            .chain(request.evidence_refs.iter().map(String::as_str))
+            .chain(request.blockers.iter().map(String::as_str)),
+    ) {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "PII_NOT_ALLOWED_IN_RULE_SHADOW_RUN",
+            "shadow run notes, blockers, and evidence_refs must not contain PII",
+        ));
+    }
+    Ok(())
 }
 
 fn candidate_review_outcome(

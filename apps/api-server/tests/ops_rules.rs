@@ -794,6 +794,66 @@ async fn persisted_backtest_evidence_feeds_rule_promotion_gates() {
 }
 
 #[tokio::test]
+async fn rule_shadow_run_evidence_feeds_rule_promotion_gates() {
+    let app = build_app(test_config());
+
+    seed_rule_promotion_evidence(app.clone()).await;
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/rule_early_claim/shadow-runs",
+        r#"{
+          "rule_version": 1,
+          "reviewed_count": 3,
+          "matched_count": 2,
+          "false_positive_count": 0,
+          "false_positive_rate": 0.0,
+          "report_uri": "artifacts/rules/rule_early_claim/shadow_report.json",
+          "decision": "shadow_passed",
+          "reviewer": "rule-shadow-review",
+          "notes": "Shadow run reviewed against labeled runtime evidence.",
+          "evidence_refs": [
+            "rules:rule_early_claim:v1",
+            "rule_shadow_runs:artifacts/rules/rule_early_claim/shadow_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["rule_id"], "rule_early_claim");
+    assert_eq!(body["decision"], "shadow_passed");
+    assert_eq!(
+        body["report_uri"],
+        "artifacts/rules/rule_early_claim/shadow_report.json"
+    );
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/rules/rule_early_claim/promotion-gates",
+        "{}",
+    )
+    .await;
+
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert!(!body["blockers"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!("shadow rollout missing")));
+    let shadow_gate = body["gates"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|gate| gate["label"] == "Shadow or limited rollout")
+        .unwrap();
+    assert_eq!(shadow_gate["passed"], true);
+    assert_eq!(shadow_gate["evidence_source"], "shadow");
+}
+
+#[tokio::test]
 async fn rule_promotion_gates_block_unresolved_backtest_blockers() {
     let app = build_app(test_config());
 

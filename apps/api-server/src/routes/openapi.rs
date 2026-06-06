@@ -459,6 +459,38 @@ pub async fn openapi_schema() -> Json<Value> {
                     }
                 }
             },
+            "/api/v1/ops/rules/{rule_id}/shadow-runs": {
+                "post": {
+                    "summary": "Record reviewed shadow-run evidence for a rule version",
+                    "security": [{ "ApiKeyAuth": [] }],
+                    "parameters": [
+                        {
+                            "name": "rule_id",
+                            "in": "path",
+                            "required": true,
+                            "schema": { "type": "string" }
+                        }
+                    ],
+                    "requestBody": {
+                        "required": true,
+                        "content": {
+                            "application/json": {
+                                "schema": { "$ref": "#/components/schemas/SubmitRuleShadowRunRequest" }
+                            }
+                        }
+                    },
+                    "responses": {
+                        "200": {
+                            "description": "Recorded rule shadow-run evidence",
+                            "content": {
+                                "application/json": {
+                                    "schema": { "$ref": "#/components/schemas/RuleShadowRun" }
+                                }
+                            }
+                        }
+                    }
+                }
+            },
             "/api/v1/ops/rules/candidate-reviews": {
                 "post": {
                     "summary": "Record accept or reject review for a discovered rule candidate",
@@ -4511,7 +4543,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "blocker": { "type": "string" },
                         "evidence_source": {
                             "type": "string",
-                            "enum": ["runtime", "backtest", "approval", "labels", "qa_feedback", "metadata", "missing"]
+                            "enum": ["runtime", "backtest", "approval", "labels", "qa_feedback", "metadata", "missing", "shadow"]
                         }
                     }
                 },
@@ -4590,6 +4622,78 @@ pub async fn openapi_schema() -> Json<Value> {
                         "decision": { "type": "string", "enum": ["approved", "rejected"] },
                         "reviewer": { "type": "string" },
                         "notes": { "type": "string" },
+                        "evidence_refs": { "type": "array", "items": { "type": "string" } },
+                        "created_at": { "type": ["string", "null"], "format": "date-time" }
+                    }
+                },
+                "SubmitRuleShadowRunRequest": {
+                    "type": "object",
+                    "required": [
+                        "rule_version",
+                        "reviewed_count",
+                        "matched_count",
+                        "false_positive_count",
+                        "false_positive_rate",
+                        "report_uri",
+                        "decision",
+                        "reviewer",
+                        "notes",
+                        "evidence_refs"
+                    ],
+                    "properties": {
+                        "rule_version": { "type": "integer", "minimum": 1 },
+                        "reviewed_count": { "type": "integer", "minimum": 1 },
+                        "matched_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "report_uri": { "type": "string", "minLength": 1 },
+                        "decision": { "type": "string", "enum": ["shadow_passed", "shadow_blocked"] },
+                        "reviewer": { "type": "string", "minLength": 1 },
+                        "notes": {
+                            "type": "string",
+                            "minLength": 1,
+                            "description": "Shadow review notes must not contain PII."
+                        },
+                        "blockers": {
+                            "type": "array",
+                            "items": { "type": "string" }
+                        },
+                        "evidence_refs": {
+                            "type": "array",
+                            "minItems": 1,
+                            "description": "Must include rules:{rule_id}:v{rule_version} and a rule_shadow_runs reference. Values must not contain PII.",
+                            "items": { "type": "string", "minLength": 1 }
+                        }
+                    }
+                },
+                "RuleShadowRun": {
+                    "type": "object",
+                    "required": [
+                        "rule_id",
+                        "rule_version",
+                        "report_uri",
+                        "decision",
+                        "reviewer",
+                        "notes",
+                        "reviewed_count",
+                        "matched_count",
+                        "false_positive_count",
+                        "false_positive_rate",
+                        "blockers",
+                        "evidence_refs"
+                    ],
+                    "properties": {
+                        "rule_id": { "type": "string" },
+                        "rule_version": { "type": "integer" },
+                        "report_uri": { "type": "string" },
+                        "decision": { "type": "string", "enum": ["shadow_passed", "shadow_blocked"] },
+                        "reviewer": { "type": "string" },
+                        "notes": { "type": "string" },
+                        "reviewed_count": { "type": "integer", "minimum": 0 },
+                        "matched_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_count": { "type": "integer", "minimum": 0 },
+                        "false_positive_rate": { "type": "number", "minimum": 0, "maximum": 1 },
+                        "blockers": { "type": "array", "items": { "type": "string" } },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } },
                         "created_at": { "type": ["string", "null"], "format": "date-time" }
                     }
