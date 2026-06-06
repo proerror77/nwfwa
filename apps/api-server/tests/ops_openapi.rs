@@ -87,6 +87,8 @@ async fn openapi_includes_operations_paths() {
         "/api/v1/ops/evidence/retrieval-audit-events",
         "/api/v1/ops/dashboard/summary",
         "/api/v1/ops/providers/risk-summary",
+        "/api/v1/ops/providers/anomaly-clustering-reports",
+        "/api/v1/ops/providers/anomaly-review-queue",
         "/api/v1/ops/providers/anomaly-candidate-reviews",
         "/api/v1/ops/webhook-events",
         "/api/v1/ops/webhook-events/{event_id}/delivery-attempts",
@@ -2207,6 +2209,63 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["ReviewAnomalyCandidateRequest"]["properties"]
             ["evidence_refs"]["description"],
         "Must include anomaly_clustering_reports:{source_report_uri}; values must not contain PII."
+    );
+    for field in [
+        "source_report_uri",
+        "report_kind",
+        "dataset_key",
+        "dataset_version",
+        "review_tasks",
+        "evidence_refs",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["SubmitAnomalyClusteringReportRequest"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|required| required == field),
+            "missing SubmitAnomalyClusteringReportRequest.{field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["SubmitAnomalyClusteringReportRequest"]["properties"]
+            ["report_kind"]["enum"],
+        serde_json::json!([
+            "provider_peer_clustering",
+            "provider_graph_community_clustering",
+            "claim_entity_clustering"
+        ])
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AnomalyClusteringReviewTaskInput"]["properties"]
+            ["candidate_kind"]["enum"],
+        serde_json::json!([
+            "provider_peer_anomaly",
+            "provider_graph_anomaly",
+            "claim_entity_anomaly"
+        ])
+    );
+    for field in [
+        "active_rule_writeback",
+        "model_activation",
+        "label_assignment",
+        "case_creation",
+    ] {
+        assert_eq!(
+            schema["components"]["schemas"]["SubmitAnomalyClusteringReportResponse"]["properties"]
+                [field]["const"],
+            false
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["AnomalyReviewQueueResponse"]["properties"]["tasks"]
+            ["items"]["$ref"],
+        "#/components/schemas/AnomalyReviewQueueTask"
+    );
+    assert_eq!(
+        schema["components"]["schemas"]["AnomalyReviewQueueTask"]["properties"]["review_status"]
+            ["enum"],
+        serde_json::json!(["pending_human_review", "reviewed"])
     );
     for field in [
         "active_rule_writeback",

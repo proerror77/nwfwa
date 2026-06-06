@@ -158,6 +158,12 @@ async function main() {
     assertContains(builtText, "Anomaly candidate kind", "web console mlops anomaly review bundle");
     assertContains(builtText, "Anomaly report URI", "web console mlops anomaly review bundle");
     assertContains(builtText, "Review anomaly candidate", "web console mlops anomaly review bundle");
+    assertContains(builtText, "Anomaly Review Queue", "web console mlops anomaly queue bundle");
+    assertContains(builtText, "No anomaly review tasks returned.", "web console mlops anomaly queue bundle");
+    assertContains(builtText, "pending_human_review", "web console mlops anomaly queue bundle");
+    assertContains(builtText, "request_more_evidence", "web console mlops anomaly queue bundle");
+    assertContains(builtText, "Use for review", "web console mlops anomaly queue bundle");
+    assertContains(sourceText, "anomaly-review-queue", "web console mlops anomaly queue API bundle");
     assertContains(builtText, "Governed Actions", "web console mlops workspace bundle");
     assertContains(builtText, "Request provider retraining", "web console provider model action bundle");
     assertContains(builtText, "Submit release review", "web console provider model action bundle");

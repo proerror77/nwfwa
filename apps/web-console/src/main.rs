@@ -1332,6 +1332,32 @@ struct MlopsAlertDeliveryTask {
     created_at: Option<String>,
 }
 
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AnomalyReviewQueueResponse {
+    tasks: Vec<AnomalyReviewQueueTask>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+struct AnomalyReviewQueueTask {
+    candidate_kind: String,
+    candidate_id: String,
+    task_kind: String,
+    review_queue: String,
+    required_review: String,
+    decision_options: Vec<String>,
+    source_report_uri: String,
+    report_kind: String,
+    dataset_key: String,
+    dataset_version: String,
+    label_policy: String,
+    governance_boundary: String,
+    review_status: String,
+    reviewer: Option<String>,
+    decision: Option<String>,
+    candidate_payload: Value,
+    evidence_refs: Vec<String>,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 struct MlopsWorkspaceSnapshot {
     data_sources: DataSourcesSnapshot,
@@ -1339,6 +1365,7 @@ struct MlopsWorkspaceSnapshot {
     retraining_jobs: Vec<ModelRetrainingJobRecord>,
     monitoring_review_tasks: Vec<ModelMonitoringReviewTask>,
     alert_delivery_tasks: Vec<MlopsAlertDeliveryTask>,
+    anomaly_review_tasks: Vec<AnomalyReviewQueueTask>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
@@ -6097,6 +6124,7 @@ fn mlops_workspace_page() -> Html {
         let anomaly_evidence_refs = anomaly_evidence_refs.clone();
         let anomaly_candidate_payload = anomaly_candidate_payload.clone();
         let action_state = action_state.clone();
+        let load_workspace = load_workspace.clone();
         Callback::from(move |_| {
             let payload = match parse_json_object(
                 &anomaly_candidate_payload,
@@ -6117,10 +6145,10 @@ fn mlops_workspace_page() -> Html {
             let decision = (*anomaly_decision).clone();
             let evidence_refs = parse_tags(&anomaly_evidence_refs);
             let action_state = action_state.clone();
+            let load_workspace = load_workspace.clone();
             action_state.set(ApiState::Loading);
             spawn_local(async move {
-                action_state.set(
-                    match submit_anomaly_candidate_review(
+                match submit_anomaly_candidate_review(
                         api_key,
                         candidate_kind,
                         candidate_id,
@@ -6133,11 +6161,33 @@ fn mlops_workspace_page() -> Html {
                     )
                     .await
                     {
-                        Ok(response) => ApiState::Ready(response),
-                        Err(error) => ApiState::Failed(error),
-                    },
-                );
+                    Ok(response) => {
+                        action_state.set(ApiState::Ready(response));
+                        load_workspace.emit(());
+                    }
+                    Err(error) => action_state.set(ApiState::Failed(error)),
+                }
             });
+        })
+    };
+
+    let select_anomaly_review_task = {
+        let anomaly_candidate_kind = anomaly_candidate_kind.clone();
+        let anomaly_candidate_id = anomaly_candidate_id.clone();
+        let anomaly_source_report_uri = anomaly_source_report_uri.clone();
+        let anomaly_decision = anomaly_decision.clone();
+        let anomaly_evidence_refs = anomaly_evidence_refs.clone();
+        let anomaly_candidate_payload = anomaly_candidate_payload.clone();
+        Callback::from(move |task: AnomalyReviewQueueTask| {
+            anomaly_candidate_kind.set(task.candidate_kind);
+            anomaly_candidate_id.set(task.candidate_id);
+            anomaly_source_report_uri.set(task.source_report_uri);
+            anomaly_decision.set("request_more_evidence".into());
+            anomaly_evidence_refs.set(task.evidence_refs.join(", "));
+            anomaly_candidate_payload.set(
+                serde_json::to_string_pretty(&task.candidate_payload)
+                    .unwrap_or_else(|_| "{}".into()),
+            );
         })
     };
 
@@ -6700,7 +6750,10 @@ fn mlops_workspace_page() -> Html {
                 </section>
             </div>
 
-            <MlopsWorkspaceView state={(*snapshot_state).clone()} />
+            <MlopsWorkspaceView
+                state={(*snapshot_state).clone()}
+                on_select_anomaly={select_anomaly_review_task}
+            />
         </section>
     }
 }
@@ -6708,6 +6761,7 @@ fn mlops_workspace_page() -> Html {
 #[derive(Properties, PartialEq)]
 struct MlopsWorkspaceProps {
     state: ApiState<MlopsWorkspaceSnapshot>,
+    on_select_anomaly: Callback<AnomalyReviewQueueTask>,
 }
 
 #[function_component(MlopsWorkspaceView)]
@@ -6725,6 +6779,7 @@ fn mlops_workspace_view(props: &MlopsWorkspaceProps) -> Html {
                         {mlops_promotion_gates(snapshot)}
                         {mlops_monitoring_summary(snapshot)}
                         {mlops_monitoring_review_queue(snapshot)}
+                        {mlops_anomaly_review_queue(snapshot, &props.on_select_anomaly)}
                         {mlops_alert_delivery_queue(snapshot)}
                         {mlops_training_handoff(snapshot)}
                         {mlops_dataset_readiness(snapshot)}
@@ -7043,6 +7098,63 @@ fn mlops_monitoring_review_queue(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                                 <span>{format!("{} / {}", task.monitoring_status, task.retraining_recommendation)}</span>
                                 <span>{refs_label(&task.evidence_refs)}</span>
                                 <small class="row-detail">{format!("required refs model_versions:{}:{}; model_monitoring_reports:{}; model_monitoring_review_tasks:{}", task.model_key, task.model_version, task.report_uri, task.task_id)}</small>
+                            </div>
+                        })}
+                    </div>
+                </details>
+            }
+        </section>
+    }
+}
+
+fn mlops_anomaly_review_queue(
+    snapshot: &MlopsWorkspaceSnapshot,
+    on_select_anomaly: &Callback<AnomalyReviewQueueTask>,
+) -> Html {
+    html! {
+        <section class="panel result-stack mlops-monitoring-panel">
+            <div class="section-header">
+                <div>
+                    <h3>{"Anomaly Review Queue"}</h3>
+                    <p>{"Unsupervised clustering can only open explainable anomaly candidates for human review. Tasks stay pending_human_review until a reviewer records accepted_for_review, rejected, open_investigation_review, or request_more_evidence; decisions here do not create cases, assign labels, activate models, or write rules."}</p>
+                </div>
+                <span class="status-token neutral">{format!("{} candidates", snapshot.anomaly_review_tasks.len())}</span>
+            </div>
+            if snapshot.anomaly_review_tasks.is_empty() {
+                <p class="empty">{"No anomaly review tasks returned."}</p>
+            } else {
+                <details class="data-source-detail governance-detail release-evidence-detail" open=true>
+                    <summary>{format!("Anomaly review detail: {} candidates", snapshot.anomaly_review_tasks.len())}</summary>
+                    <div class="ops-table">
+                        <div class="ops-table-head">
+                            <span>{"Candidate"}</span>
+                            <span>{"Kind"}</span>
+                            <span>{"Status"}</span>
+                            <span>{"Decision"}</span>
+                            <span>{"Evidence"}</span>
+                        </div>
+                        {for snapshot.anomaly_review_tasks.iter().take(8).map(|task| html! {
+                            <div class="ops-table-row">
+                                <div class="primary-cell">
+                                    <strong>{&task.candidate_id}</strong>
+                                    <span>{format!("{} / {}", task.dataset_key, task.dataset_version)}</span>
+                                </div>
+                                <span>{format!("{} / {}", task.candidate_kind, task.report_kind)}</span>
+                                <span class={classes!("status-token", status_tone(&task.review_status))}>{&task.review_status}</span>
+                                <span>{task.decision.as_deref().unwrap_or("pending decision")}</span>
+                                <span>{refs_label(&task.evidence_refs)}</span>
+                                <small class="row-detail">{format!("queue {} / required {} / report {}", task.review_queue, task.required_review, task.source_report_uri)}</small>
+                                <small class="row-detail">{format!("options: {}", refs_label(&task.decision_options))}</small>
+                                <button
+                                    class="mini-action"
+                                    onclick={{
+                                        let on_select_anomaly = on_select_anomaly.clone();
+                                        let task = task.clone();
+                                        Callback::from(move |_| on_select_anomaly.emit(task.clone()))
+                                    }}
+                                >
+                                    {"Use for review"}
+                                </button>
                             </div>
                         })}
                     </div>
@@ -12018,16 +12130,21 @@ async fn get_mlops_workspace_snapshot(
             "/api/v1/ops/models/{}/mlops-alert-delivery-queue",
             model_ops.performance.model_key
         ),
-        api_key,
+        api_key.clone(),
     )
     .await?
     .tasks;
+    let anomaly_review_tasks =
+        request_get_json::<AnomalyReviewQueueResponse>("/api/v1/ops/providers/anomaly-review-queue", api_key)
+            .await?
+            .tasks;
     Ok(MlopsWorkspaceSnapshot {
         data_sources,
         model_ops,
         retraining_jobs,
         monitoring_review_tasks,
         alert_delivery_tasks,
+        anomaly_review_tasks,
     })
 }
 

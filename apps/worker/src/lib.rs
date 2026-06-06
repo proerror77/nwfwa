@@ -1531,7 +1531,7 @@ pub async fn run_one_retraining_job(
         },
     )
     .await?;
-    if let Some(training_manifest) = training_manifest {
+    let completion_result = if let Some(training_manifest) = training_manifest {
         complete_retraining_job_with_training_output(
             api_base_url,
             api_key,
@@ -1553,7 +1553,54 @@ pub async fn run_one_retraining_job(
             artifact_base_uri,
         )
         .await
+    };
+    match completion_result {
+        Ok(result) => Ok(result),
+        Err(error) => {
+            mark_retraining_job_failed_after_completion_error(
+                api_base_url,
+                api_key,
+                &validation_job.job_id,
+                actor,
+                error,
+            )
+            .await
+        }
     }
+}
+
+async fn mark_retraining_job_failed_after_completion_error(
+    api_base_url: &str,
+    api_key: &str,
+    job_id: &str,
+    actor: &str,
+    error: anyhow::Error,
+) -> anyhow::Result<serde_json::Value> {
+    let error_message = error.to_string();
+    let failure_note = format!(
+        "Retraining job failed before output registration: {}",
+        truncate_for_status_note(&error_message, 500)
+    );
+    match update_retraining_job_status(api_base_url, api_key, job_id, "failed", actor, &failure_note)
+        .await
+    {
+        Ok(_) => Err(anyhow!(
+            "model retraining job {job_id} failed and was marked failed: {error_message}"
+        )),
+        Err(status_error) => Err(anyhow!(
+            "model retraining job {job_id} failed before output registration: {error_message}; failed status update also failed: {status_error}"
+        )),
+    }
+}
+
+fn truncate_for_status_note(value: &str, max_chars: usize) -> String {
+    let normalized = value.split_whitespace().collect::<Vec<_>>().join(" ");
+    if normalized.chars().count() <= max_chars {
+        return normalized;
+    }
+    let mut truncated = normalized.chars().take(max_chars).collect::<String>();
+    truncated.push_str("...");
+    truncated
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -8842,6 +8889,98 @@ mod tests {
                 "xgboost",
             ]
         );
+    }
+
+    #[tokio::test]
+    async fn marks_retraining_job_failed_when_training_command_fails() {
+        use tokio::{
+            io::{AsyncReadExt, AsyncWriteExt},
+            net::TcpListener,
+        };
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+            for status in ["running", "validation", "failed"] {
+                let (mut socket, _) = listener.accept().await.unwrap();
+                let mut request_bytes = Vec::new();
+                let mut buffer = [0_u8; 1024];
+                loop {
+                    let read = socket.read(&mut buffer).await.unwrap();
+                    if read == 0 {
+                        break;
+                    }
+                    request_bytes.extend_from_slice(&buffer[..read]);
+                    let Some(header_end) = request_bytes
+                        .windows(4)
+                        .position(|window| window == b"\r\n\r\n")
+                    else {
+                        continue;
+                    };
+                    let header_text = String::from_utf8_lossy(&request_bytes[..header_end]);
+                    let content_length = header_text
+                        .lines()
+                        .find_map(|line| {
+                            let (name, value) = line.split_once(':')?;
+                            if name.eq_ignore_ascii_case("content-length") {
+                                value.trim().parse::<usize>().ok()
+                            } else {
+                                None
+                            }
+                        })
+                        .unwrap_or(0);
+                    if request_bytes.len() >= header_end + 4 + content_length {
+                        break;
+                    }
+                }
+                requests.push(String::from_utf8_lossy(&request_bytes).to_string());
+                let response_body = serde_json::json!({
+                    "job_id": "job_failed_training",
+                    "model_key": "baseline_fwa",
+                    "model_version": "0.1.0",
+                    "status": status,
+                    "updated_by": "trainer-worker",
+                    "status_note": format!("{status} note")
+                })
+                .to_string();
+                let response = format!(
+                    "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nContent-Length: {}\r\n\r\n{}",
+                    response_body.len(),
+                    response_body
+                );
+                socket.write_all(response.as_bytes()).await.unwrap();
+            }
+            requests
+        });
+
+        let error = run_one_retraining_job(
+            &api_url,
+            "dev-secret",
+            "trainer-worker",
+            Some("baseline_fwa"),
+            "artifacts/models",
+            Some("data/training/manifest.json"),
+            "false",
+            None,
+            None,
+        )
+        .await
+        .unwrap_err();
+
+        let requests = server.await.unwrap();
+        assert_eq!(requests.len(), 3);
+        assert!(requests[0].contains("POST /api/v1/ops/model-retraining-jobs/claim-next"));
+        assert!(requests[1]
+            .contains("POST /api/v1/ops/model-retraining-jobs/job_failed_training/status"));
+        assert!(requests[1].contains(r#""status":"validation""#));
+        assert!(requests[2]
+            .contains("POST /api/v1/ops/model-retraining-jobs/job_failed_training/status"));
+        assert!(requests[2].contains(r#""status":"failed""#));
+        assert!(requests[2].contains("Retraining job failed before output registration"));
+        assert!(error
+            .to_string()
+            .contains("job_failed_training failed and was marked failed"));
     }
 
     #[test]

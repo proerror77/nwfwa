@@ -1088,6 +1088,15 @@ pre {
   font-size: 12px;
 }
 
+.mini-action {
+  width: fit-content;
+  min-height: 30px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 0.78rem;
+  font-weight: 700;
+}
+
 .score-hero strong {
   display: block;
   margin-top: 4px;
