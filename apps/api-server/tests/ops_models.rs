@@ -2159,6 +2159,31 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
                 "recommended_action": "ManualReview",
                 "reason": "External training platform mined this explainable candidate from feature importance and backtest evidence."
               }
+            },
+            {
+              "rule_id": "candidate_tree_provider_profile_and_amount",
+              "version": 1,
+              "name": "Decision tree mined provider profile and amount candidate",
+              "review_mode": "both",
+              "scheme_family": "high_risk_claim",
+              "conditions": [
+                {
+                  "field": "provider_profile_score",
+                  "operator": ">=",
+                  "value": 47.5
+                },
+                {
+                  "field": "claim_amount_to_limit_ratio",
+                  "operator": ">=",
+                  "value": 0.56
+                }
+              ],
+              "action": {
+                "score": 34,
+                "alert_code": "TREE_MINED_PROVIDER_AMOUNT",
+                "recommended_action": "ManualReview",
+                "reason": "External training platform mined this shallow decision-tree path from training data. Human review is required."
+              }
             }
           ]
         }"#,
@@ -2194,7 +2219,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     );
     assert_eq!(
         completed["mined_rule_candidates"].as_array().unwrap().len(),
-        1
+        2
     );
     assert_eq!(
         completed["mined_rule_candidates"][0]["summary"]["rule_id"],
@@ -2207,6 +2232,14 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(
         completed["mined_rule_candidates"][0]["summary"]["owner"],
         "external-training-platform"
+    );
+    assert_eq!(
+        completed["mined_rule_candidates"][1]["summary"]["rule_id"],
+        "candidate_tree_provider_profile_and_amount"
+    );
+    assert_eq!(
+        completed["mined_rule_candidates"][1]["summary"]["status"],
+        "draft"
     );
 
     let (status, audit) = get_json(
@@ -2254,7 +2287,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         )));
     assert_eq!(
         output_event["payload"]["mined_rule_candidate_count"],
-        serde_json::json!(1)
+        serde_json::json!(2)
     );
     assert_eq!(
         output_event["payload"]["training_boundary"],
@@ -2270,6 +2303,13 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         .find(|rule| rule["rule_id"] == "candidate_retraining_amount_ratio")
         .expect("training-platform mined rule candidate should be saved");
     assert_eq!(saved_rule["status"], "draft");
+    let saved_tree_rule = rules["rules"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|rule| rule["rule_id"] == "candidate_tree_provider_profile_and_amount")
+        .expect("training-platform tree-mined rule candidate should be saved");
+    assert_eq!(saved_tree_rule["status"], "draft");
 
     let (status, models) = get_json(app, "/api/v1/ops/models").await;
     assert_eq!(status, StatusCode::OK);

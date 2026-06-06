@@ -25,6 +25,7 @@ from sklearn.metrics import (
 )
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
+from sklearn.tree import DecisionTreeClassifier
 
 try:
     from xgboost import XGBClassifier
@@ -778,7 +779,14 @@ def build_mined_rule_candidates(
     feature_columns: list[str],
     label_column: str,
 ) -> list[dict[str, Any]]:
-    candidates: list[dict[str, Any]] = []
+    candidates = build_decision_tree_rule_candidates(
+        model_key,
+        candidate_model_version,
+        train,
+        feature_columns,
+        label_column,
+    )
+    candidate_ids = {candidate["rule_id"] for candidate in candidates}
     ranked_features = feature_importance.sort_values("importance", ascending=False)[
         "feature"
     ].tolist()
@@ -793,12 +801,128 @@ def build_mined_rule_candidates(
             feature,
             label_column,
         )
-        if candidate is not None:
+        if candidate is not None and candidate["rule_id"] not in candidate_ids:
             candidates.append(candidate)
-        if len(candidates) >= 4:
+            candidate_ids.add(candidate["rule_id"])
+        if len(candidates) >= 5:
             break
     candidates.sort(key=lambda rule: rule["rule_id"])
     return candidates
+
+
+def build_decision_tree_rule_candidates(
+    model_key: str,
+    candidate_model_version: str,
+    train: pd.DataFrame,
+    feature_columns: list[str],
+    label_column: str,
+) -> list[dict[str, Any]]:
+    labels = train[label_column].astype(int)
+    if labels.nunique() < 2 or len(train) < 4:
+        return []
+    tree = DecisionTreeClassifier(max_depth=3, min_samples_leaf=1, random_state=17)
+    tree.fit(train[feature_columns].astype(float), labels)
+    candidates: list[dict[str, Any]] = []
+    tree_state = tree.tree_
+
+    def visit(node_id: int, path: list[dict[str, Any]]) -> None:
+        left_id = int(tree_state.children_left[node_id])
+        right_id = int(tree_state.children_right[node_id])
+        if left_id == right_id:
+            values = tree_state.value[node_id][0]
+            negative_count = float(values[0]) if len(values) > 0 else 0.0
+            positive_count = float(values[1]) if len(values) > 1 else 0.0
+            total_count = negative_count + positive_count
+            if total_count == 0 or positive_count == 0:
+                return
+            positive_rate = positive_count / total_count
+            if positive_rate < 0.5 or not path:
+                return
+            candidates.append(
+                decision_tree_rule_candidate(
+                    model_key,
+                    candidate_model_version,
+                    path,
+                    positive_count,
+                    total_count,
+                    positive_rate,
+                )
+            )
+            return
+        feature = feature_columns[int(tree_state.feature[node_id])]
+        threshold = round(float(tree_state.threshold[node_id]), 6)
+        visit(
+            left_id,
+            [
+                *path,
+                {"field": feature, "operator": "<=", "value": threshold},
+            ],
+        )
+        visit(
+            right_id,
+            [
+                *path,
+                {"field": feature, "operator": ">=", "value": threshold},
+            ],
+        )
+
+    visit(0, [])
+    candidates.sort(
+        key=lambda rule: (
+            -rule["metadata"]["tree_positive_rate"],
+            -rule["metadata"]["tree_positive_count"],
+            rule["rule_id"],
+        )
+    )
+    return candidates[:2]
+
+
+def decision_tree_rule_candidate(
+    model_key: str,
+    candidate_model_version: str,
+    conditions: list[dict[str, Any]],
+    positive_count: float,
+    total_count: float,
+    positive_rate: float,
+) -> dict[str, Any]:
+    condition_slug = "_".join(
+        safe_id_segment(
+            f"{condition['field']}_{'gte' if condition['operator'] == '>=' else 'lte'}_{condition['value']}"
+        )
+        for condition in conditions
+    )
+    rule_id = "candidate_tree_" + safe_id_segment(
+        f"{model_key}_{candidate_model_version}_{condition_slug}"
+    ).lower()
+    alert_code = "TREE_MINED_" + safe_id_segment(condition_slug).upper()[:48]
+    path_label = " and ".join(
+        f"{condition['field']} {condition['operator']} {condition['value']}"
+        for condition in conditions
+    )
+    return {
+        "rule_id": rule_id,
+        "version": 1,
+        "name": f"Decision tree mined candidate: {path_label}",
+        "review_mode": "both",
+        "scheme_family": "high_risk_claim",
+        "conditions": conditions,
+        "action": {
+            "score": max(15, min(40, int(round(18 + positive_rate * 20)))),
+            "alert_code": alert_code,
+            "recommended_action": "ManualReview",
+            "reason": (
+                "External training platform mined this shallow decision-tree path "
+                f"from training data: {positive_count:.0f}/{total_count:.0f} positive samples "
+                f"({positive_rate:.2%}) matched path {path_label}. Human review is required."
+            ),
+        },
+        "metadata": {
+            "mining_algorithm": "shallow_decision_tree",
+            "tree_positive_count": int(round(positive_count)),
+            "tree_total_count": int(round(total_count)),
+            "tree_positive_rate": round(float(positive_rate), 6),
+        },
+    }
 
 
 def mined_rule_candidate_for_feature(

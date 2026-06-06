@@ -225,6 +225,16 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["mined_rule_owner"] == "external-training-platform"
     mined_rules = payload["mined_rule_candidates"]
     assert len(mined_rules) >= 1
+    tree_rule = next(
+        rule
+        for rule in mined_rules
+        if rule.get("metadata", {}).get("mining_algorithm") == "shallow_decision_tree"
+    )
+    assert tree_rule["rule_id"].startswith("candidate_tree_")
+    assert len(tree_rule["conditions"]) >= 1
+    assert tree_rule["conditions"][0]["operator"] in {"<=", ">="}
+    assert tree_rule["action"]["recommended_action"] == "ManualReview"
+    assert "shallow decision-tree path" in tree_rule["action"]["reason"]
     amount_rule = next(
         rule
         for rule in mined_rules

@@ -7655,6 +7655,8 @@ fn enrich_retraining_output_with_rule_candidate_workflow(
     let Some(feature_importance_uri) = output.feature_importance_uri.clone() else {
         return Ok(output);
     };
+    let training_platform_candidates = output.mined_rule_candidates.clone();
+    let training_platform_candidate_count = training_platform_candidates.len();
     let rule_candidate_dir = artifact_parent_path(&output.artifact_uri).join("rule-candidates");
     let plan = mine_rule_candidates(
         &output.validation_report_uri,
@@ -7684,13 +7686,31 @@ fn enrich_retraining_output_with_rule_candidate_workflow(
         .join("rule_candidate_backtest_review_tasks.json")
         .to_string_lossy()
         .into_owned();
+    let mut rule_candidates = training_platform_candidates;
+    let mut existing_rule_ids = rule_candidates
+        .iter()
+        .filter_map(|candidate| {
+            candidate
+                .get("rule_id")
+                .and_then(|value| value.as_str())
+                .map(str::to_string)
+        })
+        .collect::<BTreeSet<_>>();
     let backtested_rule_candidates = backtest
         .candidate_results
         .iter()
         .map(|result| result.rule_library_writeback_template.clone())
         .collect::<Vec<_>>();
     let backtested_rule_candidate_count = backtested_rule_candidates.len();
-    output.mined_rule_candidates = backtested_rule_candidates;
+    for candidate in backtested_rule_candidates {
+        let Some(rule_id) = candidate.get("rule_id").and_then(|value| value.as_str()) else {
+            continue;
+        };
+        if existing_rule_ids.insert(rule_id.to_string()) {
+            rule_candidates.push(candidate);
+        }
+    }
+    output.mined_rule_candidates = rule_candidates;
 
     let Some(metrics) = output.metrics_json.as_object_mut() else {
         bail!("training output metrics_json must be an object");
@@ -7725,7 +7745,13 @@ fn enrich_retraining_output_with_rule_candidate_workflow(
     );
     metrics.insert(
         "mined_rule_candidates_source".into(),
-        serde_json::Value::String("deterministic_rule_candidate_backtest".into()),
+        serde_json::Value::String(
+            "training_platform_and_deterministic_rule_candidate_backtest".into(),
+        ),
+    );
+    metrics.insert(
+        "training_platform_mined_rule_candidate_count".into(),
+        serde_json::json!(training_platform_candidate_count),
     );
     metrics.insert(
         "mined_rule_candidates_backtested_count".into(),
@@ -10848,7 +10874,11 @@ mod tests {
         );
         assert_eq!(
             output.metrics_json["mined_rule_candidates_source"],
-            "deterministic_rule_candidate_backtest"
+            "training_platform_and_deterministic_rule_candidate_backtest"
+        );
+        assert_eq!(
+            output.metrics_json["training_platform_mined_rule_candidate_count"],
+            1
         );
         assert_eq!(
             output.metrics_json["mined_rule_candidates_backtested_count"],
@@ -10859,17 +10889,21 @@ mod tests {
         assert!(output
             .evidence_refs
             .contains(&format!("rule_candidate_backtests:{report_uri}")));
-        assert_eq!(output.mined_rule_candidates.len(), 3);
+        assert_eq!(output.mined_rule_candidates.len(), 4);
+        assert!(output
+            .mined_rule_candidates
+            .iter()
+            .any(|candidate| candidate["rule_id"] == "candidate_training_amount"));
         assert_eq!(
-            output.mined_rule_candidates[0]["conditions"][0]["operator"],
+            output.mined_rule_candidates[1]["conditions"][0]["operator"],
             ">="
         );
-        assert!(output.mined_rule_candidates[0]["conditions"][0]["value"]
+        assert!(output.mined_rule_candidates[1]["conditions"][0]["value"]
             .as_f64()
             .expect("backtested rule candidate threshold")
             .is_finite());
         assert_eq!(
-            output.mined_rule_candidates[0]["action"]["action_class"],
+            output.mined_rule_candidates[1]["action"]["action_class"],
             "manual_review"
         );
     }
