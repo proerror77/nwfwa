@@ -268,6 +268,13 @@ cargo run --locked -p worker -- build-training-handoff \
   --actor trainer-worker
 ```
 
+The handoff contract now includes feature-importance output plus the downstream
+rule-candidate workflow contract. `run-retraining-job` uses that package to mine
+explainable rule candidates, run deterministic rule-candidate backtests, attach
+review-task evidence, and then register the provider output into FWA. The worker
+does not activate the model or write active rules; accepted rule candidates still
+require human governance review before rule-library writeback.
+
 Scheduled MLOps monitoring plan:
 
 ```bash

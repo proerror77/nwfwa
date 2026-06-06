@@ -89,14 +89,19 @@ The worker is the right control-plane home for scheduled and batch ML work:
   datasets, bind ordered numeric feature columns, split summaries, and a
   reproducibility hash before training.
 - `build-training-handoff`: create the reproducible external training contract,
-  including algorithm-aware logistic, XGBoost, and LightGBM artifact semantics.
+  including algorithm-aware logistic, XGBoost, and LightGBM artifact semantics,
+  feature-importance handoff, and the rule-candidate mining/backtest/review
+  evidence contract.
 - `run-retraining-job`: claim a candidate job, execute the trainer, and register
   output, enriching the trainer payload with the Rust feature-set manifest URI
   and reproducibility hash before API registration; when the trainer returns a
   serving manifest, it also runs Rust serving artifact evaluation and attaches
   the report URI plus serving latency/status evidence. ONNX runtime kinds must
   also carry a passed trainer ONNX parity report before the Rust serving gate
-  can pass.
+  can pass. When feature importance is present, the worker mines explainable
+  rule candidates, runs deterministic rule-candidate backtests against the same
+  training manifest, and registers only review handoff evidence; rule-library
+  writeback remains blocked until human governance review.
 - `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
   LightGBM, and anomaly candidates, then open human-review recommendations
   without activating any model.
@@ -195,8 +200,9 @@ Current repository completion for this target architecture is approximately:
   retraining outputs with Rust feature-set and Rust serving evaluation evidence,
   rank candidates, evaluate serving artifacts, require ONNX parity evidence for
   XGBoost/LightGBM gates, mine explainable rule candidates, backtest those
-  candidates into human-review evidence, summarize live monitoring reports into
-  review/retraining triggers, produce scheduled runtime monitoring reports from
+  candidates into human-review evidence before retraining output registration,
+  summarize live monitoring reports into review/retraining triggers, produce
+  scheduled runtime monitoring reports from
   Rust monitoring plans, run a deployable scheduled monitoring command for
   staging CronJobs, submit those reports into API governance audit,
   produce scheduler execution and alert-delivery evidence, submit scheduler
@@ -231,7 +237,10 @@ real Rust ONNX scoring for generated XGBoost and LightGBM artifacts. The worker
 now has an artifact-evaluation gate for Rust serving parity and latency
 evidence before a candidate can enter activation review, and `run-retraining-job`
 attaches that evidence before candidate registration when the trainer returns a
-serving manifest. The API now records serving-manifest evidence in retraining
-output registration and the console exposes the human release actions. The next
-highest-leverage implementation is richer artifact report drill-down and live
+serving manifest. The same worker path now attaches rule-candidate mining,
+backtest, and review-task handoff evidence before FWA registration when feature
+importance is present. The API now records serving-manifest evidence in
+retraining output registration and the console exposes the human release
+actions. The next highest-leverage implementation is richer artifact report
+drill-down and live
 latency/drift monitoring around those existing gates.

@@ -1450,7 +1450,7 @@ pub async fn openapi_schema() -> Json<Value> {
             },
             "/api/v1/ops/rules/candidates": {
                 "post": {
-                    "summary": "Save a discovered candidate rule into the rule library",
+                    "summary": "Save a discovered rule as a draft candidate for governance review",
                     "security": [{ "ApiKeyAuth": [] }],
                     "requestBody": {
                         "required": true,

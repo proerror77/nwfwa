@@ -1192,6 +1192,7 @@ pub async fn complete_retraining_job_with_training_output(
     )?;
     let output =
         enrich_retraining_output_with_model_artifact_evaluation(output, training_manifest).await?;
+    let output = enrich_retraining_output_with_rule_candidate_workflow(output, training_manifest)?;
     register_retraining_output(api_base_url, api_key, job, &output).await
 }
 
@@ -2975,6 +2976,9 @@ pub fn build_training_handoff_with_algorithm(
         "feature_set_manifests:<rust_feature_set_manifest_uri>".to_string(),
         "model_validation_reports:<validation_report_uri>".to_string(),
         "model_evaluations:<evaluation_run_id>".to_string(),
+        "rule_candidate_mining_plans:<rule_candidate_mining_plan_uri>".to_string(),
+        "rule_candidate_backtests:<rule_candidate_backtest_report_uri>".to_string(),
+        "rule_candidate_review_tasks:<rule_candidate_review_tasks_uri>".to_string(),
     ];
     if onnx_algorithm {
         required_evidence_refs.push("model_onnx_parity_reports:<onnx_parity_report_uri>".into());
@@ -3025,8 +3029,12 @@ pub fn build_training_handoff_with_algorithm(
                 serde_json::Value::Null
             },
             "validation_report_uri": format!("{artifact_dir}/validation.json"),
+            "feature_importance_uri": format!("{artifact_dir}/feature_importance.parquet"),
             "rust_feature_set_manifest_uri": format!("{artifact_dir}/rust_feature_set/feature_set_manifest.json"),
             "feature_store_manifest_uri": format!("{artifact_dir}/feature_store_manifest.json"),
+            "rule_candidate_mining_plan_uri": format!("{artifact_dir}/rule-candidates/rule_candidate_mining_plan.json"),
+            "rule_candidate_review_tasks_uri": format!("{artifact_dir}/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"),
+            "rule_candidate_backtest_report_uri": format!("{artifact_dir}/rule-candidates/backtest/rule_candidate_backtest_report.json"),
             "shadow_report_uri": format!("{artifact_dir}/shadow_report.json"),
             "drift_report_uri": format!("{artifact_dir}/drift_report.json"),
             "fairness_report_uri": format!("{artifact_dir}/fairness_report.json")
@@ -3038,9 +3046,30 @@ pub fn build_training_handoff_with_algorithm(
             "excluded_columns": ["dataset.entity_keys", "dataset.label_column"],
             "evidence_ref": "feature_set_manifests:<rust_feature_set_manifest_uri>"
         },
+        "rule_candidate_workflow_contract": {
+            "candidate_builder": "worker mine-rule-candidates",
+            "backtest_builder": "worker run-rule-candidate-backtest",
+            "validation_report_uri": "artifact_contract.validation_report_uri",
+            "feature_importance_uri": "artifact_contract.feature_importance_uri",
+            "training_manifest_uri": "data_contract.manifest_uri",
+            "required_metrics_fields": [
+                "metrics_json.rule_candidate_mining_status",
+                "metrics_json.rule_candidate_backtest_status",
+                "metrics_json.rule_candidate_backtest_report_uri",
+                "metrics_json.rule_candidate_review_tasks_uri",
+                "metrics_json.rule_library_writeback_status"
+            ],
+            "required_evidence_refs": [
+                "rule_candidate_mining_plans:<rule_candidate_mining_plan_uri>",
+                "rule_candidate_backtests:<rule_candidate_backtest_report_uri>",
+                "rule_candidate_review_tasks:<rule_candidate_review_tasks_uri>"
+            ],
+            "writeback_boundary": "human_review_required_before_rule_library_writeback"
+        },
         "output_contract": {
             "submit_path": retraining_job_output_path(job_id),
             "artifact_uri": "artifact_contract.serving_artifact_uri",
+            "feature_importance_uri": "artifact_contract.feature_importance_uri",
             "serving_manifest_uri": "artifact_contract.serving_manifest_uri",
             "onnx_parity_report_uri": if onnx_algorithm {
                 serde_json::Value::String("artifact_contract.onnx_parity_report_uri".into())
@@ -7588,6 +7617,113 @@ async fn enrich_retraining_output_with_model_artifact_evaluation(
     Ok(output)
 }
 
+fn enrich_retraining_output_with_rule_candidate_workflow(
+    mut output: CompleteRetrainingJobPayload,
+    training_manifest: &str,
+) -> anyhow::Result<CompleteRetrainingJobPayload> {
+    let Some(feature_importance_uri) = output.feature_importance_uri.clone() else {
+        return Ok(output);
+    };
+    let rule_candidate_dir = artifact_parent_path(&output.artifact_uri).join("rule-candidates");
+    let plan = mine_rule_candidates(
+        &output.validation_report_uri,
+        &feature_importance_uri,
+        &rule_candidate_dir,
+    )
+    .context("mine explainable rule candidates before retraining output registration")?;
+    let candidate_plan_uri = rule_candidate_dir
+        .join("rule_candidate_mining_plan.json")
+        .to_string_lossy()
+        .into_owned();
+    let candidate_review_tasks_uri = rule_candidate_dir
+        .join("rule_candidate_review_tasks.json")
+        .to_string_lossy()
+        .into_owned();
+    let backtest_dir = rule_candidate_dir.join("backtest");
+    let backtest =
+        run_rule_candidate_backtest(&candidate_plan_uri, training_manifest, &backtest_dir)
+            .context(
+                "backtest explainable rule candidates before retraining output registration",
+            )?;
+    let backtest_report_uri = backtest_dir
+        .join("rule_candidate_backtest_report.json")
+        .to_string_lossy()
+        .into_owned();
+    let backtest_review_tasks_uri = backtest_dir
+        .join("rule_candidate_backtest_review_tasks.json")
+        .to_string_lossy()
+        .into_owned();
+
+    let Some(metrics) = output.metrics_json.as_object_mut() else {
+        bail!("training output metrics_json must be an object");
+    };
+    metrics.insert(
+        "rule_candidate_mining_status".into(),
+        serde_json::Value::String("passed".into()),
+    );
+    metrics.insert(
+        "rule_candidate_mining_plan_uri".into(),
+        serde_json::Value::String(candidate_plan_uri.clone()),
+    );
+    metrics.insert(
+        "rule_candidate_source_count".into(),
+        serde_json::json!(plan.candidate_rules.len()),
+    );
+    metrics.insert(
+        "rule_candidate_backtest_status".into(),
+        serde_json::Value::String("passed".into()),
+    );
+    metrics.insert(
+        "rule_candidate_backtest_report_uri".into(),
+        serde_json::Value::String(backtest_report_uri.clone()),
+    );
+    metrics.insert(
+        "rule_candidate_review_tasks_uri".into(),
+        serde_json::Value::String(backtest_review_tasks_uri.clone()),
+    );
+    metrics.insert(
+        "rule_candidate_review_task_count".into(),
+        serde_json::json!(backtest.review_tasks.len()),
+    );
+    metrics.insert(
+        "rule_library_writeback_status".into(),
+        serde_json::Value::String(backtest.rule_library_writeback_status.clone()),
+    );
+    metrics.insert(
+        "rule_candidate_workflow_boundary".into(),
+        serde_json::Value::String(
+            "rule candidates are backtested and handed to human review only; worker must not write active rules".into(),
+        ),
+    );
+
+    push_unique_evidence_ref(
+        &mut output.evidence_refs,
+        format!("rule_candidate_mining_plans:{candidate_plan_uri}"),
+    );
+    push_unique_evidence_ref(
+        &mut output.evidence_refs,
+        format!("rule_candidate_review_tasks:{candidate_review_tasks_uri}"),
+    );
+    push_unique_evidence_ref(
+        &mut output.evidence_refs,
+        format!("rule_candidate_backtests:{backtest_report_uri}"),
+    );
+    push_unique_evidence_ref(
+        &mut output.evidence_refs,
+        format!("rule_candidate_review_tasks:{backtest_review_tasks_uri}"),
+    );
+    Ok(output)
+}
+
+fn push_unique_evidence_ref(evidence_refs: &mut Vec<String>, evidence_ref: String) {
+    if !evidence_refs
+        .iter()
+        .any(|reference| reference == &evidence_ref)
+    {
+        evidence_refs.push(evidence_ref);
+    }
+}
+
 #[derive(Debug, Clone, PartialEq)]
 struct OnnxParityGate {
     report_uri: String,
@@ -8407,6 +8543,18 @@ mod tests {
             "worker build-feature-set"
         );
         assert_eq!(
+            handoff["rule_candidate_workflow_contract"]["candidate_builder"],
+            "worker mine-rule-candidates"
+        );
+        assert_eq!(
+            handoff["rule_candidate_workflow_contract"]["backtest_builder"],
+            "worker run-rule-candidate-backtest"
+        );
+        assert_eq!(
+            handoff["rule_candidate_workflow_contract"]["writeback_boundary"],
+            "human_review_required_before_rule_library_writeback"
+        );
+        assert_eq!(
             handoff["output_contract"]["submit_path"],
             "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
         );
@@ -8426,6 +8574,14 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("feature_set_manifests")));
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("rule_candidate_backtests")));
     }
 
     #[test]
@@ -8472,6 +8628,10 @@ mod tests {
             handoff["output_contract"]["onnx_parity_report_uri"],
             "artifact_contract.onnx_parity_report_uri"
         );
+        assert_eq!(
+            handoff["artifact_contract"]["feature_importance_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-xgboost-candidate-model_retraining_job_1/feature_importance.parquet"
+        );
         assert!(handoff["output_contract"]["required_evidence_refs"]
             .as_array()
             .unwrap()
@@ -8480,6 +8640,14 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("model_onnx_parity_reports")));
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("rule_candidate_review_tasks")));
     }
 
     #[test]
@@ -10524,6 +10692,115 @@ mod tests {
         assert!(output_dir
             .join("rule_candidate_backtest_review_tasks.json")
             .is_file());
+    }
+
+    #[test]
+    fn enriches_training_output_with_rule_backtest_handoff_before_fwa_registration() {
+        let root = temp_root("training-rule-backtest-handoff");
+        let dataset_pack = build_demo_ml_datasets(root.join("datasets"), "2026-06-handoff")
+            .expect("demo ML datasets");
+        let artifact_dir = root.join("artifact");
+        fs::create_dir_all(&artifact_dir).unwrap();
+        let validation_report = artifact_dir.join("validation.json");
+        let feature_importance = artifact_dir.join("feature_importance.parquet");
+        write_validation_report(
+            &validation_report,
+            "0.2.0-xgboost-candidate",
+            "xgboost",
+            "gradient_boosted_tree",
+            0.86,
+            0.8,
+            0.75,
+            "passed",
+        );
+        write_feature_importance_parquet(
+            &feature_importance,
+            &[
+                ("amount_to_limit_ratio", 0.91),
+                ("high_cost_item_ratio", 0.72),
+                ("provider_risk_tier", 0.53),
+            ],
+        );
+        let artifact_path = artifact_dir.join("model.onnx");
+        fs::write(&artifact_path, b"onnx-placeholder").unwrap();
+        let output = CompleteRetrainingJobPayload {
+            actor: "trainer-worker".into(),
+            notes: "training output".into(),
+            candidate_model_version: "0.2.0-xgboost-candidate".into(),
+            artifact_uri: artifact_path.to_string_lossy().into_owned(),
+            artifact_sha256: Some(test_sha256(&artifact_path)),
+            training_artifact_uri: Some(
+                artifact_dir
+                    .join("model.joblib")
+                    .to_string_lossy()
+                    .into_owned(),
+            ),
+            training_artifact_sha256: Some("sha256:training".into()),
+            serving_manifest_uri: None,
+            onnx_parity_report_uri: None,
+            endpoint_url: None,
+            validation_report_uri: validation_report.to_string_lossy().into_owned(),
+            evaluation_run_id: "eval_baseline_fwa_candidate".into(),
+            auc: Some("0.8600".into()),
+            ks: None,
+            precision: Some("0.8000".into()),
+            recall: Some("0.7500".into()),
+            f1: None,
+            accuracy: None,
+            threshold: Some("0.5000".into()),
+            confusion_matrix_json: serde_json::json!({}),
+            feature_importance_uri: Some(feature_importance.to_string_lossy().into_owned()),
+            metrics_json: serde_json::json!({}),
+            evidence_refs: vec![
+                format!("model_artifacts:{}", artifact_path.display()),
+                format!("model_validation_reports:{}", validation_report.display()),
+                "model_evaluations:eval_baseline_fwa_candidate".into(),
+            ],
+            mined_rule_owner: Some("external-training-platform".into()),
+            mined_rule_candidates: vec![serde_json::json!({
+                "rule_id": "candidate_training_amount",
+                "version": 1,
+                "name": "Training mined amount candidate",
+                "scheme_family": "high_risk_claim",
+                "conditions": [
+                    {"field": "amount_to_limit_ratio", "operator": ">=", "value": 0.82}
+                ],
+                "action": {
+                    "score": 22,
+                    "alert_code": "TRAINING_MINED_AMOUNT",
+                    "recommended_action": "ManualReview",
+                    "reason": "training mined candidate"
+                }
+            })],
+        };
+
+        let output = enrich_retraining_output_with_rule_candidate_workflow(
+            output,
+            &dataset_pack.labeled_manifest_uri,
+        )
+        .expect("rule backtest handoff");
+
+        let report_uri = output.metrics_json["rule_candidate_backtest_report_uri"]
+            .as_str()
+            .expect("rule candidate backtest report uri");
+        let review_tasks_uri = output.metrics_json["rule_candidate_review_tasks_uri"]
+            .as_str()
+            .expect("rule candidate review tasks uri");
+        assert_eq!(
+            output.metrics_json["rule_candidate_backtest_status"],
+            "passed"
+        );
+        assert_eq!(output.metrics_json["rule_candidate_review_task_count"], 3);
+        assert_eq!(
+            output.metrics_json["rule_library_writeback_status"],
+            "blocked_pending_human_review_and_policy_governance_approval"
+        );
+        assert!(Path::new(report_uri).is_file());
+        assert!(Path::new(review_tasks_uri).is_file());
+        assert!(output
+            .evidence_refs
+            .contains(&format!("rule_candidate_backtests:{report_uri}")));
+        assert_eq!(output.mined_rule_candidates.len(), 1);
     }
 
     #[test]

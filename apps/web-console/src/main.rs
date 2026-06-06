@@ -5253,7 +5253,7 @@ fn rules_page() -> Html {
                         {if matches!(&*backtest_state, ApiState::Loading) { "Backtesting..." } else { "Run backtest" }}
                     </button>
                     <button onclick={accept_candidate} disabled={!selected_candidate_available || matches!(&*review_state, ApiState::Loading)}>
-                        {if matches!(&*review_state, ApiState::Loading) { "Reviewing..." } else { "Accept into rule library" }}
+                        {if matches!(&*review_state, ApiState::Loading) { "Reviewing..." } else { "Accept for governance review" }}
                     </button>
                     <button onclick={reject_candidate} disabled={!selected_candidate_available || matches!(&*review_state, ApiState::Loading)}>
                         {"Reject selected candidate"}
@@ -5666,8 +5666,9 @@ fn mlops_workspace_page() -> Html {
     let retraining_job_id = use_state(String::new);
     let retraining_status = use_state(|| "validation".to_string());
     let candidate_model_version = use_state(|| "0.2.0-candidate".to_string());
-    let candidate_artifact_uri =
-        use_state(|| "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json".to_string());
+    let candidate_artifact_uri = use_state(|| {
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json".to_string()
+    });
     let validation_report_uri =
         use_state(|| "s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json".to_string());
     let candidate_auc = use_state(|| "0.92".to_string());
@@ -5679,8 +5680,9 @@ fn mlops_workspace_page() -> Html {
     let candidate_threshold = use_state(|| "0.70".to_string());
     let candidate_confusion_matrix =
         use_state(|| r#"{"tp": 64, "fp": 18, "tn": 820, "fn": 36}"#.to_string());
-    let candidate_feature_importance_uri =
-        use_state(|| "data/eval/provider_retraining_candidate/feature_importance.parquet".to_string());
+    let candidate_feature_importance_uri = use_state(|| {
+        "data/eval/provider_retraining_candidate/feature_importance.parquet".to_string()
+    });
     let candidate_metrics_json = use_state(|| {
         r#"{"data_quality_status":"passed","split_strategy":"time_group_split","shadow_comparison_status":"passed","review_capacity_threshold_status":"passed"}"#.to_string()
     });
@@ -6003,7 +6005,6 @@ fn mlops_workspace_page() -> Html {
                             >
                                 <option value="running">{"running"}</option>
                                 <option value="validation">{"validation"}</option>
-                                <option value="completed">{"completed"}</option>
                                 <option value="failed">{"failed"}</option>
                                 <option value="cancelled">{"cancelled"}</option>
                             </select>
@@ -11599,7 +11600,10 @@ async fn execute_mlops_governed_action(
             )
             .await
         }
-        "monitoring_review" | "monitoring_reject" | "monitoring_prepare" | "monitoring_rollback" => {
+        "monitoring_review"
+        | "monitoring_reject"
+        | "monitoring_prepare"
+        | "monitoring_rollback" => {
             if monitoring_task_id.trim().is_empty() {
                 return Err("monitoring review actions require a monitoring task id".into());
             }
@@ -13427,7 +13431,7 @@ async fn accept_rule_candidate(
     .await?;
     Ok(json!({
         "decision": "approved",
-        "entered_rule_library": true,
+        "accepted_for_governance_review": true,
         "saved": saved,
         "review": review
     }))
@@ -13675,7 +13679,7 @@ fn candidate_review_label(
         .iter()
         .any(|accepted_id| accepted_id == candidate_id)
     {
-        "accepted into rule library"
+        "accepted for governance review"
     } else if rejected_candidate_ids
         .iter()
         .any(|rejected_id| rejected_id == candidate_id)

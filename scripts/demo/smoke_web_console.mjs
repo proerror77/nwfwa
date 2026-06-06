@@ -90,6 +90,7 @@ async function main() {
   try {
     const html = await waitForServer();
     assertMatches(html, /<div\s+id="?root"?><\/div>/, "index HTML");
+    const sourceText = await readFile(path.join(webDir, "src/main.rs"), "utf8");
     const builtText = await collectBuiltText(distDir);
     assertContains(builtText, "FWA Studio", "web console bundle");
     assertContains(builtText, "NOVA FWA", "web console bundle");
@@ -202,10 +203,15 @@ async function main() {
     assertContains(builtText, "Tree Depth", "web console rule discovery workbench bundle");
     assertContains(builtText, "Inline Labeled Evaluation Dataset", "web console rule discovery workbench bundle");
     assertContains(builtText, "Candidate rule workflow", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Accept into rule library", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Accept for governance review", "web console rule discovery workbench bundle");
     assertContains(builtText, "Reject selected candidate", "web console rule discovery workbench bundle");
     assertContains(builtText, "needs human review", "web console rule discovery workbench bundle");
-    assertContains(builtText, "entered_rule_library", "web console rule discovery workbench bundle");
+    assertContains(builtText, "accepted_for_governance_review", "web console rule discovery workbench bundle");
+    assertNotContains(
+      sourceText,
+      '<option value="completed">{"completed"}</option>',
+      "web console manual training status options"
+    );
     assertContains(builtText, "Discover candidates", "web console rule discovery workbench bundle");
     assertContains(builtText, "FWA Rule Pack Matrix", "web console rule pack visual bundle");
     assertContains(builtText, "duplicate billing", "web console rule pack visual bundle");
