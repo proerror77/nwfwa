@@ -1214,6 +1214,9 @@ pub struct AutoMlCandidateRank {
     pub out_of_time_average_precision: Option<f64>,
     pub out_of_time_precision: Option<f64>,
     pub out_of_time_recall: Option<f64>,
+    pub score_psi: Option<f64>,
+    pub max_feature_psi: Option<f64>,
+    pub overfitting_penalty: f64,
     pub gate_status: String,
     pub blocking_reasons: Vec<String>,
     pub recommended_action: String,
@@ -7155,6 +7158,12 @@ fn build_automl_candidate_rank(
         metric_object_value(metrics, "out_of_time_average_precision");
     let out_of_time_precision = metric_object_value(metrics, "out_of_time_precision");
     let out_of_time_recall = metric_object_value(metrics, "out_of_time_recall");
+    let score_psi =
+        metric_object_value(metrics, "score_psi").or_else(|| metric_object_value(metrics, "psi"));
+    let max_feature_psi = metric_object_value(metrics, "max_feature_psi");
+    let permutation_importance_passed =
+        automl_permutation_importance_passed(metrics) && automl_has_permutation_importance(metrics);
+    let feature_reproducibility_passed = automl_feature_reproducibility_passed(metrics);
 
     let blocking_reasons = automl_blocking_reasons(metrics);
     let gate_status = if blocking_reasons.is_empty() {
@@ -7190,6 +7199,10 @@ fn build_automl_candidate_rank(
             out_of_time_average_precision,
             out_of_time_precision,
             out_of_time_recall,
+            score_psi,
+            max_feature_psi,
+            permutation_importance_passed,
+            feature_reproducibility_passed,
             &gate_status,
         ),
         validation_auc,
@@ -7197,6 +7210,14 @@ fn build_automl_candidate_rank(
         out_of_time_average_precision,
         out_of_time_precision,
         out_of_time_recall,
+        score_psi,
+        max_feature_psi,
+        overfitting_penalty: automl_overfitting_penalty(
+            score_psi,
+            max_feature_psi,
+            permutation_importance_passed,
+            feature_reproducibility_passed,
+        ),
         gate_status,
         blocking_reasons,
         recommended_action,
@@ -7265,7 +7286,80 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
     if metric_object_value(metrics, "out_of_time_recall").unwrap_or(0.0) <= 0.0 {
         reasons.push("out_of_time_recall:missing_or_zero".into());
     }
+    if !automl_has_time_group_split_fields(metrics) {
+        reasons.push("time_group_split_fields:missing".into());
+    }
+    if !automl_permutation_importance_passed(metrics) {
+        reasons.push("permutation_importance_status:missing_or_failed".into());
+    }
+    if !automl_has_permutation_importance(metrics) {
+        reasons.push("permutation_importance_uri:missing".into());
+    }
+    if metric_object_value(metrics, "score_psi")
+        .or_else(|| metric_object_value(metrics, "psi"))
+        .is_none()
+    {
+        reasons.push("score_psi:missing".into());
+    }
+    if metric_object_value(metrics, "max_feature_psi").is_none() {
+        reasons.push("max_feature_psi:missing".into());
+    }
+    if metric_object_value(metrics, "score_psi")
+        .or_else(|| metric_object_value(metrics, "psi"))
+        .is_some_and(|value| value >= 0.25)
+    {
+        reasons.push("score_psi:drift".into());
+    }
+    if metric_object_value(metrics, "max_feature_psi").is_some_and(|value| value >= 0.25) {
+        reasons.push("max_feature_psi:drift".into());
+    }
+    if !automl_feature_reproducibility_passed(metrics) {
+        reasons.push("feature_reproducibility_hash:missing".into());
+    }
     reasons
+}
+
+fn automl_has_time_group_split_fields(
+    metrics: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    let has_time = metrics
+        .get("time_split_field")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty());
+    let has_group = metrics
+        .get("group_split_fields")
+        .and_then(|value| value.as_array())
+        .is_some_and(|fields| {
+            fields
+                .iter()
+                .any(|field| field.as_str().is_some_and(|value| !value.trim().is_empty()))
+        });
+    has_time && has_group
+}
+
+fn automl_permutation_importance_passed(
+    metrics: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    metrics
+        .get("permutation_importance_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+}
+
+fn automl_has_permutation_importance(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
+    metrics
+        .get("permutation_importance_uri")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty())
+}
+
+fn automl_feature_reproducibility_passed(
+    metrics: &serde_json::Map<String, serde_json::Value>,
+) -> bool {
+    metrics
+        .get("feature_reproducibility_hash")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| value.starts_with("sha256:") && value.len() > "sha256:".len())
 }
 
 fn automl_requires_onnx_parity(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
@@ -7565,14 +7659,44 @@ fn automl_ranking_score(
     average_precision: Option<f64>,
     precision: Option<f64>,
     recall: Option<f64>,
+    score_psi: Option<f64>,
+    max_feature_psi: Option<f64>,
+    permutation_importance_passed: bool,
+    feature_reproducibility_passed: bool,
     gate_status: &str,
 ) -> f64 {
     let score = out_of_time_auc.unwrap_or(0.0) * 60.0
         + average_precision.unwrap_or(0.0) * 20.0
         + precision.unwrap_or(0.0) * 10.0
         + recall.unwrap_or(0.0) * 10.0;
-    let penalty = if gate_status == "passed" { 0.0 } else { 100.0 };
+    let penalty = automl_overfitting_penalty(
+        score_psi,
+        max_feature_psi,
+        permutation_importance_passed,
+        feature_reproducibility_passed,
+    ) + if gate_status == "passed" { 0.0 } else { 100.0 };
     ((score - penalty) * 10_000.0).round() / 10_000.0
+}
+
+fn automl_overfitting_penalty(
+    score_psi: Option<f64>,
+    max_feature_psi: Option<f64>,
+    permutation_importance_passed: bool,
+    feature_reproducibility_passed: bool,
+) -> f64 {
+    let stability_penalty = score_psi.unwrap_or(1.0) * 25.0 + max_feature_psi.unwrap_or(1.0) * 15.0;
+    let permutation_penalty = if permutation_importance_passed {
+        0.0
+    } else {
+        20.0
+    };
+    let reproducibility_penalty = if feature_reproducibility_passed {
+        0.0
+    } else {
+        20.0
+    };
+    ((stability_penalty + permutation_penalty + reproducibility_penalty) * 10_000.0).round()
+        / 10_000.0
 }
 
 fn eligible_sort_key(candidate: &AutoMlCandidateRank) -> f64 {
@@ -11356,6 +11480,64 @@ mod tests {
     }
 
     #[test]
+    fn automl_candidate_ranking_penalizes_unstable_candidates() {
+        let root = temp_root("automl-ranking-stability");
+        let stable_report = root.join("stable-validation.json");
+        let unstable_report = root.join("unstable-validation.json");
+        write_validation_report(
+            &stable_report,
+            "0.1.0-stable-xgboost-candidate",
+            "xgboost",
+            "gradient_boosted_tree",
+            0.83,
+            0.77,
+            0.73,
+            "passed",
+        );
+        write_validation_report(
+            &unstable_report,
+            "0.1.0-unstable-xgboost-candidate",
+            "xgboost",
+            "gradient_boosted_tree",
+            0.90,
+            0.82,
+            0.80,
+            "passed",
+        );
+        let mut unstable_json: serde_json::Value =
+            serde_json::from_str(&fs::read_to_string(&unstable_report).unwrap()).unwrap();
+        unstable_json["metrics_json"]["score_psi"] = serde_json::json!(0.249);
+        unstable_json["metrics_json"]["max_feature_psi"] = serde_json::json!(0.249);
+        fs::write(
+            &unstable_report,
+            serde_json::to_string(&unstable_json).unwrap(),
+        )
+        .unwrap();
+
+        let ranking = rank_automl_candidates(
+            &[
+                stable_report.to_string_lossy().into_owned(),
+                unstable_report.to_string_lossy().into_owned(),
+            ],
+            root.join("out"),
+        )
+        .expect("ranking");
+
+        assert_eq!(
+            ranking.recommended_candidate_model_version.as_deref(),
+            Some("0.1.0-stable-xgboost-candidate")
+        );
+        assert_eq!(
+            ranking.candidates[0].candidate_model_version,
+            "0.1.0-stable-xgboost-candidate"
+        );
+        assert!(
+            ranking.candidates[1].overfitting_penalty > ranking.candidates[0].overfitting_penalty
+        );
+        assert_eq!(ranking.candidates[1].gate_status, "passed");
+    }
+
+    #[test]
     fn automl_candidate_ranking_requires_rust_lifecycle_evidence() {
         let root = temp_root("automl-rust-evidence");
         let validation_report = root.join("validation.json");
@@ -12111,6 +12293,8 @@ mod tests {
                     "out_of_time_precision": precision,
                     "out_of_time_recall": recall,
                     "time_group_split_status": "passed",
+                    "time_split_field": "service_date",
+                    "group_split_fields": ["member_id", "policy_id", "provider_id"],
                     "leakage_check_status": leakage_status,
                     "shadow_comparison_status": "passed",
                     "serving_version_lock_status": "passed",
@@ -12120,6 +12304,13 @@ mod tests {
                     "rust_feature_set_manifest_uri": format!(
                         "s3://fwa-models/baseline_fwa/{candidate_model_version}/rust_feature_set/feature_set_manifest.json"
                     ),
+                    "feature_reproducibility_hash": format!("sha256:{candidate_model_version}-feature-set"),
+                    "permutation_importance_status": "passed",
+                    "permutation_importance_uri": format!(
+                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/permutation_importance.parquet"
+                    ),
+                    "score_psi": 0.04,
+                    "max_feature_psi": 0.08,
                     "onnx_parity_status": if algorithm == "xgboost" || algorithm == "lightgbm" {
                         "passed"
                     } else {

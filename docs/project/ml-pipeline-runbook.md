@@ -460,13 +460,16 @@ The worker writes:
 - `automl_candidate_ranking.json`;
 - `automl_review_tasks.json`.
 
-Ranking uses out-of-time AUC, average precision, precision, and recall, but
-promotion gates still dominate. Candidates stay blocked when label provenance,
-time/group split, leakage, shadow comparison, serving version lock, artifact
-integrity, Rust feature-set materialization, Rust serving artifact evaluation,
-fairness, AUC, or recall evidence is missing or failed. The output may
-recommend a candidate for human review; it must not activate a model or publish
-a rule.
+Ranking uses out-of-time AUC, average precision, precision, and recall, then
+subtracts an overfitting penalty from score PSI, max feature PSI, missing
+permutation importance, and missing feature reproducibility hash. Promotion
+gates still dominate. Candidates stay blocked when label provenance,
+time/group split fields, leakage, shadow comparison, serving version lock,
+artifact integrity, Rust feature-set materialization, Rust serving artifact
+evaluation, fairness, AUC, recall, score PSI, max feature PSI, permutation
+importance, or feature reproducibility evidence is missing or failed. The
+output may recommend a candidate for human review; it must not activate a model
+or publish a rule.
 
 ## Stage 6.6: Rust Serving Artifact Evaluation
 
