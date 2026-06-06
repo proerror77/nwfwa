@@ -4609,18 +4609,27 @@ pub async fn openapi_schema() -> Json<Value> {
                         "evidence_refs": {
                             "type": "array",
                             "minItems": 1,
-                            "description": "Structured evidence references must not contain PII.",
+                            "description": "Structured evidence references must not contain PII. Accepted candidates must include backtest evidence.",
                             "items": { "type": "string", "minLength": 1 }
                         }
                     }
                 },
                 "ReviewRuleCandidateResponse": {
                     "type": "object",
-                    "required": ["rule_id", "decision", "entered_rule_library", "evidence_refs"],
+                    "required": ["rule_id", "decision", "entered_rule_library", "accepted_for_governance_review", "active_rule_writeback", "evidence_refs"],
                     "properties": {
                         "rule_id": { "type": "string" },
                         "decision": { "type": "string", "enum": ["accepted", "rejected"] },
-                        "entered_rule_library": { "type": "boolean" },
+                        "entered_rule_library": {
+                            "type": "boolean",
+                            "description": "Always false for candidate review; activation requires later rule lifecycle gates."
+                        },
+                        "accepted_for_governance_review": { "type": "boolean" },
+                        "saved_draft_rule_id": { "type": ["string", "null"] },
+                        "active_rule_writeback": {
+                            "type": "boolean",
+                            "description": "Always false for candidate review."
+                        },
                         "evidence_refs": { "type": "array", "items": { "type": "string" } }
                     }
                 },

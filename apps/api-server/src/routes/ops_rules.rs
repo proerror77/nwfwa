@@ -206,7 +206,17 @@ pub struct ReviewRuleCandidateResponse {
     pub rule_id: String,
     pub decision: String,
     pub entered_rule_library: bool,
+    pub accepted_for_governance_review: bool,
+    pub saved_draft_rule_id: Option<String>,
+    pub active_rule_writeback: bool,
     pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, PartialEq)]
+struct CandidateReviewOutcome {
+    accepted_for_governance_review: bool,
+    saved_draft_rule_id: Option<String>,
+    active_rule_writeback: bool,
 }
 
 #[derive(Debug, Serialize)]
@@ -965,6 +975,10 @@ fn backtest_evidence_refs(request: &RuleBacktestRequest) -> Vec<String> {
         "rules:{}:v{}",
         request.rule.rule_id, request.rule.version
     )];
+    refs.push(format!(
+        "rule_backtests:{}:v{}",
+        request.rule.rule_id, request.rule.version
+    ));
     if let Some(dataset_uri) = normalized_optional_str(request.dataset_uri.as_deref()) {
         refs.push(format!("dataset:{dataset_uri}"));
     }
@@ -1103,7 +1117,41 @@ pub async fn review_rule_candidate(
         ));
     }
 
-    let entered_rule_library = request.decision == "accepted";
+    validate_candidate_review_backtest_evidence(&request.decision, &request.evidence_refs)?;
+    let mut saved_draft_rule_id = None;
+    if request.decision == "accepted" {
+        let backtest = state
+            .repository
+            .latest_rule_backtest(&request.rule.rule_id, request.rule.version)
+            .await
+            .map_err(internal_error("RULE_CANDIDATE_BACKTEST_LOAD_FAILED"))?;
+        let Some(backtest) = backtest else {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_BACKTEST_REQUIRED",
+                "accepted rule candidates require a completed backtest",
+            ));
+        };
+        if !backtest.blockers.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_BACKTEST_BLOCKED",
+                format!(
+                    "accepted rule candidate backtest blockers must be resolved: {}",
+                    backtest.blockers.join(", ")
+                ),
+            ));
+        }
+        let mut rule = request.rule.clone();
+        rule.scheme_family = Some(validate_rule_candidate(&rule)?);
+        let detail = state
+            .repository
+            .save_rule_candidate(rule, "rule-discovery-review".into())
+            .await
+            .map_err(internal_error("RULE_CANDIDATE_ACCEPT_SAVE_FAILED"))?;
+        saved_draft_rule_id = Some(detail.summary.rule_id);
+    }
+    let outcome = candidate_review_outcome(&request.decision, saved_draft_rule_id.clone());
     state
         .repository
         .save_audit_event(PersistedAuditEvent {
@@ -1128,7 +1176,10 @@ pub async fn review_rule_candidate(
                 "rule_version": request.rule.version,
                 "decision": request.decision,
                 "reviewer": request.reviewer,
-                "entered_rule_library": entered_rule_library,
+                "entered_rule_library": false,
+                "accepted_for_governance_review": outcome.accepted_for_governance_review,
+                "saved_draft_rule_id": outcome.saved_draft_rule_id,
+                "active_rule_writeback": outcome.active_rule_writeback,
                 "condition_count": request.rule.conditions.len(),
                 "note_present": !request.notes.trim().is_empty(),
             }),
@@ -1145,7 +1196,10 @@ pub async fn review_rule_candidate(
     Ok(Json(ReviewRuleCandidateResponse {
         rule_id: request.rule.rule_id,
         decision: request.decision,
-        entered_rule_library,
+        entered_rule_library: false,
+        accepted_for_governance_review: outcome.accepted_for_governance_review,
+        saved_draft_rule_id: outcome.saved_draft_rule_id,
+        active_rule_writeback: outcome.active_rule_writeback,
         evidence_refs: request.evidence_refs,
     }))
 }
@@ -2725,4 +2779,73 @@ fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) ->
 
 fn bad_request<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| ApiError::new(StatusCode::BAD_REQUEST, code, error.to_string())
+}
+
+fn validate_candidate_review_backtest_evidence(
+    decision: &str,
+    evidence_refs: &[String],
+) -> Result<(), ApiError> {
+    if decision != "accepted" {
+        return Ok(());
+    }
+    let has_backtest_evidence = evidence_refs.iter().any(|reference| {
+        let reference = reference.trim();
+        reference.starts_with("rule_candidate_backtests:")
+            || reference.starts_with("rule_backtests:")
+            || reference.starts_with("rule.backtest:")
+            || reference.starts_with("backtest:")
+    });
+    if has_backtest_evidence {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_CANDIDATE_BACKTEST_EVIDENCE_REQUIRED",
+            "accepted rule candidates require backtest evidence_refs",
+        ))
+    }
+}
+
+fn candidate_review_outcome(
+    decision: &str,
+    saved_draft_rule_id: Option<String>,
+) -> CandidateReviewOutcome {
+    let accepted_for_governance_review = decision == "accepted" && saved_draft_rule_id.is_some();
+    CandidateReviewOutcome {
+        accepted_for_governance_review,
+        saved_draft_rule_id: accepted_for_governance_review
+            .then(|| saved_draft_rule_id.expect("checked Some")),
+        active_rule_writeback: false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn accepted_candidate_review_requires_backtest_evidence() {
+        let result =
+            validate_candidate_review_backtest_evidence("accepted", &["rules:candidate:v1".into()]);
+
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn rejected_candidate_review_does_not_require_backtest_evidence() {
+        validate_candidate_review_backtest_evidence("rejected", &["rules:candidate:v1".into()])
+            .expect("rejected candidate review can record weak explanation rejection");
+    }
+
+    #[test]
+    fn accepted_candidate_review_exposes_governance_review_boundary() {
+        let outcome = candidate_review_outcome("accepted", Some("candidate_rule_1".into()));
+
+        assert!(outcome.accepted_for_governance_review);
+        assert_eq!(
+            outcome.saved_draft_rule_id.as_deref(),
+            Some("candidate_rule_1")
+        );
+        assert!(!outcome.active_rule_writeback);
+    }
 }

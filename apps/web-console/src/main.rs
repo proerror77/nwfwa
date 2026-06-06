@@ -4694,7 +4694,6 @@ fn rules_page() -> Html {
     let discovery_feature_fields = use_state(String::new);
     let discovery_tree_depth = use_state(|| "2".to_string());
     let evaluation_dataset_json = use_state(|| pretty_json(&Value::Array(rule_demo_samples())));
-    let candidate_owner = use_state(|| "rule-discovery".to_string());
     let selected_candidate_id = use_state(String::new);
     let rule_reviewer = use_state(|| "rule-review".to_string());
     let rule_review_notes = use_state(|| {
@@ -4894,11 +4893,16 @@ fn rules_page() -> Html {
         &*discovery_state,
         ApiState::Ready(response) if selected_rule_candidate(response, &selected_candidate_id).is_some()
     );
+    let selected_candidate_backtest_ready = matches!(
+        &*backtest_state,
+        ApiState::Ready(backtest)
+            if backtest.promotion_recommendation == "eligible_for_review" && backtest.blockers.is_empty()
+    );
     let accept_candidate = {
         let api_key = api_key.clone();
-        let candidate_owner = candidate_owner.clone();
         let selected_candidate_id = selected_candidate_id.clone();
         let discovery_state = discovery_state.clone();
+        let backtest_state = backtest_state.clone();
         let snapshot_state = snapshot_state.clone();
         let save_state = save_state.clone();
         let review_state = review_state.clone();
@@ -4922,9 +4926,38 @@ fn rules_page() -> Html {
                 return;
             };
             let candidate_rule_id = rule_candidate_id(&candidate);
-            let evidence_refs = parse_tags(&rule_review_evidence_refs);
+            let mut evidence_refs = parse_tags(&rule_review_evidence_refs);
+            let backtest = match &*backtest_state {
+                ApiState::Ready(backtest)
+                    if backtest.promotion_recommendation == "eligible_for_review"
+                        && backtest.blockers.is_empty() =>
+                {
+                    backtest.clone()
+                }
+                ApiState::Ready(backtest) => {
+                    review_state.set(ApiState::Failed(format!(
+                        "selected candidate backtest is not eligible: {}",
+                        if backtest.blockers.is_empty() {
+                            backtest.promotion_recommendation.clone()
+                        } else {
+                            refs_label(&backtest.blockers)
+                        }
+                    )));
+                    return;
+                }
+                _ => {
+                    review_state.set(ApiState::Failed(
+                        "run an eligible backtest before accepting this candidate".into(),
+                    ));
+                    return;
+                }
+            };
+            for evidence_ref in backtest.evidence_refs {
+                if !evidence_refs.contains(&evidence_ref) {
+                    evidence_refs.push(evidence_ref);
+                }
+            }
             let api_key = (*api_key).clone();
-            let owner = (*candidate_owner).clone();
             let reviewer = (*rule_reviewer).clone();
             let notes = (*rule_review_notes).clone();
             let rule_id = rule_id.clone();
@@ -4939,7 +4972,6 @@ fn rules_page() -> Html {
                 match accept_rule_candidate(
                     api_key.clone(),
                     candidate.rule,
-                    owner,
                     reviewer,
                     notes,
                     evidence_refs,
@@ -4948,15 +4980,12 @@ fn rules_page() -> Html {
                 {
                     Ok(response) => {
                         if let Some(saved_rule_id) = response
-                            .get("saved")
-                            .and_then(|saved| saved.pointer("/summary/rule_id"))
+                            .get("saved_draft_rule_id")
                             .and_then(Value::as_str)
                             .map(str::to_string)
                         {
                             rule_id.set(saved_rule_id.clone());
-                            save_state.set(ApiState::Ready(
-                                response.get("saved").cloned().unwrap_or(Value::Null),
-                            ));
+                            save_state.set(ApiState::Ready(response.clone()));
                         }
                         accepted_candidate_ids.set(push_unique(
                             (*accepted_candidate_ids).clone(),
@@ -5184,18 +5213,6 @@ fn rules_page() -> Html {
                         />
                     </label>
                     <label>
-                        {"Draft Owner"}
-                        <input
-                            value={(*candidate_owner).clone()}
-                            oninput={{
-                                let candidate_owner = candidate_owner.clone();
-                                Callback::from(move |event: InputEvent| {
-                                    candidate_owner.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                })
-                            }}
-                        />
-                    </label>
-                    <label>
                         {"Reviewer"}
                         <input
                             value={(*rule_reviewer).clone()}
@@ -5252,7 +5269,7 @@ fn rules_page() -> Html {
                     <button onclick={backtest_candidate} disabled={!selected_candidate_available || matches!(&*backtest_state, ApiState::Loading)}>
                         {if matches!(&*backtest_state, ApiState::Loading) { "Backtesting..." } else { "Run backtest" }}
                     </button>
-                    <button onclick={accept_candidate} disabled={!selected_candidate_available || matches!(&*review_state, ApiState::Loading)}>
+                    <button onclick={accept_candidate} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || matches!(&*review_state, ApiState::Loading)}>
                         {if matches!(&*review_state, ApiState::Loading) { "Reviewing..." } else { "Accept for governance review" }}
                     </button>
                     <button onclick={reject_candidate} disabled={!selected_candidate_available || matches!(&*review_state, ApiState::Loading)}>
@@ -13392,7 +13409,6 @@ fn optional_trimmed_value(input: &str) -> Option<String> {
 async fn accept_rule_candidate(
     api_key: String,
     rule: Value,
-    owner: String,
     reviewer: String,
     notes: String,
     evidence_refs: Vec<String>,
@@ -13407,34 +13423,18 @@ async fn accept_rule_candidate(
         return Err("human review notes are required".into());
     }
 
-    let saved = request_json::<Value>(
-        "/api/v1/ops/rules/candidates",
-        api_key.clone(),
-        json!({ "owner": owner, "rule": rule }),
-    )
-    .await?;
-    let rule_id = saved
-        .pointer("/summary/rule_id")
-        .and_then(Value::as_str)
-        .ok_or_else(|| "saved rule candidate response is missing summary.rule_id".to_string())?
-        .to_string();
-    let review = request_json::<Value>(
-        &format!("/api/v1/ops/rules/{rule_id}/promotion-reviews"),
+    request_json::<Value>(
+        "/api/v1/ops/rules/candidate-reviews",
         api_key,
         json!({
-            "decision": "approved",
+            "decision": "accepted",
             "reviewer": reviewer.trim(),
             "notes": notes.trim(),
             "evidence_refs": evidence_refs,
+            "rule": rule,
         }),
     )
-    .await?;
-    Ok(json!({
-        "decision": "approved",
-        "accepted_for_governance_review": true,
-        "saved": saved,
-        "review": review
-    }))
+    .await
 }
 
 async fn reject_rule_candidate(
@@ -13739,20 +13739,16 @@ fn rule_backtest_view(backtest_state: &UseStateHandle<ApiState<RuleBacktestRespo
 fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
     match &**save_state {
         ApiState::Idle => html! {},
-        ApiState::Loading => html! { <p>{"Saving draft rule..."}</p> },
+        ApiState::Loading => html! { <p>{"Saving accepted draft candidate..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(saved) => {
             let rule_id = saved
-                .pointer("/summary/rule_id")
+                .get("saved_draft_rule_id")
                 .and_then(Value::as_str)
                 .unwrap_or("draft rule");
-            let status = saved
-                .pointer("/summary/status")
-                .and_then(Value::as_str)
-                .unwrap_or("draft");
             html! {
                 <div class="success-note">
-                    {format!("Saved {rule_id} as {status}.")}
+                    {format!("Saved {rule_id} as draft candidate for governance review.")}
                 </div>
             }
         }
@@ -13762,7 +13758,7 @@ fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
 fn rule_candidate_review_state(review_state: &UseStateHandle<ApiState<Value>>) -> Html {
     match &**review_state {
         ApiState::Idle => html! {
-            <p class="empty">{"Save a discovered rule, then submit it for shadow review or record a human accept/reject decision."}</p>
+            <p class="empty">{"Run backtest, then accept a candidate for governance review or reject it without saving a draft."}</p>
         },
         ApiState::Loading => html! { <p>{"Submitting rule candidate review action..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },

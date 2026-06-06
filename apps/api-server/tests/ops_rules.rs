@@ -1578,6 +1578,163 @@ async fn records_rejected_discovered_candidate_review_without_saving_rule() {
 }
 
 #[tokio::test]
+async fn accepted_discovered_candidate_review_saves_draft_after_backtest_only() {
+    let app = build_app(test_config());
+
+    let candidate_rule = r#"{
+      "rule_id": "candidate_tree_accepted_review",
+      "version": 1,
+      "name": "Accepted tree candidate",
+      "review_mode": "both",
+      "scheme_family": "high_risk_claim",
+      "conditions": [
+        {
+          "field": "claim_amount_to_limit_ratio",
+          "operator": ">=",
+          "value": 0.8
+        }
+      ],
+      "action": {
+        "score": 30,
+        "alert_code": "TREE_ACCEPTED_REVIEW",
+        "recommended_action": "ManualReview",
+        "reason": "测试接受候选规则"
+      }
+    }"#;
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate-reviews",
+        &format!(
+            r#"{{
+              "decision": "accepted",
+              "reviewer": "rule-review",
+              "notes": "Accepted candidate after backtest evidence.",
+              "evidence_refs": ["dataset:inline", "backtest:precheck"],
+              "rule": {candidate_rule}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "RULE_CANDIDATE_BACKTEST_REQUIRED");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/backtest",
+        &format!(
+            r#"{{
+              "rule": {candidate_rule},
+              "samples": [
+                {{
+                  "external_claim_id": "CLM-CAND-TP-1",
+                  "claim_amount": "9000",
+                  "currency": "CNY",
+                  "service_date": "2026-01-05",
+                  "confirmed_fwa": true,
+                  "policy": {{
+                    "external_policy_id": "POL-CAND-TP-1",
+                    "coverage_start_date": "2026-01-01",
+                    "coverage_end_date": "2026-12-31",
+                    "coverage_limit": "10000"
+                  }}
+                }},
+                {{
+                  "external_claim_id": "CLM-CAND-TP-2",
+                  "claim_amount": "8500",
+                  "currency": "CNY",
+                  "service_date": "2026-01-07",
+                  "confirmed_fwa": true,
+                  "policy": {{
+                    "external_policy_id": "POL-CAND-TP-2",
+                    "coverage_start_date": "2026-01-01",
+                    "coverage_end_date": "2026-12-31",
+                    "coverage_limit": "10000"
+                  }}
+                }},
+                {{
+                  "external_claim_id": "CLM-CAND-TN",
+                  "claim_amount": "500",
+                  "currency": "CNY",
+                  "service_date": "2026-03-01",
+                  "confirmed_fwa": false,
+                  "policy": {{
+                    "external_policy_id": "POL-CAND-TN",
+                    "coverage_start_date": "2026-01-01",
+                    "coverage_end_date": "2026-12-31",
+                    "coverage_limit": "10000"
+                  }}
+                }}
+              ],
+              "expected_review_capacity": 5
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["promotion_recommendation"], "eligible_for_review");
+    assert!(body["blockers"].as_array().unwrap().is_empty());
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate-reviews",
+        &format!(
+            r#"{{
+              "decision": "accepted",
+              "reviewer": "rule-review",
+              "notes": "Accepted candidate after backtest evidence.",
+              "evidence_refs": ["dataset:inline", "backtest:api"],
+              "rule": {candidate_rule}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["rule_id"], "candidate_tree_accepted_review");
+    assert_eq!(body["decision"], "accepted");
+    assert_eq!(body["entered_rule_library"], false);
+    assert_eq!(body["accepted_for_governance_review"], true);
+    assert_eq!(
+        body["saved_draft_rule_id"],
+        "candidate_tree_accepted_review"
+    );
+    assert_eq!(body["active_rule_writeback"], false);
+
+    let (status, body) = json_request(
+        app.clone(),
+        "GET",
+        "/api/v1/ops/rules/candidate_tree_accepted_review",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["summary"]["status"], "draft");
+    assert_eq!(body["summary"]["active_version"], serde_json::Value::Null);
+
+    let (status, body) = json_request(
+        app,
+        "GET",
+        "/api/v1/ops/audit-events?event_type=rule.candidate.reviewed&rule_id=candidate_tree_accepted_review",
+        "{}",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    let event = &body["events"].as_array().unwrap()[0];
+    assert_eq!(event["payload"]["decision"], "accepted");
+    assert_eq!(event["payload"]["entered_rule_library"], false);
+    assert_eq!(event["payload"]["accepted_for_governance_review"], true);
+    assert_eq!(event["payload"]["active_rule_writeback"], false);
+}
+
+#[tokio::test]
 async fn deterministic_adjudication_rule_requires_customer_policy_gates() {
     let app = build_app(test_config());
 

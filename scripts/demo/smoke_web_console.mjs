@@ -205,8 +205,11 @@ async function main() {
     assertContains(builtText, "Candidate rule workflow", "web console rule discovery workbench bundle");
     assertContains(builtText, "Accept for governance review", "web console rule discovery workbench bundle");
     assertContains(builtText, "Reject selected candidate", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Run backtest, then accept a candidate for governance review or reject it without saving a draft.", "web console rule candidate review gate bundle");
     assertContains(builtText, "needs human review", "web console rule discovery workbench bundle");
-    assertContains(builtText, "accepted_for_governance_review", "web console rule discovery workbench bundle");
+    assertContains(builtText, "draft candidate for governance review", "web console rule discovery workbench bundle");
+    assertContains(sourceText, "saved_draft_rule_id", "web console rule discovery response handling");
+    assertNotContains(builtText, "Draft Owner", "web console rule discovery owner boundary bundle");
     assertNotContains(
       sourceText,
       '<option value="completed">{"completed"}</option>',

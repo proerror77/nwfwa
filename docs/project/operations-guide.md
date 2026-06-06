@@ -273,7 +273,8 @@ rule-candidate workflow contract. `run-retraining-job` uses that package to mine
 explainable rule candidates, run deterministic rule-candidate backtests, attach
 review-task evidence, and then register the provider output into FWA. The worker
 does not activate the model or write active rules; accepted rule candidates still
-require human governance review before rule-library writeback.
+require completed blocker-free backtest evidence and are saved only as draft
+candidates for human governance review before rule-library writeback.
 
 Scheduled MLOps monitoring plan:
 
