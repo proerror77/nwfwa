@@ -4714,7 +4714,10 @@ fn rules_page() -> Html {
     let save_state = use_state(|| ApiState::<Value>::Idle);
     let review_state = use_state(|| ApiState::<Value>::Idle);
     let shadow_state = use_state(|| ApiState::<Value>::Idle);
+    let backtested_candidate_id = use_state(String::new);
     let accepted_candidate_ids = use_state(Vec::<String>::new);
+    let shadowed_candidate_ids = use_state(Vec::<String>::new);
+    let final_accepted_candidate_ids = use_state(Vec::<String>::new);
     let rejected_candidate_ids = use_state(Vec::<String>::new);
 
     let load_rules = {
@@ -4766,7 +4769,11 @@ fn rules_page() -> Html {
         let backtest_state = backtest_state.clone();
         let save_state = save_state.clone();
         let review_state = review_state.clone();
+        let shadow_state = shadow_state.clone();
+        let backtested_candidate_id = backtested_candidate_id.clone();
         let accepted_candidate_ids = accepted_candidate_ids.clone();
+        let shadowed_candidate_ids = shadowed_candidate_ids.clone();
+        let final_accepted_candidate_ids = final_accepted_candidate_ids.clone();
         let rejected_candidate_ids = rejected_candidate_ids.clone();
         Callback::from(move |_| {
             let Ok(contribution) = explanation_contribution.trim().parse::<f64>() else {
@@ -4809,7 +4816,11 @@ fn rules_page() -> Html {
             backtest_state.set(ApiState::Idle);
             save_state.set(ApiState::Idle);
             review_state.set(ApiState::Idle);
+            shadow_state.set(ApiState::Idle);
+            backtested_candidate_id.set(String::new());
             accepted_candidate_ids.set(Vec::new());
+            shadowed_candidate_ids.set(Vec::new());
+            final_accepted_candidate_ids.set(Vec::new());
             rejected_candidate_ids.set(Vec::new());
             spawn_local(async move {
                 match request_json::<RuleDiscoveryResponse>(
@@ -4844,6 +4855,7 @@ fn rules_page() -> Html {
         let evaluation_dataset_json = evaluation_dataset_json.clone();
         let discovery_state = discovery_state.clone();
         let backtest_state = backtest_state.clone();
+        let backtested_candidate_id = backtested_candidate_id.clone();
         Callback::from(move |_| {
             let candidate_rule = match &*discovery_state {
                 ApiState::Ready(response) => {
@@ -4858,6 +4870,7 @@ fn rules_page() -> Html {
                 ));
                 return;
             };
+            let candidate_id = (*selected_candidate_id).clone();
             let samples = if discovery_dataset_uri.trim().is_empty() {
                 match parse_json_array(&evaluation_dataset_json, "evaluation dataset") {
                     Ok(samples) => samples,
@@ -4871,6 +4884,7 @@ fn rules_page() -> Html {
             };
             let api_key = (*api_key).clone();
             let backtest_state = backtest_state.clone();
+            let backtested_candidate_id = backtested_candidate_id.clone();
             let payload = rule_backtest_payload(
                 rule,
                 &discovery_dataset_uri,
@@ -4878,20 +4892,22 @@ fn rules_page() -> Html {
                 &discovery_claim_id_column,
                 samples,
             );
+            backtested_candidate_id.set(String::new());
             backtest_state.set(ApiState::Loading);
             spawn_local(async move {
-                backtest_state.set(
-                    match request_json::<RuleBacktestResponse>(
-                        "/api/v1/ops/rules/backtest",
-                        api_key,
-                        payload,
-                    )
-                    .await
-                    {
-                        Ok(response) => ApiState::Ready(response),
-                        Err(error) => ApiState::Failed(error),
-                    },
-                );
+                match request_json::<RuleBacktestResponse>(
+                    "/api/v1/ops/rules/backtest",
+                    api_key,
+                    payload,
+                )
+                .await
+                {
+                    Ok(response) => {
+                        backtested_candidate_id.set(candidate_id);
+                        backtest_state.set(ApiState::Ready(response));
+                    }
+                    Err(error) => backtest_state.set(ApiState::Failed(error)),
+                }
             });
         })
     };
@@ -4903,24 +4919,25 @@ fn rules_page() -> Html {
     let selected_candidate_backtest_ready = matches!(
         &*backtest_state,
         ApiState::Ready(backtest)
-            if backtest.promotion_recommendation == "eligible_for_review" && backtest.blockers.is_empty()
+            if *backtested_candidate_id == *selected_candidate_id
+                && backtest.promotion_recommendation == "eligible_for_review"
+                && backtest.blockers.is_empty()
     );
-    let selected_candidate_accepted = (*accepted_candidate_ids)
+    let selected_candidate_draft_saved = (*accepted_candidate_ids)
         .iter()
         .any(|id| id == selected_candidate_id.as_str());
-    let can_submit_shadow_evidence = matches!(&*backtest_state, ApiState::Ready(_))
-        && (!selected_candidate_available || selected_candidate_accepted);
-    let accept_candidate = {
+    let selected_candidate_shadow_ready = (*shadowed_candidate_ids)
+        .iter()
+        .any(|id| id == selected_candidate_id.as_str());
+    let can_submit_shadow_evidence = selected_candidate_backtest_ready && selected_candidate_draft_saved;
+    let save_candidate_draft = {
         let api_key = api_key.clone();
         let selected_candidate_id = selected_candidate_id.clone();
         let discovery_state = discovery_state.clone();
         let backtest_state = backtest_state.clone();
         let snapshot_state = snapshot_state.clone();
         let save_state = save_state.clone();
-        let review_state = review_state.clone();
-        let rule_reviewer = rule_reviewer.clone();
-        let rule_review_notes = rule_review_notes.clone();
-        let rule_review_evidence_refs = rule_review_evidence_refs.clone();
+        let shadow_state = shadow_state.clone();
         let rule_id = rule_id.clone();
         let accepted_candidate_ids = accepted_candidate_ids.clone();
         let rejected_candidate_ids = rejected_candidate_ids.clone();
@@ -4932,14 +4949,13 @@ fn rules_page() -> Html {
                 _ => None,
             };
             let Some(candidate) = candidate else {
-                review_state.set(ApiState::Failed(
+                save_state.set(ApiState::Failed(
                     "select a discovered candidate before review".into(),
                 ));
                 return;
             };
             let candidate_rule_id = rule_candidate_id(&candidate);
-            let mut evidence_refs = parse_tags(&rule_review_evidence_refs);
-            let backtest = match &*backtest_state {
+            let _backtest = match &*backtest_state {
                 ApiState::Ready(backtest)
                     if backtest.promotion_recommendation == "eligible_for_review"
                         && backtest.blockers.is_empty() =>
@@ -4947,7 +4963,7 @@ fn rules_page() -> Html {
                     backtest.clone()
                 }
                 ApiState::Ready(backtest) => {
-                    review_state.set(ApiState::Failed(format!(
+                    save_state.set(ApiState::Failed(format!(
                         "selected candidate backtest is not eligible: {}",
                         if backtest.blockers.is_empty() {
                             backtest.promotion_recommendation.clone()
@@ -4958,47 +4974,33 @@ fn rules_page() -> Html {
                     return;
                 }
                 _ => {
-                    review_state.set(ApiState::Failed(
-                        "run an eligible backtest before accepting this candidate".into(),
+                    save_state.set(ApiState::Failed(
+                        "run an eligible backtest before saving this candidate for shadow".into(),
                     ));
                     return;
                 }
             };
-            for evidence_ref in backtest.evidence_refs {
-                if !evidence_refs.contains(&evidence_ref) {
-                    evidence_refs.push(evidence_ref);
-                }
-            }
             let api_key = (*api_key).clone();
-            let reviewer = (*rule_reviewer).clone();
-            let notes = (*rule_review_notes).clone();
             let rule_id = rule_id.clone();
             let snapshot_state = snapshot_state.clone();
             let save_state = save_state.clone();
-            let review_state = review_state.clone();
+            let shadow_state = shadow_state.clone();
             let accepted_candidate_ids = accepted_candidate_ids.clone();
             let rejected_candidate_ids = rejected_candidate_ids.clone();
-            review_state.set(ApiState::Loading);
             save_state.set(ApiState::Loading);
             spawn_local(async move {
-                match accept_rule_candidate(
+                match save_rule_candidate_draft(
                     api_key.clone(),
                     candidate.rule,
-                    reviewer,
-                    notes,
-                    evidence_refs,
+                    Some("rule-discovery-shadow".into()),
                 )
                 .await
                 {
                     Ok(response) => {
-                        if let Some(saved_rule_id) = response
-                            .get("saved_draft_rule_id")
-                            .and_then(Value::as_str)
-                            .map(str::to_string)
-                        {
-                            rule_id.set(saved_rule_id.clone());
-                            save_state.set(ApiState::Ready(response.clone()));
-                        }
+                        let saved_rule_id =
+                            response_rule_id(&response).unwrap_or(candidate_rule_id.clone());
+                        rule_id.set(saved_rule_id.clone());
+                        save_state.set(ApiState::Ready(response.clone()));
                         accepted_candidate_ids.set(push_unique(
                             (*accepted_candidate_ids).clone(),
                             candidate_rule_id.clone(),
@@ -5007,7 +5009,7 @@ fn rules_page() -> Html {
                             (*rejected_candidate_ids).clone(),
                             &candidate_rule_id,
                         ));
-                        review_state.set(ApiState::Ready(response.clone()));
+                        shadow_state.set(ApiState::Idle);
                         snapshot_state.set(ApiState::Loading);
                         snapshot_state.set(
                             match get_rule_ops_snapshot(api_key, candidate_rule_id).await {
@@ -5018,8 +5020,92 @@ fn rules_page() -> Html {
                     }
                     Err(error) => {
                         save_state.set(ApiState::Failed(error.clone()));
-                        review_state.set(ApiState::Failed(error));
                     }
+                }
+            });
+        })
+    };
+
+    let accept_candidate = {
+        let api_key = api_key.clone();
+        let selected_candidate_id = selected_candidate_id.clone();
+        let discovery_state = discovery_state.clone();
+        let backtest_state = backtest_state.clone();
+        let review_state = review_state.clone();
+        let rule_reviewer = rule_reviewer.clone();
+        let rule_review_notes = rule_review_notes.clone();
+        let rule_review_evidence_refs = rule_review_evidence_refs.clone();
+        let final_accepted_candidate_ids = final_accepted_candidate_ids.clone();
+        let rejected_candidate_ids = rejected_candidate_ids.clone();
+        let shadowed_candidate_ids = shadowed_candidate_ids.clone();
+        Callback::from(move |_| {
+            let candidate = match &*discovery_state {
+                ApiState::Ready(response) => {
+                    selected_rule_candidate(response, &selected_candidate_id).cloned()
+                }
+                _ => None,
+            };
+            let Some(candidate) = candidate else {
+                review_state.set(ApiState::Failed(
+                    "select a discovered candidate before final review".into(),
+                ));
+                return;
+            };
+            let candidate_rule_id = rule_candidate_id(&candidate);
+            if !(*shadowed_candidate_ids)
+                .iter()
+                .any(|id| id == &candidate_rule_id)
+            {
+                review_state.set(ApiState::Failed(
+                    "submit shadow evidence before accepting this candidate".into(),
+                ));
+                return;
+            }
+            let mut evidence_refs = parse_tags(&rule_review_evidence_refs);
+            let backtest = match &*backtest_state {
+                ApiState::Ready(backtest)
+                    if backtest.promotion_recommendation == "eligible_for_review"
+                        && backtest.blockers.is_empty() =>
+                {
+                    backtest.clone()
+                }
+                _ => {
+                    review_state.set(ApiState::Failed(
+                        "run an eligible backtest before final candidate review".into(),
+                    ));
+                    return;
+                }
+            };
+            for evidence_ref in backtest.evidence_refs {
+                evidence_refs = push_unique(evidence_refs, evidence_ref);
+            }
+            evidence_refs = push_unique(
+                evidence_refs,
+                format!("rule_shadow_runs:artifacts/rules/{candidate_rule_id}/shadow_report.json"),
+            );
+            let api_key = (*api_key).clone();
+            let reviewer = (*rule_reviewer).clone();
+            let notes = (*rule_review_notes).clone();
+            let review_state = review_state.clone();
+            let final_accepted_candidate_ids = final_accepted_candidate_ids.clone();
+            let rejected_candidate_ids = rejected_candidate_ids.clone();
+            review_state.set(ApiState::Loading);
+            spawn_local(async move {
+                match accept_rule_candidate(api_key, candidate.rule, reviewer, notes, evidence_refs)
+                    .await
+                {
+                    Ok(response) => {
+                        final_accepted_candidate_ids.set(push_unique(
+                            (*final_accepted_candidate_ids).clone(),
+                            candidate_rule_id.clone(),
+                        ));
+                        rejected_candidate_ids.set(remove_id(
+                            (*rejected_candidate_ids).clone(),
+                            &candidate_rule_id,
+                        ));
+                        review_state.set(ApiState::Ready(response));
+                    }
+                    Err(error) => review_state.set(ApiState::Failed(error)),
                 }
             });
         })
@@ -5035,6 +5121,7 @@ fn rules_page() -> Html {
         let review_state = review_state.clone();
         let accepted_candidate_ids = accepted_candidate_ids.clone();
         let rejected_candidate_ids = rejected_candidate_ids.clone();
+        let final_accepted_candidate_ids = final_accepted_candidate_ids.clone();
         Callback::from(move |_| {
             let candidate = match &*discovery_state {
                 ApiState::Ready(response) => {
@@ -5056,6 +5143,7 @@ fn rules_page() -> Html {
             let review_state = review_state.clone();
             let accepted_candidate_ids = accepted_candidate_ids.clone();
             let rejected_candidate_ids = rejected_candidate_ids.clone();
+            let final_accepted_candidate_ids = final_accepted_candidate_ids.clone();
             review_state.set(ApiState::Loading);
             spawn_local(async move {
                 match reject_rule_candidate(api_key, candidate.rule, reviewer, notes, evidence_refs)
@@ -5068,6 +5156,10 @@ fn rules_page() -> Html {
                         ));
                         accepted_candidate_ids.set(remove_id(
                             (*accepted_candidate_ids).clone(),
+                            &candidate_rule_id,
+                        ));
+                        final_accepted_candidate_ids.set(remove_id(
+                            (*final_accepted_candidate_ids).clone(),
                             &candidate_rule_id,
                         ));
                         review_state.set(ApiState::Ready(response));
@@ -5084,6 +5176,7 @@ fn rules_page() -> Html {
         let selected_candidate_id = selected_candidate_id.clone();
         let discovery_state = discovery_state.clone();
         let accepted_candidate_ids = accepted_candidate_ids.clone();
+        let shadowed_candidate_ids = shadowed_candidate_ids.clone();
         let snapshot_state = snapshot_state.clone();
         let backtest_state = backtest_state.clone();
         let rule_reviewer = rule_reviewer.clone();
@@ -5114,7 +5207,7 @@ fn rules_page() -> Html {
                     .any(|id| id == &candidate_rule_id)
                 {
                     shadow_state.set(ApiState::Failed(
-                        "accept the discovered candidate as a draft before submitting shadow evidence for it".into(),
+                        "save the discovered candidate draft before submitting shadow evidence for it".into(),
                     ));
                     return;
                 }
@@ -5137,12 +5230,14 @@ fn rules_page() -> Html {
             let reviewer = (*rule_reviewer).clone();
             let notes = (*rule_review_notes).clone();
             let shadow_state = shadow_state.clone();
+            let shadowed_candidate_ids = shadowed_candidate_ids.clone();
             let load_rules = load_rules.clone();
+            let shadow_rule_id = target_rule_id.clone();
             shadow_state.set(ApiState::Loading);
             spawn_local(async move {
                 match submit_rule_shadow_run(
                     api_key,
-                    target_rule_id,
+                    shadow_rule_id,
                     target_rule_version,
                     backtest,
                     report_uri,
@@ -5153,6 +5248,10 @@ fn rules_page() -> Html {
                 .await
                 {
                     Ok(response) => {
+                        shadowed_candidate_ids.set(push_unique(
+                            (*shadowed_candidate_ids).clone(),
+                            target_rule_id.clone(),
+                        ));
                         shadow_state.set(ApiState::Ready(response));
                         load_rules.emit(());
                     }
@@ -5174,7 +5273,7 @@ fn rules_page() -> Html {
 
             <section class="panel result-stack">
                 <h3>{"Rule Discovery Workbench"}</h3>
-                {rule_backfill_pipeline(&discovery_state, &backtest_state, &save_state)}
+                {rule_backfill_pipeline(&discovery_state, &backtest_state, &save_state, &shadow_state, &review_state)}
                 <div class="form-grid">
                     <label>
                         {"Gate Rule ID"}
@@ -5365,11 +5464,14 @@ fn rules_page() -> Html {
                     <button onclick={backtest_candidate} disabled={!selected_candidate_available || matches!(&*backtest_state, ApiState::Loading)}>
                         {if matches!(&*backtest_state, ApiState::Loading) { "Backtesting..." } else { "Run backtest" }}
                     </button>
+                    <button onclick={save_candidate_draft} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || matches!(&*save_state, ApiState::Loading)}>
+                        {if matches!(&*save_state, ApiState::Loading) { "Saving draft..." } else { "Save draft for shadow" }}
+                    </button>
                     <button onclick={submit_shadow_evidence} disabled={!can_submit_shadow_evidence || matches!(&*shadow_state, ApiState::Loading)}>
                         {if matches!(&*shadow_state, ApiState::Loading) { "Submitting shadow..." } else { "Submit shadow evidence" }}
                     </button>
-                    <button onclick={accept_candidate} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || matches!(&*review_state, ApiState::Loading)}>
-                        {if matches!(&*review_state, ApiState::Loading) { "Reviewing..." } else { "Accept for governance review" }}
+                    <button onclick={accept_candidate} disabled={!selected_candidate_available || !selected_candidate_backtest_ready || !selected_candidate_shadow_ready || matches!(&*review_state, ApiState::Loading)}>
+                        {if matches!(&*review_state, ApiState::Loading) { "Reviewing..." } else { "Accept after shadow evidence" }}
                     </button>
                     <button onclick={reject_candidate} disabled={!selected_candidate_available || matches!(&*review_state, ApiState::Loading)}>
                         {"Reject selected candidate"}
@@ -5378,14 +5480,16 @@ fn rules_page() -> Html {
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh gates" }}
                     </button>
                 </div>
-                {rule_shadow_run_state(&shadow_state)}
                 {rule_candidate_review_state(&review_state)}
                 {rule_candidate_workflow(
                     &discovery_state,
                     &backtest_state,
                     &save_state,
+                    &shadow_state,
                     &selected_candidate_id,
                     &accepted_candidate_ids,
+                    &shadowed_candidate_ids,
+                    &final_accepted_candidate_ids,
                     &rejected_candidate_ids,
                 )}
             </section>
@@ -6037,6 +6141,18 @@ fn mlops_workspace_page() -> Html {
         })
     };
 
+    let (activation_allowed, activation_blockers) = match &*snapshot_state {
+        ApiState::Ready(snapshot) => (
+            snapshot.model_ops.gates.blockers.is_empty(),
+            snapshot.model_ops.gates.blockers.clone(),
+        ),
+        ApiState::Idle | ApiState::Loading => (
+            false,
+            vec!["load promotion gates before activation".into()],
+        ),
+        ApiState::Failed(error) => (false, vec![error.clone()]),
+    };
+
     {
         let load_workspace = load_workspace.clone();
         use_effect_with((), move |_| {
@@ -6568,14 +6684,18 @@ fn mlops_workspace_page() -> Html {
                         <button onclick={governed_action("monitoring_rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Open rollback review"}</button>
                         <button onclick={governed_action("alert_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit alert decision"}</button>
                         <button onclick={governed_action("alert_escalate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Escalate alert to review"}</button>
-                        <button onclick={governed_action("claim_retraining_job")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Claim next queued job"}</button>
-                        <button onclick={governed_action("update_retraining_job")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Update job status"}</button>
-                        <button onclick={governed_action("register_retraining_output")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Register provider output"}</button>
+                        <button onclick={governed_action("register_retraining_output")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Register completed provider output"}</button>
                         <button onclick={review_anomaly_candidate} disabled={matches!(&*action_state, ApiState::Loading)}>{"Review anomaly candidate"}</button>
                         <button onclick={governed_action("promotion_review")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Submit release review"}</button>
-                        <button onclick={governed_action("activate")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
+                        <button onclick={governed_action("activate")} disabled={!activation_allowed || matches!(&*action_state, ApiState::Loading)}>{"Activate approved candidate"}</button>
                         <button onclick={governed_action("rollback")} disabled={matches!(&*action_state, ApiState::Loading)}>{"Rollback active model"}</button>
                     </div>
+                    if !activation_allowed {
+                        <div class="compact-list">
+                            <span>{"Activation blocked by promotion gates"}</span>
+                            {for activation_blockers.iter().map(|blocker| html! { <span>{blocker}</span> })}
+                        </div>
+                    }
                     <MlopsActionView state={(*action_state).clone()} />
                 </section>
             </div>
@@ -6729,8 +6849,8 @@ fn mlops_training_jobs(snapshot: &MlopsWorkspaceSnapshot) -> Html {
         <section class="panel result-stack mlops-training-panel">
             <div class="section-header">
                 <div>
-                    <h3>{"Provider Training Job Operations"}</h3>
-                    <p>{"Offline retraining jobs prove dispatch, validation output, artifact identity, and registration status without automatic promotion."}</p>
+                    <h3>{"Provider Output Handoff"}</h3>
+                    <p>{"External training status is read here only as handoff evidence. FWA registers completed candidate outputs; it does not operate the training platform."}</p>
                 </div>
                 <span class="status-token neutral">{format!("{} jobs", snapshot.retraining_jobs.len())}</span>
             </div>
@@ -13847,6 +13967,22 @@ async fn accept_rule_candidate(
     .await
 }
 
+async fn save_rule_candidate_draft(
+    api_key: String,
+    rule: Value,
+    owner: Option<String>,
+) -> Result<Value, String> {
+    request_json::<Value>(
+        "/api/v1/ops/rules/candidates",
+        api_key,
+        json!({
+            "owner": owner,
+            "rule": rule,
+        }),
+    )
+    .await
+}
+
 async fn reject_rule_candidate(
     api_key: String,
     rule: Value,
@@ -13876,6 +14012,19 @@ async fn reject_rule_candidate(
         }),
     )
     .await
+}
+
+fn response_rule_id(response: &Value) -> Option<String> {
+    response
+        .get("saved_draft_rule_id")
+        .and_then(Value::as_str)
+        .or_else(|| {
+            response
+                .get("summary")
+                .and_then(|summary| summary.get("rule_id"))
+                .and_then(Value::as_str)
+        })
+        .map(str::to_string)
 }
 
 async fn submit_rule_shadow_run(
@@ -14039,9 +14188,10 @@ fn rule_backfill_pipeline(
     discovery_state: &UseStateHandle<ApiState<RuleDiscoveryResponse>>,
     backtest_state: &UseStateHandle<ApiState<RuleBacktestResponse>>,
     save_state: &UseStateHandle<ApiState<Value>>,
+    shadow_state: &UseStateHandle<ApiState<Value>>,
+    review_state: &UseStateHandle<ApiState<Value>>,
 ) -> Html {
     let nodes = [
-        ("Explain", true, "model contribution"),
         (
             "Discover",
             matches!(&**discovery_state, ApiState::Ready(_)),
@@ -14053,9 +14203,19 @@ fn rule_backfill_pipeline(
             state_label(backtest_state),
         ),
         (
-            "Accept",
+            "Draft",
             matches!(&**save_state, ApiState::Ready(_)),
             state_label(save_state),
+        ),
+        (
+            "Shadow",
+            matches!(&**shadow_state, ApiState::Ready(_)),
+            state_label(shadow_state),
+        ),
+        (
+            "Review",
+            matches!(&**review_state, ApiState::Ready(_)),
+            state_label(review_state),
         ),
     ];
     gate_pipeline("Candidate rule workflow", &nodes)
@@ -14077,8 +14237,11 @@ fn rule_candidate_workflow(
     discovery_state: &UseStateHandle<ApiState<RuleDiscoveryResponse>>,
     backtest_state: &UseStateHandle<ApiState<RuleBacktestResponse>>,
     save_state: &UseStateHandle<ApiState<Value>>,
+    shadow_state: &UseStateHandle<ApiState<Value>>,
     selected_candidate_id: &UseStateHandle<String>,
     accepted_candidate_ids: &UseStateHandle<Vec<String>>,
+    shadowed_candidate_ids: &UseStateHandle<Vec<String>>,
+    final_accepted_candidate_ids: &UseStateHandle<Vec<String>>,
     rejected_candidate_ids: &UseStateHandle<Vec<String>>,
 ) -> Html {
     html! {
@@ -14087,10 +14250,13 @@ fn rule_candidate_workflow(
                 discovery_state,
                 selected_candidate_id,
                 accepted_candidate_ids,
+                shadowed_candidate_ids,
+                final_accepted_candidate_ids,
                 rejected_candidate_ids,
             )}
             {rule_backtest_view(backtest_state)}
             {rule_save_view(save_state)}
+            {rule_shadow_run_state(shadow_state)}
         </div>
     }
 }
@@ -14099,6 +14265,8 @@ fn rule_discovery_candidates_view(
     discovery_state: &UseStateHandle<ApiState<RuleDiscoveryResponse>>,
     selected_candidate_id: &UseStateHandle<String>,
     accepted_candidate_ids: &UseStateHandle<Vec<String>>,
+    shadowed_candidate_ids: &UseStateHandle<Vec<String>>,
+    final_accepted_candidate_ids: &UseStateHandle<Vec<String>>,
     rejected_candidate_ids: &UseStateHandle<Vec<String>>,
 ) -> Html {
     match &**discovery_state {
@@ -14121,11 +14289,15 @@ fn rule_discovery_candidates_view(
                         let review_status = candidate_review_label(
                             &candidate_id,
                             accepted_candidate_ids,
+                            shadowed_candidate_ids,
+                            final_accepted_candidate_ids,
                             rejected_candidate_ids,
                         );
                         let review_tone = candidate_review_tone(
                             &candidate_id,
                             accepted_candidate_ids,
+                            shadowed_candidate_ids,
+                            final_accepted_candidate_ids,
                             rejected_candidate_ids,
                         );
                         let selected_candidate_id = selected_candidate_id.clone();
@@ -14161,38 +14333,62 @@ fn rule_discovery_candidates_view(
 fn candidate_review_label(
     candidate_id: &str,
     accepted_candidate_ids: &UseStateHandle<Vec<String>>,
+    shadowed_candidate_ids: &UseStateHandle<Vec<String>>,
+    final_accepted_candidate_ids: &UseStateHandle<Vec<String>>,
     rejected_candidate_ids: &UseStateHandle<Vec<String>>,
 ) -> &'static str {
-    if accepted_candidate_ids
-        .iter()
-        .any(|accepted_id| accepted_id == candidate_id)
-    {
-        "accepted for governance review"
-    } else if rejected_candidate_ids
+    if rejected_candidate_ids
         .iter()
         .any(|rejected_id| rejected_id == candidate_id)
     {
         "rejected"
+    } else if final_accepted_candidate_ids
+        .iter()
+        .any(|accepted_id| accepted_id == candidate_id)
+    {
+        "accepted after shadow review"
+    } else if shadowed_candidate_ids
+        .iter()
+        .any(|shadowed_id| shadowed_id == candidate_id)
+    {
+        "shadow evidence ready"
+    } else if accepted_candidate_ids
+        .iter()
+        .any(|draft_id| draft_id == candidate_id)
+    {
+        "draft saved for shadow"
     } else {
-        "needs human review"
+        "needs backtest"
     }
 }
 
 fn candidate_review_tone(
     candidate_id: &str,
     accepted_candidate_ids: &UseStateHandle<Vec<String>>,
+    shadowed_candidate_ids: &UseStateHandle<Vec<String>>,
+    final_accepted_candidate_ids: &UseStateHandle<Vec<String>>,
     rejected_candidate_ids: &UseStateHandle<Vec<String>>,
 ) -> &'static str {
-    if accepted_candidate_ids
-        .iter()
-        .any(|accepted_id| accepted_id == candidate_id)
-    {
-        "accepted"
-    } else if rejected_candidate_ids
+    if rejected_candidate_ids
         .iter()
         .any(|rejected_id| rejected_id == candidate_id)
     {
         "rejected"
+    } else if final_accepted_candidate_ids
+        .iter()
+        .any(|accepted_id| accepted_id == candidate_id)
+    {
+        "accepted"
+    } else if shadowed_candidate_ids
+        .iter()
+        .any(|shadowed_id| shadowed_id == candidate_id)
+    {
+        "strong"
+    } else if accepted_candidate_ids
+        .iter()
+        .any(|draft_id| draft_id == candidate_id)
+    {
+        "warning"
     } else {
         "pending-review"
     }
@@ -14227,16 +14423,13 @@ fn rule_backtest_view(backtest_state: &UseStateHandle<ApiState<RuleBacktestRespo
 fn rule_save_view(save_state: &UseStateHandle<ApiState<Value>>) -> Html {
     match &**save_state {
         ApiState::Idle => html! {},
-        ApiState::Loading => html! { <p>{"Saving accepted draft candidate..."}</p> },
+        ApiState::Loading => html! { <p>{"Saving draft candidate for shadow..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(saved) => {
-            let rule_id = saved
-                .get("saved_draft_rule_id")
-                .and_then(Value::as_str)
-                .unwrap_or("draft rule");
+            let rule_id = response_rule_id(saved).unwrap_or_else(|| "draft rule".into());
             html! {
                 <div class="success-note">
-                    {format!("Saved {rule_id} as draft candidate for governance review.")}
+                    {format!("Saved {rule_id} as draft candidate for shadow evidence.")}
                 </div>
             }
         }
@@ -14262,7 +14455,7 @@ fn rule_shadow_run_state(shadow_state: &UseStateHandle<ApiState<Value>>) -> Html
 fn rule_candidate_review_state(review_state: &UseStateHandle<ApiState<Value>>) -> Html {
     match &**review_state {
         ApiState::Idle => html! {
-            <p class="empty">{"Run backtest, then accept a candidate for governance review or reject it without saving a draft."}</p>
+            <p class="empty">{"Run backtest, save a draft, submit shadow evidence, then accept or reject the selected candidate."}</p>
         },
         ApiState::Loading => html! { <p>{"Submitting rule candidate review action..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },

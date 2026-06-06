@@ -142,10 +142,11 @@ async function main() {
     assertContains(builtText, "Alert Delivery Queue", "web console mlops alert delivery bundle");
     assertContains(builtText, "Submit alert decision", "web console mlops alert delivery bundle");
     assertContains(builtText, "Escalate alert to review", "web console mlops alert delivery bundle");
-    assertContains(builtText, "Provider Training Job Operations", "web console mlops training job bundle");
-    assertContains(builtText, "Claim next queued job", "web console mlops training job bundle");
-    assertContains(builtText, "Update job status", "web console mlops training job bundle");
-    assertContains(builtText, "Register provider output", "web console mlops training job bundle");
+    assertContains(builtText, "Provider Output Handoff", "web console mlops output handoff bundle");
+    assertContains(builtText, "Register completed provider output", "web console mlops output handoff bundle");
+    assertContains(builtText, "Activation blocked by promotion gates", "web console mlops activation gate bundle");
+    assertNotContains(builtText, "Claim next queued job", "web console mlops training platform boundary bundle");
+    assertNotContains(builtText, "Update job status", "web console mlops training platform boundary bundle");
     assertContains(builtText, "Candidate artifact SHA", "web console mlops provider output bundle");
     assertContains(builtText, "Training artifact", "web console mlops provider output bundle");
     assertContains(builtText, "Serving manifest", "web console mlops provider output bundle");
@@ -213,11 +214,13 @@ async function main() {
     assertContains(builtText, "Candidate rule workflow", "web console rule discovery workbench bundle");
     assertContains(builtText, "Submit shadow evidence", "web console rule shadow evidence bundle");
     assertContains(builtText, "Shadow evidence submitted for promotion gates.", "web console rule shadow evidence bundle");
-    assertContains(builtText, "Accept for governance review", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Save draft for shadow", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Accept after shadow evidence", "web console rule discovery workbench bundle");
     assertContains(builtText, "Reject selected candidate", "web console rule discovery workbench bundle");
-    assertContains(builtText, "Run backtest, then accept a candidate for governance review or reject it without saving a draft.", "web console rule candidate review gate bundle");
-    assertContains(builtText, "needs human review", "web console rule discovery workbench bundle");
-    assertContains(builtText, "draft candidate for governance review", "web console rule discovery workbench bundle");
+    assertContains(builtText, "Run backtest, save a draft, submit shadow evidence, then accept or reject the selected candidate.", "web console rule candidate review gate bundle");
+    assertContains(builtText, "needs backtest", "web console rule discovery workbench bundle");
+    assertContains(builtText, "draft saved for shadow", "web console rule discovery workbench bundle");
+    assertContains(builtText, "shadow evidence ready", "web console rule discovery workbench bundle");
     assertContains(sourceText, "saved_draft_rule_id", "web console rule discovery response handling");
     assertNotContains(builtText, "Draft Owner", "web console rule discovery owner boundary bundle");
     assertNotContains(

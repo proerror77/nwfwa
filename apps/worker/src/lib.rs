@@ -7653,6 +7653,13 @@ fn enrich_retraining_output_with_rule_candidate_workflow(
         .join("rule_candidate_backtest_review_tasks.json")
         .to_string_lossy()
         .into_owned();
+    let backtested_rule_candidates = backtest
+        .candidate_results
+        .iter()
+        .map(|result| result.rule_library_writeback_template.clone())
+        .collect::<Vec<_>>();
+    let backtested_rule_candidate_count = backtested_rule_candidates.len();
+    output.mined_rule_candidates = backtested_rule_candidates;
 
     let Some(metrics) = output.metrics_json.as_object_mut() else {
         bail!("training output metrics_json must be an object");
@@ -7684,6 +7691,14 @@ fn enrich_retraining_output_with_rule_candidate_workflow(
     metrics.insert(
         "rule_candidate_review_task_count".into(),
         serde_json::json!(backtest.review_tasks.len()),
+    );
+    metrics.insert(
+        "mined_rule_candidates_source".into(),
+        serde_json::Value::String("deterministic_rule_candidate_backtest".into()),
+    );
+    metrics.insert(
+        "mined_rule_candidates_backtested_count".into(),
+        serde_json::json!(backtested_rule_candidate_count),
     );
     metrics.insert(
         "rule_library_writeback_status".into(),
@@ -10795,12 +10810,32 @@ mod tests {
             output.metrics_json["rule_library_writeback_status"],
             "blocked_pending_human_review_and_policy_governance_approval"
         );
+        assert_eq!(
+            output.metrics_json["mined_rule_candidates_source"],
+            "deterministic_rule_candidate_backtest"
+        );
+        assert_eq!(
+            output.metrics_json["mined_rule_candidates_backtested_count"],
+            3
+        );
         assert!(Path::new(report_uri).is_file());
         assert!(Path::new(review_tasks_uri).is_file());
         assert!(output
             .evidence_refs
             .contains(&format!("rule_candidate_backtests:{report_uri}")));
-        assert_eq!(output.mined_rule_candidates.len(), 1);
+        assert_eq!(output.mined_rule_candidates.len(), 3);
+        assert_eq!(
+            output.mined_rule_candidates[0]["conditions"][0]["operator"],
+            ">="
+        );
+        assert!(output.mined_rule_candidates[0]["conditions"][0]["value"]
+            .as_f64()
+            .expect("backtested rule candidate threshold")
+            .is_finite());
+        assert_eq!(
+            output.mined_rule_candidates[0]["action"]["action_class"],
+            "manual_review"
+        );
     }
 
     #[test]
