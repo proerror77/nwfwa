@@ -6,6 +6,7 @@ import pandas as pd
 from fastapi.testclient import TestClient
 
 from app.main import app
+from app.schemas import TrainRequest
 from app.training import train_from_manifest
 from app.training_jobs import TrainingJobStore
 
@@ -499,6 +500,7 @@ def test_training_job_api_persists_failed_training_job(tmp_path: Path):
             "job_id": "failed_training_job",
             "actor": "external-training-platform",
             "algorithm": "logistic_regression",
+            "max_attempts": 1,
         },
     )
 
@@ -511,3 +513,97 @@ def test_training_job_api_persists_failed_training_job(tmp_path: Path):
     assert failed["provider_output"] is None
     assert failed["error"]["code"] == "TRAINING_FAILED"
     assert "missing_manifest.json" in failed["error"]["message"]
+
+
+def test_training_job_retry_and_claim_lease_are_durable(tmp_path: Path):
+    db_path = tmp_path / "training_jobs.sqlite3"
+    store = TrainingJobStore(db_path)
+    request = TrainRequest(
+        manifest_path=str(tmp_path / "missing_manifest.json"),
+        artifact_base_uri=str(tmp_path / "artifacts"),
+        model_key="baseline_fwa",
+        base_model_version="0.1.0",
+        job_id="retry_training_job",
+        actor="external-training-platform",
+        algorithm="logistic_regression",
+        max_attempts=2,
+    )
+    store.create_queued(request)
+
+    first_claim = store.claim_next(worker_id="worker-a", lease_seconds=-1)
+    assert first_claim["status"] == "running"
+    assert first_claim["worker_id"] == "worker-a"
+    assert first_claim["attempt_count"] == 1
+
+    reclaimed = store.claim_next(worker_id="worker-b", lease_seconds=900)
+    assert reclaimed["job_id"] == "retry_training_job"
+    assert reclaimed["worker_id"] == "worker-b"
+    assert reclaimed["attempt_count"] == 2
+
+    stale_completion = store.mark_completed(
+        "retry_training_job",
+        "worker-a",
+        {
+            "candidate_model_version": "0.1.0-candidate-retry_training_job",
+            "metrics_json": {"algorithm": "logistic_regression"},
+        },
+        {"registry_kind": "training_artifact_registry"},
+    )
+    assert stale_completion is None
+
+    exhausted = store.mark_failed(
+        "retry_training_job",
+        "worker-b",
+        {"code": "TRAINING_FAILED", "message": "boom"},
+    )
+    assert exhausted["status"] == "failed"
+    assert exhausted["error"]["message"] == "boom"
+
+    store = TrainingJobStore(db_path)
+    assert store.claim_next(worker_id="worker-c", lease_seconds=900) is None
+    assert store.get("retry_training_job")["status"] == "failed"
+
+
+def test_training_job_claim_run_and_artifact_registry_endpoint(tmp_path: Path):
+    manifest_path = write_training_manifest(tmp_path)
+    db_path = tmp_path / "training_jobs.sqlite3"
+    store = TrainingJobStore(db_path)
+    app.state.training_job_store = store
+    store.create_queued(
+        TrainRequest(
+            manifest_path=str(manifest_path),
+            artifact_base_uri=str(tmp_path / "artifacts"),
+            model_key="baseline_fwa",
+            base_model_version="0.1.0",
+            job_id="claimed_training_job",
+            actor="external-training-platform",
+            algorithm="logistic_regression",
+        )
+    )
+
+    claim_response = client.post(
+        "/training-jobs/claim-next",
+        json={"worker_id": "trainer-worker", "lease_seconds": 900},
+    )
+    assert claim_response.status_code == 200
+    claimed = claim_response.json()
+    assert claimed["job_id"] == "claimed_training_job"
+    assert claimed["status"] == "running"
+    assert claimed["worker_id"] == "trainer-worker"
+
+    run_response = client.post(
+        "/training-jobs/claimed_training_job/run",
+        json={"worker_id": "trainer-worker", "lease_seconds": 900},
+    )
+    assert run_response.status_code == 200
+    completed = run_response.json()
+    assert completed["status"] == "completed"
+    assert completed["provider_output"]["candidate_model_version"] == (
+        "0.1.0-candidate-claimed_training_job"
+    )
+
+    artifacts_response = client.get("/training-jobs/claimed_training_job/artifacts")
+    assert artifacts_response.status_code == 200
+    artifact_registry = artifacts_response.json()["artifact_registry"]
+    assert artifact_registry["job_id"] == "claimed_training_job"
+    assert artifact_registry["artifact_registry_uri"].endswith("/artifact_registry.json")

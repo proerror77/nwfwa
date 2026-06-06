@@ -299,6 +299,10 @@ training in the service background task runner, and writes
 `GET /training-jobs/{job_id}` until the job is completed, validates
 `provider_output`, and can save it for review. Set `FWA_TRAINING_JOB_DB` when
 the default `data/ml-service/training_jobs.sqlite3` location should be changed.
+For worker-style execution, `POST /training-jobs/claim-next` leases the next
+queued or expired job to a worker, `POST /training-jobs/{job_id}/run` executes a
+claimed job with worker ownership checks, and
+`GET /training-jobs/{job_id}/artifacts` returns the completed artifact registry.
 Add `--register --api-url "$FWA_API_BASE_URL" --api-key "$FWA_API_KEY"` only
 when the completed output should be posted to
 `/api/v1/ops/model-retraining-jobs/{job_id}/output`. This keeps FWA on the

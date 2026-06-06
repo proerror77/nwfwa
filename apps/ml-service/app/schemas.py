@@ -17,6 +17,12 @@ class TrainRequest(BaseModel):
     job_id: str
     actor: str
     algorithm: str | None = None
+    max_attempts: int = Field(default=2, ge=1, le=5)
+
+
+class ClaimTrainingJobRequest(BaseModel):
+    worker_id: str
+    lease_seconds: int = Field(default=900, ge=30, le=86400)
 
 
 class ModelExplanation(BaseModel):

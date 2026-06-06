@@ -96,8 +96,9 @@ and rollback. Production training may run on an external training platform, but
 the platform must consume the same governed Parquet dataset manifest and return
 the same retraining output payload that the API validates. The demo keeps the
 Python HTTP ML service as a compatibility path with a local SQLite durable
-training queue and artifact registry manifest, while FWA remains the consumer of
-completed provider output rather than the training executor.
+training queue, worker lease/retry controls, and artifact registry manifest,
+while FWA remains the consumer of completed provider output rather than the
+training executor.
 
 ### Dataset And Feature Lineage
 

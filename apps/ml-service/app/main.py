@@ -1,10 +1,10 @@
 import os
 from pathlib import Path
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException
+from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from .schemas import ScoreRequest, ScoreResponse, TrainRequest
+from .schemas import ClaimTrainingJobRequest, ScoreRequest, ScoreResponse, TrainRequest
 from .scorer import ModelServingError, score_claim
 from .training import train_from_manifest
 from .training_jobs import TrainingJobStore, attach_artifact_registry
@@ -66,9 +66,17 @@ def create_training_job(
             },
         )
     if record["status"] == "queued" and not existing:
-        background_tasks.add_task(execute_training_job, request)
+        background_tasks.add_task(execute_next_training_job, "ml-service-background")
     status_code = 202 if record["status"] in {"queued", "running"} else 200
     return JSONResponse(record, status_code=status_code)
+
+
+@app.get("/training-jobs")
+def list_training_jobs(
+    status: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, object]:
+    return {"jobs": training_job_store().list(status=status, limit=limit)}
 
 
 @app.get("/training-jobs/{job_id}")
@@ -85,9 +93,100 @@ def get_training_job(job_id: str) -> dict[str, object]:
     return record
 
 
-def execute_training_job(request: TrainRequest) -> None:
+@app.get("/training-jobs/{job_id}/artifacts")
+def get_training_job_artifacts(job_id: str) -> dict[str, object]:
+    record = training_job_store().get(job_id)
+    if record is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "TRAINING_JOB_NOT_FOUND",
+                "message": f"training job not found: {job_id}",
+            },
+        )
+    if record["artifact_registry"] is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "TRAINING_ARTIFACT_REGISTRY_NOT_READY",
+                "message": f"training artifact registry is not ready for job: {job_id}",
+            },
+        )
+    return {
+        "job_id": job_id,
+        "status": record["status"],
+        "artifact_registry": record["artifact_registry"],
+    }
+
+
+@app.post("/training-jobs/claim-next")
+def claim_next_training_job(request: ClaimTrainingJobRequest) -> JSONResponse:
+    record = training_job_store().claim_next(
+        worker_id=request.worker_id,
+        lease_seconds=request.lease_seconds,
+    )
+    if record is None:
+        return JSONResponse(
+            {
+                "status": "empty",
+                "message": "no queued or expired training job is available",
+            },
+            status_code=404,
+        )
+    return JSONResponse(record, status_code=200)
+
+
+@app.post("/training-jobs/{job_id}/run")
+def run_claimed_training_job(
+    job_id: str,
+    request: ClaimTrainingJobRequest,
+) -> dict[str, object]:
+    record = training_job_store().claim_job(
+        job_id,
+        worker_id=request.worker_id,
+        lease_seconds=request.lease_seconds,
+    )
+    if record is None:
+        record = training_job_store().get(job_id)
+        if record is None:
+            raise HTTPException(
+                status_code=404,
+                detail={
+                    "code": "TRAINING_JOB_NOT_FOUND",
+                    "message": f"training job not found: {job_id}",
+                },
+            )
+        if record["status"] != "running" or record["worker_id"] != request.worker_id:
+            raise HTTPException(
+                status_code=409,
+                detail={
+                    "code": "TRAINING_JOB_NOT_CLAIMED",
+                    "message": f"training job is not claimed by worker: {request.worker_id}",
+                },
+            )
+    completed = execute_training_job(record, request.worker_id)
+    if completed is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "TRAINING_JOB_LEASE_LOST",
+                "message": f"training job lease is no longer owned by worker: {request.worker_id}",
+            },
+        )
+    return completed
+
+
+def execute_next_training_job(worker_id: str) -> None:
     store = training_job_store()
-    store.mark_running(request.job_id)
+    record = store.claim_next(worker_id=worker_id, lease_seconds=900)
+    if record is None:
+        return
+    execute_training_job(record, worker_id)
+
+
+def execute_training_job(record: dict[str, object], worker_id: str) -> dict[str, object] | None:
+    request = TrainRequest(**record["request"])
+    store = training_job_store()
     try:
         provider_output = run_training(request)
         artifact_registry = attach_artifact_registry(
@@ -98,9 +197,13 @@ def execute_training_job(request: TrainRequest) -> None:
             request.base_model_version,
         )
     except HTTPException as error:
-        store.mark_failed(request.job_id, error.detail)
-        return
-    store.mark_completed(request.job_id, provider_output, artifact_registry)
+        return store.mark_failed(request.job_id, worker_id, error.detail)
+    return store.mark_completed(
+        request.job_id,
+        worker_id,
+        provider_output,
+        artifact_registry,
+    )
 
 
 def run_training(request: TrainRequest) -> dict[str, object]:
