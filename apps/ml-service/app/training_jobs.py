@@ -26,8 +26,11 @@ CREATE TABLE IF NOT EXISTS training_jobs (
     governance_boundary TEXT NOT NULL,
     attempt_count INTEGER NOT NULL DEFAULT 0,
     max_attempts INTEGER NOT NULL DEFAULT 2,
+    retry_delay_seconds INTEGER NOT NULL DEFAULT 60,
     worker_id TEXT,
     lease_expires_at TEXT,
+    next_attempt_at TEXT,
+    dead_letter_at TEXT,
     queued_at TEXT NOT NULL,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL,
@@ -64,8 +67,11 @@ class TrainingJobStore:
         migrations = {
             "attempt_count": "ALTER TABLE training_jobs ADD COLUMN attempt_count INTEGER NOT NULL DEFAULT 0",
             "max_attempts": "ALTER TABLE training_jobs ADD COLUMN max_attempts INTEGER NOT NULL DEFAULT 2",
+            "retry_delay_seconds": "ALTER TABLE training_jobs ADD COLUMN retry_delay_seconds INTEGER NOT NULL DEFAULT 60",
             "worker_id": "ALTER TABLE training_jobs ADD COLUMN worker_id TEXT",
             "lease_expires_at": "ALTER TABLE training_jobs ADD COLUMN lease_expires_at TEXT",
+            "next_attempt_at": "ALTER TABLE training_jobs ADD COLUMN next_attempt_at TEXT",
+            "dead_letter_at": "ALTER TABLE training_jobs ADD COLUMN dead_letter_at TEXT",
             "queued_at": "ALTER TABLE training_jobs ADD COLUMN queued_at TEXT",
         }
         for column, statement in migrations.items():
@@ -97,8 +103,11 @@ class TrainingJobStore:
             "error": None,
             "attempt_count": 0,
             "max_attempts": request.max_attempts,
+            "retry_delay_seconds": request.retry_delay_seconds,
             "worker_id": None,
             "lease_expires_at": None,
+            "next_attempt_at": None,
+            "dead_letter_at": None,
             "submit_path": submit_path(request.job_id),
             "governance_boundary": GOVERNANCE_BOUNDARY,
             "queued_at": now,
@@ -120,10 +129,11 @@ class TrainingJobStore:
                     candidate_model_version, algorithm, actor, request_json,
                     provider_output_json, artifact_registry_json, error_json,
                     submit_path, governance_boundary, attempt_count, max_attempts,
-                    worker_id, lease_expires_at, queued_at, created_at, updated_at,
-                    started_at, completed_at, failed_at
+                    retry_delay_seconds, worker_id, lease_expires_at,
+                    next_attempt_at, dead_letter_at, queued_at, created_at,
+                    updated_at, started_at, completed_at, failed_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     record["job_id"],
@@ -142,8 +152,11 @@ class TrainingJobStore:
                     record["governance_boundary"],
                     record["attempt_count"],
                     record["max_attempts"],
+                    record["retry_delay_seconds"],
                     record["worker_id"],
                     record["lease_expires_at"],
+                    record["next_attempt_at"],
+                    record["dead_letter_at"],
                     record["queued_at"],
                     record["created_at"],
                     record["updated_at"],
@@ -174,12 +187,12 @@ class TrainingJobStore:
                     started_at = COALESCE(started_at, ?)
                 WHERE job_id = ?
                   AND (
-                    status = 'queued'
+                    (status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
                     OR (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
                   )
                   AND attempt_count < max_attempts
                 """,
-                (worker_id, lease_expires_at, now, now, job_id, now),
+                (worker_id, lease_expires_at, now, now, job_id, now, now),
             )
             if updated.rowcount == 0:
                 return None
@@ -195,14 +208,14 @@ class TrainingJobStore:
                 SELECT job_id
                 FROM training_jobs
                 WHERE (
-                    status = 'queued'
+                    (status = 'queued' AND (next_attempt_at IS NULL OR next_attempt_at <= ?))
                     OR (status = 'running' AND lease_expires_at IS NOT NULL AND lease_expires_at <= ?)
                 )
                   AND attempt_count < max_attempts
                 ORDER BY queued_at, created_at, job_id
                 LIMIT 1
                 """,
-                (now,),
+                (now, now),
             ).fetchone()
             if row is None:
                 connection.commit()
@@ -244,6 +257,8 @@ class TrainingJobStore:
                     error_json = NULL,
                     worker_id = NULL,
                     lease_expires_at = NULL,
+                    next_attempt_at = NULL,
+                    dead_letter_at = NULL,
                     updated_at = ?,
                     completed_at = ?
                 WHERE job_id = ?
@@ -267,6 +282,31 @@ class TrainingJobStore:
                 return None
         return self.get(job_id)
 
+    def renew_lease(
+        self,
+        job_id: str,
+        worker_id: str,
+        lease_seconds: int,
+    ) -> dict[str, Any] | None:
+        now = utc_now()
+        lease_expires_at = utc_after(seconds=lease_seconds)
+        with self._lock, self._connect() as connection:
+            updated = connection.execute(
+                """
+                UPDATE training_jobs
+                SET lease_expires_at = ?,
+                    updated_at = ?
+                WHERE job_id = ?
+                  AND status = 'running'
+                  AND worker_id = ?
+                  AND (lease_expires_at IS NULL OR lease_expires_at > ?)
+                """,
+                (lease_expires_at, now, job_id, worker_id, now),
+            )
+            if updated.rowcount == 0:
+                return None
+        return self.get(job_id)
+
     def mark_failed(
         self,
         job_id: str,
@@ -275,6 +315,16 @@ class TrainingJobStore:
     ) -> dict[str, Any] | None:
         now = utc_now()
         with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT attempt_count, max_attempts, retry_delay_seconds FROM training_jobs WHERE job_id = ?",
+                (job_id,),
+            ).fetchone()
+            if row is None:
+                return None
+            will_retry = row["attempt_count"] < row["max_attempts"]
+            next_attempt_at = (
+                utc_after(seconds=row["retry_delay_seconds"]) if will_retry else None
+            )
             updated = connection.execute(
                 """
                 UPDATE training_jobs
@@ -285,6 +335,11 @@ class TrainingJobStore:
                     error_json = ?,
                     worker_id = NULL,
                     lease_expires_at = NULL,
+                    next_attempt_at = ?,
+                    dead_letter_at = CASE
+                        WHEN attempt_count < max_attempts THEN NULL
+                        ELSE ?
+                    END,
                     queued_at = CASE
                         WHEN attempt_count < max_attempts THEN ?
                         ELSE queued_at
@@ -298,7 +353,16 @@ class TrainingJobStore:
                   AND status = 'running'
                   AND worker_id = ?
                 """,
-                (json.dumps(error, sort_keys=True), now, now, now, job_id, worker_id),
+                (
+                    json.dumps(error, sort_keys=True),
+                    next_attempt_at,
+                    now,
+                    now,
+                    now,
+                    now,
+                    job_id,
+                    worker_id,
+                ),
             )
             if updated.rowcount == 0:
                 return None
@@ -311,15 +375,17 @@ class TrainingJobStore:
                 """
                 UPDATE training_jobs
                 SET status = 'queued',
+                    attempt_count = 0,
                     error_json = NULL,
                     worker_id = NULL,
                     lease_expires_at = NULL,
+                    next_attempt_at = NULL,
+                    dead_letter_at = NULL,
                     queued_at = ?,
                     updated_at = ?,
                     failed_at = NULL
                 WHERE job_id = ?
                   AND status = 'failed'
-                  AND attempt_count < max_attempts
                 """,
                 (now, now, job_id),
             )
@@ -466,8 +532,11 @@ def row_to_record(row: sqlite3.Row) -> dict[str, Any]:
         "error": parse_json(row["error_json"]),
         "attempt_count": row["attempt_count"],
         "max_attempts": row["max_attempts"],
+        "retry_delay_seconds": row["retry_delay_seconds"],
         "worker_id": row["worker_id"],
         "lease_expires_at": row["lease_expires_at"],
+        "next_attempt_at": row["next_attempt_at"],
+        "dead_letter_at": row["dead_letter_at"],
         "submit_path": row["submit_path"],
         "governance_boundary": row["governance_boundary"],
         "queued_at": row["queued_at"],

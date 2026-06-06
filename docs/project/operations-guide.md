@@ -303,6 +303,11 @@ For worker-style execution, `POST /training-jobs/claim-next` leases the next
 queued or expired job to a worker, `POST /training-jobs/{job_id}/run` executes a
 claimed job with worker ownership checks, and
 `GET /training-jobs/{job_id}/artifacts` returns the completed artifact registry.
+Workers can extend long-running ownership with
+`POST /training-jobs/{job_id}/renew-lease`. Failed jobs wait until
+`next_attempt_at` before another worker can claim them; exhausted jobs keep
+`dead_letter_at` and can be manually requeued with
+`POST /training-jobs/{job_id}/retry`.
 For a separate training worker process, run:
 
 ```bash

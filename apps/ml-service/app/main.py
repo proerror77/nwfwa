@@ -179,5 +179,41 @@ def run_claimed_training_job(
         )
     return completed
 
+
+@app.post("/training-jobs/{job_id}/renew-lease")
+def renew_training_job_lease(
+    job_id: str,
+    request: ClaimTrainingJobRequest,
+) -> dict[str, object]:
+    record = training_job_store().renew_lease(
+        job_id,
+        worker_id=request.worker_id,
+        lease_seconds=request.lease_seconds,
+    )
+    if record is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "TRAINING_JOB_LEASE_NOT_RENEWED",
+                "message": f"training job lease could not be renewed by worker: {request.worker_id}",
+            },
+        )
+    return record
+
+
+@app.post("/training-jobs/{job_id}/retry")
+def retry_training_job(job_id: str) -> dict[str, object]:
+    record = training_job_store().retry_failed(job_id)
+    if record is None:
+        raise HTTPException(
+            status_code=409,
+            detail={
+                "code": "TRAINING_JOB_RETRY_NOT_AVAILABLE",
+                "message": f"training job cannot be requeued: {job_id}",
+            },
+        )
+    return record
+
+
 def run_training(request: TrainRequest) -> dict[str, object]:
     return run_training_request(request)

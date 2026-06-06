@@ -18,6 +18,7 @@ class TrainRequest(BaseModel):
     actor: str
     algorithm: str | None = None
     max_attempts: int = Field(default=2, ge=1, le=5)
+    retry_delay_seconds: int = Field(default=60, ge=0, le=3600)
 
 
 class ClaimTrainingJobRequest(BaseModel):
