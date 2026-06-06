@@ -82,8 +82,10 @@ The API server uses:
 
 The ML service is the demo scoring boundary and local training-platform
 compatibility path. Its training-job API uses a SQLite-backed durable queue and
-artifact registry manifest for repo-local orchestration; it is not a distributed
-enterprise scheduler. The Docker image uses `python:3.12-slim`.
+artifact registry manifest for repo-local orchestration, and
+`python -m app.training_worker` can run the queue from a separate worker
+process; it is not a distributed enterprise scheduler. The Docker image uses
+`python:3.12-slim`.
 
 ## Frontend
 

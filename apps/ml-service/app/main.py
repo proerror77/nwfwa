@@ -1,13 +1,12 @@
 import os
-from pathlib import Path
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
 from .schemas import ClaimTrainingJobRequest, ScoreRequest, ScoreResponse, TrainRequest
 from .scorer import ModelServingError, score_claim
-from .training import train_from_manifest
-from .training_jobs import TrainingJobStore, attach_artifact_registry
+from .training_runner import execute_next_training_job, execute_training_job, run_training_request
+from .training_jobs import TrainingJobStore
 
 app = FastAPI(title="FWA ML Service")
 
@@ -66,7 +65,12 @@ def create_training_job(
             },
         )
     if record["status"] == "queued" and not existing:
-        background_tasks.add_task(execute_next_training_job, "ml-service-background")
+        background_tasks.add_task(
+            execute_next_training_job,
+            training_job_store(),
+            "ml-service-background",
+            900,
+        )
     status_code = 202 if record["status"] in {"queued", "running"} else 200
     return JSONResponse(record, status_code=status_code)
 
@@ -164,7 +168,7 @@ def run_claimed_training_job(
                     "message": f"training job is not claimed by worker: {request.worker_id}",
                 },
             )
-    completed = execute_training_job(record, request.worker_id)
+    completed = execute_training_job(training_job_store(), record, request.worker_id)
     if completed is None:
         raise HTTPException(
             status_code=409,
@@ -175,50 +179,5 @@ def run_claimed_training_job(
         )
     return completed
 
-
-def execute_next_training_job(worker_id: str) -> None:
-    store = training_job_store()
-    record = store.claim_next(worker_id=worker_id, lease_seconds=900)
-    if record is None:
-        return
-    execute_training_job(record, worker_id)
-
-
-def execute_training_job(record: dict[str, object], worker_id: str) -> dict[str, object] | None:
-    request = TrainRequest(**record["request"])
-    store = training_job_store()
-    try:
-        provider_output = run_training(request)
-        artifact_registry = attach_artifact_registry(
-            provider_output,
-            request.job_id,
-            request.actor,
-            request.model_key,
-            request.base_model_version,
-        )
-    except HTTPException as error:
-        return store.mark_failed(request.job_id, worker_id, error.detail)
-    return store.mark_completed(
-        request.job_id,
-        worker_id,
-        provider_output,
-        artifact_registry,
-    )
-
-
 def run_training(request: TrainRequest) -> dict[str, object]:
-    try:
-        return train_from_manifest(
-            manifest_path=Path(request.manifest_path),
-            artifact_base_uri=Path(request.artifact_base_uri),
-            model_key=request.model_key,
-            base_model_version=request.base_model_version,
-            job_id=request.job_id,
-            actor=request.actor,
-            algorithm=request.algorithm,
-        )
-    except (OSError, ValueError, TypeError) as error:
-        raise HTTPException(
-            status_code=400,
-            detail={"code": "TRAINING_FAILED", "message": str(error)},
-        ) from error
+    return run_training_request(request)
