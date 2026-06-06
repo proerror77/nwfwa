@@ -1169,7 +1169,139 @@ fn validate_retraining_output_request(
             "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
         )?;
     }
+    validate_retraining_output_artifact_evaluation(request)?;
+    validate_retraining_output_rule_candidate_workflow(request)?;
     validate_training_package_rule_candidates(request)?;
+    Ok(())
+}
+
+fn validate_retraining_output_artifact_evaluation(
+    request: &CompleteModelRetrainingJobRequest,
+) -> Result<(), ApiError> {
+    let metrics = request.metrics_json.as_object().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_METRICS",
+            "metrics_json must be a non-empty object",
+        )
+    })?;
+    let evaluation_passed = [
+        "model_artifact_evaluation_status",
+        "model_artifact_evaluation_gate_status",
+    ]
+    .into_iter()
+    .any(|field| metrics.get(field).and_then(|value| value.as_str()) == Some("passed"));
+    if !evaluation_passed {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION",
+            "model retraining output requires passed model artifact evaluation evidence",
+        ));
+    }
+    let Some(report_uri) = metrics
+        .get("model_artifact_evaluation_report_uri")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    else {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION",
+            "model retraining output requires model_artifact_evaluation_report_uri",
+        ));
+    };
+    validate_json_report_uri(report_uri, "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION")?;
+    let expected_ref = format!("model_artifact_evaluations:{report_uri}");
+    if !request
+        .evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+            format!("model retraining output evidence_refs must include {expected_ref}"),
+        ));
+    }
+    Ok(())
+}
+
+fn validate_retraining_output_rule_candidate_workflow(
+    request: &CompleteModelRetrainingJobRequest,
+) -> Result<(), ApiError> {
+    let has_rule_candidate_workflow = request.feature_importance_uri.is_some()
+        || request
+            .mined_rule_candidates
+            .as_ref()
+            .is_some_and(|candidates| !candidates.is_empty());
+    if !has_rule_candidate_workflow {
+        return Ok(());
+    }
+    let metrics = request.metrics_json.as_object().ok_or_else(|| {
+        ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_METRICS",
+            "metrics_json must be a non-empty object",
+        )
+    })?;
+    if metrics
+        .get("rule_candidate_backtest_status")
+        .and_then(|value| value.as_str())
+        != Some("passed")
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW",
+            "model retraining output rule candidates require passed backtest evidence",
+        ));
+    }
+    if metrics
+        .get("rule_library_writeback_status")
+        .and_then(|value| value.as_str())
+        != Some("blocked_pending_human_review_and_policy_governance_approval")
+    {
+        return Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW",
+            "model retraining output rule candidates must remain blocked pending human review",
+        ));
+    }
+    for (field, evidence_prefix) in [
+        (
+            "rule_candidate_backtest_report_uri",
+            "rule_candidate_backtests",
+        ),
+        (
+            "rule_candidate_review_tasks_uri",
+            "rule_candidate_review_tasks",
+        ),
+    ] {
+        let Some(uri) = metrics
+            .get(field)
+            .and_then(|value| value.as_str())
+            .map(str::trim)
+            .filter(|value| !value.is_empty())
+        else {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW",
+                format!("model retraining output rule candidates require {field}"),
+            ));
+        };
+        validate_json_report_uri(uri, "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW")?;
+        let expected_ref = format!("{evidence_prefix}:{uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!("model retraining output evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
     Ok(())
 }
 

@@ -1069,6 +1069,7 @@ struct RuleBacktestRow {
 struct TrainingCommand {
     program: String,
     args: Vec<String>,
+    workdir: Option<PathBuf>,
 }
 
 pub async fn claim_next_retraining_job(
@@ -1182,6 +1183,8 @@ pub async fn complete_retraining_job_with_training_output(
     artifact_base_uri: &str,
     training_manifest: &str,
     trainer_python: &str,
+    trainer_workdir: Option<&str>,
+    algorithm: Option<&str>,
 ) -> anyhow::Result<serde_json::Value> {
     let output = build_training_retraining_output(
         job,
@@ -1189,6 +1192,8 @@ pub async fn complete_retraining_job_with_training_output(
         artifact_base_uri,
         training_manifest,
         trainer_python,
+        trainer_workdir,
+        algorithm,
     )?;
     let output =
         enrich_retraining_output_with_model_artifact_evaluation(output, training_manifest).await?;
@@ -1204,6 +1209,8 @@ pub async fn run_one_retraining_job(
     artifact_base_uri: &str,
     training_manifest: Option<&str>,
     trainer_python: &str,
+    trainer_workdir: Option<&str>,
+    algorithm: Option<&str>,
 ) -> anyhow::Result<serde_json::Value> {
     let job = claim_next_retraining_job(
         api_base_url,
@@ -1235,6 +1242,8 @@ pub async fn run_one_retraining_job(
             artifact_base_uri,
             training_manifest,
             trainer_python,
+            trainer_workdir,
+            algorithm,
         )
         .await
     } else {
@@ -2872,25 +2881,39 @@ fn build_training_command(
     artifact_base_uri: &str,
     job: &ClaimedRetrainingJob,
     actor: &str,
+    trainer_workdir: Option<&str>,
+    algorithm: Option<&str>,
 ) -> TrainingCommand {
+    let mut args = vec![
+        "-m".into(),
+        "app.train".into(),
+        "--manifest".into(),
+        manifest_path.into(),
+        "--artifact-base-uri".into(),
+        artifact_base_uri.into(),
+        "--model-key".into(),
+        job.model_key.clone(),
+        "--base-model-version".into(),
+        job.model_version.clone(),
+        "--job-id".into(),
+        job.job_id.clone(),
+        "--actor".into(),
+        actor.into(),
+    ];
+    if let Some(algorithm) = algorithm
+        .map(str::trim)
+        .filter(|algorithm| !algorithm.is_empty())
+    {
+        args.push("--algorithm".into());
+        args.push(algorithm.into());
+    }
     TrainingCommand {
         program: python.to_string(),
-        args: vec![
-            "-m".into(),
-            "app.train".into(),
-            "--manifest".into(),
-            manifest_path.into(),
-            "--artifact-base-uri".into(),
-            artifact_base_uri.into(),
-            "--model-key".into(),
-            job.model_key.clone(),
-            "--base-model-version".into(),
-            job.model_version.clone(),
-            "--job-id".into(),
-            job.job_id.clone(),
-            "--actor".into(),
-            actor.into(),
-        ],
+        args,
+        workdir: trainer_workdir
+            .map(str::trim)
+            .filter(|workdir| !workdir.is_empty())
+            .map(PathBuf::from),
     }
 }
 
@@ -7413,6 +7436,8 @@ fn build_training_retraining_output(
     artifact_base_uri: &str,
     training_manifest: &str,
     trainer_python: &str,
+    trainer_workdir: Option<&str>,
+    algorithm: Option<&str>,
 ) -> anyhow::Result<CompleteRetrainingJobPayload> {
     let training_command = build_training_command(
         trainer_python,
@@ -7420,9 +7445,15 @@ fn build_training_retraining_output(
         artifact_base_uri,
         job,
         actor,
+        trainer_workdir,
+        algorithm,
     );
-    let output = Command::new(&training_command.program)
-        .args(&training_command.args)
+    let mut command = Command::new(&training_command.program);
+    command.args(&training_command.args);
+    if let Some(workdir) = &training_command.workdir {
+        command.current_dir(workdir);
+    }
+    let output = command
         .output()
         .with_context(|| format!("run model training command {}", training_command.program))?;
     if !output.status.success() {
@@ -8460,9 +8491,12 @@ mod tests {
             "artifacts/models",
             &job,
             "trainer-worker",
+            Some("apps/ml-service"),
+            Some("xgboost"),
         );
 
         assert_eq!(command.program, "python3");
+        assert_eq!(command.workdir, Some(PathBuf::from("apps/ml-service")));
         assert_eq!(
             command.args,
             vec![
@@ -8480,6 +8514,8 @@ mod tests {
                 "model_retraining_job_1",
                 "--actor",
                 "trainer-worker",
+                "--algorithm",
+                "xgboost",
             ]
         );
     }

@@ -2113,8 +2113,11 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
             "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
             "model_serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
+            "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
             "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
-            "model_evaluations:eval_baseline_retraining_job_candidate"
+            "model_evaluations:eval_baseline_retraining_job_candidate",
+            "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+            "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
           ],
           "auc": "0.86",
           "ks": "0.48",
@@ -2128,7 +2131,13 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "metrics_json": {
             "score_psi": 0.04,
             "shadow_comparison_status": "passed",
-            "review_capacity_threshold_status": "passed"
+            "review_capacity_threshold_status": "passed",
+            "model_artifact_evaluation_status": "passed",
+            "model_artifact_evaluation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+            "rule_candidate_backtest_status": "passed",
+            "rule_candidate_backtest_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+            "rule_candidate_review_tasks_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json",
+            "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval"
           },
           "mined_rule_candidates": [
             {
@@ -2289,8 +2298,11 @@ async fn rejects_invalid_model_retraining_output_contract() {
           "model_retraining_jobs:job_1",
           "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
           "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+          "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
           "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
-          "model_evaluations:eval_baseline_retraining_job_candidate"
+          "model_evaluations:eval_baseline_retraining_job_candidate",
+          "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+          "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
         ],
         "auc": "0.86",
         "ks": "0.48",
@@ -2301,7 +2313,15 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "threshold": "0.52",
         "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
         "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
-        "metrics_json": {"score_psi": 0.04}
+        "metrics_json": {
+          "score_psi": 0.04,
+          "model_artifact_evaluation_status": "passed",
+          "model_artifact_evaluation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+          "rule_candidate_backtest_status": "passed",
+          "rule_candidate_backtest_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+          "rule_candidate_review_tasks_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json",
+          "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval"
+        }
     });
 
     let mut invalid_metric = valid_request.clone();
@@ -2369,6 +2389,57 @@ async fn rejects_invalid_model_retraining_output_contract() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "INVALID_RETRAINING_OUTPUT_METRICS");
+
+    let mut missing_artifact_evaluation = valid_request.clone();
+    missing_artifact_evaluation["metrics_json"]["model_artifact_evaluation_status"] =
+        serde_json::json!("missing");
+    let payload = missing_artifact_evaluation.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_ARTIFACT_EVALUATION"
+    );
+
+    let mut missing_rule_backtest = valid_request.clone();
+    missing_rule_backtest["metrics_json"]["rule_candidate_backtest_status"] =
+        serde_json::json!("missing");
+    let payload = missing_rule_backtest.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW"
+    );
+
+    let mut unsafe_rule_writeback = valid_request.clone();
+    unsafe_rule_writeback["metrics_json"]["rule_library_writeback_status"] =
+        serde_json::json!("ready_for_writeback");
+    let payload = unsafe_rule_writeback.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE_WORKFLOW"
+    );
 
     let mut csv_feature_importance = valid_request.clone();
     csv_feature_importance["feature_importance_uri"] =
@@ -2494,8 +2565,11 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
+        "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
         "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
-        "model_evaluations:eval_baseline_retraining_job_candidate"
+        "model_evaluations:eval_baseline_retraining_job_candidate",
+        "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+        "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
     ]);
     let payload = serving_manifest_evidence.to_string();
     let (status, _body) = json_request(
@@ -2556,8 +2630,11 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_retraining_jobs:job_1",
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
+        "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
         "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
-        "model_evaluations:eval_baseline_retraining_job_candidate"
+        "model_evaluations:eval_baseline_retraining_job_candidate",
+        "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+        "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
     ]);
     let payload = rust_json_model_artifact.to_string();
     let (status, _body) = json_request(
