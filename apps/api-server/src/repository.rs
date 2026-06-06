@@ -4373,8 +4373,13 @@ pub struct PostgresScoringRepository {
 
 impl PostgresScoringRepository {
     pub async fn connect(database_url: &str) -> anyhow::Result<Self> {
+        let max_connections = std::env::var("FWA_DB_MAX_CONNECTIONS")
+            .ok()
+            .and_then(|value| value.parse::<u32>().ok())
+            .filter(|value| *value > 0)
+            .unwrap_or(5);
         let pool = PgPoolOptions::new()
-            .max_connections(5)
+            .max_connections(max_connections)
             .connect(database_url)
             .await?;
         Ok(Self { pool })

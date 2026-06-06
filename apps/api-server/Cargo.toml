@@ -33,8 +33,8 @@ serde_json.workspace = true
 sha2.workspace = true
 sqlx.workspace = true
 tokio.workspace = true
+tower = { version = "0.5", features = ["limit", "util"] }
 tracing.workspace = true
 tracing-subscriber.workspace = true
 
 [dev-dependencies]
-tower = { version = "0.5", features = ["util"] }

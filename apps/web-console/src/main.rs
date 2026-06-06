@@ -7,7 +7,7 @@ use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
 
-const API_KEY_DEFAULT: &str = "dev-secret";
+const API_KEY_DEFAULT: &str = "aiclaim-demo-key";
 const DEFAULT_MODULE: &str = "Dashboard";
 const API_UNAVAILABLE_MESSAGE: &str =
     "API server is unavailable. Start the API server on 127.0.0.1:8080, then refresh this workspace.";
@@ -528,7 +528,7 @@ const CONTRACT_PANELS: &[&str] = &[
 ];
 
 const SAMPLE_INBOX_PAYLOAD: &str = r#"{
-  "systemCode": "tpa-demo",
+  "systemCode": "AiClaim Core",
   "transDate": "2026-05-27 21:22:31",
   "transNo": "f8d0e88391ac4685929d0ca1cb411e7a",
   "reportCase": {
@@ -642,7 +642,7 @@ const SAMPLE_INBOX_PAYLOAD: &str = r#"{
 }"#;
 
 const LIVE_TPA_DEMO_PAYLOAD: &str = r#"{
-  "systemCode": "tpa-demo",
+  "systemCode": "AiClaim Core",
   "transNo": "TPA-LIVE-DEMO",
   "reportCase": {
     "reportNo": "CLM-LIVE-DEMO",
@@ -730,7 +730,7 @@ const LIVE_TPA_DEMO_PAYLOAD: &str = r#"{
 const LIVE_TPA_DEMO_AMOUNT: &str = "18000.00";
 
 const SAMPLE_RUNTIME_SCORE_REQUEST: &str = r#"{
-  "source_system": "tpa-demo",
+  "source_system": "AiClaim Core",
   "review_mode": "pre_payment",
   "claim_id": "CLM-0287"
 }"#;
@@ -13579,7 +13579,7 @@ fn source_system_from_context(context: &Value) -> String {
     context
         .pointer("/claim_header/source_system")
         .and_then(Value::as_str)
-        .unwrap_or("tpa-demo")
+        .unwrap_or("AiClaim Core")
         .to_string()
 }
 

@@ -172,7 +172,9 @@ It includes:
 - QA Review
 - Governance
 
-Use API key `dev-secret` for the local demo.
+Use API key `aiclaim-demo-key` for the business-facing TPA demo. The lower-level
+developer default remains `dev-secret` when no customer principal environment is
+configured.
 
 ### ML Runtime And Service
 
@@ -399,7 +401,9 @@ The seed includes:
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
-FWA_API_KEY=dev-secret \
+FWA_API_KEY=legacy-customer-secret \
+FWA_API_KEY_PRINCIPALS="aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*" \
+FWA_SOURCE_SYSTEM="AiClaim Core" \
 FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
 cargo run --locked -p api-server
 ```
@@ -422,9 +426,9 @@ Open `http://127.0.0.1:5173`.
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/claims/score \
   -H 'content-type: application/json' \
-  -H 'x-api-key: dev-secret' \
+  -H 'x-api-key: aiclaim-demo-key' \
   -d '{
-    "source_system": "tpa-demo",
+    "source_system": "AiClaim Core",
     "claim_id": "CLM-0287"
   }' | jq
 ```
@@ -453,14 +457,14 @@ prevented-payment outcome:
 ```bash
 python3 scripts/demo/tpa_realtime_fwa_demo.py \
   --base-url http://127.0.0.1:8080 \
-  --api-key dev-secret
+  --api-key aiclaim-demo-key
 ```
 
 The default output is a customer-facing story that walks through the TPA packet,
 intake run, scoring run, generated lead, opened case, investigation writeback,
 Dashboard value before/after, and UI hash links for Intake, Leads & Cases, and
 Dashboard. Use `--format json` when you need the machine-readable artifact. If
-the API was started with a non-default `FWA_SOURCE_SYSTEM`, pass
+the API was started with a different `FWA_SOURCE_SYSTEM`, pass
 `--source-system "<value>"` so the demo payload matches the runtime.
 
 See [docs/engineering/demo-runbook.md](docs/engineering/demo-runbook.md) for the
@@ -605,7 +609,9 @@ Common local settings:
 | Variable | Default for local demo | Purpose |
 | --- | --- | --- |
 | `DATABASE_URL` | `postgres://postgres:postgres@localhost:5432/fwa` | API database connection |
-| `FWA_API_KEY` | `dev-secret` | API key accepted by local server |
+| `FWA_API_KEY` | `dev-secret` | Legacy single-key fallback when no principal map is configured |
+| `FWA_API_KEY_PRINCIPALS` | unset | Customer/API-principal map; use `aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*` for the TPA demo |
+| `FWA_SOURCE_SYSTEM` | `tpa-demo` | Source-system fallback; use `AiClaim Core` for the TPA demo |
 | `FWA_MODEL_SERVICE_URL` | `http://127.0.0.1:8001` | Configured ML scorer endpoint |
 | `FWA_MODEL_ARTIFACT_URI` | unset | Optional Rust JSON artifact scorer path; overrides `FWA_MODEL_SERVICE_URL` |
 | `FWA_MODEL_VERSION_LOCK` | unset | Optional active model version lock for artifact serving |

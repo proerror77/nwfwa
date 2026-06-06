@@ -4,6 +4,35 @@ This runbook drives the local FWA demo from seed data through scoring, audit, Da
 
 ## 1. Start Local Services
 
+For the business-facing local demo, run the complete launcher:
+
+```bash
+scripts/demo/run_local_tpa_demo.sh
+```
+
+It starts the Docker Compose demo stack, waits for `/api/v1/health`, sends one
+raw TPA packet through intake, scoring, lead triage, case opening,
+investigation writeback, and Dashboard value proof, then prints the Web Console
+URL.
+
+The launcher also saves the structured realtime summary under
+`artifacts/demo-runs/` and, by default, streams one small mixed batch of TPA
+intake traffic. Set `FWA_DEMO_STREAM_ITERATIONS=0` when you only want the single
+end-to-end prevented-payment case.
+
+For a bounded local intake concurrency smoke after the stack is healthy:
+
+```bash
+python3 scripts/demo/load_tpa_intake_smoke.py --requests 20 --concurrency 4
+```
+
+This is an entrypoint smoke, not a million-request capacity proof. Current local
+demo services use synchronous normalize/score paths and bounded Postgres/API
+limits; production-scale TPA intake needs queue-backed ingestion, worker
+consumption, rollup dashboards, rate limits, and dedicated load testing.
+
+For manual service startup:
+
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres ml-service
 ```
@@ -30,7 +59,9 @@ The seed includes:
 
 ```bash
 DATABASE_URL=postgres://postgres:postgres@localhost:5432/fwa \
-FWA_API_KEY=dev-secret \
+FWA_API_KEY=legacy-customer-secret \
+FWA_API_KEY_PRINCIPALS="aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*" \
+FWA_SOURCE_SYSTEM="AiClaim Core" \
 FWA_MODEL_SERVICE_URL=http://127.0.0.1:8001 \
 cargo run --locked -p api-server
 ```
@@ -51,9 +82,9 @@ Open `http://127.0.0.1:5173`.
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/claims/score \
   -H 'content-type: application/json' \
-  -H 'x-api-key: dev-secret' \
+  -H 'x-api-key: aiclaim-demo-key' \
   -d '{
-    "source_system": "tpa-demo",
+    "source_system": "AiClaim Core",
     "claim_id": "CLM-0287"
   }' | jq
 ```
@@ -72,7 +103,7 @@ full regression smoke:
 ```bash
 python3 scripts/demo/tpa_realtime_fwa_demo.py \
   --base-url http://127.0.0.1:8080 \
-  --api-key dev-secret
+  --api-key aiclaim-demo-key
 ```
 
 The script sends a raw TPA inbox payload through normalization, scoring, lead
@@ -81,12 +112,12 @@ default writeback records confirmed `prevented_payment`, so a confirmed blocked
 claim amount is counted as observed prevented payment rather than estimated ROI.
 The default output is a live demo cue card. Add `--format json` for automated
 verification or saved evidence artifacts. If the API was started with a
-non-default `FWA_SOURCE_SYSTEM`, add `--source-system "<value>"` so the payload
+different `FWA_SOURCE_SYSTEM`, add `--source-system "<value>"` so the payload
 passes the source-system intake gate.
 
 ## 4. Show Operations Studio
 
-Use API key `dev-secret` in the UI pages.
+Use API key `aiclaim-demo-key` in the UI pages for the business-facing TPA demo.
 
 - Dashboard: suspected claims, risk amount, RAG distribution, confirmed prevented payment, recovered amount, estimated impact, rule hits, model scores, seven-layer coverage, QA and investigation writebacks, and saving attribution lineage
 - Data Sources: profiled Parquet dataset, splits, field governance, and model evaluation
@@ -111,7 +142,7 @@ Search similar cases:
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/knowledge/search-similar \
   -H 'content-type: application/json' \
-  -H 'x-api-key: dev-secret' \
+  -H 'x-api-key: aiclaim-demo-key' \
   -d '{
     "claim_id": "CLM-0287",
     "diagnosis_code": "J10",
@@ -125,7 +156,7 @@ Write back QA:
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/qa/results \
   -H 'content-type: application/json' \
-  -H 'x-api-key: dev-secret' \
+  -H 'x-api-key: aiclaim-demo-key' \
   -d '{
     "qa_case_id": "QA-9001",
     "claim_id": "CLM-0287",
@@ -142,7 +173,7 @@ Record a medical review result for a scored claim:
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/ops/medical-review/results \
   -H 'content-type: application/json' \
-  -H 'x-api-key: dev-secret' \
+  -H 'x-api-key: aiclaim-demo-key' \
   -d '{
     "claim_id": "CLM-0287",
     "scoring_audit_id": "audit-id-from-medical-review-queue",
@@ -157,7 +188,7 @@ Check audit history:
 
 ```bash
 curl -s http://127.0.0.1:8080/api/v1/audit/claims/CLM-0287 \
-  -H 'x-api-key: dev-secret' | jq
+  -H 'x-api-key: aiclaim-demo-key' | jq
 ```
 
 Run the same API smoke used by CI:

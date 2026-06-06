@@ -285,10 +285,10 @@ def main():
     )
     parser.add_argument("--base-url", default=os.environ.get("FWA_API_BASE_URL", "http://127.0.0.1:8080"))
     parser.add_argument("--web-url", default=os.environ.get("FWA_WEB_URL", "http://127.0.0.1:5173"))
-    parser.add_argument("--api-key", default=os.environ.get("FWA_API_KEY", "dev-secret"))
+    parser.add_argument("--api-key", default=os.environ.get("FWA_API_KEY", "aiclaim-demo-key"))
     parser.add_argument(
         "--source-system",
-        default=os.environ.get("FWA_SOURCE_SYSTEM"),
+        default=os.environ.get("FWA_SOURCE_SYSTEM", "AiClaim Core"),
         help="Override payload systemCode to match the running API source-system config.",
     )
     parser.add_argument("--payload-file", default=str(DEFAULT_PAYLOAD_FILE))
@@ -305,10 +305,21 @@ def main():
         default="story",
         help="Use story for live customer demos or json for automated verification.",
     )
+    parser.add_argument(
+        "--output-file",
+        help="Optional path to save the structured demo summary JSON.",
+    )
     parser.set_defaults(unique_message=True)
     args = parser.parse_args()
 
     summary = run_demo(args)
+    if args.output_file:
+        output_path = Path(args.output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path.write_text(
+            json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+            encoding="utf-8",
+        )
     if args.format == "json":
         print(json.dumps(summary, ensure_ascii=False, indent=2, sort_keys=True))
     else:

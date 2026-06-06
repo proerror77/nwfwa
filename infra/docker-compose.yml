@@ -53,6 +53,9 @@ services:
       FWA_API_KEY: legacy-customer-secret
       FWA_API_KEY_PRINCIPALS: "aiclaim-demo-key|aiclaim-tpa|tpa_system|AiClaim Core|demo-customer|tpa:*"
       FWA_BIND_ADDR: 0.0.0.0:8080
+      FWA_DB_MAX_CONNECTIONS: 16
+      FWA_MAX_CONCURRENT_REQUESTS: 256
+      FWA_REQUEST_BODY_LIMIT_BYTES: 2097152
       FWA_MODEL_SERVICE_URL: http://ml-service:8001
       FWA_SOURCE_SYSTEM: AiClaim Core
     ports:
