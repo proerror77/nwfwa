@@ -1667,7 +1667,7 @@ async fn records_rejected_discovered_candidate_review_without_saving_rule() {
 }
 
 #[tokio::test]
-async fn accepted_discovered_candidate_review_saves_draft_after_backtest_only() {
+async fn accepted_discovered_candidate_review_requires_backtest_and_shadow() {
     let app = build_app(test_config());
 
     let candidate_rule = r#"{
@@ -1783,7 +1783,67 @@ async fn accepted_discovered_candidate_review_saves_draft_after_backtest_only() 
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::CONFLICT);
+    let body: serde_json::Value = serde_json::from_str(&body).unwrap();
+    assert_eq!(body["code"], "RULE_CANDIDATE_SHADOW_REQUIRED");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidates",
+        &format!(
+            r#"{{
+              "owner": "rule-discovery-shadow",
+              "rule": {candidate_rule}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate_tree_accepted_review/shadow-runs",
+        r#"{
+          "rule_version": 1,
+          "reviewed_count": 3,
+          "matched_count": 2,
+          "false_positive_count": 0,
+          "false_positive_rate": 0.0,
+          "report_uri": "artifacts/rules/candidate_tree_accepted_review/shadow_report.json",
+          "decision": "shadow_passed",
+          "reviewer": "rule-shadow-review",
+          "notes": "Shadow run passed before final candidate acceptance.",
+          "evidence_refs": [
+            "rules:candidate_tree_accepted_review:v1",
+            "rule_shadow_runs:artifacts/rules/candidate_tree_accepted_review/shadow_report.json"
+          ]
+        }"#,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
+
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/rules/candidate-reviews",
+        &format!(
+            r#"{{
+              "decision": "accepted",
+              "reviewer": "rule-review",
+              "notes": "Accepted candidate after backtest and shadow evidence.",
+              "evidence_refs": [
+                "dataset:inline",
+                "backtest:api",
+                "rule_shadow_runs:artifacts/rules/candidate_tree_accepted_review/shadow_report.json"
+              ],
+              "rule": {candidate_rule}
+            }}"#
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body}");
     let body: serde_json::Value = serde_json::from_str(&body).unwrap();
     assert_eq!(body["rule_id"], "candidate_tree_accepted_review");
     assert_eq!(body["decision"], "accepted");

@@ -1222,6 +1222,39 @@ pub async fn review_rule_candidate(
                 ),
             ));
         }
+        let shadow_run = state
+            .repository
+            .latest_rule_shadow_run(&request.rule.rule_id, request.rule.version)
+            .await
+            .map_err(internal_error("RULE_CANDIDATE_SHADOW_LOAD_FAILED"))?;
+        let Some(shadow_run) = shadow_run else {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_SHADOW_REQUIRED",
+                "accepted rule candidates require passed shadow evidence",
+            ));
+        };
+        if shadow_run.decision != "shadow_passed" {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_SHADOW_BLOCKED",
+                format!(
+                    "accepted rule candidate shadow evidence is not passed: {}",
+                    shadow_run.decision
+                ),
+            ));
+        }
+        if !shadow_run.blockers.is_empty() {
+            return Err(ApiError::new(
+                StatusCode::CONFLICT,
+                "RULE_CANDIDATE_SHADOW_BLOCKED",
+                format!(
+                    "accepted rule candidate shadow blockers must be resolved: {}",
+                    shadow_run.blockers.join(", ")
+                ),
+            ));
+        }
+        validate_candidate_review_shadow_evidence(&request.evidence_refs, &shadow_run.report_uri)?;
         let mut rule = request.rule.clone();
         rule.scheme_family = Some(validate_rule_candidate(&rule)?);
         let detail = state
@@ -2933,6 +2966,27 @@ fn validate_candidate_review_backtest_evidence(
             StatusCode::BAD_REQUEST,
             "RULE_CANDIDATE_BACKTEST_EVIDENCE_REQUIRED",
             "accepted rule candidates require backtest evidence_refs",
+        ))
+    }
+}
+
+fn validate_candidate_review_shadow_evidence(
+    evidence_refs: &[String],
+    shadow_report_uri: &str,
+) -> Result<(), ApiError> {
+    let expected_ref = format!("rule_shadow_runs:{shadow_report_uri}");
+    if evidence_refs
+        .iter()
+        .any(|reference| reference.trim() == expected_ref)
+    {
+        Ok(())
+    } else {
+        Err(ApiError::new(
+            StatusCode::BAD_REQUEST,
+            "RULE_CANDIDATE_SHADOW_EVIDENCE_REQUIRED",
+            format!(
+                "accepted rule candidates require shadow evidence_refs including {expected_ref}"
+            ),
         ))
     }
 }
