@@ -308,6 +308,10 @@ Workers can extend long-running ownership with
 `next_attempt_at` before another worker can claim them; exhausted jobs keep
 `dead_letter_at` and can be manually requeued with
 `POST /training-jobs/{job_id}/retry`.
+`GET /training-jobs/metrics` reports queue depth, ready jobs, delayed retries,
+expired leases, dead-letter counts, and registered workers. Workers can publish
+heartbeats with `POST /training-workers/heartbeat`, and operators can inspect
+them with `GET /training-workers`.
 For a separate training worker process, run:
 
 ```bash

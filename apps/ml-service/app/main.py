@@ -3,7 +3,13 @@ import os
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 
-from .schemas import ClaimTrainingJobRequest, ScoreRequest, ScoreResponse, TrainRequest
+from .schemas import (
+    ClaimTrainingJobRequest,
+    ScoreRequest,
+    ScoreResponse,
+    TrainingWorkerHeartbeatRequest,
+    TrainRequest,
+)
 from .scorer import ModelServingError, score_claim
 from .training_runner import execute_next_training_job, execute_training_job, run_training_request
 from .training_jobs import TrainingJobStore
@@ -81,6 +87,11 @@ def list_training_jobs(
     limit: int = Query(default=50, ge=1, le=200),
 ) -> dict[str, object]:
     return {"jobs": training_job_store().list(status=status, limit=limit)}
+
+
+@app.get("/training-jobs/metrics")
+def get_training_job_metrics() -> dict[str, object]:
+    return training_job_store().queue_metrics()
 
 
 @app.get("/training-jobs/{job_id}")
@@ -213,6 +224,27 @@ def retry_training_job(job_id: str) -> dict[str, object]:
             },
         )
     return record
+
+
+@app.post("/training-workers/heartbeat")
+def record_training_worker_heartbeat(
+    request: TrainingWorkerHeartbeatRequest,
+) -> dict[str, object]:
+    return training_job_store().record_heartbeat(
+        worker_id=request.worker_id,
+        status=request.status,
+        current_job_id=request.current_job_id,
+        processed_jobs=request.processed_jobs,
+        idle_polls=request.idle_polls,
+        metadata=request.metadata,
+    )
+
+
+@app.get("/training-workers")
+def list_training_workers(
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, object]:
+    return {"workers": training_job_store().list_workers(limit=limit)}
 
 
 def run_training(request: TrainRequest) -> dict[str, object]:

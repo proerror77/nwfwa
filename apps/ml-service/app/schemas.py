@@ -26,6 +26,15 @@ class ClaimTrainingJobRequest(BaseModel):
     lease_seconds: int = Field(default=900, ge=30, le=86400)
 
 
+class TrainingWorkerHeartbeatRequest(BaseModel):
+    worker_id: str
+    status: str = "idle"
+    current_job_id: str | None = None
+    processed_jobs: int = Field(default=0, ge=0)
+    idle_polls: int = Field(default=0, ge=0)
+    metadata: dict[str, object] = Field(default_factory=dict)
+
+
 class ModelExplanation(BaseModel):
     feature: str
     direction: str

@@ -38,6 +38,16 @@ CREATE TABLE IF NOT EXISTS training_jobs (
     completed_at TEXT,
     failed_at TEXT
 );
+
+CREATE TABLE IF NOT EXISTS training_workers (
+    worker_id TEXT PRIMARY KEY,
+    status TEXT NOT NULL,
+    last_heartbeat_at TEXT NOT NULL,
+    current_job_id TEXT,
+    processed_jobs INTEGER NOT NULL DEFAULT 0,
+    idle_polls INTEGER NOT NULL DEFAULT 0,
+    metadata_json TEXT NOT NULL DEFAULT '{}'
+);
 """
 
 
@@ -425,6 +435,130 @@ class TrainingJobStore:
                 ).fetchall()
         return [row_to_record(row) for row in rows]
 
+    def record_heartbeat(
+        self,
+        worker_id: str,
+        status: str,
+        current_job_id: str | None = None,
+        processed_jobs: int = 0,
+        idle_polls: int = 0,
+        metadata: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        now = utc_now()
+        with self._lock, self._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO training_workers (
+                    worker_id, status, last_heartbeat_at, current_job_id,
+                    processed_jobs, idle_polls, metadata_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT(worker_id) DO UPDATE SET
+                    status = excluded.status,
+                    last_heartbeat_at = excluded.last_heartbeat_at,
+                    current_job_id = excluded.current_job_id,
+                    processed_jobs = excluded.processed_jobs,
+                    idle_polls = excluded.idle_polls,
+                    metadata_json = excluded.metadata_json
+                """,
+                (
+                    worker_id,
+                    status,
+                    now,
+                    current_job_id,
+                    processed_jobs,
+                    idle_polls,
+                    json.dumps(metadata or {}, sort_keys=True),
+                ),
+            )
+        record = self.get_worker(worker_id)
+        if record is None:
+            raise RuntimeError(f"training worker heartbeat was not recorded: {worker_id}")
+        return record
+
+    def get_worker(self, worker_id: str) -> dict[str, Any] | None:
+        with self._lock, self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM training_workers WHERE worker_id = ?",
+                (worker_id,),
+            ).fetchone()
+        return worker_row_to_record(row) if row else None
+
+    def list_workers(self, limit: int = 50) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 200))
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                """
+                SELECT * FROM training_workers
+                ORDER BY last_heartbeat_at DESC, worker_id
+                LIMIT ?
+                """,
+                (limit,),
+            ).fetchall()
+        return [worker_row_to_record(row) for row in rows]
+
+    def queue_metrics(self) -> dict[str, Any]:
+        now = utc_now()
+        with self._lock, self._connect() as connection:
+            status_rows = connection.execute(
+                """
+                SELECT status, COUNT(*) AS count
+                FROM training_jobs
+                GROUP BY status
+                """
+            ).fetchall()
+            ready_jobs = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM training_jobs
+                WHERE status = 'queued'
+                  AND (next_attempt_at IS NULL OR next_attempt_at <= ?)
+                  AND attempt_count < max_attempts
+                """,
+                (now,),
+            ).fetchone()["count"]
+            delayed_jobs = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM training_jobs
+                WHERE status = 'queued'
+                  AND next_attempt_at IS NOT NULL
+                  AND next_attempt_at > ?
+                """,
+                (now,),
+            ).fetchone()["count"]
+            expired_leases = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM training_jobs
+                WHERE status = 'running'
+                  AND lease_expires_at IS NOT NULL
+                  AND lease_expires_at <= ?
+                """,
+                (now,),
+            ).fetchone()["count"]
+            dead_letter_jobs = connection.execute(
+                """
+                SELECT COUNT(*) AS count
+                FROM training_jobs
+                WHERE status = 'failed'
+                  AND dead_letter_at IS NOT NULL
+                """
+            ).fetchone()["count"]
+            registered_workers = connection.execute(
+                "SELECT COUNT(*) AS count FROM training_workers"
+            ).fetchone()["count"]
+        return {
+            "metrics_kind": "training_queue_metrics",
+            "generated_at": now,
+            "jobs_by_status": {row["status"]: row["count"] for row in status_rows},
+            "ready_jobs": ready_jobs,
+            "delayed_jobs": delayed_jobs,
+            "expired_leases": expired_leases,
+            "dead_letter_jobs": dead_letter_jobs,
+            "registered_workers": registered_workers,
+        }
+
 
 def build_artifact_registry(
     provider_output: dict[str, Any],
@@ -545,6 +679,18 @@ def row_to_record(row: sqlite3.Row) -> dict[str, Any]:
         "started_at": row["started_at"],
         "completed_at": row["completed_at"],
         "failed_at": row["failed_at"],
+    }
+
+
+def worker_row_to_record(row: sqlite3.Row) -> dict[str, Any]:
+    return {
+        "worker_id": row["worker_id"],
+        "status": row["status"],
+        "last_heartbeat_at": row["last_heartbeat_at"],
+        "current_job_id": row["current_job_id"],
+        "processed_jobs": row["processed_jobs"],
+        "idle_polls": row["idle_polls"],
+        "metadata": parse_json(row["metadata_json"]) or {},
     }
 
 

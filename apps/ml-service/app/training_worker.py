@@ -23,15 +23,39 @@ def run_worker(
     processed = 0
     idle_polls = 0
     last_job = None
+    store.record_heartbeat(
+        worker_id,
+        "starting",
+        metadata={"lease_seconds": lease_seconds, "once": once},
+    )
     while True:
+        store.record_heartbeat(
+            worker_id,
+            "polling",
+            processed_jobs=processed,
+            idle_polls=idle_polls,
+        )
         last_job = execute_next_training_job(store, worker_id, lease_seconds)
         if last_job is None:
             idle_polls += 1
+            store.record_heartbeat(
+                worker_id,
+                "idle",
+                processed_jobs=processed,
+                idle_polls=idle_polls,
+            )
             if once:
                 break
             time.sleep(poll_interval_seconds)
             continue
         processed += 1
+        store.record_heartbeat(
+            worker_id,
+            last_job["status"],
+            current_job_id=last_job["job_id"],
+            processed_jobs=processed,
+            idle_polls=idle_polls,
+        )
         if once or (max_jobs is not None and processed >= max_jobs):
             break
 
