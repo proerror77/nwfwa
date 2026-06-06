@@ -61,13 +61,18 @@ The production loop should be:
     any extracted pattern enters the active rule library.
 11. Run shadow mode against live traffic and QA outcomes.
 12. Promote or reject through governed model approval.
-13. Monitor drift, calibration, segment performance, reviewer disagreement,
+13. After approval, let the worker execute gated activation orchestration
+    through the version-scoped activation API.
+14. Monitor drift, calibration, segment performance, reviewer disagreement,
     label delay, latency, and error rate.
-14. Trigger retraining proposals, not automatic activation.
+15. Trigger retraining proposals, not automatic activation.
 
-Auto MLOps may rank candidates and open review tasks. It must not auto-promote
-models, publish rules, or turn unlabeled anomaly clusters into confirmed FWA
-labels.
+Auto MLOps may rank candidates and open review tasks. Training, monitoring, and
+candidate ranking must not approve or activate models by themselves. After a
+human model promotion review is approved and all promotion gates pass, the
+worker may run `promote-approved-model-version` to call the governed activation
+API. Auto MLOps must still not publish rules or turn unlabeled anomaly clusters
+into confirmed FWA labels.
 
 ## Rust Worker Responsibilities
 
@@ -102,6 +107,9 @@ The worker is the right control-plane home for scheduled and batch ML work:
   rule candidates, runs deterministic rule-candidate backtests against the same
   training manifest, and registers only review handoff evidence; rule-library
   writeback remains blocked until human governance review.
+- `promote-approved-model-version`: after a reviewer has approved the exact
+  model version, load version-scoped promotion gates and call the governed
+  activation API only when every activation gate except `Active version` passes.
 - `rank-automl-candidates`: compare validation reports for logistic, XGBoost,
   LightGBM, and anomaly candidates, then open human-review recommendations
   without activating any model.
@@ -215,13 +223,15 @@ Current repository completion for this target architecture is approximately:
   feature-set and Rust serving evaluation evidence, and trainer-side ONNX parity
   reports and unlabeled anomaly review tasks exist; API retraining output now
   accepts governed serving manifests, and the console has provider model
-  release, promotion review, activation, and rollback actions. Scheduled
-  monitoring outputs now include checksum-bound publication manifests for
-  durable artifact targets, and the Rust runner can bind supplied customer or
-  pilot monitoring inputs into shadow, drift, fairness, reviewer-disagreement,
-  and label-delay reports. Actual environment-specific object-store upload
-  wiring and receiver-specific monitoring input collection still need
-  environment-specific wiring.
+  release, promotion review, activation, and rollback actions. The worker now
+  also has reviewer-approved promotion orchestration that reads promotion gates
+  and activates the exact version only after human approval is already present.
+  Scheduled monitoring outputs now include checksum-bound publication manifests
+  for durable artifact targets, and the Rust runner can bind supplied customer
+  or pilot monitoring inputs into shadow, drift, fairness,
+  reviewer-disagreement, and label-delay reports. Actual environment-specific
+  object-store upload wiring and receiver-specific monitoring input collection
+  still need environment-specific wiring.
 - 81% for Rust ONNX serving: serving-manifest validation, checksum/signature
   checks, feature-order binding, CPU ONNX Runtime execution, and probability
   extraction are implemented, ONNX sessions are cached per artifact URI and

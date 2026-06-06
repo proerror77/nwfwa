@@ -1112,6 +1112,41 @@ struct UpdateRetrainingJobStatusPayload<'a> {
     notes: &'a str,
 }
 
+#[derive(Debug, Serialize)]
+struct ModelLifecyclePayload {
+    evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Deserialize, Serialize)]
+pub struct PromoteApprovedModelVersionResult {
+    pub model_key: String,
+    pub model_version: String,
+    pub status: String,
+    pub promotion_status: String,
+    pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelPromotionGatesResponse {
+    model_key: String,
+    model_version: String,
+    gates: Vec<ModelPromotionGate>,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelPromotionGate {
+    label: String,
+    passed: bool,
+    blocker: String,
+}
+
+#[derive(Debug, Deserialize)]
+struct ModelLifecycleResponse {
+    model_key: String,
+    version: String,
+    status: String,
+}
+
 #[derive(Debug, Clone, Deserialize, Serialize)]
 struct CompleteRetrainingJobPayload {
     actor: String,
@@ -1474,6 +1509,92 @@ async fn register_retraining_output(
         .json::<serde_json::Value>()
         .await
         .context("parse retraining job output response")
+}
+
+pub async fn promote_approved_model_version(
+    api_base_url: &str,
+    api_key: &str,
+    model_key: &str,
+    model_version: &str,
+) -> anyhow::Result<PromoteApprovedModelVersionResult> {
+    let gates_path =
+        format!("/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates");
+    let gates = get_model_promotion_gates(api_base_url, api_key, &gates_path).await?;
+    let blockers = gates
+        .gates
+        .iter()
+        .filter(|gate| gate.label != "Active version" && !gate.passed)
+        .map(|gate| gate.blocker.clone())
+        .collect::<Vec<_>>();
+    if !blockers.is_empty() {
+        bail!(
+            "model {}:{} promotion gates blocked: {}",
+            gates.model_key,
+            gates.model_version,
+            blockers.join(", ")
+        );
+    }
+
+    let evidence_refs = vec![format!("model_versions:{model_key}:{model_version}")];
+    let activate_path = format!("/api/v1/ops/models/{model_key}/versions/{model_version}/activate");
+    let activated =
+        activate_approved_model_version(api_base_url, api_key, &activate_path, &evidence_refs)
+            .await?;
+    Ok(PromoteApprovedModelVersionResult {
+        model_key: activated.model_key,
+        model_version: activated.version,
+        status: activated.status,
+        promotion_status: "activated_after_reviewer_approval".into(),
+        evidence_refs,
+    })
+}
+
+async fn get_model_promotion_gates(
+    api_base_url: &str,
+    api_key: &str,
+    path: &str,
+) -> anyhow::Result<ModelPromotionGatesResponse> {
+    let response = reqwest::Client::new()
+        .get(api_url(api_base_url, path))
+        .header("x-api-key", api_key)
+        .send()
+        .await
+        .with_context(|| format!("load model promotion gates from {path}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("load model promotion gates from {path} failed with {status}: {body}");
+    }
+    response
+        .json::<ModelPromotionGatesResponse>()
+        .await
+        .context("parse model promotion gates response")
+}
+
+async fn activate_approved_model_version(
+    api_base_url: &str,
+    api_key: &str,
+    path: &str,
+    evidence_refs: &[String],
+) -> anyhow::Result<ModelLifecycleResponse> {
+    let response = reqwest::Client::new()
+        .post(api_url(api_base_url, path))
+        .header("x-api-key", api_key)
+        .json(&ModelLifecyclePayload {
+            evidence_refs: evidence_refs.to_vec(),
+        })
+        .send()
+        .await
+        .with_context(|| format!("activate approved model version through {path}"))?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        bail!("activate approved model version through {path} failed with {status}: {body}");
+    }
+    response
+        .json::<ModelLifecycleResponse>()
+        .await
+        .context("parse model activation response")
 }
 
 pub async fn complete_retraining_job_with_training_output(
@@ -8598,6 +8719,55 @@ mod tests {
     use super::*;
     use std::time::{SystemTime, UNIX_EPOCH};
 
+    async fn read_http_request(socket: &mut tokio::net::TcpStream) -> String {
+        use tokio::io::AsyncReadExt;
+
+        let mut request_bytes = Vec::new();
+        let mut buffer = [0_u8; 1024];
+        loop {
+            let read = socket.read(&mut buffer).await.unwrap();
+            if read == 0 {
+                break;
+            }
+            request_bytes.extend_from_slice(&buffer[..read]);
+            let Some(header_end) = request_bytes
+                .windows(4)
+                .position(|window| window == b"\r\n\r\n")
+            else {
+                continue;
+            };
+            let header_text = String::from_utf8_lossy(&request_bytes[..header_end]);
+            let content_length = header_text
+                .lines()
+                .find_map(|line| {
+                    let (name, value) = line.split_once(':')?;
+                    if name.eq_ignore_ascii_case("content-length") {
+                        value.trim().parse::<usize>().ok()
+                    } else {
+                        None
+                    }
+                })
+                .unwrap_or(0);
+            if request_bytes.len() >= header_end + 4 + content_length {
+                break;
+            }
+        }
+        String::from_utf8_lossy(&request_bytes).to_string()
+    }
+
+    async fn write_json_response(socket: &mut tokio::net::TcpStream, body: serde_json::Value) {
+        use tokio::io::AsyncWriteExt;
+
+        let response_body = body.to_string();
+        let response = format!(
+            "HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
+            response_body.len(),
+            response_body
+        );
+        socket.write_all(response.as_bytes()).await.unwrap();
+        socket.shutdown().await.unwrap();
+    }
+
     #[test]
     fn builds_worker_api_url_without_double_slashes() {
         assert_eq!(
@@ -9046,6 +9216,110 @@ mod tests {
         assert!(error
             .to_string()
             .contains("job_failed_training failed and was marked failed"));
+    }
+
+    #[tokio::test]
+    async fn promotes_approved_model_version_after_gates_pass() {
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let mut requests = Vec::new();
+
+            let (mut socket, _) = listener.accept().await.unwrap();
+            requests.push(read_http_request(&mut socket).await);
+            write_json_response(
+                &mut socket,
+                serde_json::json!({
+                    "model_key": "baseline_fwa",
+                    "model_version": "0.2.0-candidate",
+                    "gates": [
+                        {"label": "Approval", "passed": true, "blocker": "none"},
+                        {"label": "Leakage check", "passed": true, "blocker": "none"},
+                        {"label": "Active version", "passed": false, "blocker": "model is not active"}
+                    ]
+                }),
+            )
+            .await;
+
+            let (mut socket, _) = listener.accept().await.unwrap();
+            requests.push(read_http_request(&mut socket).await);
+            write_json_response(
+                &mut socket,
+                serde_json::json!({
+                    "model_key": "baseline_fwa",
+                    "version": "0.2.0-candidate",
+                    "status": "active"
+                }),
+            )
+            .await;
+
+            requests
+        });
+
+        let result = promote_approved_model_version(
+            &api_url,
+            "dev-secret",
+            "baseline_fwa",
+            "0.2.0-candidate",
+        )
+        .await
+        .expect("approved model version should activate");
+
+        let requests = server.await.unwrap();
+        assert_eq!(requests.len(), 2);
+        assert!(requests[0].contains(
+            "GET /api/v1/ops/models/baseline_fwa/versions/0.2.0-candidate/promotion-gates"
+        ));
+        assert!(requests[1]
+            .contains("POST /api/v1/ops/models/baseline_fwa/versions/0.2.0-candidate/activate"));
+        assert!(requests[1]
+            .contains(r#""evidence_refs":["model_versions:baseline_fwa:0.2.0-candidate"]"#));
+        assert_eq!(result.model_key, "baseline_fwa");
+        assert_eq!(result.model_version, "0.2.0-candidate");
+        assert_eq!(result.status, "active");
+        assert_eq!(result.promotion_status, "activated_after_reviewer_approval");
+    }
+
+    #[tokio::test]
+    async fn blocks_auto_promotion_when_review_gate_is_missing() {
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut socket).await;
+            write_json_response(
+                &mut socket,
+                serde_json::json!({
+                    "model_key": "baseline_fwa",
+                    "model_version": "0.2.0-candidate",
+                    "gates": [
+                        {"label": "Approval", "passed": false, "blocker": "approval missing"},
+                        {"label": "Active version", "passed": false, "blocker": "model is not active"}
+                    ]
+                }),
+            )
+            .await;
+            request
+        });
+
+        let error = promote_approved_model_version(
+            &api_url,
+            "dev-secret",
+            "baseline_fwa",
+            "0.2.0-candidate",
+        )
+        .await
+        .unwrap_err();
+
+        let request = server.await.unwrap();
+        assert!(request.contains(
+            "GET /api/v1/ops/models/baseline_fwa/versions/0.2.0-candidate/promotion-gates"
+        ));
+        assert!(error.to_string().contains("approval missing"));
     }
 
     #[test]

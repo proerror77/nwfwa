@@ -913,6 +913,24 @@ Promotion review should answer:
 Human approval should be recorded through the model promotion review API. The
 training pipeline must not approve itself by writing approval into metrics.
 
+After human approval is recorded, the worker may perform the activation
+orchestration step. This command still reads version-scoped promotion gates and
+uses the governed activation API; it does not bypass approval, label, leakage,
+drift, feature materialization, serving, or QA gates:
+
+```bash
+cargo run --locked -p worker -- promote-approved-model-version \
+  --api-url http://127.0.0.1:8080 \
+  --api-key "$FWA_API_KEY" \
+  --model-key baseline_fwa \
+  --model-version 0.2.0-candidate
+```
+
+The command sends `model_versions:<model_key>:<model_version>` as activation
+evidence and fails before activation when any promotion gate other than
+`Active version` is blocked. This is the Auto MLOps handoff from human approval
+to governed activation; it is not an automatic approval mechanism.
+
 ## Stage 9: Shadow Or Limited Rollout
 
 Purpose: observe live behavior before the model affects high-impact routing.
