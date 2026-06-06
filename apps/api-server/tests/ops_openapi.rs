@@ -1132,6 +1132,7 @@ async fn openapi_includes_operations_paths() {
                 "validation_report_uri",
                 "evaluation_run_id",
                 "feature_importance_uri",
+                "permutation_importance_uri",
             ][..],
         ),
     ] {
@@ -1276,6 +1277,16 @@ async fn openapi_includes_operations_paths() {
             .contains("Parquet"),
         "missing CompleteModelRetrainingJobRequest.permutation_importance_uri parquet contract"
     );
+    for required_field in ["feature_importance_uri", "permutation_importance_uri"] {
+        assert!(
+            schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|field| field == required_field),
+            "missing CompleteModelRetrainingJobRequest required {required_field}"
+        );
+    }
     assert!(
         schema["components"]["schemas"]["ModelArtifactEvidenceSummary"]["required"]
             .as_array()

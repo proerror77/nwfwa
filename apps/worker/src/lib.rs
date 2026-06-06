@@ -1139,7 +1139,10 @@ struct CompleteRetrainingJobPayload {
     accuracy: Option<String>,
     threshold: Option<String>,
     confusion_matrix_json: serde_json::Value,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     feature_importance_uri: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    permutation_importance_uri: Option<String>,
     metrics_json: serde_json::Value,
     evidence_refs: Vec<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -3342,6 +3345,8 @@ pub fn build_training_handoff_with_algorithm(
         "model_retraining_jobs:<job_id>".to_string(),
         "model_artifacts:<serving_artifact_uri>".to_string(),
         "feature_set_manifests:<rust_feature_set_manifest_uri>".to_string(),
+        "model_feature_importance:<feature_importance_uri>".to_string(),
+        "model_permutation_importance:<permutation_importance_uri>".to_string(),
         "model_validation_reports:<validation_report_uri>".to_string(),
         "model_evaluations:<evaluation_run_id>".to_string(),
         "rule_candidate_mining_plans:<rule_candidate_mining_plan_uri>".to_string(),
@@ -3398,6 +3403,7 @@ pub fn build_training_handoff_with_algorithm(
             },
             "validation_report_uri": format!("{artifact_dir}/validation.json"),
             "feature_importance_uri": format!("{artifact_dir}/feature_importance.parquet"),
+            "permutation_importance_uri": format!("{artifact_dir}/permutation_importance.parquet"),
             "rust_feature_set_manifest_uri": format!("{artifact_dir}/rust_feature_set/feature_set_manifest.json"),
             "feature_store_manifest_uri": format!("{artifact_dir}/feature_store_manifest.json"),
             "rule_candidate_mining_plan_uri": format!("{artifact_dir}/rule-candidates/rule_candidate_mining_plan.json"),
@@ -3438,7 +3444,20 @@ pub fn build_training_handoff_with_algorithm(
             "submit_path": retraining_job_output_path(job_id),
             "artifact_uri": "artifact_contract.serving_artifact_uri",
             "feature_importance_uri": "artifact_contract.feature_importance_uri",
+            "permutation_importance_uri": "artifact_contract.permutation_importance_uri",
             "serving_manifest_uri": "artifact_contract.serving_manifest_uri",
+            "required_metrics_fields": [
+                "metrics_json.time_group_split_status",
+                "metrics_json.time_split_field",
+                "metrics_json.group_split_fields",
+                "metrics_json.leakage_check_status",
+                "metrics_json.out_of_time_auc",
+                "metrics_json.out_of_time_precision",
+                "metrics_json.out_of_time_recall",
+                "metrics_json.score_psi",
+                "metrics_json.max_feature_psi",
+                "metrics_json.feature_reproducibility_hash"
+            ],
             "onnx_parity_report_uri": if onnx_algorithm {
                 serde_json::Value::String("artifact_contract.onnx_parity_report_uri".into())
             } else {
@@ -8215,6 +8234,18 @@ fn build_mock_retraining_output(
     let feature_importance_uri = format!(
         "{artifact_root}/{safe_model_key}/{candidate_model_version}/feature_importance.parquet"
     );
+    let permutation_importance_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/permutation_importance.parquet"
+    );
+    let artifact_evaluation_report_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/artifact-evaluation/model_artifact_evaluation_report.json"
+    );
+    let rule_backtest_report_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/rule-candidates/backtest/rule_candidate_backtest_report.json"
+    );
+    let rule_review_tasks_uri = format!(
+        "{artifact_root}/{safe_model_key}/{candidate_model_version}/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
+    );
     let evaluation_run_id = format!(
         "eval_{}_{}",
         safe_id_segment(&job.model_key),
@@ -8224,6 +8255,11 @@ fn build_mock_retraining_output(
         format!("model_retraining_jobs:{}", job.job_id),
         format!("model_artifacts:{artifact_uri}"),
         format!("model_validation_reports:{validation_report_uri}"),
+        format!("model_feature_importance:{feature_importance_uri}"),
+        format!("model_permutation_importance:{permutation_importance_uri}"),
+        format!("model_artifact_evaluations:{artifact_evaluation_report_uri}"),
+        format!("rule_candidate_backtests:{rule_backtest_report_uri}"),
+        format!("rule_candidate_review_tasks:{rule_review_tasks_uri}"),
         format!("model_evaluations:{evaluation_run_id}"),
     ];
 
@@ -8254,9 +8290,13 @@ fn build_mock_retraining_output(
             "fn": 8
         }),
         feature_importance_uri: Some(feature_importance_uri),
+        permutation_importance_uri: Some(permutation_importance_uri),
         metrics_json: serde_json::json!({
             "out_of_time_auc": 0.82,
+            "out_of_time_precision": 0.76,
+            "out_of_time_recall": 0.71,
             "score_psi": 0.04,
+            "max_feature_psi": 0.08,
             "leakage_check_status": "passed",
             "time_group_split_status": "passed",
             "time_split_field": "service_date",
@@ -8270,7 +8310,13 @@ fn build_mock_retraining_output(
             "artifact_integrity_status": "passed",
             "feature_store_materialization_status": "passed",
             "segment_fairness_status": "passed",
-            "review_capacity_threshold_status": "passed"
+            "review_capacity_threshold_status": "passed",
+            "model_artifact_evaluation_status": "passed",
+            "model_artifact_evaluation_report_uri": artifact_evaluation_report_uri,
+            "rule_candidate_backtest_status": "passed",
+            "rule_candidate_backtest_report_uri": rule_backtest_report_uri,
+            "rule_candidate_review_tasks_uri": rule_review_tasks_uri,
+            "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval"
         }),
         evidence_refs,
         mined_rule_owner: None,
@@ -8818,15 +8864,34 @@ mod tests {
             "passed"
         );
         assert_eq!(output.metrics_json["segment_fairness_status"], "passed");
+        assert_eq!(output.metrics_json["out_of_time_precision"], 0.76);
+        assert_eq!(output.metrics_json["out_of_time_recall"], 0.71);
+        assert_eq!(output.metrics_json["max_feature_psi"], 0.08);
         assert_eq!(
-            output.evidence_refs,
-            vec![
-                "model_retraining_jobs:model retraining/job#1",
-                "model_artifacts:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/model.onnx",
-                "model_validation_reports:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/validation.json",
-                "model_evaluations:eval_baseline_fwa_0_1_0_candidate_model_retraining_job_1"
-            ]
+            output.metrics_json["model_artifact_evaluation_status"],
+            "passed"
         );
+        assert_eq!(
+            output.metrics_json["rule_candidate_backtest_status"],
+            "passed"
+        );
+        assert_eq!(
+            output.metrics_json["rule_library_writeback_status"],
+            "blocked_pending_human_review_and_policy_governance_approval"
+        );
+        for expected_ref in [
+            "model_retraining_jobs:model retraining/job#1",
+            "model_artifacts:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/model.onnx",
+            "model_validation_reports:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/validation.json",
+            "model_feature_importance:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/feature_importance.parquet",
+            "model_permutation_importance:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/permutation_importance.parquet",
+            "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/artifact-evaluation/model_artifact_evaluation_report.json",
+            "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rule-candidates/backtest/rule_candidate_backtest_report.json",
+            "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json",
+            "model_evaluations:eval_baseline_fwa_0_1_0_candidate_model_retraining_job_1",
+        ] {
+            assert!(output.evidence_refs.contains(&expected_ref.to_string()));
+        }
     }
 
     #[test]
@@ -9053,6 +9118,14 @@ mod tests {
             "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/rust_feature_set/feature_set_manifest.json"
         );
         assert_eq!(
+            handoff["artifact_contract"]["feature_importance_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/feature_importance.parquet"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["permutation_importance_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-candidate-model_retraining_job_1/permutation_importance.parquet"
+        );
+        assert_eq!(
             handoff["feature_set_contract"]["builder"],
             "worker build-feature-set"
         );
@@ -9077,6 +9150,10 @@ mod tests {
             "artifact_contract.serving_artifact_uri"
         );
         assert_eq!(
+            handoff["output_contract"]["permutation_importance_uri"],
+            "artifact_contract.permutation_importance_uri"
+        );
+        assert_eq!(
             handoff["data_contract"]["source"],
             "same_parquet_dataset_manifest"
         );
@@ -9088,6 +9165,27 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("feature_set_manifests")));
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("model_feature_importance")));
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("model_permutation_importance")));
+        assert!(handoff["output_contract"]["required_metrics_fields"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field.as_str().unwrap().contains("max_feature_psi")));
         assert!(handoff["output_contract"]["required_evidence_refs"]
             .as_array()
             .unwrap()
@@ -9146,6 +9244,10 @@ mod tests {
             handoff["artifact_contract"]["feature_importance_uri"],
             "s3://fwa-models/baseline_fwa/0.1.0-xgboost-candidate-model_retraining_job_1/feature_importance.parquet"
         );
+        assert_eq!(
+            handoff["artifact_contract"]["permutation_importance_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-xgboost-candidate-model_retraining_job_1/permutation_importance.parquet"
+        );
         assert!(handoff["output_contract"]["required_evidence_refs"]
             .as_array()
             .unwrap()
@@ -9154,6 +9256,14 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .contains("model_onnx_parity_reports")));
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("model_permutation_importance")));
         assert!(handoff["output_contract"]["required_evidence_refs"]
             .as_array()
             .unwrap()
@@ -9359,6 +9469,7 @@ mod tests {
                     .to_string_lossy()
                     .into_owned(),
             ),
+            permutation_importance_uri: None,
             metrics_json: serde_json::json!({
                 "feature_reproducibility_hash": "sha256:trainer-hash",
                 "feature_store_materialization_status": "passed"
@@ -9482,6 +9593,7 @@ mod tests {
             threshold: Some("0.50".into()),
             confusion_matrix_json: serde_json::json!({}),
             feature_importance_uri: None,
+            permutation_importance_uri: None,
             metrics_json: serde_json::json!({
                 "feature_reproducibility_hash": "sha256:rust-feature-hash",
                 "rust_feature_set_status": "passed",
@@ -11368,6 +11480,7 @@ mod tests {
             threshold: Some("0.5000".into()),
             confusion_matrix_json: serde_json::json!({}),
             feature_importance_uri: Some(feature_importance.to_string_lossy().into_owned()),
+            permutation_importance_uri: None,
             metrics_json: serde_json::json!({}),
             evidence_refs: vec![
                 format!("model_artifacts:{}", artifact_path.display()),

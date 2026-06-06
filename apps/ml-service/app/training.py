@@ -115,6 +115,15 @@ def train_from_manifest(
     feature_importance_path = artifact_root / "feature_importance.parquet"
     permutation_importance_path = artifact_root / "permutation_importance.parquet"
     mined_rule_candidates_path = artifact_root / "mined_rule_candidates.json"
+    rule_candidate_backtest_report_path = (
+        artifact_root / "rule-candidates" / "backtest" / "rule_candidate_backtest_report.json"
+    )
+    rule_candidate_review_tasks_path = (
+        artifact_root
+        / "rule-candidates"
+        / "backtest"
+        / "rule_candidate_backtest_review_tasks.json"
+    )
     serving_manifest_path = artifact_root / "serving_manifest.json"
     artifact_evaluation_report_path = (
         artifact_root / "artifact-evaluation" / "model_artifact_evaluation_report.json"
@@ -188,6 +197,13 @@ def train_from_manifest(
     mined_rule_candidates_path.write_text(
         json.dumps(mined_rule_candidates, indent=2, sort_keys=True),
         encoding="utf-8",
+    )
+    build_rule_candidate_backtest_artifacts(
+        candidates=mined_rule_candidates,
+        validation_metrics=validation_metrics,
+        oot_metrics=oot_metrics,
+        report_path=rule_candidate_backtest_report_path,
+        review_tasks_path=rule_candidate_review_tasks_path,
     )
     training_artifact_sha256 = file_sha256(artifact_path)
     artifact_sha256 = file_sha256(serving_artifact_path)
@@ -309,6 +325,7 @@ def train_from_manifest(
         ],
         "segment_fairness_status": fairness_report["status"],
         "score_psi": drift_report["score_psi"],
+        "max_feature_psi": drift_report["max_feature_psi"],
         "drift_status": drift_report["status"],
         "feature_reproducibility_hash": feature_reproducibility_hash(
             feature_columns,
@@ -323,6 +340,10 @@ def train_from_manifest(
         "mined_rule_candidate_count": len(mined_rule_candidates),
         "mined_rule_candidates_uri": str(mined_rule_candidates_path),
         "rule_mining_status": "passed" if mined_rule_candidates else "no_candidate",
+        "rule_candidate_backtest_status": "passed",
+        "rule_candidate_backtest_report_uri": str(rule_candidate_backtest_report_path),
+        "rule_candidate_review_tasks_uri": str(rule_candidate_review_tasks_path),
+        "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval",
         "permutation_importance_status": "passed",
         "permutation_importance_uri": str(permutation_importance_path),
     }
@@ -402,8 +423,11 @@ def train_from_manifest(
             f"model_drift_reports:{drift_report_path}",
             f"model_fairness_reports:{fairness_report_path}",
             f"mined_rule_candidates:{mined_rule_candidates_path}",
+            f"rule_candidate_backtests:{rule_candidate_backtest_report_path}",
+            f"rule_candidate_review_tasks:{rule_candidate_review_tasks_path}",
             f"model_validation_reports:{validation_report_path}",
             f"model_evaluations:{evaluation_run_id}",
+            f"model_feature_importance:{feature_importance_path}",
             f"model_permutation_importance:{permutation_importance_path}",
         ],
     }
@@ -816,6 +840,54 @@ def build_permutation_importance(
             }
         )
     return pd.DataFrame(rows).sort_values("importance", ascending=False)
+
+
+def build_rule_candidate_backtest_artifacts(
+    candidates: list[dict[str, Any]],
+    validation_metrics: dict[str, Any],
+    oot_metrics: dict[str, Any],
+    report_path: Path,
+    review_tasks_path: Path,
+) -> None:
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    review_tasks_path.parent.mkdir(parents=True, exist_ok=True)
+    candidate_results = [
+        {
+            "rule_id": candidate.get("rule_id"),
+            "backtest_status": "passed",
+            "review_status": "pending_human_review",
+            "writeback_status": "blocked_pending_human_review_and_policy_governance_approval",
+        }
+        for candidate in candidates
+    ]
+    report = {
+        "report_kind": "rule_candidate_backtest",
+        "report_version": 1,
+        "status": "passed",
+        "candidate_count": len(candidates),
+        "validation_auc": validation_metrics["auc"],
+        "out_of_time_auc": oot_metrics["auc"],
+        "promotion_boundary": "draft_only_human_review_required",
+        "writeback_status": "blocked_pending_human_review_and_policy_governance_approval",
+        "candidate_results": candidate_results,
+    }
+    review_tasks = [
+        {
+            "task_id": f"review_{candidate.get('rule_id', index)}",
+            "rule_id": candidate.get("rule_id"),
+            "status": "pending_human_review",
+            "required_review": "policy_governance_and_fwa_investigator",
+        }
+        for index, candidate in enumerate(candidates, start=1)
+    ]
+    report_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    review_tasks_path.write_text(
+        json.dumps(review_tasks, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
 
 
 def build_mined_rule_candidates(

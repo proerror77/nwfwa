@@ -6524,7 +6524,7 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "CompleteModelRetrainingJobRequest": {
                     "type": "object",
-                    "required": ["actor", "notes", "candidate_model_version", "artifact_uri", "validation_report_uri", "evaluation_run_id", "evidence_refs", "confusion_matrix_json", "metrics_json"],
+                    "required": ["actor", "notes", "candidate_model_version", "artifact_uri", "validation_report_uri", "evaluation_run_id", "evidence_refs", "confusion_matrix_json", "feature_importance_uri", "permutation_importance_uri", "metrics_json"],
                     "properties": {
                         "actor": { "type": "string", "minLength": 1 },
                         "notes": {
@@ -6569,7 +6569,7 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": "array",
                             "minItems": 1,
                             "items": { "type": "string", "minLength": 1 },
-                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, model_training_artifacts when training_artifact_uri is present, and model_serving_manifests or serving_manifests when serving_manifest_uri is present."
+                            "description": "Model retraining output evidence_refs must not contain PII and must include model_artifacts, model_validation_reports, model_evaluations, model_feature_importance, model_permutation_importance, model_training_artifacts when training_artifact_uri is present, and model_serving_manifests or serving_manifests when serving_manifest_uri is present."
                         },
                         "auc": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
                         "ks": { "type": ["string", "null"], "minimum": 0, "maximum": 1 },
@@ -6592,7 +6592,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "metrics_json": {
                             "type": "object",
                             "minProperties": 1,
-                            "description": "Model governance metrics. Promotion-ready retraining outputs should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
+                            "description": "Model governance metrics. Retraining outputs must include automatic factor and overfitting evidence: time_group_split_status=passed, time_split_field, group_split_fields, leakage_check_status=passed, out_of_time_auc, out_of_time_precision, out_of_time_recall, score_psi or psi, max_feature_psi, and a sha256 feature_reproducibility_hash. Promotion-ready retraining outputs should also include shadow_comparison_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
                         },
                         "mined_rule_owner": {
                             "type": ["string", "null"],

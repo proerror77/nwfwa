@@ -97,6 +97,8 @@ def validate_provider_output(output):
         "artifact_sha256",
         "validation_report_uri",
         "evaluation_run_id",
+        "feature_importance_uri",
+        "permutation_importance_uri",
         "metrics_json",
         "evidence_refs",
     ]
@@ -105,6 +107,30 @@ def validate_provider_output(output):
         raise ValueError(f"training output missing required fields: {', '.join(missing)}")
     if not isinstance(output["evidence_refs"], list):
         raise ValueError("training output evidence_refs must be a list")
+    required_metrics = [
+        "time_group_split_status",
+        "time_split_field",
+        "group_split_fields",
+        "leakage_check_status",
+        "out_of_time_auc",
+        "out_of_time_precision",
+        "out_of_time_recall",
+        "score_psi",
+        "max_feature_psi",
+        "feature_reproducibility_hash",
+        "rule_candidate_backtest_status",
+        "rule_candidate_backtest_report_uri",
+        "rule_candidate_review_tasks_uri",
+        "rule_library_writeback_status",
+    ]
+    missing_metrics = [
+        field for field in required_metrics if output["metrics_json"].get(field) is None
+    ]
+    if missing_metrics:
+        raise ValueError(
+            "training output missing required metrics_json fields: "
+            + ", ".join(missing_metrics)
+        )
     if (
         output.get("mined_rule_candidates")
         and output.get("mined_rule_owner") != "external-training-platform"

@@ -2184,6 +2184,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
           "model_serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
           "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+          "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
           "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
           "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "model_evaluations:eval_baseline_retraining_job_candidate",
@@ -2201,7 +2202,16 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
           "permutation_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
           "metrics_json": {
+            "out_of_time_auc": 0.82,
+            "out_of_time_precision": 0.76,
+            "out_of_time_recall": 0.71,
             "score_psi": 0.04,
+            "max_feature_psi": 0.08,
+            "time_group_split_status": "passed",
+            "time_split_field": "service_date",
+            "group_split_fields": ["member_id", "policy_id", "provider_id"],
+            "leakage_check_status": "passed",
+            "feature_reproducibility_hash": "sha256:retraining-feature-set",
             "shadow_comparison_status": "passed",
             "review_capacity_threshold_status": "passed",
             "model_artifact_evaluation_status": "passed",
@@ -2436,6 +2446,8 @@ async fn rejects_invalid_model_retraining_output_contract() {
           "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.onnx",
           "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
           "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+          "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+          "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
           "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "model_evaluations:eval_baseline_retraining_job_candidate",
           "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
@@ -2450,8 +2462,18 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "threshold": "0.52",
         "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
         "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "permutation_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "metrics_json": {
+          "out_of_time_auc": 0.82,
+          "out_of_time_precision": 0.76,
+          "out_of_time_recall": 0.71,
           "score_psi": 0.04,
+          "max_feature_psi": 0.08,
+          "time_group_split_status": "passed",
+          "time_split_field": "service_date",
+          "group_split_fields": ["member_id", "policy_id", "provider_id"],
+          "leakage_check_status": "passed",
+          "feature_reproducibility_hash": "sha256:retraining-feature-set",
           "model_artifact_evaluation_status": "passed",
           "model_artifact_evaluation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
           "rule_candidate_backtest_status": "passed",
@@ -2703,6 +2725,8 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "model_evaluations:eval_baseline_retraining_job_candidate",
         "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
@@ -2732,9 +2756,13 @@ async fn rejects_invalid_model_retraining_output_contract() {
     assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
 
     let mut missing_permutation_importance_evidence = valid_request.clone();
-    missing_permutation_importance_evidence["permutation_importance_uri"] = serde_json::json!(
-        "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet"
-    );
+    missing_permutation_importance_evidence["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some("model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet")
+        });
     let payload = missing_permutation_importance_evidence.to_string();
     let (status, body) = json_request(
         app.clone(),
@@ -2745,6 +2773,98 @@ async fn rejects_invalid_model_retraining_output_contract() {
     .await;
     assert_eq!(status, StatusCode::BAD_REQUEST);
     assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
+
+    let mut missing_feature_importance_evidence = valid_request.clone();
+    missing_feature_importance_evidence["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some("model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet")
+        });
+    let payload = missing_feature_importance_evidence.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
+
+    let mut missing_factor_ranking = valid_request.clone();
+    missing_factor_ranking
+        .as_object_mut()
+        .unwrap()
+        .remove("feature_importance_uri");
+    let payload = missing_factor_ranking.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
+    );
+
+    let mut missing_out_of_time_metric = valid_request.clone();
+    missing_out_of_time_metric["metrics_json"]
+        .as_object_mut()
+        .unwrap()
+        .remove("out_of_time_auc");
+    let payload = missing_out_of_time_metric.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
+    );
+
+    let mut failed_leakage_gate = valid_request.clone();
+    failed_leakage_gate["metrics_json"]["leakage_check_status"] = serde_json::json!("failed");
+    let payload = failed_leakage_gate.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
+    );
+
+    let mut missing_feature_stability = valid_request.clone();
+    missing_feature_stability["metrics_json"]
+        .as_object_mut()
+        .unwrap()
+        .remove("max_feature_psi");
+    let payload = missing_feature_stability.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
+    );
 
     let mut pii_evidence_refs = valid_request.clone();
     pii_evidence_refs["evidence_refs"] =
@@ -2783,6 +2903,8 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
         "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+        "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+        "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
         "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "model_evaluations:eval_baseline_retraining_job_candidate",
         "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",

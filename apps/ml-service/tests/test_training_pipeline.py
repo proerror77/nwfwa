@@ -129,6 +129,12 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["shadow_report_uri"].endswith("/shadow_report.json")
     assert payload["drift_report_uri"].endswith("/drift_report.json")
     assert payload["fairness_report_uri"].endswith("/fairness_report.json")
+    assert payload["metrics_json"]["rule_candidate_backtest_report_uri"].endswith(
+        "/rule-candidates/backtest/rule_candidate_backtest_report.json"
+    )
+    assert payload["metrics_json"]["rule_candidate_review_tasks_uri"].endswith(
+        "/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
+    )
     assert Path(payload["artifact_uri"]).exists()
     assert Path(payload["training_artifact_uri"]).exists()
     assert Path(payload["validation_report_uri"]).exists()
@@ -140,6 +146,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert Path(payload["shadow_report_uri"]).exists()
     assert Path(payload["drift_report_uri"]).exists()
     assert Path(payload["fairness_report_uri"]).exists()
+    assert Path(payload["metrics_json"]["rule_candidate_backtest_report_uri"]).exists()
+    assert Path(payload["metrics_json"]["rule_candidate_review_tasks_uri"]).exists()
     assert payload["artifact_sha256"].startswith("sha256:")
     assert payload["artifact_signature"].startswith("hmac-sha256:")
     assert payload["metrics_json"]["runtime_kind"] == "rust_logistic_regression"
@@ -165,12 +173,18 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 18
     assert payload["metrics_json"]["segment_fairness_status"] == "passed"
     assert payload["metrics_json"]["score_psi"] is not None
+    assert payload["metrics_json"]["max_feature_psi"] is not None
     assert payload["metrics_json"]["label_provenance_status"] == "passed"
     assert payload["metrics_json"]["data_quality_score"] == 1.0
     assert payload["metrics_json"]["source_data_quality_score"] == 1.0
     assert payload["metrics_json"]["permutation_importance_status"] == "passed"
     assert payload["metrics_json"]["permutation_importance_uri"].endswith(
         "/permutation_importance.parquet"
+    )
+    assert payload["metrics_json"]["rule_candidate_backtest_status"] == "passed"
+    assert (
+        payload["metrics_json"]["rule_library_writeback_status"]
+        == "blocked_pending_human_review_and_policy_governance_approval"
     )
     assert payload["metrics_json"]["dataset_usage_scope"] == "pilot_validated"
     assert payload["metrics_json"]["pilot_validation_status"] == "passed"
@@ -236,7 +250,21 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert set(permutation_importance["importance_kind"]) == {"permutation_auc_drop"}
     assert (permutation_importance["importance"] >= 0.0).all()
     assert any(
+        ref == f"model_feature_importance:{payload['feature_importance_uri']}"
+        for ref in payload["evidence_refs"]
+    )
+    assert any(
         ref == f"model_permutation_importance:{payload['permutation_importance_uri']}"
+        for ref in payload["evidence_refs"]
+    )
+    assert any(
+        ref
+        == f"rule_candidate_backtests:{payload['metrics_json']['rule_candidate_backtest_report_uri']}"
+        for ref in payload["evidence_refs"]
+    )
+    assert any(
+        ref
+        == f"rule_candidate_review_tasks:{payload['metrics_json']['rule_candidate_review_tasks_uri']}"
         for ref in payload["evidence_refs"]
     )
 
