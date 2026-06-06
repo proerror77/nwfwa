@@ -7,6 +7,7 @@ from fastapi.testclient import TestClient
 
 from app.main import app
 from app.training import train_from_manifest
+from app.training_jobs import TrainingJobStore
 
 
 client = TestClient(app)
@@ -414,6 +415,8 @@ def test_training_api_returns_completed_training_package(tmp_path: Path):
 
 def test_training_job_api_stores_completed_provider_output(tmp_path: Path):
     manifest_path = write_training_manifest(tmp_path)
+    db_path = tmp_path / "training_jobs.sqlite3"
+    app.state.training_job_store = TrainingJobStore(db_path)
 
     response = client.post(
         "/training-jobs",
@@ -428,20 +431,83 @@ def test_training_job_api_stores_completed_provider_output(tmp_path: Path):
         },
     )
 
-    assert response.status_code == 200
-    job = response.json()
-    assert job["job_id"] == "model_retraining_job_1"
-    assert job["status"] == "completed"
-    assert job["handoff_kind"] == "external_training_platform_job"
-    assert job["submit_path"] == "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
-    assert job["provider_output"]["candidate_model_version"] == (
-        "0.1.0-candidate-model_retraining_job_1"
-    )
-    assert job["provider_output"]["mined_rule_owner"] == "external-training-platform"
-    assert job["governance_boundary"].startswith("training platform owns training execution")
+    assert response.status_code == 202
+    queued = response.json()
+    assert queued["job_id"] == "model_retraining_job_1"
+    assert queued["status"] == "queued"
+    assert queued["handoff_kind"] == "external_training_platform_job"
+    assert queued["provider_output"] is None
+    assert queued["submit_path"] == "/api/v1/ops/model-retraining-jobs/model_retraining_job_1/output"
 
     status_response = client.get("/training-jobs/model_retraining_job_1")
 
     assert status_response.status_code == 200
     stored = status_response.json()
-    assert stored == job
+    assert stored["status"] == "completed"
+    assert stored["provider_output"]["candidate_model_version"] == (
+        "0.1.0-candidate-model_retraining_job_1"
+    )
+    assert stored["provider_output"]["mined_rule_owner"] == "external-training-platform"
+    assert stored["provider_output"]["artifact_registry_uri"].endswith(
+        "/artifact_registry.json"
+    )
+    assert any(
+        ref == f"model_artifact_registries:{stored['provider_output']['artifact_registry_uri']}"
+        for ref in stored["provider_output"]["evidence_refs"]
+    )
+    assert stored["artifact_registry"]["registry_kind"] == "training_artifact_registry"
+    assert stored["artifact_registry"]["model_key"] == "baseline_fwa"
+    assert stored["artifact_registry"]["base_model_version"] == "0.1.0"
+    assert stored["artifact_registry"]["candidate_model_version"] == (
+        "0.1.0-candidate-model_retraining_job_1"
+    )
+    assert {
+        artifact["artifact_kind"] for artifact in stored["artifact_registry"]["artifacts"]
+    } >= {
+        "serving_model",
+        "training_model",
+        "serving_manifest",
+        "validation_report",
+        "model_artifact_evaluation",
+        "permutation_importance",
+        "shadow_report",
+        "drift_report",
+        "fairness_report",
+        "mined_rule_candidates",
+    }
+    assert Path(stored["provider_output"]["artifact_registry_uri"]).exists()
+    assert stored["governance_boundary"].startswith("training platform owns training execution")
+
+    app.state.training_job_store = TrainingJobStore(db_path)
+    durable_response = client.get("/training-jobs/model_retraining_job_1")
+
+    assert durable_response.status_code == 200
+    assert durable_response.json() == stored
+
+
+def test_training_job_api_persists_failed_training_job(tmp_path: Path):
+    db_path = tmp_path / "training_jobs.sqlite3"
+    app.state.training_job_store = TrainingJobStore(db_path)
+
+    response = client.post(
+        "/training-jobs",
+        json={
+            "manifest_path": str(tmp_path / "missing_manifest.json"),
+            "artifact_base_uri": str(tmp_path / "artifacts"),
+            "model_key": "baseline_fwa",
+            "base_model_version": "0.1.0",
+            "job_id": "failed_training_job",
+            "actor": "external-training-platform",
+            "algorithm": "logistic_regression",
+        },
+    )
+
+    assert response.status_code == 202
+    status_response = client.get("/training-jobs/failed_training_job")
+
+    assert status_response.status_code == 200
+    failed = status_response.json()
+    assert failed["status"] == "failed"
+    assert failed["provider_output"] is None
+    assert failed["error"]["code"] == "TRAINING_FAILED"
+    assert "missing_manifest.json" in failed["error"]["message"]

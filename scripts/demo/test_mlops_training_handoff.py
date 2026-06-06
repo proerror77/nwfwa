@@ -81,6 +81,48 @@ class MlopsTrainingHandoffTest(unittest.TestCase):
             },
         )
 
+    def test_train_provider_output_polls_until_training_job_completes(self):
+        queued_job = {
+            "job_id": "job_1",
+            "handoff_kind": "external_training_platform_job",
+            "status": "queued",
+            "submit_path": "/api/v1/ops/model-retraining-jobs/job_1/output",
+            "provider_output": None,
+        }
+        running_job = {**queued_job, "status": "running"}
+        with (
+            mock.patch.object(
+                mlops_training_handoff,
+                "request_json",
+                side_effect=[queued_job, running_job, training_job()],
+            ) as request_mock,
+            mock.patch.object(mlops_training_handoff.time, "sleep") as sleep_mock,
+        ):
+            output = mlops_training_handoff.train_provider_output(
+                "http://127.0.0.1:8001",
+                "data/training/manifest.json",
+                "data/model-artifacts",
+                "baseline_fwa",
+                "0.1.0",
+                "job_1",
+                "external-training-platform",
+                None,
+                poll_interval_seconds=0.01,
+                timeout_seconds=5.0,
+            )
+
+        self.assertEqual(output["candidate_model_version"], "0.1.0-candidate-job_1")
+        self.assertEqual(request_mock.call_count, 3)
+        self.assertEqual(
+            request_mock.call_args_list[1].args,
+            (
+                "http://127.0.0.1:8001",
+                "GET",
+                "/training-jobs/job_1",
+            ),
+        )
+        self.assertEqual(sleep_mock.call_count, 2)
+
     def test_register_provider_output_posts_to_fwa_retraining_output_api(self):
         with mock.patch.object(
             mlops_training_handoff,

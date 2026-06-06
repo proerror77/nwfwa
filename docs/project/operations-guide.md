@@ -292,10 +292,15 @@ python scripts/demo/mlops_training_handoff.py \
   --write-provider-output artifacts/mlops/provider-output.json
 ```
 
-The script calls the independent ML service `POST /training-jobs`, waits for the
-completed job payload, validates `provider_output`, and can save it for review.
+The script calls the independent ML service `POST /training-jobs`, which stores
+the job in the SQLite-backed training queue, returns a queued job record, runs
+training in the service background task runner, and writes
+`artifact_registry.json` beside the model artifacts. The script polls
+`GET /training-jobs/{job_id}` until the job is completed, validates
+`provider_output`, and can save it for review. Set `FWA_TRAINING_JOB_DB` when
+the default `data/ml-service/training_jobs.sqlite3` location should be changed.
 Add `--register --api-url "$FWA_API_BASE_URL" --api-key "$FWA_API_KEY"` only
-when the output should be posted to
+when the completed output should be posted to
 `/api/v1/ops/model-retraining-jobs/{job_id}/output`. This keeps FWA on the
 consumer side of the contract: it records completed model artifacts and mined
 rule drafts, while the training platform owns training execution.

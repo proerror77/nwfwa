@@ -80,8 +80,10 @@ The API server uses:
 | Pytest | `apps/ml-service` | ML service tests |
 | HTTPX | `apps/ml-service` dev tests | FastAPI endpoint testing |
 
-The ML service is the demo scoring boundary. It is not a complete training
-platform. The Docker image uses `python:3.12-slim`.
+The ML service is the demo scoring boundary and local training-platform
+compatibility path. Its training-job API uses a SQLite-backed durable queue and
+artifact registry manifest for repo-local orchestration; it is not a distributed
+enterprise scheduler. The Docker image uses `python:3.12-slim`.
 
 ## Frontend
 

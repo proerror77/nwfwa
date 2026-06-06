@@ -2,6 +2,7 @@
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 import urllib.error
 import urllib.parse
@@ -40,6 +41,8 @@ def train_provider_output(
     job_id,
     actor,
     algorithm,
+    poll_interval_seconds=1.0,
+    timeout_seconds=300.0,
 ):
     payload = {
         "manifest_path": manifest_path,
@@ -52,6 +55,18 @@ def train_provider_output(
     if algorithm:
         payload["algorithm"] = algorithm
     training_job = request_json(ml_service_url, "POST", "/training-jobs", payload)
+    deadline = time.monotonic() + timeout_seconds
+    while training_job.get("status") in {"queued", "running"}:
+        if time.monotonic() >= deadline:
+            raise TimeoutError(
+                f"training job did not complete before timeout: {training_job.get('status')}"
+            )
+        time.sleep(poll_interval_seconds)
+        training_job = request_json(
+            ml_service_url,
+            "GET",
+            f"/training-jobs/{urllib.parse.quote(job_id, safe='')}",
+        )
     if training_job.get("status") != "completed":
         raise ValueError(
             f"training job did not complete: {training_job.get('status', 'unknown')}"
@@ -127,6 +142,8 @@ def parse_args(argv):
         help="Training algorithm. Defaults to the manifest or logistic regression.",
     )
     parser.add_argument("--write-provider-output")
+    parser.add_argument("--poll-interval-seconds", type=float, default=1.0)
+    parser.add_argument("--timeout-seconds", type=float, default=300.0)
     parser.add_argument(
         "--register",
         action="store_true",
@@ -149,6 +166,8 @@ def main(argv=None):
             args.job_id,
             args.actor,
             args.algorithm,
+            poll_interval_seconds=args.poll_interval_seconds,
+            timeout_seconds=args.timeout_seconds,
         )
         result = {
             "handoff_status": "provider_output_ready",
@@ -170,7 +189,7 @@ def main(argv=None):
             result["registration_response"] = registration
         print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
         return 0
-    except (RuntimeError, OSError, ValueError) as error:
+    except (RuntimeError, OSError, TimeoutError, ValueError) as error:
         print(json.dumps({"error": str(error)}, ensure_ascii=False), file=sys.stderr)
         return 1
 
