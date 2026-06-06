@@ -147,6 +147,9 @@ async function main() {
     assertContains(builtText, "Submit alert decision", "web console mlops alert delivery bundle");
     assertContains(builtText, "Escalate alert to review", "web console mlops alert delivery bundle");
     assertContains(builtText, "Provider Output Handoff", "web console mlops output handoff bundle");
+    assertContains(builtText, "External training payload", "web console mlops provider output payload import bundle");
+    assertContains(builtText, "Load provider output payload", "web console mlops provider output payload import bundle");
+    assertContains(sourceText, "permutation_importance_uri", "web console mlops permutation importance payload mapping");
     assertContains(builtText, "Use for output registration", "web console mlops output handoff fill action bundle");
     assertContains(builtText, "Register completed provider output", "web console mlops output handoff bundle");
     assertContains(builtText, "Activation blocked by promotion gates", "web console mlops activation gate bundle");

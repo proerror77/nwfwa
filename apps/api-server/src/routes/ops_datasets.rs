@@ -613,6 +613,19 @@ fn validate_model_evaluation_registration(
             "MODEL_EVALUATION_FEATURE_IMPORTANCE_FORMAT_INVALID",
         )?;
     }
+    if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
+        if permutation_importance_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_MODEL_EVALUATION",
+                "permutation_importance_uri must not be blank when provided",
+            ));
+        }
+        validate_parquet_uri(
+            permutation_importance_uri,
+            "MODEL_EVALUATION_PERMUTATION_IMPORTANCE_FORMAT_INVALID",
+        )?;
+    }
     Ok(())
 }
 

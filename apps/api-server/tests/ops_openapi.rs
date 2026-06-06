@@ -913,6 +913,7 @@ async fn openapi_includes_operations_paths() {
         "model_version",
         "model_dataset_id",
         "feature_importance_uri",
+        "permutation_importance_uri",
     ] {
         assert_eq!(
             schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
@@ -936,6 +937,22 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("Parquet"),
         "missing ModelEvaluation.feature_importance_uri parquet contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelEvaluationRegistrationRequest"]["properties"]
+            ["permutation_importance_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Parquet"),
+        "missing ModelEvaluationRegistrationRequest.permutation_importance_uri parquet contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelEvaluation"]["properties"]
+            ["permutation_importance_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Parquet"),
+        "missing ModelEvaluation.permutation_importance_uri parquet contract"
     );
     for field in [
         "auc",
@@ -1250,6 +1267,22 @@ async fn openapi_includes_operations_paths() {
             .unwrap_or_default()
             .contains("Parquet"),
         "missing CompleteModelRetrainingJobRequest.feature_importance_uri parquet contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["CompleteModelRetrainingJobRequest"]["properties"]
+            ["permutation_importance_uri"]["description"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("Parquet"),
+        "missing CompleteModelRetrainingJobRequest.permutation_importance_uri parquet contract"
+    );
+    assert!(
+        schema["components"]["schemas"]["ModelArtifactEvidenceSummary"]["required"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|field| field == "permutation_importance_uri"),
+        "missing ModelArtifactEvidenceSummary.permutation_importance_uri"
     );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]

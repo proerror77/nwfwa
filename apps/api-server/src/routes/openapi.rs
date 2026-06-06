@@ -5833,6 +5833,10 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": ["string", "null"],
                             "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
                         },
+                        "permutation_importance_uri": {
+                            "type": ["string", "null"],
+                            "description": "Permutation importance artifact must be a Parquet file or Parquet partition directory."
+                        },
                         "metrics_json": {
                             "type": "object",
                             "description": "Model governance metrics. Promotion-ready evaluations should include time_group_split_status, time_split_field, group_split_fields, leakage_check_status, shadow_comparison_status, serving_version_lock_status, artifact_integrity_status, feature_store_materialization_status, segment_fairness_status, label_provenance_status, and pilot_validation_status or customer_validation_status. Public or Kaggle-inspired offline research data must not be used as production promotion evidence."
@@ -5860,6 +5864,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": ["string", "null"],
                             "minLength": 1,
                             "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
+                        },
+                        "permutation_importance_uri": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Permutation importance artifact must be a Parquet file or Parquet partition directory."
                         },
                         "metrics_json": {
                             "type": "object",
@@ -6119,10 +6128,11 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelArtifactEvidenceSummary": {
                     "type": "object",
-                    "required": ["serving_manifest_uri", "model_artifact_evaluation_report_uri", "rust_serving_status", "rust_serving_latency_status", "rust_serving_p95_latency_ms"],
+                    "required": ["serving_manifest_uri", "model_artifact_evaluation_report_uri", "permutation_importance_uri", "rust_serving_status", "rust_serving_latency_status", "rust_serving_p95_latency_ms"],
                     "properties": {
                         "serving_manifest_uri": { "type": ["string", "null"] },
                         "model_artifact_evaluation_report_uri": { "type": ["string", "null"] },
+                        "permutation_importance_uri": { "type": ["string", "null"] },
                         "rust_serving_status": { "type": ["string", "null"] },
                         "rust_serving_latency_status": { "type": ["string", "null"] },
                         "rust_serving_p95_latency_ms": { "type": ["integer", "null"] }
@@ -6573,6 +6583,11 @@ pub async fn openapi_schema() -> Json<Value> {
                             "type": ["string", "null"],
                             "minLength": 1,
                             "description": "Feature importance artifact must be a Parquet file or Parquet partition directory."
+                        },
+                        "permutation_importance_uri": {
+                            "type": ["string", "null"],
+                            "minLength": 1,
+                            "description": "Permutation importance artifact must be a Parquet file or Parquet partition directory."
                         },
                         "metrics_json": {
                             "type": "object",

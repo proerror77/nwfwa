@@ -1364,6 +1364,7 @@ pub struct ModelEvaluationRecord {
     pub threshold: Option<Decimal>,
     pub confusion_matrix_json: Value,
     pub feature_importance_uri: Option<String>,
+    pub permutation_importance_uri: Option<String>,
     pub metrics_json: Value,
 }
 
@@ -1383,6 +1384,7 @@ pub struct RegisterModelEvaluationInput {
     pub threshold: Option<Decimal>,
     pub confusion_matrix_json: Value,
     pub feature_importance_uri: Option<String>,
+    pub permutation_importance_uri: Option<String>,
     pub metrics_json: Value,
 }
 
@@ -4064,6 +4066,7 @@ impl ScoringRepository for InMemoryScoringRepository {
             threshold: input.threshold,
             confusion_matrix_json: input.confusion_matrix_json,
             feature_importance_uri: input.feature_importance_uri,
+            permutation_importance_uri: input.permutation_importance_uri,
             metrics_json: input.metrics_json,
         };
         self.model_evaluations
@@ -8739,8 +8742,8 @@ impl ScoringRepository for PostgresScoringRepository {
 
         sqlx::query(
             "INSERT INTO model_evaluation_runs
-             (evaluation_run_id, model_key, model_version, model_dataset_id, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json)
-             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+             (evaluation_run_id, model_key, model_version, model_dataset_id, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, permutation_importance_uri, metrics_json)
+             VALUES ($1, $2, $3, $4::uuid, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
              ON CONFLICT (evaluation_run_id) DO UPDATE
              SET model_key = EXCLUDED.model_key,
                  model_version = EXCLUDED.model_version,
@@ -8755,6 +8758,7 @@ impl ScoringRepository for PostgresScoringRepository {
                  threshold = EXCLUDED.threshold,
                  confusion_matrix_json = EXCLUDED.confusion_matrix_json,
                  feature_importance_uri = EXCLUDED.feature_importance_uri,
+                 permutation_importance_uri = EXCLUDED.permutation_importance_uri,
                  metrics_json = EXCLUDED.metrics_json",
         )
         .bind(&input.evaluation_run_id)
@@ -8771,6 +8775,7 @@ impl ScoringRepository for PostgresScoringRepository {
         .bind(input.threshold)
         .bind(&input.confusion_matrix_json)
         .bind(&input.feature_importance_uri)
+        .bind(&input.permutation_importance_uri)
         .bind(&input.metrics_json)
         .execute(&self.pool)
         .await?;
@@ -8797,9 +8802,10 @@ impl ScoringRepository for PostgresScoringRepository {
             Option<Decimal>,
             Value,
             Option<String>,
+            Option<String>,
             Value,
         )> = sqlx::query_as(
-            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
+            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, permutation_importance_uri, metrics_json
              FROM model_evaluation_runs
              WHERE evaluation_run_id = $1",
         )
@@ -8823,6 +8829,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 threshold,
                 confusion_matrix_json,
                 feature_importance_uri,
+                permutation_importance_uri,
                 metrics_json,
             )| ModelEvaluationRecord {
                 evaluation_run_id,
@@ -8839,6 +8846,7 @@ impl ScoringRepository for PostgresScoringRepository {
                 threshold,
                 confusion_matrix_json,
                 feature_importance_uri,
+                permutation_importance_uri,
                 metrics_json,
             },
         ))
@@ -8860,9 +8868,10 @@ impl ScoringRepository for PostgresScoringRepository {
             Option<Decimal>,
             Value,
             Option<String>,
+            Option<String>,
             Value,
         )> = sqlx::query_as(
-            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, metrics_json
+            "SELECT evaluation_run_id, model_key, model_version, model_dataset_id::text, scheme_family, auc, ks, precision_value, recall_value, f1, accuracy, threshold, confusion_matrix_json, feature_importance_uri, permutation_importance_uri, metrics_json
              FROM model_evaluation_runs
              ORDER BY evaluation_run_id",
         )
@@ -8887,6 +8896,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     threshold,
                     confusion_matrix_json,
                     feature_importance_uri,
+                    permutation_importance_uri,
                     metrics_json,
                 )| ModelEvaluationRecord {
                     evaluation_run_id,
@@ -8903,6 +8913,7 @@ impl ScoringRepository for PostgresScoringRepository {
                     threshold,
                     confusion_matrix_json,
                     feature_importance_uri,
+                    permutation_importance_uri,
                     metrics_json,
                 },
             )

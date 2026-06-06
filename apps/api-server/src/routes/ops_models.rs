@@ -63,6 +63,7 @@ pub struct ModelPromotionGatesResponse {
 pub struct ModelArtifactEvidenceSummary {
     pub serving_manifest_uri: Option<String>,
     pub model_artifact_evaluation_report_uri: Option<String>,
+    pub permutation_importance_uri: Option<String>,
     pub rust_serving_status: Option<String>,
     pub rust_serving_latency_status: Option<String>,
     pub rust_serving_p95_latency_ms: Option<u64>,
@@ -291,6 +292,7 @@ pub struct CompleteModelRetrainingJobRequest {
     pub threshold: Option<Decimal>,
     pub confusion_matrix_json: Value,
     pub feature_importance_uri: Option<String>,
+    pub permutation_importance_uri: Option<String>,
     pub metrics_json: Value,
     pub mined_rule_owner: Option<String>,
     pub mined_rule_candidates: Option<Vec<Rule>>,
@@ -892,6 +894,7 @@ pub async fn complete_model_retraining_job(
             threshold: request.threshold,
             confusion_matrix_json: request.confusion_matrix_json.clone(),
             feature_importance_uri: request.feature_importance_uri.clone(),
+            permutation_importance_uri: request.permutation_importance_uri.clone(),
             metrics_json,
         })
         .await
@@ -1178,6 +1181,19 @@ fn validate_retraining_output_request(
         validate_parquet_artifact_uri(
             feature_importance_uri,
             "INVALID_RETRAINING_OUTPUT_FEATURE_IMPORTANCE",
+        )?;
+    }
+    if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
+        if permutation_importance_uri.trim().is_empty() {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "INVALID_RETRAINING_OUTPUT_PERMUTATION_IMPORTANCE",
+                "permutation_importance_uri must not be blank when provided",
+            ));
+        }
+        validate_parquet_artifact_uri(
+            permutation_importance_uri,
+            "INVALID_RETRAINING_OUTPUT_PERMUTATION_IMPORTANCE",
         )?;
     }
     validate_retraining_output_artifact_evaluation(request)?;
@@ -1927,6 +1943,20 @@ fn validate_retraining_output_evidence_refs(
             ));
         }
     }
+    if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
+        let expected_ref = format!("model_permutation_importance:{permutation_importance_uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!("model retraining output evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
     Ok(())
 }
 
@@ -1957,6 +1987,12 @@ fn retraining_metrics_with_artifacts(request: &CompleteModelRetrainingJobRequest
         metrics.insert(
             "serving_manifest_uri".into(),
             Value::String(serving_manifest_uri.clone()),
+        );
+    }
+    if let Some(permutation_importance_uri) = &request.permutation_importance_uri {
+        metrics.insert(
+            "permutation_importance_uri".into(),
+            Value::String(permutation_importance_uri.clone()),
         );
     }
     metrics_json
@@ -2610,8 +2646,11 @@ fn build_model_promotion_gates(
         })
         .unwrap_or(false);
     let explanation_artifact = latest_evaluation
-        .and_then(|evaluation| evaluation.feature_importance_uri.as_ref())
-        .is_some();
+        .map(|evaluation| {
+            evaluation.feature_importance_uri.is_some()
+                || evaluation.permutation_importance_uri.is_some()
+        })
+        .unwrap_or(false);
     let leakage_check = metrics
         .get("leakage_check_status")
         .and_then(|value| value.as_str())
@@ -3346,6 +3385,7 @@ fn model_artifact_evidence_summary(metrics: &Value) -> ModelArtifactEvidenceSumm
             metrics,
             "model_artifact_evaluation_report_uri",
         ),
+        permutation_importance_uri: optional_metric_string(metrics, "permutation_importance_uri"),
         rust_serving_status: optional_metric_string(metrics, "rust_serving_status"),
         rust_serving_latency_status: optional_metric_string(metrics, "rust_serving_latency_status"),
         rust_serving_p95_latency_ms: optional_metric_u64(metrics, "rust_serving_p95_latency_ms"),

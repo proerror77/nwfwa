@@ -2182,11 +2182,12 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             "model_retraining_jobs:{job_id}",
             "model_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json",
             "model_training_artifacts:s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib",
-            "model_serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
-            "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
-            "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
-            "model_evaluations:eval_baseline_retraining_job_candidate",
-            "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
+          "model_serving_manifests:s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json",
+          "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
+          "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+          "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
+          "model_evaluations:eval_baseline_retraining_job_candidate",
+          "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
             "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"
           ],
           "auc": "0.86",
@@ -2198,6 +2199,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "threshold": "0.52",
           "confusion_matrix_json": {"tp": 12, "fp": 2, "tn": 14, "fn": 2},
           "feature_importance_uri": "data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
+          "permutation_importance_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
           "metrics_json": {
             "score_psi": 0.04,
             "shadow_comparison_status": "passed",
@@ -2276,6 +2278,10 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     );
     assert_eq!(completed["evaluation"]["model_version"], "0.2.0-candidate");
     assert_eq!(
+        completed["evaluation"]["permutation_importance_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet"
+    );
+    assert_eq!(
         completed["evaluation"]["metrics_json"]["training_artifact_uri"],
         "s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib"
     );
@@ -2286,6 +2292,10 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
     assert_eq!(
         completed["evaluation"]["metrics_json"]["serving_manifest_uri"],
         "s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json"
+    );
+    assert_eq!(
+        completed["evaluation"]["metrics_json"]["permutation_importance_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet"
     );
     assert_eq!(
         completed["mined_rule_candidates"].as_array().unwrap().len(),
@@ -2347,6 +2357,12 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!(
+            "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet"
+        )));
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
             "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json"
         )));
     assert!(output_event["evidence_refs"]
@@ -2380,6 +2396,17 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         .find(|rule| rule["rule_id"] == "candidate_tree_provider_profile_and_amount")
         .expect("training-platform tree-mined rule candidate should be saved");
     assert_eq!(saved_tree_rule["status"], "draft");
+
+    let (status, gates) = get_json(
+        app.clone(),
+        "/api/v1/ops/models/baseline_fwa/versions/0.2.0-candidate/promotion-gates",
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(
+        gates["artifact_evidence"]["permutation_importance_uri"],
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet"
+    );
 
     let (status, models) = get_json(app, "/api/v1/ops/models").await;
     assert_eq!(status, StatusCode::OK);
@@ -2694,6 +2721,21 @@ async fn rejects_invalid_model_retraining_output_contract() {
     let mut missing_evidence_refs = valid_request.clone();
     missing_evidence_refs["evidence_refs"] = serde_json::json!([]);
     let payload = missing_evidence_refs.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
+
+    let mut missing_permutation_importance_evidence = valid_request.clone();
+    missing_permutation_importance_evidence["permutation_importance_uri"] = serde_json::json!(
+        "s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet"
+    );
+    let payload = missing_permutation_importance_evidence.to_string();
     let (status, body) = json_request(
         app.clone(),
         "POST",

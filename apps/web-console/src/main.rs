@@ -5940,11 +5940,17 @@ fn mlops_workspace_page() -> Html {
     let candidate_feature_importance_uri = use_state(|| {
         "data/eval/provider_retraining_candidate/feature_importance.parquet".to_string()
     });
+    let candidate_permutation_importance_uri = use_state(|| {
+        "data/eval/provider_retraining_candidate/permutation_importance.parquet".to_string()
+    });
     let candidate_metrics_json = use_state(|| {
         r#"{"data_quality_status":"passed","split_strategy":"time_group_split","shadow_comparison_status":"passed","review_capacity_threshold_status":"passed"}"#.to_string()
     });
     let mined_rule_candidates_json = use_state(|| {
         r#"[{"rule_id":"candidate_retraining_amount_ratio","version":1,"name":"Retraining mined amount ratio candidate","review_mode":"both","scheme_family":"high_risk_claim","conditions":[{"field":"claim_amount_to_limit_ratio","operator":">=","value":0.82}],"action":{"score":22,"alert_code":"RETRAINING_AMOUNT_RATIO_CANDIDATE","recommended_action":"ManualReview","reason":"External training platform mined this explainable candidate from feature importance and backtest evidence."}}]"#.to_string()
+    });
+    let training_output_payload_json = use_state(|| {
+        r#"{"candidate_model_version":"0.2.0-candidate","artifact_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/rust_serving_artifact.json","artifact_sha256":"sha256:rust-serving-artifact","training_artifact_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/model.joblib","training_artifact_sha256":"sha256:training-artifact","serving_manifest_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/serving_manifest.json","endpoint_url":"http://127.0.0.1:8001/score/baseline_fwa/0.2.0-candidate","validation_report_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json","feature_importance_uri":"data/eval/provider_retraining_candidate/feature_importance.parquet","permutation_importance_uri":"data/eval/provider_retraining_candidate/permutation_importance.parquet","metrics_json":{"shadow_comparison_status":"passed","review_capacity_threshold_status":"passed","model_artifact_evaluation_status":"passed","model_artifact_evaluation_report_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json","rule_candidate_backtest_status":"passed","rule_candidate_backtest_report_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json","rule_candidate_review_tasks_uri":"s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json","rule_library_writeback_status":"blocked_pending_human_review_and_policy_governance_approval"},"confusion_matrix_json":{"tp":64,"fp":18,"tn":820,"fn":36},"evidence_refs":["model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json","rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json","rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json"],"mined_rule_candidates":[]}"#.to_string()
     });
     let anomaly_candidate_kind = use_state(|| "provider_peer_anomaly".to_string());
     let anomaly_candidate_id = use_state(|| "provider_peer:PRV-042:2026-05".to_string());
@@ -6023,6 +6029,7 @@ fn mlops_workspace_page() -> Html {
         let candidate_threshold = candidate_threshold.clone();
         let candidate_confusion_matrix = candidate_confusion_matrix.clone();
         let candidate_feature_importance_uri = candidate_feature_importance_uri.clone();
+        let candidate_permutation_importance_uri = candidate_permutation_importance_uri.clone();
         let candidate_metrics_json = candidate_metrics_json.clone();
         let mined_rule_candidates_json = mined_rule_candidates_json.clone();
         let action_notes = action_notes.clone();
@@ -6059,6 +6066,8 @@ fn mlops_workspace_page() -> Html {
             let candidate_threshold = (*candidate_threshold).clone();
             let candidate_confusion_matrix = (*candidate_confusion_matrix).clone();
             let candidate_feature_importance_uri = (*candidate_feature_importance_uri).clone();
+            let candidate_permutation_importance_uri =
+                (*candidate_permutation_importance_uri).clone();
             let candidate_metrics_json = (*candidate_metrics_json).clone();
             let mined_rule_candidates_json = (*mined_rule_candidates_json).clone();
             let action_notes = (*action_notes).clone();
@@ -6097,6 +6106,7 @@ fn mlops_workspace_page() -> Html {
                     candidate_threshold,
                     candidate_confusion_matrix,
                     candidate_feature_importance_uri,
+                    candidate_permutation_importance_uri,
                     candidate_metrics_json,
                     mined_rule_candidates_json,
                     action_notes,
@@ -6172,6 +6182,112 @@ fn mlops_workspace_page() -> Html {
                     Err(error) => action_state.set(ApiState::Failed(error)),
                 }
             });
+        })
+    };
+
+    let load_training_output_payload = {
+        let training_output_payload_json = training_output_payload_json.clone();
+        let candidate_model_version = candidate_model_version.clone();
+        let candidate_artifact_uri = candidate_artifact_uri.clone();
+        let candidate_artifact_sha256 = candidate_artifact_sha256.clone();
+        let training_artifact_uri = training_artifact_uri.clone();
+        let training_artifact_sha256 = training_artifact_sha256.clone();
+        let serving_manifest_uri = serving_manifest_uri.clone();
+        let candidate_endpoint_url = candidate_endpoint_url.clone();
+        let validation_report_uri = validation_report_uri.clone();
+        let candidate_auc = candidate_auc.clone();
+        let candidate_ks = candidate_ks.clone();
+        let candidate_precision = candidate_precision.clone();
+        let candidate_recall = candidate_recall.clone();
+        let candidate_f1 = candidate_f1.clone();
+        let candidate_accuracy = candidate_accuracy.clone();
+        let candidate_threshold = candidate_threshold.clone();
+        let candidate_confusion_matrix = candidate_confusion_matrix.clone();
+        let candidate_feature_importance_uri = candidate_feature_importance_uri.clone();
+        let candidate_permutation_importance_uri = candidate_permutation_importance_uri.clone();
+        let candidate_metrics_json = candidate_metrics_json.clone();
+        let mined_rule_candidates_json = mined_rule_candidates_json.clone();
+        let evidence_refs = evidence_refs.clone();
+        let action_state = action_state.clone();
+        Callback::from(move |_| {
+            let payload = match parse_json_object(
+                &training_output_payload_json,
+                "external training payload",
+            ) {
+                Ok(payload) => payload,
+                Err(error) => {
+                    action_state.set(ApiState::Failed(error));
+                    return;
+                }
+            };
+            if let Some(value) = json_string_field(&payload, "candidate_model_version") {
+                candidate_model_version.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "artifact_uri") {
+                candidate_artifact_uri.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "artifact_sha256") {
+                candidate_artifact_sha256.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "training_artifact_uri") {
+                training_artifact_uri.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "training_artifact_sha256") {
+                training_artifact_sha256.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "serving_manifest_uri") {
+                serving_manifest_uri.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "endpoint_url") {
+                candidate_endpoint_url.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "validation_report_uri") {
+                validation_report_uri.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "feature_importance_uri") {
+                candidate_feature_importance_uri.set(value);
+            }
+            if let Some(value) = json_string_field(&payload, "permutation_importance_uri") {
+                candidate_permutation_importance_uri.set(value);
+            }
+            if let Some(value) = json_metric_string(&payload, "auc") {
+                candidate_auc.set(value);
+            }
+            if let Some(value) = json_metric_string(&payload, "ks") {
+                candidate_ks.set(value);
+            }
+            if let Some(value) = json_metric_string(&payload, "precision") {
+                candidate_precision.set(value);
+            }
+            if let Some(value) = json_metric_string(&payload, "recall") {
+                candidate_recall.set(value);
+            }
+            if let Some(value) = json_metric_string(&payload, "f1") {
+                candidate_f1.set(value);
+            }
+            if let Some(value) = json_metric_string(&payload, "accuracy") {
+                candidate_accuracy.set(value);
+            }
+            if let Some(value) = json_metric_string(&payload, "threshold") {
+                candidate_threshold.set(value);
+            }
+            if let Some(confusion_matrix) = payload.get("confusion_matrix_json") {
+                candidate_confusion_matrix.set(pretty_json(confusion_matrix));
+            }
+            if let Some(metrics) = payload.get("metrics_json") {
+                candidate_metrics_json.set(pretty_json(metrics));
+            }
+            if let Some(candidates) = payload.get("mined_rule_candidates") {
+                mined_rule_candidates_json.set(pretty_json(candidates));
+            }
+            if let Some(refs) = payload.get("evidence_refs").and_then(|value| value.as_array()) {
+                let refs = refs
+                    .iter()
+                    .filter_map(|value| value.as_str().map(str::to_string))
+                    .collect::<Vec<_>>();
+                evidence_refs.set(refs.join(", "));
+            }
+            action_state.set(ApiState::Idle);
         })
     };
 
@@ -6451,6 +6567,21 @@ fn mlops_workspace_page() -> Html {
                                 <option value="cancelled">{"cancelled"}</option>
                             </select>
                         </label>
+                        <label class="mlops-field mlops-evidence-field">
+                            {"External training payload"}
+                            <textarea
+                                value={(*training_output_payload_json).clone()}
+                                oninput={{
+                                    let training_output_payload_json = training_output_payload_json.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        training_output_payload_json.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <button class="mini-action" onclick={load_training_output_payload.clone()}>
+                            {"Load provider output payload"}
+                        </button>
                         <label class="mlops-field">
                             {"Candidate version"}
                             <input
@@ -6639,6 +6770,18 @@ fn mlops_workspace_page() -> Html {
                                     let candidate_feature_importance_uri = candidate_feature_importance_uri.clone();
                                     Callback::from(move |event: InputEvent| {
                                         candidate_feature_importance_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                                    })
+                                }}
+                            />
+                        </label>
+                        <label class="mlops-field">
+                            {"Permutation importance URI"}
+                            <input
+                                value={(*candidate_permutation_importance_uri).clone()}
+                                oninput={{
+                                    let candidate_permutation_importance_uri = candidate_permutation_importance_uri.clone();
+                                    Callback::from(move |event: InputEvent| {
+                                        candidate_permutation_importance_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
                                     })
                                 }}
                             />
@@ -12282,6 +12425,7 @@ async fn execute_mlops_governed_action(
     candidate_threshold: String,
     candidate_confusion_matrix: String,
     candidate_feature_importance_uri: String,
+    candidate_permutation_importance_uri: String,
     candidate_metrics_json: String,
     mined_rule_candidates_json: String,
     notes: String,
@@ -12411,6 +12555,8 @@ async fn execute_mlops_governed_action(
             let serving_manifest_uri = optional_trimmed_value(&serving_manifest_uri);
             let endpoint_url = optional_trimmed_value(&candidate_endpoint_url);
             let feature_importance_uri = optional_trimmed_value(&candidate_feature_importance_uri);
+            let permutation_importance_uri =
+                optional_trimmed_value(&candidate_permutation_importance_uri);
             let mined_rule_candidates =
                 parse_optional_json_array(&mined_rule_candidates_json, "mined rule candidates")?;
             let evaluation_run_id = format!(
@@ -12439,6 +12585,12 @@ async fn execute_mlops_governed_action(
                 evidence_refs = push_unique(
                     evidence_refs,
                     format!("model_serving_manifests:{serving_manifest_uri}"),
+                );
+            }
+            if let Some(permutation_importance_uri) = &permutation_importance_uri {
+                evidence_refs = push_unique(
+                    evidence_refs,
+                    format!("model_permutation_importance:{permutation_importance_uri}"),
                 );
             }
             evidence_refs = push_unique(
@@ -12475,6 +12627,7 @@ async fn execute_mlops_governed_action(
                     "threshold": threshold,
                     "confusion_matrix_json": confusion_matrix_json,
                     "feature_importance_uri": feature_importance_uri,
+                    "permutation_importance_uri": permutation_importance_uri,
                     "metrics_json": metrics_json,
                     "mined_rule_owner": "external-training-platform",
                     "mined_rule_candidates": mined_rule_candidates,
@@ -14140,6 +14293,24 @@ fn parse_json_object(input: &str, label: &str) -> Result<Value, String> {
         Ok(_) => Err(format!("{label} must be a JSON object")),
         Err(error) => Err(format!("{label} JSON is invalid: {error}")),
     }
+}
+
+fn json_string_field(value: &Value, key: &str) -> Option<String> {
+    value
+        .get(key)
+        .and_then(Value::as_str)
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .map(str::to_string)
+}
+
+fn json_metric_string(value: &Value, key: &str) -> Option<String> {
+    value.get(key).and_then(|value| {
+        value
+            .as_str()
+            .map(str::to_string)
+            .or_else(|| value.as_f64().map(|number| number.to_string()))
+    })
 }
 
 fn parse_optional_unit_metric(input: &str, label: &str) -> Result<Option<String>, String> {

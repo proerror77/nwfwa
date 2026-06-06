@@ -722,12 +722,15 @@ CREATE TABLE IF NOT EXISTS model_evaluation_runs (
   threshold NUMERIC,
   confusion_matrix_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   feature_importance_uri TEXT,
+  permutation_importance_uri TEXT,
   metrics_json JSONB NOT NULL DEFAULT '{}'::jsonb,
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
 ALTER TABLE model_evaluation_runs
   ADD COLUMN IF NOT EXISTS scheme_family TEXT NOT NULL DEFAULT 'high_risk_claim';
+ALTER TABLE model_evaluation_runs
+  ADD COLUMN IF NOT EXISTS permutation_importance_uri TEXT;
 
 CREATE TABLE IF NOT EXISTS model_promotion_reviews (
   id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
