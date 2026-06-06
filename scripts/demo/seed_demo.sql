@@ -981,6 +981,30 @@ VALUES
     NULL,
     NULL,
     now()
+  ),
+  (
+    '80000000-0000-0000-0000-000000001001',
+    'run-demo-mlops-monitoring',
+    '40000000-0000-0000-0000-000000000287',
+    'tpa-demo',
+    'mlops-worker',
+    'completed',
+    NULL,
+    NULL,
+    NULL,
+    now()
+  ),
+  (
+    '80000000-0000-0000-0000-000000001002',
+    'run-demo-mlops-alert-delivery',
+    '40000000-0000-0000-0000-000000000287',
+    'tpa-demo',
+    'mlops-worker',
+    'completed',
+    NULL,
+    NULL,
+    NULL,
+    now()
   )
 ON CONFLICT (run_id) DO UPDATE
 SET claim_id = EXCLUDED.claim_id,
