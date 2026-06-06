@@ -6348,6 +6348,10 @@ fn mlops_workspace_page() -> Html {
         Callback::from(move |job: ModelRetrainingJobRecord| {
             retraining_job_id.set(job.job_id.clone());
             retraining_status.set(job.status.clone());
+            let evidence_model_version = job
+                .candidate_model_version
+                .clone()
+                .unwrap_or_else(|| job.model_version.clone());
             if let Some(version) = job.candidate_model_version {
                 candidate_model_version.set(version);
             }
@@ -6362,7 +6366,7 @@ fn mlops_workspace_page() -> Html {
             }
             let mut refs = vec![
                 format!("model_retraining_jobs:{}", job.job_id),
-                format!("model_versions:{}:{}", job.model_key, job.model_version),
+                format!("model_versions:{}:{}", job.model_key, evidence_model_version),
             ];
             if let Some(evaluation_id) = job.output_evaluation_id {
                 refs = push_unique(refs, format!("model_evaluations:{evaluation_id}"));

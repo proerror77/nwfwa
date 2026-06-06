@@ -237,7 +237,10 @@ def govern_retraining_candidate():
     output_evaluation_id = completed_job["output_evaluation_id"]
     job_id = completed_job["job_id"]
 
-    gates = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    gates = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-gates",
+    )
     assert_true(gates.get("model_version") == candidate_version, "promotion gates did not target latest candidate")
     assert_true(
         "approval missing" in gates.get("blockers", []),
@@ -250,7 +253,7 @@ def govern_retraining_candidate():
 
     review = request(
         "POST",
-        f"/api/v1/ops/models/{MODEL_KEY}/promotion-reviews",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-reviews",
         {
             "decision": "approved",
             "reviewer": "model-governance-demo",
@@ -265,7 +268,10 @@ def govern_retraining_candidate():
     assert_true(review.get("decision") == "approved", "promotion review was not approved")
     assert_true(review.get("model_version") == candidate_version, "promotion review target mismatch")
 
-    gates_after_review = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    gates_after_review = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-gates",
+    )
     assert_true(
         gates_after_review.get("blockers") == ["model is not active"],
         f"candidate should only be blocked by activation status after approval: {gates_after_review}",
@@ -273,7 +279,7 @@ def govern_retraining_candidate():
 
     activated = request(
         "POST",
-        f"/api/v1/ops/models/{MODEL_KEY}/activate",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/activate",
         {
             "evidence_refs": [
                 f"model_versions:{MODEL_KEY}:{candidate_version}",
@@ -305,7 +311,10 @@ def govern_retraining_candidate():
         "previous active model was not moved to approved",
     )
 
-    activated_gates = request("GET", f"/api/v1/ops/models/{MODEL_KEY}/promotion-gates")
+    activated_gates = request(
+        "GET",
+        f"/api/v1/ops/models/{MODEL_KEY}/versions/{candidate_version}/promotion-gates",
+    )
     assert_true(
         activated_gates.get("decision") == "routing_allowed",
         f"activated candidate should pass routing gates: {activated_gates}",
