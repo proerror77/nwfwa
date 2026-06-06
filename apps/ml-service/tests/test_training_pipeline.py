@@ -117,6 +117,7 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["training_artifact_uri"].endswith("/model.joblib")
     assert payload["validation_report_uri"].endswith("/validation.json")
     assert payload["feature_importance_uri"].endswith("/feature_importance.parquet")
+    assert payload["permutation_importance_uri"].endswith("/permutation_importance.parquet")
     assert payload["serving_manifest_uri"].endswith("/serving_manifest.json")
     assert payload["model_artifact_evaluation_report_uri"].endswith(
         "/artifact-evaluation/model_artifact_evaluation_report.json"
@@ -129,6 +130,7 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert Path(payload["training_artifact_uri"]).exists()
     assert Path(payload["validation_report_uri"]).exists()
     assert Path(payload["feature_importance_uri"]).exists()
+    assert Path(payload["permutation_importance_uri"]).exists()
     assert Path(payload["serving_manifest_uri"]).exists()
     assert Path(payload["model_artifact_evaluation_report_uri"]).exists()
     assert Path(payload["feature_store_manifest_uri"]).exists()
@@ -163,6 +165,10 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["label_provenance_status"] == "passed"
     assert payload["metrics_json"]["data_quality_score"] == 1.0
     assert payload["metrics_json"]["source_data_quality_score"] == 1.0
+    assert payload["metrics_json"]["permutation_importance_status"] == "passed"
+    assert payload["metrics_json"]["permutation_importance_uri"].endswith(
+        "/permutation_importance.parquet"
+    )
     assert payload["metrics_json"]["dataset_usage_scope"] == "pilot_validated"
     assert payload["metrics_json"]["pilot_validation_status"] == "passed"
     assert payload["auc"] is not None
@@ -222,6 +228,15 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert artifact_evaluation["runtime_kind"] == "rust_logistic_regression"
     assert artifact_evaluation["rust_serving_p95_latency_ms"] == 18
 
+    permutation_importance = pd.read_parquet(payload["permutation_importance_uri"])
+    assert set(permutation_importance["feature"]) == set(rust_artifact["feature_columns"])
+    assert set(permutation_importance["importance_kind"]) == {"permutation_auc_drop"}
+    assert (permutation_importance["importance"] >= 0.0).all()
+    assert any(
+        ref == f"model_permutation_importance:{payload['permutation_importance_uri']}"
+        for ref in payload["evidence_refs"]
+    )
+
     assert payload["mined_rule_owner"] == "external-training-platform"
     mined_rules = payload["mined_rule_candidates"]
     assert len(mined_rules) >= 1
@@ -273,6 +288,8 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert payload["metrics_json"]["permutation_importance_status"] == "passed"
+    assert Path(payload["permutation_importance_uri"]).exists()
     assert (
         payload["metrics_json"]["rust_serving_gate_status"]
         == "onnx_export_parity_and_rust_runtime_ready"
@@ -334,6 +351,8 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert payload["metrics_json"]["permutation_importance_status"] == "passed"
+    assert Path(payload["permutation_importance_uri"]).exists()
     assert (
         payload["metrics_json"]["rust_serving_gate_status"]
         == "onnx_export_parity_and_rust_runtime_ready"

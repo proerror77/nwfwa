@@ -23,6 +23,7 @@ from sklearn.metrics import (
     recall_score,
     roc_auc_score,
 )
+from sklearn.inspection import permutation_importance
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
@@ -112,6 +113,7 @@ def train_from_manifest(
     onnx_parity_report_path = artifact_root / "onnx_parity_report.json"
     validation_report_path = artifact_root / "validation.json"
     feature_importance_path = artifact_root / "feature_importance.parquet"
+    permutation_importance_path = artifact_root / "permutation_importance.parquet"
     mined_rule_candidates_path = artifact_root / "mined_rule_candidates.json"
     serving_manifest_path = artifact_root / "serving_manifest.json"
     artifact_evaluation_report_path = (
@@ -167,6 +169,14 @@ def train_from_manifest(
 
     feature_importance = build_feature_importance(pipeline, feature_columns)
     feature_importance.to_parquet(feature_importance_path, index=False)
+    permutation_importance_frame = build_permutation_importance(
+        pipeline,
+        validation,
+        feature_columns,
+        label_column,
+        use_numpy_matrix,
+    )
+    permutation_importance_frame.to_parquet(permutation_importance_path, index=False)
     mined_rule_candidates = build_mined_rule_candidates(
         model_key=model_key,
         candidate_model_version=candidate_model_version,
@@ -313,6 +323,8 @@ def train_from_manifest(
         "mined_rule_candidate_count": len(mined_rule_candidates),
         "mined_rule_candidates_uri": str(mined_rule_candidates_path),
         "rule_mining_status": "passed" if mined_rule_candidates else "no_candidate",
+        "permutation_importance_status": "passed",
+        "permutation_importance_uri": str(permutation_importance_path),
     }
     for optional_field in (
         "dataset_usage_scope",
@@ -360,6 +372,7 @@ def train_from_manifest(
         "threshold": format_metric(DEFAULT_THRESHOLD),
         "confusion_matrix_json": validation_metrics["confusion_matrix"],
         "feature_importance_uri": str(feature_importance_path),
+        "permutation_importance_uri": str(permutation_importance_path),
         "serving_manifest_uri": str(serving_manifest_path),
         "model_artifact_evaluation_report_uri": str(artifact_evaluation_report_path),
         "onnx_parity_report_uri": str(onnx_parity_report_path)
@@ -391,6 +404,7 @@ def train_from_manifest(
             f"mined_rule_candidates:{mined_rule_candidates_path}",
             f"model_validation_reports:{validation_report_path}",
             f"model_evaluations:{evaluation_run_id}",
+            f"model_permutation_importance:{permutation_importance_path}",
         ],
     }
     if mined_rule_candidates:
@@ -769,6 +783,39 @@ def build_feature_importance(pipeline: Pipeline, feature_columns: list[str]) -> 
             "importance_kind": "feature_importance",
         }
     ).sort_values("importance", ascending=False)
+
+
+def build_permutation_importance(
+    pipeline: Pipeline,
+    validation: pd.DataFrame,
+    feature_columns: list[str],
+    label_column: str,
+    use_numpy_matrix: bool,
+) -> pd.DataFrame:
+    result = permutation_importance(
+        pipeline,
+        model_input(validation, feature_columns, use_numpy_matrix),
+        validation[label_column].astype(int),
+        scoring="roc_auc",
+        n_repeats=5,
+        random_state=42,
+    )
+    rows = []
+    for feature, mean, stddev in zip(
+        feature_columns,
+        result.importances_mean,
+        result.importances_std,
+        strict=True,
+    ):
+        rows.append(
+            {
+                "feature": feature,
+                "importance": max(0.0, float(mean)),
+                "importance_stddev": float(stddev),
+                "importance_kind": "permutation_auc_drop",
+            }
+        )
+    return pd.DataFrame(rows).sort_values("importance", ascending=False)
 
 
 def build_mined_rule_candidates(
