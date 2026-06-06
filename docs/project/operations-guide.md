@@ -276,6 +276,30 @@ does not activate the model or write active rules; accepted rule candidates stil
 require completed blocker-free backtest evidence and are saved only as draft
 candidates for human governance review before rule-library writeback.
 
+Independent training service handoff:
+
+```bash
+python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
+
+python scripts/demo/mlops_training_handoff.py \
+  --ml-service-url http://127.0.0.1:8001 \
+  --manifest data/training/manifest.json \
+  --artifact-base-uri data/model-artifacts \
+  --model-key baseline_fwa \
+  --base-model-version 0.1.0 \
+  --job-id model_retraining_job_1 \
+  --actor external-training-platform \
+  --write-provider-output artifacts/mlops/provider-output.json
+```
+
+The script calls the independent ML service `POST /train`, validates the
+completed provider output, and can save it for review. Add `--register
+--api-url "$FWA_API_BASE_URL" --api-key "$FWA_API_KEY"` only when the output
+should be posted to
+`/api/v1/ops/model-retraining-jobs/{job_id}/output`. This keeps FWA on the
+consumer side of the contract: it records completed model artifacts and mined
+rule drafts, while the training platform owns training execution.
+
 Scheduled MLOps monitoring plan:
 
 ```bash
