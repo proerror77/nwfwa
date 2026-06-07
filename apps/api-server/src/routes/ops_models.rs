@@ -1291,6 +1291,26 @@ fn validate_retraining_output_overfitting_evidence(
         ));
     }
     if metrics
+        .get("automl_factor_ranking_status")
+        .and_then(|value| value.as_str())
+        != Some("passed")
+    {
+        return Err(missing(
+            "model retraining output requires passed automl_factor_ranking_status",
+        ));
+    }
+    if metrics
+        .get("automl_factor_ranking_report_uri")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
+        return Err(missing(
+            "model retraining output requires automl_factor_ranking_report_uri",
+        ));
+    }
+    if metrics
         .get("overfitting_diagnostics_report_uri")
         .and_then(|value| value.as_str())
         .map(str::trim)
@@ -2156,6 +2176,26 @@ fn validate_retraining_output_evidence_refs(
         .filter(|value| !value.is_empty())
     {
         let expected_ref = format!("model_overfitting_diagnostics:{overfitting_diagnostics_uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!("model retraining output evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
+    if let Some(factor_ranking_uri) = request
+        .metrics_json
+        .get("automl_factor_ranking_report_uri")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let expected_ref = format!("automl_factor_rankings:{factor_ranking_uri}");
         if !request
             .evidence_refs
             .iter()

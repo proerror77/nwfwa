@@ -189,6 +189,9 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["automl_feature_search_report_uri"].endswith(
         "/automl_feature_search_report.json"
     )
+    assert payload["automl_factor_ranking_report_uri"].endswith(
+        "/automl_factor_ranking_report.json"
+    )
     assert payload["overfitting_diagnostics_report_uri"].endswith(
         "/overfitting_diagnostics_report.json"
     )
@@ -210,6 +213,7 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert Path(payload["model_artifact_evaluation_report_uri"]).exists()
     assert Path(payload["feature_store_manifest_uri"]).exists()
     assert Path(payload["automl_feature_search_report_uri"]).exists()
+    assert Path(payload["automl_factor_ranking_report_uri"]).exists()
     assert Path(payload["overfitting_diagnostics_report_uri"]).exists()
     assert Path(payload["shadow_report_uri"]).exists()
     assert Path(payload["drift_report_uri"]).exists()
@@ -235,6 +239,11 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["feature_store_materialization_status"] == "passed"
     assert payload["metrics_json"]["automl_feature_search_status"] == "passed"
     assert payload["metrics_json"]["automl_selected_feature_count"] == 3
+    assert payload["metrics_json"]["automl_factor_ranking_status"] == "passed"
+    assert payload["metrics_json"]["automl_ranked_factor_count"] == 3
+    assert payload["metrics_json"]["automl_factor_ranking_report_uri"].endswith(
+        "/automl_factor_ranking_report.json"
+    )
     assert payload["metrics_json"]["rust_feature_set_status"] == "passed"
     assert payload["metrics_json"]["rust_feature_set_manifest_uri"].endswith(
         "/rust_feature_set/feature_set_manifest.json"
@@ -309,6 +318,17 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert feature_search_report["ranked_features"]
     assert any(
         ref == f"automl_feature_search_reports:{payload['automl_feature_search_report_uri']}"
+        for ref in payload["evidence_refs"]
+    )
+    factor_ranking_report = json.loads(
+        Path(payload["automl_factor_ranking_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert factor_ranking_report["report_kind"] == "automl_factor_ranking"
+    assert factor_ranking_report["status"] == "passed"
+    assert factor_ranking_report["ranked_factor_count"] == 3
+    assert [row["rank"] for row in factor_ranking_report["ranked_factors"]] == [1, 2, 3]
+    assert any(
+        ref == f"automl_factor_rankings:{payload['automl_factor_ranking_report_uri']}"
         for ref in payload["evidence_refs"]
     )
     overfitting_diagnostics = json.loads(
@@ -417,6 +437,7 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert payload["metrics_json"]["automl_factor_ranking_status"] == "passed"
     assert payload["metrics_json"]["overfitting_diagnostics_status"] == "passed"
     assert payload["metrics_json"]["permutation_importance_status"] == "passed"
     assert Path(payload["permutation_importance_uri"]).exists()
@@ -506,6 +527,7 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert payload["metrics_json"]["automl_factor_ranking_status"] == "passed"
     assert payload["metrics_json"]["overfitting_diagnostics_status"] == "passed"
     assert payload["metrics_json"]["permutation_importance_status"] == "passed"
     assert Path(payload["permutation_importance_uri"]).exists()

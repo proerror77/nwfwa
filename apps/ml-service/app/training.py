@@ -131,6 +131,7 @@ def train_from_manifest(
     validation_report_path = artifact_root / "validation.json"
     feature_importance_path = artifact_root / "feature_importance.parquet"
     permutation_importance_path = artifact_root / "permutation_importance.parquet"
+    factor_ranking_report_path = artifact_root / "automl_factor_ranking_report.json"
     overfitting_diagnostics_report_path = artifact_root / "overfitting_diagnostics_report.json"
     mined_rule_candidates_path = artifact_root / "mined_rule_candidates.json"
     rule_candidate_backtest_report_path = (
@@ -283,6 +284,13 @@ def train_from_manifest(
         drift_report_path,
         use_numpy_matrix=use_numpy_matrix,
     )
+    factor_ranking_report = build_factor_ranking_report(
+        feature_search_report=feature_search_report,
+        feature_importance=feature_importance,
+        permutation_importance=permutation_importance_frame,
+        drift_report=drift_report,
+        output_path=factor_ranking_report_path,
+    )
     overfitting_diagnostics_report = build_overfitting_diagnostics_report(
         splits=splits,
         time_split_field=time_split_field,
@@ -351,6 +359,9 @@ def train_from_manifest(
         "automl_feature_search_report_uri": str(feature_search_report_path),
         "automl_candidate_feature_count": feature_search_report["candidate_feature_count"],
         "automl_selected_feature_count": feature_search_report["selected_feature_count"],
+        "automl_factor_ranking_status": factor_ranking_report["status"],
+        "automl_factor_ranking_report_uri": str(factor_ranking_report_path),
+        "automl_ranked_factor_count": factor_ranking_report["ranked_factor_count"],
         "rust_feature_set_status": "passed",
         "rust_feature_set_manifest_uri": str(rust_feature_set_manifest_path),
         "model_artifact_evaluation_status": artifact_evaluation_report["gate_status"],
@@ -446,6 +457,7 @@ def train_from_manifest(
         else None,
         "feature_store_manifest_uri": str(feature_store_manifest_path),
         "automl_feature_search_report_uri": str(feature_search_report_path),
+        "automl_factor_ranking_report_uri": str(factor_ranking_report_path),
         "overfitting_diagnostics_report_uri": str(overfitting_diagnostics_report_path),
         "shadow_report_uri": str(shadow_report_path),
         "drift_report_uri": str(drift_report_path),
@@ -466,6 +478,7 @@ def train_from_manifest(
             ),
             f"feature_store_manifests:{feature_store_manifest_path}",
             f"automl_feature_search_reports:{feature_search_report_path}",
+            f"automl_factor_rankings:{factor_ranking_report_path}",
             f"model_overfitting_diagnostics:{overfitting_diagnostics_report_path}",
             f"rust_feature_sets:{rust_feature_set_manifest_path}",
             f"model_shadow_reports:{shadow_report_path}",
@@ -910,6 +923,85 @@ def build_overfitting_diagnostics_report(
         encoding="utf-8",
     )
     return report
+
+
+def build_factor_ranking_report(
+    feature_search_report: dict[str, Any],
+    feature_importance: pd.DataFrame,
+    permutation_importance: pd.DataFrame,
+    drift_report: dict[str, Any],
+    output_path: Path,
+) -> dict[str, Any]:
+    search_rows = {
+        row["feature"]: row for row in feature_search_report.get("ranked_features", [])
+    }
+    model_importance = {
+        str(row["feature"]): float(row["importance"])
+        for row in feature_importance.to_dict(orient="records")
+    }
+    permutation_scores = {
+        str(row["feature"]): float(row["importance"])
+        for row in permutation_importance.to_dict(orient="records")
+    }
+    feature_psi = drift_report.get("feature_psi", {})
+    max_model_importance = max(model_importance.values(), default=0.0)
+    max_permutation = max(permutation_scores.values(), default=0.0)
+    factor_rows = []
+    for feature in feature_search_report.get("selected_features", []):
+        search_row = search_rows.get(feature, {})
+        normalized_model_importance = normalize_positive_score(
+            model_importance.get(feature, 0.0),
+            max_model_importance,
+        )
+        normalized_permutation = normalize_positive_score(
+            permutation_scores.get(feature, 0.0),
+            max_permutation,
+        )
+        stability_penalty = min(float(feature_psi.get(feature, 0.0)), 1.0)
+        label_correlation = float(search_row.get("abs_label_correlation", 0.0))
+        ranking_score = (
+            normalized_model_importance * 0.45
+            + normalized_permutation * 0.35
+            + label_correlation * 0.20
+            - stability_penalty * 0.25
+        )
+        factor_rows.append(
+            {
+                "feature": feature,
+                "model_importance": round(model_importance.get(feature, 0.0), 6),
+                "permutation_importance": round(permutation_scores.get(feature, 0.0), 6),
+                "abs_label_correlation": round(label_correlation, 6),
+                "feature_psi": round(float(feature_psi.get(feature, 0.0)), 6),
+                "stability_status": search_row.get("stability_status", "unknown"),
+                "ranking_score": round(float(ranking_score), 6),
+                "recommended_use": "model_factor_and_rule_candidate_review",
+            }
+        )
+    ranked_factors = sorted(
+        factor_rows,
+        key=lambda row: (-row["ranking_score"], row["feature"]),
+    )
+    for index, row in enumerate(ranked_factors, start=1):
+        row["rank"] = index
+    report = {
+        "report_kind": "automl_factor_ranking",
+        "report_version": 1,
+        "status": "passed" if ranked_factors else "blocked",
+        "ranking_policy": "model_importance_permutation_label_correlation_minus_feature_psi",
+        "ranked_factor_count": len(ranked_factors),
+        "ranked_factors": ranked_factors,
+    }
+    output_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return report
+
+
+def normalize_positive_score(value: float, max_value: float) -> float:
+    if max_value <= 0.0:
+        return 0.0
+    return max(0.0, float(value)) / max_value
 
 
 def time_group_split_check(
