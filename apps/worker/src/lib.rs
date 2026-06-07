@@ -7179,6 +7179,23 @@ fn build_automl_candidate_rank(
     }
     .to_string();
 
+    let mut evidence_refs = vec![
+        format!("model_validation_reports:{validation_report_uri}"),
+        format!(
+            "model_evaluations:{}",
+            safe_id_segment(&candidate_model_version)
+        ),
+    ];
+    if let Some(feature_search_report_uri) = metrics
+        .get("automl_feature_search_report_uri")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+    {
+        evidence_refs.push(format!(
+            "automl_feature_search_reports:{feature_search_report_uri}"
+        ));
+    }
+
     Ok(AutoMlCandidateRank {
         rank: 0,
         model_key,
@@ -7221,13 +7238,7 @@ fn build_automl_candidate_rank(
         gate_status,
         blocking_reasons,
         recommended_action,
-        evidence_refs: vec![
-            format!("model_validation_reports:{validation_report_uri}"),
-            format!(
-                "model_evaluations:{}",
-                safe_id_segment(&candidate_model_version)
-            ),
-        ],
+        evidence_refs,
     })
 }
 
@@ -7265,6 +7276,15 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
         .is_some_and(|value| !value.trim().is_empty())
     {
         reasons.push("rust_feature_set_manifest_uri:missing".into());
+    }
+    if !automl_feature_search_passed(metrics) {
+        reasons.push("automl_feature_search_status:missing_or_failed".into());
+    }
+    if !automl_has_feature_search_report(metrics) {
+        reasons.push("automl_feature_search_report_uri:missing".into());
+    }
+    if metric_object_value(metrics, "automl_selected_feature_count").unwrap_or(0.0) <= 0.0 {
+        reasons.push("automl_selected_feature_count:missing_or_zero".into());
     }
     if !automl_rust_serving_evaluation_passed(metrics) {
         reasons.push("model_artifact_evaluation_status:missing_or_failed".into());
@@ -7360,6 +7380,20 @@ fn automl_feature_reproducibility_passed(
         .get("feature_reproducibility_hash")
         .and_then(|value| value.as_str())
         .is_some_and(|value| value.starts_with("sha256:") && value.len() > "sha256:".len())
+}
+
+fn automl_feature_search_passed(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
+    metrics
+        .get("automl_feature_search_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+}
+
+fn automl_has_feature_search_report(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
+    metrics
+        .get("automl_feature_search_report_uri")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty())
 }
 
 fn automl_requires_onnx_parity(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
@@ -11458,6 +11492,10 @@ mod tests {
             ranking.candidates[0].recommended_action,
             "open_human_review"
         );
+        assert!(ranking.candidates[0]
+            .evidence_refs
+            .iter()
+            .any(|ref_id| { ref_id.starts_with("automl_feature_search_reports:") }));
         assert_eq!(
             ranking.candidates[1].candidate_model_version,
             "0.1.0-candidate-logistic"
@@ -11589,6 +11627,15 @@ mod tests {
         assert!(ranking.candidates[0]
             .blocking_reasons
             .contains(&"rust_feature_set_manifest_uri:missing".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"automl_feature_search_status:missing_or_failed".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"automl_feature_search_report_uri:missing".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"automl_selected_feature_count:missing_or_zero".into()));
         assert!(ranking.candidates[0]
             .blocking_reasons
             .contains(&"model_artifact_evaluation_status:missing_or_failed".into()));
@@ -12300,6 +12347,11 @@ mod tests {
                     "serving_version_lock_status": "passed",
                     "artifact_integrity_status": "passed",
                     "feature_store_materialization_status": "passed",
+                    "automl_feature_search_status": "passed",
+                    "automl_feature_search_report_uri": format!(
+                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/automl_feature_search_report.json"
+                    ),
+                    "automl_selected_feature_count": 4,
                     "rust_feature_set_status": "passed",
                     "rust_feature_set_manifest_uri": format!(
                         "s3://fwa-models/baseline_fwa/{candidate_model_version}/rust_feature_set/feature_set_manifest.json"

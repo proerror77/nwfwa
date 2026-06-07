@@ -166,6 +166,14 @@ URI, and evidence refs. This is training and promotion evidence only. It does
 not approve labels, promote models, publish rules, or allow unlabeled anomaly
 outputs to become supervised labels.
 
+The local training service also writes `automl_feature_search_report.json`
+inside the candidate artifact directory. That report ranks candidate numeric
+factors by label correlation, records missingness, variance, and train-vs-OOT
+feature PSI, and selects the training feature list after excluding only
+structurally unusable fields such as zero-variance or high-missingness factors.
+Feature PSI is retained as overfitting evidence for ranking and promotion
+gates, not silently used as a training-time deletion rule.
+
 ## Public Data MVP Path
 
 When customer training data is not available, use the public-data MVP pack to
@@ -465,11 +473,11 @@ subtracts an overfitting penalty from score PSI, max feature PSI, missing
 permutation importance, and missing feature reproducibility hash. Promotion
 gates still dominate. Candidates stay blocked when label provenance,
 time/group split fields, leakage, shadow comparison, serving version lock,
-artifact integrity, Rust feature-set materialization, Rust serving artifact
-evaluation, fairness, AUC, recall, score PSI, max feature PSI, permutation
-importance, or feature reproducibility evidence is missing or failed. The
-output may recommend a candidate for human review; it must not activate a model
-or publish a rule.
+artifact integrity, Auto MLOps feature-search report evidence, Rust feature-set
+materialization, Rust serving artifact evaluation, fairness, AUC, recall, score
+PSI, max feature PSI, permutation importance, or feature reproducibility
+evidence is missing or failed. The output may recommend a candidate for human
+review; it must not activate a model or publish a rule.
 
 ## Stage 6.6: Rust Serving Artifact Evaluation
 

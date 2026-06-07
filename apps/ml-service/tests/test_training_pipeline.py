@@ -126,6 +126,9 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
         "/artifact-evaluation/model_artifact_evaluation_report.json"
     )
     assert payload["feature_store_manifest_uri"].endswith("/feature_store_manifest.json")
+    assert payload["automl_feature_search_report_uri"].endswith(
+        "/automl_feature_search_report.json"
+    )
     assert payload["shadow_report_uri"].endswith("/shadow_report.json")
     assert payload["drift_report_uri"].endswith("/drift_report.json")
     assert payload["fairness_report_uri"].endswith("/fairness_report.json")
@@ -143,6 +146,7 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert Path(payload["serving_manifest_uri"]).exists()
     assert Path(payload["model_artifact_evaluation_report_uri"]).exists()
     assert Path(payload["feature_store_manifest_uri"]).exists()
+    assert Path(payload["automl_feature_search_report_uri"]).exists()
     assert Path(payload["shadow_report_uri"]).exists()
     assert Path(payload["drift_report_uri"]).exists()
     assert Path(payload["fairness_report_uri"]).exists()
@@ -160,6 +164,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["serving_version_lock_status"] == "passed"
     assert payload["metrics_json"]["artifact_integrity_status"] == "passed"
     assert payload["metrics_json"]["feature_store_materialization_status"] == "passed"
+    assert payload["metrics_json"]["automl_feature_search_status"] == "passed"
+    assert payload["metrics_json"]["automl_selected_feature_count"] == 4
     assert payload["metrics_json"]["rust_feature_set_status"] == "passed"
     assert payload["metrics_json"]["rust_feature_set_manifest_uri"].endswith(
         "/rust_feature_set/feature_set_manifest.json"
@@ -226,6 +232,16 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
         "provider_profile_score",
         "high_cost_item_ratio",
     ]
+    feature_search_report = json.loads(
+        Path(payload["automl_feature_search_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert feature_search_report["report_kind"] == "automl_feature_search"
+    assert feature_search_report["selected_feature_count"] == 4
+    assert feature_search_report["ranked_features"]
+    assert any(
+        ref == f"automl_feature_search_reports:{payload['automl_feature_search_report_uri']}"
+        for ref in payload["evidence_refs"]
+    )
     assert feature_store_manifest["split_row_counts"]["train"] == 4
     rust_feature_set_manifest = json.loads(
         Path(payload["metrics_json"]["rust_feature_set_manifest_uri"]).read_text(

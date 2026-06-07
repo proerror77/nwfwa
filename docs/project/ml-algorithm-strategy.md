@@ -178,6 +178,9 @@ Every candidate evaluation should record:
 - threshold selection tied to review capacity;
 - rule-only and previous-model comparisons;
 - feature importance or SHAP artifact URI;
+- Auto MLOps feature-search report URI with candidate feature count, selected
+  feature count, feature missingness, label-correlation ranking, and feature
+  PSI watch status;
 - ONNX artifact URI, ONNX parity report URI, and maximum probability delta for
   XGBoost and LightGBM candidates;
 - shadow-mode comparison against live traffic, QA outcomes, and routing impact;
@@ -194,6 +197,9 @@ Minimum `metrics_json` fields for promotion-ready model evaluations:
   "leakage_check_status": "passed",
   "shadow_comparison_status": "passed",
   "review_capacity_threshold_status": "passed",
+  "automl_feature_search_status": "passed",
+  "automl_feature_search_report_uri": "s3://.../automl_feature_search_report.json",
+  "automl_selected_feature_count": 42,
   "feature_reproducibility_hash": "sha256:<feature-build-hash>",
   "label_provenance_status": "passed",
   "label_reviewer_source": "qa_review",

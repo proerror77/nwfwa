@@ -47,6 +47,7 @@ from .mlops import (
     build_serving_manifest,
     build_shadow_report,
     file_sha256,
+    population_stability_index,
 )
 
 
@@ -79,9 +80,23 @@ def train_from_manifest(
     out_of_time = required_split(splits, "out_of_time")
     ensure_binary_labels(train[label_column], label_column)
 
-    feature_columns = numeric_feature_columns(train, label_column, entity_keys)
-    if not feature_columns:
+    candidate_feature_columns = numeric_feature_columns(train, label_column, entity_keys)
+    if not candidate_feature_columns:
         raise ValueError("training manifest must expose at least one numeric feature column")
+    candidate_model_version = candidate_version(base_model_version, job_id, model_algorithm)
+    artifact_root = Path(artifact_base_uri) / safe_path_segment(model_key) / candidate_model_version
+    artifact_root.mkdir(parents=True, exist_ok=True)
+    feature_search_report_path = artifact_root / "automl_feature_search_report.json"
+    feature_search_report = build_feature_search_report(
+        train=train,
+        out_of_time=out_of_time,
+        candidate_features=candidate_feature_columns,
+        label_column=label_column,
+        output_path=feature_search_report_path,
+    )
+    feature_columns = feature_search_report["selected_features"]
+    if not feature_columns:
+        raise ValueError("automatic feature search did not select any training features")
 
     use_numpy_matrix = model_algorithm == "xgboost"
     pipeline = build_pipeline(model_algorithm, train[label_column])
@@ -104,9 +119,6 @@ def train_from_manifest(
         label_column,
         use_numpy_matrix,
     )
-    candidate_model_version = candidate_version(base_model_version, job_id, model_algorithm)
-    artifact_root = Path(artifact_base_uri) / safe_path_segment(model_key) / candidate_model_version
-    artifact_root.mkdir(parents=True, exist_ok=True)
     artifact_path = artifact_root / "model.joblib"
     rust_artifact_path = artifact_root / "rust_serving_artifact.json"
     onnx_artifact_path = artifact_root / "model.onnx"
@@ -312,6 +324,10 @@ def train_from_manifest(
         if onnx_parity_report
         else "rust_native_artifact_ready",
         "feature_store_materialization_status": "passed",
+        "automl_feature_search_status": feature_search_report["status"],
+        "automl_feature_search_report_uri": str(feature_search_report_path),
+        "automl_candidate_feature_count": feature_search_report["candidate_feature_count"],
+        "automl_selected_feature_count": feature_search_report["selected_feature_count"],
         "rust_feature_set_status": "passed",
         "rust_feature_set_manifest_uri": str(rust_feature_set_manifest_path),
         "model_artifact_evaluation_status": artifact_evaluation_report["gate_status"],
@@ -400,6 +416,7 @@ def train_from_manifest(
         if onnx_parity_report
         else None,
         "feature_store_manifest_uri": str(feature_store_manifest_path),
+        "automl_feature_search_report_uri": str(feature_search_report_path),
         "shadow_report_uri": str(shadow_report_path),
         "drift_report_uri": str(drift_report_path),
         "fairness_report_uri": str(fairness_report_path),
@@ -418,6 +435,7 @@ def train_from_manifest(
                 else []
             ),
             f"feature_store_manifests:{feature_store_manifest_path}",
+            f"automl_feature_search_reports:{feature_search_report_path}",
             f"rust_feature_sets:{rust_feature_set_manifest_path}",
             f"model_shadow_reports:{shadow_report_path}",
             f"model_drift_reports:{drift_report_path}",
@@ -729,6 +747,79 @@ def numeric_feature_columns(
         for column in frame.columns
         if column not in excluded and pd.api.types.is_numeric_dtype(frame[column])
     ]
+
+
+def build_feature_search_report(
+    train: pd.DataFrame,
+    out_of_time: pd.DataFrame,
+    candidate_features: list[str],
+    label_column: str,
+    output_path: Path,
+) -> dict[str, Any]:
+    labels = train[label_column].astype(float)
+    feature_rows: list[dict[str, Any]] = []
+    selected_features: list[str] = []
+    for feature in candidate_features:
+        series = train[feature].astype(float)
+        variance = float(series.var(ddof=0)) if len(series) else 0.0
+        missing_rate = float(series.isna().mean())
+        correlation = label_correlation(series, labels)
+        feature_psi = population_stability_index(series, out_of_time[feature].astype(float))
+        rejection_reasons = []
+        if variance <= 0.0:
+            rejection_reasons.append("zero_variance")
+        if missing_rate > 0.30:
+            rejection_reasons.append("high_missing_rate")
+        stability_status = "drift_watch" if feature_psi >= 0.25 else "stable"
+        status = "rejected" if rejection_reasons else "selected"
+        if status == "selected":
+            selected_features.append(feature)
+        feature_rows.append(
+            {
+                "feature": feature,
+                "status": status,
+                "variance": round(variance, 6),
+                "missing_rate": round(missing_rate, 6),
+                "abs_label_correlation": round(abs(correlation), 6),
+                "feature_psi": round(feature_psi, 6),
+                "stability_status": stability_status,
+                "rejection_reasons": rejection_reasons,
+            }
+        )
+    ranked_features = sorted(
+        feature_rows,
+        key=lambda row: (
+            row["status"] != "selected",
+            -row["abs_label_correlation"],
+            row["feature"],
+        ),
+    )
+    report = {
+        "report_kind": "automl_feature_search",
+        "report_version": 1,
+        "status": "passed" if selected_features else "blocked",
+        "selection_policy": "numeric_non_entity_features_with_variance_missingness_label_correlation_and_oot_psi_watch",
+        "label_column": label_column,
+        "candidate_feature_count": len(candidate_features),
+        "selected_feature_count": len(selected_features),
+        "rejected_feature_count": len(candidate_features) - len(selected_features),
+        "selected_features": selected_features,
+        "ranked_features": ranked_features,
+    }
+    output_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return report
+
+
+def label_correlation(feature: pd.Series, labels: pd.Series) -> float:
+    if feature.nunique(dropna=True) <= 1 or labels.nunique(dropna=True) <= 1:
+        return 0.0
+    correlation = feature.corr(labels)
+    if pd.isna(correlation):
+        return 0.0
+    return float(correlation)
 
 
 def evaluate_split(
