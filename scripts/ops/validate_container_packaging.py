@@ -68,6 +68,16 @@ REQUIRED_FILES = {
         "COPY scripts/demo/seed_demo.sql ./scripts/demo/seed_demo.sql",
         "COPY scripts/demo/assert_demo_persistence.sql ./scripts/demo/assert_demo_persistence.sql",
     ],
+    "scripts/ops/run_k3d_simulation.sh": [
+        "k3d cluster create",
+        "k3d image import",
+        "--runtime current-context",
+        "build_k3s_simulation_package.py",
+        "validate_k3s_simulation_package.py",
+        "NWFWA_K3S_ALLOW_NON_K3S",
+        "./apply.sh",
+        "./smoke.sh",
+    ],
     "infra/k8s/staging/database-jobs.yaml": [
         "name: database-migrate",
         "name: demo-seed",

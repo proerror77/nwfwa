@@ -606,6 +606,23 @@ pass image names from a registry that the cluster can pull. After applying,
 `smoke.sh` port-forwards the ML service and checks `/health`, Prometheus
 `/metrics`, and `/artifact-registries`.
 
+To run the complete local Kubernetes-style loop from Docker images to rollout
+and smoke checks, use the runner:
+
+```bash
+scripts/ops/run_k3d_simulation.sh
+```
+
+The runner creates or reuses the `nwfwa-sim` K3d cluster, builds local API,
+web console, ML service, worker, and ops images, imports them into K3d,
+generates the simulation package, applies it, waits for rollouts, verifies
+CronJobs, and runs the smoke script. For Docker Desktop Kubernetes instead of
+K3d, use the current-context mode:
+
+```bash
+scripts/ops/run_k3d_simulation.sh --runtime current-context
+```
+
 Validate container packaging before building images:
 
 ```bash

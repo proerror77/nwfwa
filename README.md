@@ -376,6 +376,25 @@ The web console proxies `/api/` to the containerized API server. The compose
 stack runs migrations and deterministic demo seed data through the
 `migrate-seed` one-shot service before the API server starts.
 
+### Run A Kubernetes-Style Local Simulation
+
+To validate deployment and scheduling semantics instead of only container
+startup, run the local Kubernetes simulation:
+
+```bash
+scripts/ops/run_k3d_simulation.sh
+```
+
+This builds the local images, creates or reuses the `nwfwa-sim` K3d cluster,
+imports images, applies the generated K3s simulation package, waits for
+Deployments and StatefulSets, verifies CronJobs, and runs smoke checks against
+the ML service. If you want to use Docker Desktop Kubernetes instead of K3d,
+run:
+
+```bash
+scripts/ops/run_k3d_simulation.sh --runtime current-context
+```
+
 ### Start PostgreSQL And ML Service Only
 
 ```bash

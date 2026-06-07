@@ -34,6 +34,7 @@ required_files=(
   "scripts/ops/build_staging_evidence.py"
   "scripts/ops/build_staging_deployment_package.py"
   "scripts/ops/build_k3s_simulation_package.py"
+  "scripts/ops/run_k3d_simulation.sh"
   "scripts/ops/build_prd_coverage.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
   "scripts/ops/sample_mlops_monitoring_plan.json"
@@ -492,6 +493,7 @@ grep -q "run_mlops_monitoring_plan.py" docs/engineering/pilot-readiness.md
 grep -q "Kubernetes Staging" docs/project/operations-guide.md
 grep -q "validate_container_packaging.py" docs/project/operations-guide.md
 grep -q "validate_staging_deployment_package.py" docs/project/operations-guide.md
+grep -q "run_k3d_simulation.sh" docs/project/operations-guide.md
 grep -q "build_staging_evidence.py" docs/project/operations-guide.md
 grep -q "build_staging_deployment_package.py" docs/project/operations-guide.md
 grep -q "run_mlops_monitoring_plan.py" docs/project/operations-guide.md
@@ -507,6 +509,8 @@ grep -q "UPDATE investigation_cases" migrations/0001_initial.sql
 grep -q "SET review_mode = l.review_mode" migrations/0001_initial.sql
 grep -q "object-storage" infra/docker-compose.yml
 grep -q "quay.io/minio/minio" infra/docker-compose.yml
+grep -q "run_k3d_simulation.sh" README.md
+grep -q -- "--runtime current-context" README.md
 grep -q "CARGO_INCREMENTAL=0" apps/api-server/Dockerfile
 grep -q "cargo build --locked -p api-server" apps/api-server/Dockerfile
 grep -q "target/debug/api-server" apps/api-server/Dockerfile
@@ -545,6 +549,8 @@ grep -q "staging_observability_proof" scripts/ops/build_staging_evidence.py
 grep -q "github_environment_staging_deployment_package" scripts/ops/build_staging_deployment_package.py
 grep -q "staging deployment package validation passed" scripts/ops/validate_staging_deployment_package.py
 grep -q "human_approval_required_before_destroy" scripts/ops/build_staging_deployment_package.py
+grep -q "k3d image import" scripts/ops/run_k3d_simulation.sh
+grep -q "NWFWA_K3S_ALLOW_NON_K3S" scripts/ops/run_k3d_simulation.sh
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "scheduled_ai_evidence_execution" apps/worker/src/lib.rs
 grep -q "ai_evidence_execution_plan" apps/worker/src/lib.rs
@@ -556,6 +562,7 @@ grep -q "build-governance-ops-plan" apps/worker/src/main.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
 python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+bash -n scripts/ops/run_k3d_simulation.sh
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
 python3 scripts/ops/validate_analytics_scale.py
