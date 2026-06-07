@@ -19,6 +19,7 @@ REQUIRED_FILES = [
     "object-storage.yaml",
     "clickhouse.yaml",
     "database-jobs.yaml",
+    "worker-serviceaccount.yaml",
     "ml-service.yaml",
     "api-server.yaml",
     "worker-cronjobs.yaml",
@@ -33,6 +34,7 @@ REQUIRED_TEXT = {
         "object-storage.yaml",
         "clickhouse.yaml",
         "worker-cronjobs.yaml",
+        "worker-serviceaccount.yaml",
     ],
     "configmap.yaml": [
         "FWA_OBJECT_STORAGE_URI: s3://nwfwa-staging-artifacts",
@@ -46,8 +48,16 @@ REQUIRED_TEXT = {
     ],
     "secrets.example.yaml": [
         "replace-with-staging-api-key",
+        "FWA_MODEL_SIGNATURE_KEY:",
+        "FWA_ALERT_RECEIVER_TOKEN:",
+        "FWA_ALERT_RECEIVER_SIGNING_SECRET:",
         "FWA_API_KEY_PRINCIPALS:",
         "DATABASE_URL:",
+    ],
+    "worker-serviceaccount.yaml": [
+        "kind: ServiceAccount",
+        "name: nwfwa-worker",
+        "automountServiceAccountToken: false",
     ],
     "api-server.yaml": [
         "kind: Deployment",
@@ -59,6 +69,7 @@ REQUIRED_TEXT = {
     "ml-service.yaml": [
         "kind: Deployment",
         "name: ml-service",
+        "type: Recreate",
         "name: ml-training-worker",
         "app.training_worker",
         "claimName: ml-training-jobs",
@@ -89,6 +100,13 @@ REQUIRED_TEXT = {
     ],
     "worker-cronjobs.yaml": [
         "kind: CronJob",
+        "serviceAccountName: nwfwa-worker",
+        "automountServiceAccountToken: false",
+        "startingDeadlineSeconds:",
+        "activeDeadlineSeconds:",
+        "backoffLimit: 1",
+        "ttlSecondsAfterFinished: 86400",
+        "resources:",
         "check-pilot-readiness",
         "--require-ready",
         "run-scheduled-mlops-monitoring",

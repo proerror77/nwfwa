@@ -8,6 +8,7 @@ resources:
   - object-storage.yaml
   - clickhouse.yaml
   - database-jobs.yaml
+  - worker-serviceaccount.yaml
   - ml-service.yaml
   - api-server.yaml
   - worker-cronjobs.yaml

@@ -537,6 +537,9 @@ Kustomize:
 
 ```bash
 python3 scripts/ops/validate_k8s_staging.py
+python3 scripts/ops/validate_staging_secret_file.py \
+  --secret-file infra/k8s/staging/secrets.example.yaml \
+  --allow-placeholders
 kubectl kustomize infra/k8s/staging
 ```
 
@@ -548,7 +551,12 @@ The directory includes API, web console, ML service, PostgreSQL,
 S3-compatible object storage, ClickHouse, database migration and seed Jobs, and
 worker CronJobs for pilot readiness, MLOps monitoring-plan generation, AI
 evidence execution-plan generation, analytics export-plan generation, and
-governance ops plan generation.
+governance ops plan generation. Worker CronJobs use the `nwfwa-worker`
+ServiceAccount with service-account token automount disabled, explicit
+deadlines, bounded retries, TTL cleanup, and resource requests/limits. The
+`ml-service` deployment uses a `Recreate` strategy because the SQLite training
+queue is backed by a ReadWriteOnce PVC; do not scale it horizontally until the
+queue is migrated to PostgreSQL or Redis.
 
 Build a GitHub Environment gated staging deployment package:
 
@@ -567,7 +575,9 @@ The package includes copied staging manifests, `deployment_manifest.json`,
 `.github/workflows/deploy-staging.yml` builds the same package behind the
 `staging` GitHub Environment and uploads it as an artifact. It does not apply to
 a cluster automatically; `apply.sh` requires a customer-approved Kubernetes
-context and `NWFWA_STAGING_SECRET_FILE`.
+context and `NWFWA_STAGING_SECRET_FILE`. The apply script validates the Secret
+YAML for required keys and placeholder removal, runs server-side dry-runs for
+the Secret and kustomization, then checks deployments and staging CronJobs.
 
 Validate container packaging before building images:
 

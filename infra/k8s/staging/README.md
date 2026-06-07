@@ -34,12 +34,18 @@ Replace image names and secrets before applying:
 cp infra/k8s/staging/secrets.example.yaml /tmp/nwfwa-staging-secrets.yaml
 $EDITOR /tmp/nwfwa-staging-secrets.yaml
 kubectl apply -f infra/k8s/staging/namespace.yaml
+python3 scripts/ops/validate_staging_secret_file.py \
+  --secret-file /tmp/nwfwa-staging-secrets.yaml
 kubectl apply -n nwfwa-staging -f /tmp/nwfwa-staging-secrets.yaml
+kubectl apply -k infra/k8s/staging --dry-run=server
 kubectl apply -k infra/k8s/staging
 ```
 
 The example secret file is intentionally committed with placeholder values only.
 Do not put customer secrets in this repository.
+The worker CronJobs run with the `nwfwa-worker` ServiceAccount, token
+automounting disabled, bounded deadlines, bounded retries, TTL cleanup, and
+resource requests/limits.
 
 ## Static Validation
 
@@ -50,7 +56,8 @@ python3 scripts/ops/validate_k8s_staging.py
 The validator checks that the staging manifests include the required services,
 readiness probes, database Jobs, CronJobs, object storage, ClickHouse, AI
 evidence execution-plan scheduling, governance ops scheduling, and non-demo
-readiness settings.
+readiness settings. It also checks the worker scheduling hardening and the
+example Secret key contract.
 
 The database Jobs use the `nwfwa-ops` image built from
 `infra/dockerfiles/Dockerfile.ops`, which packages the migration and seed SQL.
