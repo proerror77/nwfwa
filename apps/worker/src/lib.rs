@@ -1871,6 +1871,7 @@ pub struct ProviderPeerClusteringReport {
     pub cluster_summaries: Vec<ProviderPeerClusterSummary>,
     pub provider_assignments: Vec<ProviderPeerClusterAssignment>,
     pub anomaly_candidates: Vec<ProviderPeerAnomalyCandidate>,
+    pub factor_ranking: UnsupervisedFactorRanking,
     pub review_tasks: Vec<ProviderPeerReviewTask>,
     pub evidence_refs: Vec<String>,
 }
@@ -1929,6 +1930,7 @@ pub struct ClaimEntityClusteringReport {
     pub cluster_summaries: Vec<ClaimEntityClusterSummary>,
     pub entity_assignments: Vec<ClaimEntityClusterAssignment>,
     pub anomaly_candidates: Vec<ClaimEntityAnomalyCandidate>,
+    pub factor_ranking: UnsupervisedFactorRanking,
     pub review_tasks: Vec<ClaimEntityReviewTask>,
     pub evidence_refs: Vec<String>,
 }
@@ -1987,8 +1989,26 @@ pub struct ProviderGraphCommunityReport {
     pub community_summaries: Vec<ProviderGraphCommunitySummary>,
     pub provider_assignments: Vec<ProviderGraphCommunityAssignment>,
     pub anomaly_candidates: Vec<ProviderGraphAnomalyCandidate>,
+    pub factor_ranking: UnsupervisedFactorRanking,
     pub review_tasks: Vec<ProviderGraphReviewTask>,
     pub evidence_refs: Vec<String>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct UnsupervisedFactorRanking {
+    pub report_kind: String,
+    pub ranking_policy: String,
+    pub ranked_factor_count: usize,
+    pub ranked_factors: Vec<UnsupervisedFactorRank>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq)]
+pub struct UnsupervisedFactorRank {
+    pub rank: usize,
+    pub feature: String,
+    pub ranking_score: f64,
+    pub anomaly_candidate_count: usize,
+    pub average_abs_centroid_deviation: f64,
 }
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
@@ -4322,18 +4342,30 @@ pub fn build_automl_lifecycle_closure_report(
         == "provider_peer_clustering"
         && json_string(&provider_clustering, "governance_boundary")
             .is_some_and(|boundary| boundary.contains("must not create confirmed FWA labels"))
-        && json_array_len(&provider_clustering, "anomaly_candidates") > 0;
+        && json_array_len(&provider_clustering, "anomaly_candidates") > 0
+        && unsupervised_factor_ranking_passed(
+            &provider_clustering,
+            "provider_peer_unsupervised_factor_ranking",
+        );
     let provider_graph_clustering_passed = provider_graph_clustering["report_kind"]
         == "provider_graph_community_clustering"
         && json_string(&provider_graph_clustering, "governance_boundary")
             .is_some_and(|boundary| boundary.contains("must not create confirmed FWA labels"))
         && json_array_len(&provider_graph_clustering, "anomaly_candidates") > 0
-        && json_array_len(&provider_graph_clustering, "review_tasks") > 0;
+        && json_array_len(&provider_graph_clustering, "review_tasks") > 0
+        && unsupervised_factor_ranking_passed(
+            &provider_graph_clustering,
+            "provider_graph_unsupervised_factor_ranking",
+        );
     let claim_entity_clustering_passed = claim_entity_clustering["report_kind"]
         == "claim_entity_clustering"
         && json_string(&claim_entity_clustering, "governance_boundary")
             .is_some_and(|boundary| boundary.contains("rule-library writeback"))
-        && json_array_len(&claim_entity_clustering, "review_tasks") > 0;
+        && json_array_len(&claim_entity_clustering, "review_tasks") > 0
+        && unsupervised_factor_ranking_passed(
+            &claim_entity_clustering,
+            "claim_entity_unsupervised_factor_ranking",
+        );
 
     let monitoring_status =
         json_string(&mlops_monitoring, "overall_status").unwrap_or_else(|| "missing".into());
@@ -5007,6 +5039,49 @@ fn write_demo_validation_report(
     precision: f64,
     recall: f64,
 ) -> anyhow::Result<()> {
+    let validation_metrics = serde_json::json!({
+        "auc": auc,
+        "precision": precision,
+        "recall": recall
+    });
+    let metrics_json = serde_json::json!({
+        "algorithm": algorithm,
+        "algorithm_family": "gradient_boosted_tree",
+        "runtime_kind": runtime_kind,
+        "out_of_time_auc": auc - 0.02,
+        "out_of_time_average_precision": auc - 0.05,
+        "out_of_time_precision": precision,
+        "out_of_time_recall": recall,
+        "time_group_split_status": "passed",
+        "time_split_field": "service_month",
+        "group_split_fields": ["provider_id", "member_id"],
+        "leakage_check_status": "passed",
+        "out_of_time_validation_status": "passed",
+        "score_stability_status": "passed",
+        "feature_stability_status": "passed",
+        "score_psi": 0.03,
+        "max_feature_psi": 0.08,
+        "overfitting_diagnostics_status": "passed",
+        "overfitting_diagnostics_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/diagnostics/{candidate_model_version}_overfitting_diagnostics_report.json"),
+        "automl_feature_search_status": "passed",
+        "automl_feature_search_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/feature-search/{candidate_model_version}_automl_feature_search_report.json"),
+        "automl_selected_feature_count": 8,
+        "permutation_importance_status": "passed",
+        "permutation_importance_uri": format!("data/rust-automl-demo/lifecycle-evidence/permutation/{candidate_model_version}_permutation_importance.json"),
+        "feature_reproducibility_hash": format!("sha256:{candidate_model_version}-demo-feature-set"),
+        "shadow_comparison_status": "passed",
+        "serving_version_lock_status": "passed",
+        "artifact_integrity_status": "passed",
+        "feature_store_materialization_status": "passed",
+        "rust_feature_set_status": "passed",
+        "rust_feature_set_manifest_uri": format!("data/rust-automl-demo/labeled_claim_risk/feature-set/feature_set_manifest.json"),
+        "segment_fairness_status": "passed",
+        "model_artifact_evaluation_status": "passed",
+        "onnx_parity_status": "passed",
+        "onnx_parity_gate_status": "passed",
+        "onnx_parity_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/onnx-parity/{candidate_model_version}_onnx_parity_report.json"),
+        "label_provenance_status": "passed"
+    });
     write_json(
         path.to_path_buf(),
         &serde_json::json!({
@@ -5015,34 +5090,8 @@ fn write_demo_validation_report(
             "dataset_key": "rust_demo_claim_risk_labeled",
             "dataset_version": "2026-06-rust-automl-demo",
             "algorithm": algorithm,
-            "validation_metrics": {
-                "auc": auc,
-                "precision": precision,
-                "recall": recall
-            },
-            "metrics_json": {
-                "algorithm": algorithm,
-                "algorithm_family": "gradient_boosted_tree",
-                "runtime_kind": runtime_kind,
-                "out_of_time_auc": auc - 0.02,
-                "out_of_time_average_precision": auc - 0.05,
-                "out_of_time_precision": precision,
-                "out_of_time_recall": recall,
-                "time_group_split_status": "passed",
-                "leakage_check_status": "passed",
-                "shadow_comparison_status": "passed",
-                "serving_version_lock_status": "passed",
-                "artifact_integrity_status": "passed",
-                "feature_store_materialization_status": "passed",
-                "rust_feature_set_status": "passed",
-                "rust_feature_set_manifest_uri": format!("data/rust-automl-demo/labeled_claim_risk/feature-set/feature_set_manifest.json"),
-                "segment_fairness_status": "passed",
-                "model_artifact_evaluation_status": "passed",
-                "onnx_parity_status": "passed",
-                "onnx_parity_gate_status": "passed",
-                "onnx_parity_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/onnx-parity/{candidate_model_version}_onnx_parity_report.json"),
-                "label_provenance_status": "passed"
-            }
+            "validation_metrics": validation_metrics,
+            "metrics_json": metrics_json
         }),
     )
 }
@@ -5192,6 +5241,18 @@ fn clustering_report_matches(
             .is_some_and(|boundary| boundary.contains(required_boundary_text))
         && json_array_len(report, "anomaly_candidates") > 0
         && json_array_len(report, "review_tasks") > 0
+}
+
+fn unsupervised_factor_ranking_passed(report: &serde_json::Value, report_kind: &str) -> bool {
+    let Some(factor_ranking) = report.get("factor_ranking") else {
+        return false;
+    };
+    factor_ranking["report_kind"] == report_kind
+        && factor_ranking
+            .get("ranked_factor_count")
+            .and_then(|value| value.as_u64())
+            .is_some_and(|count| count > 0)
+        && json_array_len(factor_ranking, "ranked_factors") > 0
 }
 
 fn json_array_len(value: &serde_json::Value, key: &str) -> usize {
@@ -6244,6 +6305,7 @@ pub fn cluster_provider_peers(
     let threshold = anomaly_threshold(&distances);
     let mut provider_assignments = Vec::new();
     let mut anomaly_candidates = Vec::new();
+    let mut anomaly_indexes = Vec::new();
     for (index, row) in rows.iter().enumerate() {
         let outlier_score = round4(distances[index]);
         let anomaly_candidate = distances[index] >= threshold;
@@ -6256,6 +6318,7 @@ pub fn cluster_provider_peers(
             anomaly_candidate,
         });
         if anomaly_candidate {
+            anomaly_indexes.push(index);
             anomaly_candidates.push(ProviderPeerAnomalyCandidate {
                 provider_id: row.provider_id.clone(),
                 cohort_key: row.cohort_key.clone(),
@@ -6296,6 +6359,14 @@ pub fn cluster_provider_peers(
         .collect::<Vec<_>>();
     let cluster_summaries =
         summarize_provider_clusters(&rows, &cluster_ids, &distances, cluster_count);
+    let factor_ranking = standardized_factor_ranking(
+        "provider_peer_unsupervised_factor_ranking",
+        &feature_columns,
+        &normalized,
+        &cluster_ids,
+        cluster_count,
+        &anomaly_indexes,
+    );
     let report = ProviderPeerClusteringReport {
         report_kind: "provider_peer_clustering".into(),
         report_version: 1,
@@ -6311,8 +6382,18 @@ pub fn cluster_provider_peers(
         cluster_summaries,
         provider_assignments,
         anomaly_candidates,
+        factor_ranking,
         review_tasks,
-        evidence_refs: vec![format!("dataset_manifest:{}", manifest_path.display())],
+        evidence_refs: vec![
+            format!("dataset_manifest:{}", manifest_path.display()),
+            format!(
+                "unsupervised_factor_rankings:{}",
+                output_dir
+                    .as_ref()
+                    .join("provider_peer_factor_ranking.json")
+                    .display()
+            ),
+        ],
     };
 
     fs::create_dir_all(output_dir.as_ref()).with_context(|| {
@@ -6326,6 +6407,12 @@ pub fn cluster_provider_peers(
             .as_ref()
             .join("provider_peer_clustering_report.json"),
         &report,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_peer_factor_ranking.json"),
+        &report.factor_ranking,
     )?;
     write_json(
         output_dir
@@ -6375,6 +6462,7 @@ pub fn cluster_claim_entities(
     let threshold = anomaly_threshold(&distances);
     let mut entity_assignments = Vec::new();
     let mut anomaly_candidates = Vec::new();
+    let mut anomaly_indexes = Vec::new();
     for (index, row) in rows.iter().enumerate() {
         let outlier_score = round4(distances[index]);
         let anomaly_candidate = distances[index] >= threshold;
@@ -6387,6 +6475,7 @@ pub fn cluster_claim_entities(
             anomaly_candidate,
         });
         if anomaly_candidate {
+            anomaly_indexes.push(index);
             anomaly_candidates.push(ClaimEntityAnomalyCandidate {
                 claim_id: row.claim_id.clone(),
                 member_id: row.member_id.clone(),
@@ -6431,6 +6520,14 @@ pub fn cluster_claim_entities(
         .collect::<Vec<_>>();
     let cluster_summaries =
         summarize_claim_entity_clusters(&rows, &cluster_ids, &distances, cluster_count);
+    let factor_ranking = standardized_factor_ranking(
+        "claim_entity_unsupervised_factor_ranking",
+        &feature_columns,
+        &normalized,
+        &cluster_ids,
+        cluster_count,
+        &anomaly_indexes,
+    );
     let report = ClaimEntityClusteringReport {
         report_kind: "claim_entity_clustering".into(),
         report_version: 1,
@@ -6446,8 +6543,18 @@ pub fn cluster_claim_entities(
         cluster_summaries,
         entity_assignments,
         anomaly_candidates,
+        factor_ranking,
         review_tasks,
-        evidence_refs: vec![format!("dataset_manifest:{}", manifest_path.display())],
+        evidence_refs: vec![
+            format!("dataset_manifest:{}", manifest_path.display()),
+            format!(
+                "unsupervised_factor_rankings:{}",
+                output_dir
+                    .as_ref()
+                    .join("claim_entity_factor_ranking.json")
+                    .display()
+            ),
+        ],
     };
 
     fs::create_dir_all(output_dir.as_ref()).with_context(|| {
@@ -6461,6 +6568,10 @@ pub fn cluster_claim_entities(
             .as_ref()
             .join("claim_entity_clustering_report.json"),
         &report,
+    )?;
+    write_json(
+        output_dir.as_ref().join("claim_entity_factor_ranking.json"),
+        &report.factor_ranking,
     )?;
     write_json(
         output_dir.as_ref().join("claim_entity_review_tasks.json"),
@@ -6552,6 +6663,7 @@ pub fn cluster_provider_graph_communities(
         })
         .collect::<Vec<_>>();
     let community_summaries = summarize_provider_graph_communities(&rows, &provider_assignments);
+    let factor_ranking = provider_graph_factor_ranking(&anomaly_candidates);
     let report = ProviderGraphCommunityReport {
         report_kind: "provider_graph_community_clustering".into(),
         report_version: 1,
@@ -6565,8 +6677,18 @@ pub fn cluster_provider_graph_communities(
         community_summaries,
         provider_assignments,
         anomaly_candidates,
+        factor_ranking,
         review_tasks,
-        evidence_refs: vec![format!("dataset_manifest:{}", manifest_path.display())],
+        evidence_refs: vec![
+            format!("dataset_manifest:{}", manifest_path.display()),
+            format!(
+                "unsupervised_factor_rankings:{}",
+                output_dir
+                    .as_ref()
+                    .join("provider_graph_factor_ranking.json")
+                    .display()
+            ),
+        ],
     };
 
     fs::create_dir_all(output_dir.as_ref()).with_context(|| {
@@ -6580,6 +6702,12 @@ pub fn cluster_provider_graph_communities(
             .as_ref()
             .join("provider_graph_community_report.json"),
         &report,
+    )?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("provider_graph_factor_ranking.json"),
+        &report.factor_ranking,
     )?;
     write_json(
         output_dir.as_ref().join("provider_graph_review_tasks.json"),
@@ -6857,11 +6985,11 @@ fn assign_standardized_clusters<const N: usize>(
         for (row_index, row) in rows.iter().enumerate() {
             assignments[row_index] = nearest_centroid(row, &centroids);
         }
-        let mut sums = vec![[0.0; 5]; cluster_count];
+        let mut sums = vec![[0.0; N]; cluster_count];
         let mut counts = vec![0_usize; cluster_count];
         for (row, cluster_id) in rows.iter().zip(assignments.iter()) {
             counts[*cluster_id] += 1;
-            for index in 0..5 {
+            for index in 0..N {
                 sums[*cluster_id][index] += row[index];
             }
         }
@@ -6869,7 +6997,7 @@ fn assign_standardized_clusters<const N: usize>(
             if counts[cluster_id] == 0 {
                 continue;
             }
-            for index in 0..5 {
+            for index in 0..N {
                 centroids[cluster_id][index] = sums[cluster_id][index] / counts[cluster_id] as f64;
             }
         }
@@ -6920,6 +7048,119 @@ fn standardized_cluster_distances<const N: usize>(
         .zip(assignments.iter())
         .map(|(row, cluster_id)| squared_distance(row, &centroids[*cluster_id]).sqrt())
         .collect()
+}
+
+fn standardized_factor_ranking<const N: usize>(
+    report_kind: &str,
+    feature_columns: &[String],
+    rows: &[[f64; N]],
+    assignments: &[usize],
+    cluster_count: usize,
+    anomaly_indexes: &[usize],
+) -> UnsupervisedFactorRanking {
+    let mut sums = vec![[0.0; N]; cluster_count];
+    let mut counts = vec![0_usize; cluster_count];
+    for (row, cluster_id) in rows.iter().zip(assignments.iter()) {
+        counts[*cluster_id] += 1;
+        for index in 0..N {
+            sums[*cluster_id][index] += row[index];
+        }
+    }
+    let mut centroids = vec![[0.0; N]; cluster_count];
+    for cluster_id in 0..cluster_count {
+        if counts[cluster_id] == 0 {
+            continue;
+        }
+        for index in 0..N {
+            centroids[cluster_id][index] = sums[cluster_id][index] / counts[cluster_id] as f64;
+        }
+    }
+
+    let mut contribution_totals = vec![0.0; N];
+    for row_index in anomaly_indexes {
+        let row = &rows[*row_index];
+        let centroid = &centroids[assignments[*row_index]];
+        for index in 0..N {
+            contribution_totals[index] += (row[index] - centroid[index]).abs();
+        }
+    }
+    let divisor = anomaly_indexes.len().max(1) as f64;
+    let mut ranked_factors = feature_columns
+        .iter()
+        .enumerate()
+        .map(|(index, feature)| UnsupervisedFactorRank {
+            rank: 0,
+            feature: feature.clone(),
+            ranking_score: round4(contribution_totals[index] / divisor),
+            anomaly_candidate_count: anomaly_indexes.len(),
+            average_abs_centroid_deviation: round4(contribution_totals[index] / divisor),
+        })
+        .collect::<Vec<_>>();
+    ranked_factors.sort_by(|left, right| {
+        right
+            .ranking_score
+            .partial_cmp(&left.ranking_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.feature.cmp(&right.feature))
+    });
+    for (index, factor) in ranked_factors.iter_mut().enumerate() {
+        factor.rank = index + 1;
+    }
+    UnsupervisedFactorRanking {
+        report_kind: report_kind.into(),
+        ranking_policy:
+            "average_absolute_standardized_anomaly_deviation_from_assigned_cluster_centroid".into(),
+        ranked_factor_count: ranked_factors.len(),
+        ranked_factors,
+    }
+}
+
+fn provider_graph_factor_ranking(
+    anomaly_candidates: &[ProviderGraphAnomalyCandidate],
+) -> UnsupervisedFactorRanking {
+    let count = anomaly_candidates.len();
+    let graph_degree = anomaly_candidates
+        .iter()
+        .map(|candidate| candidate.graph_degree.abs())
+        .sum::<f64>()
+        / count.max(1) as f64;
+    let peer_z_score = anomaly_candidates
+        .iter()
+        .map(|candidate| candidate.peer_z_score.abs())
+        .sum::<f64>()
+        / count.max(1) as f64;
+    let mut ranked_factors = vec![
+        UnsupervisedFactorRank {
+            rank: 0,
+            feature: "graph_degree".into(),
+            ranking_score: round4(graph_degree),
+            anomaly_candidate_count: count,
+            average_abs_centroid_deviation: round4(graph_degree),
+        },
+        UnsupervisedFactorRank {
+            rank: 0,
+            feature: "peer_z_score".into(),
+            ranking_score: round4(peer_z_score),
+            anomaly_candidate_count: count,
+            average_abs_centroid_deviation: round4(peer_z_score),
+        },
+    ];
+    ranked_factors.sort_by(|left, right| {
+        right
+            .ranking_score
+            .partial_cmp(&left.ranking_score)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| left.feature.cmp(&right.feature))
+    });
+    for (index, factor) in ranked_factors.iter_mut().enumerate() {
+        factor.rank = index + 1;
+    }
+    UnsupervisedFactorRanking {
+        report_kind: "provider_graph_unsupervised_factor_ranking".into(),
+        ranking_policy: "average_absolute_graph_anomaly_signal_for_review_candidates".into(),
+        ranked_factor_count: ranked_factors.len(),
+        ranked_factors,
+    }
 }
 
 fn squared_distance(left: &[f64], right: &[f64]) -> f64 {
@@ -10103,13 +10344,29 @@ mod tests {
         assert_eq!(report.cluster_count, 3);
         assert_eq!(report.provider_assignments.len(), 6);
         assert!(!report.anomaly_candidates.is_empty());
+        assert_eq!(
+            report.factor_ranking.report_kind,
+            "provider_peer_unsupervised_factor_ranking"
+        );
+        assert_eq!(
+            report.factor_ranking.ranked_factor_count,
+            report.feature_columns.len()
+        );
+        assert_eq!(report.factor_ranking.ranked_factors[0].rank, 1);
         assert_eq!(report.review_tasks.len(), report.anomaly_candidates.len());
         assert_eq!(
             report.review_tasks[0].required_review,
             "human_review_required_before_case_creation_or_label_assignment"
         );
+        assert!(report
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.starts_with("unsupervised_factor_rankings:")));
         assert!(output_dir
             .join("provider_peer_clustering_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("provider_peer_factor_ranking.json")
             .is_file());
         assert!(output_dir
             .join("provider_anomaly_review_tasks.json")
@@ -10141,9 +10398,22 @@ mod tests {
         assert!(!report.community_summaries.is_empty());
         assert_eq!(report.provider_assignments.len(), 6);
         assert!(!report.anomaly_candidates.is_empty());
+        assert_eq!(
+            report.factor_ranking.report_kind,
+            "provider_graph_unsupervised_factor_ranking"
+        );
+        assert_eq!(report.factor_ranking.ranked_factor_count, 2);
+        assert_eq!(report.factor_ranking.ranked_factors[0].rank, 1);
         assert_eq!(report.review_tasks.len(), report.anomaly_candidates.len());
+        assert!(report
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.starts_with("unsupervised_factor_rankings:")));
         assert!(output_dir
             .join("provider_graph_community_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("provider_graph_factor_ranking.json")
             .is_file());
         assert!(output_dir
             .join("provider_graph_review_tasks.json")
@@ -10178,13 +10448,29 @@ mod tests {
         assert_eq!(report.cluster_count, 4);
         assert_eq!(report.entity_assignments.len(), 6);
         assert!(!report.anomaly_candidates.is_empty());
+        assert_eq!(
+            report.factor_ranking.report_kind,
+            "claim_entity_unsupervised_factor_ranking"
+        );
+        assert_eq!(
+            report.factor_ranking.ranked_factor_count,
+            report.feature_columns.len()
+        );
+        assert_eq!(report.factor_ranking.ranked_factors[0].rank, 1);
         assert_eq!(report.review_tasks.len(), report.anomaly_candidates.len());
         assert_eq!(
             report.review_tasks[0].required_review,
             "human_review_required_before_case_creation_label_assignment_or_rule_writeback"
         );
+        assert!(report
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.starts_with("unsupervised_factor_rankings:")));
         assert!(output_dir
             .join("claim_entity_clustering_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("claim_entity_factor_ranking.json")
             .is_file());
         assert!(output_dir.join("claim_entity_review_tasks.json").is_file());
     }
