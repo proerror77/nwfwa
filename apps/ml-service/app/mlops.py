@@ -43,10 +43,12 @@ def build_feature_store_manifest(
     label_column: str,
     entity_keys: set[str],
     output_path: str | Path,
+    feature_definitions: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     manifest = {
         "materialization_status": "materialized",
         "feature_columns": feature_columns,
+        "feature_definitions": feature_definitions or [],
         "label_column": label_column,
         "entity_keys": sorted(entity_keys),
         "split_row_counts": {

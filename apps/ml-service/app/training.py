@@ -56,6 +56,8 @@ DEFAULT_THRESHOLD = 0.5
 DEFAULT_ALGORITHM = "logistic_regression"
 ONNX_ALGORITHMS = {"xgboost", "lightgbm"}
 SUPPORTED_ALGORITHMS = {DEFAULT_ALGORITHM, "xgboost", "lightgbm", "deep_learning"}
+MAX_AUTOML_FEATURE_BASE_COLUMNS = 8
+MAX_AUTOML_GENERATED_FEATURES = 32
 
 
 def train_from_manifest(
@@ -90,6 +92,12 @@ def train_from_manifest(
     )
     if not candidate_feature_columns:
         raise ValueError("training manifest must expose at least one numeric feature column")
+    splits, candidate_feature_columns, generated_feature_definitions = (
+        materialize_automl_candidate_features(splits, candidate_feature_columns)
+    )
+    train = required_split(splits, "train")
+    validation = required_split(splits, "validation")
+    out_of_time = required_split(splits, "out_of_time")
     candidate_model_version = candidate_version(base_model_version, job_id, model_algorithm)
     artifact_root = Path(artifact_base_uri) / safe_path_segment(model_key) / candidate_model_version
     artifact_root.mkdir(parents=True, exist_ok=True)
@@ -98,6 +106,7 @@ def train_from_manifest(
         train=train,
         out_of_time=out_of_time,
         candidate_features=candidate_feature_columns,
+        generated_feature_definitions=generated_feature_definitions,
         label_column=label_column,
         output_path=feature_search_report_path,
     )
@@ -265,6 +274,7 @@ def train_from_manifest(
         label_column=label_column,
         entity_keys=entity_keys,
         output_path=feature_store_manifest_path,
+        feature_definitions=selected_feature_definitions(feature_search_report),
     )
     rust_feature_set_manifest_path.parent.mkdir(parents=True, exist_ok=True)
     build_feature_store_manifest(
@@ -273,6 +283,7 @@ def train_from_manifest(
         label_column=label_column,
         entity_keys=entity_keys,
         output_path=rust_feature_set_manifest_path,
+        feature_definitions=selected_feature_definitions(feature_search_report),
     )
     shadow_report = build_shadow_report(
         pipeline,
@@ -363,6 +374,7 @@ def train_from_manifest(
         "automl_feature_search_status": feature_search_report["status"],
         "automl_feature_search_report_uri": str(feature_search_report_path),
         "automl_candidate_feature_count": feature_search_report["candidate_feature_count"],
+        "automl_generated_feature_count": feature_search_report["generated_feature_count"],
         "automl_selected_feature_count": feature_search_report["selected_feature_count"],
         "automl_factor_ranking_status": factor_ranking_report["status"],
         "automl_factor_ranking_report_uri": str(factor_ranking_report_path),
@@ -819,14 +831,88 @@ def numeric_feature_columns(
     ]
 
 
+def materialize_automl_candidate_features(
+    splits: dict[str, pd.DataFrame],
+    base_features: list[str],
+) -> tuple[dict[str, pd.DataFrame], list[str], list[dict[str, Any]]]:
+    materialized = {split_name: frame.copy() for split_name, frame in splits.items()}
+    generated_definitions: list[dict[str, Any]] = []
+    generated_names: list[str] = []
+    bounded_features = base_features[:MAX_AUTOML_FEATURE_BASE_COLUMNS]
+
+    def add_generated_feature(
+        name: str,
+        transformation: str,
+        source_features: list[str],
+        values_by_split: dict[str, pd.Series],
+    ) -> None:
+        if len(generated_names) >= MAX_AUTOML_GENERATED_FEATURES:
+            return
+        if name in base_features or name in generated_names:
+            return
+        for split_name, values in values_by_split.items():
+            materialized[split_name][name] = values.astype(float).replace(
+                [np.inf, -np.inf],
+                0.0,
+            ).fillna(0.0)
+        generated_names.append(name)
+        generated_definitions.append(
+            {
+                "feature": name,
+                "feature_kind": "generated",
+                "transformation": transformation,
+                "source_features": source_features,
+            }
+        )
+
+    for left_index, left in enumerate(bounded_features):
+        for right in bounded_features[left_index + 1 :]:
+            if len(generated_names) >= MAX_AUTOML_GENERATED_FEATURES:
+                break
+            left_slug = safe_path_segment(left).lower()
+            right_slug = safe_path_segment(right).lower()
+            add_generated_feature(
+                f"automl__diff__{left_slug}__minus__{right_slug}",
+                "pairwise_difference",
+                [left, right],
+                {
+                    split_name: pd.to_numeric(frame[left], errors="coerce")
+                    - pd.to_numeric(frame[right], errors="coerce")
+                    for split_name, frame in materialized.items()
+                },
+            )
+            add_generated_feature(
+                f"automl__ratio__{left_slug}__over__{right_slug}",
+                "safe_pairwise_ratio",
+                [left, right],
+                {
+                    split_name: safe_ratio_series(frame[left], frame[right])
+                    for split_name, frame in materialized.items()
+                },
+            )
+
+    return materialized, [*base_features, *generated_names], generated_definitions
+
+
+def safe_ratio_series(numerator: pd.Series, denominator: pd.Series) -> pd.Series:
+    numerator_values = pd.to_numeric(numerator, errors="coerce").astype(float)
+    denominator_values = pd.to_numeric(denominator, errors="coerce").astype(float)
+    safe_denominator = denominator_values.where(denominator_values.abs() > 1e-9)
+    return (numerator_values / safe_denominator).replace([np.inf, -np.inf], 0.0).fillna(0.0)
+
+
 def build_feature_search_report(
     train: pd.DataFrame,
     out_of_time: pd.DataFrame,
     candidate_features: list[str],
+    generated_feature_definitions: list[dict[str, Any]],
     label_column: str,
     output_path: Path,
 ) -> dict[str, Any]:
     labels = train[label_column].astype(float)
+    definitions_by_feature = {
+        definition["feature"]: definition for definition in generated_feature_definitions
+    }
     feature_rows: list[dict[str, Any]] = []
     selected_features: list[str] = []
     for feature in candidate_features:
@@ -847,6 +933,16 @@ def build_feature_search_report(
         feature_rows.append(
             {
                 "feature": feature,
+                "feature_kind": "generated"
+                if feature in definitions_by_feature
+                else "source",
+                "transformation": definitions_by_feature.get(feature, {}).get(
+                    "transformation"
+                ),
+                "source_features": definitions_by_feature.get(feature, {}).get(
+                    "source_features",
+                    [feature],
+                ),
                 "status": status,
                 "variance": round(variance, 6),
                 "missing_rate": round(missing_rate, 6),
@@ -868,12 +964,15 @@ def build_feature_search_report(
         "report_kind": "automl_feature_search",
         "report_version": 1,
         "status": "passed" if selected_features else "blocked",
-        "selection_policy": "numeric_non_entity_features_with_variance_missingness_label_correlation_and_oot_psi_watch",
+        "feature_engineering_policy": "bounded_pairwise_difference_and_safe_ratio_generation",
+        "selection_policy": "source_and_generated_numeric_features_with_variance_missingness_label_correlation_and_oot_psi_watch",
         "label_column": label_column,
         "candidate_feature_count": len(candidate_features),
+        "generated_feature_count": len(generated_feature_definitions),
         "selected_feature_count": len(selected_features),
         "rejected_feature_count": len(candidate_features) - len(selected_features),
         "selected_features": selected_features,
+        "generated_feature_definitions": generated_feature_definitions,
         "ranked_features": ranked_features,
     }
     output_path.write_text(
@@ -881,6 +980,20 @@ def build_feature_search_report(
         encoding="utf-8",
     )
     return report
+
+
+def selected_feature_definitions(feature_search_report: dict[str, Any]) -> list[dict[str, Any]]:
+    selected = set(feature_search_report.get("selected_features", []))
+    return [
+        {
+            "feature": row["feature"],
+            "feature_kind": row.get("feature_kind", "source"),
+            "transformation": row.get("transformation"),
+            "source_features": row.get("source_features", [row["feature"]]),
+        }
+        for row in feature_search_report.get("ranked_features", [])
+        if row.get("feature") in selected
+    ]
 
 
 def build_overfitting_diagnostics_report(

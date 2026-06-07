@@ -13,6 +13,11 @@ from app.training_worker import run_worker
 
 
 client = TestClient(app)
+BASE_FEATURES = {
+    "claim_amount_to_limit_ratio",
+    "provider_profile_score",
+    "high_cost_item_ratio",
+}
 
 
 def write_split(path: Path, rows: list[dict[str, object]]) -> None:
@@ -238,9 +243,12 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["artifact_integrity_status"] == "passed"
     assert payload["metrics_json"]["feature_store_materialization_status"] == "passed"
     assert payload["metrics_json"]["automl_feature_search_status"] == "passed"
-    assert payload["metrics_json"]["automl_selected_feature_count"] == 3
+    assert payload["metrics_json"]["automl_generated_feature_count"] >= 1
+    assert payload["metrics_json"]["automl_selected_feature_count"] > len(BASE_FEATURES)
     assert payload["metrics_json"]["automl_factor_ranking_status"] == "passed"
-    assert payload["metrics_json"]["automl_ranked_factor_count"] == 3
+    assert payload["metrics_json"]["automl_ranked_factor_count"] == payload["metrics_json"][
+        "automl_selected_feature_count"
+    ]
     assert payload["metrics_json"]["automl_factor_ranking_report_uri"].endswith(
         "/automl_factor_ranking_report.json"
     )
@@ -286,11 +294,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert rust_artifact["runtime_kind"] == "rust_logistic_regression"
     assert rust_artifact["model_key"] == "baseline_fwa"
     assert rust_artifact["model_version"] == payload["candidate_model_version"]
-    assert rust_artifact["feature_columns"] == [
-        "claim_amount_to_limit_ratio",
-        "provider_profile_score",
-        "high_cost_item_ratio",
-    ]
+    assert BASE_FEATURES.issubset(set(rust_artifact["feature_columns"]))
+    assert any(feature.startswith("automl__") for feature in rust_artifact["feature_columns"])
     assert isinstance(rust_artifact["intercept"], float)
     assert set(rust_artifact["coefficients"]) == set(rust_artifact["feature_columns"])
     assert serving_manifest["model_version"] == payload["candidate_model_version"]
@@ -305,17 +310,27 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
         Path(payload["feature_store_manifest_uri"]).read_text(encoding="utf-8")
     )
     assert feature_store_manifest["materialization_status"] == "materialized"
-    assert feature_store_manifest["feature_columns"] == [
-        "claim_amount_to_limit_ratio",
-        "provider_profile_score",
-        "high_cost_item_ratio",
-    ]
+    assert BASE_FEATURES.issubset(set(feature_store_manifest["feature_columns"]))
+    assert any(
+        definition["feature"].startswith("automl__")
+        for definition in feature_store_manifest["feature_definitions"]
+    )
     feature_search_report = json.loads(
         Path(payload["automl_feature_search_report_uri"]).read_text(encoding="utf-8")
     )
     assert feature_search_report["report_kind"] == "automl_feature_search"
-    assert feature_search_report["selected_feature_count"] == 3
+    assert feature_search_report["feature_engineering_policy"] == (
+        "bounded_pairwise_difference_and_safe_ratio_generation"
+    )
+    assert feature_search_report["generated_feature_count"] >= 1
+    assert feature_search_report["selected_feature_count"] == payload["metrics_json"][
+        "automl_selected_feature_count"
+    ]
     assert feature_search_report["ranked_features"]
+    assert any(
+        row["feature_kind"] == "generated"
+        for row in feature_search_report["ranked_features"]
+    )
     assert any(
         ref == f"automl_feature_search_reports:{payload['automl_feature_search_report_uri']}"
         for ref in payload["evidence_refs"]
@@ -325,8 +340,12 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     )
     assert factor_ranking_report["report_kind"] == "automl_factor_ranking"
     assert factor_ranking_report["status"] == "passed"
-    assert factor_ranking_report["ranked_factor_count"] == 3
-    assert [row["rank"] for row in factor_ranking_report["ranked_factors"]] == [1, 2, 3]
+    assert factor_ranking_report["ranked_factor_count"] == payload["metrics_json"][
+        "automl_selected_feature_count"
+    ]
+    assert [row["rank"] for row in factor_ranking_report["ranked_factors"]] == list(
+        range(1, factor_ranking_report["ranked_factor_count"] + 1)
+    )
     assert any(
         ref == f"automl_factor_rankings:{payload['automl_factor_ranking_report_uri']}"
         for ref in payload["evidence_refs"]
@@ -466,11 +485,8 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert parity_report["max_abs_probability_delta"] <= parity_report["tolerance"]
 
     feature_importance = pd.read_parquet(payload["feature_importance_uri"])
-    assert set(feature_importance["feature"]) == {
-        "claim_amount_to_limit_ratio",
-        "provider_profile_score",
-        "high_cost_item_ratio",
-    }
+    assert BASE_FEATURES.issubset(set(feature_importance["feature"]))
+    assert any(feature.startswith("automl__") for feature in feature_importance["feature"])
     assert set(feature_importance["importance_kind"]) == {"feature_importance"}
 
 
@@ -556,11 +572,8 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert parity_report["max_abs_probability_delta"] <= parity_report["tolerance"]
 
     feature_importance = pd.read_parquet(payload["feature_importance_uri"])
-    assert set(feature_importance["feature"]) == {
-        "claim_amount_to_limit_ratio",
-        "provider_profile_score",
-        "high_cost_item_ratio",
-    }
+    assert BASE_FEATURES.issubset(set(feature_importance["feature"]))
+    assert any(feature.startswith("automl__") for feature in feature_importance["feature"])
     assert set(feature_importance["importance_kind"]) == {"feature_importance"}
 
 
@@ -609,18 +622,15 @@ def test_training_pipeline_writes_deep_learning_candidate_payload(tmp_path: Path
     assert serving_manifest["artifact_uri"] == payload["artifact_uri"]
 
     feature_importance = pd.read_parquet(payload["feature_importance_uri"])
-    assert set(feature_importance["feature"]) == {
-        "claim_amount_to_limit_ratio",
-        "provider_profile_score",
-        "high_cost_item_ratio",
-    }
+    assert BASE_FEATURES.issubset(set(feature_importance["feature"]))
+    assert any(feature.startswith("automl__") for feature in feature_importance["feature"])
     assert set(feature_importance["importance_kind"]) == {"first_layer_weight_abs_mean"}
 
     factor_ranking = json.loads(
         Path(payload["automl_factor_ranking_report_uri"]).read_text(encoding="utf-8")
     )
     assert factor_ranking["status"] == "passed"
-    assert factor_ranking["ranked_factor_count"] == 3
+    assert factor_ranking["ranked_factor_count"] > len(BASE_FEATURES)
 
 
 def test_training_api_returns_completed_training_package(tmp_path: Path):
