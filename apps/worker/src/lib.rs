@@ -95,6 +95,10 @@ pub fn worker_health() -> WorkerHealthResponse {
                 status: "ok",
             },
             WorkerHealthCheck {
+                name: "model_promotion_orchestrator",
+                status: "ok",
+            },
+            WorkerHealthCheck {
                 name: "mlops_monitoring_report_submitter",
                 status: "ok",
             },
@@ -1523,6 +1527,9 @@ pub async fn promote_approved_model_version(
     let gates_path =
         format!("/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates");
     let gates = get_model_promotion_gates(api_base_url, api_key, &gates_path).await?;
+    if !promotion_gate_passed(&gates, "Approval") {
+        bail!("model {model_key}:{model_version} promotion gates blocked: approval missing");
+    }
     let blockers = gates
         .gates
         .iter()
@@ -1550,6 +1557,13 @@ pub async fn promote_approved_model_version(
         promotion_status: "activated_after_reviewer_approval".into(),
         evidence_refs,
     })
+}
+
+fn promotion_gate_passed(gates: &ModelPromotionGatesResponse, label: &str) -> bool {
+    gates
+        .gates
+        .iter()
+        .any(|gate| gate.label == label && gate.passed)
 }
 
 async fn get_model_promotion_gates(
@@ -4233,6 +4247,142 @@ pub fn build_mlops_scheduler_execution_report(
     Ok(report)
 }
 
+pub fn build_model_promotion_orchestration_report(
+    candidate_ranking_uri: &str,
+    artifact_evaluation_report_uris: &[String],
+    mlops_monitoring_report_uri: &str,
+    output_dir: impl AsRef<Path>,
+) -> anyhow::Result<serde_json::Value> {
+    let candidate_ranking_uri = required_non_empty("candidate_ranking_uri", candidate_ranking_uri)?;
+    if artifact_evaluation_report_uris.is_empty() {
+        bail!("at least one artifact_evaluation_report_uri is required");
+    }
+    let mlops_monitoring_report_uri =
+        required_non_empty("mlops_monitoring_report_uri", mlops_monitoring_report_uri)?;
+
+    let candidate_ranking = read_json_report(candidate_ranking_uri)?;
+    let artifact_reports = artifact_evaluation_report_uris
+        .iter()
+        .map(|uri| read_json_report(uri))
+        .collect::<anyhow::Result<Vec<_>>>()?;
+    let mlops_monitoring = read_json_report(mlops_monitoring_report_uri)?;
+
+    let recommended_candidate_model_version =
+        json_string(&candidate_ranking, "recommended_candidate_model_version");
+    let recommended_candidate =
+        recommended_candidate_model_version
+            .as_deref()
+            .and_then(|version| {
+                candidate_ranking
+                    .get("candidates")
+                    .and_then(|value| value.as_array())
+                    .into_iter()
+                    .flatten()
+                    .find(|candidate| {
+                        json_string(candidate, "candidate_model_version").as_deref()
+                            == Some(version)
+                    })
+            });
+    let model_key = recommended_candidate
+        .and_then(|candidate| json_string(candidate, "model_key"))
+        .unwrap_or_else(|| "missing".into());
+    let model_version = recommended_candidate_model_version.unwrap_or_else(|| "missing".into());
+    let recommended_candidate_gate_passed = recommended_candidate.is_some_and(|candidate| {
+        json_string(candidate, "gate_status").as_deref() == Some("passed")
+            && json_string(candidate, "recommended_action").as_deref() == Some("open_human_review")
+    });
+    let artifact_evaluations_passed = artifact_reports.iter().any(|report| {
+        json_string(report, "model_key").as_deref() == Some(model_key.as_str())
+            && json_string(report, "model_version").as_deref() == Some(model_version.as_str())
+            && json_string(report, "gate_status").as_deref() == Some("passed")
+            && json_string(report, "rust_serving_status").as_deref() == Some("passed")
+            && json_string(report, "latency_status").as_deref() == Some("passed")
+    });
+    let monitoring_passed = mlops_monitoring["report_kind"] == "mlops_monitoring_report"
+        && json_string(&mlops_monitoring, "overall_status").as_deref() == Some("passed")
+        && json_string(&mlops_monitoring, "promotion_boundary")
+            .is_some_and(|boundary| boundary.contains("must not activate models"));
+
+    let mut blocking_reasons = Vec::new();
+    if !recommended_candidate_gate_passed {
+        blocking_reasons.push("recommended_candidate_gate_not_passed".to_string());
+    }
+    if !artifact_evaluations_passed {
+        blocking_reasons.push("serving_artifact_gate_not_passed".to_string());
+    }
+    if !monitoring_passed {
+        blocking_reasons.push("mlops_monitoring_not_clear_for_review".to_string());
+    }
+    let orchestration_status = if blocking_reasons.is_empty() {
+        "ready_after_reviewer_approval"
+    } else {
+        "blocked_pending_evidence"
+    };
+    let promotion_gates_path =
+        format!("/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-gates");
+    let activation_path =
+        format!("/api/v1/ops/models/{model_key}/versions/{model_version}/activate");
+
+    let report = serde_json::json!({
+        "report_kind": "reviewer_approved_model_promotion_orchestration",
+        "report_version": 1,
+        "model_key": model_key,
+        "candidate_model_version": model_version,
+        "orchestration_status": orchestration_status,
+        "activation_policy": "automatic_after_reviewer_approval_and_fresh_promotion_gates_pass",
+        "required_pre_activation_gates": [
+            "recommended_candidate_gate_passed",
+            "rust_serving_artifact_gate_passed",
+            "mlops_monitoring_clear_for_review",
+            "human_model_governance_review_approved",
+            "fresh_promotion_gates_pass_before_activation"
+        ],
+        "automation_steps": [
+            {
+                "step": "submit_or_verify_model_governance_review",
+                "required_decision": "approved",
+                "endpoint": format!("/api/v1/ops/models/{model_key}/versions/{model_version}/promotion-review")
+            },
+            {
+                "step": "recheck_promotion_gates",
+                "required_result": "all_non_active_version_gates_passed",
+                "endpoint": promotion_gates_path
+            },
+            {
+                "step": "activate_approved_model_version",
+                "required_result": "model_status_active",
+                "endpoint": activation_path,
+                "worker_command": format!("cargo run --locked -p worker -- promote-approved-model-version --api-url <api-url> --api-key <api-key> --model-key {model_key} --model-version {model_version}")
+            }
+        ],
+        "blocking_reasons": blocking_reasons,
+        "governance_boundary": "orchestration may activate a model only after recorded reviewer approval and a fresh promotion-gate pass; it must not bypass human approval, publish rules, assign fraud labels, or activate from stale evidence",
+        "evidence_refs": [
+            format!("automl_candidate_ranking:{candidate_ranking_uri}"),
+            format!("mlops_monitoring_reports:{mlops_monitoring_report_uri}"),
+            format!("model_versions:{model_key}:{model_version}")
+        ],
+        "artifact_evaluation_refs": artifact_evaluation_report_uris
+            .iter()
+            .map(|uri| format!("model_artifact_evaluations:{uri}"))
+            .collect::<Vec<_>>()
+    });
+
+    fs::create_dir_all(output_dir.as_ref()).with_context(|| {
+        format!(
+            "create model promotion orchestration output dir {}",
+            output_dir.as_ref().display()
+        )
+    })?;
+    write_json(
+        output_dir
+            .as_ref()
+            .join("model_promotion_orchestration_report.json"),
+        &report,
+    )?;
+    Ok(report)
+}
+
 pub fn build_automl_lifecycle_closure_report(
     demo_index_uri: &str,
     candidate_ranking_uri: &str,
@@ -4244,6 +4394,7 @@ pub fn build_automl_lifecycle_closure_report(
     mlops_monitoring_report_uri: &str,
     mlops_scheduler_execution_report_uri: &str,
     mlops_monitoring_cycle_report_uri: &str,
+    model_promotion_orchestration_report_uri: &str,
     output_dir: impl AsRef<Path>,
 ) -> anyhow::Result<serde_json::Value> {
     let demo_index_uri = required_non_empty("demo_index_uri", demo_index_uri)?;
@@ -4275,6 +4426,10 @@ pub fn build_automl_lifecycle_closure_report(
         "mlops_monitoring_cycle_report_uri",
         mlops_monitoring_cycle_report_uri,
     )?;
+    let model_promotion_orchestration_report_uri = required_non_empty(
+        "model_promotion_orchestration_report_uri",
+        model_promotion_orchestration_report_uri,
+    )?;
 
     let demo_index = read_json_report(demo_index_uri)?;
     let candidate_ranking = read_json_report(candidate_ranking_uri)?;
@@ -4289,6 +4444,7 @@ pub fn build_automl_lifecycle_closure_report(
     let mlops_monitoring = read_json_report(mlops_monitoring_report_uri)?;
     let mlops_scheduler_execution = read_json_report(mlops_scheduler_execution_report_uri)?;
     let mlops_monitoring_cycle = read_json_report(mlops_monitoring_cycle_report_uri)?;
+    let model_promotion_orchestration = read_json_report(model_promotion_orchestration_report_uri)?;
 
     let dataset_manifests = demo_index
         .get("dataset_manifests")
@@ -4389,6 +4545,25 @@ pub fn build_automl_lifecycle_closure_report(
         && cycle_status.starts_with("completed")
         && json_string(&mlops_monitoring_cycle, "governance_boundary")
             .is_some_and(|boundary| boundary.contains("must not create retraining jobs"));
+    let promotion_orchestration_passed = model_promotion_orchestration["report_kind"]
+        == "reviewer_approved_model_promotion_orchestration"
+        && json_string(&model_promotion_orchestration, "orchestration_status").as_deref()
+            == Some("ready_after_reviewer_approval")
+        && json_string(&model_promotion_orchestration, "activation_policy")
+            .is_some_and(|policy| policy.contains("fresh_promotion_gates_pass"))
+        && json_string(&model_promotion_orchestration, "governance_boundary")
+            .is_some_and(|boundary| boundary.contains("after recorded reviewer approval"))
+        && nested_json_array_contains(
+            &model_promotion_orchestration,
+            &["required_pre_activation_gates"],
+            "human_model_governance_review_approved",
+        )
+        && nested_json_array_contains(
+            &model_promotion_orchestration,
+            &["required_pre_activation_gates"],
+            "fresh_promotion_gates_pass_before_activation",
+        )
+        && json_array_len(&model_promotion_orchestration, "automation_steps") >= 3;
 
     let stages = vec![
         lifecycle_stage(
@@ -4457,6 +4632,15 @@ pub fn build_automl_lifecycle_closure_report(
                 format!("mlops_monitoring_cycles:{mlops_monitoring_cycle_report_uri}"),
             ],
         ),
+        lifecycle_stage(
+            "reviewer_approved_promotion_orchestration",
+            promotion_orchestration_passed,
+            "model promotion is automated only after reviewer approval and a fresh promotion-gate pass"
+                .into(),
+            vec![format!(
+                "model_promotion_orchestrations:{model_promotion_orchestration_report_uri}"
+            )],
+        ),
     ];
     let closure_status = if stages
         .iter()
@@ -4475,6 +4659,7 @@ pub fn build_automl_lifecycle_closure_report(
         "governance_boundary": "Rust lifecycle closure may open monitoring, review, retraining preparation, and rule-candidate backtest work only; it must not auto-activate models, assign fraud labels, or write back to the rule library",
         "required_human_gates": [
             "model_governance_review_before_shadow_or_activation",
+            "reviewer_approved_promotion_before_model_activation",
             "human_rule_review_after_backtest_before_rule_library_writeback",
             "anomaly_review_before_case_creation_or_label_assignment",
             "mlops_monitoring_review_before_retraining_or_rollback_action"
@@ -4488,7 +4673,8 @@ pub fn build_automl_lifecycle_closure_report(
             format!("claim_entity_clustering:{claim_entity_clustering_report_uri}"),
             format!("mlops_monitoring_reports:{mlops_monitoring_report_uri}"),
             format!("mlops_scheduler_execution_reports:{mlops_scheduler_execution_report_uri}"),
-            format!("mlops_monitoring_cycles:{mlops_monitoring_cycle_report_uri}")
+            format!("mlops_monitoring_cycles:{mlops_monitoring_cycle_report_uri}"),
+            format!("model_promotion_orchestrations:{model_promotion_orchestration_report_uri}")
         ],
         "artifact_evaluation_refs": artifact_evaluation_report_uris
             .iter()
@@ -4684,6 +4870,20 @@ pub fn build_demo_automl_lifecycle_evidence(
         &fairness_report.to_string_lossy(),
         output_dir.join("monitoring/cycle"),
     )?;
+    let promotion_orchestration_dir = output_dir.join("promotion-orchestration");
+    build_model_promotion_orchestration_report(
+        &output_dir
+            .join("ranking/automl_candidate_ranking.json")
+            .to_string_lossy(),
+        &[
+            xgboost_artifact_eval.to_string_lossy().into_owned(),
+            lightgbm_artifact_eval.to_string_lossy().into_owned(),
+        ],
+        &output_dir
+            .join("monitoring/mlops_monitoring_report.json")
+            .to_string_lossy(),
+        &promotion_orchestration_dir,
+    )?;
 
     let closure = build_automl_lifecycle_closure_report(
         &index_uri.to_string_lossy(),
@@ -4715,6 +4915,9 @@ pub fn build_demo_automl_lifecycle_evidence(
         &output_dir
             .join("monitoring/cycle/mlops_monitoring_cycle_report.json")
             .to_string_lossy(),
+        &promotion_orchestration_dir
+            .join("model_promotion_orchestration_report.json")
+            .to_string_lossy(),
         output_dir.join("closure"),
     )?;
 
@@ -4744,6 +4947,7 @@ pub fn build_demo_automl_lifecycle_evidence(
             "mlops_monitoring_plan": monitoring_plan_uri,
             "mlops_scheduler_execution_report": scheduler_dir.join("mlops_scheduler_execution_report.json"),
             "mlops_monitoring_cycle_report": output_dir.join("monitoring/cycle/mlops_monitoring_cycle_report.json"),
+            "model_promotion_orchestration_report": promotion_orchestration_dir.join("model_promotion_orchestration_report.json"),
             "lifecycle_closure_report": output_dir.join("closure/rust_automl_lifecycle_closure_report.json")
         },
         "governance_boundary": "demo evidence only; the pack proves the Rust AutoML lifecycle contract but must not activate models, assign fraud labels, or write rules without the recorded human gates"
@@ -4971,6 +5175,30 @@ pub fn verify_demo_automl_lifecycle(
         ],
     );
 
+    let promotion_orchestration_uri =
+        required_artifact_uri(artifacts, "model_promotion_orchestration_report")?;
+    let promotion_orchestration = read_json_report(&promotion_orchestration_uri)?;
+    push_verification_check(
+        &mut checks,
+        &mut blocking_reasons,
+        "reviewer_approved_promotion_orchestration",
+        promotion_orchestration["report_kind"] == "reviewer_approved_model_promotion_orchestration"
+            && json_string(&promotion_orchestration, "orchestration_status").as_deref()
+                == Some("ready_after_reviewer_approval")
+            && json_string(&promotion_orchestration, "activation_policy")
+                .is_some_and(|policy| policy.contains("fresh_promotion_gates_pass"))
+            && nested_json_array_contains(
+                &promotion_orchestration,
+                &["required_pre_activation_gates"],
+                "human_model_governance_review_approved",
+            ),
+        "promotion orchestration is ready only after reviewer approval and fresh gate recheck"
+            .into(),
+        vec![format!(
+            "model_promotion_orchestrations:{promotion_orchestration_uri}"
+        )],
+    );
+
     let closure_report_uri = required_artifact_uri(artifacts, "lifecycle_closure_report")?;
     let closure_report = read_json_report(&closure_report_uri)?;
     let closure_stage_count = closure_report
@@ -4989,7 +5217,7 @@ pub fn verify_demo_automl_lifecycle(
         closure_report["report_kind"] == "rust_automl_lifecycle_closure"
             && closure_report["closure_status"] == "closed_with_human_governance_gates"
             && closure_stages_passed
-            && closure_stage_count >= 6
+            && closure_stage_count >= 7
             && json_array_len(&closure_report, "required_human_gates") >= 4,
         format!("{closure_stage_count} lifecycle stage(s) closed with human governance gates"),
         vec![format!("automl_lifecycle_closure:{closure_report_uri}")],
@@ -9737,6 +9965,46 @@ mod tests {
         assert!(error.to_string().contains("approval missing"));
     }
 
+    #[tokio::test]
+    async fn blocks_auto_promotion_when_approval_gate_is_absent() {
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut socket).await;
+            write_json_response(
+                &mut socket,
+                serde_json::json!({
+                    "model_key": "baseline_fwa",
+                    "model_version": "0.2.0-candidate",
+                    "gates": [
+                        {"label": "Leakage check", "passed": true, "blocker": "none"},
+                        {"label": "Active version", "passed": false, "blocker": "model is not active"}
+                    ]
+                }),
+            )
+            .await;
+            request
+        });
+
+        let error = promote_approved_model_version(
+            &api_url,
+            "dev-secret",
+            "baseline_fwa",
+            "0.2.0-candidate",
+        )
+        .await
+        .unwrap_err();
+
+        let request = server.await.unwrap();
+        assert!(request.contains(
+            "GET /api/v1/ops/models/baseline_fwa/versions/0.2.0-candidate/promotion-gates"
+        ));
+        assert!(error.to_string().contains("approval missing"));
+    }
+
     #[test]
     fn builds_external_training_handoff_from_manifest() {
         let root = temp_root("training-handoff");
@@ -11374,6 +11642,100 @@ mod tests {
     }
 
     #[test]
+    fn builds_reviewer_approved_model_promotion_orchestration_report() {
+        let root = temp_root("model-promotion-orchestration");
+        let xgboost_validation = root.join("xgboost-validation.json");
+        let lightgbm_validation = root.join("lightgbm-validation.json");
+        write_validation_report(
+            &xgboost_validation,
+            "0.2.0-xgboost-candidate",
+            "xgboost",
+            "gradient_boosted_tree",
+            0.86,
+            0.80,
+            0.76,
+            "passed",
+        );
+        write_validation_report(
+            &lightgbm_validation,
+            "0.2.0-lightgbm-candidate",
+            "lightgbm",
+            "gradient_boosted_tree",
+            0.85,
+            0.79,
+            0.75,
+            "passed",
+        );
+        rank_automl_candidates(
+            &[
+                xgboost_validation.to_string_lossy().into_owned(),
+                lightgbm_validation.to_string_lossy().into_owned(),
+            ],
+            root.join("ranking"),
+        )
+        .expect("candidate ranking");
+        let artifact_eval = root.join("xgboost-artifact-evaluation.json");
+        write_json(
+            artifact_eval.clone(),
+            &serde_json::json!({
+                "report_kind": "model_artifact_evaluation",
+                "model_key": "baseline_fwa",
+                "model_version": "0.2.0-xgboost-candidate",
+                "runtime_kind": "xgboost_onnx",
+                "gate_status": "passed",
+                "rust_serving_status": "passed",
+                "latency_status": "passed"
+            }),
+        )
+        .unwrap();
+        let monitoring_report = root.join("mlops-monitoring.json");
+        write_json(
+            monitoring_report.clone(),
+            &serde_json::json!({
+                "report_kind": "mlops_monitoring_report",
+                "overall_status": "passed",
+                "promotion_boundary": "monitoring can open review only; it must not activate models"
+            }),
+        )
+        .unwrap();
+
+        let report = build_model_promotion_orchestration_report(
+            &root
+                .join("ranking/automl_candidate_ranking.json")
+                .to_string_lossy(),
+            &[artifact_eval.to_string_lossy().into_owned()],
+            &monitoring_report.to_string_lossy(),
+            root.join("promotion"),
+        )
+        .expect("promotion orchestration report");
+
+        assert_eq!(
+            report["report_kind"],
+            "reviewer_approved_model_promotion_orchestration"
+        );
+        assert_eq!(
+            report["orchestration_status"],
+            "ready_after_reviewer_approval"
+        );
+        assert!(report["activation_policy"]
+            .as_str()
+            .unwrap()
+            .contains("fresh_promotion_gates_pass"));
+        assert!(report["required_pre_activation_gates"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!("human_model_governance_review_approved")));
+        assert!(report["automation_steps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|step| step["step"] == "activate_approved_model_version"));
+        assert!(root
+            .join("promotion/model_promotion_orchestration_report.json")
+            .is_file());
+    }
+
+    #[test]
     fn builds_automl_lifecycle_closure_report_from_governed_evidence() {
         let root = temp_root("automl-lifecycle-closure");
         let pack = build_demo_ml_datasets(&root, "2026-06-closure-demo").expect("demo ML datasets");
@@ -11419,6 +11781,8 @@ mod tests {
             xgboost_artifact_eval.clone(),
             &serde_json::json!({
                 "report_kind": "model_artifact_evaluation",
+                "model_key": "baseline_fwa",
+                "model_version": "0.2.0-xgboost-candidate",
                 "runtime_kind": "xgboost_onnx",
                 "gate_status": "passed",
                 "rust_serving_status": "passed",
@@ -11431,6 +11795,8 @@ mod tests {
             lightgbm_artifact_eval.clone(),
             &serde_json::json!({
                 "report_kind": "model_artifact_evaluation",
+                "model_key": "baseline_fwa",
+                "model_version": "0.2.0-lightgbm-candidate",
                 "runtime_kind": "lightgbm_onnx",
                 "gate_status": "passed",
                 "rust_serving_status": "passed",
@@ -11537,6 +11903,21 @@ mod tests {
             root.join("cycle"),
         )
         .expect("monitoring cycle report");
+        let promotion_orchestration_dir = root.join("promotion-orchestration");
+        build_model_promotion_orchestration_report(
+            &root
+                .join("ranking/automl_candidate_ranking.json")
+                .to_string_lossy(),
+            &[
+                xgboost_artifact_eval.to_string_lossy().into_owned(),
+                lightgbm_artifact_eval.to_string_lossy().into_owned(),
+            ],
+            &root
+                .join("monitoring/mlops_monitoring_report.json")
+                .to_string_lossy(),
+            &promotion_orchestration_dir,
+        )
+        .expect("promotion orchestration report");
 
         let report = build_automl_lifecycle_closure_report(
             &root.join("index.json").to_string_lossy(),
@@ -11566,6 +11947,9 @@ mod tests {
             &root
                 .join("cycle/mlops_monitoring_cycle_report.json")
                 .to_string_lossy(),
+            &promotion_orchestration_dir
+                .join("model_promotion_orchestration_report.json")
+                .to_string_lossy(),
             root.join("closure"),
         )
         .expect("lifecycle closure report");
@@ -11575,7 +11959,7 @@ mod tests {
             report["closure_status"],
             "closed_with_human_governance_gates"
         );
-        assert_eq!(report["lifecycle_stages"].as_array().unwrap().len(), 6);
+        assert_eq!(report["lifecycle_stages"].as_array().unwrap().len(), 7);
         assert!(report["lifecycle_stages"]
             .as_array()
             .unwrap()
@@ -11613,6 +11997,13 @@ mod tests {
                 .as_str()
                 .unwrap()
                 .starts_with("mlops_scheduler_execution_reports:")));
+        let promotion_stage = report["lifecycle_stages"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|stage| stage["stage"] == "reviewer_approved_promotion_orchestration")
+            .expect("promotion orchestration stage");
+        assert_eq!(promotion_stage["status"], "passed");
         assert!(root
             .join("closure/rust_automl_lifecycle_closure_report.json")
             .is_file());
@@ -11669,6 +12060,9 @@ mod tests {
             .is_file());
         assert!(output_dir
             .join("monitoring/cycle/mlops_monitoring_cycle_report.json")
+            .is_file());
+        assert!(output_dir
+            .join("promotion-orchestration/model_promotion_orchestration_report.json")
             .is_file());
         assert!(output_dir
             .join("closure/rust_automl_lifecycle_closure_report.json")

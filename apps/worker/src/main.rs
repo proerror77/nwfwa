@@ -221,6 +221,23 @@ async fn main() -> anyhow::Result<()> {
             )?;
             println!("{}", serde_json::to_string_pretty(&report)?);
         }
+        "build-model-promotion-orchestration-report" => {
+            let candidate_ranking = take_flag_value(&mut args, "--candidate-ranking")?;
+            let artifact_evaluation_reports =
+                take_repeated_flag_value(&mut args, "--artifact-evaluation-report")?;
+            let mlops_monitoring_report = take_flag_value(&mut args, "--mlops-monitoring-report")?;
+            let output_dir = take_flag_value(&mut args, "--output-dir")?;
+            if !args.is_empty() {
+                anyhow::bail!("unexpected arguments: {}", args.join(" "));
+            }
+            let report = worker::build_model_promotion_orchestration_report(
+                &candidate_ranking,
+                &artifact_evaluation_reports,
+                &mlops_monitoring_report,
+                output_dir,
+            )?;
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        }
         "submit-mlops-alert-delivery-tasks" => {
             let api_url = take_flag_value(&mut args, "--api-url")?;
             let api_key = take_flag_value(&mut args, "--api-key")?;
@@ -327,6 +344,8 @@ async fn main() -> anyhow::Result<()> {
                 take_flag_value(&mut args, "--mlops-scheduler-execution-report")?;
             let mlops_monitoring_cycle_report =
                 take_flag_value(&mut args, "--mlops-monitoring-cycle-report")?;
+            let model_promotion_orchestration_report =
+                take_flag_value(&mut args, "--model-promotion-orchestration-report")?;
             let output_dir = take_flag_value(&mut args, "--output-dir")?;
             if !args.is_empty() {
                 anyhow::bail!("unexpected arguments: {}", args.join(" "));
@@ -342,6 +361,7 @@ async fn main() -> anyhow::Result<()> {
                 &mlops_monitoring_report,
                 &mlops_scheduler_execution_report,
                 &mlops_monitoring_cycle_report,
+                &model_promotion_orchestration_report,
                 output_dir,
             )?;
             println!("{}", serde_json::to_string_pretty(&report)?);
