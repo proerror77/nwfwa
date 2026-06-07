@@ -3575,6 +3575,11 @@ pub fn build_training_handoff_with_algorithm(
                 "metrics_json.time_split_field",
                 "metrics_json.group_split_fields",
                 "metrics_json.leakage_check_status",
+                "metrics_json.out_of_time_validation_status",
+                "metrics_json.score_stability_status",
+                "metrics_json.feature_stability_status",
+                "metrics_json.overfitting_diagnostics_status",
+                "metrics_json.overfitting_diagnostics_report_uri",
                 "metrics_json.out_of_time_auc",
                 "metrics_json.out_of_time_precision",
                 "metrics_json.out_of_time_recall",
@@ -7246,6 +7251,10 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
     let required_statuses = [
         "time_group_split_status",
         "leakage_check_status",
+        "out_of_time_validation_status",
+        "score_stability_status",
+        "feature_stability_status",
+        "overfitting_diagnostics_status",
         "shadow_comparison_status",
         "serving_version_lock_status",
         "artifact_integrity_status",
@@ -7314,6 +7323,13 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
     }
     if !automl_has_permutation_importance(metrics) {
         reasons.push("permutation_importance_uri:missing".into());
+    }
+    if !metrics
+        .get("overfitting_diagnostics_report_uri")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty())
+    {
+        reasons.push("overfitting_diagnostics_report_uri:missing".into());
     }
     if metric_object_value(metrics, "score_psi")
         .or_else(|| metric_object_value(metrics, "psi"))
@@ -12343,6 +12359,17 @@ mod tests {
                     "time_split_field": "service_date",
                     "group_split_fields": ["member_id", "policy_id", "provider_id"],
                     "leakage_check_status": leakage_status,
+                    "out_of_time_validation_status": "passed",
+                    "score_stability_status": "passed",
+                    "feature_stability_status": "passed",
+                    "overfitting_diagnostics_status": if leakage_status == "passed" {
+                        "passed"
+                    } else {
+                        "failed"
+                    },
+                    "overfitting_diagnostics_report_uri": format!(
+                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/overfitting_diagnostics_report.json"
+                    ),
                     "shadow_comparison_status": "passed",
                     "serving_version_lock_status": "passed",
                     "artifact_integrity_status": "passed",

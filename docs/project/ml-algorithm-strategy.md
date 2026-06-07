@@ -181,6 +181,9 @@ Every candidate evaluation should record:
 - Auto MLOps feature-search report URI with candidate feature count, selected
   feature count, feature missingness, label-correlation ranking, and feature
   PSI watch status;
+- overfitting diagnostics report URI with time/group split ordering, group
+  leakage overlap counts, out-of-time AUC gap, score PSI, feature PSI, and
+  permutation-importance status;
 - ONNX artifact URI, ONNX parity report URI, and maximum probability delta for
   XGBoost and LightGBM candidates;
 - shadow-mode comparison against live traffic, QA outcomes, and routing impact;
@@ -195,8 +198,11 @@ Minimum `metrics_json` fields for promotion-ready model evaluations:
   "time_split_field": "service_date",
   "group_split_fields": ["member_id", "policy_id", "provider_id", "case_family_id"],
   "leakage_check_status": "passed",
+  "out_of_time_validation_status": "passed",
   "shadow_comparison_status": "passed",
   "review_capacity_threshold_status": "passed",
+  "overfitting_diagnostics_status": "passed",
+  "overfitting_diagnostics_report_uri": "s3://.../overfitting_diagnostics_report.json",
   "automl_feature_search_status": "passed",
   "automl_feature_search_report_uri": "s3://.../automl_feature_search_report.json",
   "automl_selected_feature_count": 42,

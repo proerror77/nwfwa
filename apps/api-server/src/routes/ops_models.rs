@@ -1281,6 +1281,35 @@ fn validate_retraining_output_overfitting_evidence(
             "model retraining output requires passed leakage_check_status",
         ));
     }
+    if metrics
+        .get("overfitting_diagnostics_status")
+        .and_then(|value| value.as_str())
+        != Some("passed")
+    {
+        return Err(missing(
+            "model retraining output requires passed overfitting_diagnostics_status",
+        ));
+    }
+    if metrics
+        .get("overfitting_diagnostics_report_uri")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_none()
+    {
+        return Err(missing(
+            "model retraining output requires overfitting_diagnostics_report_uri",
+        ));
+    }
+    if metrics
+        .get("out_of_time_validation_status")
+        .and_then(|value| value.as_str())
+        != Some("passed")
+    {
+        return Err(missing(
+            "model retraining output requires passed out_of_time_validation_status",
+        ));
+    }
     for field in [
         "out_of_time_auc",
         "out_of_time_precision",
@@ -1312,6 +1341,24 @@ fn validate_retraining_output_overfitting_evidence(
     if !metric_value_as_f64(metrics, "max_feature_psi").is_some_and(|value| value >= 0.0) {
         return Err(missing(
             "model retraining output requires max_feature_psi stability evidence",
+        ));
+    }
+    if metrics
+        .get("score_stability_status")
+        .and_then(|value| value.as_str())
+        != Some("passed")
+    {
+        return Err(missing(
+            "model retraining output requires passed score_stability_status",
+        ));
+    }
+    if metrics
+        .get("feature_stability_status")
+        .and_then(|value| value.as_str())
+        != Some("passed")
+    {
+        return Err(missing(
+            "model retraining output requires passed feature_stability_status",
         ));
     }
     if !metrics
@@ -2089,6 +2136,26 @@ fn validate_retraining_output_evidence_refs(
     }
     if let Some(feature_importance_uri) = &request.feature_importance_uri {
         let expected_ref = format!("model_feature_importance:{feature_importance_uri}");
+        if !request
+            .evidence_refs
+            .iter()
+            .any(|reference| reference.trim() == expected_ref)
+        {
+            return Err(ApiError::new(
+                StatusCode::BAD_REQUEST,
+                "MISSING_RETRAINING_OUTPUT_EVIDENCE",
+                format!("model retraining output evidence_refs must include {expected_ref}"),
+            ));
+        }
+    }
+    if let Some(overfitting_diagnostics_uri) = request
+        .metrics_json
+        .get("overfitting_diagnostics_report_uri")
+        .and_then(|value| value.as_str())
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+    {
+        let expected_ref = format!("model_overfitting_diagnostics:{overfitting_diagnostics_uri}");
         if !request
             .evidence_refs
             .iter()

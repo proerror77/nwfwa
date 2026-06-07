@@ -72,15 +72,75 @@ def write_training_manifest(tmp_path: Path) -> Path:
     write_split(
         dataset_root / "validation.parquet",
         [
-            {**common_rows[0], "claim_id": "CLM-5", "member_id": "MBR-5", "policy_id": "POL-5", "provider_id": "PRV-5"},
-            {**common_rows[1], "claim_id": "CLM-6", "member_id": "MBR-6", "policy_id": "POL-6", "provider_id": "PRV-6"},
+            {
+                **common_rows[0],
+                "claim_id": "CLM-5",
+                "member_id": "MBR-5",
+                "policy_id": "POL-5",
+                "provider_id": "PRV-5",
+                "service_date_ord": 5,
+            },
+            {
+                **common_rows[1],
+                "claim_id": "CLM-6",
+                "member_id": "MBR-6",
+                "policy_id": "POL-6",
+                "provider_id": "PRV-6",
+                "service_date_ord": 6,
+            },
+            {
+                **common_rows[2],
+                "claim_id": "CLM-7",
+                "member_id": "MBR-7",
+                "policy_id": "POL-7",
+                "provider_id": "PRV-7",
+                "service_date_ord": 7,
+            },
+            {
+                **common_rows[3],
+                "claim_id": "CLM-8",
+                "member_id": "MBR-8",
+                "policy_id": "POL-8",
+                "provider_id": "PRV-8",
+                "service_date_ord": 8,
+            },
         ],
     )
     write_split(
         dataset_root / "out_of_time.parquet",
         [
-            {**common_rows[2], "claim_id": "CLM-7", "member_id": "MBR-7", "policy_id": "POL-7", "provider_id": "PRV-7"},
-            {**common_rows[3], "claim_id": "CLM-8", "member_id": "MBR-8", "policy_id": "POL-8", "provider_id": "PRV-8"},
+            {
+                **common_rows[0],
+                "claim_id": "CLM-9",
+                "member_id": "MBR-9",
+                "policy_id": "POL-9",
+                "provider_id": "PRV-9",
+                "service_date_ord": 9,
+            },
+            {
+                **common_rows[1],
+                "claim_id": "CLM-10",
+                "member_id": "MBR-10",
+                "policy_id": "POL-10",
+                "provider_id": "PRV-10",
+                "service_date_ord": 10,
+            },
+            {
+                **common_rows[2],
+                "claim_id": "CLM-11",
+                "member_id": "MBR-11",
+                "policy_id": "POL-11",
+                "provider_id": "PRV-11",
+                "service_date_ord": 11,
+            },
+            {
+                **common_rows[3],
+                "claim_id": "CLM-12",
+                "member_id": "MBR-12",
+                "policy_id": "POL-12",
+                "provider_id": "PRV-12",
+                "service_date_ord": 12,
+            },
         ],
     )
     manifest = {
@@ -129,6 +189,9 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["automl_feature_search_report_uri"].endswith(
         "/automl_feature_search_report.json"
     )
+    assert payload["overfitting_diagnostics_report_uri"].endswith(
+        "/overfitting_diagnostics_report.json"
+    )
     assert payload["shadow_report_uri"].endswith("/shadow_report.json")
     assert payload["drift_report_uri"].endswith("/drift_report.json")
     assert payload["fairness_report_uri"].endswith("/fairness_report.json")
@@ -147,6 +210,7 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert Path(payload["model_artifact_evaluation_report_uri"]).exists()
     assert Path(payload["feature_store_manifest_uri"]).exists()
     assert Path(payload["automl_feature_search_report_uri"]).exists()
+    assert Path(payload["overfitting_diagnostics_report_uri"]).exists()
     assert Path(payload["shadow_report_uri"]).exists()
     assert Path(payload["drift_report_uri"]).exists()
     assert Path(payload["fairness_report_uri"]).exists()
@@ -160,12 +224,17 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["training_artifact_uri"].endswith("/model.joblib")
     assert payload["metrics_json"]["time_group_split_status"] == "passed"
     assert payload["metrics_json"]["leakage_check_status"] == "passed"
+    assert payload["metrics_json"]["out_of_time_validation_status"] == "passed"
+    assert payload["metrics_json"]["overfitting_diagnostics_status"] == "passed"
+    assert payload["metrics_json"]["overfitting_diagnostics_report_uri"].endswith(
+        "/overfitting_diagnostics_report.json"
+    )
     assert payload["metrics_json"]["shadow_comparison_status"] == "passed"
     assert payload["metrics_json"]["serving_version_lock_status"] == "passed"
     assert payload["metrics_json"]["artifact_integrity_status"] == "passed"
     assert payload["metrics_json"]["feature_store_materialization_status"] == "passed"
     assert payload["metrics_json"]["automl_feature_search_status"] == "passed"
-    assert payload["metrics_json"]["automl_selected_feature_count"] == 4
+    assert payload["metrics_json"]["automl_selected_feature_count"] == 3
     assert payload["metrics_json"]["rust_feature_set_status"] == "passed"
     assert payload["metrics_json"]["rust_feature_set_manifest_uri"].endswith(
         "/rust_feature_set/feature_set_manifest.json"
@@ -180,6 +249,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["segment_fairness_status"] == "passed"
     assert payload["metrics_json"]["score_psi"] is not None
     assert payload["metrics_json"]["max_feature_psi"] is not None
+    assert payload["metrics_json"]["score_stability_status"] == "passed"
+    assert payload["metrics_json"]["feature_stability_status"] == "passed"
     assert payload["metrics_json"]["label_provenance_status"] == "passed"
     assert payload["metrics_json"]["data_quality_score"] == 1.0
     assert payload["metrics_json"]["source_data_quality_score"] == 1.0
@@ -207,7 +278,6 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert rust_artifact["model_key"] == "baseline_fwa"
     assert rust_artifact["model_version"] == payload["candidate_model_version"]
     assert rust_artifact["feature_columns"] == [
-        "service_date_ord",
         "claim_amount_to_limit_ratio",
         "provider_profile_score",
         "high_cost_item_ratio",
@@ -227,7 +297,6 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     )
     assert feature_store_manifest["materialization_status"] == "materialized"
     assert feature_store_manifest["feature_columns"] == [
-        "service_date_ord",
         "claim_amount_to_limit_ratio",
         "provider_profile_score",
         "high_cost_item_ratio",
@@ -236,10 +305,23 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
         Path(payload["automl_feature_search_report_uri"]).read_text(encoding="utf-8")
     )
     assert feature_search_report["report_kind"] == "automl_feature_search"
-    assert feature_search_report["selected_feature_count"] == 4
+    assert feature_search_report["selected_feature_count"] == 3
     assert feature_search_report["ranked_features"]
     assert any(
         ref == f"automl_feature_search_reports:{payload['automl_feature_search_report_uri']}"
+        for ref in payload["evidence_refs"]
+    )
+    overfitting_diagnostics = json.loads(
+        Path(payload["overfitting_diagnostics_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert overfitting_diagnostics["report_kind"] == "overfitting_diagnostics"
+    assert overfitting_diagnostics["status"] == "passed"
+    assert overfitting_diagnostics["time_group_split_status"] == "passed"
+    assert overfitting_diagnostics["leakage_check_status"] == "passed"
+    assert overfitting_diagnostics["permutation_importance_status"] == "passed"
+    assert any(
+        ref
+        == f"model_overfitting_diagnostics:{payload['overfitting_diagnostics_report_uri']}"
         for ref in payload["evidence_refs"]
     )
     assert feature_store_manifest["split_row_counts"]["train"] == 4
@@ -335,6 +417,7 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert payload["metrics_json"]["overfitting_diagnostics_status"] == "passed"
     assert payload["metrics_json"]["permutation_importance_status"] == "passed"
     assert Path(payload["permutation_importance_uri"]).exists()
     assert (
@@ -363,12 +446,37 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
 
     feature_importance = pd.read_parquet(payload["feature_importance_uri"])
     assert set(feature_importance["feature"]) == {
-        "service_date_ord",
         "claim_amount_to_limit_ratio",
         "provider_profile_score",
         "high_cost_item_ratio",
     }
     assert set(feature_importance["importance_kind"]) == {"feature_importance"}
+
+
+def test_training_pipeline_marks_group_overlap_as_leakage(tmp_path: Path):
+    manifest_path = write_training_manifest(tmp_path)
+    manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
+    validation_path = manifest_path.parent / manifest["splits"][1]["data_uri"]
+    validation = pd.read_parquet(validation_path)
+    validation.loc[0, "member_id"] = "MBR-1"
+    validation.to_parquet(validation_path, index=False)
+
+    payload = train_from_manifest(
+        manifest_path=manifest_path,
+        artifact_base_uri=tmp_path / "artifacts",
+        model_key="baseline_fwa",
+        base_model_version="0.1.0",
+        job_id="model_retraining_job_1",
+        actor="trainer-worker",
+    )
+
+    assert payload["metrics_json"]["overfitting_diagnostics_status"] == "failed"
+    assert payload["metrics_json"]["leakage_check_status"] == "failed"
+    overfitting_diagnostics = json.loads(
+        Path(payload["overfitting_diagnostics_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert overfitting_diagnostics["group_overlap_counts"]["member_id"]["validation"] == 1
+    assert "leakage_check_status:failed" in overfitting_diagnostics["blocking_reasons"]
 
 
 def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
@@ -398,6 +506,7 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
+    assert payload["metrics_json"]["overfitting_diagnostics_status"] == "passed"
     assert payload["metrics_json"]["permutation_importance_status"] == "passed"
     assert Path(payload["permutation_importance_uri"]).exists()
     assert (
@@ -426,7 +535,6 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
 
     feature_importance = pd.read_parquet(payload["feature_importance_uri"])
     assert set(feature_importance["feature"]) == {
-        "service_date_ord",
         "claim_amount_to_limit_ratio",
         "provider_profile_score",
         "high_cost_item_ratio",

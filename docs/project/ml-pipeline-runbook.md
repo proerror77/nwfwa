@@ -169,10 +169,18 @@ outputs to become supervised labels.
 The local training service also writes `automl_feature_search_report.json`
 inside the candidate artifact directory. That report ranks candidate numeric
 factors by label correlation, records missingness, variance, and train-vs-OOT
-feature PSI, and selects the training feature list after excluding only
-structurally unusable fields such as zero-variance or high-missingness factors.
+feature PSI, and selects the training feature list after excluding labels,
+entity keys, the raw time split control field, and structurally unusable fields
+such as zero-variance or high-missingness factors.
 Feature PSI is retained as overfitting evidence for ranking and promotion
 gates, not silently used as a training-time deletion rule.
+
+The same training run writes `overfitting_diagnostics_report.json`. This report
+is the source of the retraining payload's time/group split, leakage,
+out-of-time validation, score PSI, feature PSI, and permutation-importance
+statuses. A failed diagnostic may still produce an artifact for review, but the
+FWA API will reject registration or promotion because the payload status fields
+will no longer be `passed`.
 
 ## Public Data MVP Path
 

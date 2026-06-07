@@ -80,7 +80,12 @@ def train_from_manifest(
     out_of_time = required_split(splits, "out_of_time")
     ensure_binary_labels(train[label_column], label_column)
 
-    candidate_feature_columns = numeric_feature_columns(train, label_column, entity_keys)
+    candidate_feature_columns = numeric_feature_columns(
+        train,
+        label_column,
+        entity_keys,
+        time_split_field,
+    )
     if not candidate_feature_columns:
         raise ValueError("training manifest must expose at least one numeric feature column")
     candidate_model_version = candidate_version(base_model_version, job_id, model_algorithm)
@@ -126,6 +131,7 @@ def train_from_manifest(
     validation_report_path = artifact_root / "validation.json"
     feature_importance_path = artifact_root / "feature_importance.parquet"
     permutation_importance_path = artifact_root / "permutation_importance.parquet"
+    overfitting_diagnostics_report_path = artifact_root / "overfitting_diagnostics_report.json"
     mined_rule_candidates_path = artifact_root / "mined_rule_candidates.json"
     rule_candidate_backtest_report_path = (
         artifact_root / "rule-candidates" / "backtest" / "rule_candidate_backtest_report.json"
@@ -277,6 +283,16 @@ def train_from_manifest(
         drift_report_path,
         use_numpy_matrix=use_numpy_matrix,
     )
+    overfitting_diagnostics_report = build_overfitting_diagnostics_report(
+        splits=splits,
+        time_split_field=time_split_field,
+        group_split_fields=group_split_fields,
+        validation_metrics=validation_metrics,
+        oot_metrics=oot_metrics,
+        drift_report=drift_report,
+        permutation_importance=permutation_importance_frame,
+        output_path=overfitting_diagnostics_report_path,
+    )
     fairness_report = build_fairness_report(
         pipeline,
         validation,
@@ -295,10 +311,17 @@ def train_from_manifest(
         "out_of_time_average_precision": oot_metrics["average_precision"],
         "out_of_time_precision": oot_metrics["precision"],
         "out_of_time_recall": oot_metrics["recall"],
-        "time_group_split_status": "passed",
+        "out_of_time_validation_status": overfitting_diagnostics_report[
+            "out_of_time_validation_status"
+        ],
+        "time_group_split_status": overfitting_diagnostics_report[
+            "time_group_split_status"
+        ],
         "time_split_field": time_split_field,
         "group_split_fields": group_split_fields,
-        "leakage_check_status": leakage_status(group_split_fields),
+        "leakage_check_status": overfitting_diagnostics_report["leakage_check_status"],
+        "overfitting_diagnostics_status": overfitting_diagnostics_report["status"],
+        "overfitting_diagnostics_report_uri": str(overfitting_diagnostics_report_path),
         "shadow_comparison_status": shadow_report["status"],
         "review_capacity_threshold_status": "passed",
         "serving_version_lock_status": "passed",
@@ -343,6 +366,10 @@ def train_from_manifest(
         "score_psi": drift_report["score_psi"],
         "max_feature_psi": drift_report["max_feature_psi"],
         "drift_status": drift_report["status"],
+        "score_stability_status": overfitting_diagnostics_report["score_stability_status"],
+        "feature_stability_status": overfitting_diagnostics_report[
+            "feature_stability_status"
+        ],
         "feature_reproducibility_hash": feature_reproducibility_hash(
             feature_columns,
             label_column,
@@ -360,7 +387,9 @@ def train_from_manifest(
         "rule_candidate_backtest_report_uri": str(rule_candidate_backtest_report_path),
         "rule_candidate_review_tasks_uri": str(rule_candidate_review_tasks_path),
         "rule_library_writeback_status": "blocked_pending_human_review_and_policy_governance_approval",
-        "permutation_importance_status": "passed",
+        "permutation_importance_status": overfitting_diagnostics_report[
+            "permutation_importance_status"
+        ],
         "permutation_importance_uri": str(permutation_importance_path),
     }
     for optional_field in (
@@ -417,6 +446,7 @@ def train_from_manifest(
         else None,
         "feature_store_manifest_uri": str(feature_store_manifest_path),
         "automl_feature_search_report_uri": str(feature_search_report_path),
+        "overfitting_diagnostics_report_uri": str(overfitting_diagnostics_report_path),
         "shadow_report_uri": str(shadow_report_path),
         "drift_report_uri": str(drift_report_path),
         "fairness_report_uri": str(fairness_report_path),
@@ -436,6 +466,7 @@ def train_from_manifest(
             ),
             f"feature_store_manifests:{feature_store_manifest_path}",
             f"automl_feature_search_reports:{feature_search_report_path}",
+            f"model_overfitting_diagnostics:{overfitting_diagnostics_report_path}",
             f"rust_feature_sets:{rust_feature_set_manifest_path}",
             f"model_shadow_reports:{shadow_report_path}",
             f"model_drift_reports:{drift_report_path}",
@@ -740,8 +771,9 @@ def numeric_feature_columns(
     frame: pd.DataFrame,
     label_column: str,
     entity_keys: set[str],
+    time_split_field: str,
 ) -> list[str]:
-    excluded = entity_keys | {label_column}
+    excluded = entity_keys | {label_column, time_split_field}
     return [
         column
         for column in frame.columns
@@ -811,6 +843,148 @@ def build_feature_search_report(
         encoding="utf-8",
     )
     return report
+
+
+def build_overfitting_diagnostics_report(
+    splits: dict[str, pd.DataFrame],
+    time_split_field: str,
+    group_split_fields: list[str],
+    validation_metrics: dict[str, Any],
+    oot_metrics: dict[str, Any],
+    drift_report: dict[str, Any],
+    permutation_importance: pd.DataFrame,
+    output_path: Path,
+) -> dict[str, Any]:
+    time_check = time_group_split_check(splits, time_split_field, group_split_fields)
+    leakage_check = leakage_check_report(splits, group_split_fields)
+    oot_gap = float(validation_metrics["auc"] - oot_metrics["auc"])
+    out_of_time_validation_status = (
+        "passed" if oot_metrics["auc"] >= 0.5 and oot_gap <= 0.20 else "failed"
+    )
+    score_psi = float(drift_report["score_psi"])
+    max_feature_psi = float(drift_report["max_feature_psi"])
+    score_stability_status = "passed" if score_psi < 0.25 else "failed"
+    feature_stability_status = "passed" if max_feature_psi < 0.25 else "failed"
+    permutation_importance_status = (
+        "passed"
+        if not permutation_importance.empty
+        and permutation_importance["importance"].notna().all()
+        and (permutation_importance["importance"] >= 0.0).all()
+        else "failed"
+    )
+    checks = [
+        ("time_group_split_status", time_check["status"]),
+        ("leakage_check_status", leakage_check["status"]),
+        ("out_of_time_validation_status", out_of_time_validation_status),
+        ("score_stability_status", score_stability_status),
+        ("feature_stability_status", feature_stability_status),
+        ("permutation_importance_status", permutation_importance_status),
+    ]
+    blocking_reasons = [
+        f"{name}:{status}" for name, status in checks if status != "passed"
+    ]
+    report = {
+        "report_kind": "overfitting_diagnostics",
+        "report_version": 1,
+        "status": "passed" if not blocking_reasons else "failed",
+        "time_split_field": time_split_field,
+        "group_split_fields": group_split_fields,
+        "time_group_split_status": time_check["status"],
+        "time_boundaries": time_check["time_boundaries"],
+        "leakage_check_status": leakage_check["status"],
+        "group_overlap_counts": leakage_check["group_overlap_counts"],
+        "out_of_time_validation_status": out_of_time_validation_status,
+        "validation_auc": round(float(validation_metrics["auc"]), 6),
+        "out_of_time_auc": round(float(oot_metrics["auc"]), 6),
+        "validation_to_oot_auc_gap": round(oot_gap, 6),
+        "score_stability_status": score_stability_status,
+        "feature_stability_status": feature_stability_status,
+        "score_psi": round(score_psi, 6),
+        "max_feature_psi": round(max_feature_psi, 6),
+        "permutation_importance_status": permutation_importance_status,
+        "permutation_feature_count": int(permutation_importance.shape[0]),
+        "blocking_reasons": blocking_reasons,
+    }
+    output_path.write_text(
+        json.dumps(report, indent=2, sort_keys=True),
+        encoding="utf-8",
+    )
+    return report
+
+
+def time_group_split_check(
+    splits: dict[str, pd.DataFrame],
+    time_split_field: str,
+    group_split_fields: list[str],
+) -> dict[str, Any]:
+    required_splits = ["train", "validation", "out_of_time"]
+    missing = [
+        split
+        for split in required_splits
+        if time_split_field not in splits[split].columns
+    ]
+    if missing:
+        return {
+            "status": "failed",
+            "time_boundaries": {},
+            "missing_time_field_splits": missing,
+        }
+    time_boundaries = {
+        split: {
+            "min": float(pd.to_numeric(splits[split][time_split_field]).min()),
+            "max": float(pd.to_numeric(splits[split][time_split_field]).max()),
+        }
+        for split in required_splits
+    }
+    ordered = (
+        time_boundaries["train"]["max"] <= time_boundaries["validation"]["min"]
+        and time_boundaries["validation"]["max"] <= time_boundaries["out_of_time"]["min"]
+    )
+    has_group_fields = bool(group_split_fields) and all(
+        field in splits["train"].columns for field in group_split_fields
+    )
+    return {
+        "status": "passed" if ordered and has_group_fields else "failed",
+        "time_boundaries": time_boundaries,
+        "ordered_time_splits": ordered,
+        "group_fields_present": has_group_fields,
+    }
+
+
+def leakage_check_report(
+    splits: dict[str, pd.DataFrame],
+    group_split_fields: list[str],
+) -> dict[str, Any]:
+    required_group_fields = {"member_id", "policy_id", "provider_id"}
+    missing_required = sorted(required_group_fields - set(group_split_fields))
+    overlap_counts: dict[str, dict[str, int]] = {}
+    for field in group_split_fields:
+        if any(
+            field not in splits[split].columns
+            for split in ["train", "validation", "out_of_time"]
+        ):
+            overlap_counts[field] = {"validation": -1, "out_of_time": -1}
+            continue
+        train_values = set(splits["train"][field].dropna().astype(str))
+        overlap_counts[field] = {
+            "validation": len(
+                train_values & set(splits["validation"][field].dropna().astype(str))
+            ),
+            "out_of_time": len(
+                train_values & set(splits["out_of_time"][field].dropna().astype(str))
+            ),
+        }
+    has_overlap = any(
+        count != 0
+        for split_counts in overlap_counts.values()
+        for count in split_counts.values()
+    )
+    status = "passed" if not missing_required and not has_overlap else "failed"
+    return {
+        "status": status,
+        "missing_required_group_fields": missing_required,
+        "group_overlap_counts": overlap_counts,
+    }
 
 
 def label_correlation(feature: pd.Series, labels: pd.Series) -> float:
@@ -1192,11 +1366,6 @@ def mined_rule_candidate_for_feature(
 
 def mined_rule_score(importance: float) -> int:
     return max(10, min(35, int(round(15 + min(float(importance), 1.0) * 20))))
-
-
-def leakage_status(group_split_fields: list[str]) -> str:
-    required = {"member_id", "policy_id", "provider_id"}
-    return "passed" if required.issubset(set(group_split_fields)) else "failed"
 
 
 def source_data_quality_score(frames: Any) -> float:

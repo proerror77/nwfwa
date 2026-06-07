@@ -1,3 +1,5 @@
+#![recursion_limit = "256"]
+
 use api_server::{app::build_app, config::AppConfig};
 use axum::{
     body::{to_bytes, Body},
@@ -2186,6 +2188,7 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
           "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
           "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
           "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+          "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
           "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "model_evaluations:eval_baseline_retraining_job_candidate",
           "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
@@ -2211,6 +2214,11 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
             "time_split_field": "service_date",
             "group_split_fields": ["member_id", "policy_id", "provider_id"],
             "leakage_check_status": "passed",
+            "out_of_time_validation_status": "passed",
+            "score_stability_status": "passed",
+            "feature_stability_status": "passed",
+            "overfitting_diagnostics_status": "passed",
+            "overfitting_diagnostics_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
             "feature_reproducibility_hash": "sha256:retraining-feature-set",
             "shadow_comparison_status": "passed",
             "review_capacity_threshold_status": "passed",
@@ -2373,6 +2381,12 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
         .as_array()
         .unwrap()
         .contains(&serde_json::json!(
+            "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json"
+        )));
+    assert!(output_event["evidence_refs"]
+        .as_array()
+        .unwrap()
+        .contains(&serde_json::json!(
             "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json"
         )));
     assert!(output_event["evidence_refs"]
@@ -2448,6 +2462,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
           "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
           "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
           "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+          "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
           "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
           "model_evaluations:eval_baseline_retraining_job_candidate",
           "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
@@ -2473,6 +2488,11 @@ async fn rejects_invalid_model_retraining_output_contract() {
           "time_split_field": "service_date",
           "group_split_fields": ["member_id", "policy_id", "provider_id"],
           "leakage_check_status": "passed",
+          "out_of_time_validation_status": "passed",
+          "score_stability_status": "passed",
+          "feature_stability_status": "passed",
+          "overfitting_diagnostics_status": "passed",
+          "overfitting_diagnostics_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
           "feature_reproducibility_hash": "sha256:retraining-feature-set",
           "model_artifact_evaluation_status": "passed",
           "model_artifact_evaluation_report_uri": "s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
@@ -2727,6 +2747,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
         "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
         "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+        "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
         "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "model_evaluations:eval_baseline_retraining_job_candidate",
         "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
@@ -2847,6 +2868,61 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
     );
 
+    let mut missing_overfitting_diagnostics = valid_request.clone();
+    missing_overfitting_diagnostics["metrics_json"]
+        .as_object_mut()
+        .unwrap()
+        .remove("overfitting_diagnostics_report_uri");
+    let payload = missing_overfitting_diagnostics.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
+    );
+
+    let mut missing_overfitting_diagnostics_evidence = valid_request.clone();
+    missing_overfitting_diagnostics_evidence["evidence_refs"]
+        .as_array_mut()
+        .unwrap()
+        .retain(|reference| {
+            reference.as_str()
+                != Some("model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json")
+        });
+    let payload = missing_overfitting_diagnostics_evidence.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body["code"], "MISSING_RETRAINING_OUTPUT_EVIDENCE");
+
+    let mut failed_overfitting_diagnostics = valid_request.clone();
+    failed_overfitting_diagnostics["metrics_json"]["overfitting_diagnostics_status"] =
+        serde_json::json!("failed");
+    let payload = failed_overfitting_diagnostics.to_string();
+    let (status, body) = json_request(
+        app.clone(),
+        "POST",
+        "/api/v1/ops/model-retraining-jobs/job_1/output",
+        &payload,
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(
+        body["code"],
+        "INVALID_RETRAINING_OUTPUT_OVERFITTING_EVIDENCE"
+    );
+
     let mut missing_feature_stability = valid_request.clone();
     missing_feature_stability["metrics_json"]
         .as_object_mut()
@@ -2905,6 +2981,7 @@ async fn rejects_invalid_model_retraining_output_contract() {
         "model_artifact_evaluations:s3://fwa-models/baseline_fwa/0.2.0-candidate/artifact-evaluation/model_artifact_evaluation_report.json",
         "model_feature_importance:data/eval/claims_model_eval_retraining_job_candidate/v1/feature_importance.parquet",
         "model_permutation_importance:s3://fwa-models/baseline_fwa/0.2.0-candidate/permutation_importance.parquet",
+        "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/0.2.0-candidate/overfitting_diagnostics_report.json",
         "model_validation_reports:s3://fwa-models/baseline_fwa/0.2.0-candidate/validation.json",
         "model_evaluations:eval_baseline_retraining_job_candidate",
         "rule_candidate_backtests:s3://fwa-models/baseline_fwa/0.2.0-candidate/rule-candidates/backtest/rule_candidate_backtest_report.json",
