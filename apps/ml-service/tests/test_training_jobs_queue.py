@@ -178,6 +178,7 @@ def test_training_metrics_and_workers_api(tmp_path: Path):
         },
     )
     metrics_response = client.get("/training-jobs/metrics")
+    prometheus_response = client.get("/metrics")
     workers_response = client.get("/training-workers")
 
     assert heartbeat_response.status_code == 200
@@ -185,6 +186,10 @@ def test_training_metrics_and_workers_api(tmp_path: Path):
     assert metrics_response.status_code == 200
     assert metrics_response.json()["ready_jobs"] == 1
     assert metrics_response.json()["registered_workers"] == 1
+    assert prometheus_response.status_code == 200
+    assert 'fwa_ml_training_jobs{status="queued"} 1' in prometheus_response.text
+    assert "fwa_ml_training_jobs_ready 1" in prometheus_response.text
+    assert 'fwa_ml_training_workers{status="idle"} 1' in prometheus_response.text
     assert workers_response.status_code == 200
     assert workers_response.json()["workers"][0]["worker_id"] == "api-worker"
 

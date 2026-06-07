@@ -299,10 +299,17 @@ training in the service background task runner, and writes
 `GET /training-jobs/{job_id}` until the job is completed, validates
 `provider_output`, and can save it for review. Set `FWA_TRAINING_JOB_DB` when
 the default `data/ml-service/training_jobs.sqlite3` location should be changed.
+Set `FWA_ARTIFACT_REGISTRY_URI` to the environment's registry root, for example
+`s3://nwfwa-staging-artifacts/ml-service`, so deployment manifests carry the
+intended durable registry boundary even when local tests use filesystem
+artifacts.
 For worker-style execution, `POST /training-jobs/claim-next` leases the next
 queued or expired job to a worker, `POST /training-jobs/{job_id}/run` executes a
 claimed job with worker ownership checks, and
 `GET /training-jobs/{job_id}/artifacts` returns the completed artifact registry.
+Operators can also use `GET /artifact-registries` to list completed registries
+or `GET /artifact-registries/{model_key}/{candidate_model_version}` to inspect a
+single immutable training artifact package.
 Workers can extend long-running ownership with
 `POST /training-jobs/{job_id}/renew-lease`. Failed jobs wait until
 `next_attempt_at` before another worker can claim them; exhausted jobs keep
@@ -311,7 +318,9 @@ Workers can extend long-running ownership with
 `GET /training-jobs/metrics` reports queue depth, ready jobs, delayed retries,
 expired leases, dead-letter counts, and registered workers. Workers can publish
 heartbeats with `POST /training-workers/heartbeat`, and operators can inspect
-them with `GET /training-workers`.
+them with `GET /training-workers`. Prometheus-compatible scraping is available
+at `GET /metrics`; Kubernetes staging annotates the ML service Pod to scrape
+that endpoint.
 For a separate training worker process, run:
 
 ```bash

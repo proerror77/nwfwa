@@ -6,6 +6,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from threading import RLock
 from typing import Any
+from urllib.parse import urlparse
 
 
 JOB_STORE_SCHEMA = """
@@ -435,6 +436,47 @@ class TrainingJobStore:
                 ).fetchall()
         return [row_to_record(row) for row in rows]
 
+    def list_artifact_registries(
+        self,
+        model_key: str | None = None,
+        candidate_model_version: str | None = None,
+        limit: int = 50,
+    ) -> list[dict[str, Any]]:
+        limit = max(1, min(limit, 200))
+        conditions = ["artifact_registry_json IS NOT NULL"]
+        values: list[Any] = []
+        if model_key:
+            conditions.append("model_key = ?")
+            values.append(model_key)
+        if candidate_model_version:
+            conditions.append("candidate_model_version = ?")
+            values.append(candidate_model_version)
+        values.append(limit)
+        with self._lock, self._connect() as connection:
+            rows = connection.execute(
+                f"""
+                SELECT *
+                FROM training_jobs
+                WHERE {' AND '.join(conditions)}
+                ORDER BY completed_at DESC, updated_at DESC, job_id
+                LIMIT ?
+                """,
+                values,
+            ).fetchall()
+        return [artifact_registry_summary(row_to_record(row)) for row in rows]
+
+    def get_artifact_registry(
+        self,
+        model_key: str,
+        candidate_model_version: str,
+    ) -> dict[str, Any] | None:
+        registries = self.list_artifact_registries(
+            model_key=model_key,
+            candidate_model_version=candidate_model_version,
+            limit=1,
+        )
+        return registries[0] if registries else None
+
     def record_heartbeat(
         self,
         worker_id: str,
@@ -559,6 +601,12 @@ class TrainingJobStore:
             "registered_workers": registered_workers,
         }
 
+    def prometheus_metrics(self) -> str:
+        return render_prometheus_metrics(
+            self.queue_metrics(),
+            self.list_workers(limit=200),
+        )
+
 
 def build_artifact_registry(
     provider_output: dict[str, Any],
@@ -589,7 +637,12 @@ def build_artifact_registry(
                 "artifact_kind": artifact_kind,
                 "field": field,
                 "uri": uri,
+                "storage_uri": uri,
+                "publish_status": artifact_publish_status(uri),
+                "immutable": True,
             }
+            if is_local_artifact_uri(uri):
+                entry["local_staging_uri"] = uri
             if digest_field and provider_output.get(digest_field):
                 entry["sha256"] = provider_output[digest_field]
             artifact_entries.append(entry)
@@ -601,6 +654,9 @@ def build_artifact_registry(
                 "artifact_kind": "mined_rule_candidates",
                 "field": "metrics_json.mined_rule_candidates_uri",
                 "uri": mined_rules_uri,
+                "storage_uri": mined_rules_uri,
+                "publish_status": artifact_publish_status(mined_rules_uri),
+                "immutable": True,
             }
         )
 
@@ -648,6 +704,80 @@ def attach_artifact_registry(
 
 def artifact_registry_uri(artifact_uri: str) -> str:
     return str(Path(artifact_uri).parent / "artifact_registry.json")
+
+
+def artifact_registry_summary(record: dict[str, Any]) -> dict[str, Any]:
+    registry = record["artifact_registry"]
+    return {
+        "job_id": record["job_id"],
+        "status": record["status"],
+        "model_key": record["model_key"],
+        "base_model_version": record["base_model_version"],
+        "candidate_model_version": record["candidate_model_version"],
+        "algorithm": record["algorithm"],
+        "actor": record["actor"],
+        "completed_at": record["completed_at"],
+        "artifact_registry_uri": registry.get("artifact_registry_uri"),
+        "artifact_count": len(registry.get("artifacts", [])),
+        "artifact_registry": registry,
+    }
+
+
+def artifact_publish_status(uri: str) -> str:
+    if is_local_artifact_uri(uri):
+        return "local_staging_available" if Path(uri).exists() else "local_staging_missing"
+    scheme = urlparse(uri).scheme
+    if scheme == "s3":
+        return "external_object_storage_registered"
+    return "external_uri_registered"
+
+
+def is_local_artifact_uri(uri: str) -> bool:
+    return urlparse(uri).scheme in {"", "file"}
+
+
+def render_prometheus_metrics(
+    queue_metrics: dict[str, Any],
+    workers: list[dict[str, Any]],
+) -> str:
+    lines = [
+        "# HELP fwa_ml_training_jobs Number of ML training jobs by status.",
+        "# TYPE fwa_ml_training_jobs gauge",
+    ]
+    for status, count in sorted(queue_metrics["jobs_by_status"].items()):
+        lines.append(f'fwa_ml_training_jobs{{status="{prom_label(status)}"}} {int(count)}')
+    gauges = {
+        "fwa_ml_training_jobs_ready": queue_metrics["ready_jobs"],
+        "fwa_ml_training_jobs_delayed": queue_metrics["delayed_jobs"],
+        "fwa_ml_training_jobs_expired_leases": queue_metrics["expired_leases"],
+        "fwa_ml_training_jobs_dead_letter": queue_metrics["dead_letter_jobs"],
+        "fwa_ml_training_workers_registered": queue_metrics["registered_workers"],
+    }
+    for metric_name, value in gauges.items():
+        lines.extend(
+            [
+                f"# HELP {metric_name} ML training queue metric.",
+                f"# TYPE {metric_name} gauge",
+                f"{metric_name} {int(value)}",
+            ]
+        )
+    worker_status_counts: dict[str, int] = {}
+    for worker in workers:
+        status = str(worker.get("status") or "unknown")
+        worker_status_counts[status] = worker_status_counts.get(status, 0) + 1
+    lines.extend(
+        [
+            "# HELP fwa_ml_training_workers Number of ML training workers by heartbeat status.",
+            "# TYPE fwa_ml_training_workers gauge",
+        ]
+    )
+    for status, count in sorted(worker_status_counts.items()):
+        lines.append(f'fwa_ml_training_workers{{status="{prom_label(status)}"}} {count}')
+    return "\n".join(lines) + "\n"
+
+
+def prom_label(value: str) -> str:
+    return value.replace("\\", "\\\\").replace('"', '\\"').replace("\n", "\\n")
 
 
 def row_to_record(row: sqlite3.Row) -> dict[str, Any]:

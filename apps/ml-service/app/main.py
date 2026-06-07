@@ -1,7 +1,7 @@
 import os
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, PlainTextResponse
 
 from .schemas import (
     ClaimTrainingJobRequest,
@@ -92,6 +92,52 @@ def list_training_jobs(
 @app.get("/training-jobs/metrics")
 def get_training_job_metrics() -> dict[str, object]:
     return training_job_store().queue_metrics()
+
+
+@app.get("/metrics", response_class=PlainTextResponse)
+def get_prometheus_metrics() -> PlainTextResponse:
+    return PlainTextResponse(
+        training_job_store().prometheus_metrics(),
+        media_type="text/plain; version=0.0.4; charset=utf-8",
+    )
+
+
+@app.get("/artifact-registries")
+def list_artifact_registries(
+    model_key: str | None = None,
+    candidate_model_version: str | None = None,
+    limit: int = Query(default=50, ge=1, le=200),
+) -> dict[str, object]:
+    return {
+        "registries": training_job_store().list_artifact_registries(
+            model_key=model_key,
+            candidate_model_version=candidate_model_version,
+            limit=limit,
+        )
+    }
+
+
+@app.get("/artifact-registries/{model_key}/{candidate_model_version}")
+def get_artifact_registry(
+    model_key: str,
+    candidate_model_version: str,
+) -> dict[str, object]:
+    registry = training_job_store().get_artifact_registry(
+        model_key,
+        candidate_model_version,
+    )
+    if registry is None:
+        raise HTTPException(
+            status_code=404,
+            detail={
+                "code": "TRAINING_ARTIFACT_REGISTRY_NOT_FOUND",
+                "message": (
+                    "training artifact registry not found for model version: "
+                    f"{model_key}/{candidate_model_version}"
+                ),
+            },
+        )
+    return registry
 
 
 @app.get("/training-jobs/{job_id}")

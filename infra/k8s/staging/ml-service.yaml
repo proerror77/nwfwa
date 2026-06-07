@@ -30,6 +30,10 @@ spec:
       labels:
         app.kubernetes.io/name: ml-service
         app.kubernetes.io/part-of: nwfwa-staging
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/path: /metrics
+        prometheus.io/port: "8001"
     spec:
       containers:
         - name: ml-service

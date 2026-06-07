@@ -651,6 +651,14 @@ def test_training_job_api_stores_completed_provider_output(tmp_path: Path):
         "fairness_report",
         "mined_rule_candidates",
     }
+    serving_artifact = next(
+        artifact
+        for artifact in stored["artifact_registry"]["artifacts"]
+        if artifact["artifact_kind"] == "serving_model"
+    )
+    assert serving_artifact["storage_uri"] == stored["provider_output"]["artifact_uri"]
+    assert serving_artifact["publish_status"] == "local_staging_available"
+    assert serving_artifact["immutable"] is True
     assert Path(stored["provider_output"]["artifact_registry_uri"]).exists()
     assert stored["governance_boundary"].startswith("training platform owns training execution")
 
@@ -782,6 +790,18 @@ def test_training_job_claim_run_and_artifact_registry_endpoint(tmp_path: Path):
     artifact_registry = artifacts_response.json()["artifact_registry"]
     assert artifact_registry["job_id"] == "claimed_training_job"
     assert artifact_registry["artifact_registry_uri"].endswith("/artifact_registry.json")
+
+    registries_response = client.get("/artifact-registries?model_key=baseline_fwa")
+    assert registries_response.status_code == 200
+    registries = registries_response.json()["registries"]
+    assert registries[0]["job_id"] == "claimed_training_job"
+    assert registries[0]["artifact_count"] == len(artifact_registry["artifacts"])
+
+    version_response = client.get(
+        "/artifact-registries/baseline_fwa/0.1.0-candidate-claimed_training_job"
+    )
+    assert version_response.status_code == 200
+    assert version_response.json()["artifact_registry"]["job_id"] == "claimed_training_job"
 
 
 def test_training_worker_once_processes_durable_queue(tmp_path: Path):

@@ -20,6 +20,7 @@ services:
       context: ../apps/ml-service
     environment:
       FWA_TRAINING_JOB_DB: /app/data/ml-service/training_jobs.sqlite3
+      FWA_ARTIFACT_REGISTRY_URI: s3://nwfwa-local-artifacts/ml-service
     ports:
       - "8001:8001"
     volumes:
@@ -33,6 +34,7 @@ services:
         condition: service_started
     environment:
       FWA_TRAINING_JOB_DB: /app/data/ml-service/training_jobs.sqlite3
+      FWA_ARTIFACT_REGISTRY_URI: s3://nwfwa-local-artifacts/ml-service
     command:
       - python
       - -m
