@@ -182,6 +182,13 @@ statuses. A failed diagnostic may still produce an artifact for review, but the
 FWA API will reject registration or promotion because the payload status fields
 will no longer be `passed`.
 
+After feature importance and permutation importance are computed, the training
+service also writes `automl_factor_ranking_report.json`. It combines model
+importance, permutation AUC drop, label-correlation signal, and feature PSI into
+a ranked factor list for model review and rule-candidate review. This report is
+required by the retraining output API; raw feature-importance files alone are
+not enough to satisfy the Auto MLOps evidence contract.
+
 ## Public Data MVP Path
 
 When customer training data is not available, use the public-data MVP pack to
