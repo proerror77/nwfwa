@@ -8,6 +8,8 @@ foundation environment, not a production deployment package.
 - `api-server`: Rust Axum API on port `8080`.
 - `web-console`: Yew/Trunk operator console on port `8081`.
 - `ml-service`: Python FastAPI scorer/training boundary on port `8001`.
+- `ml-training-worker`: sidecar process in the `ml-service` Pod that runs the
+  durable training queue against the shared `ml-training-jobs` PVC.
 - `postgres`: transactional store for claims, audit, governance, labels, and jobs.
 - `object-storage`: S3-compatible MinIO endpoint for staging artifacts.
 - `clickhouse`: derived analytical event store for reporting proof.

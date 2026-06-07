@@ -35,6 +35,9 @@ spec:
         - name: ml-service
           image: ghcr.io/replace-me/nwfwa-ml-service:staging
           imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: nwfwa-staging-config
           ports:
             - name: http
               containerPort: 8001
@@ -48,3 +51,42 @@ spec:
               path: /health
               port: 8001
             periodSeconds: 10
+          volumeMounts:
+            - name: ml-training-jobs
+              mountPath: /app/data/ml-service
+        - name: ml-training-worker
+          image: ghcr.io/replace-me/nwfwa-ml-service:staging
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: nwfwa-staging-config
+          command:
+            - python
+            - -m
+            - app.training_worker
+            - --db
+            - /app/data/ml-service/training_jobs.sqlite3
+            - --worker-id
+            - staging-ml-training-worker
+            - --lease-seconds
+            - "900"
+          volumeMounts:
+            - name: ml-training-jobs
+              mountPath: /app/data/ml-service
+      volumes:
+        - name: ml-training-jobs
+          persistentVolumeClaim:
+            claimName: ml-training-jobs
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ml-training-jobs
+  labels:
+    app.kubernetes.io/name: ml-service
+    app.kubernetes.io/part-of: nwfwa-staging
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 5Gi

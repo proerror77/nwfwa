@@ -323,6 +323,10 @@ python -m app.training_worker \
 
 Use `--once` in CI or smoke checks when the worker should process at most one
 available job and exit.
+Docker Compose runs the same worker as `ml-training-worker` with a shared
+`fwa_ml_training_jobs` volume. The Kubernetes staging manifest runs it as an
+`ml-service` sidecar with a shared `ml-training-jobs` PVC; move the queue to
+PostgreSQL or Redis before scaling workers across pods.
 Add `--register --api-url "$FWA_API_BASE_URL" --api-key "$FWA_API_KEY"` only
 when the completed output should be posted to
 `/api/v1/ops/model-retraining-jobs/{job_id}/output`. This keeps FWA on the

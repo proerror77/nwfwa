@@ -18,8 +18,33 @@ services:
   ml-service:
     build:
       context: ../apps/ml-service
+    environment:
+      FWA_TRAINING_JOB_DB: /app/data/ml-service/training_jobs.sqlite3
     ports:
       - "8001:8001"
+    volumes:
+      - fwa_ml_training_jobs:/app/data/ml-service
+
+  ml-training-worker:
+    build:
+      context: ../apps/ml-service
+    depends_on:
+      ml-service:
+        condition: service_started
+    environment:
+      FWA_TRAINING_JOB_DB: /app/data/ml-service/training_jobs.sqlite3
+    command:
+      - python
+      - -m
+      - app.training_worker
+      - --db
+      - /app/data/ml-service/training_jobs.sqlite3
+      - --worker-id
+      - compose-ml-training-worker
+      - --lease-seconds
+      - "900"
+    volumes:
+      - fwa_ml_training_jobs:/app/data/ml-service
 
   migrate-seed:
     image: postgres:16
@@ -106,5 +131,6 @@ services:
 
 volumes:
   fwa_postgres_data:
+  fwa_ml_training_jobs:
   fwa_object_storage_data:
   fwa_clickhouse_data:

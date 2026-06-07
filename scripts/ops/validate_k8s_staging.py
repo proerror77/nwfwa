@@ -36,6 +36,7 @@ REQUIRED_TEXT = {
     ],
     "configmap.yaml": [
         "FWA_OBJECT_STORAGE_URI: s3://nwfwa-staging-artifacts",
+        "FWA_TRAINING_JOB_DB: /app/data/ml-service/training_jobs.sqlite3",
         "FWA_ANALYTICS_CLICKHOUSE_URL: http://clickhouse:8123",
         "FWA_RETENTION_POLICY_ID: staging-retention-v1",
         "FWA_LEGAL_HOLD_POLICY_ID: staging-legal-hold-v1",
@@ -57,6 +58,10 @@ REQUIRED_TEXT = {
     "ml-service.yaml": [
         "kind: Deployment",
         "name: ml-service",
+        "name: ml-training-worker",
+        "app.training_worker",
+        "claimName: ml-training-jobs",
+        "PersistentVolumeClaim",
         "path: /health",
     ],
     "object-storage.yaml": [
