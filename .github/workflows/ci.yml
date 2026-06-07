@@ -34,15 +34,29 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v6
-      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/build_prd_coverage.py scripts/ops/run_mlops_monitoring_plan.py
+      - run: python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/build_prd_coverage.py scripts/ops/run_mlops_monitoring_plan.py
       - run: python3 scripts/ops/validate_k8s_staging.py
       - run: python3 scripts/ops/validate_container_packaging.py
       - run: python3 scripts/ops/validate_analytics_scale.py
       - run: python3 scripts/ops/validate_ai_evidence_foundation.py
+      - run: python3 scripts/ops/validate_observability_manifests.py
       - run: python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof
       - run: python3 scripts/ops/validate_operational_drill_proof.py --proof-dir /tmp/nwfwa-staging-proof
       - run: python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment --commit-sha "$GITHUB_SHA"
       - run: python3 scripts/ops/validate_staging_deployment_package.py --package-dir /tmp/nwfwa-staging-deployment
+      - run: |
+          python3 scripts/ops/build_production_deployment_package.py \
+            --output-dir /tmp/nwfwa-production-deployment \
+            --commit-sha "$GITHUB_SHA" \
+            --api-image ghcr.io/nwfwa/api-server:ci \
+            --web-console-image ghcr.io/nwfwa/web-console:ci \
+            --ml-service-image ghcr.io/nwfwa/ml-service:ci \
+            --worker-image ghcr.io/nwfwa/worker:ci \
+            --ops-image ghcr.io/nwfwa/ops:ci \
+            --host fwa.example.com
+      - run: python3 scripts/ops/validate_production_deployment_package.py --package-dir /tmp/nwfwa-production-deployment
+      - run: python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwfwa-production-readiness
+      - run: python3 scripts/ops/validate_production_readiness_contract.py --contract-dir /tmp/nwfwa-production-readiness
       - run: python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export
       - run: python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation
       - run: python3 scripts/ops/build_prd_coverage.py --output-dir /tmp/nwfwa-prd-coverage
@@ -59,6 +73,11 @@ jobs:
           test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
           test -f /tmp/nwfwa-staging-deployment/apply.sh
           test -f /tmp/nwfwa-staging-deployment/rollback.md
+          test -f /tmp/nwfwa-production-deployment/deployment_manifest.json
+          test -x /tmp/nwfwa-production-deployment/apply.sh
+          test -x /tmp/nwfwa-production-deployment/tools/validate_production_secret_file.py
+          test -f /tmp/nwfwa-production-readiness/production_readiness_contract.json
+          test -f /tmp/nwfwa-production-readiness/index.json
           test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
           test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
           test -f /tmp/nwfwa-analytics-export/schema.sql

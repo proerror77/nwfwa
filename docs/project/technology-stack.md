@@ -242,10 +242,10 @@ Prefer locked commands when documenting reproducible verification.
 
 ## Current Non-Goals
 
-- Production Kubernetes deployment package.
 - Production secrets management.
 - Production object storage wiring beyond staging proof manifests.
-- Production observability stack.
+- Live production Kubernetes apply and smoke evidence.
+- Live production observability apply, dashboarding, and alert-receipt evidence.
 - Production ClickHouse retention, backup, and access policy.
 - Production OCR, embedding, vector-search, and retrieval workers.
 - GPU inference runtime.

@@ -22,7 +22,9 @@ completed without real customer data:
 - ClickHouse analytics-scale schema, dashboard queries, export contracts, and
   provider graph snapshots;
 - Kubernetes staging manifests, container packaging, GitHub Environment staging
-  package workflow, and pilot-foundation proof artifacts;
+  package workflow, pilot-foundation proof artifacts, customer-gated production
+  deployment package, production observability manifests, and production
+  readiness evidence contract;
 - Yew Operations Studio demo surface.
 
 The remaining production boundary is not another local module. It is customer
@@ -33,7 +35,8 @@ validation and environment execution:
 - customer-approved production deployment, secrets, retention, observability,
   OCR/vector workers, analytics execution, and network controls;
 - customer-executed live restore, rollback, alert, and operational drills beyond
-  the staging `operational_drill_proof.json` contract.
+  the staging `operational_drill_proof.json` and production readiness evidence
+  contracts.
 
 ## Machine-Checkable Proof
 
@@ -64,6 +67,7 @@ expected code, document, workflow, or proof artifact is missing.
 | Knowledge, agent, and AI evidence foundation | Staging proof | `apps/api-server/src/routes/knowledge.rs`, `apps/api-server/src/routes/ops_evidence.rs`, `scripts/ops/build_ai_evidence_foundation.py` | Customer OCR, embedding/vector store, retrieval ranking, masking, and retention execution. |
 | Analytics scale | Staging proof | `analytics/clickhouse/schema.sql`, `analytics/clickhouse/dashboard_queries.sql`, `scripts/ops/build_analytics_export.py` | Live scheduler credentials, ClickHouse retention/backup/access policy, dashboard hosting. |
 | Pilot foundation and staging deployment | Staging proof | `infra/k8s/staging`, `.github/workflows/deploy-staging.yml`, `scripts/ops/build_staging_evidence.py`, `scripts/ops/validate_staging_deployment_package.py` | Customer cluster credentials, secrets, allowlists, observability receiver, restore drill. |
+| Production deployment and readiness contract | Implemented as customer-gated contract | `scripts/ops/build_production_deployment_package.py`, `infra/k8s/observability`, `scripts/ops/build_production_readiness_contract.py` | Live customer cluster apply, real secrets/images/TLS, smoke, alert delivery, restore, rollback, retention, and SLO evidence. |
 | Web console operations studio | Implemented | `apps/web-console/src/main.rs`, `apps/web-console/src/styles.css`, `scripts/demo/smoke_web_console.mjs` | Customer UAT and role-specific UX refinements. |
 
 ## Practical Reading

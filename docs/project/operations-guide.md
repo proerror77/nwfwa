@@ -189,7 +189,7 @@ FWA_MODEL_SHADOW_HEURISTIC=true \
 python -m uvicorn app.main:app --app-dir apps/ml-service --host 127.0.0.1 --port 8001
 ```
 
-Rust runtime manifest scoring is available for governed serving manifests.
+Rust runtime artifact scoring is available for governed serving manifests.
 Configure the API server with `FWA_MODEL_SERVING_MANIFEST_URI` and, when the
 manifest includes `artifact_signature`, `FWA_MODEL_SIGNATURE_KEY`. When this is
 set, `/api/v1/health` reports
@@ -374,8 +374,8 @@ The Rust worker writes `mlops_monitoring_plan.json`, shadow, drift, segment
 fairness, reviewer disagreement, label delay report artifacts, and
 `mlops_monitoring_artifact_publication_manifest.json`. These are staging proof
 artifacts only unless `--monitoring-inputs` points to a customer or pilot
-monitoring window. Use `run-mlops-monitoring-plan --plan ...` only when
-replaying an already materialized plan file.
+monitoring window. Use `scripts/ops/run_mlops_monitoring_plan.py --plan ...`
+only when replaying an already materialized plan file.
 
 Run the Rust MLOps monitoring cycle executor after the runtime reports exist.
 The artifact-evaluation report comes from `evaluate-model-artifact`; the
@@ -636,6 +636,62 @@ The local API server and Web Console images are optimized for demo build
 latency and use locked debug builds; the worker image remains a release build
 because it is used as a compact operational runtime.
 
+### Production Deployment Contract
+
+Generate a customer-gated production deployment package:
+
+```bash
+python3 scripts/ops/build_production_deployment_package.py \
+  --output-dir artifacts/production-deployment \
+  --api-image ghcr.io/customer/nwfwa-api-server:approved \
+  --web-console-image ghcr.io/customer/nwfwa-web-console:approved \
+  --ml-service-image ghcr.io/customer/nwfwa-ml-service:approved \
+  --worker-image ghcr.io/customer/nwfwa-worker:approved \
+  --ops-image ghcr.io/customer/nwfwa-ops:approved \
+  --host fwa.customer.example
+python3 scripts/ops/validate_production_deployment_package.py \
+  --package-dir artifacts/production-deployment
+```
+
+The package rewrites the staging deployment shape into `nwfwa-production`,
+adds Ingress, HPA, PDB, and NetworkPolicy manifests, embeds
+`tools/validate_production_secret_file.py`, and includes `apply.sh` plus
+`rollback.md`. `apply.sh` requires `NWFWA_PRODUCTION_KUBE_CONTEXT` and
+`NWFWA_PRODUCTION_SECRET_FILE`, refuses to run on any other current Kubernetes
+context, validates the customer-provided Secret YAML, runs server-side dry-runs,
+applies the production kustomization, and waits for core rollouts. It still
+requires a customer-approved Kubernetes context, real images, real TLS, real
+secrets, and live rollout evidence before any production claim.
+
+Validate the production observability manifests:
+
+```bash
+python3 scripts/ops/validate_observability_manifests.py
+kubectl kustomize infra/k8s/observability
+```
+
+`infra/k8s/observability` defines a Prometheus and Alertmanager deployment for
+the production namespace contract. Prometheus scrapes annotated pods and
+includes MLOps queue/worker/backlog rules. Alertmanager sends native webhooks
+to `mlops-alert-router.nwfwa-production`, an adapter boundary that must inject
+FWA API auth, convert the Alertmanager payload into the governed MLOps alert
+delivery request, and forward it to the customer-approved receiver path. Live
+alert receipt must still be proven with a customer receiver or approved adapter.
+
+Generate the production readiness evidence contract:
+
+```bash
+python3 scripts/ops/build_production_readiness_contract.py \
+  --output-dir artifacts/production-readiness
+python3 scripts/ops/validate_production_readiness_contract.py \
+  --contract-dir artifacts/production-readiness
+```
+
+The readiness contract is intentionally blocked until live environment evidence
+is attached for deployment apply, smoke, observability, secrets/access,
+backup/restore, rollback, alert delivery, retention/legal hold, customer data
+governance, model serving SLO, and OCR/vector/analytics execution.
+
 Generate local pilot foundation evidence without customer data:
 
 ```bash
@@ -783,7 +839,9 @@ Writeback contract fields:
 
 ## Production Boundaries
 
-The repository is not yet a production deployment package.
+The repository now contains a customer-gated production deployment package
+builder, production observability manifests, and a production readiness evidence
+contract. These artifacts do not prove live production readiness by themselves.
 
 Not complete yet:
 
@@ -792,7 +850,8 @@ Not complete yet:
 - production key rotation automation
 - production object storage wiring
 - production OCR, embedding, vector-search, and retrieval workers
-- production observability stack
+- live production observability stack apply, scrape proof, dashboarding, and
+  alert-receipt evidence
 - production ClickHouse retention, backup, and access policy
 - production alert routing
 - customer-executed backup and restore drills
@@ -809,7 +868,7 @@ Not complete yet:
 - customer holdout validation process
 - production observability dashboards for long-running drift and fairness review
 - production observability dashboards for retrieval audit and agent workspace artifacts
-- full rollback runbook for customer environments
+- customer-approved rollback drill evidence for the selected environment
 
 ## Troubleshooting
 

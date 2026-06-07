@@ -69,8 +69,12 @@ governance, Rust artifact serving, external training handoff, MLOps monitoring
 plans, AI evidence metadata, ClickHouse analytics proof, staging manifests, and
 GitHub Environment packaging. Remaining production work is customer-side
 execution and validation: real customer labels, customer holdout validation,
-live shadow traffic, customer-approved secrets, observability, retention,
-OCR/vector workers, analytics execution, and operational drills.
+live shadow traffic, customer-approved secrets, live observability, retention,
+OCR/vector workers, analytics execution, and operational drills. The repo now
+also generates a customer-gated production deployment package, Kubernetes
+observability manifests, and a production readiness evidence contract; those
+artifacts define what must be applied and proven, but they are not live
+customer-environment evidence by themselves.
 The public-data MVP pack can validate the data and ML engineering loop before
 customer data is available, but it does not replace customer production
 validation.
@@ -80,6 +84,12 @@ the pilot foundation deployment shape for API, web console, ML service,
 PostgreSQL, S3-compatible object storage, ClickHouse, and worker CronJobs. They
 are staging manifests with placeholder images and secrets, not a production
 package.
+Production package generation lives in
+`scripts/ops/build_production_deployment_package.py`. It rewrites the staging
+shape into a customer-gated `nwfwa-production` package with Ingress, HPA, PDB,
+NetworkPolicy, rollback notes, and an embedded production Secret validator.
+`scripts/ops/build_production_readiness_contract.py` defines the live evidence
+artifacts still required before production readiness can be claimed.
 Container packaging is defined for API server, worker, web console, and the
 database ops image. GitHub Environment based staging deployment is now
 configured as a package-only workflow; it builds and uploads a deployment
@@ -122,9 +132,12 @@ workflow.
 - `pilot foundation pending`: object storage, backup and restore, retention,
   legal hold, customer scoping, key rotation, allowlists, and observability need
   environment-specific setup before customer data is used.
-- `future`: production training, production deployment, SSO/RBAC,
-  customer-managed OCR/vector/retrieval execution, customer-managed analytics
-  execution, and long-running drift operations.
+- `production contract`: production package, observability manifests, and
+  required evidence contract exist, but live customer-environment proof is not
+  present.
+- `future`: production training, SSO/RBAC, customer-managed OCR/vector/retrieval
+  execution, customer-managed analytics execution, and long-running drift
+  operations.
 
 ## Architecture
 
@@ -680,9 +693,10 @@ See [AGENTS.md](AGENTS.md) for project-local agent working instructions.
 - AI evidence metadata exists for documents, chunks, OCR, redaction, embedding,
   retrieval audit, and agent workspace artifacts; production OCR/vector workers
   and retrieval ranking still need environment decisions.
-- Production deployment, observability, secrets management, object storage,
-  customer data onboarding, and model training operations still need environment
-  decisions.
+- Production package and observability manifests exist as customer-gated
+  artifacts; secrets management, object storage, customer data onboarding,
+  live drills, and model training operations still need environment decisions
+  and evidence.
 
 ## License
 

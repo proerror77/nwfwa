@@ -30,6 +30,7 @@ const translations = new Map([
   ["Review Workbench", "复核工作台"],
   ["Use this as the single entry point for human review. Clinical necessity and QA feedback stay separate, but operators do not need two top-level menus.", "这里是人工复核的统一入口。医疗必要性和 QA 反馈保持分离，但运营人员不需要两个顶层菜单。"],
   ["Human review", "人工复核"],
+  ["Correction Review", "修正复核"],
   ["Medical Review", "医疗复核"],
   ["Resolve clinical reasonableness, necessity, and documentation questions.", "处理临床合理性、必要性和资料问题。"],
   ["Open clinical queue", "打开医疗队列"],

@@ -29,11 +29,17 @@ required_files=(
   "scripts/ops/validate_operational_drill_proof.py"
   "scripts/ops/validate_staging_deployment_package.py"
   "scripts/ops/validate_k3s_simulation_package.py"
+  "scripts/ops/validate_production_deployment_package.py"
+  "scripts/ops/validate_production_secret_file.py"
+  "scripts/ops/validate_observability_manifests.py"
+  "scripts/ops/validate_production_readiness_contract.py"
   "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
   "scripts/ops/build_staging_deployment_package.py"
   "scripts/ops/build_k3s_simulation_package.py"
+  "scripts/ops/build_production_deployment_package.py"
+  "scripts/ops/build_production_readiness_contract.py"
   "scripts/ops/run_k3d_simulation.sh"
   "scripts/ops/build_prd_coverage.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
@@ -48,6 +54,11 @@ required_files=(
   "infra/k8s/staging/database-jobs.yaml"
   "infra/k8s/staging/worker-cronjobs.yaml"
   "infra/k8s/staging/README.md"
+  "infra/k8s/observability/kustomization.yaml"
+  "infra/k8s/observability/namespace.yaml"
+  "infra/k8s/observability/prometheus-rbac.yaml"
+  "infra/k8s/observability/prometheus.yaml"
+  "infra/k8s/observability/alertmanager.yaml"
   "apps/api-server/tests/tpa_contract_docs.rs"
   "docs/project/public-data-mvp.md"
   "docs/project/mlops-ui-design.md"
@@ -146,6 +157,11 @@ grep -q "validate_analytics_scale.py" .github/workflows/ci.yml
 grep -q "build_analytics_export.py" .github/workflows/ci.yml
 grep -q "validate_ai_evidence_foundation.py" .github/workflows/ci.yml
 grep -q "build_ai_evidence_foundation.py" .github/workflows/ci.yml
+grep -q "validate_observability_manifests.py" .github/workflows/ci.yml
+grep -q "build_production_deployment_package.py" .github/workflows/ci.yml
+grep -q "validate_production_deployment_package.py" .github/workflows/ci.yml
+grep -q "build_production_readiness_contract.py" .github/workflows/ci.yml
+grep -q "validate_production_readiness_contract.py" .github/workflows/ci.yml
 grep -q "build_prd_coverage.py" .github/workflows/ci.yml
 grep -q "run_mlops_monitoring_plan.py" .github/workflows/ci.yml
 grep -q "cargo run --locked -p worker -- health" .github/workflows/ci.yml
@@ -537,7 +553,7 @@ grep -q "FWA_OBJECT_STORAGE_URI: s3://nwfwa-staging-artifacts" infra/k8s/staging
 grep -q "database-migrate" infra/k8s/staging/database-jobs.yaml
 grep -q "demo-seed" infra/k8s/staging/database-jobs.yaml
 grep -q "check-pilot-readiness" infra/k8s/staging/worker-cronjobs.yaml
-grep -q "build-mlops-monitoring-plan" infra/k8s/staging/worker-cronjobs.yaml
+grep -q "run-scheduled-mlops-monitoring" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "build-ai-evidence-execution-plan" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "build-governance-ops-plan" infra/k8s/staging/worker-cronjobs.yaml
 grep -q "replace-with-staging-api-key" infra/k8s/staging/secrets.example.yaml
@@ -551,6 +567,13 @@ grep -q "staging deployment package validation passed" scripts/ops/validate_stag
 grep -q "human_approval_required_before_destroy" scripts/ops/build_staging_deployment_package.py
 grep -q "k3d image import" scripts/ops/run_k3d_simulation.sh
 grep -q "NWFWA_K3S_ALLOW_NON_K3S" scripts/ops/run_k3d_simulation.sh
+grep -q "customer_gated_production_deployment_package" scripts/ops/build_production_deployment_package.py
+grep -q "tools/validate_production_secret_file.py" scripts/ops/build_production_deployment_package.py
+grep -q "blocked_until_live_environment_evidence" scripts/ops/build_production_readiness_contract.py
+grep -q "production readiness contract validation passed" scripts/ops/validate_production_readiness_contract.py
+grep -q "prom/prometheus:v3.7.3" infra/k8s/observability/prometheus.yaml
+grep -q "prom/alertmanager:v0.29.0" infra/k8s/observability/alertmanager.yaml
+grep -q "mlops-alert-router.nwfwa-production" infra/k8s/observability/alertmanager.yaml
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "scheduled_ai_evidence_execution" apps/worker/src/lib.rs
 grep -q "ai_evidence_execution_plan" apps/worker/src/lib.rs
@@ -561,10 +584,11 @@ grep -q "governance_ops_plan" apps/worker/src/lib.rs
 grep -q "build-governance-ops-plan" apps/worker/src/main.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 bash -n scripts/ops/run_k3d_simulation.sh
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
+python3 scripts/ops/validate_observability_manifests.py
 python3 scripts/ops/validate_analytics_scale.py
 python3 scripts/ops/validate_ai_evidence_foundation.py
 python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-proof >/tmp/nwfwa-staging-proof.json
@@ -573,6 +597,17 @@ python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-
 python3 scripts/ops/validate_staging_deployment_package.py --package-dir /tmp/nwfwa-staging-deployment
 python3 scripts/ops/build_k3s_simulation_package.py --output-dir /tmp/nwfwa-k3s-simulation >/tmp/nwfwa-k3s-simulation.json
 python3 scripts/ops/validate_k3s_simulation_package.py --package-dir /tmp/nwfwa-k3s-simulation
+python3 scripts/ops/build_production_deployment_package.py \
+  --output-dir /tmp/nwfwa-production-deployment \
+  --api-image ghcr.io/nwfwa/api-server:ci \
+  --web-console-image ghcr.io/nwfwa/web-console:ci \
+  --ml-service-image ghcr.io/nwfwa/ml-service:ci \
+  --worker-image ghcr.io/nwfwa/worker:ci \
+  --ops-image ghcr.io/nwfwa/ops:ci \
+  --host fwa.example.com >/tmp/nwfwa-production-deployment.json
+python3 scripts/ops/validate_production_deployment_package.py --package-dir /tmp/nwfwa-production-deployment
+python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwfwa-production-readiness >/tmp/nwfwa-production-readiness.json
+python3 scripts/ops/validate_production_readiness_contract.py --contract-dir /tmp/nwfwa-production-readiness
 python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
 python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation >/tmp/nwfwa-ai-evidence-foundation.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
@@ -589,6 +624,11 @@ test -f /tmp/nwfwa-staging-deployment/rollback.md
 test -f /tmp/nwfwa-k3s-simulation/simulation_manifest.json
 test -x /tmp/nwfwa-k3s-simulation/apply.sh
 test -x /tmp/nwfwa-k3s-simulation/smoke.sh
+test -f /tmp/nwfwa-production-deployment/deployment_manifest.json
+test -x /tmp/nwfwa-production-deployment/apply.sh
+test -x /tmp/nwfwa-production-deployment/tools/validate_production_secret_file.py
+test -f /tmp/nwfwa-production-readiness/production_readiness_contract.json
+test -f /tmp/nwfwa-production-readiness/index.json
 test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
 test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
 test -f /tmp/nwfwa-analytics-export/schema.sql
