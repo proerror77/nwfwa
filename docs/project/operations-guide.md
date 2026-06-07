@@ -579,6 +579,33 @@ context and `NWFWA_STAGING_SECRET_FILE`. The apply script validates the Secret
 YAML for required keys and placeholder removal, runs server-side dry-runs for
 the Secret and kustomization, then checks deployments and staging CronJobs.
 
+### Local K3s Simulation
+
+For a local K3s or K3d cluster, build a simulation package instead of applying
+the customer-gated staging package directly:
+
+```bash
+python3 scripts/ops/build_k3s_simulation_package.py \
+  --output-dir artifacts/k3s-simulation \
+  --namespace nwfwa-k3s-sim \
+  --api-image nwfwa-api-server:local \
+  --web-console-image nwfwa-web-console:local \
+  --ml-service-image nwfwa-ml-service:local \
+  --worker-image nwfwa-worker:local \
+  --ops-image nwfwa-ops:local
+python3 scripts/ops/validate_k3s_simulation_package.py \
+  --package-dir artifacts/k3s-simulation
+```
+
+The generated package copies the staging manifests, rewrites them into an
+isolated namespace, replaces placeholder images with local images, generates a
+non-production simulation Secret, and includes `apply.sh` plus `smoke.sh`.
+`apply.sh` refuses to run unless the current Kubernetes context looks like K3s
+or K3d. Before applying, load the local images into the K3s/K3d image store or
+pass image names from a registry that the cluster can pull. After applying,
+`smoke.sh` port-forwards the ML service and checks `/health`, Prometheus
+`/metrics`, and `/artifact-registries`.
+
 Validate container packaging before building images:
 
 ```bash

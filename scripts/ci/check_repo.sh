@@ -28,10 +28,12 @@ required_files=(
   "scripts/ops/validate_ai_evidence_foundation.py"
   "scripts/ops/validate_operational_drill_proof.py"
   "scripts/ops/validate_staging_deployment_package.py"
+  "scripts/ops/validate_k3s_simulation_package.py"
   "scripts/ops/build_ai_evidence_foundation.py"
   "scripts/ops/build_analytics_export.py"
   "scripts/ops/build_staging_evidence.py"
   "scripts/ops/build_staging_deployment_package.py"
+  "scripts/ops/build_k3s_simulation_package.py"
   "scripts/ops/build_prd_coverage.py"
   "scripts/ops/run_mlops_monitoring_plan.py"
   "scripts/ops/sample_mlops_monitoring_plan.json"
@@ -553,7 +555,7 @@ grep -q "governance_ops_plan" apps/worker/src/lib.rs
 grep -q "build-governance-ops-plan" apps/worker/src/main.rs
 grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.json
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
-python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
+python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
 python3 scripts/ops/validate_analytics_scale.py
@@ -562,6 +564,8 @@ python3 scripts/ops/build_staging_evidence.py --output-dir /tmp/nwfwa-staging-pr
 python3 scripts/ops/validate_operational_drill_proof.py --proof-dir /tmp/nwfwa-staging-proof
 python3 scripts/ops/build_staging_deployment_package.py --output-dir /tmp/nwfwa-staging-deployment >/tmp/nwfwa-staging-deployment.json
 python3 scripts/ops/validate_staging_deployment_package.py --package-dir /tmp/nwfwa-staging-deployment
+python3 scripts/ops/build_k3s_simulation_package.py --output-dir /tmp/nwfwa-k3s-simulation >/tmp/nwfwa-k3s-simulation.json
+python3 scripts/ops/validate_k3s_simulation_package.py --package-dir /tmp/nwfwa-k3s-simulation
 python3 scripts/ops/build_analytics_export.py --output-dir /tmp/nwfwa-analytics-export >/tmp/nwfwa-analytics-export.json
 python3 scripts/ops/build_ai_evidence_foundation.py --output-dir /tmp/nwfwa-ai-evidence-foundation >/tmp/nwfwa-ai-evidence-foundation.json
 python3 scripts/ops/run_mlops_monitoring_plan.py \
@@ -575,6 +579,9 @@ test -f /tmp/nwfwa-staging-proof/operational_drill_proof.json
 test -f /tmp/nwfwa-staging-deployment/deployment_manifest.json
 test -f /tmp/nwfwa-staging-deployment/apply.sh
 test -f /tmp/nwfwa-staging-deployment/rollback.md
+test -f /tmp/nwfwa-k3s-simulation/simulation_manifest.json
+test -x /tmp/nwfwa-k3s-simulation/apply.sh
+test -x /tmp/nwfwa-k3s-simulation/smoke.sh
 test -f /tmp/nwfwa-analytics-export/analytics_export_manifest.json
 test -f /tmp/nwfwa-analytics-export/scheduled_exports.json
 test -f /tmp/nwfwa-analytics-export/schema.sql

@@ -61,3 +61,12 @@ example Secret key contract.
 
 The database Jobs use the `nwfwa-ops` image built from
 `infra/dockerfiles/Dockerfile.ops`, which packages the migration and seed SQL.
+
+## Local K3s Simulation
+
+Use `scripts/ops/build_k3s_simulation_package.py` when you want a local K3s or
+K3d simulation. The generated package rewrites these staging manifests into an
+isolated namespace, injects non-production simulation secrets, replaces
+placeholder images with local image names, and provides `apply.sh` and
+`smoke.sh` for K3s-only execution. Load local images into K3s/K3d first, or
+pass registry image names that the cluster can pull.
