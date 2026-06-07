@@ -413,6 +413,28 @@ This records delivery handoff evidence only. It does not replace the customer
 alert receiver, create retraining jobs, activate models, rollback models, or
 assign fraud labels.
 
+Run the Alertmanager adapter when Kubernetes Alertmanager should submit native
+webhooks into the same governed FWA API handoff:
+
+```bash
+cargo run --locked -p worker -- serve-mlops-alert-router \
+  --bind-addr 0.0.0.0:8080 \
+  --api-url "$FWA_API_BASE_URL" \
+  --api-key "$FWA_API_KEY" \
+  --alertmanager-webhook-token "$FWA_MLOPS_ALERT_ROUTER_TOKEN" \
+  --model-key baseline_fwa \
+  --model-version "$APPROVED_MODEL_VERSION" \
+  --scheduler-report-uri "$APPROVED_MLOPS_SCHEDULER_REPORT_URI"
+```
+
+The adapter exposes `/health` and `POST /alertmanager/webhook`. It converts
+Alertmanager firing alerts into `mlops_alert_delivery` tasks and submits them
+to `/api/v1/ops/models/{model_key}/mlops-alert-deliveries` with `x-api-key`.
+The webhook requires `Authorization: Bearer $FWA_MLOPS_ALERT_ROUTER_TOKEN`.
+It does not send alerts to the external customer receiver by itself; customer
+receipt is still proven through the alert-receiver delivery report and
+readiness evidence.
+
 Send queued MLOps alert tasks to a customer receiver webhook:
 
 ```bash
@@ -648,6 +670,8 @@ python3 scripts/ops/build_production_deployment_package.py \
   --ml-service-image ghcr.io/customer/nwfwa-ml-service:approved \
   --worker-image ghcr.io/customer/nwfwa-worker:approved \
   --ops-image ghcr.io/customer/nwfwa-ops:approved \
+  --mlops-alert-model-version "$APPROVED_MODEL_VERSION" \
+  --mlops-scheduler-report-uri "$APPROVED_MLOPS_SCHEDULER_REPORT_URI" \
   --host fwa.customer.example
 python3 scripts/ops/validate_production_deployment_package.py \
   --package-dir artifacts/production-deployment
@@ -673,10 +697,13 @@ kubectl kustomize infra/k8s/observability
 `infra/k8s/observability` defines a Prometheus and Alertmanager deployment for
 the production namespace contract. Prometheus scrapes annotated pods and
 includes MLOps queue/worker/backlog rules. Alertmanager sends native webhooks
-to `mlops-alert-router.nwfwa-production`, an adapter boundary that must inject
-FWA API auth, convert the Alertmanager payload into the governed MLOps alert
-delivery request, and forward it to the customer-approved receiver path. Live
-alert receipt must still be proven with a customer receiver or approved adapter.
+to `mlops-alert-router.nwfwa-production`, the worker-hosted adapter deployed by
+the production package. The adapter requires a shared Bearer token, injects FWA
+API auth, and converts the Alertmanager payload into the governed MLOps alert
+delivery request. Provision the same token as `FWA_MLOPS_ALERT_ROUTER_TOKEN` in
+the production Secret and as `mlops-alert-router-webhook-token` in the
+observability namespace. Live alert receipt must still be proven with a
+customer receiver and delivery report.
 
 Generate the production readiness evidence contract:
 

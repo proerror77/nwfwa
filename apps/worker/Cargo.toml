@@ -8,6 +8,7 @@ publish.workspace = true
 anyhow.workspace = true
 arrow-array = "53"
 arrow-schema = "53"
+axum.workspace = true
 fwa-core = { path = "../../crates/fwa-core" }
 fwa-features = { path = "../../crates/fwa-features" }
 fwa-ml-runtime = { path = "../../crates/fwa-ml-runtime" }

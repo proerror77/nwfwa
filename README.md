@@ -87,7 +87,8 @@ package.
 Production package generation lives in
 `scripts/ops/build_production_deployment_package.py`. It rewrites the staging
 shape into a customer-gated `nwfwa-production` package with Ingress, HPA, PDB,
-NetworkPolicy, rollback notes, and an embedded production Secret validator.
+NetworkPolicy, the MLOps alert-router adapter, rollback notes, and an embedded
+production Secret validator.
 `scripts/ops/build_production_readiness_contract.py` defines the live evidence
 artifacts still required before production readiness can be claimed.
 Container packaging is defined for API server, worker, web console, and the

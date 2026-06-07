@@ -493,6 +493,262 @@ pub async fn submit_mlops_alert_delivery_tasks(
         .context("parse MLOps alert delivery response")
 }
 
+#[derive(Debug, Clone)]
+pub struct MlopsAlertRouterConfig {
+    pub bind_addr: String,
+    pub api_base_url: String,
+    pub api_key: String,
+    pub alertmanager_webhook_token: Option<String>,
+    pub model_key: String,
+    pub model_version: String,
+    pub scheduler_execution_report_uri: String,
+    pub actor: String,
+    pub notes: String,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AlertmanagerWebhook {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default, rename = "groupKey")]
+    pub group_key: String,
+    #[serde(default)]
+    pub alerts: Vec<AlertmanagerAlert>,
+}
+
+#[derive(Debug, Clone, Deserialize)]
+pub struct AlertmanagerAlert {
+    #[serde(default)]
+    pub status: String,
+    #[serde(default)]
+    pub labels: BTreeMap<String, String>,
+    #[serde(default)]
+    pub fingerprint: String,
+    #[serde(default, rename = "startsAt")]
+    pub starts_at: String,
+}
+
+pub fn build_alertmanager_mlops_alert_delivery_submission(
+    config: &MlopsAlertRouterConfig,
+    webhook: &AlertmanagerWebhook,
+) -> anyhow::Result<serde_json::Value> {
+    required_non_empty("api_base_url", &config.api_base_url)?;
+    required_non_empty("api_key", &config.api_key)?;
+    required_non_empty("model_key", &config.model_key)?;
+    required_non_empty("model_version", &config.model_version)?;
+    required_non_empty(
+        "scheduler_execution_report_uri",
+        &config.scheduler_execution_report_uri,
+    )?;
+    required_non_empty("actor", &config.actor)?;
+    required_non_empty("notes", &config.notes)?;
+
+    let alert_delivery_tasks = webhook
+        .alerts
+        .iter()
+        .filter(|alert| alert.status.trim().is_empty() || alert.status == "firing")
+        .map(|alert| alertmanager_alert_delivery_task(config, alert))
+        .collect::<Vec<_>>();
+    let alert_delivery_status = if alert_delivery_tasks.is_empty() {
+        "no_alerts_required"
+    } else {
+        "queued_for_external_alert_router"
+    };
+    Ok(serde_json::json!({
+        "actor": config.actor,
+        "notes": config.notes,
+        "scheduler_execution_report_uri": config.scheduler_execution_report_uri,
+        "report_kind": "mlops_scheduler_execution_report",
+        "model_version": config.model_version,
+        "alert_delivery_status": alert_delivery_status,
+        "alert_delivery_tasks": alert_delivery_tasks,
+        "evidence_refs": [
+            format!("mlops_scheduler_execution_reports:{}", config.scheduler_execution_report_uri),
+            format!("model_versions:{}:{}", config.model_key, config.model_version)
+        ]
+    }))
+}
+
+pub async fn submit_alertmanager_webhook_to_fwa(
+    config: &MlopsAlertRouterConfig,
+    webhook: &AlertmanagerWebhook,
+) -> anyhow::Result<serde_json::Value> {
+    let payload = build_alertmanager_mlops_alert_delivery_submission(config, webhook)?;
+    let response = reqwest::Client::new()
+        .post(api_url(
+            &config.api_base_url,
+            &format!(
+                "/api/v1/ops/models/{}/mlops-alert-deliveries",
+                config.model_key
+            ),
+        ))
+        .header("x-api-key", &config.api_key)
+        .json(&payload)
+        .send()
+        .await
+        .context("submit Alertmanager MLOps alert delivery")?;
+    let status = response.status();
+    if !status.is_success() {
+        let body = response.text().await.unwrap_or_default();
+        tracing::warn!(
+            status = %status,
+            upstream_body = %body,
+            "Alertmanager MLOps alert delivery submission failed"
+        );
+        bail!("submit Alertmanager MLOps alert delivery failed with {status}");
+    }
+    response
+        .json::<serde_json::Value>()
+        .await
+        .context("parse Alertmanager MLOps alert delivery response")
+}
+
+pub async fn serve_mlops_alert_router(config: MlopsAlertRouterConfig) -> anyhow::Result<()> {
+    use axum::{
+        extract::State,
+        http::{header, HeaderMap, StatusCode},
+        response::IntoResponse,
+        routing::{get, post},
+        Json, Router,
+    };
+
+    async fn health() -> impl IntoResponse {
+        Json(serde_json::json!({
+            "status": "ok",
+            "service": "mlops-alert-router",
+            "adapter_boundary": "alertmanager_to_fwa_mlops_alert_delivery"
+        }))
+    }
+
+    async fn route_alertmanager_webhook(
+        State(config): State<Arc<MlopsAlertRouterConfig>>,
+        headers: HeaderMap,
+        Json(webhook): Json<AlertmanagerWebhook>,
+    ) -> impl IntoResponse {
+        if !alertmanager_webhook_is_authorized(&config, &headers, header::AUTHORIZATION) {
+            return (
+                StatusCode::UNAUTHORIZED,
+                Json(serde_json::json!({
+                    "status": "unauthorized",
+                    "error": "invalid Alertmanager webhook credentials",
+                    "adapter_boundary": "alertmanager_to_fwa_mlops_alert_delivery"
+                })),
+            );
+        }
+        match submit_alertmanager_webhook_to_fwa(&config, &webhook).await {
+            Ok(response) => (StatusCode::ACCEPTED, Json(response)),
+            Err(error) => {
+                tracing::warn!(error = %error, "Alertmanager webhook routing failed");
+                (
+                    StatusCode::BAD_GATEWAY,
+                    Json(serde_json::json!({
+                        "status": "failed",
+                        "error": "failed to submit Alertmanager webhook to FWA API",
+                        "adapter_boundary": "alertmanager_to_fwa_mlops_alert_delivery"
+                    })),
+                )
+            }
+        }
+    }
+
+    required_non_empty("bind_addr", &config.bind_addr)?;
+    required_non_empty(
+        "alertmanager_webhook_token",
+        config
+            .alertmanager_webhook_token
+            .as_deref()
+            .unwrap_or_default(),
+    )?;
+    let listener = tokio::net::TcpListener::bind(&config.bind_addr)
+        .await
+        .with_context(|| format!("bind MLOps alert router on {}", config.bind_addr))?;
+    let router = Router::new()
+        .route("/health", get(health))
+        .route("/alertmanager/webhook", post(route_alertmanager_webhook))
+        .with_state(Arc::new(config));
+    axum::serve(listener, router)
+        .await
+        .context("serve MLOps alert router")
+}
+
+fn alertmanager_webhook_is_authorized(
+    config: &MlopsAlertRouterConfig,
+    headers: &axum::http::HeaderMap,
+    authorization_header: axum::http::header::HeaderName,
+) -> bool {
+    let Some(expected_token) = config.alertmanager_webhook_token.as_deref() else {
+        return false;
+    };
+    if expected_token.trim().is_empty() {
+        return false;
+    }
+    let expected = format!("Bearer {expected_token}");
+    headers
+        .get(authorization_header)
+        .and_then(|value| value.to_str().ok())
+        .is_some_and(|actual| actual.trim() == expected)
+}
+
+fn alertmanager_alert_delivery_task(
+    config: &MlopsAlertRouterConfig,
+    alert: &AlertmanagerAlert,
+) -> serde_json::Value {
+    let alert_name = safe_alertmanager_value(alert.labels.get("alertname"), "alertmanager_alert");
+    let severity = safe_alertmanager_value(alert.labels.get("severity"), "warning");
+    let service = safe_alertmanager_value(alert.labels.get("service"), "mlops");
+    let fingerprint = safe_alertmanager_value(Some(&alert.fingerprint), "");
+    let fallback_dedupe = format!(
+        "{}:{}:{}",
+        alert_name,
+        service,
+        safe_alertmanager_value(Some(&alert.starts_at), "unknown")
+    );
+    let dedupe_key = if fingerprint.is_empty() {
+        format!("alertmanager:{fallback_dedupe}")
+    } else {
+        format!("alertmanager:{fingerprint}")
+    };
+    serde_json::json!({
+        "task_kind": "mlops_alert_delivery",
+        "model_key": config.model_key,
+        "model_version": config.model_version,
+        "trigger": alert_name,
+        "severity": severity,
+        "route_key": service,
+        "dedupe_key": dedupe_key,
+        "alertmanager_fingerprint": fingerprint,
+        "alert_status": if alert.status.trim().is_empty() { "firing" } else { alert.status.as_str() },
+        "starts_at": safe_alertmanager_value(Some(&alert.starts_at), "unknown"),
+        "delivery_status": "queued_for_external_alert_router",
+        "recommended_action": "review Alertmanager MLOps alert and confirm customer alert-router receipt",
+        "evidence_refs": [
+            format!("mlops_scheduler_execution_reports:{}", config.scheduler_execution_report_uri),
+            format!("model_versions:{}:{}", config.model_key, config.model_version)
+        ]
+    })
+}
+
+fn safe_alertmanager_value(value: Option<&String>, fallback: &str) -> String {
+    let cleaned = value
+        .map(String::as_str)
+        .unwrap_or(fallback)
+        .chars()
+        .map(|ch| {
+            if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.' | ':' | '/') {
+                ch
+            } else {
+                '_'
+            }
+        })
+        .take(96)
+        .collect::<String>();
+    if cleaned.trim_matches('_').is_empty() {
+        fallback.into()
+    } else {
+        cleaned
+    }
+}
+
 pub fn build_anomaly_clustering_report_submission(
     report_uri: &str,
     actor: &str,
@@ -13359,6 +13615,232 @@ mod tests {
 
         let digest = Sha256::digest(fs::read(path).unwrap());
         format!("sha256:{digest:x}")
+    }
+
+    #[test]
+    fn converts_alertmanager_webhook_to_mlops_alert_delivery_submission() {
+        let config = test_mlops_alert_router_config();
+        let webhook = AlertmanagerWebhook {
+            status: "firing".into(),
+            group_key: "{}:{alertname=\"NwfwaMlTrainingQueueBacklog\"}".into(),
+            alerts: vec![AlertmanagerAlert {
+                status: "firing".into(),
+                labels: BTreeMap::from([
+                    ("alertname".into(), "NwfwaMlTrainingQueueBacklog".into()),
+                    ("severity".into(), "warning".into()),
+                    ("service".into(), "ml-service".into()),
+                ]),
+                fingerprint: "4f5f6f".into(),
+                starts_at: "2026-06-07T14:00:00Z".into(),
+            }],
+        };
+
+        let submission =
+            build_alertmanager_mlops_alert_delivery_submission(&config, &webhook).unwrap();
+
+        assert_eq!(
+            submission["report_kind"],
+            "mlops_scheduler_execution_report"
+        );
+        assert_eq!(
+            submission["alert_delivery_status"],
+            "queued_for_external_alert_router"
+        );
+        assert_eq!(
+            submission["alert_delivery_tasks"].as_array().unwrap().len(),
+            1
+        );
+        assert_eq!(
+            submission["alert_delivery_tasks"][0]["task_kind"],
+            "mlops_alert_delivery"
+        );
+        assert_eq!(
+            submission["alert_delivery_tasks"][0]["trigger"],
+            "NwfwaMlTrainingQueueBacklog"
+        );
+        assert_eq!(
+            submission["alert_delivery_tasks"][0]["dedupe_key"],
+            "alertmanager:4f5f6f"
+        );
+        assert!(submission["evidence_refs"]
+            .as_array()
+            .unwrap()
+            .contains(&serde_json::json!(
+                "mlops_scheduler_execution_reports:s3://nwfwa-production-artifacts/mlops/scheduler/mlops_scheduler_execution_report.json"
+            )));
+    }
+
+    #[test]
+    fn resolved_alertmanager_webhook_does_not_create_delivery_tasks() {
+        let config = test_mlops_alert_router_config();
+        let webhook = AlertmanagerWebhook {
+            status: "resolved".into(),
+            group_key: "{}:{alertname=\"ResolvedAlert\"}".into(),
+            alerts: vec![AlertmanagerAlert {
+                status: "resolved".into(),
+                labels: BTreeMap::from([("alertname".into(), "ResolvedAlert".into())]),
+                fingerprint: "resolved-fingerprint".into(),
+                starts_at: "2026-06-07T14:00:00Z".into(),
+            }],
+        };
+
+        let submission =
+            build_alertmanager_mlops_alert_delivery_submission(&config, &webhook).unwrap();
+
+        assert_eq!(submission["alert_delivery_status"], "no_alerts_required");
+        assert!(submission["alert_delivery_tasks"]
+            .as_array()
+            .unwrap()
+            .is_empty());
+    }
+
+    #[tokio::test]
+    async fn alertmanager_webhook_submission_posts_to_expected_fwa_api() {
+        use tokio::net::TcpListener;
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut socket).await;
+            write_json_response(
+                &mut socket,
+                serde_json::json!({
+                    "status": "accepted",
+                    "alert_delivery_task_count": 1
+                }),
+            )
+            .await;
+            request
+        });
+        let mut config = test_mlops_alert_router_config();
+        config.api_base_url = api_url;
+        let webhook = AlertmanagerWebhook {
+            status: "firing".into(),
+            group_key: "{}:{alertname=\"NwfwaMlTrainingQueueBacklog\"}".into(),
+            alerts: vec![AlertmanagerAlert {
+                status: "firing".into(),
+                labels: BTreeMap::from([
+                    ("alertname".into(), "NwfwaMlTrainingQueueBacklog".into()),
+                    ("severity".into(), "warning".into()),
+                    ("service".into(), "ml-service".into()),
+                ]),
+                fingerprint: "4f5f6f".into(),
+                starts_at: "2026-06-07T14:00:00Z".into(),
+            }],
+        };
+
+        let response = submit_alertmanager_webhook_to_fwa(&config, &webhook)
+            .await
+            .unwrap();
+
+        let request = server.await.unwrap();
+        assert!(request
+            .contains("POST /api/v1/ops/models/baseline_fwa/mlops-alert-deliveries HTTP/1.1"));
+        assert!(request.contains("x-api-key: test-api-key"));
+        assert!(request.contains(r#""dedupe_key":"alertmanager:4f5f6f""#));
+        assert_eq!(response["status"], "accepted");
+    }
+
+    #[tokio::test]
+    async fn alertmanager_webhook_upstream_error_body_is_not_exposed() {
+        use tokio::{io::AsyncWriteExt, net::TcpListener};
+
+        let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let api_url = format!("http://{}", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            let (mut socket, _) = listener.accept().await.unwrap();
+            let request = read_http_request(&mut socket).await;
+            let body = r#"{"error":"secret upstream detail"}"#;
+            let response = format!(
+                "HTTP/1.1 500 Internal Server Error\r\nContent-Type: application/json\r\nConnection: close\r\nContent-Length: {}\r\n\r\n{}",
+                body.len(),
+                body
+            );
+            socket.write_all(response.as_bytes()).await.unwrap();
+            socket.shutdown().await.unwrap();
+            request
+        });
+        let mut config = test_mlops_alert_router_config();
+        config.api_base_url = api_url;
+        let webhook = AlertmanagerWebhook {
+            status: "firing".into(),
+            group_key: "{}:{alertname=\"NwfwaMlTrainingQueueBacklog\"}".into(),
+            alerts: vec![AlertmanagerAlert {
+                status: "firing".into(),
+                labels: BTreeMap::from([(
+                    "alertname".into(),
+                    "NwfwaMlTrainingQueueBacklog".into(),
+                )]),
+                fingerprint: "4f5f6f".into(),
+                starts_at: "2026-06-07T14:00:00Z".into(),
+            }],
+        };
+
+        let error = submit_alertmanager_webhook_to_fwa(&config, &webhook)
+            .await
+            .unwrap_err();
+
+        let request = server.await.unwrap();
+        assert!(request.contains("POST /api/v1/ops/models/baseline_fwa/mlops-alert-deliveries"));
+        assert!(error.to_string().contains("500 Internal Server Error"));
+        assert!(!error.to_string().contains("secret upstream detail"));
+    }
+
+    #[test]
+    fn alertmanager_webhook_authorization_requires_bearer_token() {
+        let config = test_mlops_alert_router_config();
+        let mut headers = axum::http::HeaderMap::new();
+
+        assert!(!alertmanager_webhook_is_authorized(
+            &config,
+            &headers,
+            axum::http::header::AUTHORIZATION,
+        ));
+
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            axum::http::HeaderValue::from_static("Basic test-alertmanager-token"),
+        );
+        assert!(!alertmanager_webhook_is_authorized(
+            &config,
+            &headers,
+            axum::http::header::AUTHORIZATION,
+        ));
+
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            axum::http::HeaderValue::from_static("Bearer wrong-token"),
+        );
+        assert!(!alertmanager_webhook_is_authorized(
+            &config,
+            &headers,
+            axum::http::header::AUTHORIZATION,
+        ));
+
+        headers.insert(
+            axum::http::header::AUTHORIZATION,
+            axum::http::HeaderValue::from_static("Bearer test-alertmanager-token"),
+        );
+        assert!(alertmanager_webhook_is_authorized(
+            &config,
+            &headers,
+            axum::http::header::AUTHORIZATION,
+        ));
+    }
+
+    fn test_mlops_alert_router_config() -> MlopsAlertRouterConfig {
+        MlopsAlertRouterConfig {
+            bind_addr: "127.0.0.1:0".into(),
+            api_base_url: "http://127.0.0.1:8080".into(),
+            api_key: "test-api-key".into(),
+            alertmanager_webhook_token: Some("test-alertmanager-token".into()),
+            model_key: "baseline_fwa".into(),
+            model_version: "production".into(),
+            scheduler_execution_report_uri: "s3://nwfwa-production-artifacts/mlops/scheduler/mlops_scheduler_execution_report.json".into(),
+            actor: "mlops-alert-router".into(),
+            notes: "Alertmanager webhook converted by test adapter.".into(),
+        }
     }
 
     fn temp_root(prefix: &str) -> PathBuf {

@@ -3973,6 +3973,7 @@ dependencies = [
  "anyhow",
  "arrow-array",
  "arrow-schema",
+ "axum",
  "fwa-core",
  "fwa-features",
  "fwa-ml-runtime",

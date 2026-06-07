@@ -176,6 +176,11 @@ grep -q "pilot_readiness_checker" scripts/ci/assert_worker_health.py
 grep -q "analytics_export_plan" scripts/ci/assert_worker_health.py
 grep -q "check-pilot-readiness" apps/worker/src/main.rs
 grep -q "build-analytics-export-plan" apps/worker/src/main.rs
+grep -q "serve-mlops-alert-router" apps/worker/src/main.rs
+grep -q "serve_mlops_alert_router" apps/worker/src/lib.rs
+grep -q "build_alertmanager_mlops_alert_delivery_submission" apps/worker/src/lib.rs
+grep -q "FWA_MLOPS_ALERT_ROUTER_TOKEN" apps/worker/src/main.rs
+grep -q "axum.workspace = true" apps/worker/Cargo.toml
 grep -q "scheduled_analytics_export" apps/worker/src/lib.rs
 grep -q "analytics_provider_graph_snapshots" apps/worker/src/lib.rs
 grep -q "prd_coverage_summary" scripts/ops/build_prd_coverage.py
@@ -574,6 +579,9 @@ grep -q "production readiness contract validation passed" scripts/ops/validate_p
 grep -q "prom/prometheus:v3.7.3" infra/k8s/observability/prometheus.yaml
 grep -q "prom/alertmanager:v0.29.0" infra/k8s/observability/alertmanager.yaml
 grep -q "mlops-alert-router.nwfwa-production" infra/k8s/observability/alertmanager.yaml
+grep -q "serve-mlops-alert-router" scripts/ops/build_production_deployment_package.py
+grep -q "allow-observability-to-mlops-alert-router" scripts/ops/build_production_deployment_package.py
+grep -q "FWA_MLOPS_ALERT_ROUTER_TOKEN" scripts/ops/validate_production_secret_file.py
 grep -q "scheduled_mlops_monitoring" scripts/ops/run_mlops_monitoring_plan.py
 grep -q "scheduled_ai_evidence_execution" apps/worker/src/lib.rs
 grep -q "ai_evidence_execution_plan" apps/worker/src/lib.rs
@@ -604,6 +612,8 @@ python3 scripts/ops/build_production_deployment_package.py \
   --ml-service-image ghcr.io/nwfwa/ml-service:ci \
   --worker-image ghcr.io/nwfwa/worker:ci \
   --ops-image ghcr.io/nwfwa/ops:ci \
+  --mlops-alert-model-version ci-production \
+  --mlops-scheduler-report-uri s3://nwfwa-production-artifacts/mlops/scheduler/ci_mlops_scheduler_execution_report.json \
   --host fwa.example.com >/tmp/nwfwa-production-deployment.json
 python3 scripts/ops/validate_production_deployment_package.py --package-dir /tmp/nwfwa-production-deployment
 python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwfwa-production-readiness >/tmp/nwfwa-production-readiness.json

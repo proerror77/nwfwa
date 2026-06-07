@@ -53,6 +53,8 @@ jobs:
             --ml-service-image ghcr.io/nwfwa/ml-service:ci \
             --worker-image ghcr.io/nwfwa/worker:ci \
             --ops-image ghcr.io/nwfwa/ops:ci \
+            --mlops-alert-model-version ci-production \
+            --mlops-scheduler-report-uri s3://nwfwa-production-artifacts/mlops/scheduler/ci_mlops_scheduler_execution_report.json \
             --host fwa.example.com
       - run: python3 scripts/ops/validate_production_deployment_package.py --package-dir /tmp/nwfwa-production-deployment
       - run: python3 scripts/ops/build_production_readiness_contract.py --output-dir /tmp/nwfwa-production-readiness

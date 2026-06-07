@@ -27,6 +27,7 @@ REQUIRED_PACKAGE_PATHS = {
     "k8s/production/hpa.yaml",
     "k8s/production/pdb.yaml",
     "k8s/production/networkpolicy.yaml",
+    "k8s/production/mlops-alert-router.yaml",
 }
 
 REQUIRED_RENDERED_SNIPPETS = [
@@ -34,8 +35,16 @@ REQUIRED_RENDERED_SNIPPETS = [
     "kind: HorizontalPodAutoscaler",
     "kind: PodDisruptionBudget",
     "kind: NetworkPolicy",
+    "name: mlops-alert-router",
+    "serve-mlops-alert-router",
+    "FWA_MLOPS_ALERT_MODEL_VERSION",
+    "FWA_MLOPS_SCHEDULER_REPORT_URI",
+    "serviceAccountName: nwfwa-worker",
+    "automountServiceAccountToken: false",
+    "allowPrivilegeEscalation: false",
     "name: default-deny-ingress",
     "name: allow-same-namespace",
+    "name: allow-observability-to-mlops-alert-router",
     "name: allow-ingress-controller-to-web-and-api",
     "prometheus.io/path: /metrics",
 ]
@@ -104,7 +113,23 @@ def validate_manifest(package_dir: Path, manifest: dict) -> None:
         "customer-approved production cluster" in required_environment.get("required_kube_context", ""),
         "manifest must require customer-approved production kube context",
     )
+    require(
+        required_environment.get("required_mlops_alert_router_token") == "FWA_MLOPS_ALERT_ROUTER_TOKEN",
+        "manifest must require MLOps alert-router webhook token",
+    )
     require(manifest.get("tls_secret"), "manifest missing tls_secret")
+    alert_router = manifest.get("mlops_alert_router")
+    require(isinstance(alert_router, dict), "deployment manifest missing mlops_alert_router")
+    require(alert_router.get("model_key"), "mlops_alert_router missing model_key")
+    require(alert_router.get("model_version"), "mlops_alert_router missing model_version")
+    require(
+        str(alert_router.get("scheduler_report_uri", "")).endswith(".json"),
+        "mlops_alert_router scheduler_report_uri must point to JSON",
+    )
+    require(
+        "FWA_MLOPS_ALERT_ROUTER_TOKEN" in alert_router.get("webhook_auth", ""),
+        "mlops_alert_router webhook_auth must reference FWA_MLOPS_ALERT_ROUTER_TOKEN",
+    )
     package_files = manifest.get("package_files")
     require(isinstance(package_files, list) and package_files, "package_files must be non-empty")
     package_by_path = {item.get("path"): item for item in package_files if isinstance(item, dict)}
@@ -130,9 +155,11 @@ def validate_apply_script(package_dir: Path) -> None:
         "kubectl apply -k k8s/production --dry-run=server",
         "rollout status statefulset/postgres",
         "rollout status deployment/api-server",
+        "rollout status deployment/mlops-alert-router",
         "get ingress nwfwa",
         "get hpa api-server web-console",
         "get networkpolicy default-deny-ingress",
+        "allow-observability-to-mlops-alert-router",
     ]:
         require(snippet in text, f"apply.sh missing snippet: {snippet}")
 
@@ -152,6 +179,15 @@ def validate_rendered_manifests(package_dir: Path, namespace: str) -> None:
         require(snippet in rendered_text, f"production manifests missing snippet: {snippet}")
     for snippet in FORBIDDEN_RENDERED_SNIPPETS:
         require(snippet not in rendered_text, f"production manifests contain forbidden snippet: {snippet}")
+    alert_router_text = (production_dir / "mlops-alert-router.yaml").read_text(encoding="utf-8")
+    require(
+        "- --model-version" not in alert_router_text,
+        "alert-router deployment must not hardcode model version as a CLI flag",
+    )
+    require(
+        "- --scheduler-report-uri" not in alert_router_text,
+        "alert-router deployment must not hardcode scheduler report URI as a CLI flag",
+    )
 
 
 def validate_index(package_dir: Path) -> None:

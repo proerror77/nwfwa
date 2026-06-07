@@ -50,6 +50,8 @@ REQUIRED_TEXT = {
         "mlops-alert-router.nwfwa-production",
         "/alertmanager/webhook",
         "send_resolved: true",
+        "credentials_file: /etc/alertmanager-webhook-token/token",
+        "secretName: mlops-alert-router-webhook-token",
         "allowPrivilegeEscalation: false",
         "fsGroup: 65534",
     ],
