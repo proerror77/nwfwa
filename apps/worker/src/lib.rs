@@ -3488,15 +3488,18 @@ pub fn build_training_handoff_with_algorithm(
     let safe_model_key = safe_path_segment(model_key);
     let artifact_dir = format!("{artifact_root}/{safe_model_key}/{candidate_model_version}");
     let onnx_algorithm = matches!(algorithm, "xgboost" | "lightgbm");
-    let serving_artifact_uri = if onnx_algorithm {
-        format!("{artifact_dir}/model.onnx")
-    } else {
-        format!("{artifact_dir}/rust_serving_artifact.json")
+    let rust_native_algorithm = algorithm == "logistic_regression";
+    let serving_artifact_uri = match algorithm {
+        "xgboost" | "lightgbm" => format!("{artifact_dir}/model.onnx"),
+        "deep_learning" => format!("{artifact_dir}/model.joblib"),
+        "logistic_regression" => format!("{artifact_dir}/rust_serving_artifact.json"),
+        _ => unreachable!("algorithm normalized"),
     };
     let runtime_kind = match algorithm {
         "logistic_regression" => "rust_logistic_regression",
         "xgboost" => "xgboost_onnx",
         "lightgbm" => "lightgbm_onnx",
+        "deep_learning" => "deep_learning_sklearn_mlp",
         _ => unreachable!("algorithm normalized"),
     };
     let mut required_evidence_refs = vec![
@@ -3545,8 +3548,17 @@ pub fn build_training_handoff_with_algorithm(
         "artifact_contract": {
             "artifact_dir": artifact_dir,
             "serving_artifact_uri": serving_artifact_uri,
-            "serving_artifact_format": if onnx_algorithm { "onnx" } else { "rust_json" },
-            "rust_serving_artifact_uri": format!("{artifact_dir}/rust_serving_artifact.json"),
+            "serving_artifact_format": match algorithm {
+                "xgboost" | "lightgbm" => "onnx",
+                "deep_learning" => "joblib",
+                "logistic_regression" => "rust_json",
+                _ => unreachable!("algorithm normalized"),
+            },
+            "rust_serving_artifact_uri": if rust_native_algorithm {
+                serde_json::Value::String(format!("{artifact_dir}/rust_serving_artifact.json"))
+            } else {
+                serde_json::Value::Null
+            },
             "onnx_artifact_uri": if onnx_algorithm {
                 serde_json::Value::String(format!("{artifact_dir}/model.onnx"))
             } else {
@@ -3636,6 +3648,7 @@ fn normalize_training_algorithm(algorithm: &str) -> anyhow::Result<&'static str>
         "" | "logistic_regression" => Ok("logistic_regression"),
         "xgboost" => Ok("xgboost"),
         "lightgbm" => Ok("lightgbm"),
+        "deep_learning" => Ok("deep_learning"),
         other => bail!("unsupported training algorithm: {other}"),
     }
 }
@@ -4471,6 +4484,7 @@ pub fn build_automl_lifecycle_closure_report(
     let supervised_candidates_passed = candidate_ranking["plan_kind"] == "automl_candidate_ranking"
         && candidate_algorithms.contains("xgboost")
         && candidate_algorithms.contains("lightgbm")
+        && candidate_algorithms.contains("deep_learning")
         && candidate_ranking
             .get("recommended_candidate_model_version")
             .is_some_and(|value| !value.is_null());
@@ -4732,6 +4746,7 @@ pub fn build_demo_automl_lifecycle_evidence(
         .with_context(|| format!("create validation dir {}", validation_dir.display()))?;
     let xgboost_validation = validation_dir.join("xgboost_validation.json");
     let lightgbm_validation = validation_dir.join("lightgbm_validation.json");
+    let deep_learning_validation = validation_dir.join("deep_learning_validation.json");
     write_demo_validation_report(
         &xgboost_validation,
         "0.2.0-xgboost-candidate",
@@ -4750,6 +4765,15 @@ pub fn build_demo_automl_lifecycle_evidence(
         0.79,
         0.75,
     )?;
+    write_demo_validation_report(
+        &deep_learning_validation,
+        "0.2.0-deep_learning-candidate",
+        "deep_learning",
+        "deep_learning_sklearn_mlp",
+        0.84,
+        0.78,
+        0.74,
+    )?;
 
     let feature_importance_dir = output_dir.join("feature-importance");
     fs::create_dir_all(&feature_importance_dir).with_context(|| {
@@ -4765,6 +4789,7 @@ pub fn build_demo_automl_lifecycle_evidence(
         &[
             xgboost_validation.to_string_lossy().into_owned(),
             lightgbm_validation.to_string_lossy().into_owned(),
+            deep_learning_validation.to_string_lossy().into_owned(),
         ],
         output_dir.join("ranking"),
     )?;
@@ -4778,6 +4803,8 @@ pub fn build_demo_automl_lifecycle_evidence(
     })?;
     let xgboost_artifact_eval = artifact_eval_dir.join("xgboost_model_artifact_evaluation.json");
     let lightgbm_artifact_eval = artifact_eval_dir.join("lightgbm_model_artifact_evaluation.json");
+    let deep_learning_artifact_eval =
+        artifact_eval_dir.join("deep_learning_model_artifact_evaluation.json");
     write_demo_artifact_evaluation_report(
         &xgboost_artifact_eval,
         "0.2.0-xgboost-candidate",
@@ -4789,6 +4816,12 @@ pub fn build_demo_automl_lifecycle_evidence(
         "0.2.0-lightgbm-candidate",
         "lightgbm_onnx",
         21,
+    )?;
+    write_demo_artifact_evaluation_report(
+        &deep_learning_artifact_eval,
+        "0.2.0-deep_learning-candidate",
+        "deep_learning_sklearn_mlp",
+        24,
     )?;
 
     let rule_candidate_dir = output_dir.join("rule-candidates");
@@ -4878,6 +4911,7 @@ pub fn build_demo_automl_lifecycle_evidence(
         &[
             xgboost_artifact_eval.to_string_lossy().into_owned(),
             lightgbm_artifact_eval.to_string_lossy().into_owned(),
+            deep_learning_artifact_eval.to_string_lossy().into_owned(),
         ],
         &output_dir
             .join("monitoring/mlops_monitoring_report.json")
@@ -4893,6 +4927,7 @@ pub fn build_demo_automl_lifecycle_evidence(
         &[
             xgboost_artifact_eval.to_string_lossy().into_owned(),
             lightgbm_artifact_eval.to_string_lossy().into_owned(),
+            deep_learning_artifact_eval.to_string_lossy().into_owned(),
         ],
         &rule_backtest_dir
             .join("rule_candidate_backtest_report.json")
@@ -4934,9 +4969,11 @@ pub fn build_demo_automl_lifecycle_evidence(
         "artifacts": {
             "xgboost_validation_report": xgboost_validation,
             "lightgbm_validation_report": lightgbm_validation,
+            "deep_learning_validation_report": deep_learning_validation,
             "candidate_ranking": output_dir.join("ranking/automl_candidate_ranking.json"),
             "xgboost_artifact_evaluation": xgboost_artifact_eval,
             "lightgbm_artifact_evaluation": lightgbm_artifact_eval,
+            "deep_learning_artifact_evaluation": deep_learning_artifact_eval,
             "feature_importance": feature_importance_uri,
             "rule_candidate_plan": rule_candidate_dir.join("rule_candidate_mining_plan.json"),
             "rule_backtest_report": rule_backtest_dir.join("rule_candidate_backtest_report.json"),
@@ -5066,36 +5103,46 @@ pub fn verify_demo_automl_lifecycle(
 
     let xgboost_validation_uri = required_artifact_uri(artifacts, "xgboost_validation_report")?;
     let lightgbm_validation_uri = required_artifact_uri(artifacts, "lightgbm_validation_report")?;
+    let deep_learning_validation_uri =
+        required_artifact_uri(artifacts, "deep_learning_validation_report")?;
     let xgboost_validation = read_json_report(&xgboost_validation_uri)?;
     let lightgbm_validation = read_json_report(&lightgbm_validation_uri)?;
+    let deep_learning_validation = read_json_report(&deep_learning_validation_uri)?;
     push_verification_check(
         &mut checks,
         &mut blocking_reasons,
         "supervised_algorithm_portfolio",
         validation_report_matches(&xgboost_validation, "xgboost", "xgboost_onnx")
-            && validation_report_matches(&lightgbm_validation, "lightgbm", "lightgbm_onnx"),
-        "XGBoost and LightGBM validation reports carry ONNX runtime and parity gate evidence"
+            && validation_report_matches(&lightgbm_validation, "lightgbm", "lightgbm_onnx")
+            && deep_learning_validation_report_matches(&deep_learning_validation),
+        "XGBoost, LightGBM, and deep learning validation reports carry governed runtime evidence"
             .into(),
         vec![
             format!("model_validation_reports:{xgboost_validation_uri}"),
             format!("model_validation_reports:{lightgbm_validation_uri}"),
+            format!("model_validation_reports:{deep_learning_validation_uri}"),
         ],
     );
 
     let xgboost_artifact_uri = required_artifact_uri(artifacts, "xgboost_artifact_evaluation")?;
     let lightgbm_artifact_uri = required_artifact_uri(artifacts, "lightgbm_artifact_evaluation")?;
+    let deep_learning_artifact_uri =
+        required_artifact_uri(artifacts, "deep_learning_artifact_evaluation")?;
     let xgboost_artifact = read_json_report(&xgboost_artifact_uri)?;
     let lightgbm_artifact = read_json_report(&lightgbm_artifact_uri)?;
+    let deep_learning_artifact = read_json_report(&deep_learning_artifact_uri)?;
     push_verification_check(
         &mut checks,
         &mut blocking_reasons,
         "rust_onnx_serving_gate",
         artifact_evaluation_matches(&xgboost_artifact, "xgboost_onnx")
-            && artifact_evaluation_matches(&lightgbm_artifact, "lightgbm_onnx"),
-        "XGBoost and LightGBM artifact evaluations pass Rust serving gates".into(),
+            && artifact_evaluation_matches(&lightgbm_artifact, "lightgbm_onnx")
+            && artifact_evaluation_matches(&deep_learning_artifact, "deep_learning_sklearn_mlp"),
+        "XGBoost, LightGBM, and deep learning artifact evaluations pass serving gates".into(),
         vec![
             format!("model_artifact_evaluations:{xgboost_artifact_uri}"),
             format!("model_artifact_evaluations:{lightgbm_artifact_uri}"),
+            format!("model_artifact_evaluations:{deep_learning_artifact_uri}"),
         ],
     );
 
@@ -5267,6 +5314,12 @@ fn write_demo_validation_report(
     precision: f64,
     recall: f64,
 ) -> anyhow::Result<()> {
+    let onnx_runtime = matches!(algorithm, "xgboost" | "lightgbm");
+    let algorithm_family = if algorithm == "deep_learning" {
+        "deep_learning"
+    } else {
+        "gradient_boosted_tree"
+    };
     let validation_metrics = serde_json::json!({
         "auc": auc,
         "precision": precision,
@@ -5274,7 +5327,7 @@ fn write_demo_validation_report(
     });
     let metrics_json = serde_json::json!({
         "algorithm": algorithm,
-        "algorithm_family": "gradient_boosted_tree",
+        "algorithm_family": algorithm_family,
         "runtime_kind": runtime_kind,
         "out_of_time_auc": auc - 0.02,
         "out_of_time_average_precision": auc - 0.05,
@@ -5294,6 +5347,9 @@ fn write_demo_validation_report(
         "automl_feature_search_status": "passed",
         "automl_feature_search_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/feature-search/{candidate_model_version}_automl_feature_search_report.json"),
         "automl_selected_feature_count": 8,
+        "automl_factor_ranking_status": "passed",
+        "automl_factor_ranking_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/factor-ranking/{candidate_model_version}_automl_factor_ranking_report.json"),
+        "automl_ranked_factor_count": 5,
         "permutation_importance_status": "passed",
         "permutation_importance_uri": format!("data/rust-automl-demo/lifecycle-evidence/permutation/{candidate_model_version}_permutation_importance.json"),
         "feature_reproducibility_hash": format!("sha256:{candidate_model_version}-demo-feature-set"),
@@ -5305,9 +5361,13 @@ fn write_demo_validation_report(
         "rust_feature_set_manifest_uri": format!("data/rust-automl-demo/labeled_claim_risk/feature-set/feature_set_manifest.json"),
         "segment_fairness_status": "passed",
         "model_artifact_evaluation_status": "passed",
-        "onnx_parity_status": "passed",
-        "onnx_parity_gate_status": "passed",
-        "onnx_parity_report_uri": format!("data/rust-automl-demo/lifecycle-evidence/onnx-parity/{candidate_model_version}_onnx_parity_report.json"),
+        "onnx_parity_status": if onnx_runtime { "passed" } else { "not_required" },
+        "onnx_parity_gate_status": if onnx_runtime { "passed" } else { "not_required" },
+        "onnx_parity_report_uri": if onnx_runtime {
+            serde_json::Value::String(format!("data/rust-automl-demo/lifecycle-evidence/onnx-parity/{candidate_model_version}_onnx_parity_report.json"))
+        } else {
+            serde_json::Value::Null
+        },
         "label_provenance_status": "passed"
     });
     write_json(
@@ -5330,6 +5390,11 @@ fn write_demo_artifact_evaluation_report(
     runtime_kind: &str,
     p95_latency_ms: u64,
 ) -> anyhow::Result<()> {
+    let evidence_refs = if runtime_kind.ends_with("_onnx") {
+        vec![format!("model_onnx_parity_reports:data/rust-automl-demo/lifecycle-evidence/onnx-parity/{model_version}_onnx_parity_report.json")]
+    } else {
+        vec![format!("model_artifacts:data/rust-automl-demo/lifecycle-evidence/serving/{model_version}/model.joblib")]
+    };
     write_json(
         path.to_path_buf(),
         &serde_json::json!({
@@ -5354,9 +5419,7 @@ fn write_demo_artifact_evaluation_report(
             "latency_budget_ms": 100,
             "blocking_reasons": [],
             "sample_results": [],
-            "evidence_refs": [
-                format!("model_onnx_parity_reports:data/rust-automl-demo/lifecycle-evidence/onnx-parity/{model_version}_onnx_parity_report.json")
-            ]
+            "evidence_refs": evidence_refs
         }),
     )
 }
@@ -5449,6 +5512,21 @@ fn validation_report_matches(
         && nested_json_string(report, &["metrics_json", "onnx_parity_gate_status"]).as_deref()
             == Some("passed")
         && nested_json_string(report, &["metrics_json", "onnx_parity_report_uri"]).is_some()
+}
+
+fn deep_learning_validation_report_matches(report: &serde_json::Value) -> bool {
+    json_string(report, "algorithm").as_deref() == Some("deep_learning")
+        && nested_json_string(report, &["metrics_json", "algorithm_family"]).as_deref()
+            == Some("deep_learning")
+        && nested_json_string(report, &["metrics_json", "runtime_kind"]).as_deref()
+            == Some("deep_learning_sklearn_mlp")
+        && nested_json_string(report, &["metrics_json", "onnx_parity_status"]).as_deref()
+            == Some("not_required")
+        && nested_json_string(report, &["metrics_json", "automl_factor_ranking_status"]).as_deref()
+            == Some("passed")
+        && nested_json_string(report, &["metrics_json", "overfitting_diagnostics_status"])
+            .as_deref()
+            == Some("passed")
 }
 
 fn artifact_evaluation_matches(report: &serde_json::Value, runtime_kind: &str) -> bool {
@@ -7669,6 +7747,15 @@ fn build_automl_candidate_rank(
             "automl_feature_search_reports:{feature_search_report_uri}"
         ));
     }
+    if let Some(factor_ranking_report_uri) = metrics
+        .get("automl_factor_ranking_report_uri")
+        .and_then(|value| value.as_str())
+        .filter(|value| !value.trim().is_empty())
+    {
+        evidence_refs.push(format!(
+            "automl_factor_rankings:{factor_ranking_report_uri}"
+        ));
+    }
 
     Ok(AutoMlCandidateRank {
         rank: 0,
@@ -7763,6 +7850,15 @@ fn automl_blocking_reasons(metrics: &serde_json::Map<String, serde_json::Value>)
     }
     if metric_object_value(metrics, "automl_selected_feature_count").unwrap_or(0.0) <= 0.0 {
         reasons.push("automl_selected_feature_count:missing_or_zero".into());
+    }
+    if !automl_factor_ranking_passed(metrics) {
+        reasons.push("automl_factor_ranking_status:missing_or_failed".into());
+    }
+    if !automl_has_factor_ranking_report(metrics) {
+        reasons.push("automl_factor_ranking_report_uri:missing".into());
+    }
+    if metric_object_value(metrics, "automl_ranked_factor_count").unwrap_or(0.0) <= 0.0 {
+        reasons.push("automl_ranked_factor_count:missing_or_zero".into());
     }
     if !automl_rust_serving_evaluation_passed(metrics) {
         reasons.push("model_artifact_evaluation_status:missing_or_failed".into());
@@ -7877,6 +7973,20 @@ fn automl_feature_search_passed(metrics: &serde_json::Map<String, serde_json::Va
 fn automl_has_feature_search_report(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
     metrics
         .get("automl_feature_search_report_uri")
+        .and_then(|value| value.as_str())
+        .is_some_and(|value| !value.trim().is_empty())
+}
+
+fn automl_factor_ranking_passed(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
+    metrics
+        .get("automl_factor_ranking_status")
+        .and_then(|value| value.as_str())
+        == Some("passed")
+}
+
+fn automl_has_factor_ranking_report(metrics: &serde_json::Map<String, serde_json::Value>) -> bool {
+    metrics
+        .get("automl_factor_ranking_report_uri")
         .and_then(|value| value.as_str())
         .is_some_and(|value| !value.trim().is_empty())
 }
@@ -10232,6 +10342,63 @@ mod tests {
     }
 
     #[test]
+    fn builds_deep_learning_training_handoff_with_joblib_contract() {
+        let root = temp_root("deep-learning-training-handoff");
+        let pack = build_demo_ml_datasets(&root, "2026-06-deep-learning-handoff")
+            .expect("demo ML datasets");
+
+        let handoff = build_training_handoff_with_algorithm(
+            &pack.labeled_manifest_uri,
+            "s3://fwa-models",
+            "baseline_fwa",
+            "0.1.0",
+            "model_retraining_job_1",
+            "trainer-worker",
+            "deep_learning",
+        )
+        .expect("deep learning handoff");
+
+        assert_eq!(handoff["handoff_version"], 2);
+        assert_eq!(handoff["training_job"]["algorithm"], "deep_learning");
+        assert_eq!(
+            handoff["training_job"]["runtime_kind"],
+            "deep_learning_sklearn_mlp"
+        );
+        assert_eq!(
+            handoff["training_job"]["candidate_model_version"],
+            "0.1.0-deep_learning-candidate-model_retraining_job_1"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["serving_artifact_uri"],
+            "s3://fwa-models/baseline_fwa/0.1.0-deep_learning-candidate-model_retraining_job_1/model.joblib"
+        );
+        assert_eq!(
+            handoff["artifact_contract"]["serving_artifact_format"],
+            "joblib"
+        );
+        assert!(handoff["artifact_contract"]["rust_serving_artifact_uri"].is_null());
+        assert!(handoff["artifact_contract"]["onnx_artifact_uri"].is_null());
+        assert!(handoff["artifact_contract"]["onnx_parity_report_uri"].is_null());
+        assert!(handoff["output_contract"]["onnx_parity_report_uri"].is_null());
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|reference| !reference
+                .as_str()
+                .unwrap()
+                .contains("model_onnx_parity_reports")));
+        assert!(handoff["output_contract"]["required_evidence_refs"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|reference| reference
+                .as_str()
+                .unwrap()
+                .contains("model_permutation_importance")));
+    }
+
+    #[test]
     fn builds_rust_demo_ml_datasets_with_labeled_and_unlabeled_manifests() {
         let root = temp_root("demo-ml-datasets");
         let pack = build_demo_ml_datasets(&root, "2026-06-rust-demo").expect("demo ML datasets");
@@ -11742,6 +11909,7 @@ mod tests {
 
         let xgboost_validation = root.join("xgboost-validation.json");
         let lightgbm_validation = root.join("lightgbm-validation.json");
+        let deep_learning_validation = root.join("deep-learning-validation.json");
         write_validation_report(
             &xgboost_validation,
             "0.2.0-xgboost-candidate",
@@ -11762,10 +11930,21 @@ mod tests {
             0.75,
             "passed",
         );
+        write_validation_report(
+            &deep_learning_validation,
+            "0.2.0-deep_learning-candidate",
+            "deep_learning",
+            "deep_learning",
+            0.84,
+            0.78,
+            0.74,
+            "passed",
+        );
         let ranking = rank_automl_candidates(
             &[
                 xgboost_validation.to_string_lossy().into_owned(),
                 lightgbm_validation.to_string_lossy().into_owned(),
+                deep_learning_validation.to_string_lossy().into_owned(),
             ],
             root.join("ranking"),
         )
@@ -11777,6 +11956,7 @@ mod tests {
 
         let xgboost_artifact_eval = root.join("xgboost-artifact-evaluation.json");
         let lightgbm_artifact_eval = root.join("lightgbm-artifact-evaluation.json");
+        let deep_learning_artifact_eval = root.join("deep-learning-artifact-evaluation.json");
         write_json(
             xgboost_artifact_eval.clone(),
             &serde_json::json!({
@@ -11802,6 +11982,20 @@ mod tests {
                 "rust_serving_status": "passed",
                 "latency_status": "passed",
                 "p95_latency_ms": 21
+            }),
+        )
+        .unwrap();
+        write_json(
+            deep_learning_artifact_eval.clone(),
+            &serde_json::json!({
+                "report_kind": "model_artifact_evaluation",
+                "model_key": "baseline_fwa",
+                "model_version": "0.2.0-deep_learning-candidate",
+                "runtime_kind": "deep_learning_sklearn_mlp",
+                "gate_status": "passed",
+                "rust_serving_status": "passed",
+                "latency_status": "passed",
+                "p95_latency_ms": 24
             }),
         )
         .unwrap();
@@ -11911,6 +12105,7 @@ mod tests {
             &[
                 xgboost_artifact_eval.to_string_lossy().into_owned(),
                 lightgbm_artifact_eval.to_string_lossy().into_owned(),
+                deep_learning_artifact_eval.to_string_lossy().into_owned(),
             ],
             &root
                 .join("monitoring/mlops_monitoring_report.json")
@@ -11927,6 +12122,7 @@ mod tests {
             &[
                 xgboost_artifact_eval.to_string_lossy().into_owned(),
                 lightgbm_artifact_eval.to_string_lossy().into_owned(),
+                deep_learning_artifact_eval.to_string_lossy().into_owned(),
             ],
             &rule_backtest.to_string_lossy(),
             &provider_cluster_dir
@@ -12033,6 +12229,12 @@ mod tests {
         );
         assert!(output_dir
             .join("ranking/automl_candidate_ranking.json")
+            .is_file());
+        assert!(output_dir
+            .join("validation/deep_learning_validation.json")
+            .is_file());
+        assert!(output_dir
+            .join("artifact-evaluation/deep_learning_model_artifact_evaluation.json")
             .is_file());
         assert!(output_dir
             .join("rule-candidates/backtest/rule_candidate_backtest_report.json")
@@ -12192,6 +12394,10 @@ mod tests {
             .evidence_refs
             .iter()
             .any(|ref_id| { ref_id.starts_with("automl_feature_search_reports:") }));
+        assert!(ranking.candidates[0]
+            .evidence_refs
+            .iter()
+            .any(|ref_id| { ref_id.starts_with("automl_factor_rankings:") }));
         assert_eq!(
             ranking.candidates[1].candidate_model_version,
             "0.1.0-candidate-logistic"
@@ -12332,6 +12538,15 @@ mod tests {
         assert!(ranking.candidates[0]
             .blocking_reasons
             .contains(&"automl_selected_feature_count:missing_or_zero".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"automl_factor_ranking_status:missing_or_failed".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"automl_factor_ranking_report_uri:missing".into()));
+        assert!(ranking.candidates[0]
+            .blocking_reasons
+            .contains(&"automl_ranked_factor_count:missing_or_zero".into()));
         assert!(ranking.candidates[0]
             .blocking_reasons
             .contains(&"model_artifact_evaluation_status:missing_or_failed".into()));
@@ -13015,6 +13230,85 @@ mod tests {
         recall: f64,
         leakage_status: &str,
     ) {
+        let onnx_runtime = matches!(algorithm, "xgboost" | "lightgbm");
+        let runtime_kind = match algorithm {
+            "xgboost" => "xgboost_onnx",
+            "lightgbm" => "lightgbm_onnx",
+            "deep_learning" => "deep_learning_sklearn_mlp",
+            _ => "rust_logistic_regression",
+        };
+        let validation_metrics = serde_json::json!({
+            "auc": auc,
+            "precision": precision,
+            "recall": recall
+        });
+        let metrics_json = serde_json::json!({
+            "algorithm": algorithm,
+            "algorithm_family": algorithm_family,
+            "runtime_kind": runtime_kind,
+            "out_of_time_auc": auc,
+            "out_of_time_average_precision": auc - 0.04,
+            "out_of_time_precision": precision,
+            "out_of_time_recall": recall,
+            "time_group_split_status": "passed",
+            "time_split_field": "service_date",
+            "group_split_fields": ["member_id", "policy_id", "provider_id"],
+            "leakage_check_status": leakage_status,
+            "out_of_time_validation_status": "passed",
+            "score_stability_status": "passed",
+            "feature_stability_status": "passed",
+            "overfitting_diagnostics_status": if leakage_status == "passed" {
+                "passed"
+            } else {
+                "failed"
+            },
+            "overfitting_diagnostics_report_uri": format!(
+                "s3://fwa-models/baseline_fwa/{candidate_model_version}/overfitting_diagnostics_report.json"
+            ),
+            "shadow_comparison_status": "passed",
+            "serving_version_lock_status": "passed",
+            "artifact_integrity_status": "passed",
+            "feature_store_materialization_status": "passed",
+            "automl_feature_search_status": "passed",
+            "automl_feature_search_report_uri": format!(
+                "s3://fwa-models/baseline_fwa/{candidate_model_version}/automl_feature_search_report.json"
+            ),
+            "automl_selected_feature_count": 4,
+            "automl_factor_ranking_status": "passed",
+            "automl_factor_ranking_report_uri": format!(
+                "s3://fwa-models/baseline_fwa/{candidate_model_version}/automl_factor_ranking_report.json"
+            ),
+            "automl_ranked_factor_count": 4,
+            "rust_feature_set_status": "passed",
+            "rust_feature_set_manifest_uri": format!(
+                "s3://fwa-models/baseline_fwa/{candidate_model_version}/rust_feature_set/feature_set_manifest.json"
+            ),
+            "feature_reproducibility_hash": format!("sha256:{candidate_model_version}-feature-set"),
+            "permutation_importance_status": "passed",
+            "permutation_importance_uri": format!(
+                "s3://fwa-models/baseline_fwa/{candidate_model_version}/permutation_importance.parquet"
+            ),
+            "score_psi": 0.04,
+            "max_feature_psi": 0.08,
+            "onnx_parity_status": if onnx_runtime {
+                "passed"
+            } else {
+                "not_required"
+            },
+            "onnx_parity_gate_status": if onnx_runtime {
+                "passed"
+            } else {
+                "not_required"
+            },
+            "onnx_parity_report_uri": if onnx_runtime {
+                format!("s3://fwa-models/baseline_fwa/{candidate_model_version}/onnx_parity_report.json")
+            } else {
+                String::new()
+            },
+            "segment_fairness_status": "passed",
+            "model_artifact_evaluation_status": "passed",
+            "label_provenance_status": "passed"
+        });
         fs::write(
             path,
             serde_json::json!({
@@ -13023,67 +13317,8 @@ mod tests {
                 "dataset_key": "claims_model",
                 "dataset_version": "2026-06-demo",
                 "algorithm": algorithm,
-                "validation_metrics": {
-                    "auc": auc,
-                    "precision": precision,
-                    "recall": recall
-                },
-                "metrics_json": {
-                    "algorithm": algorithm,
-                    "algorithm_family": algorithm_family,
-                    "out_of_time_auc": auc,
-                    "out_of_time_average_precision": auc - 0.04,
-                    "out_of_time_precision": precision,
-                    "out_of_time_recall": recall,
-                    "time_group_split_status": "passed",
-                    "time_split_field": "service_date",
-                    "group_split_fields": ["member_id", "policy_id", "provider_id"],
-                    "leakage_check_status": leakage_status,
-                    "out_of_time_validation_status": "passed",
-                    "score_stability_status": "passed",
-                    "feature_stability_status": "passed",
-                    "overfitting_diagnostics_status": if leakage_status == "passed" {
-                        "passed"
-                    } else {
-                        "failed"
-                    },
-                    "overfitting_diagnostics_report_uri": format!(
-                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/overfitting_diagnostics_report.json"
-                    ),
-                    "shadow_comparison_status": "passed",
-                    "serving_version_lock_status": "passed",
-                    "artifact_integrity_status": "passed",
-                    "feature_store_materialization_status": "passed",
-                    "automl_feature_search_status": "passed",
-                    "automl_feature_search_report_uri": format!(
-                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/automl_feature_search_report.json"
-                    ),
-                    "automl_selected_feature_count": 4,
-                    "rust_feature_set_status": "passed",
-                    "rust_feature_set_manifest_uri": format!(
-                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/rust_feature_set/feature_set_manifest.json"
-                    ),
-                    "feature_reproducibility_hash": format!("sha256:{candidate_model_version}-feature-set"),
-                    "permutation_importance_status": "passed",
-                    "permutation_importance_uri": format!(
-                        "s3://fwa-models/baseline_fwa/{candidate_model_version}/permutation_importance.parquet"
-                    ),
-                    "score_psi": 0.04,
-                    "max_feature_psi": 0.08,
-                    "onnx_parity_status": if algorithm == "xgboost" || algorithm == "lightgbm" {
-                        "passed"
-                    } else {
-                        "not_required"
-                    },
-                    "onnx_parity_report_uri": if algorithm == "xgboost" || algorithm == "lightgbm" {
-                        format!("s3://fwa-models/baseline_fwa/{candidate_model_version}/onnx_parity_report.json")
-                    } else {
-                        String::new()
-                    },
-                    "segment_fairness_status": "passed",
-                    "model_artifact_evaluation_status": "passed",
-                    "label_provenance_status": "passed"
-                }
+                "validation_metrics": validation_metrics,
+                "metrics_json": metrics_json
             })
             .to_string(),
         )

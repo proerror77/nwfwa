@@ -25,6 +25,7 @@ from sklearn.metrics import (
 )
 from sklearn.inspection import permutation_importance
 from sklearn.pipeline import Pipeline
+from sklearn.neural_network import MLPClassifier
 from sklearn.preprocessing import StandardScaler
 from sklearn.tree import DecisionTreeClassifier
 
@@ -53,7 +54,8 @@ from .mlops import (
 
 DEFAULT_THRESHOLD = 0.5
 DEFAULT_ALGORITHM = "logistic_regression"
-SUPPORTED_ALGORITHMS = {DEFAULT_ALGORITHM, "xgboost", "lightgbm"}
+ONNX_ALGORITHMS = {"xgboost", "lightgbm"}
+SUPPORTED_ALGORITHMS = {DEFAULT_ALGORITHM, "xgboost", "lightgbm", "deep_learning"}
 
 
 def train_from_manifest(
@@ -183,7 +185,7 @@ def train_from_manifest(
         )
         serving_artifact_path = rust_artifact_path
         onnx_parity_report = None
-    else:
+    elif model_algorithm in ONNX_ALGORITHMS:
         onnx_parity_report = export_onnx_serving_artifact(
             pipeline=pipeline,
             algorithm=model_algorithm,
@@ -194,6 +196,9 @@ def train_from_manifest(
             use_numpy_matrix=use_numpy_matrix,
         )
         serving_artifact_path = onnx_artifact_path
+    else:
+        onnx_parity_report = None
+        serving_artifact_path = artifact_path
 
     feature_importance = build_feature_importance(pipeline, feature_columns)
     feature_importance.to_parquet(feature_importance_path, index=False)
@@ -526,6 +531,23 @@ def build_pipeline(algorithm: str, labels: pd.Series) -> Pipeline:
                 ),
             ]
         )
+    if algorithm == "deep_learning":
+        return Pipeline(
+            [
+                ("scale", StandardScaler()),
+                (
+                    "model",
+                    MLPClassifier(
+                        hidden_layer_sizes=(8, 4),
+                        activation="relu",
+                        solver="lbfgs",
+                        alpha=0.001,
+                        max_iter=500,
+                        random_state=42,
+                    ),
+                ),
+            ]
+        )
     positive_count = int((labels.astype(int) == 1).sum())
     negative_count = int((labels.astype(int) == 0).sum())
     scale_pos_weight = negative_count / positive_count if positive_count else 1.0
@@ -574,6 +596,7 @@ def runtime_kind_for_algorithm(algorithm: str) -> str:
         DEFAULT_ALGORITHM: "sklearn_logistic_regression",
         "xgboost": "xgboost_classifier",
         "lightgbm": "lightgbm_classifier",
+        "deep_learning": "sklearn_mlp_classifier",
     }[algorithm]
 
 
@@ -582,6 +605,7 @@ def serving_runtime_kind_for_algorithm(algorithm: str) -> str:
         DEFAULT_ALGORITHM: "rust_logistic_regression",
         "xgboost": "xgboost_onnx",
         "lightgbm": "lightgbm_onnx",
+        "deep_learning": "deep_learning_sklearn_mlp",
     }[algorithm]
 
 
@@ -590,6 +614,7 @@ def algorithm_family(algorithm: str) -> str:
         DEFAULT_ALGORITHM: "linear_baseline",
         "xgboost": "gradient_boosted_tree",
         "lightgbm": "gradient_boosted_tree",
+        "deep_learning": "deep_learning",
     }[algorithm]
 
 
@@ -1151,6 +1176,17 @@ def build_feature_importance(pipeline: Pipeline, feature_columns: list[str]) -> 
                 "coefficient": coefficients,
                 "importance": abs(coefficients),
                 "importance_kind": "coefficient_abs",
+            }
+        ).sort_values("importance", ascending=False)
+    if hasattr(model, "coefs_"):
+        first_layer_weights = np.asarray(model.coefs_[0], dtype=float)
+        importances = np.mean(np.abs(first_layer_weights), axis=1)
+        return pd.DataFrame(
+            {
+                "feature": feature_columns,
+                "coefficient": [None] * len(feature_columns),
+                "importance": importances,
+                "importance_kind": "first_layer_weight_abs_mean",
             }
         ).sort_values("importance", ascending=False)
     importances = getattr(model, "feature_importances_", None)

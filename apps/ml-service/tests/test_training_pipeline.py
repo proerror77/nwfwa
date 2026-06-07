@@ -564,6 +564,65 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert set(feature_importance["importance_kind"]) == {"feature_importance"}
 
 
+def test_training_pipeline_writes_deep_learning_candidate_payload(tmp_path: Path):
+    manifest_path = write_training_manifest(tmp_path)
+
+    payload = train_from_manifest(
+        manifest_path=manifest_path,
+        artifact_base_uri=tmp_path / "artifacts",
+        model_key="baseline_fwa",
+        base_model_version="0.1.0",
+        job_id="model_retraining_job_1",
+        actor="trainer-worker",
+        algorithm="deep_learning",
+    )
+
+    assert (
+        payload["candidate_model_version"]
+        == "0.1.0-deep_learning-candidate-model_retraining_job_1"
+    )
+    assert payload["artifact_uri"].endswith("/model.joblib")
+    assert payload["training_artifact_uri"].endswith("/model.joblib")
+    assert payload["onnx_parity_report_uri"] is None
+    assert payload["metrics_json"]["algorithm"] == "deep_learning"
+    assert payload["metrics_json"]["algorithm_family"] == "deep_learning"
+    assert payload["metrics_json"]["runtime_kind"] == "deep_learning_sklearn_mlp"
+    assert payload["metrics_json"]["python_runtime_kind"] == "sklearn_mlp_classifier"
+    assert payload["metrics_json"]["onnx_export_status"] == "not_required"
+    assert payload["metrics_json"]["onnx_parity_status"] == "not_required"
+    assert payload["metrics_json"]["rust_serving_gate_status"] == "rust_native_artifact_ready"
+    assert payload["metrics_json"]["model_artifact_evaluation_status"] == "passed"
+    assert payload["metrics_json"]["automl_feature_search_status"] == "passed"
+    assert payload["metrics_json"]["automl_factor_ranking_status"] == "passed"
+    assert payload["metrics_json"]["overfitting_diagnostics_status"] == "passed"
+    assert payload["metrics_json"]["permutation_importance_status"] == "passed"
+    assert Path(payload["artifact_uri"]).exists()
+    assert Path(payload["feature_importance_uri"]).exists()
+    assert Path(payload["permutation_importance_uri"]).exists()
+    assert Path(payload["automl_factor_ranking_report_uri"]).exists()
+    assert Path(payload["overfitting_diagnostics_report_uri"]).exists()
+
+    serving_manifest = json.loads(
+        Path(payload["serving_manifest_uri"]).read_text(encoding="utf-8")
+    )
+    assert serving_manifest["runtime_kind"] == "deep_learning_sklearn_mlp"
+    assert serving_manifest["artifact_uri"] == payload["artifact_uri"]
+
+    feature_importance = pd.read_parquet(payload["feature_importance_uri"])
+    assert set(feature_importance["feature"]) == {
+        "claim_amount_to_limit_ratio",
+        "provider_profile_score",
+        "high_cost_item_ratio",
+    }
+    assert set(feature_importance["importance_kind"]) == {"first_layer_weight_abs_mean"}
+
+    factor_ranking = json.loads(
+        Path(payload["automl_factor_ranking_report_uri"]).read_text(encoding="utf-8")
+    )
+    assert factor_ranking["status"] == "passed"
+    assert factor_ranking["ranked_factor_count"] == 3
+
+
 def test_training_api_returns_completed_training_package(tmp_path: Path):
     manifest_path = write_training_manifest(tmp_path)
 
