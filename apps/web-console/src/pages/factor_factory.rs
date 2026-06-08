@@ -112,7 +112,7 @@ fn factor_readiness_view(props: &FactorReadinessProps) -> Html {
                         <section class="panel result-stack">
                             <h3>{"Factor Cards"}</h3>
                             <div class="factor-card-grid">
-                                {for readiness.factor_cards.iter().take(8).map(|card| html! {
+                                {for readiness.factor_cards.iter().map(|card| html! {
                                     <div class="factor-card">
                                         <div>
                                             <strong>{&card.factor_name}</strong>

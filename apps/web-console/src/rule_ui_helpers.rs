@@ -19,7 +19,7 @@ pub(crate) fn rule_performance_visual(performance: &[RulePerformance]) -> Html {
         <div class="visual-panel wide-visual">
             <h4>{"Rule command path"}</h4>
             <div class="rule-bars">
-                {for performance.iter().take(6).map(|item| html! {
+                {for performance.iter().map(|item| html! {
                     <div class="rule-bar-row">
                         <div>
                             <strong>{&item.rule_id}</strong>

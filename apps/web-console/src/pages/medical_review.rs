@@ -278,7 +278,7 @@ fn medical_review_queue_view(props: &MedicalReviewQueueProps) -> Html {
                                 <p class="empty">{"No medical review queue items returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for items.iter().take(10).map(|item| html! {
+                                    {for items.iter().map(|item| html! {
                                         <div class="factor-card">
                                             <div>
                                                 <strong>{format!("{} / {}", item.claim_id, item.audit_id)}</strong>

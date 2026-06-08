@@ -156,7 +156,7 @@ fn knowledge_base_view(props: &KnowledgeBaseProps) -> Html {
                                 <p class="empty">{"No confirmed knowledge cases returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.cases.iter().take(8).map(|case| html! {
+                                    {for snapshot.cases.iter().map(|case| html! {
                                         <div class="factor-card">
                                             <div>
                                                 <strong>{format!("{} / {}", case.case_id, case.title)}</strong>
@@ -182,7 +182,7 @@ fn knowledge_base_view(props: &KnowledgeBaseProps) -> Html {
                                 <p class="empty">{"No similar cases matched the current query."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.results.iter().take(8).map(|case| html! {
+                                    {for snapshot.results.iter().map(|case| html! {
                                         <div class="factor-card">
                                             <div>
                                                 <strong>{format!("{} / {}", case.case_id, case.title)}</strong>

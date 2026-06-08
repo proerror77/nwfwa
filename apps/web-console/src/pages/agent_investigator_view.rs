@@ -253,7 +253,7 @@ pub(super) fn agent_runs_view(props: &AgentRunsProps) -> Html {
                         <>
                             {agent_run_governance_cockpit(&runs[0])}
                             <div class="factor-card-grid">
-                                {for runs.iter().take(8).map(|run| html! {
+                                {for runs.iter().map(|run| html! {
                                     <div class="factor-card">
                                         <div>
                                             <strong>{&run.claim_id}</strong>

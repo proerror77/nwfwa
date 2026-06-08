@@ -148,7 +148,7 @@ fn evidence_runtime_view(props: &EvidenceRuntimeProps) -> Html {
                                 <p class="empty">{"No evidence documents registered for this customer scope."}</p>
                             } else {
                                 <div class="evidence-runtime-grid">
-                                    {for snapshot.documents.iter().take(8).map(evidence_document_card)}
+                                    {for snapshot.documents.iter().map(evidence_document_card)}
                                 </div>
                             }
                         </section>
@@ -193,7 +193,7 @@ fn evidence_runtime_view(props: &EvidenceRuntimeProps) -> Html {
                                         <p class="empty">{"No embedding jobs registered."}</p>
                                     } else {
                                         <div class="table-list">
-                                            {for snapshot.embedding_jobs.iter().take(8).map(evidence_embedding_row)}
+                                            {for snapshot.embedding_jobs.iter().map(evidence_embedding_row)}
                                         </div>
                                     }
                                 </div>
@@ -203,7 +203,7 @@ fn evidence_runtime_view(props: &EvidenceRuntimeProps) -> Html {
                                         <p class="empty">{"No retrieval audit events recorded."}</p>
                                     } else {
                                         <div class="table-list">
-                                            {for snapshot.retrieval_audit_events.iter().take(8).map(evidence_retrieval_row)}
+                                            {for snapshot.retrieval_audit_events.iter().map(evidence_retrieval_row)}
                                         </div>
                                     }
                                 </div>

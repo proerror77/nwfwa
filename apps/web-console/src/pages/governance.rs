@@ -110,7 +110,7 @@ fn governance_view(props: &GovernanceProps) -> Html {
                             } else {
                                 <>
                                     <div class="factor-card-grid">
-                                        {for snapshot.health.pilot_readiness.blocking_checks.iter().take(3).map(|check| html! {
+                                        {for snapshot.health.pilot_readiness.blocking_checks.iter().map(|check| html! {
                                             <div class="factor-card">
                                                 <div>
                                                     <strong>{&check.name}</strong>
@@ -154,7 +154,7 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                 <p class="empty">{"No audit events returned for this filter."}</p>
                             } else {
                                 <ol class="audit-timeline">
-                                    {for snapshot.audit_events.iter().take(8).map(|event| html! {
+                                    {for snapshot.audit_events.iter().map(|event| html! {
                                         <li>
                                             <div>
                                                 <strong>{&event.event_type}</strong>
@@ -179,7 +179,7 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                 <p class="empty">{"No API call records returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.api_calls.iter().take(8).map(|call| html! {
+                                    {for snapshot.api_calls.iter().map(|call| html! {
                                         <div class="factor-card">
                                             <div>
                                                 <strong>{format!("{} {}", call.method, call.endpoint)}</strong>
@@ -213,7 +213,7 @@ fn governance_view(props: &GovernanceProps) -> Html {
                                 <p class="empty">{"No Agent run logs returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.agent_runs.iter().take(8).map(|run| html! {
+                                    {for snapshot.agent_runs.iter().map(|run| html! {
                                         <div class="factor-card">
                                             <div>
                                                 <strong>{&run.claim_id}</strong>

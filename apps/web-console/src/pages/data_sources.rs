@@ -111,7 +111,7 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                         <span>{"Grain"}</span>
                                         <span>{"Status"}</span>
                                     </div>
-                                    {for snapshot.datasets.iter().take(8).map(|dataset| html! {
+                                    {for snapshot.datasets.iter().map(|dataset| html! {
                                         <div class="ops-table-row">
                                             <div class="primary-cell">
                                                 <strong>{&dataset.display_name}</strong>
@@ -171,7 +171,7 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                 <p class="empty">{"No split or schema coverage available."}</p>
                             } else {
                                 <div class="dataset-workbench-list">
-                                    {for snapshot.datasets.iter().take(6).map(|dataset| html! {
+                                    {for snapshot.datasets.iter().map(|dataset| html! {
                                         <article class="dataset-workbench">
                                             <div class="workbench-title">
                                                 <div>
@@ -210,7 +210,7 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                                             <span>{"Nullability"}</span>
                                                             <span>{"Profile"}</span>
                                                         </div>
-                                                        {for dataset.fields.iter().take(10).map(|field| html! {
+                                                        {for dataset.fields.iter().map(|field| html! {
                                                             <div class="field-row">
                                                                 <div class="primary-cell">
                                                                     <strong>{&field.field_name}</strong>
@@ -251,7 +251,7 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                 <div class="lineage-list">
                                     {for snapshot.datasets.iter().flat_map(|dataset| {
                                         dataset.mappings.iter().map(move |mapping| (dataset, mapping))
-                                    }).take(12).map(|(dataset, mapping)| html! {
+                                    }).map(|(dataset, mapping)| html! {
                                         <div class="lineage-row">
                                             <div class="lineage-flow">
                                                 <strong>{&mapping.external_field}</strong>
@@ -289,7 +289,7 @@ fn data_sources_view(props: &DataSourcesProps) -> Html {
                                         <span>{"Recall"}</span>
                                         <span>{"Data Quality"}</span>
                                     </div>
-                                    {for snapshot.evaluations.iter().take(8).map(|evaluation| {
+                                    {for snapshot.evaluations.iter().map(|evaluation| {
                                         let lineage = lineage_for(&snapshot.lineage, &evaluation.evaluation_run_id);
                                         html! {
                                             <div class="ops-table-row">

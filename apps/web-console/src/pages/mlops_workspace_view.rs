@@ -116,7 +116,7 @@ fn mlops_dataset_readiness(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                 <details class="data-source-detail governance-detail release-evidence-detail">
                     <summary>{format!("Release dataset evidence detail: {} datasets", snapshot.data_sources.datasets.len())}</summary>
                     <div class="factor-card-grid">
-                        {for snapshot.data_sources.datasets.iter().take(6).map(|dataset| {
+                        {for snapshot.data_sources.datasets.iter().map(|dataset| {
                             let health = health_for_dataset(&snapshot.data_sources.health, &dataset.dataset_id);
                             html! {
                                 <div class="factor-card">
@@ -169,7 +169,7 @@ fn mlops_training_jobs(
                             <span>{"Candidate"}</span>
                             <span>{"Updated"}</span>
                         </div>
-                        {for snapshot.retraining_jobs.iter().take(8).map(|job| html! {
+                        {for snapshot.retraining_jobs.iter().map(|job| html! {
                             <div class="ops-table-row">
                                 <div class="primary-cell">
                                     <strong>{&job.job_id}</strong>
@@ -356,7 +356,7 @@ fn mlops_monitoring_review_queue(
                             <span>{"Recommendation"}</span>
                             <span>{"Evidence"}</span>
                         </div>
-                        {for snapshot.monitoring_review_tasks.iter().take(8).map(|task| html! {
+                        {for snapshot.monitoring_review_tasks.iter().map(|task| html! {
                             <div class="ops-table-row">
                                 <div class="primary-cell">
                                     <strong>{&task.task_kind}</strong>
@@ -412,7 +412,7 @@ fn mlops_anomaly_review_queue(
                             <span>{"Decision"}</span>
                             <span>{"Evidence"}</span>
                         </div>
-                        {for snapshot.anomaly_review_tasks.iter().take(8).map(|task| html! {
+                        {for snapshot.anomaly_review_tasks.iter().map(|task| html! {
                             <div class="ops-table-row">
                                 <div class="primary-cell">
                                     <strong>{&task.candidate_id}</strong>
@@ -466,7 +466,7 @@ fn mlops_alert_delivery_queue(snapshot: &MlopsWorkspaceSnapshot) -> Html {
                             <span>{"Receipt"}</span>
                             <span>{"Evidence"}</span>
                         </div>
-                        {for snapshot.alert_delivery_tasks.iter().take(8).map(|task| html! {
+                        {for snapshot.alert_delivery_tasks.iter().map(|task| html! {
                             <div class="ops-table-row">
                                 <div class="primary-cell">
                                     <strong>{&task.task_kind}</strong>

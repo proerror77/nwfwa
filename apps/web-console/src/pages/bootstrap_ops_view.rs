@@ -61,7 +61,7 @@ fn bootstrap_backfill_panel(backfills: &[HistoricalBackfillJob]) -> Html {
                 <p class="empty">{"No backfill jobs yet."}</p>
             } else {
                 <div class="finding-list">
-                    {for backfills.iter().take(5).map(|job| html! {
+                    {for backfills.iter().map(|job| html! {
                         <div class="finding-row">
                             <strong>{&job.job_id}</strong>
                             <span>{format!("{} candidates / {} datasets", job.candidate_count, job.dataset_refs.len())}</span>
@@ -91,7 +91,7 @@ fn bootstrap_evidence_panel(requests: &[EvidenceRequestRecord]) -> Html {
                 <p class="empty">{"No generated evidence requests yet."}</p>
             } else {
                 <div class="finding-list">
-                    {for requests.iter().take(8).map(|request| html! {
+                    {for requests.iter().map(|request| html! {
                         <div class="finding-row">
                             <strong>{&request.claim_id}</strong>
                             <span>{format!("{} / {}", request.status, request.request_reason)}</span>
@@ -128,7 +128,7 @@ fn bootstrap_label_panel(items: &[LabelBootstrapItem]) -> Html {
                 <p class="empty">{"No reviewed-label handoff candidates yet."}</p>
             } else {
                 <div class="finding-list">
-                    {for items.iter().take(8).map(|item| html! {
+                    {for items.iter().map(|item| html! {
                         <div class="finding-row">
                             <strong>{&item.suggested_label_name}</strong>
                             <span>{format!("{} / {}", item.review_status, item.governance_status)}</span>
