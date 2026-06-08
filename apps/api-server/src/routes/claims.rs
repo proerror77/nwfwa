@@ -1,16 +1,16 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{
         ModelVersionRecord, PersistedAuditEvent, PersistedScoringRun, SimilarCaseQuery,
         SimilarCaseRecord,
     },
 };
-use axum::{extract::State, http::HeaderMap, Json};
+use axum::{extract::State, Json};
 use chrono::NaiveDate;
 use fwa_anomaly::detect_anomaly;
 use fwa_audit::ActorContext;
-use fwa_auth::authenticate_api_key;
 use fwa_clinical::{
     assess_clinical_evidence, ClinicalDocumentEvidence, ClinicalEvidenceAssessment,
 };
@@ -215,20 +215,9 @@ pub struct AlertResponse {
 
 pub async fn score_claim(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<ScoreClaimRequest>,
 ) -> Result<Json<ScoreClaimResponse>, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                axum::http::StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
     if !principal.has_permission("tpa:claims:score") {
         return Err(ApiError::new(
             axum::http::StatusCode::FORBIDDEN,
