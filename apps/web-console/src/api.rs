@@ -7,6 +7,7 @@ use serde_json::Value;
 mod audit;
 mod bootstrap;
 mod cases;
+mod data_sources;
 mod evidence;
 mod governance;
 mod medical;
@@ -17,6 +18,7 @@ mod scoring;
 pub(crate) use audit::*;
 pub(crate) use bootstrap::*;
 pub(crate) use cases::*;
+pub(crate) use data_sources::*;
 pub(crate) use evidence::*;
 pub(crate) use governance::*;
 pub(crate) use medical::*;
@@ -99,22 +101,6 @@ pub(crate) async fn get_factor_readiness(
     api_key: String,
 ) -> Result<FactorReadinessResponse, String> {
     request_get_json("/api/v1/ops/factors/readiness", api_key).await
-}
-
-pub(crate) async fn get_data_sources_snapshot(
-    api_key: String,
-) -> Result<DataSourcesSnapshot, String> {
-    let datasets =
-        request_get_json::<DatasetListResponse>("/api/v1/ops/datasets", api_key.clone()).await?;
-    let evaluations =
-        request_get_json::<ModelEvaluationListResponse>("/api/v1/ops/model-evaluations", api_key)
-            .await?;
-    Ok(DataSourcesSnapshot {
-        datasets: datasets.datasets,
-        health: datasets.health,
-        evaluations: evaluations.evaluations,
-        lineage: evaluations.lineage,
-    })
 }
 
 pub(crate) async fn get_member_profile_summary(
