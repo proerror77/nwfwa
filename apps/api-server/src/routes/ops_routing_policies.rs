@@ -1,16 +1,16 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{PersistedAuditEvent, RoutingPolicyRecord},
     routes::pii,
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use fwa_scoring::RoutingPolicy;
 use serde::{Deserialize, Serialize};
@@ -55,9 +55,8 @@ pub struct RoutingPolicyLifecycleRequest {
 
 pub async fn list_routing_policies(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<RoutingPolicyListResponse>, ApiError> {
-    let _actor = authorize(&state, &headers)?;
     let policies = state
         .repository
         .list_routing_policies()
@@ -68,20 +67,18 @@ pub async fn list_routing_policies(
 
 pub async fn routing_policy_promotion_gates(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
 ) -> Result<Json<RoutingPolicyPromotionGatesResponse>, ApiError> {
-    let _actor = authorize(&state, &headers)?;
     let record = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
     Ok(Json(build_routing_policy_promotion_gates(&record)))
 }
 
 pub async fn save_routing_policy_candidate(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<SaveRoutingPolicyCandidateRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_routing_policy_candidate(&request)?;
     let owner = request.owner.unwrap_or_else(|| "policy-ops".into());
     if let Some(existing) = state
@@ -166,14 +163,14 @@ fn validate_routing_policy_candidate(
 
 pub async fn submit_routing_policy(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
     update_routing_policy_status(
         state,
-        headers,
+        actor,
         RoutingPolicyStatusChange {
             policy_id,
             version,
@@ -188,14 +185,14 @@ pub async fn submit_routing_policy(
 
 pub async fn approve_routing_policy(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
     update_routing_policy_status(
         state,
-        headers,
+        actor,
         RoutingPolicyStatusChange {
             policy_id,
             version,
@@ -210,12 +207,11 @@ pub async fn approve_routing_policy(
 
 pub async fn activate_routing_policy(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
-    let actor = authorize(&state, &headers)?;
     let previous = load_routing_policy(&state, &policy_id, version, &review_mode).await?;
     require_status(&previous, "approved", "ROUTING_POLICY_APPROVAL_REQUIRED")?;
     let gates = build_routing_policy_promotion_gates(&previous);
@@ -257,14 +253,14 @@ pub async fn activate_routing_policy(
 
 pub async fn rollback_routing_policy(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path((policy_id, review_mode, version)): Path<(String, String, u32)>,
     Json(request): Json<RoutingPolicyLifecycleRequest>,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
     validate_routing_policy_lifecycle_request(&request)?;
     update_routing_policy_status(
         state,
-        headers,
+        actor,
         RoutingPolicyStatusChange {
             policy_id,
             version,
@@ -304,10 +300,9 @@ fn validate_routing_policy_lifecycle_request(
 
 async fn update_routing_policy_status(
     state: AppState,
-    headers: HeaderMap,
+    actor: ActorContext,
     change: RoutingPolicyStatusChange,
 ) -> Result<Json<RoutingPolicyRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let previous = load_routing_policy(
         &state,
         &change.policy_id,
@@ -480,19 +475,6 @@ fn routing_policy_not_found() -> ApiError {
         "ROUTING_POLICY_NOT_FOUND",
         "routing policy not found",
     )
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 struct RoutingPolicyAuditInput<'a> {
