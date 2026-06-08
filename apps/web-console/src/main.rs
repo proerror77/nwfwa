@@ -38,8 +38,8 @@ pub(crate) use model_ui_helpers::*;
 use pages::*;
 pub(crate) use payload_helpers::*;
 use routing::{
-    active_module_from_location, is_known_module, module_icon_class, set_module_hash,
-    workspace_system_map, CONTRACT_PANELS, NAV_SECTIONS,
+    active_module_from_location, module_from_name, set_module_hash, workspace_system_map, Module,
+    NAV_SECTIONS,
 };
 pub(crate) use rule_helpers::*;
 pub(crate) use rule_ui_helpers::*;
@@ -56,10 +56,16 @@ fn app() -> Html {
     let api_key = use_state(|| API_KEY_DEFAULT.to_string());
     let select_module = {
         let active = active.clone();
+        Callback::from(move |module: Module| {
+            set_module_hash(module);
+            active.set(module);
+        })
+    };
+    let select_module_name = {
+        let select_module = select_module.clone();
         Callback::from(move |module: String| {
-            if is_known_module(&module) {
-                set_module_hash(&module);
-                active.set(module);
+            if let Some(module) = module_from_name(&module) {
+                select_module.emit(module);
             }
         })
     };
@@ -118,17 +124,17 @@ fn app() -> Html {
                             <p class="nav-section-title">{section_label(section, *language)}</p>
                             {for modules.iter().map(|module| {
                                 let select_module = select_module.clone();
-                                let module_name = (*module).to_string();
-                                let is_active = *active == module_name;
+                                let module = *module;
+                                let is_active = *active == module;
                                 html! {
                                     <button
                                         class={classes!(is_active.then_some("active"))}
-                                        onclick={Callback::from(move |_| select_module.emit(module_name.clone()))}
+                                        onclick={Callback::from(move |_| select_module.emit(module))}
                                     >
-                                        <span class={classes!("nav-icon", module_icon_class(module))}></span>
+                                        <span class={classes!("nav-icon", module.icon_class())}></span>
                                         <span class="nav-copy">
-                                            <span class="nav-label">{module_label(module, *language)}</span>
-                                            <span class="nav-description">{module_description(module, *language)}</span>
+                                            <span class="nav-label">{module_label(module.as_str(), *language)}</span>
+                                            <span class="nav-description">{module_description(module.as_str(), *language)}</span>
                                         </span>
                                     </button>
                                 }
@@ -141,7 +147,7 @@ fn app() -> Html {
                 <div class="workspace-topbar">
                     <div class="topbar-context">
                         <span class="eyebrow">{tr(*language, "Real-time operations", "实时运营")}</span>
-                        <strong>{module_context(&active, *language)}</strong>
+                        <strong>{module_context(active.as_str(), *language)}</strong>
                     </div>
                     <div class="topbar-actions">
                         <span class="api-chip status-live">{"live"}</span>
@@ -151,88 +157,37 @@ fn app() -> Html {
                         </button>
                     </div>
                 </div>
-                {workspace_system_map(active.as_str(), select_module.clone(), *language)}
+                {workspace_system_map(*active, select_module.clone(), *language)}
                 <div class="workspace-content">
-                    if *active == "Intake Ops" {
-                        <ClaimInboxPage />
-                    } else if *active == "Dashboard" {
-                        <DashboardPage on_navigate={select_module.clone()} />
-                    } else if *active == "Runtime Scoring" {
-                        <RuntimeScoringPage />
-                    } else if *active == "Review Workbench" {
-                        {review_workbench_page(select_module.clone())}
-                    } else if *active == "Bootstrap Ops" {
-                        <BootstrapOpsPage />
-                    } else if *active == "Discovery Review" {
-                        {discovery_review_page(select_module.clone())}
-                    } else if *active == "Evidence Hub" {
-                        {evidence_hub_page(select_module.clone())}
-                    } else if *active == "Provider Model Intake" {
-                        <MlopsWorkspacePage />
-                    } else if *active == "Evidence Runtime" {
-                        <EvidenceRuntimePage />
-                    } else if *active == "Rules" {
-                        <RulesPage />
-                    } else if *active == "Models" {
-                        <ModelsPage />
-                    } else if *active == "Routing Policies" {
-                        <RoutingPoliciesPage />
-                    } else if *active == "Data Sources" {
-                        <DataSourcesPage />
-                    } else if *active == "Factor Factory" {
-                        <FactorFactoryPage />
-                    } else if *active == "Leads & Cases" {
-                        <LeadsCasesPage />
-                    } else if *active == "Member Profile" {
-                        <MemberProfilePage />
-                    } else if *active == "Provider Risk" {
-                        <ProviderRiskPage />
-                    } else if *active == "Medical Review" {
-                        <MedicalReviewPage />
-                    } else if *active == "Audit Sampling" {
-                        <AuditSamplingPage />
-                    } else if *active == "Knowledge Base" {
-                        <KnowledgeBasePage />
-                    } else if *active == "Agent Investigator" {
-                        <AgentInvestigatorPage />
-                    } else if *active == "QA Review" {
-                        <QaReviewPage />
-                    } else if *active == "Governance" {
-                        <GovernancePage />
-                    } else {
-                        <ModuleStatusPage title={(*active).clone()} />
-                    }
+                    {match *active {
+                        Module::IntakeOps => html! { <ClaimInboxPage /> },
+                        Module::Dashboard => html! { <DashboardPage on_navigate={select_module_name.clone()} /> },
+                        Module::RuntimeScoring => html! { <RuntimeScoringPage /> },
+                        Module::ReviewWorkbench => review_workbench_page(select_module_name.clone()),
+                        Module::BootstrapOps => html! { <BootstrapOpsPage /> },
+                        Module::DiscoveryReview => discovery_review_page(select_module_name.clone()),
+                        Module::EvidenceHub => evidence_hub_page(select_module_name.clone()),
+                        Module::ProviderModelIntake => html! { <MlopsWorkspacePage /> },
+                        Module::EvidenceRuntime => html! { <EvidenceRuntimePage /> },
+                        Module::Rules => html! { <RulesPage /> },
+                        Module::Models => html! { <ModelsPage /> },
+                        Module::RoutingPolicies => html! { <RoutingPoliciesPage /> },
+                        Module::DataSources => html! { <DataSourcesPage /> },
+                        Module::FactorFactory => html! { <FactorFactoryPage /> },
+                        Module::LeadsCases => html! { <LeadsCasesPage /> },
+                        Module::MemberProfile => html! { <MemberProfilePage /> },
+                        Module::ProviderRisk => html! { <ProviderRiskPage /> },
+                        Module::MedicalReview => html! { <MedicalReviewPage /> },
+                        Module::AuditSampling => html! { <AuditSamplingPage /> },
+                        Module::KnowledgeBase => html! { <KnowledgeBasePage /> },
+                        Module::AgentInvestigator => html! { <AgentInvestigatorPage /> },
+                        Module::QaReview => html! { <QaReviewPage /> },
+                        Module::Governance => html! { <GovernancePage /> },
+                    }}
                 </div>
             </main>
         </div>
         </ContextProvider<ApiKeyContext>>
-    }
-}
-
-#[derive(Properties, PartialEq)]
-struct ModuleStatusProps {
-    title: String,
-}
-
-#[function_component(ModuleStatusPage)]
-fn module_status_page(props: &ModuleStatusProps) -> Html {
-    html! {
-        <section class="module-status">
-            <div class="dashboard-header">
-                <div>
-                    <h2>{&props.title}</h2>
-                    <p>{"This module remains part of the operations contract while the web console migrates to Yew."}</p>
-                </div>
-                <span class="status-pill">{"Yew shell"}</span>
-            </div>
-            <div class="panel">
-                <h3>{"Migration Contract"}</h3>
-                <p>{"Existing API, audit, QA, model, rule, and governance contracts stay in place while the console prioritizes the active operator workflow."}</p>
-                <div class="tag-grid">
-                    {for CONTRACT_PANELS.iter().map(|panel| html! { <span>{panel}</span> })}
-                </div>
-            </div>
-        </section>
     }
 }
 
