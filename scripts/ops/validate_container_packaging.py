@@ -33,6 +33,12 @@ REQUIRED_FILES = {
         "COPY crates ./crates",
         "CMD [\"worker\", \"health\"]",
     ],
+    "apps/ml-service/Dockerfile": [
+        "FROM python:3.12-slim",
+        "apt-get install -y --no-install-recommends libgomp1",
+        "pip install --no-cache-dir .",
+        "CMD [\"uvicorn\", \"app.main:app\", \"--host\", \"0.0.0.0\", \"--port\", \"8001\"]",
+    ],
     "apps/web-console/Dockerfile": [
         "FROM rust:1.96-bookworm AS builder",
         "rustup target add wasm32-unknown-unknown",
