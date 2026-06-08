@@ -131,7 +131,7 @@ pub fn aggregate_with_routing_policy(
     ]);
     let risk_score = RiskScore::new(final_score_value).expect("clamped score is valid");
     let risk_level = risk_level_for_policy(risk_score.value(), &routing_policy).to_string();
-    let rag = rag_for_policy(&risk_level);
+    let rag = rag_for_policy(risk_score, &routing_policy);
     let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);
     let confidence = confidence_level_for_policy(confidence_score, &routing_policy).to_string();
     let recommended_action = recommended_action(
@@ -397,13 +397,12 @@ fn risk_level_for_policy(score: u8, policy: &RoutingPolicy) -> &'static str {
     }
 }
 
-fn rag_for_policy(risk_level: &str) -> RiskLevel {
-    match risk_level {
-        "Low" => RiskLevel::Green,
-        "Medium" => RiskLevel::Amber,
-        "High" | "Critical" => RiskLevel::Red,
-        _ => RiskLevel::Red,
-    }
+fn rag_for_policy(score: RiskScore, policy: &RoutingPolicy) -> RiskLevel {
+    RiskLevel::from_thresholds(
+        score,
+        policy.risk_thresholds.medium_min,
+        policy.risk_thresholds.high_min,
+    )
 }
 
 fn confidence_score(rule_score: u8, anomaly_score: u8, ml_score: u8) -> u8 {

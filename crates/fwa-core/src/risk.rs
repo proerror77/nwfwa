@@ -33,10 +33,14 @@ pub enum RiskLevel {
 
 impl RiskLevel {
     pub fn from_score(score: RiskScore) -> Self {
+        Self::from_thresholds(score, 40, 70)
+    }
+
+    pub fn from_thresholds(score: RiskScore, amber_min: u8, red_min: u8) -> Self {
         match score.value() {
-            0..=39 => Self::Green,
-            40..=69 => Self::Amber,
-            _ => Self::Red,
+            value if value >= red_min => Self::Red,
+            value if value >= amber_min => Self::Amber,
+            _ => Self::Green,
         }
     }
 }
@@ -109,6 +113,22 @@ mod tests {
         );
         assert_eq!(
             RiskLevel::from_score(RiskScore::new(87).unwrap()),
+            RiskLevel::Red
+        );
+    }
+
+    #[test]
+    fn maps_scores_to_policy_threshold_rag_levels() {
+        assert_eq!(
+            RiskLevel::from_thresholds(RiskScore::new(49).unwrap(), 50, 80),
+            RiskLevel::Green
+        );
+        assert_eq!(
+            RiskLevel::from_thresholds(RiskScore::new(50).unwrap(), 50, 80),
+            RiskLevel::Amber
+        );
+        assert_eq!(
+            RiskLevel::from_thresholds(RiskScore::new(80).unwrap(), 50, 80),
             RiskLevel::Red
         );
     }
