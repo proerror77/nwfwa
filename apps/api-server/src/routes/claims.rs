@@ -461,16 +461,26 @@ pub async fn score_claim(
     expand_dynamic_required_evidence(&mut rule_matches, &clinical_evidence);
     let anomaly_score = detect_anomaly(&features);
     let similar_case_tags = similar_case_tags(&features, &rule_matches);
-    let similar_cases = state
-        .repository
-        .search_similar_cases(SimilarCaseQuery {
-            claim_id: Some(context.claim.external_claim_id.clone()),
-            diagnosis_code: context.claim.diagnosis_code.clone(),
-            provider_region: context.provider.region.clone(),
-            tags: similar_case_tags.clone(),
-        })
-        .await
-        .map_err(internal_error("SIMILAR_CASE_SEARCH_FAILED"))?;
+    let similar_case_query = SimilarCaseQuery {
+        claim_id: Some(context.claim.external_claim_id.clone()),
+        diagnosis_code: context.claim.diagnosis_code.clone(),
+        provider_region: context.provider.region.clone(),
+        tags: similar_case_tags.clone(),
+    };
+    let model_score_request = ModelScoreRequest {
+        run_id: run_id.clone(),
+        claim_id: context.claim.id.clone(),
+        model_key: active_model.model_key.clone(),
+        model_version: active_model.version.clone(),
+        endpoint_url: active_model.endpoint_url.clone(),
+        features: features.clone(),
+    };
+    let (similar_cases_result, model_score_result) = tokio::join!(
+        state.repository.search_similar_cases(similar_case_query),
+        state.scorer.score(model_score_request)
+    );
+    let similar_cases =
+        similar_cases_result.map_err(internal_error("SIMILAR_CASE_SEARCH_FAILED"))?;
     let similar_case_score = similar_case_score(&similar_cases);
     evidence_refs.extend(
         similar_cases
@@ -479,18 +489,7 @@ pub async fn score_claim(
             .cloned()
             .map(serde_json::Value::String),
     );
-    let model_score = match state
-        .scorer
-        .score(ModelScoreRequest {
-            run_id: run_id.clone(),
-            claim_id: context.claim.id.clone(),
-            model_key: active_model.model_key.clone(),
-            model_version: active_model.version.clone(),
-            endpoint_url: active_model.endpoint_url.clone(),
-            features: features.clone(),
-        })
-        .await
-    {
+    let model_score = match model_score_result {
         Ok(score) => score,
         Err(error) => {
             let error_message = error.to_string();
