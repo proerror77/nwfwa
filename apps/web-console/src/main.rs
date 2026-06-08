@@ -6,11 +6,13 @@ use wasm_bindgen::{closure::Closure, prelude::wasm_bindgen, JsCast};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 use yew::prelude::*;
+mod constants;
+mod state;
 
-const API_KEY_DEFAULT: &str = "aiclaim-demo-key";
+use constants::*;
+use state::{ApiState, Language};
+
 const DEFAULT_MODULE: &str = "Dashboard";
-const API_UNAVAILABLE_MESSAGE: &str =
-    "API server is unavailable. Start the API server on 127.0.0.1:8080, then refresh this workspace.";
 
 #[wasm_bindgen(inline_js = r#"
 const translations = new Map([
@@ -528,214 +530,6 @@ const CONTRACT_PANELS: &[&str] = &[
     "Canonical Trace Only",
     "Input Mode",
 ];
-
-const SAMPLE_INBOX_PAYLOAD: &str = r#"{
-  "systemCode": "AiClaim Core",
-  "transDate": "2026-05-27 21:22:31",
-  "transNo": "f8d0e88391ac4685929d0ca1cb411e7a",
-  "reportCase": {
-    "reportNo": "SAAS0300040388200349",
-    "accidentDate": 1766678400000,
-    "claimReceiveDate": 1779811200000,
-    "accidentReason": "outpatient",
-    "calculateRisk": "N",
-    "accidentPerson": {
-      "insuredName": "LEE, Peter",
-      "insuredNo": "D209475(0)",
-      "certNo": "D209475(0)",
-      "certType": "I",
-      "gender": "M",
-      "birthday": 1094313600000
-    },
-    "medicalRecordInfoList": [
-      {
-        "id": 425840008,
-        "hospitalName": "Nanjing Tongren Hospital",
-        "departmentName": "Dental",
-        "diagnosisName": "Periodontitis",
-        "medicalType": "outpatient",
-        "medicalRecordType": "13",
-        "visitDate": 1766678400000,
-        "patientName": "",
-        "medicalRecordInformation": "periodontal cleaning /n prescription"
-      }
-    ],
-    "policyList": [
-      {
-        "policyNo": "PNSR039",
-        "policyType": "2",
-        "insuredName": "LEE, Peter",
-        "validateDate": 1514822400000,
-        "expireDate": 4070966400000,
-        "productList": [
-          {
-            "productCode": "YBYL",
-            "productName": "Medical Benefit",
-            "validateDate": 1735747200000,
-            "expireDate": 1767283200000,
-            "claimLiabilityList": [
-              {
-                "liabCode": "YBYL02",
-                "liabName": "Outpatient Medical",
-                "validateDate": 1735747200000,
-                "expireDate": 1767283200000
-              }
-            ]
-          }
-        ],
-        "invoiceList": [
-          {
-            "invoiceNo": "1111111111",
-            "feeAmount": 397.06,
-            "startDate": 1766678400000,
-            "endDate": 1766678400000,
-            "hospitalCode": "HSP-001",
-            "hospitalName": "Nanjing Tongren Hospital",
-            "hospitalClass": "Level III",
-            "hospitalProperty": "02",
-            "hospitalCityName": "Nanjing",
-            "hospitalProvinceName": "Jiangsu",
-            "isHospitalInstitution": true,
-            "primaryCare": true,
-            "redFlag": "N",
-            "medicalType": "outpatient",
-            "departmentName": "Dental",
-            "claimNature": "1",
-            "billType": "socialSecurityBill",
-            "documentType": "original",
-            "socialInsuranceType": "2",
-            "medicareAmount": 133.99,
-            "selfPayAmount": 108.82,
-            "ownExpenseAmount": 0,
-            "otherAmount": 0,
-            "accidentPersonName": "Wang",
-            "diagnosisList": [
-              {
-                "detailCode": "K05.300",
-                "detailName": "Chronic periodontitis",
-                "icd": "K05.3",
-                "name": "Chronic periodontitis",
-                "primary": true
-              }
-            ],
-            "feeList": [
-              {
-                "feeCategory": "westernMedicineFee",
-                "medicareAmount": 21.55,
-                "feeAmount": 51.51,
-                "otherAmount": 0,
-                "feeDetailList": [
-                  {
-                    "name": "Diclofenac diethylamine emulgel",
-                    "amount": 51.51,
-                    "selfPayAmount": 5.15,
-                    "ownExpenseAmount": 0,
-                    "medicalCategory": "1",
-                    "medicareProrated": "10.00"
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-}"#;
-
-const LIVE_TPA_DEMO_PAYLOAD: &str = r#"{
-  "systemCode": "AiClaim Core",
-  "transNo": "TPA-LIVE-DEMO",
-  "reportCase": {
-    "reportNo": "CLM-LIVE-DEMO",
-    "accidentDate": 1768435200000,
-    "claimReceiveDate": 1768867200000,
-    "accidentReason": "live demo health claim",
-    "calculateRisk": "Y",
-    "claimAmount": 18000,
-    "accidentPerson": {
-      "insuredName": "Demo Member",
-      "insuredNo": "MASKED-LIVE-DEMO",
-      "certNo": "MASKED-LIVE-DEMO",
-      "certType": "demo_id",
-      "gender": "U",
-      "birthday": 315532800000
-    },
-    "medicalRecordInfoList": [
-      {
-        "medicalRecordNo": "MR-LIVE-DEMO",
-        "medicalRecordType": "demo_summary",
-        "medicalRecordInformation": "Demo medical note. No PHI.",
-        "patientName": "Demo Member",
-        "visitDate": 1768435200000
-      }
-    ],
-    "policyList": [
-      {
-        "policyNo": "POL-LIVE-DEMO",
-        "insuredName": "Demo Member",
-        "coverageLimit": 20000,
-        "validateDate": 1767225600000,
-        "expireDate": 1798675200000,
-        "productList": [
-          {
-            "productCode": "DEMO-HEALTH",
-            "productName": "Demo Health Product",
-            "validateDate": 1767225600000,
-            "expireDate": 1798675200000,
-            "claimLiabilityList": [
-              {
-                "liabilityCode": "MEDICAL-EXPENSE",
-                "liabilityName": "Demo Medical Expense",
-                "validateDate": 1767225600000,
-                "claimValidateDate": 1767225600000,
-                "expireDate": 1798675200000
-              }
-            ]
-          }
-        ],
-        "invoiceList": [
-          {
-            "invoiceNo": "INV-LIVE-DEMO",
-            "hospitalCode": "PRV-LIVE-DEMO",
-            "hospitalName": "Demo Provider",
-            "medicalType": "outpatient",
-            "startDate": 1768435200000,
-            "endDate": 1768435200000,
-            "feeAmount": 18000,
-            "diagnosisList": [
-              {
-                "detailCode": "Z00",
-                "detailName": "Demo diagnosis"
-              }
-            ],
-            "feeList": [
-              {
-                "feeCategory": "treatmentFee",
-                "medicareAmount": 7200,
-                "feeDetailList": [
-                  {
-                    "detailId": "LINE-LIVE-DEMO",
-                    "name": "Inpatient room and board",
-                    "amount": 18000
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    ]
-  }
-}"#;
-
-const LIVE_TPA_DEMO_AMOUNT: &str = "18000.00";
-
-const SAMPLE_RUNTIME_SCORE_REQUEST: &str = r#"{
-  "source_system": "AiClaim Core",
-  "review_mode": "pre_payment",
-  "claim_id": "CLM-0287"
-}"#;
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]
 struct InboxNormalizeResponse {
@@ -2352,43 +2146,6 @@ struct MedicalReviewResultResponse {
     evidence_refs: Vec<String>,
 }
 
-#[derive(Clone, Debug, PartialEq)]
-enum ApiState<T> {
-    Idle,
-    Loading,
-    Ready(T),
-    Failed(String),
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Language {
-    En,
-    Zh,
-}
-
-impl Language {
-    fn toggle(self) -> Self {
-        match self {
-            Self::En => Self::Zh,
-            Self::Zh => Self::En,
-        }
-    }
-
-    fn code(self) -> &'static str {
-        match self {
-            Self::En => "EN",
-            Self::Zh => "中文",
-        }
-    }
-
-    fn document_code(self) -> &'static str {
-        match self {
-            Self::En => "en",
-            Self::Zh => "zh-CN",
-        }
-    }
-}
-
 #[function_component(App)]
 fn app() -> Html {
     let active = use_state(active_module_from_location);
@@ -2934,8 +2691,9 @@ fn bootstrap_ops_page() -> Html {
     let label_governance_status = use_state(|| "approved_for_training".to_string());
     let label_feedback_target = use_state(|| "model".to_string());
     let label_evidence_refs_input = use_state(String::new);
-    let label_notes =
-        use_state(|| "Label reviewed against linked evidence for training-platform handoff.".to_string());
+    let label_notes = use_state(|| {
+        "Label reviewed against linked evidence for training-platform handoff.".to_string()
+    });
 
     let refresh = {
         let api_key = api_key.clone();
@@ -3100,7 +2858,8 @@ fn bootstrap_ops_page() -> Html {
                 && governance_status == "approved_for_training"
             {
                 action_state.set(ApiState::Failed(
-                    "receive document evidence before approving this item for training handoff".into(),
+                    "receive document evidence before approving this item for training handoff"
+                        .into(),
                 ));
                 return;
             }
@@ -4960,7 +4719,8 @@ fn rules_page() -> Html {
     let selected_candidate_shadow_ready = (*shadowed_candidate_ids)
         .iter()
         .any(|id| id == selected_candidate_id.as_str());
-    let can_submit_shadow_evidence = selected_candidate_backtest_ready && selected_candidate_draft_saved;
+    let can_submit_shadow_evidence =
+        selected_candidate_backtest_ready && selected_candidate_draft_saved;
     let save_candidate_draft = {
         let api_key = api_key.clone();
         let selected_candidate_id = selected_candidate_id.clone();
@@ -5231,7 +4991,8 @@ fn rules_page() -> Html {
                 }
                 _ => None,
             };
-            let (target_rule_id, target_rule_version) = if let Some(candidate) = selected_candidate {
+            let (target_rule_id, target_rule_version) = if let Some(candidate) = selected_candidate
+            {
                 let candidate_rule_id = rule_candidate_id(&candidate);
                 if !(*accepted_candidate_ids)
                     .iter()
@@ -5726,10 +5487,12 @@ fn models_page() -> Html {
             let snapshot_state = snapshot_state.clone();
             snapshot_state.set(ApiState::Loading);
             spawn_local(async move {
-                snapshot_state.set(match get_model_ops_snapshot(api_key, model_key, None).await {
-                    Ok(snapshot) => ApiState::Ready(snapshot),
-                    Err(error) => ApiState::Failed(error),
-                });
+                snapshot_state.set(
+                    match get_model_ops_snapshot(api_key, model_key, None).await {
+                        Ok(snapshot) => ApiState::Ready(snapshot),
+                        Err(error) => ApiState::Failed(error),
+                    },
+                );
             });
         })
     };
@@ -6144,16 +5907,14 @@ fn mlops_workspace_page() -> Html {
         let action_state = action_state.clone();
         let load_workspace = load_workspace.clone();
         Callback::from(move |_| {
-            let payload = match parse_json_object(
-                &anomaly_candidate_payload,
-                "anomaly candidate payload",
-            ) {
-                Ok(payload) => payload,
-                Err(error) => {
-                    action_state.set(ApiState::Failed(error));
-                    return;
-                }
-            };
+            let payload =
+                match parse_json_object(&anomaly_candidate_payload, "anomaly candidate payload") {
+                    Ok(payload) => payload,
+                    Err(error) => {
+                        action_state.set(ApiState::Failed(error));
+                        return;
+                    }
+                };
             let api_key = (*api_key).clone();
             let reviewer = (*reviewer).clone();
             let notes = (*action_notes).clone();
@@ -6167,18 +5928,18 @@ fn mlops_workspace_page() -> Html {
             action_state.set(ApiState::Loading);
             spawn_local(async move {
                 match submit_anomaly_candidate_review(
-                        api_key,
-                        candidate_kind,
-                        candidate_id,
-                        source_report_uri,
-                        decision,
-                        reviewer,
-                        notes,
-                        evidence_refs,
-                        payload,
-                    )
-                    .await
-                    {
+                    api_key,
+                    candidate_kind,
+                    candidate_id,
+                    source_report_uri,
+                    decision,
+                    reviewer,
+                    notes,
+                    evidence_refs,
+                    payload,
+                )
+                .await
+                {
                     Ok(response) => {
                         action_state.set(ApiState::Ready(response));
                         load_workspace.emit(());
@@ -6214,16 +5975,15 @@ fn mlops_workspace_page() -> Html {
         let evidence_refs = evidence_refs.clone();
         let action_state = action_state.clone();
         Callback::from(move |_| {
-            let payload = match parse_json_object(
-                &training_output_payload_json,
-                "external training payload",
-            ) {
-                Ok(payload) => payload,
-                Err(error) => {
-                    action_state.set(ApiState::Failed(error));
-                    return;
-                }
-            };
+            let payload =
+                match parse_json_object(&training_output_payload_json, "external training payload")
+                {
+                    Ok(payload) => payload,
+                    Err(error) => {
+                        action_state.set(ApiState::Failed(error));
+                        return;
+                    }
+                };
             if let Some(value) = json_string_field(&payload, "candidate_model_version") {
                 candidate_model_version.set(value);
             }
@@ -6284,7 +6044,10 @@ fn mlops_workspace_page() -> Html {
             if let Some(candidates) = payload.get("mined_rule_candidates") {
                 mined_rule_candidates_json.set(pretty_json(candidates));
             }
-            if let Some(refs) = payload.get("evidence_refs").and_then(|value| value.as_array()) {
+            if let Some(refs) = payload
+                .get("evidence_refs")
+                .and_then(|value| value.as_array())
+            {
                 let refs = refs
                     .iter()
                     .filter_map(|value| value.as_str().map(str::to_string))
@@ -6370,7 +6133,10 @@ fn mlops_workspace_page() -> Html {
             }
             let mut refs = vec![
                 format!("model_retraining_jobs:{}", job.job_id),
-                format!("model_versions:{}:{}", job.model_key, evidence_model_version),
+                format!(
+                    "model_versions:{}:{}",
+                    job.model_key, evidence_model_version
+                ),
             ];
             if let Some(evaluation_id) = job.output_evaluation_id {
                 refs = push_unique(refs, format!("model_evaluations:{evaluation_id}"));
@@ -6384,10 +6150,9 @@ fn mlops_workspace_page() -> Html {
             snapshot.model_ops.gates.blockers.is_empty(),
             snapshot.model_ops.gates.blockers.clone(),
         ),
-        ApiState::Idle | ApiState::Loading => (
-            false,
-            vec!["load promotion gates before activation".into()],
-        ),
+        ApiState::Idle | ApiState::Loading => {
+            (false, vec!["load promotion gates before activation".into()])
+        }
         ApiState::Failed(error) => (false, vec![error.clone()]),
     };
 
@@ -12335,14 +12100,12 @@ async fn get_model_ops_snapshot(
         .map(str::trim)
         .filter(|version| !version.is_empty())
         .filter(|version| {
-            models.iter().any(|model| {
-                model.model_key == selected_model_key && model.version == *version
-            })
+            models
+                .iter()
+                .any(|model| model.model_key == selected_model_key && model.version == *version)
         });
     let gates_path = if let Some(model_version) = selected_model_version {
-        format!(
-            "/api/v1/ops/models/{selected_model_key}/versions/{model_version}/promotion-gates"
-        )
+        format!("/api/v1/ops/models/{selected_model_key}/versions/{model_version}/promotion-gates")
     } else {
         format!("/api/v1/ops/models/{selected_model_key}/promotion-gates")
     };
@@ -12395,10 +12158,12 @@ async fn get_mlops_workspace_snapshot(
     )
     .await?
     .tasks;
-    let anomaly_review_tasks =
-        request_get_json::<AnomalyReviewQueueResponse>("/api/v1/ops/providers/anomaly-review-queue", api_key)
-            .await?
-            .tasks;
+    let anomaly_review_tasks = request_get_json::<AnomalyReviewQueueResponse>(
+        "/api/v1/ops/providers/anomaly-review-queue",
+        api_key,
+    )
+    .await?
+    .tasks;
     Ok(MlopsWorkspaceSnapshot {
         data_sources,
         model_ops,
@@ -12611,8 +12376,10 @@ async fn execute_mlops_governed_action(
                 evidence_refs,
                 format!("model_validation_reports:{}", validation_report_uri.trim()),
             );
-            evidence_refs =
-                push_unique(evidence_refs, format!("model_evaluations:{evaluation_run_id}"));
+            evidence_refs = push_unique(
+                evidence_refs,
+                format!("model_evaluations:{evaluation_run_id}"),
+            );
             request_json(
                 &format!(
                     "/api/v1/ops/model-retraining-jobs/{}/output",
