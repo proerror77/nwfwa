@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{
         AuditEventListFilter, AuditHistoryEventRecord, PersistedAuditEvent,
@@ -7,13 +8,8 @@ use crate::{
     },
     routes::pii,
 };
-use axum::{
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,9 +17,8 @@ use std::collections::HashMap;
 
 pub async fn provider_risk_summary(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<ProviderRiskSummaryRecord>, ApiError> {
-    authorize(&state, &headers)?;
     let summary = state
         .repository
         .provider_risk_summary()
@@ -133,10 +128,9 @@ pub struct AnomalyReviewQueueTask {
 
 pub async fn submit_anomaly_clustering_report(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<SubmitAnomalyClusteringReportRequest>,
 ) -> Result<Json<SubmitAnomalyClusteringReportResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_anomaly_clustering_report_submission(&request)?;
     let response = SubmitAnomalyClusteringReportResponse {
         report_kind: request.report_kind.clone(),
@@ -160,9 +154,8 @@ pub async fn submit_anomaly_clustering_report(
 
 pub async fn anomaly_review_queue(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<AnomalyReviewQueueResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let report_events = state
         .repository
         .list_audit_events(AuditEventListFilter {
@@ -191,10 +184,9 @@ pub async fn anomaly_review_queue(
 
 pub async fn review_anomaly_candidate(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<ReviewAnomalyCandidateRequest>,
 ) -> Result<Json<ReviewAnomalyCandidateResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_anomaly_candidate_review(&request)?;
     let response = ReviewAnomalyCandidateResponse {
         candidate_kind: request.candidate_kind.clone(),
@@ -729,19 +721,6 @@ fn anomaly_review_tasks_from_events(
 
 fn queue_key(source_report_uri: &str, candidate_kind: &str, candidate_id: &str) -> String {
     format!("{source_report_uri}\n{candidate_kind}\n{candidate_id}")
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
