@@ -1,3 +1,4 @@
+use crate::pii::mask_audit_payload;
 use async_trait::async_trait;
 use chrono::NaiveDate;
 use fwa_core::{
@@ -2172,7 +2173,7 @@ impl ScoringRepository for InMemoryScoringRepository {
                 .unwrap_or("succeeded")
                 .to_string(),
             summary: "FWA scoring completed".into(),
-            payload: run.audit_event.clone(),
+            payload: mask_audit_payload(run.audit_event.clone()),
             evidence_refs: run.evidence_refs.clone(),
         });
         self.runs.lock().await.push(run);
@@ -2180,6 +2181,10 @@ impl ScoringRepository for InMemoryScoringRepository {
     }
 
     async fn save_audit_event(&self, event: PersistedAuditEvent) -> anyhow::Result<()> {
+        let event = PersistedAuditEvent {
+            payload: mask_audit_payload(event.payload),
+            ..event
+        };
         let mut audit_events = self.audit_events.lock().await;
         if let Some(existing) = audit_events
             .iter_mut()
@@ -13853,7 +13858,7 @@ async fn insert_audit_event(
     .bind(&event.event_type)
     .bind(&event.event_status)
     .bind(&event.summary)
-    .bind(&event.payload)
+    .bind(mask_audit_payload(event.payload.clone()))
     .bind(serde_json::Value::Array(event.evidence_refs.clone()))
     .execute(&mut **tx)
     .await?;
@@ -13893,9 +13898,48 @@ async fn insert_pilot_audit_event(
     .bind(&event.event_type)
     .bind(&event.event_status)
     .bind(&event.summary)
-    .bind(&event.payload)
+    .bind(mask_audit_payload(event.payload.clone()))
     .bind(serde_json::json!(event.evidence_refs))
     .execute(&mut **tx)
     .await?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn in_memory_audit_events_mask_pii_payload_fields() {
+        let repository = InMemoryScoringRepository::default();
+
+        repository
+            .save_audit_event(PersistedAuditEvent {
+                audit_id: "audit-1".into(),
+                run_id: "run-1".into(),
+                claim_id: "claim-1".into(),
+                source_system: "tpa-demo".into(),
+                actor_id: "actor-1".into(),
+                actor_role: "tpa_system".into(),
+                event_type: "scoring.completed".into(),
+                event_status: "succeeded".into(),
+                summary: "summary".into(),
+                payload: serde_json::json!({
+                    "external_member_id": "MBR-12345",
+                    "dob": "1988-03-12",
+                    "gender": "F",
+                    "risk_score": 72
+                }),
+                evidence_refs: vec![],
+            })
+            .await
+            .unwrap();
+
+        let audit_events = repository.audit_events.lock().await;
+        let payload = &audit_events[0].payload;
+        assert_ne!(payload["external_member_id"], "MBR-12345");
+        assert_eq!(payload["dob"], "1988-XX-XX");
+        assert_eq!(payload["gender"], "MASKED");
+        assert_eq!(payload["risk_score"], 72);
+    }
 }

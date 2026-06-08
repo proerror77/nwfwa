@@ -1946,10 +1946,11 @@ fn apply_provider_relationship_features(
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
     move |error| {
+        tracing::error!(code, error = %error, "internal API error");
         ApiError::new(
             axum::http::StatusCode::INTERNAL_SERVER_ERROR,
             code,
-            error.to_string(),
+            "internal server error",
         )
     }
 }

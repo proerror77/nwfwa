@@ -3,5 +3,6 @@
 pub mod app;
 pub mod config;
 pub mod error;
+pub mod pii;
 pub mod repository;
 pub mod routes;

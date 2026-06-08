@@ -20,7 +20,7 @@ pub struct AppConfig {
 
 impl AppConfig {
     pub fn from_env() -> Self {
-        Self {
+        let config = Self {
             api_key: std::env::var("FWA_API_KEY").unwrap_or_else(|_| "dev-secret".into()),
             source_system: std::env::var("FWA_SOURCE_SYSTEM").unwrap_or_else(|_| "tpa-demo".into()),
             database_url: std::env::var("DATABASE_URL")
@@ -47,7 +47,9 @@ impl AppConfig {
                 .unwrap_or_else(|_| "local://demo-observability".into()),
             agent_policy_id: std::env::var("FWA_AGENT_POLICY_ID")
                 .unwrap_or_else(|_| "demo-agent-policy".into()),
-        }
+        };
+        config.validate_environment();
+        config
     }
 
     pub fn model_runtime_kind(&self) -> &'static str {
@@ -208,6 +210,14 @@ impl AppConfig {
 
     pub fn api_key_config(&self) -> ApiKeyConfig {
         self.api_key_config_from_specs(api_key_principal_specs())
+    }
+
+    fn validate_environment(&self) {
+        let env = std::env::var("FWA_ENV").unwrap_or_else(|_| "development".into());
+        let principal_specs = api_key_principal_specs();
+        if env != "development" && self.api_key == "dev-secret" && principal_specs.is_empty() {
+            panic!("FWA_API_KEY or FWA_API_KEY_PRINCIPALS must be set outside development");
+        }
     }
 
     fn api_key_config_from_specs(&self, specs: Vec<String>) -> ApiKeyConfig {
@@ -413,6 +423,57 @@ mod tests {
     }
 
     #[test]
+    fn rejects_default_dev_key_outside_development() {
+        let previous_env = std::env::var_os("FWA_ENV");
+        let previous_api_key = std::env::var_os("FWA_API_KEY");
+        let previous_principals = std::env::var_os("FWA_API_KEY_PRINCIPALS");
+        std::env::set_var("FWA_ENV", "production");
+        std::env::remove_var("FWA_API_KEY");
+        std::env::remove_var("FWA_API_KEY_PRINCIPALS");
+
+        let result = std::panic::catch_unwind(AppConfig::from_env);
+
+        restore_env("FWA_ENV", previous_env);
+        restore_env("FWA_API_KEY", previous_api_key);
+        restore_env("FWA_API_KEY_PRINCIPALS", previous_principals);
+
+        let panic_message = result
+            .unwrap_err()
+            .downcast::<String>()
+            .map(|message| *message)
+            .unwrap_or_else(|payload| {
+                payload
+                    .downcast::<&'static str>()
+                    .map(|message| (*message).to_string())
+                    .unwrap_or_default()
+            });
+        assert!(panic_message
+            .contains("FWA_API_KEY or FWA_API_KEY_PRINCIPALS must be set outside development"));
+    }
+
+    #[test]
+    fn allows_principal_map_outside_development_without_legacy_key() {
+        let previous_env = std::env::var_os("FWA_ENV");
+        let previous_api_key = std::env::var_os("FWA_API_KEY");
+        let previous_principals = std::env::var_os("FWA_API_KEY_PRINCIPALS");
+        std::env::set_var("FWA_ENV", "production");
+        std::env::remove_var("FWA_API_KEY");
+        std::env::set_var(
+            "FWA_API_KEY_PRINCIPALS",
+            "ops-secret|ops-console|fwa_operator|ops-studio|customer-beta",
+        );
+
+        let config = AppConfig::from_env();
+
+        assert_eq!(config.api_key, "dev-secret");
+        assert_eq!(config.api_key_config().key, "");
+
+        restore_env("FWA_ENV", previous_env);
+        restore_env("FWA_API_KEY", previous_api_key);
+        restore_env("FWA_API_KEY_PRINCIPALS", previous_principals);
+    }
+
+    #[test]
     fn rust_artifact_model_runtime_counts_as_configured_model_service() {
         let previous_artifact_uri = std::env::var_os("FWA_MODEL_ARTIFACT_URI");
         std::env::set_var(
@@ -477,5 +538,13 @@ mod tests {
             api_key_config.principals[0].customer_scope_id,
             "customer-beta"
         );
+    }
+
+    fn restore_env(name: &str, value: Option<std::ffi::OsString>) {
+        if let Some(value) = value {
+            std::env::set_var(name, value);
+        } else {
+            std::env::remove_var(name);
+        }
     }
 }
