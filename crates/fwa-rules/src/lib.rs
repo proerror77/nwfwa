@@ -154,8 +154,14 @@ fn evaluate_condition(condition: &Condition, features: &FeatureMap) -> Result<bo
 
     match condition.operator.as_str() {
         "<=" => Ok(as_f64(&feature.value) <= as_f64(&condition.value)),
+        "<" => Ok(as_f64(&feature.value) < as_f64(&condition.value)),
         ">=" => Ok(as_f64(&feature.value) >= as_f64(&condition.value)),
+        ">" => Ok(as_f64(&feature.value) > as_f64(&condition.value)),
         "==" => Ok(feature.value == condition.value),
+        "in" => Ok(condition
+            .value
+            .as_array()
+            .is_some_and(|values| values.iter().any(|value| value == &feature.value))),
         other => Err(RuleError::UnsupportedOperator(other.to_string())),
     }
 }
@@ -254,6 +260,90 @@ mod tests {
 
         let matches = evaluate_rules(&rules, &BTreeMap::new()).unwrap();
         assert!(matches.is_empty());
+    }
+
+    #[test]
+    fn supports_strict_numeric_operators() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_item_count".into(),
+            FeatureValue {
+                name: "claim_item_count".into(),
+                version: 1,
+                value: serde_json::json!(5),
+                evidence_refs: vec![],
+            },
+        );
+
+        assert!(evaluate_condition(
+            &Condition {
+                field: "claim_item_count".into(),
+                operator: ">".into(),
+                value: serde_json::json!(4),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(evaluate_condition(
+            &Condition {
+                field: "claim_item_count".into(),
+                operator: "<".into(),
+                value: serde_json::json!(6),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(!evaluate_condition(
+            &Condition {
+                field: "claim_item_count".into(),
+                operator: ">".into(),
+                value: serde_json::json!(5),
+            },
+            &features,
+        )
+        .unwrap());
+    }
+
+    #[test]
+    fn supports_in_operator() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "provider_region".into(),
+            FeatureValue {
+                name: "provider_region".into(),
+                version: 1,
+                value: serde_json::json!("shanghai"),
+                evidence_refs: vec![],
+            },
+        );
+
+        assert!(evaluate_condition(
+            &Condition {
+                field: "provider_region".into(),
+                operator: "in".into(),
+                value: serde_json::json!(["beijing", "shanghai"]),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(!evaluate_condition(
+            &Condition {
+                field: "provider_region".into(),
+                operator: "in".into(),
+                value: serde_json::json!(["shenzhen"]),
+            },
+            &features,
+        )
+        .unwrap());
+        assert!(!evaluate_condition(
+            &Condition {
+                field: "provider_region".into(),
+                operator: "in".into(),
+                value: serde_json::json!("shanghai"),
+            },
+            &features,
+        )
+        .unwrap());
     }
 
     #[test]
