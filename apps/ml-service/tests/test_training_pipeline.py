@@ -168,6 +168,55 @@ def write_training_manifest(tmp_path: Path) -> Path:
     return manifest_path
 
 
+def imbalanced_rows(start_ord: int) -> list[dict[str, object]]:
+    rows: list[dict[str, object]] = []
+    for index in range(20):
+        confirmed_fwa = index >= 18
+        rows.append(
+            {
+                "claim_id": f"CLM-IMB-{start_ord + index}",
+                "member_id": f"MBR-IMB-{start_ord + index}",
+                "policy_id": f"POL-IMB-{start_ord + index}",
+                "provider_id": f"PRV-IMB-{start_ord + index}",
+                "service_date_ord": start_ord + index,
+                "claim_amount_to_limit_ratio": 0.9
+                if confirmed_fwa
+                else 0.08 + (index % 6) * 0.02,
+                "provider_profile_score": 88.0
+                if confirmed_fwa
+                else 8.0 + (index % 5) * 2.0,
+                "high_cost_item_ratio": 1.0 if confirmed_fwa else 0.0,
+                "confirmed_fwa": int(confirmed_fwa),
+            }
+        )
+    return rows
+
+
+def write_imbalanced_training_manifest(tmp_path: Path) -> Path:
+    dataset_root = tmp_path / "imbalanced_dataset"
+    write_split(dataset_root / "train.parquet", imbalanced_rows(1))
+    write_split(dataset_root / "validation.parquet", imbalanced_rows(101))
+    write_split(dataset_root / "out_of_time.parquet", imbalanced_rows(201))
+    manifest = {
+        "dataset_key": "claims_model_imbalanced",
+        "dataset_version": "2026-06-09",
+        "dataset_usage_scope": "pilot_validated",
+        "pilot_validation_status": "passed",
+        "label_column": "confirmed_fwa",
+        "entity_keys": ["claim_id", "member_id", "policy_id", "provider_id"],
+        "time_split_field": "service_date_ord",
+        "group_split_fields": ["member_id", "policy_id", "provider_id"],
+        "splits": [
+            {"split_name": "train", "data_uri": "train.parquet"},
+            {"split_name": "validation", "data_uri": "validation.parquet"},
+            {"split_name": "out_of_time", "data_uri": "out_of_time.parquet"},
+        ],
+    }
+    manifest_path = dataset_root / "manifest.json"
+    manifest_path.write_text(json.dumps(manifest), encoding="utf-8")
+    return manifest_path
+
+
 def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Path):
     manifest_path = write_training_manifest(tmp_path)
 
@@ -431,6 +480,29 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert amount_rule["action"]["recommended_action"] == "ManualReview"
     assert "negative-class mean + 1.5 standard deviations" in amount_rule["action"]["reason"]
     assert math.isclose(amount_rule["conditions"][0]["value"], 0.244853, rel_tol=1e-5)
+
+
+def test_training_pipeline_reports_metrics_for_imbalanced_labels(tmp_path: Path):
+    manifest_path = write_imbalanced_training_manifest(tmp_path)
+
+    payload = train_from_manifest(
+        manifest_path=manifest_path,
+        artifact_base_uri=tmp_path / "artifacts",
+        model_key="baseline_fwa",
+        base_model_version="0.1.0",
+        job_id="imbalanced_training_job",
+        actor="trainer-worker",
+    )
+
+    confusion_matrix = payload["confusion_matrix_json"]
+    assert confusion_matrix["tp"] + confusion_matrix["fn"] == 2
+    assert confusion_matrix["tn"] + confusion_matrix["fp"] == 18
+    assert float(payload["auc"]) >= 0.8
+    assert payload["precision"] is not None
+    assert payload["recall"] is not None
+    assert payload["threshold"] == "0.5000"
+    assert payload["metrics_json"]["out_of_time_validation_status"] == "passed"
+    assert payload["metrics_json"]["overfitting_diagnostics_status"] == "passed"
 
 
 def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
