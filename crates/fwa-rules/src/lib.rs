@@ -407,4 +407,69 @@ mod tests {
         assert_eq!(matches[0].required_evidence[0].evidence_type, "dental_xray");
         assert!(matches[0].required_evidence[0].blocking);
     }
+
+    #[test]
+    fn returns_conflicting_action_class_matches_for_scoring_priority() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "coverage_exception".into(),
+            FeatureValue {
+                name: "coverage_exception".into(),
+                version: 1,
+                value: serde_json::json!("approved"),
+                evidence_refs: vec![],
+            },
+        );
+
+        let straight_through_rule = Rule {
+            rule_id: "approved_exception_stp".into(),
+            version: 1,
+            name: "Approved exception straight-through".into(),
+            review_mode: "pre_payment".into(),
+            scheme_family: Some("coverage_exception".into()),
+            conditions: vec![Condition {
+                field: "coverage_exception".into(),
+                operator: "==".into(),
+                value: serde_json::json!("approved"),
+            }],
+            action: RuleAction {
+                score: 0,
+                alert_code: "APPROVED_EXCEPTION_STP".into(),
+                recommended_action: RecommendedAction::StandardProcessing,
+                action_class: RuleActionClass::StraightThrough,
+                required_evidence: vec![],
+                adjudication_policy: None,
+                reason: "customer-approved exception can pass without extra review".into(),
+            },
+        };
+        let hard_deny_rule = Rule {
+            rule_id: "coverage_exclusion_hard_deny".into(),
+            version: 1,
+            name: "Coverage exclusion hard deny".into(),
+            review_mode: "pre_payment".into(),
+            scheme_family: Some("coverage_exception".into()),
+            conditions: vec![Condition {
+                field: "coverage_exception".into(),
+                operator: "in".into(),
+                value: serde_json::json!(["approved", "excluded"]),
+            }],
+            action: RuleAction {
+                score: 100,
+                alert_code: "COVERAGE_EXCLUSION_HARD_DENY".into(),
+                recommended_action: RecommendedAction::ManualReview,
+                action_class: RuleActionClass::HardDeny,
+                required_evidence: vec![],
+                adjudication_policy: None,
+                reason: "coverage exclusion needs deterministic adjudication review".into(),
+            },
+        };
+
+        let matches = evaluate_rules(&[straight_through_rule, hard_deny_rule], &features).unwrap();
+
+        assert_eq!(matches.len(), 2);
+        assert_eq!(matches[0].action_class, RuleActionClass::StraightThrough);
+        assert_eq!(matches[0].alert_code, "APPROVED_EXCEPTION_STP");
+        assert_eq!(matches[1].action_class, RuleActionClass::HardDeny);
+        assert_eq!(matches[1].alert_code, "COVERAGE_EXCLUSION_HARD_DENY");
+    }
 }
