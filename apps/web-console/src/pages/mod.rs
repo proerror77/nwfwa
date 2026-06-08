@@ -1,4 +1,5 @@
 mod agent_investigator;
+mod audit_sampling;
 mod bootstrap_ops;
 mod claim_inbox;
 mod dashboard;
@@ -16,6 +17,7 @@ mod rules;
 mod runtime_scoring;
 
 pub use agent_investigator::*;
+pub use audit_sampling::*;
 pub use bootstrap_ops::*;
 pub use claim_inbox::*;
 pub use dashboard::*;
