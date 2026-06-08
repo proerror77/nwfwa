@@ -1392,6 +1392,7 @@ pub async fn publish_rule(
     )
     .await
     .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    state.scoring_lookup_cache.invalidate_all().await;
     Ok(Json(RuleLifecycleResponse {
         rule_id: rule.rule_id,
         status: rule.status,
@@ -1442,6 +1443,7 @@ pub async fn rollback_rule(
     )
     .await
     .map_err(internal_error("RULE_AUDIT_SAVE_FAILED"))?;
+    state.scoring_lookup_cache.invalidate_all().await;
     Ok(Json(RuleLifecycleResponse {
         rule_id: rule.rule_id,
         status: rule.status,

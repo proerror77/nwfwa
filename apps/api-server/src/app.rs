@@ -1,6 +1,6 @@
 use crate::{
     config::AppConfig,
-    repository::{InMemoryScoringRepository, SharedRepository},
+    repository::{InMemoryScoringRepository, ModelVersionRecord, SharedRepository},
     routes::{
         agent, claims, dashboard, health, inbox, knowledge, openapi, ops_agents, ops_audit,
         ops_bootstrap, ops_cases, ops_datasets, ops_evidence, ops_medical, ops_models,
@@ -15,13 +15,97 @@ use fwa_ml_runtime::{
     ArtifactModelScorer, HeuristicModelScorer, HttpModelScorer, ModelScorer,
     ServingManifestModelScorer,
 };
-use std::sync::Arc;
+use fwa_rules::Rule;
+use std::{
+    collections::HashMap,
+    sync::Arc,
+    time::{Duration, Instant},
+};
+use tokio::sync::RwLock;
+
+const SCORING_LOOKUP_CACHE_TTL: Duration = Duration::from_secs(30);
 
 #[derive(Clone)]
 pub struct AppState {
     pub config: AppConfig,
     pub scorer: Arc<dyn ModelScorer>,
     pub repository: SharedRepository,
+    pub scoring_lookup_cache: ScoringLookupCache,
+}
+
+#[derive(Clone)]
+pub struct ScoringLookupCache {
+    inner: Arc<RwLock<ScoringLookupCacheState>>,
+    ttl: Duration,
+}
+
+#[derive(Default)]
+struct ScoringLookupCacheState {
+    active_rules: Option<CachedLookup<Vec<Rule>>>,
+    active_models: HashMap<String, CachedLookup<ModelVersionRecord>>,
+}
+
+struct CachedLookup<T> {
+    value: T,
+    expires_at: Instant,
+}
+
+impl Default for ScoringLookupCache {
+    fn default() -> Self {
+        Self::new(SCORING_LOOKUP_CACHE_TTL)
+    }
+}
+
+impl ScoringLookupCache {
+    pub fn new(ttl: Duration) -> Self {
+        Self {
+            inner: Arc::new(RwLock::new(ScoringLookupCacheState::default())),
+            ttl,
+        }
+    }
+
+    pub async fn active_rules(&self) -> Option<Vec<Rule>> {
+        let cache = self.inner.read().await;
+        cache
+            .active_rules
+            .as_ref()
+            .filter(|entry| entry.expires_at > Instant::now())
+            .map(|entry| entry.value.clone())
+    }
+
+    pub async fn store_active_rules(&self, rules: Vec<Rule>) {
+        let mut cache = self.inner.write().await;
+        cache.active_rules = Some(CachedLookup {
+            value: rules,
+            expires_at: Instant::now() + self.ttl,
+        });
+    }
+
+    pub async fn active_model(&self, review_mode: &str) -> Option<ModelVersionRecord> {
+        let cache = self.inner.read().await;
+        cache
+            .active_models
+            .get(review_mode)
+            .filter(|entry| entry.expires_at > Instant::now())
+            .map(|entry| entry.value.clone())
+    }
+
+    pub async fn store_active_model(&self, review_mode: &str, model: ModelVersionRecord) {
+        let mut cache = self.inner.write().await;
+        cache.active_models.insert(
+            review_mode.to_string(),
+            CachedLookup {
+                value: model,
+                expires_at: Instant::now() + self.ttl,
+            },
+        );
+    }
+
+    pub async fn invalidate_all(&self) {
+        let mut cache = self.inner.write().await;
+        cache.active_rules = None;
+        cache.active_models.clear();
+    }
 }
 
 pub fn build_app(config: AppConfig) -> Router {
@@ -59,6 +143,7 @@ pub fn build_app_with_parts(
         config,
         scorer,
         repository,
+        scoring_lookup_cache: ScoringLookupCache::default(),
     };
 
     Router::new()
@@ -419,7 +504,7 @@ pub fn build_app_with_parts(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use fwa_core::{ClaimId, ScoringRunId};
+    use fwa_core::{ClaimId, RecommendedAction, RuleActionClass, ScoringRunId};
     use fwa_features::FeatureValue;
     use fwa_ml_runtime::ModelScoreRequest;
     use std::{
@@ -454,6 +539,69 @@ mod tests {
     fn scorer_env_lock() -> &'static Mutex<()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
+    }
+
+    #[tokio::test]
+    async fn scoring_lookup_cache_stores_rules_until_invalidated() {
+        let cache = ScoringLookupCache::new(Duration::from_secs(60));
+        assert!(cache.active_rules().await.is_none());
+
+        cache
+            .store_active_rules(vec![Rule {
+                rule_id: "rule_cache_test".into(),
+                version: 1,
+                name: "Cache test".into(),
+                review_mode: "both".into(),
+                scheme_family: None,
+                conditions: vec![],
+                action: fwa_rules::RuleAction {
+                    score: 10,
+                    alert_code: "CACHE_TEST".into(),
+                    recommended_action: RecommendedAction::ManualReview,
+                    action_class: RuleActionClass::ManualReview,
+                    required_evidence: vec![],
+                    adjudication_policy: None,
+                    reason: "cache test".into(),
+                },
+            }])
+            .await;
+
+        let cached_rules = cache.active_rules().await.expect("cached rules");
+        assert_eq!(cached_rules[0].rule_id, "rule_cache_test");
+
+        cache.invalidate_all().await;
+        assert!(cache.active_rules().await.is_none());
+    }
+
+    #[tokio::test]
+    async fn scoring_lookup_cache_stores_models_by_review_mode() {
+        let cache = ScoringLookupCache::new(Duration::from_secs(60));
+        let model = ModelVersionRecord {
+            model_key: "baseline_fwa".into(),
+            version: "0.2.0-active".into(),
+            model_type: "baseline_classifier".into(),
+            runtime_kind: "python_http".into(),
+            execution_provider: "cpu".into(),
+            status: "active".into(),
+            review_mode: "pre_payment".into(),
+            artifact_uri: None,
+            endpoint_url: Some("http://127.0.0.1:8001/score".into()),
+        };
+
+        cache.store_active_model("pre_payment", model).await;
+
+        assert_eq!(
+            cache
+                .active_model("pre_payment")
+                .await
+                .expect("cached model")
+                .version,
+            "0.2.0-active"
+        );
+        assert!(cache.active_model("post_payment").await.is_none());
+
+        cache.invalidate_all().await;
+        assert!(cache.active_model("pre_payment").await.is_none());
     }
 
     fn clear_model_artifact_env() {

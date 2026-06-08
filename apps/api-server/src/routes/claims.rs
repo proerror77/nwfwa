@@ -22,7 +22,7 @@ use fwa_provider::{
     ProviderProfileInput, ProviderProfileWindow, ProviderRelationshipGraphAssessment,
     ProviderRelationshipGraphInput,
 };
-use fwa_rules::{evaluate_rules, RequiredEvidence, RuleMatch};
+use fwa_rules::{evaluate_rules, RequiredEvidence, Rule, RuleMatch};
 use fwa_scoring::DetectionLayerScore;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -447,8 +447,8 @@ pub async fn score_claim(
             .map(|evidence| serde_json::json!(evidence)),
     );
     let (rules_result, active_model_result) = tokio::join!(
-        state.repository.list_active_rules(),
-        active_scoring_model(&state, &review_mode)
+        cached_active_rules(&state),
+        cached_active_scoring_model(&state, &review_mode)
     );
     let rules = rules_result.map_err(internal_error("RULE_LOAD_FAILED"))?;
     let active_model = active_model_result?;
@@ -1238,6 +1238,33 @@ async fn active_scoring_model(
                 format!("no active scoring model is available for review_mode {review_mode}"),
             )
         })
+}
+
+async fn cached_active_rules(state: &AppState) -> anyhow::Result<Vec<Rule>> {
+    if let Some(rules) = state.scoring_lookup_cache.active_rules().await {
+        return Ok(rules);
+    }
+    let rules = state.repository.list_active_rules().await?;
+    state
+        .scoring_lookup_cache
+        .store_active_rules(rules.clone())
+        .await;
+    Ok(rules)
+}
+
+async fn cached_active_scoring_model(
+    state: &AppState,
+    review_mode: &str,
+) -> Result<ModelVersionRecord, ApiError> {
+    if let Some(model) = state.scoring_lookup_cache.active_model(review_mode).await {
+        return Ok(model);
+    }
+    let model = active_scoring_model(state, review_mode).await?;
+    state
+        .scoring_lookup_cache
+        .store_active_model(review_mode, model.clone())
+        .await;
+    Ok(model)
 }
 
 async fn active_routing_policy(

@@ -2547,6 +2547,7 @@ async fn activate_model_target(
     )
     .await
     .map_err(internal_error("MODEL_AUDIT_SAVE_FAILED"))?;
+    state.scoring_lookup_cache.invalidate_all().await;
     Ok(Json(ModelLifecycleResponse {
         model_key: activated.model_key,
         version: activated.version,
@@ -2619,6 +2620,7 @@ pub async fn rollback_model(
     )
     .await
     .map_err(internal_error("MODEL_AUDIT_SAVE_FAILED"))?;
+    state.scoring_lookup_cache.invalidate_all().await;
     Ok(Json(ModelLifecycleResponse {
         model_key: restored.model_key,
         version: restored.version,
