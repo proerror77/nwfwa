@@ -6,6 +6,7 @@ mod evidence_runtime;
 mod hubs;
 mod leads_cases;
 mod medical_review;
+mod member_profile;
 mod runtime_scoring;
 
 pub use bootstrap_ops::*;
@@ -16,4 +17,5 @@ pub use evidence_runtime::*;
 pub use hubs::*;
 pub use leads_cases::*;
 pub use medical_review::*;
+pub use member_profile::*;
 pub use runtime_scoring::*;
