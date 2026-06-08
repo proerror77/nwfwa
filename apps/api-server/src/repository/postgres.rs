@@ -661,37 +661,11 @@ impl ScoringRepository for PostgresScoringRepository {
         &self,
         review_mode: &str,
     ) -> anyhow::Result<Option<RoutingPolicy>> {
-        ensure_default_routing_policies_seeded(&self.pool).await?;
-        let row: Option<(Value,)> = sqlx::query_as(
-            "SELECT policy_json
-             FROM routing_policies
-             WHERE status = 'active'
-               AND review_mode IN ($1, 'both')
-             ORDER BY CASE WHEN review_mode = $1 THEN 0 ELSE 1 END, version DESC
-             LIMIT 1",
-        )
-        .bind(review_mode)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(|row| serde_json::from_value(row.0))
-            .transpose()
-            .map_err(Into::into)
+        postgres_routing_policies::active_routing_policy(self, review_mode).await
     }
 
     async fn list_routing_policies(&self) -> anyhow::Result<Vec<RoutingPolicyRecord>> {
-        ensure_default_routing_policies_seeded(&self.pool).await?;
-        let rows: Vec<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
-            "SELECT policy_json, status, owner, activated_at::text, created_at::text
-             FROM routing_policies
-             ORDER BY policy_key, review_mode, version DESC",
-        )
-        .fetch_all(&self.pool)
-        .await?;
-
-        rows.into_iter()
-            .map(routing_policy_record_from_row)
-            .collect()
+        postgres_routing_policies::list_routing_policies(self).await
     }
 
     async fn save_routing_policy_candidate(
@@ -699,25 +673,7 @@ impl ScoringRepository for PostgresScoringRepository {
         policy: RoutingPolicy,
         owner: String,
     ) -> anyhow::Result<RoutingPolicyRecord> {
-        ensure_default_routing_policies_seeded(&self.pool).await?;
-        sqlx::query(
-            "INSERT INTO routing_policies
-             (policy_key, version, review_mode, status, owner, policy_json)
-             VALUES ($1, $2, $3, 'draft', $4, $5)
-             ON CONFLICT (policy_key, version, review_mode) DO UPDATE
-             SET status = 'draft',
-                 owner = EXCLUDED.owner,
-                 policy_json = EXCLUDED.policy_json",
-        )
-        .bind(&policy.policy_id)
-        .bind(policy.version as i32)
-        .bind(&policy.review_mode)
-        .bind(&owner)
-        .bind(serde_json::to_value(&policy)?)
-        .execute(&self.pool)
-        .await?;
-
-        Ok(routing_policy_record(policy, "draft", &owner, None, None))
+        postgres_routing_policies::save_routing_policy_candidate(self, policy, owner).await
     }
 
     async fn get_routing_policy(
@@ -726,19 +682,7 @@ impl ScoringRepository for PostgresScoringRepository {
         version: u32,
         review_mode: &str,
     ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
-        ensure_default_routing_policies_seeded(&self.pool).await?;
-        let row: Option<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
-            "SELECT policy_json, status, owner, activated_at::text, created_at::text
-                 FROM routing_policies
-                 WHERE policy_key = $1 AND version = $2 AND review_mode = $3",
-        )
-        .bind(policy_id)
-        .bind(version as i32)
-        .bind(review_mode)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(routing_policy_record_from_row).transpose()
+        postgres_routing_policies::get_routing_policy(self, policy_id, version, review_mode).await
     }
 
     async fn update_routing_policy_status(
@@ -748,21 +692,14 @@ impl ScoringRepository for PostgresScoringRepository {
         review_mode: &str,
         status: &str,
     ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
-        ensure_default_routing_policies_seeded(&self.pool).await?;
-        let row: Option<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
-            "UPDATE routing_policies
-                 SET status = $4
-                 WHERE policy_key = $1 AND version = $2 AND review_mode = $3
-                 RETURNING policy_json, status, owner, activated_at::text, created_at::text",
+        postgres_routing_policies::update_routing_policy_status(
+            self,
+            policy_id,
+            version,
+            review_mode,
+            status,
         )
-        .bind(policy_id)
-        .bind(version as i32)
-        .bind(review_mode)
-        .bind(status)
-        .fetch_optional(&self.pool)
-        .await?;
-
-        row.map(routing_policy_record_from_row).transpose()
+        .await
     }
 
     async fn activate_routing_policy(
@@ -771,35 +708,8 @@ impl ScoringRepository for PostgresScoringRepository {
         version: u32,
         review_mode: &str,
     ) -> anyhow::Result<Option<RoutingPolicyRecord>> {
-        ensure_default_routing_policies_seeded(&self.pool).await?;
-        let mut tx = self.pool.begin().await?;
-        sqlx::query(
-            "UPDATE routing_policies
-             SET status = 'approved'
-             WHERE review_mode = $1
-               AND status = 'active'
-               AND NOT (policy_key = $2 AND version = $3)",
-        )
-        .bind(review_mode)
-        .bind(policy_id)
-        .bind(version as i32)
-        .execute(&mut *tx)
-        .await?;
-
-        let row: Option<(Value, String, String, Option<String>, Option<String>)> = sqlx::query_as(
-            "UPDATE routing_policies
-                 SET status = 'active', activated_at = now()
-                 WHERE policy_key = $1 AND version = $2 AND review_mode = $3
-                 RETURNING policy_json, status, owner, activated_at::text, created_at::text",
-        )
-        .bind(policy_id)
-        .bind(version as i32)
-        .bind(review_mode)
-        .fetch_optional(&mut *tx)
-        .await?;
-        tx.commit().await?;
-
-        row.map(routing_policy_record_from_row).transpose()
+        postgres_routing_policies::activate_routing_policy(self, policy_id, version, review_mode)
+            .await
     }
 
     async fn list_rules(&self) -> anyhow::Result<Vec<RuleSummaryRecord>> {
