@@ -9,6 +9,7 @@ mod bootstrap;
 mod cases;
 mod evidence;
 mod governance;
+mod medical;
 mod models;
 
 pub(crate) use audit::*;
@@ -16,6 +17,7 @@ pub(crate) use bootstrap::*;
 pub(crate) use cases::*;
 pub(crate) use evidence::*;
 pub(crate) use governance::*;
+pub(crate) use medical::*;
 pub(crate) use models::*;
 
 pub(crate) async fn request_json<T>(
@@ -175,31 +177,6 @@ pub(crate) async fn get_provider_risk_summary(
     api_key: String,
 ) -> Result<ProviderRiskSummary, String> {
     request_get_json("/api/v1/ops/providers/risk-summary", api_key).await
-}
-
-pub(crate) async fn get_medical_review_queue(
-    api_key: String,
-    limit: String,
-) -> Result<Vec<MedicalReviewQueueItem>, String> {
-    let limit = limit
-        .trim()
-        .parse::<u32>()
-        .ok()
-        .map(|value| value.clamp(1, 200))
-        .unwrap_or(100);
-    Ok(request_get_json::<MedicalReviewQueueResponse>(
-        &format!("/api/v1/ops/medical-review/queue?limit={limit}"),
-        api_key,
-    )
-    .await?
-    .items)
-}
-
-pub(crate) async fn post_medical_review_result(
-    api_key: String,
-    payload: Value,
-) -> Result<MedicalReviewResultResponse, String> {
-    request_json("/api/v1/ops/medical-review/results", api_key, payload).await
 }
 
 pub(crate) async fn get_qa_review_snapshot(api_key: String) -> Result<QaReviewSnapshot, String> {
