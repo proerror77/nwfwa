@@ -23,6 +23,7 @@ mod member_profile_helpers;
 mod model_helpers;
 mod outcome_helpers;
 mod postgres;
+mod postgres_agent_helpers;
 mod provider_helpers;
 mod row_types;
 mod rule_helpers;
