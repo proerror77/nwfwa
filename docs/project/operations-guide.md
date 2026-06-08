@@ -12,12 +12,52 @@ rustup target add wasm32-unknown-unknown
 cargo install trunk --version 0.21.14 --locked
 ```
 
+Use the supported hybrid local runtime for day-to-day development on Docker
+Desktop. Docker runs the backing services, while the Rust API and Trunk dev
+server run on the host in tmux sessions:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+Open:
+
+```text
+http://127.0.0.1:5173
+```
+
+Use API key:
+
+```text
+aiclaim-demo-key
+```
+
+The launcher starts `postgres`, `ml-service`, object storage, and ClickHouse
+with Docker Compose, applies migrations plus deterministic demo seed data,
+builds the host `api-server` with `cargo build --locked -p api-server`, starts
+`api-server` in tmux session `nwfwa-api`, starts the Web Console in tmux
+session `nwfwa-web`, then verifies ML, API, Web, and authenticated dashboard
+health. Runtime logs are written under `artifacts/local-runtime/`.
+
+Stop the local runtime:
+
+```bash
+scripts/dev/stop_local_runtime.sh
+```
+
 Start the full local demo stack when you want the same containerized API and
 Web Console boundary used by the pilot packaging proof:
 
 ```bash
 docker compose -f infra/docker-compose.yml up --build
 ```
+
+The full Docker path is still the packaging proof, but local Docker Desktop may
+need more memory for the Rust API image build. If `api-server` fails during
+container build with `SIGKILL`, `ResourceExhausted`, or `cannot allocate
+memory`, either increase Docker Desktop memory to roughly 12-16 GB, use
+prebuilt images, or use `scripts/dev/start_local_runtime.sh` for local
+development.
 
 Open:
 

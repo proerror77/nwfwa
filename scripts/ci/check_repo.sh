@@ -16,6 +16,8 @@ required_files=(
   "scripts/demo/seed_demo.sh"
   "scripts/demo/seed_demo.sql"
   "scripts/demo/pilot_ready_env.example"
+  "scripts/dev/start_local_runtime.sh"
+  "scripts/dev/stop_local_runtime.sh"
   "scripts/demo/tpa_mock_client.py"
   "scripts/demo/smoke_demo.py"
   "scripts/demo/smoke_web_console.mjs"
@@ -365,6 +367,12 @@ grep -q "customer_pilot_proof.sh" docs/project/operations-guide.md
 grep -q "pilot readiness reporting" docs/project/operations-guide.md
 grep -q "readiness JSON as a pilot evidence artifact" docs/project/operations-guide.md
 grep -q "customer_pilot_proof_summary" docs/project/operations-guide.md
+grep -q "scripts/dev/start_local_runtime.sh" docs/project/operations-guide.md
+grep -q "scripts/dev/stop_local_runtime.sh" docs/project/operations-guide.md
+grep -q "nwfwa-api" scripts/dev/start_local_runtime.sh
+grep -q "nwfwa-web" scripts/dev/start_local_runtime.sh
+grep -q "FWA_API_KEY_PRINCIPALS" scripts/dev/start_local_runtime.sh
+grep -q "/api/v1/ops/dashboard/summary" scripts/dev/start_local_runtime.sh
 grep -q -- "--customer-principal-smoke" docs/engineering/demo-runbook.md
 grep -q -- "--customer-principal-smoke" docs/engineering/pilot-readiness.md
 grep -q "API Call Records" apps/web-console/src/main.rs
@@ -594,6 +602,7 @@ grep -q "reviewer_disagreement_review" scripts/ops/sample_mlops_monitoring_plan.
 grep -q "label_delay_review" scripts/ops/sample_mlops_monitoring_plan.json
 python3 -m py_compile scripts/ops/validate_k8s_staging.py scripts/ops/validate_container_packaging.py scripts/ops/validate_analytics_scale.py scripts/ops/validate_ai_evidence_foundation.py scripts/ops/validate_operational_drill_proof.py scripts/ops/validate_staging_deployment_package.py scripts/ops/validate_k3s_simulation_package.py scripts/ops/validate_production_deployment_package.py scripts/ops/validate_production_secret_file.py scripts/ops/validate_observability_manifests.py scripts/ops/validate_production_readiness_contract.py scripts/ops/build_staging_evidence.py scripts/ops/build_staging_deployment_package.py scripts/ops/build_k3s_simulation_package.py scripts/ops/build_production_deployment_package.py scripts/ops/build_production_readiness_contract.py scripts/ops/build_analytics_export.py scripts/ops/build_ai_evidence_foundation.py scripts/ops/run_mlops_monitoring_plan.py
 bash -n scripts/ops/run_k3d_simulation.sh
+bash -n scripts/dev/start_local_runtime.sh scripts/dev/stop_local_runtime.sh
 python3 scripts/ops/validate_k8s_staging.py
 python3 scripts/ops/validate_container_packaging.py
 python3 scripts/ops/validate_observability_manifests.py
