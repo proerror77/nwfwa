@@ -1395,6 +1395,7 @@ fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInpu
     let claim_header = object_field(value, "claim_header")?;
     let member_policy = object_field(value, "member_policy_snapshot")?;
     let provider_snapshot = object_field(value, "provider_snapshot")?;
+    let mut data_quality_warnings = Vec::new();
     let bill_lines = value
         .get("itemized_bill_lines")
         .and_then(serde_json::Value::as_array)
@@ -1412,21 +1413,34 @@ fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInpu
     let service_date = optional_json_date(claim_header, "service_date")?;
     let diagnosis_code = optional_json_string(claim_header, "diagnosis_code")
         .or_else(|| first_bill_line_diagnosis_code(&bill_lines))
-        .or_else(|| first_document_diagnosis(&documents))
-        .unwrap_or_else(|| "UNKNOWN".into());
+        .or_else(|| first_document_diagnosis(&documents));
+    let diagnosis_code = canonical_string_or_default(
+        diagnosis_code,
+        &mut data_quality_warnings,
+        "claim_header.diagnosis_code",
+        "UNKNOWN",
+    );
 
     let member_payload = MemberPayload {
-        external_member_id: optional_json_string(member_policy, "masked_member_id")
-            .or_else(|| optional_json_string(member_policy, "masked_certificate_id"))
-            .unwrap_or_else(|| "MBR-INBOX".into()),
+        external_member_id: canonical_string_or_default(
+            optional_json_string(member_policy, "masked_member_id")
+                .or_else(|| optional_json_string(member_policy, "masked_certificate_id")),
+            &mut data_quality_warnings,
+            "member_policy_snapshot.masked_member_id",
+            "MBR-INBOX",
+        ),
         dob: optional_json_date(member_policy, "member_birth_date")?,
         gender: optional_json_string(member_policy, "member_gender"),
     };
     let coverage_start_date = required_json_date(member_policy, "coverage_start_date")?;
     let coverage_end_date = required_json_date(member_policy, "coverage_end_date")?;
     let policy_payload = PolicyPayload {
-        external_policy_id: optional_json_string(member_policy, "policy_id")
-            .unwrap_or_else(|| "POL-INBOX".into()),
+        external_policy_id: canonical_string_or_default(
+            optional_json_string(member_policy, "policy_id"),
+            &mut data_quality_warnings,
+            "member_policy_snapshot.policy_id",
+            "POL-INBOX",
+        ),
         product_code: optional_json_string(member_policy, "product_code"),
         coverage_start_date,
         coverage_end_date,
@@ -1434,18 +1448,34 @@ fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInpu
         currency: Some(currency.clone()),
     };
     let provider_payload = ProviderPayload {
-        external_provider_id: optional_json_string(provider_snapshot, "provider_id")
-            .or_else(|| optional_json_string(provider_snapshot, "provider_code"))
-            .unwrap_or_else(|| "PRV-INBOX".into()),
-        name: optional_json_string(provider_snapshot, "name")
-            .unwrap_or_else(|| "Inbox Provider".into()),
-        provider_type: optional_json_string(provider_snapshot, "provider_type")
-            .or_else(|| optional_json_string(provider_snapshot, "type"))
-            .unwrap_or_else(|| "provider".into()),
-        region: optional_json_string(provider_snapshot, "region")
-            .or_else(|| optional_json_string(provider_snapshot, "city"))
-            .or_else(|| optional_json_string(provider_snapshot, "province"))
-            .unwrap_or_else(|| "UNKNOWN".into()),
+        external_provider_id: canonical_string_or_default(
+            optional_json_string(provider_snapshot, "provider_id")
+                .or_else(|| optional_json_string(provider_snapshot, "provider_code")),
+            &mut data_quality_warnings,
+            "provider_snapshot.provider_id",
+            "PRV-INBOX",
+        ),
+        name: canonical_string_or_default(
+            optional_json_string(provider_snapshot, "name"),
+            &mut data_quality_warnings,
+            "provider_snapshot.name",
+            "Inbox Provider",
+        ),
+        provider_type: canonical_string_or_default(
+            optional_json_string(provider_snapshot, "provider_type")
+                .or_else(|| optional_json_string(provider_snapshot, "type")),
+            &mut data_quality_warnings,
+            "provider_snapshot.provider_type",
+            "provider",
+        ),
+        region: canonical_string_or_default(
+            optional_json_string(provider_snapshot, "region")
+                .or_else(|| optional_json_string(provider_snapshot, "city"))
+                .or_else(|| optional_json_string(provider_snapshot, "province")),
+            &mut data_quality_warnings,
+            "provider_snapshot.region",
+            "UNKNOWN",
+        ),
         risk_tier: optional_json_string(provider_snapshot, "risk_tier")
             .and_then(|value| provider_risk_tier_from_str(&value)),
     };
@@ -1464,7 +1494,7 @@ fn canonical_score_input(value: &serde_json::Value) -> Result<CanonicalScoreInpu
     evidence_refs.extend(canonical_document_refs(&documents));
     evidence_refs.sort_by_key(|value| value.to_string());
     evidence_refs.dedup();
-    let trace = canonical_claim_context_trace(&bill_lines, &documents);
+    let trace = canonical_claim_context_trace(&bill_lines, &documents, data_quality_warnings);
 
     Ok(CanonicalScoreInput {
         context: demo_context(FullClaimPayload {
@@ -1514,6 +1544,26 @@ fn optional_json_string(
         .map(str::trim)
         .filter(|value| !value.is_empty())
         .map(ToOwned::to_owned)
+}
+
+fn canonical_string_or_default(
+    value: Option<String>,
+    data_quality_warnings: &mut Vec<serde_json::Value>,
+    field_path: &'static str,
+    default_value: &'static str,
+) -> String {
+    match value {
+        Some(value) => value,
+        None => {
+            data_quality_warnings.push(serde_json::json!({
+                "field_path": field_path,
+                "severity": "warning",
+                "message": "canonical_claim_context defaulted missing field",
+                "default_value": default_value
+            }));
+            default_value.to_string()
+        }
+    }
 }
 
 fn required_json_decimal(
@@ -1693,6 +1743,7 @@ fn canonical_document_refs(documents: &[serde_json::Value]) -> Vec<serde_json::V
 fn canonical_claim_context_trace(
     bill_lines: &[serde_json::Value],
     documents: &[serde_json::Value],
+    data_quality_warnings: Vec<serde_json::Value>,
 ) -> serde_json::Value {
     let mut evidence_refs = bill_lines
         .iter()
@@ -1733,7 +1784,8 @@ fn canonical_claim_context_trace(
     serde_json::json!({
         "input_mode": "canonical_claim_context",
         "evidence_refs": evidence_refs,
-        "source_refs": source_refs
+        "source_refs": source_refs,
+        "data_quality_warnings": data_quality_warnings
     })
 }
 

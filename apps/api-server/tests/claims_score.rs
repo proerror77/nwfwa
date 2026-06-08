@@ -747,6 +747,93 @@ async fn scores_inbox_canonical_claim_context() {
 }
 
 #[tokio::test]
+async fn canonical_claim_context_audits_defaulted_field_warnings() {
+    let app = build_app(test_config());
+
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/v1/claims/score")
+        .header("content-type", "application/json")
+        .header("x-api-key", "dev-secret")
+        .body(Body::from(
+            r#"{
+              "source_system": "tpa-demo",
+              "canonical_claim_context": {
+                "claim_header": {
+                  "external_claim_id": "CLM-CANONICAL-WARNINGS",
+                  "total_amount": 3200,
+                  "currency": "CNY",
+                  "service_date": "2026-01-06"
+                },
+                "member_policy_snapshot": {
+                  "member_birth_date": "1988-03-12",
+                  "member_gender": "F",
+                  "product_code": "MED",
+                  "coverage_start_date": "2026-01-01",
+                  "coverage_end_date": "2026-12-31",
+                  "coverage_limit": 10000
+                },
+                "provider_snapshot": {},
+                "itemized_bill_lines": [
+                  {
+                    "item_name": "Outpatient medicine",
+                    "fee_category": "pharmacy",
+                    "amount": 3200,
+                    "source_path": "reportCase.policyList[0].invoiceList[0].feeList[0].feeDetailList[0]",
+                    "evidence_refs": ["invoice:INV-WARN:fee_detail:LINE-1"]
+                  }
+                ],
+                "document_evidence": []
+              }
+            }"#,
+        ))
+        .unwrap();
+
+    let response = app.clone().oneshot(request).await.unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+
+    let audit_request = Request::builder()
+        .method("GET")
+        .uri("/api/v1/audit/claims/CLM-CANONICAL-WARNINGS")
+        .header("x-api-key", "dev-secret")
+        .body(Body::empty())
+        .unwrap();
+    let audit_response = app.oneshot(audit_request).await.unwrap();
+    assert_eq!(audit_response.status(), StatusCode::OK);
+    let audit_body = to_bytes(audit_response.into_body(), usize::MAX)
+        .await
+        .unwrap();
+    let audit_body: serde_json::Value = serde_json::from_slice(&audit_body).unwrap();
+    let scoring_event = audit_body["events"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|event| event["event_type"] == "scoring.completed")
+        .expect("audit history should include scoring.completed");
+    let warnings = scoring_event["payload"]["canonical_claim_context_trace"]
+        ["data_quality_warnings"]
+        .as_array()
+        .expect("canonical trace should include data quality warnings");
+    for field_path in [
+        "claim_header.diagnosis_code",
+        "member_policy_snapshot.masked_member_id",
+        "member_policy_snapshot.policy_id",
+        "provider_snapshot.provider_id",
+        "provider_snapshot.name",
+        "provider_snapshot.provider_type",
+        "provider_snapshot.region",
+    ] {
+        assert!(
+            warnings
+                .iter()
+                .any(|warning| warning["field_path"] == field_path
+                    && warning["severity"] == "warning"),
+            "missing warning for {field_path}"
+        );
+    }
+}
+
+#[tokio::test]
 async fn scores_scoring_ready_inbox_run_handoff() {
     let app = build_app(test_config());
 
