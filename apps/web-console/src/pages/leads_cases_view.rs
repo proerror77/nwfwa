@@ -59,7 +59,7 @@ pub(super) fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                     <p class="empty">{"No leads returned."}</p>
                                 } else {
                                     <div class="queue-list">
-                                        {for snapshot.leads.iter().take(12).enumerate().map(|(index, lead)| {
+                                        {for snapshot.leads.iter().enumerate().map(|(index, lead)| {
                                             let selected = props.selected_lead_id.trim();
                                             let is_active = if selected.is_empty() {
                                                 index == 0
@@ -97,7 +97,7 @@ pub(super) fn leads_cases_view(props: &LeadsCasesProps) -> Html {
                                     <p class="empty">{"No investigation cases returned."}</p>
                                 } else {
                                     <div class="queue-list">
-                                        {for snapshot.cases.iter().take(12).enumerate().map(|(index, case)| {
+                                        {for snapshot.cases.iter().enumerate().map(|(index, case)| {
                                             let selected = props.selected_case_id.trim();
                                             let is_active = if selected.is_empty() {
                                                 index == 0

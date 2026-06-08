@@ -212,7 +212,7 @@ fn audit_samples_view(props: &AuditSamplesProps) -> Html {
                         <>
                             {audit_sampling_governance_cockpit(samples)}
                             <div class="factor-card-grid">
-                                {for samples.iter().take(10).map(|sample| html! {
+                                {for samples.iter().map(|sample| html! {
                                     <div class="factor-card">
                                         <div>
                                             <strong>{format!("{} / {}", sample.sample_id, sample.sample_mode)}</strong>
@@ -234,7 +234,7 @@ fn audit_samples_view(props: &AuditSamplesProps) -> Html {
                                                 <p class="empty">{"No selected leads in this sample."}</p>
                                             } else {
                                                 <div class="factor-card-grid">
-                                                    {for sample.selected_leads.iter().take(6).map(|lead| html! {
+                                                    {for sample.selected_leads.iter().map(|lead| html! {
                                                         <div class="metric-row">
                                                             <span>{format!("{} / {}", lead.lead_id, lead.claim_id)}</span>
                                                             <strong>{format!("{} / {}", lead.risk_score, lead.rag)}</strong>

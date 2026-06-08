@@ -108,7 +108,7 @@ fn qa_review_view(props: &QaReviewProps) -> Html {
                                 <p class="empty">{"No sampled QA cases in the queue."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.queue.iter().take(8).map(qa_queue_card)}
+                                    {for snapshot.queue.iter().map(qa_queue_card)}
                                 </div>
                             }
                         </section>
@@ -119,7 +119,7 @@ fn qa_review_view(props: &QaReviewProps) -> Html {
                                 <p class="empty">{"No QA feedback items returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.feedback_items.iter().take(8).map(qa_feedback_card)}
+                                    {for snapshot.feedback_items.iter().map(qa_feedback_card)}
                                 </div>
                             }
                         </section>

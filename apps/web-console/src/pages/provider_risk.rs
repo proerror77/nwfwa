@@ -91,7 +91,7 @@ fn provider_risk_view(props: &ProviderRiskProps) -> Html {
                                 <p class="empty">{"No provider risk profiles returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for summary.providers.iter().take(12).map(|provider| html! {
+                                    {for summary.providers.iter().map(|provider| html! {
                                         <div class="factor-card">
                                             <div>
                                                 <strong>{format!("{} / {}", provider.provider_id, provider.risk_tier)}</strong>
