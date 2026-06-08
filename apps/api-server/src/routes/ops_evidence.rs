@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{
         CreateEvidenceDocumentChunkInput, CreateEvidenceDocumentInput,
@@ -11,11 +12,10 @@ use crate::{
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
@@ -128,10 +128,9 @@ pub struct EvidenceRetrievalAuditEventListResponse {
 
 pub async fn create_document(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<CreateEvidenceDocumentRequest>,
 ) -> Result<Json<EvidenceDocumentRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_document_request(&request)?;
     let document = state
         .repository
@@ -183,9 +182,8 @@ pub async fn create_document(
 
 pub async fn list_documents(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<EvidenceDocumentListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let documents = state
         .repository
         .list_evidence_documents(Some(&actor.customer_scope_id))
@@ -196,10 +194,9 @@ pub async fn list_documents(
 
 pub async fn get_document(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(document_id): Path<String>,
 ) -> Result<Json<EvidenceDocumentRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let document = state
         .repository
         .get_evidence_document(&document_id, Some(&actor.customer_scope_id))
@@ -214,11 +211,10 @@ pub async fn get_document(
 
 pub async fn create_document_chunk(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(document_id): Path<String>,
     Json(request): Json<CreateEvidenceDocumentChunkRequest>,
 ) -> Result<Json<EvidenceDocumentChunkRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_chunk_request(&request)?;
     let chunk = state
         .repository
@@ -265,10 +261,9 @@ pub async fn create_document_chunk(
 
 pub async fn list_document_chunks(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(document_id): Path<String>,
 ) -> Result<Json<EvidenceDocumentChunkListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let chunks = state
         .repository
         .list_evidence_document_chunks(&document_id, Some(&actor.customer_scope_id))
@@ -279,11 +274,10 @@ pub async fn list_document_chunks(
 
 pub async fn create_ocr_output(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(document_id): Path<String>,
     Json(request): Json<CreateEvidenceOcrOutputRequest>,
 ) -> Result<Json<EvidenceOcrOutputRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_ocr_request(&request)?;
     let output = state
         .repository
@@ -334,10 +328,9 @@ pub async fn create_ocr_output(
 
 pub async fn list_ocr_outputs(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(document_id): Path<String>,
 ) -> Result<Json<EvidenceOcrOutputListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let ocr_outputs = state
         .repository
         .list_evidence_ocr_outputs(&document_id, Some(&actor.customer_scope_id))
@@ -348,10 +341,9 @@ pub async fn list_ocr_outputs(
 
 pub async fn create_embedding_job(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<CreateEvidenceEmbeddingJobRequest>,
 ) -> Result<Json<EvidenceEmbeddingJobRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_embedding_job_request(&request)?;
     let job = state
         .repository
@@ -399,9 +391,8 @@ pub async fn create_embedding_job(
 
 pub async fn list_embedding_jobs(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<EvidenceEmbeddingJobListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let embedding_jobs = state
         .repository
         .list_evidence_embedding_jobs(Some(&actor.customer_scope_id))
@@ -412,10 +403,9 @@ pub async fn list_embedding_jobs(
 
 pub async fn create_retrieval_audit_event(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<CreateEvidenceRetrievalAuditEventRequest>,
 ) -> Result<Json<EvidenceRetrievalAuditEventRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_retrieval_audit_request(&request)?;
     let event = state
         .repository
@@ -463,9 +453,8 @@ pub async fn create_retrieval_audit_event(
 
 pub async fn list_retrieval_audit_events(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<EvidenceRetrievalAuditEventListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let retrieval_audit_events = state
         .repository
         .list_evidence_retrieval_audit_events(Some(&actor.customer_scope_id))
@@ -619,19 +608,6 @@ fn evidence_refs_with_anchor(values: &[String], kind: &str, id: &str) -> Vec<Str
 
 fn empty_object() -> Value {
     json!({})
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 fn not_found(code: &'static str, message: &'static str) -> impl FnOnce() -> ApiError {
