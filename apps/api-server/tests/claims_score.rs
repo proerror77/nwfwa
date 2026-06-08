@@ -402,11 +402,11 @@ async fn scores_spec_style_top_level_full_payload() {
     assert!(body["model_score"]["metadata"]["abuse_probability"].is_number());
     assert!(body["model_score"]["metadata"]["waste_probability"].is_number());
     assert_eq!(body["risk_level"], "Critical");
-    assert_eq!(body["decision_outcome"], "manual_review");
-    assert_eq!(body["decision_authority"], "customer_policy_rule");
+    assert_eq!(body["decision_outcome"], "pending_evidence");
+    assert_eq!(body["decision_authority"], "clinical_policy_rule");
     assert_eq!(body["decision_confidence"], "deterministic");
     assert_eq!(body["appeal_or_review_required"], true);
-    assert_eq!(body["reason_code"], "EARLY_CLAIM");
+    assert_eq!(body["reason_code"], "MEDICALLY_UNNECESSARY_SERVICE");
     assert!(body["confidence_score"].as_u64().unwrap() >= 80);
     assert_eq!(body["confidence"], "High");
     assert!(body["routing_reason"]
