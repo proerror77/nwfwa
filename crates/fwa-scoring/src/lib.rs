@@ -130,8 +130,8 @@ pub fn aggregate_with_routing_policy(
         (similar_case_score, 0.05),
     ]);
     let risk_score = RiskScore::new(final_score_value).expect("clamped score is valid");
-    let rag = RiskLevel::from_score(risk_score);
     let risk_level = risk_level_for_policy(risk_score.value(), &routing_policy).to_string();
+    let rag = rag_for_policy(&risk_level);
     let confidence_score = confidence_score(rule_score, anomaly_score.score, model_score.score);
     let confidence = confidence_level_for_policy(confidence_score, &routing_policy).to_string();
     let recommended_action = recommended_action(
@@ -394,6 +394,15 @@ fn risk_level_for_policy(score: u8, policy: &RoutingPolicy) -> &'static str {
         "Medium"
     } else {
         "Low"
+    }
+}
+
+fn rag_for_policy(risk_level: &str) -> RiskLevel {
+    match risk_level {
+        "Low" => RiskLevel::Green,
+        "Medium" => RiskLevel::Amber,
+        "High" | "Critical" => RiskLevel::Red,
+        _ => RiskLevel::Red,
     }
 }
 
@@ -1341,6 +1350,44 @@ mod tests {
         assert_eq!(decision.routing_policy.policy_id, "custom_prepay_routing");
         assert_eq!(decision.routing_policy.version, 3);
         assert_eq!(decision.layers[6].reason, "高风险，建议人工审核");
+    }
+
+    #[test]
+    fn custom_routing_policy_controls_rag_thresholds() {
+        let mut features = BTreeMap::new();
+        features.insert(
+            "claim_amount_peer_percentile".into(),
+            feature(serde_json::json!(100)),
+        );
+        let policy = RoutingPolicy {
+            policy_id: "raised_high_threshold".into(),
+            version: 2,
+            review_mode: "pre_payment".into(),
+            risk_thresholds: RiskThresholds {
+                low_max: 39,
+                medium_min: 40,
+                high_min: 90,
+                critical_min: 95,
+            },
+            confidence_thresholds: ConfidenceThresholds {
+                low_confidence_below: 50,
+                high_confidence_min: 80,
+            },
+            provider_review_threshold: 90,
+        };
+
+        let decision = aggregate_with_routing_policy(
+            &features,
+            &[rule(100)],
+            &model(100),
+            &anomaly(100),
+            100,
+            policy,
+        );
+
+        assert_eq!(decision.risk_score.value(), 80);
+        assert_eq!(decision.risk_level, "Medium");
+        assert_eq!(decision.rag, RiskLevel::Amber);
     }
 
     #[test]
