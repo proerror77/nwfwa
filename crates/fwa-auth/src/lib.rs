@@ -58,7 +58,7 @@ pub fn authenticate_api_key(
         if let Some(principal) = config
             .principals
             .iter()
-            .find(|principal| principal.key == value)
+            .find(|principal| constant_time_eq(&principal.key, value))
         {
             return Ok(AuthenticatedPrincipal {
                 actor: ActorContext {
@@ -70,7 +70,7 @@ pub fn authenticate_api_key(
                 permissions: principal.permissions.clone(),
             });
         }
-        if value == config.key {
+        if constant_time_eq(value, &config.key) {
             return Ok(AuthenticatedPrincipal {
                 actor: ActorContext {
                     actor_id: config.source_system.clone(),
@@ -83,6 +83,18 @@ pub fn authenticate_api_key(
         }
     }
     Err(AuthError::InvalidApiKey)
+}
+
+fn constant_time_eq(left: &str, right: &str) -> bool {
+    let left = left.as_bytes();
+    let right = right.as_bytes();
+    let mut diff = left.len() ^ right.len();
+    for index in 0..left.len().max(right.len()) {
+        let left_byte = left.get(index).copied().unwrap_or(0);
+        let right_byte = right.get(index).copied().unwrap_or(0);
+        diff |= (left_byte ^ right_byte) as usize;
+    }
+    diff == 0
 }
 
 #[cfg(test)]
@@ -161,6 +173,14 @@ mod tests {
             validate_api_key(Some("wrong"), &config).unwrap_err(),
             AuthError::InvalidApiKey
         );
+    }
+
+    #[test]
+    fn api_key_comparison_requires_exact_full_match() {
+        assert!(constant_time_eq("secret", "secret"));
+        assert!(!constant_time_eq("secret", "secre"));
+        assert!(!constant_time_eq("secret", "secret-extra"));
+        assert!(!constant_time_eq("secret", "secRet"));
     }
 
     #[test]
