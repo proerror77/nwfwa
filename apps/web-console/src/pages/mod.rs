@@ -1,5 +1,6 @@
 mod agent_investigator;
 mod bootstrap_ops;
+mod claim_inbox;
 mod dashboard;
 mod data_sources;
 mod evidence_hub;
@@ -15,6 +16,7 @@ mod runtime_scoring;
 
 pub use agent_investigator::*;
 pub use bootstrap_ops::*;
+pub use claim_inbox::*;
 pub use dashboard::*;
 pub use data_sources::*;
 pub use evidence_hub::*;
