@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         canonical_feedback_target, AuditEventListFilter, CompleteModelRetrainingJobInput,
@@ -11,11 +12,11 @@ use crate::{
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::{authenticate_api_key, validate_api_key};
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{canonical_scheme_family, AuditEventId, ScoringRunId};
 use fwa_rules::Rule;
 use rust_decimal::Decimal;
@@ -315,9 +316,8 @@ pub struct ModelLifecycleResponse {
 
 pub async fn list_models(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<ModelListResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let models = state
         .repository
         .list_models()
@@ -328,10 +328,9 @@ pub async fn list_models(
 
 pub async fn model_performance(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(model_key): Path<String>,
 ) -> Result<Json<crate::repository::ModelPerformanceRecord>, ApiError> {
-    authorize(&state, &headers)?;
     let performance = state
         .repository
         .model_performance(&model_key)
@@ -345,20 +344,18 @@ pub async fn model_performance(
 
 pub async fn model_promotion_gates(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelPromotionGatesResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let (_, gates) = load_model_promotion_gates(&state, &model_key).await?;
     Ok(Json(gates))
 }
 
 pub async fn model_version_promotion_gates(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path((model_key, model_version)): Path<(String, String)>,
 ) -> Result<Json<ModelPromotionGatesResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let (_, gates) =
         load_model_promotion_gates_for_version(&state, &model_key, &model_version).await?;
     Ok(Json(gates))
@@ -366,10 +363,9 @@ pub async fn model_version_promotion_gates(
 
 pub async fn model_retraining_readiness(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelRetrainingReadinessResponse>, ApiError> {
-    authorize(&state, &headers)?;
     Ok(Json(
         load_model_retraining_readiness(&state, &model_key).await?,
     ))
@@ -377,10 +373,9 @@ pub async fn model_retraining_readiness(
 
 pub async fn list_model_retraining_jobs(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelRetrainingJobListResponse>, ApiError> {
-    authorize(&state, &headers)?;
     ensure_model_exists(&state, &model_key).await?;
     let jobs = state
         .repository
@@ -392,10 +387,9 @@ pub async fn list_model_retraining_jobs(
 
 pub async fn model_monitoring_review_queue(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(model_key): Path<String>,
 ) -> Result<Json<ModelMonitoringReviewQueueResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     ensure_model_exists(&state, &model_key).await?;
     let events = state
         .repository
@@ -427,11 +421,11 @@ pub async fn model_monitoring_review_queue(
 
 pub async fn submit_model_monitoring_review_task_review(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((model_key, task_id)): Path<(String, String)>,
     Json(request): Json<SubmitModelMonitoringReviewTaskReviewRequest>,
 ) -> Result<Json<ModelMonitoringReviewTaskReviewResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    let actor = require_permission(principal, "ops:models:review")?;
     validate_monitoring_review_task_review_request(&request)?;
     ensure_model_exists(&state, &model_key).await?;
 
@@ -485,11 +479,10 @@ pub async fn submit_model_monitoring_review_task_review(
 
 pub async fn create_model_retraining_job(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(model_key): Path<String>,
     Json(request): Json<CreateModelRetrainingJobRequest>,
 ) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     if request.requested_by.trim().is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -551,11 +544,11 @@ pub async fn create_model_retraining_job(
 
 pub async fn submit_mlops_monitoring_report(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
     Json(request): Json<SubmitMlopsMonitoringReportRequest>,
 ) -> Result<Json<SubmitMlopsMonitoringReportResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    let actor = require_permission(principal, "ops:models:review")?;
     validate_mlops_monitoring_report_request(&request)?;
     let model = state
         .repository
@@ -587,11 +580,11 @@ pub async fn submit_mlops_monitoring_report(
 
 pub async fn submit_mlops_alert_delivery(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
     Json(request): Json<SubmitMlopsAlertDeliveryRequest>,
 ) -> Result<Json<SubmitMlopsAlertDeliveryResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    let actor = require_permission(principal, "ops:models:review")?;
     validate_mlops_alert_delivery_request(&request)?;
     let model = state
         .repository
@@ -623,10 +616,9 @@ pub async fn submit_mlops_alert_delivery(
 
 pub async fn mlops_alert_delivery_queue(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(model_key): Path<String>,
 ) -> Result<Json<MlopsAlertDeliveryQueueResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     ensure_model_exists(&state, &model_key).await?;
     let events = state
         .repository
@@ -658,11 +650,11 @@ pub async fn mlops_alert_delivery_queue(
 
 pub async fn submit_mlops_alert_delivery_task_review(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((model_key, task_id)): Path<(String, String)>,
     Json(request): Json<SubmitMlopsAlertDeliveryTaskReviewRequest>,
 ) -> Result<Json<MlopsAlertDeliveryTaskReviewResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
+    let actor = require_permission(principal, "ops:models:review")?;
     validate_alert_delivery_task_review_request(&request)?;
     ensure_model_exists(&state, &model_key).await?;
     let events = state
@@ -714,11 +706,10 @@ pub async fn submit_mlops_alert_delivery_task_review(
 
 pub async fn update_model_retraining_job_status(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(job_id): Path<String>,
     Json(request): Json<UpdateModelRetrainingJobStatusRequest>,
 ) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     if !matches!(
         request.status.as_str(),
         "queued" | "running" | "validation" | "failed" | "cancelled"
@@ -769,10 +760,9 @@ pub async fn update_model_retraining_job_status(
 
 pub async fn claim_next_model_retraining_job(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<ClaimModelRetrainingJobRequest>,
 ) -> Result<Json<ModelRetrainingJobRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     if request.actor.trim().is_empty() {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -812,11 +802,10 @@ pub async fn claim_next_model_retraining_job(
 
 pub async fn complete_model_retraining_job(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(job_id): Path<String>,
     Json(request): Json<CompleteModelRetrainingJobRequest>,
 ) -> Result<Json<CompleteModelRetrainingJobResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_retraining_output_request(&request)?;
     let job = state
         .repository
@@ -2356,37 +2345,32 @@ fn has_supported_uri_suffix(value: &str, suffixes: &[&str]) -> bool {
 
 pub async fn submit_model_promotion_review(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
     Json(request): Json<SubmitModelPromotionReviewRequest>,
 ) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
-    submit_model_promotion_review_for_target(state, headers, model_key, None, request).await
+    let actor = require_permission(principal, "ops:models:review")?;
+    submit_model_promotion_review_for_target(state, actor, model_key, None, request).await
 }
 
 pub async fn submit_model_version_promotion_review(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((model_key, model_version)): Path<(String, String)>,
     Json(request): Json<SubmitModelPromotionReviewRequest>,
 ) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
-    submit_model_promotion_review_for_target(
-        state,
-        headers,
-        model_key,
-        Some(model_version),
-        request,
-    )
-    .await
+    let actor = require_permission(principal, "ops:models:review")?;
+    submit_model_promotion_review_for_target(state, actor, model_key, Some(model_version), request)
+        .await
 }
 
 async fn submit_model_promotion_review_for_target(
     state: AppState,
-    headers: HeaderMap,
+    actor: ActorContext,
     model_key: String,
     model_version: Option<String>,
     request: SubmitModelPromotionReviewRequest,
 ) -> Result<Json<ModelPromotionReviewRecord>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:models:review")?;
     if !matches!(request.decision.as_str(), "approved" | "rejected") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -2458,31 +2442,32 @@ async fn submit_model_promotion_review_for_target(
 
 pub async fn activate_model(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
-    activate_model_target(state, headers, model_key, None, request).await
+    let actor = require_permission(principal, "ops:models:activate")?;
+    activate_model_target(state, actor, model_key, None, request).await
 }
 
 pub async fn activate_model_version(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path((model_key, model_version)): Path<(String, String)>,
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
-    activate_model_target(state, headers, model_key, Some(model_version), request).await
+    let actor = require_permission(principal, "ops:models:activate")?;
+    activate_model_target(state, actor, model_key, Some(model_version), request).await
 }
 
 async fn activate_model_target(
     state: AppState,
-    headers: HeaderMap,
+    actor: ActorContext,
     model_key: String,
     model_version: Option<String>,
     request: ModelLifecycleRequest,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
-    let actor = authorize_permission(&state, &headers, "ops:models:activate")?;
     let (candidate, gates) = load_model_promotion_gates_for_optional_version(
         &state,
         &model_key,
@@ -2571,12 +2556,12 @@ async fn activate_model_target(
 
 pub async fn rollback_model(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(model_key): Path<String>,
     Json(request): Json<ModelLifecycleRequest>,
 ) -> Result<Json<ModelLifecycleResponse>, ApiError> {
     validate_model_lifecycle_request(&request)?;
-    let actor = authorize_permission(&state, &headers, "ops:models:rollback")?;
+    let actor = require_permission(principal, "ops:models:rollback")?;
     let models = state
         .repository
         .list_models()
@@ -4256,35 +4241,10 @@ async fn record_model_rollback_audit(
         .await
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
-}
-
-fn authorize_permission(
-    state: &AppState,
-    headers: &HeaderMap,
+fn require_permission(
+    principal: AuthenticatedPrincipal,
     permission: &str,
 ) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
     if !principal.has_permission(permission) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,

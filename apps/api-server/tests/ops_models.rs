@@ -311,6 +311,10 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "model_artifacts:s3://fwa-models/baseline_fwa/{candidate_version}/model.onnx",
                 "model_validation_reports:s3://fwa-models/baseline_fwa/{candidate_version}/validation.json",
                 "model_artifact_evaluations:s3://fwa-models/baseline_fwa/{candidate_version}/artifact-evaluation/model_artifact_evaluation_report.json",
+                "model_feature_importance:data/eval/claims_model_eval_activation_candidate/v1/feature_importance.parquet",
+                "model_permutation_importance:s3://fwa-models/baseline_fwa/{candidate_version}/permutation_importance.parquet",
+                "automl_factor_rankings:s3://fwa-models/baseline_fwa/{candidate_version}/automl_factor_ranking_report.json",
+                "model_overfitting_diagnostics:s3://fwa-models/baseline_fwa/{candidate_version}/overfitting_diagnostics_report.json",
                 "rule_candidate_backtests:s3://fwa-models/baseline_fwa/{candidate_version}/rule-candidates/backtest/rule_candidate_backtest_report.json",
                 "rule_candidate_review_tasks:s3://fwa-models/baseline_fwa/{candidate_version}/rule-candidates/backtest/rule_candidate_backtest_review_tasks.json",
                 "model_evaluations:eval_baseline_activation_candidate"
@@ -324,10 +328,21 @@ async fn register_activation_candidate(app: axum::Router) -> String {
               "threshold": "0.52",
               "confusion_matrix_json": {{"tp": 12, "fp": 2, "tn": 14, "fn": 2}},
               "feature_importance_uri": "data/eval/claims_model_eval_activation_candidate/v1/feature_importance.parquet",
+              "permutation_importance_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/permutation_importance.parquet",
               "metrics_json": {{
                 "score_psi": 0.04,
+                "max_feature_psi": 0.03,
+                "score_stability_status": "passed",
+                "feature_stability_status": "passed",
                 "out_of_time_auc": 0.84,
+                "out_of_time_precision": 0.77,
+                "out_of_time_recall": 0.70,
+                "out_of_time_validation_status": "passed",
                 "review_capacity_threshold_status": "passed",
+                "overfitting_diagnostics_status": "passed",
+                "overfitting_diagnostics_report_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/overfitting_diagnostics_report.json",
+                "automl_factor_ranking_status": "passed",
+                "automl_factor_ranking_report_uri": "s3://fwa-models/baseline_fwa/{candidate_version}/automl_factor_ranking_report.json",
                 "leakage_check_status": "passed",
                 "time_group_split_status": "passed",
                 "time_split_field": "service_date",
@@ -358,7 +373,7 @@ async fn register_activation_candidate(app: axum::Router) -> String {
         ),
     )
     .await;
-    assert_eq!(status, StatusCode::OK);
+    assert_eq!(status, StatusCode::OK, "{completed}");
     assert_eq!(completed["candidate_model"]["version"], candidate_version);
 
     candidate_version.to_string()
