@@ -446,11 +446,12 @@ pub async fn score_claim(
             .iter()
             .map(|evidence| serde_json::json!(evidence)),
     );
-    let rules = state
-        .repository
-        .list_active_rules()
-        .await
-        .map_err(internal_error("RULE_LOAD_FAILED"))?;
+    let (rules_result, active_model_result) = tokio::join!(
+        state.repository.list_active_rules(),
+        active_scoring_model(&state, &review_mode)
+    );
+    let rules = rules_result.map_err(internal_error("RULE_LOAD_FAILED"))?;
+    let active_model = active_model_result?;
     let rules = rules
         .into_iter()
         .filter(|rule| review_mode_applies(&rule.review_mode, &review_mode))
@@ -478,7 +479,6 @@ pub async fn score_claim(
             .cloned()
             .map(serde_json::Value::String),
     );
-    let active_model = active_scoring_model(&state, &review_mode).await?;
     let model_score = match state
         .scorer
         .score(ModelScoreRequest {
