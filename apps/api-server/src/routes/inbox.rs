@@ -333,13 +333,7 @@ fn status_for_validation_result(validation_result: &str) -> StatusCode {
 fn internal_error(
     code: &'static str,
 ) -> impl FnOnce(anyhow::Error) -> ApiError + Send + Sync + 'static {
-    move |error| {
-        ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            code,
-            format!("{code}: {error}"),
-        )
-    }
+    move |error| ApiError::internal(code, error)
 }
 
 fn raw_payload_checksum(payload: &Value) -> String {

@@ -494,5 +494,5 @@ fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiE
 fn internal_error(
     code: &'static str,
 ) -> impl Fn(anyhow::Error) -> ApiError + Clone + Send + Sync + 'static {
-    move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+    move |error| ApiError::internal(code, error)
 }

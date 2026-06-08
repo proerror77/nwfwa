@@ -643,5 +643,5 @@ fn bad_request(code: &'static str, message: impl Into<String>) -> ApiError {
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
-    move |error| ApiError::new(StatusCode::INTERNAL_SERVER_ERROR, code, error.to_string())
+    move |error| ApiError::internal(code, error)
 }
