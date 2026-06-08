@@ -155,13 +155,8 @@ pub async fn investigate_case(
         top_reasons: governed_top_reasons,
         similar_cases,
     });
-    let output_json = serde_json::to_value(&package).map_err(|error| {
-        ApiError::new(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            "AGENT_ENCODE_FAILED",
-            error.to_string(),
-        )
-    })?;
+    let output_json = serde_json::to_value(&package)
+        .map_err(|error| ApiError::internal("AGENT_ENCODE_FAILED", error))?;
     let evidence_refs = package
         .evidence_refs
         .iter()
