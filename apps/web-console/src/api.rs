@@ -4,12 +4,14 @@ use gloo_net::http::Request;
 use serde::Deserialize;
 use serde_json::Value;
 
+mod audit;
 mod bootstrap;
 mod cases;
 mod evidence;
 mod governance;
 mod models;
 
+pub(crate) use audit::*;
 pub(crate) use bootstrap::*;
 pub(crate) use cases::*;
 pub(crate) use evidence::*;
@@ -173,37 +175,6 @@ pub(crate) async fn get_provider_risk_summary(
     api_key: String,
 ) -> Result<ProviderRiskSummary, String> {
     request_get_json("/api/v1/ops/providers/risk-summary", api_key).await
-}
-
-pub(crate) async fn get_audit_samples(api_key: String) -> Result<Vec<AuditSampleRecord>, String> {
-    Ok(
-        request_get_json::<AuditSampleListResponse>("/api/v1/ops/audit-samples", api_key)
-            .await?
-            .samples,
-    )
-}
-
-pub(crate) async fn post_audit_sample(
-    api_key: String,
-    payload: Value,
-) -> Result<AuditSampleRecord, String> {
-    request_json("/api/v1/ops/audit-samples", api_key, payload).await
-}
-
-pub(crate) async fn get_audit_events_for_sample(
-    api_key: String,
-    sample_id: String,
-) -> Result<Vec<AuditEventRecord>, String> {
-    let sample_id = sample_id.trim();
-    if sample_id.is_empty() {
-        return Err("audit sample id is required".into());
-    }
-    Ok(request_get_json::<AuditEventListResponse>(
-        &format!("/api/v1/ops/audit-events?sample_id={sample_id}&limit=20"),
-        api_key,
-    )
-    .await?
-    .events)
 }
 
 pub(crate) async fn get_medical_review_queue(
