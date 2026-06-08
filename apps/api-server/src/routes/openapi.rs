@@ -4819,7 +4819,7 @@ pub async fn openapi_schema() -> Json<Value> {
                         "source_rule_version": { "type": "integer", "minimum": 0 },
                         "condition_index": { "type": "integer", "minimum": 0 },
                         "field": { "type": "string" },
-                        "operator": { "type": "string", "enum": ["<=", ">=", "=="] },
+                        "operator": { "type": "string", "enum": ["<=", "<", ">=", ">", "==", "in"] },
                         "value": {},
                         "review_mode": { "type": "string", "enum": ["pre_payment", "post_payment", "both"] },
                         "scheme_family": { "$ref": "#/components/schemas/FwaSchemeFamily" },
@@ -5374,7 +5374,7 @@ pub async fn openapi_schema() -> Json<Value> {
                     "required": ["field", "operator", "value"],
                     "properties": {
                         "field": { "type": "string" },
-                        "operator": { "type": "string", "enum": ["<=", ">=", "=="] },
+                        "operator": { "type": "string", "enum": ["<=", "<", ">=", ">", "==", "in"] },
                         "value": {}
                     }
                 },

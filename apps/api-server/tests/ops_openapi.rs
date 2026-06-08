@@ -1431,6 +1431,18 @@ async fn openapi_includes_operations_paths() {
             ["scheme_family"]["$ref"],
         "#/components/schemas/FwaSchemeFamily"
     );
+    let condition_library_operators = schema["components"]["schemas"]["RuleConditionLibraryRecord"]
+        ["properties"]["operator"]["enum"]
+        .as_array()
+        .unwrap();
+    for operator in ["<=", "<", ">=", ">", "==", "in"] {
+        assert!(
+            condition_library_operators
+                .iter()
+                .any(|value| value == operator),
+            "missing rule condition library operator {operator}"
+        );
+    }
     assert!(
         schema["components"]["schemas"]["RuleDiscoveryCandidate"]["required"]
             .as_array()
@@ -1460,6 +1472,18 @@ async fn openapi_includes_operations_paths() {
         schema["components"]["schemas"]["RuleDefinition"]["properties"]["review_mode"]["enum"][1],
         "post_payment"
     );
+    let rule_condition_operators = schema["components"]["schemas"]["RuleCondition"]["properties"]
+        ["operator"]["enum"]
+        .as_array()
+        .unwrap();
+    for operator in ["<=", "<", ">=", ">", "==", "in"] {
+        assert!(
+            rule_condition_operators
+                .iter()
+                .any(|value| value == operator),
+            "missing rule condition operator {operator}"
+        );
+    }
     assert_eq!(
         schema["components"]["schemas"]["RuleSummary"]["properties"]["scheme_family"]["$ref"],
         "#/components/schemas/FwaSchemeFamily"
