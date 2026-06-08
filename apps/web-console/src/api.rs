@@ -11,6 +11,7 @@ mod evidence;
 mod governance;
 mod medical;
 mod models;
+mod scoring;
 
 pub(crate) use audit::*;
 pub(crate) use bootstrap::*;
@@ -19,6 +20,7 @@ pub(crate) use evidence::*;
 pub(crate) use governance::*;
 pub(crate) use medical::*;
 pub(crate) use models::*;
+pub(crate) use scoring::*;
 
 pub(crate) async fn request_json<T>(
     path: &str,
@@ -85,20 +87,6 @@ fn api_error_message(path: &str, status: u16, body: &str) -> String {
 
 fn pretty_json(value: &Value) -> String {
     serde_json::to_string_pretty(value).unwrap_or_else(|_| value.to_string())
-}
-
-pub(crate) async fn normalize_claim(
-    payload: Value,
-    api_key: String,
-) -> Result<InboxNormalizeResponse, String> {
-    request_json("/api/v1/inbox/claims/normalize", api_key, payload).await
-}
-
-pub(crate) async fn score_canonical_claim(
-    payload: Value,
-    api_key: String,
-) -> Result<ScoreResponse, String> {
-    request_json("/api/v1/claims/score", api_key, payload).await
 }
 
 pub(crate) async fn get_dashboard_summary(api_key: String) -> Result<DashboardSummary, String> {
