@@ -1,3 +1,4 @@
+mod agent_investigator;
 mod bootstrap_ops;
 mod dashboard;
 mod data_sources;
@@ -12,6 +13,7 @@ mod provider_risk;
 mod rules;
 mod runtime_scoring;
 
+pub use agent_investigator::*;
 pub use bootstrap_ops::*;
 pub use dashboard::*;
 pub use data_sources::*;
