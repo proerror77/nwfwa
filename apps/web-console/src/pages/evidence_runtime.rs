@@ -4,7 +4,7 @@ use web_sys::HtmlInputElement;
 
 #[function_component(EvidenceRuntimePage)]
 pub fn evidence_runtime_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let selected_document_id = use_state(String::new);
     let snapshot_state = use_state(|| ApiState::<EvidenceRuntimeSnapshot>::Idle);
     let action_state = use_state(|| ApiState::<String>::Idle);

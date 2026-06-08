@@ -9,7 +9,7 @@ use rules_view::RulesView;
 
 #[function_component(RulesPage)]
 pub fn rules_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let rule_id = use_state(|| "rule_early_claim".to_string());
     let model_key = use_state(|| "baseline_fwa".to_string());
     let model_version = use_state(|| "0.3.0-candidate".to_string());

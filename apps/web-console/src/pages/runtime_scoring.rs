@@ -4,7 +4,7 @@ use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 
 #[function_component(RuntimeScoringPage)]
 pub fn runtime_scoring_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let request_payload = use_state(|| SAMPLE_RUNTIME_SCORE_REQUEST.to_string());
     let score_state = use_state(|| ApiState::<ScoreResponse>::Idle);
 

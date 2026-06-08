@@ -44,7 +44,7 @@ use routing::{
 pub(crate) use rule_helpers::*;
 pub(crate) use rule_ui_helpers::*;
 pub(crate) use runtime_helpers::*;
-use state::{ApiState, Language};
+use state::{use_api_key, ApiKeyContext, ApiState, Language};
 use types::*;
 pub(crate) use ui_helpers::*;
 pub(crate) use visual_helpers::*;
@@ -53,6 +53,7 @@ pub(crate) use visual_helpers::*;
 fn app() -> Html {
     let active = use_state(active_module_from_location);
     let language = use_state(|| Language::En);
+    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
     let select_module = {
         let active = active.clone();
         Callback::from(move |module: String| {
@@ -103,6 +104,7 @@ fn app() -> Html {
     }
 
     html! {
+        <ContextProvider<ApiKeyContext> context={ApiKeyContext(api_key)}>
         <div class="app">
             <aside class="sidebar">
                 <div class="brand-block">
@@ -203,6 +205,7 @@ fn app() -> Html {
                 </div>
             </main>
         </div>
+        </ContextProvider<ApiKeyContext>>
     }
 }
 

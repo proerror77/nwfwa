@@ -9,7 +9,7 @@ use agent_investigator_view::{agent_investigator_blueprint, AgentRunsView};
 
 #[function_component(AgentInvestigatorPage)]
 pub fn agent_investigator_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let claim_id = use_state(|| "CLM-0287".to_string());
     let risk_score = use_state(|| "87".to_string());
     let rag = use_state(|| "RED".to_string());

@@ -5,7 +5,7 @@ use web_sys::HtmlTextAreaElement;
 
 #[function_component(AuditSamplingPage)]
 pub fn audit_sampling_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let sample_mode = use_state(|| "risk_ranked".to_string());
     let population_definition = use_state(|| "Open high-risk leads for QA sampling".to_string());
     let inclusion_criteria = use_state(|| {

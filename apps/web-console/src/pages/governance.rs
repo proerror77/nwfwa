@@ -4,7 +4,7 @@ use web_sys::HtmlInputElement;
 
 #[function_component(GovernancePage)]
 pub fn governance_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let event_group = use_state(|| "governance".to_string());
     let snapshot_state = use_state(|| ApiState::<GovernanceSnapshot>::Idle);
 

@@ -1,9 +1,21 @@
+use yew::prelude::*;
+
 #[derive(Clone, Debug, PartialEq)]
 pub(crate) enum ApiState<T> {
     Idle,
     Loading,
     Ready(T),
     Failed(String),
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct ApiKeyContext(pub UseStateHandle<String>);
+
+#[hook]
+pub(crate) fn use_api_key() -> UseStateHandle<String> {
+    use_context::<ApiKeyContext>()
+        .expect("ApiKeyContext provider is missing")
+        .0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

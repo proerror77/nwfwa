@@ -10,7 +10,7 @@ use leads_cases_view::{
 
 #[function_component(LeadsCasesPage)]
 pub fn leads_cases_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let selected_lead_id = use_state(String::new);
     let triage_decision = use_state(|| "open_case".to_string());
     let triage_assignee = use_state(|| "investigator-1".to_string());

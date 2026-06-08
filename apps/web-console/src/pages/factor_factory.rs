@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 #[function_component(FactorFactoryPage)]
 pub fn factor_factory_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let readiness_state = use_state(|| ApiState::<FactorReadinessResponse>::Idle);
 
     let load_readiness = {

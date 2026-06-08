@@ -4,7 +4,7 @@ use wasm_bindgen_futures::spawn_local;
 
 #[function_component(RoutingPoliciesPage)]
 pub fn routing_policies_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let policy_id = use_state(|| "fwa_risk_fusion_routing".to_string());
     let review_mode = use_state(|| "pre_payment".to_string());
     let version = use_state(|| "1".to_string());

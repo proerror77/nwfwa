@@ -4,7 +4,7 @@ use web_sys::HtmlInputElement;
 
 #[function_component(ModelsPage)]
 pub fn models_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let model_key = use_state(|| "baseline_fwa".to_string());
     let snapshot_state = use_state(|| ApiState::<ModelOpsSnapshot>::Idle);
 

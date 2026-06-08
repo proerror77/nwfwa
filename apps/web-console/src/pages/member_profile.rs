@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 #[function_component(MemberProfilePage)]
 pub fn member_profile_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let member_id = use_state(|| "MBR-0287".to_string());
     let profile_state = use_state(|| ApiState::<MemberProfileSummary>::Idle);
 

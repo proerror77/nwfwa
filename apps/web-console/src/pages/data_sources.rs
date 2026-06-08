@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 #[function_component(DataSourcesPage)]
 pub fn data_sources_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let snapshot_state = use_state(|| ApiState::<DataSourcesSnapshot>::Idle);
 
     let load_sources = {

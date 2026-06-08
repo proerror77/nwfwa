@@ -5,7 +5,7 @@ use web_sys::HtmlInputElement;
 
 #[function_component(KnowledgeBasePage)]
 pub fn knowledge_base_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let claim_id = use_state(|| "CLM-0287".to_string());
     let diagnosis_code = use_state(|| "J10".to_string());
     let provider_region = use_state(|| "Shanghai".to_string());

@@ -9,7 +9,7 @@ use claim_inbox_view::{LiveTpaDemoView, NormalizeResultView, ScoreResultView};
 
 #[function_component(ClaimInboxPage)]
 pub fn claim_inbox_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let raw_payload = use_state(|| SAMPLE_INBOX_PAYLOAD.to_string());
     let overlay_payload = use_state(|| "{}".to_string());
     let reviewer_approved = use_state(|| false);

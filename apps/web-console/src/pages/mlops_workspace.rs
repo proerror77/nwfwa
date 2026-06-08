@@ -12,7 +12,7 @@ use mlops_workspace_actions::{execute_mlops_governed_action, submit_anomaly_cand
 
 #[function_component(MlopsWorkspacePage)]
 pub fn mlops_workspace_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let model_key = use_state(|| "baseline_fwa".to_string());
     let actor = use_state(|| "mlops-operator".to_string());
     let reviewer = use_state(|| "risk-model-owner".to_string());

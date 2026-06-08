@@ -4,7 +4,7 @@ use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlTextAreaElement};
 
 #[function_component(MedicalReviewPage)]
 pub fn medical_review_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let limit = use_state(|| "100".to_string());
     let selected_audit_id = use_state(String::new);
     let reviewer = use_state(|| "medical-reviewer-1".to_string());

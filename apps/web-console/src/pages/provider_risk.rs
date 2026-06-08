@@ -3,7 +3,7 @@ use wasm_bindgen_futures::spawn_local;
 
 #[function_component(ProviderRiskPage)]
 pub fn provider_risk_page() -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let summary_state = use_state(|| ApiState::<ProviderRiskSummary>::Idle);
 
     let load_summary = {

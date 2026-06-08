@@ -8,7 +8,7 @@ pub struct DashboardPageProps {
 
 #[function_component(DashboardPage)]
 pub fn dashboard_page(props: &DashboardPageProps) -> Html {
-    let api_key = use_state(|| API_KEY_DEFAULT.to_string());
+    let api_key = use_api_key();
     let summary_state = use_state(|| ApiState::<DashboardSummary>::Idle);
 
     let load_summary = {
