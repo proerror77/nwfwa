@@ -1,15 +1,13 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{AuditEventListFilter, AuditHistoryEventRecord},
 };
 use axum::{
     extract::{Query, State},
-    http::{HeaderMap, StatusCode},
     Json,
 };
-use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Deserialize)]
@@ -74,10 +72,9 @@ pub struct ApiCallListResponse {
 
 pub async fn list_audit_events(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Query(query): Query<AuditEventListQuery>,
 ) -> Result<Json<AuditEventListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let filter = AuditEventListFilter {
         limit: query.limit.unwrap_or(50).clamp(1, 200),
         event_group: normalize_filter(query.event_group),
@@ -113,10 +110,9 @@ pub async fn list_audit_events(
 
 pub async fn list_api_calls(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Query(query): Query<ApiCallListQuery>,
 ) -> Result<Json<ApiCallListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let limit = query.limit.unwrap_or(50).clamp(1, 200);
     let events = state
         .repository
@@ -213,19 +209,6 @@ fn normalize_filter(value: Option<String>) -> Option<String> {
         } else {
             Some(trimmed.to_owned())
         }
-    })
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
     })
 }
 
