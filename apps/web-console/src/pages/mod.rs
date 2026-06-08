@@ -8,6 +8,7 @@ mod leads_cases;
 mod medical_review;
 mod member_profile;
 mod provider_risk;
+mod rules;
 mod runtime_scoring;
 
 pub use bootstrap_ops::*;
@@ -20,4 +21,5 @@ pub use leads_cases::*;
 pub use medical_review::*;
 pub use member_profile::*;
 pub use provider_risk::*;
+pub use rules::*;
 pub use runtime_scoring::*;
