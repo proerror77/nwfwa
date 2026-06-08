@@ -1,16 +1,16 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{AuditEventListFilter, AuditHistoryEventRecord, LeadRecord, PersistedAuditEvent},
     routes::pii,
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -170,10 +170,9 @@ pub struct LabelBootstrapReviewResponse {
 
 pub async fn create_historical_backfill(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<CreateHistoricalBackfillRequest>,
 ) -> Result<Json<HistoricalBackfillResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_backfill_request(&request)?;
     let leads = state
         .repository
@@ -243,9 +242,8 @@ pub async fn create_historical_backfill(
 
 pub async fn list_historical_backfills(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<HistoricalBackfillListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_audit_events(AuditEventListFilter {
@@ -263,10 +261,9 @@ pub async fn list_historical_backfills(
 
 pub async fn list_historical_backfill_leads(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(job_id): Path<String>,
 ) -> Result<Json<HistoricalBackfillLeadResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_audit_events(AuditEventListFilter {
@@ -293,10 +290,9 @@ pub async fn list_historical_backfill_leads(
 
 pub async fn generate_evidence_requests(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<GenerateEvidenceRequestsRequest>,
 ) -> Result<Json<EvidenceRequestGenerateResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_generate_evidence_request(&request)?;
     let events = state
         .repository
@@ -351,9 +347,8 @@ pub async fn generate_evidence_requests(
 
 pub async fn list_evidence_requests(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<EvidenceRequestListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     Ok(Json(EvidenceRequestListResponse {
         requests: load_evidence_requests(&state, &actor.customer_scope_id).await?,
     }))
@@ -361,11 +356,10 @@ pub async fn list_evidence_requests(
 
 pub async fn update_evidence_request_status(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(request_id): Path<String>,
     Json(request): Json<UpdateEvidenceRequestStatusRequest>,
 ) -> Result<Json<EvidenceRequestRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_evidence_status_update(&request)?;
     let current = load_evidence_requests(&state, &actor.customer_scope_id)
         .await?
@@ -427,36 +421,22 @@ pub async fn update_evidence_request_status(
 
 pub async fn label_bootstrap_queue(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<LabelBootstrapQueueResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
-    let requests = load_evidence_requests(&state, &actor.customer_scope_id).await?;
-    let reviews = load_label_bootstrap_reviews(&state, &actor.customer_scope_id).await?;
-    let mut items = requests
-        .into_iter()
-        .map(label_item_from_evidence_request)
-        .collect::<Vec<_>>();
-    for item in &mut items {
-        if let Some(review) = reviews.get(&item.item_id) {
-            apply_label_review(item, review);
-        }
-    }
-    items.sort_by(|left, right| left.item_id.cmp(&right.item_id));
-    Ok(Json(LabelBootstrapQueueResponse { items }))
+    Ok(Json(LabelBootstrapQueueResponse {
+        items: load_label_bootstrap_items(&state, &actor.customer_scope_id).await?,
+    }))
 }
 
 pub async fn review_label_bootstrap_item(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(item_id): Path<String>,
     Json(request): Json<ReviewLabelBootstrapItemRequest>,
 ) -> Result<Json<LabelBootstrapReviewResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_label_review(&request)?;
-    let mut item = label_bootstrap_queue(State(state.clone()), headers)
+    let mut item = load_label_bootstrap_items(&state, &actor.customer_scope_id)
         .await?
-        .0
-        .items
         .into_iter()
         .find(|item| item.item_id == item_id)
         .ok_or_else(not_found(
@@ -508,6 +488,25 @@ pub async fn review_label_bootstrap_item(
     item.training_eligible = item.governance_status == "approved_for_training";
     item.evidence_refs = request.evidence_refs;
     Ok(Json(LabelBootstrapReviewResponse { item, audit_id }))
+}
+
+async fn load_label_bootstrap_items(
+    state: &AppState,
+    customer_scope_id: &str,
+) -> Result<Vec<LabelBootstrapItemRecord>, ApiError> {
+    let requests = load_evidence_requests(state, customer_scope_id).await?;
+    let reviews = load_label_bootstrap_reviews(state, customer_scope_id).await?;
+    let mut items = requests
+        .into_iter()
+        .map(label_item_from_evidence_request)
+        .collect::<Vec<_>>();
+    for item in &mut items {
+        if let Some(review) = reviews.get(&item.item_id) {
+            apply_label_review(item, review);
+        }
+    }
+    items.sort_by(|left, right| left.item_id.cmp(&right.item_id));
+    Ok(items)
 }
 
 async fn load_evidence_requests(
@@ -995,19 +994,6 @@ fn json_array_to_strings(value: &Value) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 fn not_found(code: &'static str, message: &'static str) -> impl FnOnce() -> ApiError {
