@@ -11,6 +11,7 @@ mod evidence;
 mod governance;
 mod medical;
 mod models;
+mod rules;
 mod scoring;
 
 pub(crate) use audit::*;
@@ -20,6 +21,7 @@ pub(crate) use evidence::*;
 pub(crate) use governance::*;
 pub(crate) use medical::*;
 pub(crate) use models::*;
+pub(crate) use rules::*;
 pub(crate) use scoring::*;
 
 pub(crate) async fn request_json<T>(
@@ -91,37 +93,6 @@ fn pretty_json(value: &Value) -> String {
 
 pub(crate) async fn get_dashboard_summary(api_key: String) -> Result<DashboardSummary, String> {
     request_get_json("/api/v1/ops/dashboard/summary", api_key).await
-}
-
-pub(crate) async fn get_rule_ops_snapshot(
-    api_key: String,
-    rule_id: String,
-) -> Result<RuleOpsSnapshot, String> {
-    let rules = request_get_json::<RuleListResponse>("/api/v1/ops/rules", api_key.clone())
-        .await?
-        .rules;
-    let selected_rule_id = rules
-        .iter()
-        .find(|rule| rule.rule_id == rule_id)
-        .map(|rule| rule.rule_id.clone())
-        .or_else(|| rules.first().map(|rule| rule.rule_id.clone()))
-        .unwrap_or(rule_id);
-    let performance = request_get_json::<RulePerformanceResponse>(
-        "/api/v1/ops/rules/performance",
-        api_key.clone(),
-    )
-    .await?
-    .rules;
-    let gates = request_get_json::<RulePromotionGates>(
-        &format!("/api/v1/ops/rules/{selected_rule_id}/promotion-gates"),
-        api_key,
-    )
-    .await?;
-    Ok(RuleOpsSnapshot {
-        rules,
-        performance,
-        gates,
-    })
 }
 
 pub(crate) async fn get_factor_readiness(
