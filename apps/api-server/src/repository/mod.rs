@@ -25,6 +25,7 @@ mod outcome_helpers;
 mod postgres;
 mod postgres_agent_helpers;
 mod postgres_evidence;
+mod postgres_inbox;
 mod postgres_routing_policies;
 mod provider_helpers;
 mod row_types;
