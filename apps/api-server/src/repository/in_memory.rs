@@ -2370,3 +2370,42 @@ impl ScoringRepository for InMemoryScoringRepository {
         Ok(records)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[tokio::test]
+    async fn in_memory_audit_events_mask_pii_payload_fields() {
+        let repository = InMemoryScoringRepository::default();
+
+        repository
+            .save_audit_event(PersistedAuditEvent {
+                audit_id: "audit-1".into(),
+                run_id: "run-1".into(),
+                claim_id: "claim-1".into(),
+                source_system: "tpa-demo".into(),
+                actor_id: "actor-1".into(),
+                actor_role: "tpa_system".into(),
+                event_type: "scoring.completed".into(),
+                event_status: "succeeded".into(),
+                summary: "summary".into(),
+                payload: serde_json::json!({
+                    "external_member_id": "MBR-12345",
+                    "dob": "1988-03-12",
+                    "gender": "F",
+                    "risk_score": 72
+                }),
+                evidence_refs: vec![],
+            })
+            .await
+            .unwrap();
+
+        let audit_events = repository.audit_events.lock().await;
+        let payload = &audit_events[0].payload;
+        assert_ne!(payload["external_member_id"], "MBR-12345");
+        assert_eq!(payload["dob"], "1988-XX-XX");
+        assert_eq!(payload["gender"], "MASKED");
+        assert_eq!(payload["risk_score"], 72);
+    }
+}
