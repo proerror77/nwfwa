@@ -390,6 +390,12 @@ def train_from_manifest(
         "rust_serving_p95_latency_ms": artifact_evaluation_report[
             "rust_serving_p95_latency_ms"
         ],
+        "rust_serving_latency_measurement_kind": artifact_evaluation_report[
+            "rust_serving_latency_measurement_kind"
+        ],
+        "rust_serving_latency_sample_count": artifact_evaluation_report[
+            "rust_serving_latency_sample_count"
+        ],
         "segment_fairness_status": fairness_report["status"],
         "score_psi": drift_report["score_psi"],
         "max_feature_psi": drift_report["max_feature_psi"],

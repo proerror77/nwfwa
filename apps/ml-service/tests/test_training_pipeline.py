@@ -263,6 +263,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert payload["metrics_json"]["rust_serving_status"] == "passed"
     assert payload["metrics_json"]["rust_serving_latency_status"] == "passed"
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 18
+    assert payload["metrics_json"]["rust_serving_latency_measurement_kind"] == "simulated_fixture"
+    assert payload["metrics_json"]["rust_serving_latency_sample_count"] == 0
     assert payload["metrics_json"]["segment_fairness_status"] == "passed"
     assert payload["metrics_json"]["score_psi"] is not None
     assert payload["metrics_json"]["max_feature_psi"] is not None
@@ -381,6 +383,8 @@ def test_training_pipeline_writes_artifacts_and_validation_payload(tmp_path: Pat
     assert artifact_evaluation["gate_status"] == "passed"
     assert artifact_evaluation["runtime_kind"] == "rust_logistic_regression"
     assert artifact_evaluation["rust_serving_p95_latency_ms"] == 18
+    assert artifact_evaluation["rust_serving_latency_measurement_kind"] == "simulated_fixture"
+    assert artifact_evaluation["rust_serving_latency_sample_count"] == 0
 
     permutation_importance = pd.read_parquet(payload["permutation_importance_uri"])
     assert set(permutation_importance["feature"]) == set(rust_artifact["feature_columns"])
@@ -454,6 +458,8 @@ def test_training_pipeline_writes_xgboost_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_status"] == "passed"
     assert payload["metrics_json"]["rust_serving_latency_status"] == "passed"
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
+    assert payload["metrics_json"]["rust_serving_latency_measurement_kind"] == "simulated_fixture"
+    assert payload["metrics_json"]["rust_serving_latency_sample_count"] == 0
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
     assert payload["metrics_json"]["automl_factor_ranking_status"] == "passed"
@@ -541,6 +547,8 @@ def test_training_pipeline_writes_lightgbm_candidate_payload(tmp_path: Path):
     assert payload["metrics_json"]["rust_serving_status"] == "passed"
     assert payload["metrics_json"]["rust_serving_latency_status"] == "passed"
     assert payload["metrics_json"]["rust_serving_p95_latency_ms"] == 24
+    assert payload["metrics_json"]["rust_serving_latency_measurement_kind"] == "simulated_fixture"
+    assert payload["metrics_json"]["rust_serving_latency_sample_count"] == 0
     assert payload["metrics_json"]["onnx_export_status"] == "exported"
     assert payload["metrics_json"]["onnx_parity_status"] == "passed"
     assert payload["metrics_json"]["automl_factor_ranking_status"] == "passed"

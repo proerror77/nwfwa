@@ -117,6 +117,8 @@ def build_model_artifact_evaluation_report(
         "rust_serving_status": "passed",
         "rust_serving_latency_status": "passed",
         "rust_serving_p95_latency_ms": p95_latency_ms,
+        "rust_serving_latency_measurement_kind": "simulated_fixture",
+        "rust_serving_latency_sample_count": 0,
         "feature_count": len(feature_columns),
         "gate_status": "passed",
     }
