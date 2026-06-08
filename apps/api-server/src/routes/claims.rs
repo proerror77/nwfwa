@@ -649,6 +649,28 @@ pub async fn score_claim(
     })
     .await?;
 
+    tracing::info!(
+        run_id = %run_id,
+        audit_id = %audit_id,
+        source_system = %request.source_system,
+        review_mode = %review_mode,
+        risk_score = decision.risk_score.value(),
+        risk_level = %decision.risk_level,
+        rag = ?decision.rag,
+        decision_outcome = ?decision.decision_outcome,
+        decision_authority = ?decision.decision_authority,
+        decision_confidence = ?decision.decision_confidence,
+        routing_policy_id = %decision.routing_policy.policy_id,
+        routing_policy_version = decision.routing_policy.version,
+        rule_match_count = rule_matches.len(),
+        alert_count = alerts.len(),
+        similar_case_count = similar_cases.len(),
+        evidence_ref_count = evidence_refs.len(),
+        model_key = %model_score.model_key,
+        model_version = %model_score.model_version,
+        "scoring run completed"
+    );
+
     Ok(Json(ScoreClaimResponse {
         run_id: run_id.to_string(),
         audit_id: audit_id.to_string(),
