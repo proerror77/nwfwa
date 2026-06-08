@@ -1,10 +1,8 @@
 use crate::pii::mask_audit_payload;
 use async_trait::async_trait;
-use chrono::NaiveDate;
 use fwa_core::{
-    assess_evidence_sufficiency, canonical_scheme_family, AuditEventId, Claim, ClaimContext,
-    ClaimId, ClaimItem, Member, MemberId, Money, Policy, PolicyId, Provider, ProviderId,
-    ProviderRiskTier, RecommendedAction, RuleActionClass,
+    assess_evidence_sufficiency, canonical_scheme_family, AuditEventId, ClaimContext,
+    RecommendedAction, RuleActionClass,
 };
 use fwa_rules::{AdjudicationPolicy, Condition, RequiredEvidence, Rule, RuleAction};
 use fwa_scoring::RoutingPolicy;
@@ -18,217 +16,18 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+mod row_types;
 mod types;
 
+use self::row_types::{
+    inbox_claim_run_from_row, AgentApprovalRow, AgentPolicyCheckRow, CaseRow, ClaimContextRow,
+    ClaimItemRow, IntoClaimContext, LeadRow,
+};
 pub use self::types::*;
 use self::types::{
     AuditSampleStrataContext, MemberProfileSummaryInput, QaFeedbackStatusUpdate,
     SavingAttributionRecord,
 };
-
-#[derive(sqlx::FromRow)]
-struct ClaimContextRow {
-    external_claim_id: String,
-    diagnosis_code: String,
-    service_date: NaiveDate,
-    claim_amount: Decimal,
-    claim_currency: String,
-    external_member_id: String,
-    dob: Option<NaiveDate>,
-    gender: Option<String>,
-    external_policy_id: String,
-    product_code: String,
-    coverage_start_date: NaiveDate,
-    coverage_end_date: NaiveDate,
-    coverage_limit_amount: Decimal,
-    policy_currency: String,
-    external_provider_id: String,
-    provider_name: String,
-    provider_type: String,
-    provider_region: String,
-    provider_risk_tier: String,
-}
-
-type ClaimItemRow = (String, String, String, i32, Decimal, Decimal, String);
-type LeadRow = (
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    String,
-    i32,
-    String,
-    String,
-    Value,
-);
-#[derive(sqlx::FromRow)]
-struct CaseRow {
-    case_id: String,
-    lead_id: String,
-    claim_id: String,
-    member_id: String,
-    provider_id: String,
-    source_system: String,
-    review_mode: String,
-    scheme_family: String,
-    lead_source: String,
-    status: String,
-    assignee: String,
-    reviewer: String,
-    priority: String,
-    routing_reason: String,
-    evidence_package_json: Value,
-    final_outcome: Option<String>,
-    reviewer_notes: Option<String>,
-    investigation_result_id: Option<String>,
-    lead_created_at: chrono::DateTime<chrono::Utc>,
-    case_created_at: chrono::DateTime<chrono::Utc>,
-    case_updated_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(sqlx::FromRow)]
-struct AgentApprovalRow {
-    approval_id: String,
-    proposed_action: String,
-    decision: String,
-    approver: String,
-    reason: String,
-    evidence_refs: Value,
-    created_at: chrono::DateTime<chrono::Utc>,
-}
-
-#[derive(sqlx::FromRow)]
-struct AgentPolicyCheckRow {
-    policy_check_id: String,
-    tool_call_id: String,
-    tool_name: String,
-    policy_name: String,
-    decision: String,
-    reason: String,
-    evidence_refs: Value,
-    created_at: chrono::DateTime<chrono::Utc>,
-}
-
-trait IntoClaimContext {
-    fn into_context(self, items: Vec<ClaimItemRow>) -> ClaimContext;
-}
-
-impl IntoClaimContext for ClaimContextRow {
-    fn into_context(self, items: Vec<ClaimItemRow>) -> ClaimContext {
-        let member_id = MemberId::from_external(self.external_member_id.clone());
-        let policy_id = PolicyId::from_external(self.external_policy_id.clone());
-        let provider_id = ProviderId::from_external(self.external_provider_id.clone());
-
-        ClaimContext {
-            claim: Claim {
-                id: ClaimId::from_external(self.external_claim_id.clone()),
-                external_claim_id: self.external_claim_id,
-                member_id: member_id.clone(),
-                policy_id: policy_id.clone(),
-                provider_id: provider_id.clone(),
-                diagnosis_code: self.diagnosis_code,
-                service_date: self.service_date,
-                amount: Money::new(self.claim_amount, self.claim_currency),
-            },
-            items: items
-                .into_iter()
-                .map(
-                    |(
-                        item_code,
-                        item_type,
-                        description,
-                        quantity,
-                        unit_amount,
-                        total_amount,
-                        currency,
-                    )| ClaimItem {
-                        item_code,
-                        item_type,
-                        description,
-                        quantity: quantity.max(0) as u32,
-                        unit_amount: Money::new(unit_amount, currency.clone()),
-                        total_amount: Money::new(total_amount, currency),
-                    },
-                )
-                .collect(),
-            member: Member {
-                id: member_id.clone(),
-                external_member_id: self.external_member_id,
-                dob: self.dob,
-                gender: self.gender,
-            },
-            policy: Policy {
-                id: policy_id,
-                external_policy_id: self.external_policy_id,
-                member_id,
-                product_code: self.product_code,
-                coverage_start_date: self.coverage_start_date,
-                coverage_end_date: self.coverage_end_date,
-                coverage_limit: Money::new(self.coverage_limit_amount, self.policy_currency),
-            },
-            provider: Provider {
-                id: provider_id,
-                external_provider_id: self.external_provider_id,
-                name: self.provider_name,
-                provider_type: self.provider_type,
-                region: self.provider_region,
-                risk_tier: provider_risk_tier_from_text(&self.provider_risk_tier),
-            },
-        }
-    }
-}
-
-fn provider_risk_tier_from_text(value: &str) -> ProviderRiskTier {
-    match value {
-        "Low" => ProviderRiskTier::Low,
-        "High" => ProviderRiskTier::High,
-        _ => ProviderRiskTier::Medium,
-    }
-}
-
-fn inbox_claim_run_from_row(row: PgRow) -> PersistedInboxClaimRun {
-    PersistedInboxClaimRun {
-        run_id: row.try_get("run_id").unwrap_or_default(),
-        audit_id: row.try_get("audit_id").unwrap_or_default(),
-        external_message_id: row
-            .try_get::<Option<String>, _>("external_message_id")
-            .unwrap_or(None),
-        idempotency_key: row
-            .try_get::<Option<String>, _>("idempotency_key")
-            .unwrap_or(None),
-        external_message_fingerprint: row
-            .try_get::<Option<String>, _>("external_message_fingerprint")
-            .unwrap_or(None),
-        raw_payload_checksum: row.try_get("raw_payload_checksum").unwrap_or_default(),
-        raw_payload_ref: row
-            .try_get::<Option<String>, _>("raw_payload_ref")
-            .unwrap_or(None),
-        mapping_version: row.try_get("mapping_version").unwrap_or_default(),
-        validation_result: row.try_get("validation_result").unwrap_or_default(),
-        scoring_ready: row.try_get("scoring_ready").unwrap_or(false),
-        claim_id: row.try_get("claim_id").unwrap_or_default(),
-        source_system: row.try_get("source_system").unwrap_or_default(),
-        customer_scope_id: row.try_get("customer_scope_id").unwrap_or_default(),
-        canonical_claim_context: row
-            .try_get("canonical_claim_context")
-            .unwrap_or_else(|_| serde_json::json!({})),
-        validation_errors: row
-            .try_get("validation_errors")
-            .unwrap_or_else(|_| serde_json::json!([])),
-        data_quality_signals: row
-            .try_get("data_quality_signals")
-            .unwrap_or_else(|_| serde_json::json!([])),
-        evidence_refs: row
-            .try_get("evidence_refs")
-            .unwrap_or_else(|_| serde_json::json!([])),
-    }
-}
 
 #[async_trait]
 pub trait ScoringRepository: Send + Sync {
