@@ -1,0 +1,1618 @@
+use serde::Deserialize;
+use serde_json::{Map, Value};
+use std::collections::BTreeMap;
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct InboxNormalizeResponse {
+    pub(crate) run_id: String,
+    pub(crate) audit_id: String,
+    pub(crate) external_message_id: Option<String>,
+    pub(crate) idempotency_key: Option<String>,
+    pub(crate) mapping_version: String,
+    pub(crate) validation_result: String,
+    pub(crate) scoring_ready: bool,
+    pub(crate) raw_payload_ref: Option<String>,
+    pub(crate) validation_errors: Vec<InboxValidationError>,
+    pub(crate) canonical_claim_context: Value,
+    pub(crate) data_quality_signals: Vec<String>,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct InboxValidationError {
+    pub(crate) field_path: String,
+    pub(crate) severity: String,
+    pub(crate) remediation: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ScoreResponse {
+    pub(crate) run_id: Option<String>,
+    pub(crate) claim_id: String,
+    pub(crate) review_mode: Option<String>,
+    pub(crate) risk_score: Value,
+    pub(crate) rag: Option<Value>,
+    pub(crate) risk_level: Option<String>,
+    pub(crate) recommended_action: Option<String>,
+    pub(crate) decision_outcome: Option<String>,
+    pub(crate) decision_authority: Option<String>,
+    pub(crate) decision_confidence: Option<String>,
+    pub(crate) appeal_or_review_required: Option<bool>,
+    pub(crate) reason_code: Option<String>,
+    pub(crate) confidence_score: Option<u8>,
+    pub(crate) confidence: Option<String>,
+    pub(crate) routing_reason: Option<String>,
+    pub(crate) routing_policy: Option<Value>,
+    pub(crate) scores: Option<RuntimeScoreBreakdown>,
+    pub(crate) model_score: Option<RuntimeModelScore>,
+    #[serde(default)]
+    pub(crate) alerts: Vec<RuntimeAlert>,
+    #[serde(default)]
+    pub(crate) top_reasons: Vec<String>,
+    #[serde(default)]
+    pub(crate) layers: Vec<RuntimeLayerScore>,
+    pub(crate) clinical_evidence: Option<Value>,
+    pub(crate) provider_profile: Option<Value>,
+    pub(crate) provider_relationships: Option<Value>,
+    #[serde(default)]
+    pub(crate) similar_cases: Vec<Value>,
+    #[serde(default)]
+    pub(crate) feature_values: Vec<Value>,
+    pub(crate) audit_id: Option<String>,
+    pub(crate) evidence_refs: Option<Vec<Value>>,
+    pub(crate) agent_investigation_prefill: Option<Value>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LiveTpaDemoRun {
+    pub(crate) claim_id: String,
+    pub(crate) claim_amount: String,
+    pub(crate) inbox_run_id: String,
+    pub(crate) score_run_id: String,
+    pub(crate) risk_score: String,
+    pub(crate) rag: String,
+    pub(crate) decision_outcome: String,
+    pub(crate) lead_id: String,
+    pub(crate) case_id: String,
+    pub(crate) case_status: String,
+    pub(crate) investigation_audit_id: String,
+    pub(crate) prevented_before: String,
+    pub(crate) prevented_after: String,
+    pub(crate) dashboard_saving_after: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuntimeScoreBreakdown {
+    pub(crate) peer_deviation_score: u8,
+    pub(crate) rule_score: u8,
+    pub(crate) anomaly_score: u8,
+    pub(crate) ml_score: u8,
+    pub(crate) medical_reasonableness_score: u8,
+    pub(crate) provider_network_score: u8,
+    pub(crate) similar_case_score: u8,
+    pub(crate) final_score: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuntimeModelScore {
+    pub(crate) model_key: String,
+    pub(crate) model_version: String,
+    pub(crate) runtime_kind: String,
+    pub(crate) execution_provider: String,
+    pub(crate) score: u8,
+    pub(crate) label: String,
+    #[serde(default)]
+    pub(crate) explanations: Vec<ModelExplanationView>,
+    pub(crate) metadata: Value,
+    pub(crate) latency_ms: u64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelExplanationView {
+    pub(crate) feature: String,
+    pub(crate) direction: String,
+    pub(crate) contribution: f64,
+    pub(crate) reason: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuntimeAlert {
+    pub(crate) alert_code: String,
+    pub(crate) severity: String,
+    pub(crate) reason: String,
+    pub(crate) rule_id: String,
+    pub(crate) rule_version: u32,
+    #[serde(default)]
+    pub(crate) required_evidence: Vec<RuntimeRequiredEvidence>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuntimeRequiredEvidence {
+    pub(crate) evidence_type: String,
+    pub(crate) evidence_request_type: Option<String>,
+    pub(crate) blocking: bool,
+    pub(crate) policy_authority_ref: Option<String>,
+    pub(crate) exception_check: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuntimeLayerScore {
+    pub(crate) layer_id: String,
+    pub(crate) name: String,
+    pub(crate) score: u8,
+    pub(crate) status: String,
+    pub(crate) reason: String,
+    #[serde(default)]
+    pub(crate) evidence_refs: Vec<Value>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceDocumentListResponse {
+    pub(crate) documents: Vec<EvidenceDocumentRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceDocumentChunkListResponse {
+    pub(crate) chunks: Vec<EvidenceDocumentChunkRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceOcrOutputListResponse {
+    pub(crate) ocr_outputs: Vec<EvidenceOcrOutputRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceEmbeddingJobListResponse {
+    pub(crate) embedding_jobs: Vec<EvidenceEmbeddingJobRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceRetrievalAuditEventListResponse {
+    pub(crate) retrieval_audit_events: Vec<EvidenceRetrievalAuditEventRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceDocumentRecord {
+    pub(crate) document_id: String,
+    pub(crate) customer_scope_id: String,
+    pub(crate) source_system: String,
+    pub(crate) source_record_ref: String,
+    pub(crate) claim_id: Option<String>,
+    pub(crate) external_document_id: Option<String>,
+    pub(crate) document_type: String,
+    pub(crate) storage_uri: String,
+    pub(crate) content_checksum: String,
+    pub(crate) ingestion_status: String,
+    pub(crate) redaction_status: String,
+    pub(crate) retention_policy_id: String,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) metadata_json: Value,
+    pub(crate) created_at: Option<String>,
+    pub(crate) updated_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceDocumentChunkRecord {
+    pub(crate) chunk_id: String,
+    pub(crate) document_id: String,
+    pub(crate) chunk_index: i32,
+    pub(crate) chunking_version: String,
+    pub(crate) redaction_status: String,
+    pub(crate) text_checksum: String,
+    pub(crate) token_count: i32,
+    pub(crate) storage_uri: String,
+    pub(crate) source_offsets_json: Value,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceOcrOutputRecord {
+    pub(crate) ocr_output_id: String,
+    pub(crate) document_id: String,
+    pub(crate) ocr_engine: String,
+    pub(crate) ocr_engine_version: String,
+    pub(crate) output_uri: String,
+    pub(crate) output_checksum: String,
+    pub(crate) confidence_score: Option<Value>,
+    pub(crate) quality_status: String,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceEmbeddingJobRecord {
+    pub(crate) embedding_job_id: String,
+    pub(crate) customer_scope_id: String,
+    pub(crate) target_kind: String,
+    pub(crate) target_ref: String,
+    pub(crate) embedding_model: String,
+    pub(crate) embedding_model_version: String,
+    pub(crate) chunking_version: String,
+    pub(crate) redaction_status: String,
+    pub(crate) vector_store_kind: String,
+    pub(crate) vector_store_ref: String,
+    pub(crate) embedding_checksum: String,
+    pub(crate) status: String,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+    pub(crate) completed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceRetrievalAuditEventRecord {
+    pub(crate) retrieval_id: String,
+    pub(crate) customer_scope_id: String,
+    pub(crate) actor_id: String,
+    pub(crate) actor_role: String,
+    pub(crate) query_kind: String,
+    pub(crate) query_checksum: String,
+    pub(crate) retrieval_method: String,
+    pub(crate) embedding_model_version: Option<String>,
+    pub(crate) top_k: i32,
+    pub(crate) source_refs: Vec<String>,
+    pub(crate) result_refs: Vec<String>,
+    pub(crate) redaction_status: String,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct EvidenceRuntimeSnapshot {
+    pub(crate) documents: Vec<EvidenceDocumentRecord>,
+    pub(crate) selected_document_id: Option<String>,
+    pub(crate) chunks: Vec<EvidenceDocumentChunkRecord>,
+    pub(crate) ocr_outputs: Vec<EvidenceOcrOutputRecord>,
+    pub(crate) embedding_jobs: Vec<EvidenceEmbeddingJobRecord>,
+    pub(crate) retrieval_audit_events: Vec<EvidenceRetrievalAuditEventRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct CorrectionHint {
+    pub(crate) field_path: String,
+    pub(crate) severity: String,
+    pub(crate) blocks_scoring: bool,
+    pub(crate) next_action: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct FactorReadinessResponse {
+    pub(crate) dataset_count: u32,
+    pub(crate) factor_count: u32,
+    pub(crate) data_quality_score: f64,
+    pub(crate) data_quality_status: String,
+    pub(crate) online_ready_count: u32,
+    pub(crate) rule_convertible_count: u32,
+    pub(crate) ready_factor_count: u32,
+    pub(crate) review_factor_count: u32,
+    pub(crate) scheme_readiness: Vec<FactorSchemeReadiness>,
+    pub(crate) factor_cards: Vec<FactorCard>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct FactorSchemeReadiness {
+    pub(crate) scheme_family: String,
+    pub(crate) factor_count: u32,
+    pub(crate) ready_factor_count: u32,
+    pub(crate) review_factor_count: u32,
+    pub(crate) online_ready_count: u32,
+    pub(crate) rule_convertible_count: u32,
+    pub(crate) readiness_issue_counts: Map<String, Value>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct FactorCard {
+    pub(crate) dataset_key: String,
+    pub(crate) factor_name: String,
+    pub(crate) scheme_family: String,
+    pub(crate) chinese_name: String,
+    pub(crate) entity_type: String,
+    pub(crate) business_meaning: String,
+    pub(crate) readiness_status: String,
+    pub(crate) owner: String,
+    pub(crate) online_available: bool,
+    pub(crate) rule_convertible: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DatasetListResponse {
+    pub(crate) datasets: Vec<DatasetRecord>,
+    pub(crate) health: Vec<DatasetHealthRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DatasetRecord {
+    pub(crate) dataset_id: String,
+    pub(crate) source_key: String,
+    pub(crate) display_name: String,
+    pub(crate) business_domain: String,
+    pub(crate) dataset_key: String,
+    pub(crate) dataset_version: String,
+    pub(crate) sample_grain: String,
+    pub(crate) label_column: String,
+    pub(crate) entity_keys: Vec<String>,
+    pub(crate) manifest_uri: String,
+    pub(crate) schema_uri: String,
+    pub(crate) profile_uri: String,
+    pub(crate) storage_format: String,
+    pub(crate) schema_hash: String,
+    pub(crate) row_count: u64,
+    pub(crate) status: String,
+    pub(crate) splits: Vec<DatasetSplitRecord>,
+    pub(crate) fields: Vec<SchemaFieldRecord>,
+    pub(crate) mappings: Vec<FieldMappingRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DatasetSplitRecord {
+    pub(crate) split_name: String,
+    pub(crate) data_uri: String,
+    pub(crate) row_count: u64,
+    pub(crate) positive_count: Option<u64>,
+    pub(crate) negative_count: Option<u64>,
+    pub(crate) label_distribution_json: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct SchemaFieldRecord {
+    pub(crate) field_name: String,
+    pub(crate) logical_type: String,
+    pub(crate) nullable: bool,
+    pub(crate) semantic_role: String,
+    pub(crate) description: String,
+    pub(crate) profile_json: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct FieldMappingRecord {
+    pub(crate) mapping_id: String,
+    pub(crate) dataset_id: String,
+    pub(crate) external_field: String,
+    pub(crate) canonical_target: String,
+    pub(crate) feature_name: Option<String>,
+    pub(crate) transform_kind: String,
+    pub(crate) transform_json: Value,
+    pub(crate) status: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DatasetHealthRecord {
+    pub(crate) dataset_id: String,
+    pub(crate) dataset_key: String,
+    pub(crate) dataset_version: String,
+    pub(crate) data_quality_score: f64,
+    pub(crate) data_quality_status: String,
+    pub(crate) field_count: u32,
+    pub(crate) label_count: u32,
+    pub(crate) entity_key_count: u32,
+    pub(crate) high_missing_count: u32,
+    pub(crate) unstable_field_count: u32,
+    pub(crate) unowned_field_count: u32,
+    pub(crate) online_ready_count: u32,
+    pub(crate) issue_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelEvaluationListResponse {
+    pub(crate) evaluations: Vec<ModelEvaluationRecord>,
+    pub(crate) lineage: Vec<ModelEvaluationLineageRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelEvaluationRecord {
+    pub(crate) evaluation_run_id: String,
+    pub(crate) model_key: String,
+    pub(crate) model_version: String,
+    pub(crate) model_dataset_id: String,
+    pub(crate) scheme_family: String,
+    pub(crate) auc: Option<Value>,
+    pub(crate) ks: Option<Value>,
+    pub(crate) precision: Option<Value>,
+    pub(crate) recall: Option<Value>,
+    pub(crate) f1: Option<Value>,
+    pub(crate) accuracy: Option<Value>,
+    pub(crate) threshold: Option<Value>,
+    pub(crate) confusion_matrix_json: Value,
+    pub(crate) feature_importance_uri: Option<String>,
+    pub(crate) permutation_importance_uri: Option<String>,
+    pub(crate) metrics_json: Value,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelEvaluationLineageRecord {
+    pub(crate) evaluation_run_id: String,
+    pub(crate) model_key: String,
+    pub(crate) model_version: String,
+    pub(crate) model_dataset_id: String,
+    pub(crate) source_dataset_id: Option<String>,
+    pub(crate) source_dataset_key: Option<String>,
+    pub(crate) source_dataset_version: Option<String>,
+    pub(crate) source_data_quality_score: Option<f64>,
+    pub(crate) source_data_quality_status: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct DataSourcesSnapshot {
+    pub(crate) datasets: Vec<DatasetRecord>,
+    pub(crate) health: Vec<DatasetHealthRecord>,
+    pub(crate) evaluations: Vec<ModelEvaluationRecord>,
+    pub(crate) lineage: Vec<ModelEvaluationLineageRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelListResponse {
+    pub(crate) models: Vec<ModelVersion>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelVersion {
+    pub(crate) model_key: String,
+    pub(crate) version: String,
+    pub(crate) model_type: String,
+    pub(crate) runtime_kind: String,
+    pub(crate) execution_provider: String,
+    pub(crate) status: String,
+    pub(crate) review_mode: String,
+    pub(crate) artifact_uri: Option<String>,
+    pub(crate) endpoint_url: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelPerformance {
+    pub(crate) model_key: String,
+    pub(crate) data_status: String,
+    pub(crate) scored_runs: u32,
+    pub(crate) average_score: f64,
+    pub(crate) high_risk_count: u32,
+    pub(crate) score_psi: Option<f64>,
+    pub(crate) drift_status: String,
+    pub(crate) latest_scored_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelPromotionGates {
+    pub(crate) model_key: String,
+    pub(crate) model_version: String,
+    pub(crate) decision: String,
+    pub(crate) passed_count: u32,
+    pub(crate) total_count: u32,
+    pub(crate) latest_evaluation_id: String,
+    pub(crate) source_data_quality_status: String,
+    pub(crate) unresolved_model_feedback_count: u32,
+    pub(crate) approved_label_count: u32,
+    pub(crate) artifact_evidence: ModelArtifactEvidence,
+    pub(crate) gates: Vec<ModelPromotionGate>,
+    pub(crate) blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelArtifactEvidence {
+    pub(crate) serving_manifest_uri: Option<String>,
+    pub(crate) model_artifact_evaluation_report_uri: Option<String>,
+    pub(crate) rust_serving_status: Option<String>,
+    pub(crate) rust_serving_latency_status: Option<String>,
+    pub(crate) rust_serving_p95_latency_ms: Option<u64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelPromotionGate {
+    pub(crate) label: String,
+    pub(crate) passed: bool,
+    pub(crate) blocker: String,
+    pub(crate) evidence_source: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelRetrainingReadiness {
+    pub(crate) recommendation: String,
+    pub(crate) drift_status: String,
+    pub(crate) source_data_quality_status: String,
+    pub(crate) open_model_feedback_count: u32,
+    pub(crate) approved_label_count: u32,
+    pub(crate) needs_review_label_count: u32,
+    pub(crate) retraining_triggers: Vec<String>,
+    pub(crate) blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct ModelOpsSnapshot {
+    pub(crate) models: Vec<ModelVersion>,
+    pub(crate) performance: ModelPerformance,
+    pub(crate) gates: ModelPromotionGates,
+    pub(crate) retraining: ModelRetrainingReadiness,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelRetrainingJobListResponse {
+    pub(crate) jobs: Vec<ModelRetrainingJobRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelRetrainingJobRecord {
+    pub(crate) job_id: String,
+    pub(crate) model_key: String,
+    pub(crate) model_version: String,
+    pub(crate) status: String,
+    pub(crate) requested_by: String,
+    pub(crate) request_notes: String,
+    pub(crate) status_note: String,
+    pub(crate) updated_by: String,
+    pub(crate) readiness_recommendation: String,
+    pub(crate) latest_evaluation_id: String,
+    pub(crate) source_dataset_id: String,
+    pub(crate) source_data_quality_score: Option<f64>,
+    pub(crate) source_data_quality_status: String,
+    pub(crate) trigger_summary: Vec<String>,
+    pub(crate) blocker_summary: Vec<String>,
+    pub(crate) candidate_model_version: Option<String>,
+    pub(crate) candidate_artifact_uri: Option<String>,
+    pub(crate) candidate_endpoint_url: Option<String>,
+    pub(crate) validation_report_uri: Option<String>,
+    pub(crate) output_evaluation_id: Option<String>,
+    pub(crate) created_at: Option<String>,
+    pub(crate) updated_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelMonitoringReviewQueueResponse {
+    pub(crate) tasks: Vec<ModelMonitoringReviewTask>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ModelMonitoringReviewTask {
+    pub(crate) task_id: String,
+    pub(crate) audit_id: String,
+    pub(crate) model_key: String,
+    pub(crate) model_version: String,
+    pub(crate) report_uri: String,
+    pub(crate) monitoring_status: String,
+    pub(crate) retraining_recommendation: String,
+    pub(crate) task_kind: String,
+    pub(crate) trigger: String,
+    pub(crate) review_status: String,
+    pub(crate) reviewer: Option<String>,
+    pub(crate) review_audit_id: Option<String>,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct MlopsAlertDeliveryQueueResponse {
+    pub(crate) tasks: Vec<MlopsAlertDeliveryTask>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct MlopsAlertDeliveryTask {
+    pub(crate) task_id: String,
+    pub(crate) audit_id: String,
+    pub(crate) model_key: String,
+    pub(crate) model_version: String,
+    pub(crate) scheduler_execution_report_uri: String,
+    pub(crate) alert_delivery_status: String,
+    pub(crate) task_kind: String,
+    pub(crate) trigger: String,
+    pub(crate) route_key: String,
+    pub(crate) delivery_status: String,
+    pub(crate) review_status: String,
+    pub(crate) reviewer: Option<String>,
+    pub(crate) review_audit_id: Option<String>,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AnomalyReviewQueueResponse {
+    pub(crate) tasks: Vec<AnomalyReviewQueueTask>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AnomalyReviewQueueTask {
+    pub(crate) candidate_kind: String,
+    pub(crate) candidate_id: String,
+    pub(crate) task_kind: String,
+    pub(crate) review_queue: String,
+    pub(crate) required_review: String,
+    pub(crate) decision_options: Vec<String>,
+    pub(crate) source_report_uri: String,
+    pub(crate) report_kind: String,
+    pub(crate) dataset_key: String,
+    pub(crate) dataset_version: String,
+    pub(crate) label_policy: String,
+    pub(crate) governance_boundary: String,
+    pub(crate) review_status: String,
+    pub(crate) reviewer: Option<String>,
+    pub(crate) decision: Option<String>,
+    pub(crate) candidate_payload: Value,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct MlopsWorkspaceSnapshot {
+    pub(crate) data_sources: DataSourcesSnapshot,
+    pub(crate) model_ops: ModelOpsSnapshot,
+    pub(crate) retraining_jobs: Vec<ModelRetrainingJobRecord>,
+    pub(crate) monitoring_review_tasks: Vec<ModelMonitoringReviewTask>,
+    pub(crate) alert_delivery_tasks: Vec<MlopsAlertDeliveryTask>,
+    pub(crate) anomaly_review_tasks: Vec<AnomalyReviewQueueTask>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RoutingPolicyListResponse {
+    pub(crate) policies: Vec<RoutingPolicyRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RoutingPolicyRecord {
+    pub(crate) policy_id: String,
+    pub(crate) version: u32,
+    pub(crate) review_mode: String,
+    pub(crate) status: String,
+    pub(crate) owner: String,
+    pub(crate) risk_thresholds: RoutingRiskThresholds,
+    pub(crate) confidence_thresholds: RoutingConfidenceThresholds,
+    pub(crate) provider_review_threshold: u8,
+    pub(crate) activated_at: Option<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RoutingRiskThresholds {
+    pub(crate) low_max: u8,
+    pub(crate) medium_min: u8,
+    pub(crate) high_min: u8,
+    pub(crate) critical_min: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RoutingConfidenceThresholds {
+    pub(crate) low_confidence_below: u8,
+    pub(crate) high_confidence_min: u8,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RoutingPolicyPromotionGates {
+    pub(crate) policy_id: String,
+    pub(crate) version: u32,
+    pub(crate) review_mode: String,
+    pub(crate) status: String,
+    pub(crate) decision: String,
+    pub(crate) passed_count: u32,
+    pub(crate) total_count: u32,
+    pub(crate) gates: Vec<RoutingPolicyPromotionGate>,
+    pub(crate) blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RoutingPolicyPromotionGate {
+    pub(crate) label: String,
+    pub(crate) passed: bool,
+    pub(crate) blocker: String,
+    pub(crate) evidence_source: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RoutingPolicySnapshot {
+    pub(crate) policies: Vec<RoutingPolicyRecord>,
+    pub(crate) gates: RoutingPolicyPromotionGates,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct MemberProfileSummary {
+    pub(crate) member_id: String,
+    pub(crate) claim_count: u32,
+    pub(crate) policy_count: u32,
+    pub(crate) total_claim_amount: Value,
+    pub(crate) currency: String,
+    pub(crate) high_risk_claim_count: u32,
+    pub(crate) latest_claim_id: Option<String>,
+    pub(crate) risk_level_summary: String,
+    pub(crate) profile_summary: String,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ProviderRiskSummary {
+    pub(crate) provider_count: u32,
+    pub(crate) review_required_count: u32,
+    pub(crate) high_risk_count: u32,
+    pub(crate) providers: Vec<ProviderRiskItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ProviderRiskItem {
+    pub(crate) provider_id: String,
+    pub(crate) risk_score: u8,
+    pub(crate) risk_tier: String,
+    pub(crate) review_required: bool,
+    pub(crate) review_route: String,
+    pub(crate) claim_count: u32,
+    pub(crate) specialty: Option<String>,
+    pub(crate) network_status: Option<String>,
+    pub(crate) review_failure_count: u32,
+    pub(crate) confirmed_fwa_count: u32,
+    pub(crate) false_positive_count: u32,
+    pub(crate) network_risk_score: Option<u8>,
+    pub(crate) latest_claim_id: Option<String>,
+    pub(crate) outlier_flags: Vec<String>,
+    pub(crate) graph_reasons: Vec<String>,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AuditSampleListResponse {
+    pub(crate) samples: Vec<AuditSampleRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AuditSampleRecord {
+    pub(crate) sample_id: String,
+    pub(crate) sample_mode: String,
+    pub(crate) population_definition: String,
+    pub(crate) inclusion_criteria: Value,
+    pub(crate) deterministic_seed: Option<String>,
+    pub(crate) selection_method: String,
+    pub(crate) sample_size: usize,
+    pub(crate) reviewer: String,
+    pub(crate) assignment_queue: String,
+    pub(crate) selected_leads: Vec<AuditSampleLead>,
+    pub(crate) outcome_distribution: Value,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AuditSampleLead {
+    pub(crate) lead_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) scheme_family: String,
+    pub(crate) review_mode: String,
+    pub(crate) provider_id: String,
+    pub(crate) provider_type: String,
+    pub(crate) provider_region: String,
+    pub(crate) policy_type: String,
+    pub(crate) risk_band: String,
+    pub(crate) strata_key: String,
+    pub(crate) prior_reviewer_sample_count: u32,
+    pub(crate) risk_score: u8,
+    pub(crate) rag: String,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct QaQueueListResponse {
+    pub(crate) items: Vec<QaQueueItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct QaQueueItem {
+    pub(crate) qa_case_id: String,
+    pub(crate) sample_id: String,
+    pub(crate) lead_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) scheme_family: String,
+    pub(crate) rag: String,
+    pub(crate) risk_score: u8,
+    pub(crate) reviewer: String,
+    pub(crate) assignment_queue: String,
+    pub(crate) status: String,
+    pub(crate) qa_conclusion: Option<String>,
+    pub(crate) issue_type: Option<String>,
+    pub(crate) feedback_target: Option<String>,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) canonical_source_refs: Vec<String>,
+    pub(crate) canonical_evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct QaQueueSummary {
+    pub(crate) open_count: u32,
+    pub(crate) in_progress_count: u32,
+    pub(crate) resolved_count: u32,
+    pub(crate) dismissed_count: u32,
+    pub(crate) unresolved_count: u32,
+    pub(crate) rules_feedback_count: u32,
+    pub(crate) models_feedback_count: u32,
+    pub(crate) features_feedback_count: u32,
+    pub(crate) provider_profile_feedback_count: u32,
+    pub(crate) workflow_feedback_count: u32,
+    pub(crate) tpa_feedback_count: u32,
+    pub(crate) high_priority_count: u32,
+    pub(crate) evidence_backed_count: u32,
+    pub(crate) highest_priority: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct QaFeedbackItemListResponse {
+    pub(crate) items: Vec<QaFeedbackItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct QaFeedbackItem {
+    pub(crate) feedback_id: String,
+    pub(crate) qa_case_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) feedback_target: String,
+    pub(crate) issue_type: String,
+    pub(crate) qa_conclusion: String,
+    pub(crate) source: String,
+    pub(crate) status: String,
+    pub(crate) priority: String,
+    pub(crate) summary: String,
+    pub(crate) note_present: bool,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+    pub(crate) status_updated_by: Option<String>,
+    pub(crate) status_audit_id: Option<String>,
+    pub(crate) status_updated_at: Option<String>,
+    pub(crate) status_evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct QaReviewSnapshot {
+    pub(crate) queue: Vec<QaQueueItem>,
+    pub(crate) summary: QaQueueSummary,
+    pub(crate) feedback_items: Vec<QaFeedbackItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct HistoricalBackfillListResponse {
+    pub(crate) jobs: Vec<HistoricalBackfillJob>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct HistoricalBackfillResponse {
+    pub(crate) job: HistoricalBackfillJob,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct HistoricalBackfillJob {
+    pub(crate) job_id: String,
+    pub(crate) status: String,
+    pub(crate) dataset_refs: Vec<String>,
+    pub(crate) rule_refs: Vec<String>,
+    pub(crate) candidate_count: u32,
+    pub(crate) leads: Vec<HistoricalBackfillLead>,
+    pub(crate) reviewer: Option<String>,
+    pub(crate) notes: Option<String>,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct HistoricalBackfillLead {
+    pub(crate) lead_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) scheme_family: String,
+    pub(crate) risk_score: u8,
+    pub(crate) rag: String,
+    pub(crate) status: String,
+    pub(crate) reason: String,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceRequestListResponse {
+    pub(crate) requests: Vec<EvidenceRequestRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceRequestGenerateResponse {
+    pub(crate) requests: Vec<EvidenceRequestRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceRequestRecord {
+    pub(crate) request_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) scoring_audit_id: String,
+    pub(crate) status: String,
+    pub(crate) request_reason: String,
+    pub(crate) missing_evidence: Vec<String>,
+    pub(crate) items: Vec<EvidenceRequestItem>,
+    pub(crate) reviewer_queue: String,
+    pub(crate) requested_by: String,
+    pub(crate) notes: Option<String>,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+    pub(crate) updated_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct EvidenceRequestItem {
+    pub(crate) item_id: String,
+    pub(crate) document_type: String,
+    pub(crate) status: String,
+    pub(crate) reason: String,
+    #[serde(default)]
+    pub(crate) blocking: bool,
+    pub(crate) policy_authority_ref: Option<String>,
+    pub(crate) exception_check: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct LabelBootstrapQueueResponse {
+    pub(crate) items: Vec<LabelBootstrapItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct LabelBootstrapReviewResponse {
+    pub(crate) item: LabelBootstrapItem,
+    pub(crate) audit_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct LabelBootstrapItem {
+    pub(crate) item_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) source_type: String,
+    pub(crate) source_id: String,
+    pub(crate) suggested_label_name: String,
+    pub(crate) suggested_label_value: String,
+    pub(crate) governance_status: String,
+    pub(crate) training_eligible: bool,
+    pub(crate) review_status: String,
+    pub(crate) review_audit_id: Option<String>,
+    pub(crate) reviewer: Option<String>,
+    pub(crate) feedback_target: String,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct BootstrapOpsSnapshot {
+    pub(crate) backfills: Vec<HistoricalBackfillJob>,
+    pub(crate) evidence_requests: Vec<EvidenceRequestRecord>,
+    pub(crate) label_items: Vec<LabelBootstrapItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct KnowledgeCaseListResponse {
+    pub(crate) cases: Vec<KnowledgeCase>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct KnowledgeCase {
+    pub(crate) case_id: String,
+    pub(crate) title: String,
+    pub(crate) fwa_type: String,
+    pub(crate) scheme_family: String,
+    pub(crate) diagnosis_code: String,
+    pub(crate) provider_region: String,
+    pub(crate) provider_type: String,
+    pub(crate) summary: String,
+    pub(crate) outcome: String,
+    pub(crate) tags: Vec<String>,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct SimilarCaseSearchResponse {
+    pub(crate) results: Vec<SimilarCase>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct SimilarCase {
+    pub(crate) case_id: String,
+    pub(crate) title: String,
+    pub(crate) scheme_family: String,
+    pub(crate) similarity_score: f64,
+    pub(crate) matched_signals: Vec<String>,
+    pub(crate) retrieval_method: String,
+    pub(crate) provenance_refs: Vec<String>,
+    pub(crate) summary: String,
+    pub(crate) outcome: String,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct KnowledgeSnapshot {
+    pub(crate) cases: Vec<KnowledgeCase>,
+    pub(crate) results: Vec<SimilarCase>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AuditEventListResponse {
+    pub(crate) events: Vec<AuditEventRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AuditEventRecord {
+    pub(crate) audit_id: String,
+    pub(crate) run_id: String,
+    pub(crate) event_type: String,
+    pub(crate) event_status: String,
+    pub(crate) summary: String,
+    pub(crate) payload: Value,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ApiCallListResponse {
+    pub(crate) calls: Vec<ApiCallRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct ApiCallRecord {
+    pub(crate) call_id: String,
+    pub(crate) endpoint: String,
+    pub(crate) method: String,
+    pub(crate) status_code: u16,
+    pub(crate) result: String,
+    pub(crate) source_system: String,
+    pub(crate) claim_id: String,
+    pub(crate) run_id: String,
+    pub(crate) audit_id: String,
+    pub(crate) event_type: String,
+    pub(crate) idempotency_key: Option<String>,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) observed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentRunListResponse {
+    pub(crate) runs: Vec<AgentRunRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentRunRecord {
+    pub(crate) agent_run_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) status: String,
+    pub(crate) decision_boundary: String,
+    pub(crate) output_json: Value,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) steps: Vec<Value>,
+    pub(crate) context_snapshots: Vec<Value>,
+    pub(crate) policy_checks: Vec<Value>,
+    pub(crate) tool_calls: Vec<Value>,
+    pub(crate) tool_results: Vec<Value>,
+    pub(crate) approvals: Vec<AgentApprovalView>,
+    pub(crate) created_at: Option<String>,
+    pub(crate) completed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentApprovalView {
+    pub(crate) approval_id: String,
+    pub(crate) proposed_action: String,
+    pub(crate) decision: String,
+    pub(crate) approver: String,
+    pub(crate) reason: String,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentInvestigationResponse {
+    pub(crate) agent_run_id: String,
+    pub(crate) decision_boundary: String,
+    pub(crate) risk_summary: String,
+    pub(crate) findings: Vec<AgentInvestigationFinding>,
+    pub(crate) investigation_checklist: Vec<String>,
+    pub(crate) similar_cases: Vec<AgentInvestigationSimilarCase>,
+    pub(crate) qa_opinion_draft: String,
+    pub(crate) evidence_sufficiency: AgentEvidenceSufficiency,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) evidence_refs_by_type: AgentEvidenceBuckets,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentInvestigationFinding {
+    pub(crate) finding: String,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentInvestigationSimilarCase {
+    pub(crate) case_id: String,
+    pub(crate) similarity_score: f64,
+    pub(crate) matched_signals: Vec<String>,
+    pub(crate) provenance_refs: Vec<String>,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentEvidenceSufficiency {
+    pub(crate) scheme_family: String,
+    pub(crate) status: String,
+    pub(crate) minimum_evidence: Vec<String>,
+    pub(crate) present_evidence: Vec<String>,
+    pub(crate) missing_evidence: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct AgentEvidenceBuckets {
+    pub(crate) claim: Vec<String>,
+    pub(crate) rule: Vec<String>,
+    pub(crate) model: Vec<String>,
+    pub(crate) anomaly: Vec<String>,
+    pub(crate) document: Vec<String>,
+    pub(crate) similar_case: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct GovernanceSnapshot {
+    pub(crate) health: HealthResponse,
+    pub(crate) audit_events: Vec<AuditEventRecord>,
+    pub(crate) api_calls: Vec<ApiCallRecord>,
+    pub(crate) agent_runs: Vec<AgentRunRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct HealthResponse {
+    pub(crate) status: String,
+    pub(crate) service: String,
+    pub(crate) version: String,
+    pub(crate) pilot_readiness: PilotReadiness,
+    pub(crate) checks: Vec<HealthCheck>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct PilotReadiness {
+    pub(crate) status: String,
+    pub(crate) ready_for_customer_pilot: bool,
+    pub(crate) required_check_names: Vec<String>,
+    pub(crate) required_check_count: usize,
+    pub(crate) ready_check_count: usize,
+    pub(crate) blocking_check_count: usize,
+    pub(crate) blocking_check_names: Vec<String>,
+    pub(crate) remediation_summary: Vec<String>,
+    pub(crate) ready_checks: Vec<HealthCheck>,
+    pub(crate) blocking_checks: Vec<HealthCheck>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct HealthCheck {
+    pub(crate) name: String,
+    pub(crate) status: String,
+    pub(crate) runtime_kind: Option<String>,
+    pub(crate) remediation: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardSummary {
+    pub(crate) suspected_claims: u32,
+    pub(crate) confirmed_fwa: u32,
+    pub(crate) risk_amount: String,
+    pub(crate) saving_amount: String,
+    pub(crate) rag_distribution: BTreeMap<String, u32>,
+    pub(crate) scheme_distribution: BTreeMap<String, u32>,
+    pub(crate) rule_hits: u32,
+    pub(crate) model_scores: BTreeMap<String, DashboardModelScore>,
+    pub(crate) layer_scores: BTreeMap<String, DashboardLayerScore>,
+    pub(crate) saving_attributions: Vec<DashboardSavingAttribution>,
+    pub(crate) saving_segments: Vec<DashboardSavingSegment>,
+    pub(crate) value_measurement: DashboardValueMeasurement,
+    pub(crate) audit_coverage: DashboardAuditCoverage,
+    pub(crate) label_pool: DashboardLabelPool,
+    pub(crate) qa_queue: DashboardQaQueue,
+    pub(crate) case_sla: DashboardCaseSla,
+    pub(crate) agent_governance: DashboardAgentGovernance,
+    pub(crate) model_governance: DashboardModelGovernance,
+    pub(crate) rule_governance: DashboardRuleGovernance,
+    pub(crate) investigation_results: u32,
+    pub(crate) qa_reviews: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardModelScore {
+    pub(crate) scored_runs: u32,
+    pub(crate) average_score: f64,
+    pub(crate) high_risk_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardLayerScore {
+    pub(crate) name: String,
+    pub(crate) scored_runs: u32,
+    pub(crate) average_score: f64,
+    pub(crate) high_risk_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardSavingAttribution {
+    pub(crate) source_type: String,
+    pub(crate) source_id: String,
+    pub(crate) financial_impact_type: String,
+    pub(crate) action: String,
+    pub(crate) saving_amount: String,
+    pub(crate) currency: String,
+    pub(crate) claim_count: u32,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardSavingSegment {
+    pub(crate) segment_type: String,
+    pub(crate) segment_id: String,
+    pub(crate) saving_amount: String,
+    pub(crate) currency: String,
+    pub(crate) claim_count: u32,
+    pub(crate) attribution_count: u32,
+    pub(crate) roi: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardValueMeasurement {
+    pub(crate) prevented_payment: String,
+    pub(crate) recovered_amount: String,
+    pub(crate) avoided_future_exposure: String,
+    pub(crate) deterrence_estimate: String,
+    pub(crate) estimated_impact: String,
+    pub(crate) review_cost: String,
+    pub(crate) false_positive_operational_cost: String,
+    pub(crate) reviewer_capacity_hours: String,
+    pub(crate) net_value: String,
+    pub(crate) currency: String,
+    pub(crate) evidence_caveat: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardAuditCoverage {
+    pub(crate) scoring_runs: u32,
+    pub(crate) canonical_trace_runs: u32,
+    pub(crate) canonical_trace_coverage: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardLabelPool {
+    pub(crate) total_labels: u32,
+    pub(crate) approved_for_training: u32,
+    pub(crate) needs_review: u32,
+    pub(crate) rule_feedback: u32,
+    pub(crate) model_feedback: u32,
+    pub(crate) features_feedback: u32,
+    pub(crate) provider_profile_feedback: u32,
+    pub(crate) workflow_feedback: u32,
+    pub(crate) case_status_labels: u32,
+    pub(crate) medical_review_labels: u32,
+    pub(crate) false_positive_labels: u32,
+    pub(crate) evidence_backed_labels: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardQaQueue {
+    pub(crate) sampled_cases: u32,
+    pub(crate) open_cases: u32,
+    pub(crate) reviewed_cases: u32,
+    pub(crate) disagreement_cases: u32,
+    pub(crate) disagreement_rate: f64,
+    pub(crate) feedback_open_count: u32,
+    pub(crate) feedback_in_progress_count: u32,
+    pub(crate) feedback_resolved_count: u32,
+    pub(crate) feedback_dismissed_count: u32,
+    pub(crate) unresolved_feedback_count: u32,
+    pub(crate) rules_unresolved_feedback_count: u32,
+    pub(crate) models_unresolved_feedback_count: u32,
+    pub(crate) features_unresolved_feedback_count: u32,
+    pub(crate) provider_profile_unresolved_feedback_count: u32,
+    pub(crate) workflow_unresolved_feedback_count: u32,
+    pub(crate) tpa_unresolved_feedback_count: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardCaseSla {
+    pub(crate) total_cases: u32,
+    pub(crate) open_cases: u32,
+    pub(crate) closed_cases: u32,
+    pub(crate) breached_cases: u32,
+    pub(crate) sla_breach_rate: f64,
+    pub(crate) average_time_to_triage_hours: f64,
+    pub(crate) average_time_to_closure_hours: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardAgentGovernance {
+    pub(crate) total_runs: u32,
+    pub(crate) successful_runs: u32,
+    pub(crate) evidence_backed_runs: u32,
+    pub(crate) tool_call_count: u32,
+    pub(crate) policy_check_count: u32,
+    pub(crate) denied_policy_check_count: u32,
+    pub(crate) failed_tool_call_count: u32,
+    pub(crate) pending_approvals: u32,
+    pub(crate) approved_approvals: u32,
+    pub(crate) rejected_approvals: u32,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardModelGovernance {
+    pub(crate) total_models: u32,
+    pub(crate) evaluated_models: u32,
+    pub(crate) drift_watch_count: u32,
+    pub(crate) drift_detected_count: u32,
+    pub(crate) average_precision: Option<f64>,
+    pub(crate) average_recall: Option<f64>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct DashboardRuleGovernance {
+    pub(crate) total_rules: u32,
+    pub(crate) active_rules: u32,
+    pub(crate) triggered_rules: u32,
+    pub(crate) total_trigger_count: u32,
+    pub(crate) reviewed_count: u32,
+    pub(crate) confirmed_fwa_count: u32,
+    pub(crate) false_positive_count: u32,
+    pub(crate) precision: f64,
+    pub(crate) false_positive_rate: f64,
+    pub(crate) saving_amount: String,
+    pub(crate) roi: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleListResponse {
+    pub(crate) rules: Vec<RuleSummary>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleSummary {
+    pub(crate) rule_id: String,
+    pub(crate) name: String,
+    pub(crate) status: String,
+    pub(crate) owner: String,
+    pub(crate) active_version: Option<u32>,
+    pub(crate) latest_version: u32,
+    pub(crate) review_mode: String,
+    pub(crate) scheme_family: String,
+    pub(crate) score: u8,
+    pub(crate) alert_code: String,
+    pub(crate) recommended_action: String,
+    pub(crate) applicability_scope: RuleApplicabilityScope,
+    pub(crate) backtest_result: RuleBacktestSummary,
+    pub(crate) estimated_saving: String,
+    pub(crate) false_positive_history: RuleFalsePositiveHistory,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleApplicabilityScope {
+    pub(crate) review_mode: String,
+    pub(crate) scheme_family: String,
+    pub(crate) source: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleBacktestSummary {
+    pub(crate) status: String,
+    pub(crate) sample_count: u32,
+    pub(crate) matched_count: u32,
+    pub(crate) precision: f64,
+    pub(crate) recall: f64,
+    pub(crate) lift: f64,
+    pub(crate) false_positive_rate: f64,
+    pub(crate) estimated_saving: String,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleFalsePositiveHistory {
+    pub(crate) status: String,
+    pub(crate) false_positive_count: u32,
+    pub(crate) false_positive_rate: f64,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RulePerformanceResponse {
+    pub(crate) rules: Vec<RulePerformance>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RulePerformance {
+    pub(crate) rule_id: String,
+    pub(crate) alert_code: String,
+    pub(crate) trigger_count: u32,
+    pub(crate) reviewed_count: u32,
+    pub(crate) confirmed_fwa_count: u32,
+    pub(crate) false_positive_count: u32,
+    pub(crate) mark_rate: f64,
+    pub(crate) precision: f64,
+    pub(crate) false_positive_rate: f64,
+    pub(crate) saving_amount: String,
+    pub(crate) roi: f64,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RulePromotionGates {
+    pub(crate) rule_id: String,
+    pub(crate) rule_version: u32,
+    pub(crate) review_mode: String,
+    pub(crate) decision: String,
+    pub(crate) status: String,
+    pub(crate) passed_count: usize,
+    pub(crate) total_count: usize,
+    pub(crate) trigger_count: u32,
+    pub(crate) reviewed_count: u32,
+    pub(crate) false_positive_rate: f64,
+    pub(crate) saving_amount: String,
+    pub(crate) open_rule_feedback_count: usize,
+    pub(crate) unresolved_rule_feedback_count: usize,
+    pub(crate) approved_label_count: usize,
+    pub(crate) needs_review_label_count: usize,
+    pub(crate) gates: Vec<RulePromotionGate>,
+    pub(crate) blockers: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RulePromotionGate {
+    pub(crate) label: String,
+    pub(crate) passed: bool,
+    pub(crate) blocker: String,
+    pub(crate) evidence_source: String,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RuleOpsSnapshot {
+    pub(crate) rules: Vec<RuleSummary>,
+    pub(crate) performance: Vec<RulePerformance>,
+    pub(crate) gates: RulePromotionGates,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleDiscoveryResponse {
+    pub(crate) sample_count: usize,
+    pub(crate) positive_count: usize,
+    pub(crate) candidates: Vec<RuleDiscoveryCandidate>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleDiscoveryCandidate {
+    pub(crate) rule: Value,
+    pub(crate) support: usize,
+    pub(crate) precision: f64,
+    pub(crate) recall: f64,
+    pub(crate) lift: f64,
+    pub(crate) estimated_saving: String,
+    pub(crate) false_positive_rate: f64,
+    pub(crate) matched_claim_ids: Vec<String>,
+    pub(crate) explanation: String,
+    #[serde(default)]
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct RuleBacktestResponse {
+    pub(crate) sample_count: usize,
+    pub(crate) matched_count: usize,
+    pub(crate) reviewed_count: usize,
+    pub(crate) confirmed_fwa_count: usize,
+    pub(crate) false_positive_count: usize,
+    pub(crate) match_rate: f64,
+    pub(crate) precision: f64,
+    pub(crate) recall: f64,
+    pub(crate) lift: f64,
+    pub(crate) false_positive_rate: f64,
+    pub(crate) average_score_contribution: f64,
+    pub(crate) estimated_saving: String,
+    pub(crate) promotion_recommendation: String,
+    pub(crate) blockers: Vec<String>,
+    pub(crate) matched_claim_ids: Vec<String>,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct LeadListResponse {
+    pub(crate) leads: Vec<LeadRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct LeadRecord {
+    pub(crate) lead_id: String,
+    pub(crate) run_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) member_id: String,
+    pub(crate) provider_id: String,
+    pub(crate) source_system: String,
+    pub(crate) review_mode: String,
+    pub(crate) scheme_family: String,
+    pub(crate) lead_source: String,
+    pub(crate) status: String,
+    pub(crate) disposition: String,
+    pub(crate) risk_score: u8,
+    pub(crate) rag: String,
+    pub(crate) reason: String,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct CaseListResponse {
+    pub(crate) cases: Vec<CaseRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct CaseRecord {
+    pub(crate) case_id: String,
+    pub(crate) lead_id: String,
+    pub(crate) claim_id: String,
+    pub(crate) member_id: String,
+    pub(crate) provider_id: String,
+    pub(crate) source_system: String,
+    pub(crate) review_mode: String,
+    pub(crate) scheme_family: String,
+    pub(crate) lead_source: String,
+    pub(crate) status: String,
+    pub(crate) assignee: String,
+    pub(crate) reviewer: String,
+    pub(crate) priority: String,
+    pub(crate) routing_reason: String,
+    pub(crate) evidence_package: Value,
+    pub(crate) sla_target_hours: u32,
+    pub(crate) sla_status: String,
+    pub(crate) time_to_triage_hours: f64,
+    pub(crate) time_to_closure_hours: Option<f64>,
+    pub(crate) final_outcome: Option<String>,
+    pub(crate) reviewer_notes: Option<String>,
+    pub(crate) investigation_result_id: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct TriageLeadRecord {
+    pub(crate) lead: LeadRecord,
+    pub(crate) case: Option<CaseRecord>,
+    pub(crate) audit_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct UpdateCaseStatusRecord {
+    pub(crate) case: CaseRecord,
+    pub(crate) audit_id: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct PilotWritebackResponse {
+    pub(crate) claim_id: String,
+    pub(crate) event_type: String,
+    pub(crate) event_status: String,
+    pub(crate) audit_id: String,
+    pub(crate) run_id: String,
+    pub(crate) idempotency_key: String,
+    pub(crate) evidence_refs: Vec<String>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct LeadsCasesSnapshot {
+    pub(crate) leads: Vec<LeadRecord>,
+    pub(crate) cases: Vec<CaseRecord>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct MedicalReviewQueueResponse {
+    pub(crate) items: Vec<MedicalReviewQueueItem>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct MedicalReviewQueueItem {
+    pub(crate) claim_id: String,
+    pub(crate) run_id: String,
+    pub(crate) audit_id: String,
+    pub(crate) medical_reasonableness_score: u8,
+    pub(crate) review_route: String,
+    pub(crate) evidence_status: String,
+    pub(crate) missing_evidence: Vec<String>,
+    pub(crate) item_finding_count: u32,
+    pub(crate) first_item_code: Option<String>,
+    pub(crate) first_issue_type: Option<String>,
+    pub(crate) evidence_refs: Vec<String>,
+    pub(crate) canonical_source_refs: Vec<String>,
+    pub(crate) canonical_evidence_refs: Vec<String>,
+    pub(crate) created_at: Option<String>,
+    pub(crate) review_status: String,
+    pub(crate) review_audit_id: Option<String>,
+    pub(crate) review_decision: Option<String>,
+    pub(crate) reviewer: Option<String>,
+    pub(crate) reviewed_at: Option<String>,
+}
+
+#[derive(Clone, Debug, PartialEq, Deserialize)]
+pub(crate) struct MedicalReviewResultResponse {
+    pub(crate) claim_id: String,
+    pub(crate) event_type: String,
+    pub(crate) event_status: String,
+    pub(crate) audit_id: String,
+    pub(crate) run_id: String,
+    pub(crate) review_status: String,
+    pub(crate) clinical_outcomes: Vec<String>,
+    pub(crate) evidence_refs: Vec<String>,
+}
