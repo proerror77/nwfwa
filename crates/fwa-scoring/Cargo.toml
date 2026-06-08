@@ -12,3 +12,10 @@ fwa-ml-runtime = { path = "../fwa-ml-runtime" }
 fwa-rules = { path = "../fwa-rules" }
 serde.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+criterion = "0.5"
+
+[[bench]]
+name = "scoring_aggregate"
+harness = false
