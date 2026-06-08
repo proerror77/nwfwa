@@ -12,6 +12,7 @@ use std::{
 };
 use tokio::sync::Mutex;
 
+mod agent_helpers;
 mod audit_helpers;
 mod audit_sample_helpers;
 mod case_rows;
@@ -31,6 +32,7 @@ mod triage_helpers;
 mod types;
 mod webhook_helpers;
 
+use self::agent_helpers::agent_run_log_from_persisted;
 use self::audit_helpers::{
     audit_event_payload_matches_customer_scope, audit_history_from_persisted,
     evidence_values_to_strings, persisted_audit_event_matches_filter,
@@ -7827,25 +7829,6 @@ pub(crate) fn scheme_family_from_knowledge_signals(fwa_type: &str, tags: &[Strin
             "Fraud" => "relationship_concentration".into(),
             _ => "high_risk_claim".into(),
         }
-    }
-}
-
-fn agent_run_log_from_persisted(run: &PersistedAgentRun) -> AgentRunLogRecord {
-    AgentRunLogRecord {
-        agent_run_id: run.agent_run_id.clone(),
-        claim_id: run.claim_id.clone(),
-        status: run.status.clone(),
-        decision_boundary: run.decision_boundary.clone(),
-        output_json: run.output_json.clone(),
-        evidence_refs: evidence_values_to_strings(&run.evidence_refs),
-        steps: run.steps.clone(),
-        context_snapshots: run.context_snapshots.clone(),
-        policy_checks: run.policy_checks.clone(),
-        tool_calls: run.tool_calls.clone(),
-        tool_results: run.tool_results.clone(),
-        approvals: run.approvals.clone(),
-        created_at: None,
-        completed_at: None,
     }
 }
 
