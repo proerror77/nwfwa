@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{
         CaseRecord, LeadRecord, TriageLeadInput, TriageLeadRecord, UpdateCaseStatusInput,
@@ -9,11 +10,9 @@ use crate::{
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
-use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use serde::Serialize;
 
 #[derive(Debug, Serialize)]
@@ -28,9 +27,8 @@ pub struct CaseListResponse {
 
 pub async fn list_leads(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<LeadListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let leads = state
         .repository
         .list_leads(Some(&actor.customer_scope_id))
@@ -41,11 +39,10 @@ pub async fn list_leads(
 
 pub async fn triage_lead(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(lead_id): Path<String>,
     Json(mut request): Json<TriageLeadInput>,
 ) -> Result<Json<TriageLeadRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_triage_request(&lead_id, &request)?;
     request.customer_scope_id = Some(actor.customer_scope_id);
     let record = state
@@ -120,9 +117,8 @@ fn validate_triage_request(lead_id: &str, request: &TriageLeadInput) -> Result<(
 
 pub async fn list_cases(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<CaseListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let cases = state
         .repository
         .list_cases(Some(&actor.customer_scope_id))
@@ -133,11 +129,10 @@ pub async fn list_cases(
 
 pub async fn update_case_status(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(case_id): Path<String>,
     Json(mut request): Json<UpdateCaseStatusInput>,
 ) -> Result<Json<UpdateCaseStatusRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     if !is_supported_case_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -196,19 +191,6 @@ fn is_supported_case_status(status: &str) -> bool {
         status,
         "triage" | "investigating" | "pending_evidence" | "confirmed" | "rejected" | "closed"
     )
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
