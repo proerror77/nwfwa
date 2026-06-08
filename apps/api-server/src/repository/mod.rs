@@ -24,6 +24,7 @@ mod evidence_rows;
 mod outcome_helpers;
 mod provider_helpers;
 mod row_types;
+mod rule_performance_helpers;
 mod types;
 
 use self::audit_helpers::{
@@ -62,6 +63,10 @@ use self::provider_helpers::summarize_provider_risk_profiles;
 use self::row_types::{
     inbox_claim_run_from_row, AgentApprovalRow, AgentPolicyCheckRow, ClaimContextRow, ClaimItemRow,
     IntoClaimContext,
+};
+use self::rule_performance_helpers::{
+    decimal_from_json, ratio, rule_accumulators_from_rules, rule_performance_records,
+    InvestigationOutcome, RULE_REVIEW_COST_AMOUNT,
 };
 pub use self::types::*;
 use self::types::{
@@ -7745,113 +7750,6 @@ impl ScoringRepository for PostgresScoringRepository {
             .map(evidence_retrieval_audit_event_from_row)
             .collect()
     }
-}
-
-const RULE_REVIEW_COST_AMOUNT: f64 = 100.0;
-
-#[derive(Debug, Clone)]
-struct InvestigationOutcome {
-    confirmed_fwa: bool,
-    saving_amount: Decimal,
-}
-
-#[derive(Debug, Clone)]
-struct RulePerformanceAccumulator {
-    rule_id: String,
-    alert_code: String,
-    trigger_count: u32,
-    triggered_claim_ids: BTreeSet<String>,
-}
-
-fn rule_accumulators_from_rules(
-    rules: &[RuleSummaryRecord],
-) -> BTreeMap<String, RulePerformanceAccumulator> {
-    rules
-        .iter()
-        .map(|rule| {
-            (
-                rule.rule_id.clone(),
-                RulePerformanceAccumulator {
-                    rule_id: rule.rule_id.clone(),
-                    alert_code: rule.alert_code.clone(),
-                    trigger_count: 0,
-                    triggered_claim_ids: BTreeSet::new(),
-                },
-            )
-        })
-        .collect()
-}
-
-fn rule_performance_records(
-    accumulators: BTreeMap<String, RulePerformanceAccumulator>,
-    outcomes: &HashMap<String, InvestigationOutcome>,
-    total_scoring_runs: u32,
-) -> Vec<RulePerformanceRecord> {
-    accumulators
-        .into_values()
-        .map(|accumulator| {
-            let mut reviewed_count = 0_u32;
-            let mut confirmed_fwa_count = 0_u32;
-            let mut false_positive_count = 0_u32;
-            let mut saving_amount = Decimal::ZERO;
-
-            for claim_id in &accumulator.triggered_claim_ids {
-                let Some(outcome) = outcomes.get(claim_id) else {
-                    continue;
-                };
-                reviewed_count += 1;
-                if outcome.confirmed_fwa {
-                    confirmed_fwa_count += 1;
-                    saving_amount += outcome.saving_amount;
-                } else {
-                    false_positive_count += 1;
-                }
-            }
-
-            let trigger_count = accumulator.trigger_count;
-            let mark_rate = ratio(trigger_count, total_scoring_runs);
-            let precision = ratio(confirmed_fwa_count, reviewed_count);
-            let false_positive_rate = ratio(false_positive_count, reviewed_count);
-            let roi = if trigger_count == 0 {
-                0.0
-            } else {
-                let saving = saving_amount.to_string().parse::<f64>().unwrap_or(0.0);
-                saving / (trigger_count as f64 * RULE_REVIEW_COST_AMOUNT)
-            };
-
-            RulePerformanceRecord {
-                rule_id: accumulator.rule_id,
-                alert_code: accumulator.alert_code,
-                trigger_count,
-                reviewed_count,
-                confirmed_fwa_count,
-                false_positive_count,
-                mark_rate,
-                precision,
-                false_positive_rate,
-                saving_amount: format!("{:.2}", saving_amount.round_dp(2)),
-                roi,
-            }
-        })
-        .collect()
-}
-
-fn ratio(numerator: u32, denominator: u32) -> f64 {
-    if denominator == 0 {
-        0.0
-    } else {
-        numerator as f64 / denominator as f64
-    }
-}
-
-fn decimal_from_json(value: &Value) -> Decimal {
-    if let Some(value) = value.as_str() {
-        return value.parse::<Decimal>().unwrap_or(Decimal::ZERO);
-    }
-    if let Some(value) = value.as_f64() {
-        return Decimal::from_f64_retain(value).unwrap_or(Decimal::ZERO);
-    }
-    Decimal::ZERO
 }
 
 fn lead_from_scoring_run(
