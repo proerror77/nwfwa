@@ -1287,13 +1287,24 @@ async fn openapi_includes_operations_paths() {
             "missing CompleteModelRetrainingJobRequest required {required_field}"
         );
     }
-    assert!(
-        schema["components"]["schemas"]["ModelArtifactEvidenceSummary"]["required"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|field| field == "permutation_importance_uri"),
-        "missing ModelArtifactEvidenceSummary.permutation_importance_uri"
+    for required_field in [
+        "permutation_importance_uri",
+        "rust_serving_latency_measurement_kind",
+        "rust_serving_latency_sample_count",
+    ] {
+        assert!(
+            schema["components"]["schemas"]["ModelArtifactEvidenceSummary"]["required"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .any(|field| field == required_field),
+            "missing ModelArtifactEvidenceSummary.{required_field}"
+        );
+    }
+    assert_eq!(
+        schema["components"]["schemas"]["ModelArtifactEvidenceSummary"]["properties"]
+            ["rust_serving_latency_sample_count"]["minimum"],
+        0
     );
     assert_eq!(
         schema["components"]["schemas"]["FactorReadinessResponse"]["properties"]

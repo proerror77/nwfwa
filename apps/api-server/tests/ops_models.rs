@@ -360,6 +360,8 @@ async fn register_activation_candidate(app: axum::Router) -> String {
                 "rust_serving_status": "passed",
                 "rust_serving_latency_status": "passed",
                 "rust_serving_p95_latency_ms": 17,
+                "rust_serving_latency_measurement_kind": "simulated_fixture",
+                "rust_serving_latency_sample_count": 0,
                 "feature_reproducibility_hash": "sha256:activation-features",
                 "label_provenance_status": "passed",
                 "label_reviewer_source": "qa_review",
@@ -3417,6 +3419,14 @@ async fn activates_candidate_model_after_promotion_gates_pass() {
     assert_eq!(
         gates["artifact_evidence"]["rust_serving_p95_latency_ms"],
         17
+    );
+    assert_eq!(
+        gates["artifact_evidence"]["rust_serving_latency_measurement_kind"],
+        "simulated_fixture"
+    );
+    assert_eq!(
+        gates["artifact_evidence"]["rust_serving_latency_sample_count"],
+        0
     );
 
     let (status, body) = json_request(

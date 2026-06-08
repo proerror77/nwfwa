@@ -55,6 +55,8 @@ pub(crate) struct ModelArtifactEvidence {
     pub(crate) rust_serving_status: Option<String>,
     pub(crate) rust_serving_latency_status: Option<String>,
     pub(crate) rust_serving_p95_latency_ms: Option<u64>,
+    pub(crate) rust_serving_latency_measurement_kind: Option<String>,
+    pub(crate) rust_serving_latency_sample_count: Option<u64>,
 }
 
 #[derive(Clone, Debug, PartialEq, Deserialize)]

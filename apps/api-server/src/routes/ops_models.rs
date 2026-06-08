@@ -68,6 +68,8 @@ pub struct ModelArtifactEvidenceSummary {
     pub rust_serving_status: Option<String>,
     pub rust_serving_latency_status: Option<String>,
     pub rust_serving_p95_latency_ms: Option<u64>,
+    pub rust_serving_latency_measurement_kind: Option<String>,
+    pub rust_serving_latency_sample_count: Option<u64>,
 }
 
 #[derive(Debug, Serialize)]
@@ -3645,6 +3647,14 @@ fn model_artifact_evidence_summary(metrics: &Value) -> ModelArtifactEvidenceSumm
         rust_serving_status: optional_metric_string(metrics, "rust_serving_status"),
         rust_serving_latency_status: optional_metric_string(metrics, "rust_serving_latency_status"),
         rust_serving_p95_latency_ms: optional_metric_u64(metrics, "rust_serving_p95_latency_ms"),
+        rust_serving_latency_measurement_kind: optional_metric_string(
+            metrics,
+            "rust_serving_latency_measurement_kind",
+        ),
+        rust_serving_latency_sample_count: optional_metric_u64(
+            metrics,
+            "rust_serving_latency_sample_count",
+        ),
     }
 }
 

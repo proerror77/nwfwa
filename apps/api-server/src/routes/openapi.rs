@@ -6128,14 +6128,22 @@ pub async fn openapi_schema() -> Json<Value> {
                 },
                 "ModelArtifactEvidenceSummary": {
                     "type": "object",
-                    "required": ["serving_manifest_uri", "model_artifact_evaluation_report_uri", "permutation_importance_uri", "rust_serving_status", "rust_serving_latency_status", "rust_serving_p95_latency_ms"],
+                    "required": ["serving_manifest_uri", "model_artifact_evaluation_report_uri", "permutation_importance_uri", "rust_serving_status", "rust_serving_latency_status", "rust_serving_p95_latency_ms", "rust_serving_latency_measurement_kind", "rust_serving_latency_sample_count"],
                     "properties": {
                         "serving_manifest_uri": { "type": ["string", "null"] },
                         "model_artifact_evaluation_report_uri": { "type": ["string", "null"] },
                         "permutation_importance_uri": { "type": ["string", "null"] },
                         "rust_serving_status": { "type": ["string", "null"] },
                         "rust_serving_latency_status": { "type": ["string", "null"] },
-                        "rust_serving_p95_latency_ms": { "type": ["integer", "null"] }
+                        "rust_serving_p95_latency_ms": { "type": ["integer", "null"] },
+                        "rust_serving_latency_measurement_kind": {
+                            "type": ["string", "null"],
+                            "description": "Describes whether the latency number is measured runtime evidence or a simulated fixture."
+                        },
+                        "rust_serving_latency_sample_count": {
+                            "type": ["integer", "null"],
+                            "minimum": 0
+                        }
                     }
                 },
                 "ModelPromotionGatesResponse": {

@@ -278,7 +278,7 @@ fn mlops_promotion_gates(snapshot: &MlopsWorkspaceSnapshot) -> Html {
 }
 
 fn model_latency_label(evidence: &ModelArtifactEvidence) -> String {
-    match (
+    let latency = match (
         evidence.rust_serving_latency_status.as_deref(),
         evidence.rust_serving_p95_latency_ms,
     ) {
@@ -286,6 +286,15 @@ fn model_latency_label(evidence: &ModelArtifactEvidence) -> String {
         (Some(status), None) => status.to_string(),
         (None, Some(ms)) => format!("{ms}ms"),
         (None, None) => "missing".into(),
+    };
+    match (
+        evidence.rust_serving_latency_measurement_kind.as_deref(),
+        evidence.rust_serving_latency_sample_count,
+    ) {
+        (Some(kind), Some(count)) => format!("{latency} ({kind}, n={count})"),
+        (Some(kind), None) => format!("{latency} ({kind})"),
+        (None, Some(count)) => format!("{latency} (n={count})"),
+        (None, None) => latency,
     }
 }
 
