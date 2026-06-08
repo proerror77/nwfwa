@@ -2279,13 +2279,18 @@ async fn queues_updates_and_completes_model_retraining_job_from_readiness() {
               "conditions": [
                 {
                   "field": "provider_profile_score",
-                  "operator": ">=",
+                  "operator": ">",
                   "value": 47.5
                 },
                 {
                   "field": "claim_amount_to_limit_ratio",
-                  "operator": ">=",
+                  "operator": "<",
                   "value": 0.56
+                },
+                {
+                  "field": "provider_region",
+                  "operator": "in",
+                  "value": ["SH", "BJ"]
                 }
               ],
               "action": {

@@ -1572,12 +1572,15 @@ fn validate_training_package_rule_candidate(rule: &Rule) -> Result<(), ApiError>
     }
     if rule.conditions.iter().any(|condition| {
         condition.field.trim().is_empty()
-            || !matches!(condition.operator.as_str(), "<=" | ">=" | "==")
+            || !matches!(
+                condition.operator.as_str(),
+                "<=" | "<" | ">=" | ">" | "==" | "in"
+            )
     }) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
             "INVALID_RETRAINING_OUTPUT_RULE_CANDIDATE",
-            "mined rule candidate conditions must use supported operators: <=, >=, ==",
+            "mined rule candidate conditions must use supported operators: <=, <, >=, >, ==, in",
         ));
     }
     if rule.action.alert_code.trim().is_empty() || rule.action.reason.trim().is_empty() {
