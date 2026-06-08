@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         PersistedAuditEvent, QaFeedbackItemRecord, RuleBacktestRecord, RuleConditionLibraryRecord,
@@ -10,12 +11,12 @@ use crate::{
 use anyhow::{bail, Context};
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
 use chrono::NaiveDate;
 use fwa_audit::ActorContext;
-use fwa_auth::{authenticate_api_key, validate_api_key};
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{
     canonical_scheme_family, AuditEventId, Claim, ClaimContext, ClaimId, Member, MemberId, Money,
     Policy, PolicyId, Provider, ProviderId, ProviderRiskTier, RecommendedAction, RuleActionClass,
@@ -273,9 +274,8 @@ pub struct RuleLifecycleResponse {
 
 pub async fn list_rules(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<RuleListResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let rules = state
         .repository
         .list_rules()
@@ -286,9 +286,8 @@ pub async fn list_rules(
 
 pub async fn rule_performance(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<RulePerformanceResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let rules = state
         .repository
         .rule_performance()
@@ -299,9 +298,8 @@ pub async fn rule_performance(
 
 pub async fn list_rule_conditions(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<RuleConditionLibraryResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let conditions = state
         .repository
         .list_rule_conditions()
@@ -312,10 +310,9 @@ pub async fn list_rule_conditions(
 
 pub async fn rule_promotion_gates(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(rule_id): Path<String>,
 ) -> Result<Json<RulePromotionGatesResponse>, ApiError> {
-    authorize(&state, &headers)?;
     Ok(Json(load_rule_promotion_gates(&state, &rule_id).await?))
 }
 
@@ -379,11 +376,11 @@ async fn load_rule_promotion_gates(
 
 pub async fn submit_rule_promotion_review(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
     Json(request): Json<SubmitRulePromotionReviewRequest>,
 ) -> Result<Json<RulePromotionReviewRecord>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:rules:review")?;
+    let actor = require_permission(principal, "ops:rules:review")?;
     if !matches!(request.decision.as_str(), "approved" | "rejected") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -455,11 +452,11 @@ pub async fn submit_rule_promotion_review(
 
 pub async fn submit_rule_shadow_run(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
     Json(request): Json<SubmitRuleShadowRunRequest>,
 ) -> Result<Json<RuleShadowRunRecord>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:rules:review")?;
+    let actor = require_permission(principal, "ops:rules:review")?;
     validate_rule_shadow_run_request(&rule_id, &request)?;
     let rule = state
         .repository
@@ -502,10 +499,9 @@ pub async fn submit_rule_shadow_run(
 
 pub async fn get_rule(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(rule_id): Path<String>,
 ) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
-    authorize(&state, &headers)?;
     let rule = state
         .repository
         .get_rule(&rule_id)
@@ -904,10 +900,9 @@ fn empty_rule_performance(rule: &RuleSummaryRecord) -> RulePerformanceRecord {
 
 pub async fn backtest_rule(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<RuleBacktestRequest>,
 ) -> Result<Json<RuleBacktestResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let mining_samples =
         backtest_mining_samples(&request).map_err(bad_request("RULE_BACKTEST_DATASET_FAILED"))?;
     let mut matched_claim_ids = Vec::new();
@@ -1066,11 +1061,10 @@ fn backtest_evidence_refs(request: &RuleBacktestRequest) -> Vec<String> {
 }
 
 pub async fn discover_rules(
-    State(state): State<AppState>,
-    headers: HeaderMap,
+    State(_state): State<AppState>,
+    _actor: AuthenticatedActor,
     Json(request): Json<RuleDiscoveryRequest>,
 ) -> Result<Json<RuleDiscoveryResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let min_support = request.min_support.unwrap_or(1);
     let mining_samples =
         discovery_mining_samples(&request).map_err(bad_request("RULE_DISCOVERY_DATASET_FAILED"))?;
@@ -1119,10 +1113,9 @@ pub async fn discover_rules(
 
 pub async fn save_rule_candidate(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(mut request): Json<SaveRuleCandidateRequest>,
 ) -> Result<Json<crate::repository::RuleDetailRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     request.rule.scheme_family = Some(validate_rule_candidate(&request.rule)?);
     let owner = request.owner.unwrap_or_else(|| "rule-discovery".into());
     let detail = state
@@ -1149,10 +1142,10 @@ pub async fn save_rule_candidate(
 
 pub async fn review_rule_candidate(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<ReviewRuleCandidateRequest>,
 ) -> Result<Json<ReviewRuleCandidateResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "ops:rules:review")?;
+    let actor = require_permission(principal, "ops:rules:review")?;
     if !matches!(request.decision.as_str(), "accepted" | "rejected") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -1319,25 +1312,25 @@ pub async fn review_rule_candidate(
 
 pub async fn submit_rule(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(rule_id): Path<String>,
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    update_status(state, headers, rule_id, "submitted", request.evidence_refs).await
+    update_status(state, actor, rule_id, "submitted", request.evidence_refs).await
 }
 
 pub async fn approve_rule(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    authorize_permission(&state, &headers, "ops:rules:approve")?;
+    let actor = require_permission(principal, "ops:rules:approve")?;
     update_status_with_required_previous(
         state,
-        headers,
+        actor,
         rule_id,
         "approved",
         Some("submitted"),
@@ -1348,12 +1341,12 @@ pub async fn approve_rule(
 
 pub async fn publish_rule(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    let actor = authorize_permission(&state, &headers, "ops:rules:publish")?;
+    let actor = require_permission(principal, "ops:rules:publish")?;
     let previous = state
         .repository
         .get_rule(&rule_id)
@@ -1409,12 +1402,12 @@ pub async fn publish_rule(
 
 pub async fn rollback_rule(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(rule_id): Path<String>,
     Json(request): Json<RuleLifecycleRequest>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
     validate_rule_lifecycle_request(&request)?;
-    let actor = authorize_permission(&state, &headers, "ops:rules:rollback")?;
+    let actor = require_permission(principal, "ops:rules:rollback")?;
     let previous = state
         .repository
         .get_rule(&rule_id)
@@ -1459,23 +1452,22 @@ pub async fn rollback_rule(
 
 async fn update_status(
     state: AppState,
-    headers: HeaderMap,
+    actor: ActorContext,
     rule_id: String,
     status: &'static str,
     evidence_refs: Vec<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    update_status_with_required_previous(state, headers, rule_id, status, None, evidence_refs).await
+    update_status_with_required_previous(state, actor, rule_id, status, None, evidence_refs).await
 }
 
 async fn update_status_with_required_previous(
     state: AppState,
-    headers: HeaderMap,
+    actor: ActorContext,
     rule_id: String,
     status: &'static str,
     required_previous_status: Option<&'static str>,
     evidence_refs: Vec<String>,
 ) -> Result<Json<RuleLifecycleResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let previous = state
         .repository
         .get_rule(&rule_id)
@@ -1561,35 +1553,10 @@ fn validate_rule_lifecycle_request(request: &RuleLifecycleRequest) -> Result<(),
     Ok(())
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
-}
-
-fn authorize_permission(
-    state: &AppState,
-    headers: &HeaderMap,
+fn require_permission(
+    principal: AuthenticatedPrincipal,
     permission: &str,
 ) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
     if !principal.has_permission(permission) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
