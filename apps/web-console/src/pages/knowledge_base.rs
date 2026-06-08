@@ -1,4 +1,5 @@
 use crate::*;
+use serde_json::{json, Value};
 use wasm_bindgen_futures::spawn_local;
 use web_sys::HtmlInputElement;
 
@@ -316,4 +317,37 @@ fn knowledge_evidence_cockpit(snapshot: &KnowledgeSnapshot) -> Html {
             </div>
         </section>
     }
+}
+
+async fn get_knowledge_snapshot(
+    api_key: String,
+    claim_id: String,
+    diagnosis_code: String,
+    provider_region: String,
+    tags_text: String,
+) -> Result<KnowledgeSnapshot, String> {
+    let tags = parse_tags(&tags_text);
+    if diagnosis_code.trim().is_empty() || provider_region.trim().is_empty() || tags.is_empty() {
+        return Err("diagnosis code, provider region, and at least one tag are required".into());
+    }
+    let cases = request_get_json::<KnowledgeCaseListResponse>(
+        "/api/v1/ops/knowledge/cases",
+        api_key.clone(),
+    )
+    .await?
+    .cases;
+    let payload = json!({
+        "claim_id": if claim_id.trim().is_empty() { Value::Null } else { Value::String(claim_id.trim().to_string()) },
+        "diagnosis_code": diagnosis_code.trim(),
+        "provider_region": provider_region.trim(),
+        "tags": tags,
+    });
+    let results = request_json::<SimilarCaseSearchResponse>(
+        "/api/v1/knowledge/search-similar",
+        api_key,
+        payload,
+    )
+    .await?
+    .results;
+    Ok(KnowledgeSnapshot { cases, results })
 }

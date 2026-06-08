@@ -519,3 +519,23 @@ fn live_tpa_demo_view(props: &LiveTpaDemoProps) -> Html {
         </>
     }
 }
+
+fn release_blocker_title(error: &str) -> &'static str {
+    if error.contains("coverage_limit") || error.contains("coverage limit") {
+        "Coverage limit needs correction"
+    } else if error.contains("claim_amount") || error.contains("claim amount") {
+        "Claim amount needs confirmation"
+    } else {
+        "Claim packet is not ready"
+    }
+}
+
+fn release_blocker_next_step(error: &str) -> &'static str {
+    if error.contains("coverage_limit") || error.contains("coverage limit") {
+        "Update the policy or liability coverage limit, then check the intake packet again."
+    } else if error.contains("claim_amount") || error.contains("claim amount") {
+        "Confirm the payable claim amount from invoice totals before release."
+    } else {
+        "Resolve the intake findings on the left before releasing this claim."
+    }
+}

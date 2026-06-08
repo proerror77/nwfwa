@@ -1,4 +1,5 @@
 use crate::*;
+use serde_json::json;
 use wasm_bindgen_futures::spawn_local;
 
 #[function_component(RoutingPoliciesPage)]
@@ -307,4 +308,56 @@ fn routing_policy_action_view(props: &RoutingPolicyActionProps) -> Html {
             </div>
         },
     }
+}
+
+async fn get_routing_policy_snapshot(
+    api_key: String,
+    policy_id: String,
+    review_mode: String,
+    version: String,
+) -> Result<RoutingPolicySnapshot, String> {
+    let policies = request_get_json::<RoutingPolicyListResponse>(
+        "/api/v1/ops/routing-policies",
+        api_key.clone(),
+    )
+    .await?
+    .policies;
+    let version = parse_u32(&version, "routing policy version")?;
+    let gates = request_get_json::<RoutingPolicyPromotionGates>(
+        &format!(
+            "/api/v1/ops/routing-policies/{}/{}/{}/promotion-gates",
+            policy_id.trim(),
+            review_mode.trim(),
+            version
+        ),
+        api_key,
+    )
+    .await?;
+    Ok(RoutingPolicySnapshot { policies, gates })
+}
+
+async fn update_routing_policy_lifecycle(
+    api_key: String,
+    policy_id: String,
+    review_mode: String,
+    version: String,
+    action: &str,
+    evidence_refs: Vec<String>,
+) -> Result<RoutingPolicyRecord, String> {
+    if evidence_refs.is_empty() {
+        return Err("routing policy lifecycle actions require evidence refs".into());
+    }
+    let version = parse_u32(&version, "routing policy version")?;
+    request_json(
+        &format!(
+            "/api/v1/ops/routing-policies/{}/{}/{}/{}",
+            policy_id.trim(),
+            review_mode.trim(),
+            version,
+            action
+        ),
+        api_key,
+        json!({ "evidence_refs": evidence_refs }),
+    )
+    .await
 }
