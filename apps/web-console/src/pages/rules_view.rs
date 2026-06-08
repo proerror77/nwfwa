@@ -24,7 +24,7 @@ pub(crate) fn rules_view(props: &RulesProps) -> Html {
                                     <p class="empty">{"No rules returned."}</p>
                                 } else {
                                     <div class="factor-card-grid">
-                                        {for snapshot.rules.iter().take(4).map(|rule| {
+                                        {for snapshot.rules.iter().map(|rule| {
                                             let performance = rule_performance_for(&snapshot.performance, &rule.rule_id);
                                             html! {
                                                 <div class="factor-card">
@@ -51,20 +51,6 @@ pub(crate) fn rules_view(props: &RulesProps) -> Html {
                                             }
                                         })}
                                     </div>
-                                    if snapshot.rules.len() > 4 {
-                                        <details class="data-source-detail governance-detail">
-                                            <summary>{format!("Additional rule library detail: {} rules", snapshot.rules.len() - 4)}</summary>
-                                            <div class="governance-check-list">
-                                                {for snapshot.rules.iter().skip(4).map(|rule| html! {
-                                                    <div>
-                                                        <strong>{&rule.name}</strong>
-                                                        <span>{format!("{} / {} / {}", rule.rule_id, rule.status, rule.recommended_action)}</span>
-                                                        <small>{format!("evidence: {}", refs_count_label(&rule.evidence_refs))}</small>
-                                                    </div>
-                                                })}
-                                            </div>
-                                        </details>
-                                    }
                                 }
                             </section>
 
@@ -75,7 +61,7 @@ pub(crate) fn rules_view(props: &RulesProps) -> Html {
                                 <p class="empty">{"No rule performance records returned."}</p>
                             } else {
                                 <div class="factor-card-grid">
-                                    {for snapshot.performance.iter().take(4).map(|item| html! {
+                                    {for snapshot.performance.iter().map(|item| html! {
                                             <div class="metric-row">
                                                 <span>{format!("{} / {}", item.rule_id, item.alert_code)}</span>
                                                 <strong>{format!("precision {}", percent_label(item.precision))}</strong>
@@ -87,20 +73,6 @@ pub(crate) fn rules_view(props: &RulesProps) -> Html {
                                             </div>
                                         })}
                                     </div>
-                                    if snapshot.performance.len() > 4 {
-                                        <details class="data-source-detail governance-detail">
-                                            <summary>{format!("Additional rule performance detail: {} rules", snapshot.performance.len() - 4)}</summary>
-                                            <div class="governance-check-list">
-                                                {for snapshot.performance.iter().skip(4).map(|item| html! {
-                                                    <div>
-                                                        <strong>{&item.rule_id}</strong>
-                                                        <span>{format!("precision {} / triggers {}", percent_label(item.precision), item.trigger_count)}</span>
-                                                        <small>{format!("false positive rate {} / saving {}", percent_label(item.false_positive_rate), item.saving_amount)}</small>
-                                                    </div>
-                                                })}
-                                            </div>
-                                        </details>
-                                    }
                                 }
                             </section>
 
