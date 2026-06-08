@@ -37,11 +37,12 @@ const translations = new Map([
   ["QA Review", "QA 复核"],
   ["Close sampled findings, reviewer disagreement, and feedback calibration.", "闭环抽样发现、复核分歧和反馈校准。"],
   ["Open QA queue", "打开 QA 队列"],
-  ["Bootstrap Ops", "冷启动作业"],
-  ["Operate historical replay, missing-evidence requests, and label governance as one controlled path before provider model release consumes training labels.", "在 Provider 模型发布使用训练标签前，将历史回放、补件请求和标签治理放在同一条受控路径中执行。"],
-  ["Label Bootstrap", "标签冷启动"],
-  ["Bootstrap Source", "冷启动数据源"],
-  ["Using the configured pilot operations principal for historical replay, evidence requests, and label governance.", "使用已配置的试点运营身份执行历史回放、补件请求和标签治理。"],
+  ["Bootstrap Ops", "标签证据准备"],
+  ["Training Label Handoff", "训练标签交付"],
+  ["Prepare replay findings, missing-evidence requests, and reviewed labels as an audited handoff for the independent training platform.", "将历史回放发现、补件请求和已复核标签整理成可审计交付包，供独立训练平台使用。"],
+  ["Label Evidence Handoff", "标签证据交付"],
+  ["Label Evidence Source", "标签证据来源"],
+  ["Using the configured pilot operations principal for historical replay, evidence requests, and label handoff governance.", "使用已配置的试点运营身份执行历史回放、补件请求和标签交付治理。"],
   ["Create backfill", "创建回放"],
   ["Generate evidence requests", "生成补件请求"],
   ["Evidence Intake", "证据接收"],
@@ -53,21 +54,21 @@ const translations = new Map([
   ["Label Review", "标签复核"],
   ["Review selected label", "复核所选标签"],
   ["Review notes", "复核备注"],
-  ["Load bootstrap queues to inspect replay, evidence, and labels.", "加载冷启动队列以查看回放、证据和标签。"],
-  ["Loading bootstrap queues...", "正在加载冷启动队列..."],
-  ["Actions write audit events; suspicious leads and missing evidence are not training labels until reviewed.", "操作会写入审计事件；可疑线索和缺失证据在复核前不会成为训练标签。"],
-  ["Submitting bootstrap action...", "正在提交冷启动操作..."],
+  ["Load label handoff queues to inspect replay, evidence, and reviewed-label readiness.", "加载标签交付队列以查看回放、证据和标签复核准备状态。"],
+  ["Loading label handoff queues...", "正在加载标签交付队列..."],
+  ["Actions write audit events; suspicious leads and missing evidence stay out of the training handoff until reviewed.", "操作会写入审计事件；可疑线索和缺失证据在复核前不会进入训练交付包。"],
+  ["Submitting label handoff action...", "正在提交标签交付操作..."],
   ["Historical Replay", "历史回放"],
   ["No backfill jobs yet.", "暂无回放任务。"],
   ["Evidence Requests", "补件请求"],
   ["No generated evidence requests yet.", "暂无已生成的补件请求。"],
-  ["No label bootstrap candidates yet.", "暂无标签冷启动候选。"],
+  ["No reviewed-label handoff candidates yet.", "暂无待交付标签候选。"],
   ["Select request", "选择请求"],
   ["Select label item", "选择标签项"],
   ["Select the request before recording received evidence.", "记录收到证据前请先选择请求。"],
   ["Selected evidence request", "已选补件请求"],
   ["Selected evidence request is no longer in the queue.", "已选补件请求已不在队列中。"],
-  ["Select the item before writing a governed label review.", "写入受治理标签复核前请先选择标签项。"],
+  ["Select the item before writing a governed label handoff review.", "写入受治理标签交付复核前请先选择标签项。"],
   ["Selected label item", "已选标签项"],
   ["Selected label item is no longer in the queue.", "已选标签项已不在队列中。"],
   ["Rule & Model Discovery Review", "规则与模型发现评审"],
@@ -498,7 +499,7 @@ const CONTRACT_PANELS: &[&str] = &[
     "Bootstrap Ops",
     "Historical Replay",
     "Evidence Requests",
-    "Label Bootstrap",
+    "Label Evidence Handoff",
     "promotion_review_ready",
     "Factor Cards",
     "AUC Gain",
@@ -2629,7 +2630,7 @@ fn module_label(module: &str, language: Language) -> &'static str {
         "Discovery Review" => tr(language, "Discovery Review", "发现评审"),
         "Runtime Scoring" => tr(language, "Runtime Scoring", "实时评分"),
         "Review Workbench" => tr(language, "Review Workbench", "复核工作台"),
-        "Bootstrap Ops" => tr(language, "Bootstrap Ops", "冷启动作业"),
+        "Bootstrap Ops" => tr(language, "Training Label Handoff", "训练标签交付"),
         "Evidence Hub" => tr(language, "Evidence Hub", "证据中心"),
         "Provider Model Intake" => tr(language, "Provider Model Intake", "Provider 模型接入"),
         "Evidence Runtime" => tr(language, "Evidence Runtime", "证据运行时"),
@@ -2746,8 +2747,8 @@ fn module_context(module: &str, language: Language) -> &'static str {
         ),
         "Bootstrap Ops" => tr(
             language,
-            "Replay historical leads, request missing evidence, and govern bootstrap labels.",
-            "回放历史线索、发起补件请求，并治理冷启动标签。",
+            "Prepare evidence-backed labels for the independent training platform handoff.",
+            "为独立训练平台准备有证据支撑的标签交付包。",
         ),
         "Evidence Hub" => tr(
             language,
@@ -2926,14 +2927,15 @@ fn bootstrap_ops_page() -> Html {
     let selected_evidence_request_id = use_state(String::new);
     let evidence_refs_input = use_state(String::new);
     let evidence_notes =
-        use_state(|| "Evidence packet received and linked for bootstrap review.".to_string());
+        use_state(|| "Evidence packet received and linked for label handoff review.".to_string());
     let selected_label_item_id = use_state(String::new);
     let label_name = use_state(String::new);
     let label_value = use_state(|| "true".to_string());
     let label_governance_status = use_state(|| "approved_for_training".to_string());
     let label_feedback_target = use_state(|| "model".to_string());
     let label_evidence_refs_input = use_state(String::new);
-    let label_notes = use_state(|| "Bootstrap label reviewed against linked evidence.".to_string());
+    let label_notes =
+        use_state(|| "Label reviewed against linked evidence for training-platform handoff.".to_string());
 
     let refresh = {
         let api_key = api_key.clone();
@@ -3074,7 +3076,7 @@ fn bootstrap_ops_page() -> Html {
             let item_id = (*selected_label_item_id).trim().to_string();
             if item_id.is_empty() {
                 action_state.set(ApiState::Failed(
-                    "select one label bootstrap item first".into(),
+                    "select one label handoff item first".into(),
                 ));
                 return;
             }
@@ -3098,7 +3100,7 @@ fn bootstrap_ops_page() -> Html {
                 && governance_status == "approved_for_training"
             {
                 action_state.set(ApiState::Failed(
-                    "receive document evidence before approving this item for training".into(),
+                    "receive document evidence before approving this item for training handoff".into(),
                 ));
                 return;
             }
@@ -3113,7 +3115,7 @@ fn bootstrap_ops_page() -> Html {
                 && !has_document_evidence_ref(&evidence_refs)
             {
                 action_state.set(ApiState::Failed(
-                    "training labels require at least one evidence_documents:* ref".into(),
+                    "training handoff labels require at least one evidence_documents:* ref".into(),
                 ));
                 return;
             }
@@ -3212,15 +3214,15 @@ fn bootstrap_ops_page() -> Html {
         <section class="module-status">
             <div class="dashboard-header">
                 <div>
-                    <h2>{"Bootstrap Ops"}</h2>
-                    <p>{"Operate historical replay, missing-evidence requests, and label governance as one controlled path before provider model release consumes training labels."}</p>
+                    <h2>{"Training Label Handoff"}</h2>
+                    <p>{"Prepare replay findings, missing-evidence requests, and reviewed labels as an audited handoff for the independent training platform."}</p>
                 </div>
-                <span class="status-pill">{"Label Bootstrap"}</span>
+                <span class="status-pill">{"Label Evidence Handoff"}</span>
             </div>
 
             <section class="panel">
-                <h3>{"Bootstrap Source"}</h3>
-                <p class="empty">{"Using the configured pilot operations principal for historical replay, evidence requests, and label governance."}</p>
+                <h3>{"Label Evidence Source"}</h3>
+                <p class="empty">{"Using the configured pilot operations principal for historical replay, evidence requests, and label handoff governance."}</p>
                 <div class="action-bar">
                     <button onclick={refresh_click} disabled={matches!(&*snapshot_state, ApiState::Loading)}>
                         {if matches!(&*snapshot_state, ApiState::Loading) { "Refreshing..." } else { "Refresh queues" }}
@@ -3284,7 +3286,7 @@ fn bootstrap_ops_page() -> Html {
                     <div class="section-header compact">
                         <div>
                             <h3>{"Label Review"}</h3>
-                            <p>{"Review one bootstrap item explicitly; only approved document-backed labels enter training."}</p>
+                            <p>{"Review one label candidate explicitly; only approved document-backed labels enter the training-platform handoff."}</p>
                         </div>
                     </div>
                     <label>
@@ -3397,8 +3399,8 @@ struct BootstrapOpsProps {
 fn bootstrap_ops_view(props: &BootstrapOpsProps) -> Html {
     html! {
         {match &props.state {
-            ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load bootstrap queues to inspect replay, evidence, and labels."}</p></section> },
-            ApiState::Loading => html! { <section class="panel"><p>{"Loading bootstrap queues..."}</p></section> },
+            ApiState::Idle => html! { <section class="panel"><p class="empty">{"Load label handoff queues to inspect replay, evidence, and reviewed-label readiness."}</p></section> },
+            ApiState::Loading => html! { <section class="panel"><p>{"Loading label handoff queues..."}</p></section> },
             ApiState::Failed(error) => html! { <section class="panel"><p class="error">{error}</p></section> },
             ApiState::Ready(snapshot) => html! {
                 <>
@@ -3430,9 +3432,9 @@ fn bootstrap_ops_view(props: &BootstrapOpsProps) -> Html {
 fn bootstrap_action_state(state: &UseStateHandle<ApiState<String>>) -> Html {
     match &**state {
         ApiState::Idle => {
-            html! { <p class="empty">{"Actions write audit events; suspicious leads and missing evidence are not training labels until reviewed."}</p> }
+            html! { <p class="empty">{"Actions write audit events; suspicious leads and missing evidence stay out of the training handoff until reviewed."}</p> }
         }
-        ApiState::Loading => html! { <p>{"Submitting bootstrap action..."}</p> },
+        ApiState::Loading => html! { <p>{"Submitting label handoff action..."}</p> },
         ApiState::Failed(error) => html! { <p class="error">{error}</p> },
         ApiState::Ready(message) => html! { <p class="success-note">{message}</p> },
     }
@@ -3509,11 +3511,11 @@ fn bootstrap_label_panel(items: &[LabelBootstrapItem]) -> Html {
     html! {
         <section class="panel result-stack">
             <div class="panel-heading-row">
-                <h3>{"Label Bootstrap"}</h3>
+                <h3>{"Label Evidence Handoff"}</h3>
                 <span class="status-pill">{items.iter().filter(|item| item.training_eligible).count()}</span>
             </div>
             if items.is_empty() {
-                <p class="empty">{"No label bootstrap candidates yet."}</p>
+                <p class="empty">{"No reviewed-label handoff candidates yet."}</p>
             } else {
                 <div class="finding-list">
                     {for items.iter().take(8).map(|item| html! {
@@ -3608,7 +3610,7 @@ fn bootstrap_selected_label_item(
 ) -> Html {
     let selected_id = (**selected_id).trim().to_string();
     if selected_id.is_empty() {
-        return html! { <p class="empty">{"Select the item before writing a governed label review."}</p> };
+        return html! { <p class="empty">{"Select the item before writing a governed label handoff review."}</p> };
     }
     match label_item_by_id(snapshot_state, &selected_id) {
         Some(item) => html! {
@@ -12935,7 +12937,7 @@ async fn create_bootstrap_backfill(api_key: String) -> Result<HistoricalBackfill
             "dataset_refs": ["ops:current_scoring_audit"],
             "rule_refs": ["ops:active_rule_library"],
             "reviewer": "ops-lead",
-            "notes": "Create a governed replay snapshot for label bootstrap.",
+            "notes": "Create a governed replay snapshot for label handoff.",
             "limit": 25,
         }),
     )
