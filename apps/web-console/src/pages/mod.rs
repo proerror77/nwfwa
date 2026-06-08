@@ -14,6 +14,7 @@ mod member_profile;
 mod mlops_workspace;
 mod models;
 mod provider_risk;
+mod routing_policies;
 mod rules;
 mod runtime_scoring;
 
@@ -33,5 +34,6 @@ pub use member_profile::*;
 pub use mlops_workspace::*;
 pub use models::*;
 pub use provider_risk::*;
+pub use routing_policies::*;
 pub use rules::*;
 pub use runtime_scoring::*;
