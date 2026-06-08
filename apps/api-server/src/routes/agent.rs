@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{
         AgentApprovalRecord, AgentContextSnapshotRecord, AgentPolicyCheckRecord,
@@ -8,16 +9,10 @@ use crate::{
     },
     routes::pii,
 };
-use axum::{
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    Json,
-};
+use axum::{extract::State, http::StatusCode, Json};
 use fwa_agent::{
     DeterministicInvestigator, EvidenceSufficiency, InvestigationRequest, SimilarCaseInput,
 };
-use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::hash::{Hash, Hasher};
@@ -55,10 +50,9 @@ pub struct AgentInvestigationResponse {
 
 pub async fn investigate_case(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<AgentInvestigationRequest>,
 ) -> Result<Json<AgentInvestigationResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_agent_investigation_request(&request)?;
     let masked_claim_ref = mask_agent_claim_ref(&request.claim_id);
     let scheme_family = request
@@ -476,19 +470,6 @@ fn stable_fnv1a64(scope: &str, value: &str) -> u64 {
         hash = hash.wrapping_mul(0x100000001b3);
     }
     hash
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 fn internal_error(
