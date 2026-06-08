@@ -1,16 +1,15 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{AgentApprovalRecord, AgentRunLogRecord, PersistedAuditEvent},
     routes::pii,
 };
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
-use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use fwa_core::AuditEventId;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -36,9 +35,8 @@ pub struct SubmitAgentApprovalResponse {
 
 pub async fn list_agent_runs(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<AgentRunLogListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let runs = state
         .repository
         .list_agent_runs(Some(&actor.customer_scope_id))
@@ -49,11 +47,10 @@ pub async fn list_agent_runs(
 
 pub async fn submit_agent_approval(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(agent_run_id): Path<String>,
     Json(request): Json<SubmitAgentApprovalRequest>,
 ) -> Result<Json<SubmitAgentApprovalResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_agent_approval_request(&request)?;
     let run = state
         .repository
@@ -208,19 +205,6 @@ fn validate_agent_approval_request(request: &SubmitAgentApprovalRequest) -> Resu
         ));
     }
     Ok(())
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
