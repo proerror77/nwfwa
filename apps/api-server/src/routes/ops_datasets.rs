@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedActor,
     error::ApiError,
     repository::{
         CreateFieldMappingInput, DatasetRecord, FeatureSetRecord, FieldMappingRecord,
@@ -13,11 +14,10 @@ use std::collections::BTreeMap;
 
 use axum::{
     extract::{Path, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::validate_api_key;
 use fwa_core::{canonical_scheme_family, AuditEventId, ScoringRunId};
 use rust_decimal::Decimal;
 use serde::Serialize;
@@ -144,10 +144,9 @@ pub struct FactorCardRecord {
 
 pub async fn register_dataset(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<RegisterDatasetInput>,
 ) -> Result<Json<DatasetRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_dataset_contract(&request)?;
     let dataset = state
         .repository
@@ -184,9 +183,8 @@ pub async fn register_dataset(
 
 pub async fn list_datasets(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<DatasetListResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let datasets = state
         .repository
         .list_datasets()
@@ -198,9 +196,8 @@ pub async fn list_datasets(
 
 pub async fn factor_readiness(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<FactorReadinessResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let datasets = state
         .repository
         .list_datasets()
@@ -211,10 +208,9 @@ pub async fn factor_readiness(
 
 pub async fn get_dataset(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(dataset_id): Path<String>,
 ) -> Result<Json<DatasetRecord>, ApiError> {
-    authorize(&state, &headers)?;
     let dataset = state
         .repository
         .get_dataset(&dataset_id)
@@ -232,11 +228,10 @@ pub async fn get_dataset(
 
 pub async fn add_field_mapping(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(dataset_id): Path<String>,
     Json(request): Json<CreateFieldMappingInput>,
 ) -> Result<Json<FieldMappingResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_field_mapping(&request)?;
     let mapping = state
         .repository
@@ -318,10 +313,9 @@ fn validate_field_mapping(request: &CreateFieldMappingInput) -> Result<(), ApiEr
 
 pub async fn register_feature_set(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<RegisterFeatureSetInput>,
 ) -> Result<Json<FeatureSetRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_feature_set_registration(&request)?;
     validate_parquet_uri(&request.features_uri, "FEATURE_SET_FORMAT_INVALID")?;
     let feature_set = state
@@ -405,10 +399,9 @@ fn validate_feature_set_registration(request: &RegisterFeatureSetInput) -> Resul
 
 pub async fn register_model_dataset(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(request): Json<RegisterModelDatasetInput>,
 ) -> Result<Json<ModelDatasetRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_model_dataset_registration(&request)?;
     validate_parquet_uri(&request.train_uri, "MODEL_DATASET_FORMAT_INVALID")?;
     validate_parquet_uri(&request.validation_uri, "MODEL_DATASET_FORMAT_INVALID")?;
@@ -505,10 +498,9 @@ fn validate_model_dataset_registration(
 
 pub async fn register_model_evaluation(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(mut request): Json<RegisterModelEvaluationInput>,
 ) -> Result<Json<ModelEvaluationResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_model_evaluation_registration(&request)?;
     request.scheme_family = canonical_scheme_family(&request.scheme_family).unwrap();
     let evaluation = state
@@ -647,10 +639,9 @@ fn validate_unit_interval_metric(
 
 pub async fn get_model_evaluation(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
     Path(evaluation_run_id): Path<String>,
 ) -> Result<Json<ModelEvaluationResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let evaluation = state
         .repository
         .get_model_evaluation(&evaluation_run_id)
@@ -668,9 +659,8 @@ pub async fn get_model_evaluation(
 
 pub async fn list_model_evaluations(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<ModelEvaluationListResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let evaluations = state
         .repository
         .list_model_evaluations()
@@ -1356,19 +1346,6 @@ async fn record_data_lineage_audit(
                 .collect(),
         })
         .await
-}
-
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
 }
 
 fn internal_error<E: std::fmt::Display>(code: &'static str) -> impl FnOnce(E) -> ApiError {
