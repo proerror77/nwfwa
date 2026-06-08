@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         normalize_scheme_family, scheme_family_from_knowledge_signals, AuditEventListFilter,
@@ -7,13 +8,8 @@ use crate::{
     },
     routes::pii,
 };
-use axum::{
-    extract::State,
-    http::{HeaderMap, StatusCode},
-    Json,
-};
-use fwa_audit::ActorContext;
-use fwa_auth::{authenticate_api_key, validate_api_key};
+use axum::{extract::State, http::StatusCode, Json};
+use fwa_auth::AuthenticatedPrincipal;
 use fwa_core::{AuditEventId, ScoringRunId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -60,9 +56,8 @@ pub struct SimilarCaseSearchResponse {
 
 pub async fn list_cases(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    _actor: AuthenticatedActor,
 ) -> Result<Json<KnowledgeCaseListResponse>, ApiError> {
-    authorize(&state, &headers)?;
     let cases = state
         .repository
         .list_knowledge_cases()
@@ -73,10 +68,9 @@ pub async fn list_cases(
 
 pub async fn publish_case(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Json(mut request): Json<PublishKnowledgeCaseRequest>,
 ) -> Result<Json<PublishKnowledgeCaseResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_publish_knowledge_case(&request)?;
     merge_latest_canonical_evidence_refs(&state, &actor.customer_scope_id, &mut request).await?;
 
@@ -261,10 +255,10 @@ fn unique_json_string_values(value: &Value) -> Vec<String> {
 
 pub async fn search_similar(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(request): Json<SimilarCaseSearchRequest>,
 ) -> Result<Json<SimilarCaseSearchResponse>, ApiError> {
-    authorize_permission(&state, &headers, "tpa:knowledge:read")?;
+    require_permission(principal, "tpa:knowledge:read")?;
     validate_similar_case_search(&request)?;
     let results = state
         .repository
@@ -297,35 +291,7 @@ fn validate_similar_case_search(request: &SimilarCaseSearchRequest) -> Result<()
     Ok(())
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
-}
-
-fn authorize_permission(
-    state: &AppState,
-    headers: &HeaderMap,
-    permission: &str,
-) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
+fn require_permission(principal: AuthenticatedPrincipal, permission: &str) -> Result<(), ApiError> {
     if !principal.has_permission(permission) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
@@ -333,7 +299,7 @@ fn authorize_permission(
             format!("missing permission: {permission}"),
         ));
     }
-    Ok(principal.actor)
+    Ok(())
 }
 
 fn internal_error(
