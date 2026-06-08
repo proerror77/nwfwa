@@ -1304,6 +1304,61 @@ mod tests {
     }
 
     #[test]
+    fn hard_deny_takes_precedence_over_approved_straight_through_rule() {
+        let mut hard_deny_rule = rule(10);
+        hard_deny_rule.alert_code = "APPROVED_HARD_DENY".into();
+        hard_deny_rule.action_class = RuleActionClass::HardDeny;
+        hard_deny_rule.required_evidence = adjudication_evidence();
+        hard_deny_rule.adjudication_policy = Some(adjudication_policy());
+
+        let mut straight_through_rule = rule(0);
+        straight_through_rule.alert_code = "APPROVED_STP".into();
+        straight_through_rule.action_class = RuleActionClass::StraightThrough;
+        straight_through_rule.recommended_action = RecommendedAction::StandardProcessing;
+        straight_through_rule.required_evidence = adjudication_evidence();
+        straight_through_rule.adjudication_policy = Some(adjudication_policy());
+
+        let decision = aggregate(
+            &BTreeMap::new(),
+            &[straight_through_rule, hard_deny_rule],
+            &model(10),
+            &anomaly(0),
+            0,
+        );
+
+        assert_eq!(decision.decision_outcome, DecisionOutcome::AutoDeny);
+        assert_eq!(decision.reason_code, "APPROVED_HARD_DENY");
+        assert!(decision.appeal_or_review_required);
+    }
+
+    #[test]
+    fn pending_evidence_takes_precedence_over_approved_straight_through_rule() {
+        let mut pending_evidence_rule = rule(0);
+        pending_evidence_rule.alert_code = "MISSING_REQUIRED_EVIDENCE".into();
+        pending_evidence_rule.action_class = RuleActionClass::PendingEvidence;
+        pending_evidence_rule.recommended_action = RecommendedAction::RequestEvidence;
+
+        let mut straight_through_rule = rule(0);
+        straight_through_rule.alert_code = "APPROVED_STP".into();
+        straight_through_rule.action_class = RuleActionClass::StraightThrough;
+        straight_through_rule.recommended_action = RecommendedAction::StandardProcessing;
+        straight_through_rule.required_evidence = adjudication_evidence();
+        straight_through_rule.adjudication_policy = Some(adjudication_policy());
+
+        let decision = aggregate(
+            &BTreeMap::new(),
+            &[straight_through_rule, pending_evidence_rule],
+            &model(10),
+            &anomaly(0),
+            0,
+        );
+
+        assert_eq!(decision.decision_outcome, DecisionOutcome::PendingEvidence);
+        assert_eq!(decision.reason_code, "MISSING_REQUIRED_EVIDENCE");
+        assert!(decision.appeal_or_review_required);
+    }
+
+    #[test]
     fn model_and_anomaly_risk_do_not_auto_deny_without_hard_rule() {
         let decision = aggregate(&BTreeMap::new(), &[], &model(100), &anomaly(100), 100);
 
