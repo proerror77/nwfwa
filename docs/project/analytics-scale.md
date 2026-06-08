@@ -67,7 +67,15 @@ The output includes:
 
 ## Local Runtime
 
-Start ClickHouse with the demo stack:
+For the complete local FWA runtime, use the supported hybrid launcher. It starts
+ClickHouse together with PostgreSQL, the ML service, object storage, the host
+API, and the Web Console:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+Start only ClickHouse when you are testing the analytics store in isolation:
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d clickhouse

@@ -37,6 +37,15 @@ the technical stack fits together, and what is ready for demo or pilot use.
 - [Operations Guide](operations-guide.md): local demo, Kubernetes staging,
   verification gates, CI, pilot readiness, and known production boundaries.
 
+For local Docker Desktop development, start with:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+This is the supported hybrid runtime for day-to-day work. Full Docker Compose
+and K3d simulation remain packaging and deployment-shape proofs.
+
 ## Source Of Truth
 
 These documents summarize the current repository implementation and should be

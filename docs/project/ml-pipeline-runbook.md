@@ -987,6 +987,11 @@ FWA_MODEL_SHADOW_HEURISTIC=true \
 cargo run --locked -p api-server
 ```
 
+For the standard local runtime around this serving path, start Docker-backed
+dependencies and the Web Console with `scripts/dev/start_local_runtime.sh`.
+Use manual `cargo run --locked -p api-server` only when overriding model
+artifact environment variables for a specific serving test.
+
 The serving manifest path is preferred because it carries the model identity,
 runtime kind, ordered feature list, threshold, artifact checksum, optional
 signature, version lock, and training-artifact reference in one governed

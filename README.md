@@ -373,12 +373,35 @@ customer adjudication state.
 
 ### Start The Full Local Demo Stack
 
+For day-to-day local development on Docker Desktop, use the supported hybrid
+runtime launcher:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+It starts PostgreSQL, the ML service, object storage, and ClickHouse with
+Docker Compose, applies migrations and deterministic seed data, then runs the
+host `api-server` and Web Console in tmux sessions `nwfwa-api` and
+`nwfwa-web`. Stop it with:
+
+```bash
+scripts/dev/stop_local_runtime.sh
+```
+
+Use API key `aiclaim-demo-key` and open `http://127.0.0.1:5173`.
+
 To run the API server, Web Console, ML service, PostgreSQL, seed job, and MinIO
 through Docker Compose:
 
 ```bash
 docker compose -f infra/docker-compose.yml up --build
 ```
+
+The full Docker path remains the packaging proof. On local Docker Desktop it
+may need roughly 12-16 GB memory for the Rust API image build; if the container
+build fails with `SIGKILL`, `ResourceExhausted`, or `cannot allocate memory`,
+use `scripts/dev/start_local_runtime.sh` or prebuilt images.
 
 Open:
 
@@ -409,7 +432,7 @@ run:
 scripts/ops/run_k3d_simulation.sh --runtime current-context
 ```
 
-### Start PostgreSQL And ML Service Only
+### Manual Host Runtime
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres ml-service

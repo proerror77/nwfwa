@@ -44,6 +44,28 @@ cargo test --locked --workspace
 toolchain through `dtolnay/rust-toolchain@stable`. CI disables incremental
 compilation and dev/test debug info for faster cold runner validation.
 
+## Local Runtime
+
+The supported Docker Desktop development path is the hybrid runtime launcher:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+Docker Compose runs PostgreSQL, the ML service, object storage, and ClickHouse.
+The host runs the Rust `api-server` and Trunk Web Console in tmux sessions so
+local Rust compilation does not have to happen inside a memory-constrained
+Docker build. Stop it with:
+
+```bash
+scripts/dev/stop_local_runtime.sh
+```
+
+The full Docker Compose stack remains available for packaging proof. If
+`api-server` fails during image build with `SIGKILL`, `ResourceExhausted`, or
+`cannot allocate memory`, increase Docker Desktop memory to roughly 12-16 GB,
+use prebuilt images, or use the hybrid launcher for local development.
+
 ## API Server
 
 The API server uses:
@@ -120,6 +142,10 @@ Then start the Yew web console:
 cd apps/web-console
 NO_COLOR=false trunk serve
 ```
+
+When the full local runtime is needed, prefer `scripts/dev/start_local_runtime.sh`
+because it also starts the API and Docker-backed dependencies with the demo
+principal configuration.
 
 Direct Rust/WASM checks are:
 

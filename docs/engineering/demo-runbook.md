@@ -4,14 +4,28 @@ This runbook drives the local FWA demo from seed data through scoring, audit, Da
 
 ## 1. Start Local Services
 
+For the normal operator/demo workspace, start the supported local runtime:
+
+```bash
+scripts/dev/start_local_runtime.sh
+```
+
+It starts Docker-backed dependencies, applies migrations plus deterministic
+seed data, and runs `api-server` plus the Web Console in tmux. Open
+`http://127.0.0.1:5173` with API key `aiclaim-demo-key`. Stop it with:
+
+```bash
+scripts/dev/stop_local_runtime.sh
+```
+
 For the business-facing local demo, run the complete launcher:
 
 ```bash
 scripts/demo/run_local_tpa_demo.sh
 ```
 
-It starts the Docker Compose demo stack, waits for `/api/v1/health`, sends one
-raw TPA packet through intake, scoring, lead triage, case opening,
+It starts or reuses the same local runtime, waits for `/api/v1/health`, sends
+one raw TPA packet through intake, scoring, lead triage, case opening,
 investigation writeback, and Dashboard value proof, then prints the Web Console
 URL.
 
@@ -31,7 +45,7 @@ demo services use synchronous normalize/score paths and bounded Postgres/API
 limits; production-scale TPA intake needs queue-backed ingestion, worker
 consumption, rollup dashboards, rate limits, and dedicated load testing.
 
-For manual service startup:
+For manual service startup without the supported launcher:
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d postgres ml-service
@@ -76,6 +90,9 @@ NO_COLOR=false trunk serve
 ```
 
 Open `http://127.0.0.1:5173`.
+
+Prefer `scripts/dev/start_local_runtime.sh` unless you need to inspect or
+override a single process manually.
 
 ## 3. Score a Demo Claim
 

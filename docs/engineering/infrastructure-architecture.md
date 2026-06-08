@@ -58,6 +58,12 @@ ml-service
   -> explanation artifacts
 ```
 
+For local Docker Desktop development, the supported launcher is
+`scripts/dev/start_local_runtime.sh`: Docker Compose owns PostgreSQL,
+`ml-service`, object storage, and ClickHouse, while host tmux sessions run the
+Rust API and Web Console. Full Docker Compose and K3d remain packaging and
+deployment-shape proofs rather than the fastest daily development path.
+
 Process responsibilities:
 
 - `api-server`: synchronous TPA APIs, Operations Studio APIs, auth boundary,

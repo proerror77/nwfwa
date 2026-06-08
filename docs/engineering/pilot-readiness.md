@@ -57,6 +57,10 @@ Medical review results also produce governed outcome labels for model and workfl
 
 Minimum pilot monitoring:
 
+- Local runtime smoke: `scripts/dev/start_local_runtime.sh` should bring up the
+  Docker-backed dependencies, host API, Web Console, ML health, API health, Web
+  root, and authenticated dashboard summary before local pilot-demo checks.
+  Stop it with `scripts/dev/stop_local_runtime.sh`.
 - API health: `GET /api/v1/health`
 - Pilot readiness gate: `/api/v1/health` field `pilot_readiness.status` must be
   `ready` and `pilot_readiness.ready_for_customer_pilot` must be `true` before

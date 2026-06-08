@@ -154,20 +154,31 @@ backup, retention, or production monitoring setup is complete.
 
 ## Deployment Shape
 
-The current repository supports a local modular monolith path:
+The current repository supports a local modular monolith path. For day-to-day
+development on Docker Desktop, `scripts/dev/start_local_runtime.sh` is the
+supported launcher: Docker runs PostgreSQL, the ML service, object storage, and
+ClickHouse, while the host runs `api-server` and the Yew dev server in tmux.
 
 - PostgreSQL 16 through Docker Compose.
 - S3-compatible MinIO object storage through Docker Compose for staging proof.
 - Python FastAPI ML service through Docker Compose or local uvicorn.
-- Rust API server through `cargo run --locked -p api-server`.
-- Yew web console through `NO_COLOR=false trunk serve`.
+- Rust API server through the local runtime launcher or
+  `cargo run --locked -p api-server`.
+- Yew web console through the local runtime launcher or
+  `NO_COLOR=false trunk serve`.
 - Kubernetes staging manifests under `infra/k8s/staging` for API server, web
   console, ML service, PostgreSQL, object storage, and worker CronJobs.
 
-Production deployment is not configured yet. The Kubernetes manifests are a
-staging architecture and proof surface; environment-specific production
-deployment, managed secrets, key rotation, observability, object storage, and
-customer network controls must still be selected before production use.
+The full Docker Compose stack remains the packaging proof. On small local
+Docker Desktop allocations, the Rust API image build can be killed by memory
+pressure; use the hybrid launcher, increase Docker memory, or consume prebuilt
+images when validating locally.
+
+Production deployment is package-defined but not customer-applied yet. The
+Kubernetes manifests are a staging architecture and proof surface;
+environment-specific production deployment, managed secrets, key rotation,
+observability, object storage, and customer network controls must still be
+selected before production use.
 
 Pilot foundation work is also still required before customer data is used:
 object storage health, backup and restore, retention and legal hold, tenant or
