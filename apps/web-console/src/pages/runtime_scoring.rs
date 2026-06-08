@@ -1,6 +1,6 @@
 use crate::*;
 use wasm_bindgen_futures::spawn_local;
-use web_sys::HtmlTextAreaElement;
+use web_sys::{HtmlInputElement, HtmlTextAreaElement};
 
 #[function_component(RuntimeScoringPage)]
 pub fn runtime_scoring_page() -> Html {
