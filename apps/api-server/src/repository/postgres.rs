@@ -1,19 +1,46 @@
 use super::*;
+use std::time::Duration;
+
+const DEFAULT_DB_MAX_CONNECTIONS: u32 = 20;
+const DEFAULT_DB_ACQUIRE_TIMEOUT_SECONDS: u64 = 5;
 
 #[derive(Debug, Clone)]
 pub struct PostgresScoringRepository {
     pool: PgPool,
 }
 
+fn configured_db_max_connections() -> u32 {
+    positive_u32_env("FWA_DB_MAX_CONNECTIONS", DEFAULT_DB_MAX_CONNECTIONS)
+}
+
+fn configured_db_acquire_timeout_seconds() -> u64 {
+    positive_u64_env(
+        "FWA_DB_ACQUIRE_TIMEOUT_SECONDS",
+        DEFAULT_DB_ACQUIRE_TIMEOUT_SECONDS,
+    )
+}
+
+fn positive_u32_env(name: &str, default: u32) -> u32 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u32>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default)
+}
+
+fn positive_u64_env(name: &str, default: u64) -> u64 {
+    std::env::var(name)
+        .ok()
+        .and_then(|value| value.parse::<u64>().ok())
+        .filter(|value| *value > 0)
+        .unwrap_or(default)
+}
+
 impl PostgresScoringRepository {
     pub async fn connect(database_url: &str) -> anyhow::Result<Self> {
-        let max_connections = std::env::var("FWA_DB_MAX_CONNECTIONS")
-            .ok()
-            .and_then(|value| value.parse::<u32>().ok())
-            .filter(|value| *value > 0)
-            .unwrap_or(5);
         let pool = PgPoolOptions::new()
-            .max_connections(max_connections)
+            .max_connections(configured_db_max_connections())
+            .acquire_timeout(Duration::from_secs(configured_db_acquire_timeout_seconds()))
             .connect(database_url)
             .await?;
         Ok(Self { pool })
@@ -162,6 +189,35 @@ impl PostgresScoringRepository {
                 created_at: Some(row.created_at.to_rfc3339()),
             })
             .collect())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn positive_u32_env_accepts_positive_values() {
+        let name = "NWFWA_TEST_POSITIVE_U32_ENV";
+        std::env::set_var(name, "32");
+
+        assert_eq!(positive_u32_env(name, 20), 32);
+
+        std::env::remove_var(name);
+    }
+
+    #[test]
+    fn positive_env_helpers_fall_back_for_invalid_values() {
+        let u32_name = "NWFWA_TEST_INVALID_U32_ENV";
+        let u64_name = "NWFWA_TEST_INVALID_U64_ENV";
+        std::env::set_var(u32_name, "0");
+        std::env::set_var(u64_name, "not-a-number");
+
+        assert_eq!(positive_u32_env(u32_name, 20), 20);
+        assert_eq!(positive_u64_env(u64_name, 5), 5);
+
+        std::env::remove_var(u32_name);
+        std::env::remove_var(u64_name);
     }
 }
 
