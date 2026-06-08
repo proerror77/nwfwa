@@ -1,12 +1,12 @@
 use crate::{
     app::AppState,
+    auth::AuthenticatedApiPrincipal,
     error::ApiError,
     repository::{PersistedAuditEvent, PersistedInboxClaimRun},
     routes::pii::redact_text,
 };
-use axum::{extract::State, http::HeaderMap, http::StatusCode, Json};
+use axum::{extract::State, http::StatusCode, Json};
 use chrono::{DateTime, FixedOffset, NaiveDate};
-use fwa_auth::authenticate_api_key;
 use fwa_core::AuditEventId;
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -58,20 +58,9 @@ impl SourceInvoice<'_> {
 
 pub async fn normalize_claim_inbox(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(payload): Json<Value>,
 ) -> Result<(StatusCode, Json<InboxNormalizeResponse>), ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
     if !principal.has_permission("tpa:inbox:normalize") {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
