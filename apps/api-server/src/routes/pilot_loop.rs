@@ -1,5 +1,6 @@
 use crate::{
     app::AppState,
+    auth::{AuthenticatedActor, AuthenticatedApiPrincipal},
     error::ApiError,
     repository::{
         canonical_feedback_target, AgentRunLogRecord, AuditEventListFilter,
@@ -13,11 +14,11 @@ use crate::{
 };
 use axum::{
     extract::{Path, Query, State},
-    http::{HeaderMap, StatusCode},
+    http::StatusCode,
     Json,
 };
 use fwa_audit::ActorContext;
-use fwa_auth::{authenticate_api_key, validate_api_key};
+use fwa_auth::AuthenticatedPrincipal;
 use rust_decimal::Decimal;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -133,10 +134,10 @@ pub struct OutcomeLabelListResponse {
 
 pub async fn member_profile_summary(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(member_id): Path<String>,
 ) -> Result<Json<MemberProfileSummaryRecord>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "tpa:members:read")?;
+    let actor = require_permission(principal, "tpa:members:read")?;
     let profile = state
         .repository
         .member_profile_summary(&member_id, Some(&actor.customer_scope_id))
@@ -154,10 +155,10 @@ pub async fn member_profile_summary(
 
 pub async fn write_investigation_result(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(mut request): Json<InvestigationResultRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "tpa:investigations:write")?;
+    let actor = require_permission(principal, "tpa:investigations:write")?;
     validate_investigation_result_request(&request)?;
     ensure_writeback_id_is_available_for_customer(
         &state,
@@ -198,10 +199,10 @@ pub async fn write_investigation_result(
 
 pub async fn write_qa_result(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Json(mut request): Json<QaReviewRecord>,
 ) -> Result<Json<PilotWritebackResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "tpa:qa:write")?;
+    let actor = require_permission(principal, "tpa:qa:write")?;
     validate_qa_review_request(&request)?;
     request.feedback_target = canonical_feedback_target(&request.feedback_target).into();
     ensure_writeback_id_is_available_for_customer(
@@ -473,10 +474,9 @@ fn validate_writeback_pii(notes: &str, evidence_refs: &[String]) -> Result<(), A
 
 pub async fn list_qa_feedback_items(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Query(query): Query<QaFeedbackItemListQuery>,
 ) -> Result<Json<QaFeedbackItemListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     validate_qa_feedback_item_list_query(&query)?;
     let mut items = state
         .repository
@@ -495,11 +495,10 @@ pub async fn list_qa_feedback_items(
 
 pub async fn update_qa_feedback_status(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(feedback_id): Path<String>,
     Json(mut request): Json<UpdateQaFeedbackStatusInput>,
 ) -> Result<Json<UpdateQaFeedbackStatusRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     if !is_supported_qa_feedback_status(&request.status) {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -606,9 +605,8 @@ fn is_supported_qa_feedback_target(feedback_target: &str) -> bool {
 
 pub async fn list_qa_queue(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<QaQueueListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let samples = state
         .repository
         .list_audit_samples(Some(&actor.customer_scope_id))
@@ -638,9 +636,8 @@ pub async fn list_qa_queue(
 
 pub async fn qa_queue_summary(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<QaQueueSummaryResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let items = state
         .repository
         .list_qa_feedback_items(Some(&actor.customer_scope_id))
@@ -651,9 +648,8 @@ pub async fn qa_queue_summary(
 
 pub async fn list_outcome_labels(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<OutcomeLabelListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let labels = state
         .repository
         .list_outcome_labels(Some(&actor.customer_scope_id))
@@ -664,10 +660,10 @@ pub async fn list_outcome_labels(
 
 pub async fn claim_audit_history(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedApiPrincipal(principal): AuthenticatedApiPrincipal,
     Path(claim_id): Path<String>,
 ) -> Result<Json<ClaimAuditHistoryResponse>, ApiError> {
-    let actor = authorize_permission(&state, &headers, "tpa:audit:read")?;
+    let actor = require_permission(principal, "tpa:audit:read")?;
     let events = state
         .repository
         .claim_audit_history(&claim_id, Some(&actor.customer_scope_id))
@@ -678,9 +674,8 @@ pub async fn claim_audit_history(
 
 pub async fn list_webhook_events(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<WebhookEventListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let events = state
         .repository
         .list_webhook_events()
@@ -694,11 +689,10 @@ pub async fn list_webhook_events(
 
 pub async fn submit_webhook_delivery_attempt(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
     Path(event_id): Path<String>,
     Json(request): Json<SubmitWebhookDeliveryAttemptRequest>,
 ) -> Result<Json<WebhookDeliveryAttemptRecord>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     if !matches!(request.delivery_status.as_str(), "delivered" | "failed") {
         return Err(ApiError::new(
             StatusCode::BAD_REQUEST,
@@ -748,9 +742,8 @@ pub async fn submit_webhook_delivery_attempt(
 
 pub async fn list_ops_alerts(
     State(state): State<AppState>,
-    headers: HeaderMap,
+    AuthenticatedActor(actor): AuthenticatedActor,
 ) -> Result<Json<OpsAlertListResponse>, ApiError> {
-    let actor = authorize(&state, &headers)?;
     let leads = state
         .repository
         .list_leads(Some(&actor.customer_scope_id))
@@ -1204,35 +1197,10 @@ fn highest_priority(items: &[&QaFeedbackItemRecord]) -> &'static str {
     }
 }
 
-fn authorize(state: &AppState, headers: &HeaderMap) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    validate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-        ApiError::new(
-            StatusCode::UNAUTHORIZED,
-            "INVALID_API_KEY",
-            "invalid api key",
-        )
-    })
-}
-
-fn authorize_permission(
-    state: &AppState,
-    headers: &HeaderMap,
+fn require_permission(
+    principal: AuthenticatedPrincipal,
     permission: &str,
 ) -> Result<ActorContext, ApiError> {
-    let api_key = headers
-        .get("x-api-key")
-        .and_then(|value| value.to_str().ok());
-    let principal =
-        authenticate_api_key(api_key, &state.config.api_key_config()).map_err(|_| {
-            ApiError::new(
-                StatusCode::UNAUTHORIZED,
-                "INVALID_API_KEY",
-                "invalid api key",
-            )
-        })?;
     if !principal.has_permission(permission) {
         return Err(ApiError::new(
             StatusCode::FORBIDDEN,
