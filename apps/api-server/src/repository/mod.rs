@@ -28,6 +28,7 @@ mod postgres_audit_samples;
 mod postgres_cases;
 mod postgres_evidence;
 mod postgres_inbox;
+mod postgres_knowledge;
 mod postgres_routing_policies;
 mod provider_helpers;
 mod row_types;
