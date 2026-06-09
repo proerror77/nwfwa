@@ -34,6 +34,7 @@ mod postgres_inbox;
 mod postgres_knowledge;
 mod postgres_providers;
 mod postgres_routing_policies;
+mod postgres_rules;
 mod postgres_webhooks;
 mod provider_helpers;
 mod row_types;
