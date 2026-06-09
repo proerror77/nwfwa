@@ -26,6 +26,7 @@ mod postgres;
 mod postgres_agent_helpers;
 mod postgres_audit_samples;
 mod postgres_cases;
+mod postgres_dashboard;
 mod postgres_evidence;
 mod postgres_inbox;
 mod postgres_knowledge;
