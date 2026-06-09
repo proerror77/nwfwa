@@ -31,3 +31,4 @@ pub mod ops_sampling;
 pub mod ops_schemes;
 pub mod pii;
 pub mod pilot_loop;
+mod pilot_loop_types;
