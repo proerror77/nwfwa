@@ -555,494 +555,47 @@ pub fn mlops_workspace_page() -> Html {
                         <span class="status-token strong">{"manual evidence required"}</span>
                     </div>
                     <div class="mlops-action-grid">
-                        <label class="mlops-field">
-                            {"Actor"}
-                            <input
-                                value={(*actor).clone()}
-                                oninput={{
-                                    let actor = actor.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        actor.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Reviewer"}
-                            <input
-                                value={(*reviewer).clone()}
-                                oninput={{
-                                    let reviewer = reviewer.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        reviewer.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Promotion decision"}
-                            <select
-                                value={(*promotion_decision).clone()}
-                                onchange={{
-                                    let promotion_decision = promotion_decision.clone();
-                                    Callback::from(move |event: Event| {
-                                        promotion_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                    })
-                                }}
-                            >
-                                <option value="approved">{"approved"}</option>
-                                <option value="rejected">{"rejected"}</option>
-                            </select>
-                        </label>
-                        <label class="mlops-field">
-                            {"Monitoring task id"}
-                            <input
-                                value={(*monitoring_task_id).clone()}
-                                oninput={{
-                                    let monitoring_task_id = monitoring_task_id.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        monitoring_task_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Monitoring decision"}
-                            <select
-                                value={(*monitoring_decision).clone()}
-                                onchange={{
-                                    let monitoring_decision = monitoring_decision.clone();
-                                    Callback::from(move |event: Event| {
-                                        monitoring_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                    })
-                                }}
-                            >
-                                <option value="acknowledged">{"acknowledged"}</option>
-                                <option value="rejected">{"rejected"}</option>
-                                <option value="prepare_retraining">{"prepare_retraining"}</option>
-                                <option value="open_shadow_review">{"open_shadow_review"}</option>
-                                <option value="open_rollback_review">{"open_rollback_review"}</option>
-                                <option value="closed">{"closed"}</option>
-                            </select>
-                        </label>
-                        <label class="mlops-field">
-                            {"Alert task id"}
-                            <input
-                                value={(*alert_task_id).clone()}
-                                oninput={{
-                                    let alert_task_id = alert_task_id.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        alert_task_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Alert decision"}
-                            <select
-                                value={(*alert_decision).clone()}
-                                onchange={{
-                                    let alert_decision = alert_decision.clone();
-                                    Callback::from(move |event: Event| {
-                                        alert_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                    })
-                                }}
-                            >
-                                <option value="receipt_confirmed">{"receipt_confirmed"}</option>
-                                <option value="delivery_failed">{"delivery_failed"}</option>
-                                <option value="closed_no_action">{"closed_no_action"}</option>
-                                <option value="escalated_for_governance_review">{"escalated_for_governance_review"}</option>
-                            </select>
-                        </label>
-                        <label class="mlops-field">
-                            {"Training job id"}
-                            <input
-                                value={(*retraining_job_id).clone()}
-                                oninput={{
-                                    let retraining_job_id = retraining_job_id.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        retraining_job_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Training status"}
-                            <select
-                                value={(*retraining_status).clone()}
-                                onchange={{
-                                    let retraining_status = retraining_status.clone();
-                                    Callback::from(move |event: Event| {
-                                        retraining_status.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                    })
-                                }}
-                            >
-                                <option value="running">{"running"}</option>
-                                <option value="validation">{"validation"}</option>
-                                <option value="failed">{"failed"}</option>
-                                <option value="cancelled">{"cancelled"}</option>
-                            </select>
-                        </label>
-                        <label class="mlops-field mlops-evidence-field">
-                            {"External training payload"}
-                            <textarea
-                                value={(*training_output_payload_json).clone()}
-                                oninput={{
-                                    let training_output_payload_json = training_output_payload_json.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        training_output_payload_json.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
+                        {mlops_text_field("Actor", &actor)}
+                        {mlops_text_field("Reviewer", &reviewer)}
+                        {mlops_select_field("Promotion decision", &promotion_decision, &["approved", "rejected"])}
+                        {mlops_text_field("Monitoring task id", &monitoring_task_id)}
+                        {mlops_select_field("Monitoring decision", &monitoring_decision, &["acknowledged", "rejected", "prepare_retraining", "open_shadow_review", "open_rollback_review", "closed"])}
+                        {mlops_text_field("Alert task id", &alert_task_id)}
+                        {mlops_select_field("Alert decision", &alert_decision, &["receipt_confirmed", "delivery_failed", "closed_no_action", "escalated_for_governance_review"])}
+                        {mlops_text_field("Training job id", &retraining_job_id)}
+                        {mlops_select_field("Training status", &retraining_status, &["running", "validation", "failed", "cancelled"])}
+                        {mlops_textarea_field("External training payload", &training_output_payload_json, "mlops-evidence-field")}
                         <button class="mini-action" onclick={load_training_output_payload.clone()}>
                             {"Load provider output payload"}
                         </button>
-                        <label class="mlops-field">
-                            {"Candidate version"}
-                            <input
-                                value={(*candidate_model_version).clone()}
-                                oninput={{
-                                    let candidate_model_version = candidate_model_version.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_model_version.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate artifact"}
-                            <input
-                                value={(*candidate_artifact_uri).clone()}
-                                oninput={{
-                                    let candidate_artifact_uri = candidate_artifact_uri.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_artifact_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate artifact SHA"}
-                            <input
-                                value={(*candidate_artifact_sha256).clone()}
-                                oninput={{
-                                    let candidate_artifact_sha256 = candidate_artifact_sha256.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_artifact_sha256.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Training artifact"}
-                            <input
-                                value={(*training_artifact_uri).clone()}
-                                oninput={{
-                                    let training_artifact_uri = training_artifact_uri.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        training_artifact_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Training artifact SHA"}
-                            <input
-                                value={(*training_artifact_sha256).clone()}
-                                oninput={{
-                                    let training_artifact_sha256 = training_artifact_sha256.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        training_artifact_sha256.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Serving manifest"}
-                            <input
-                                value={(*serving_manifest_uri).clone()}
-                                oninput={{
-                                    let serving_manifest_uri = serving_manifest_uri.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        serving_manifest_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate endpoint"}
-                            <input
-                                value={(*candidate_endpoint_url).clone()}
-                                oninput={{
-                                    let candidate_endpoint_url = candidate_endpoint_url.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_endpoint_url.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Validation report"}
-                            <input
-                                value={(*validation_report_uri).clone()}
-                                oninput={{
-                                    let validation_report_uri = validation_report_uri.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        validation_report_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate AUC"}
-                            <input
-                                value={(*candidate_auc).clone()}
-                                oninput={{
-                                    let candidate_auc = candidate_auc.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_auc.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate KS"}
-                            <input
-                                value={(*candidate_ks).clone()}
-                                oninput={{
-                                    let candidate_ks = candidate_ks.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_ks.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate precision"}
-                            <input
-                                value={(*candidate_precision).clone()}
-                                oninput={{
-                                    let candidate_precision = candidate_precision.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_precision.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate recall"}
-                            <input
-                                value={(*candidate_recall).clone()}
-                                oninput={{
-                                    let candidate_recall = candidate_recall.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_recall.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate F1"}
-                            <input
-                                value={(*candidate_f1).clone()}
-                                oninput={{
-                                    let candidate_f1 = candidate_f1.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_f1.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate accuracy"}
-                            <input
-                                value={(*candidate_accuracy).clone()}
-                                oninput={{
-                                    let candidate_accuracy = candidate_accuracy.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_accuracy.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Candidate threshold"}
-                            <input
-                                value={(*candidate_threshold).clone()}
-                                oninput={{
-                                    let candidate_threshold = candidate_threshold.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_threshold.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Feature importance URI"}
-                            <input
-                                value={(*candidate_feature_importance_uri).clone()}
-                                oninput={{
-                                    let candidate_feature_importance_uri = candidate_feature_importance_uri.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_feature_importance_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Permutation importance URI"}
-                            <input
-                                value={(*candidate_permutation_importance_uri).clone()}
-                                oninput={{
-                                    let candidate_permutation_importance_uri = candidate_permutation_importance_uri.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_permutation_importance_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field mlops-evidence-field">
-                            {"Confusion matrix JSON"}
-                            <textarea
-                                value={(*candidate_confusion_matrix).clone()}
-                                oninput={{
-                                    let candidate_confusion_matrix = candidate_confusion_matrix.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_confusion_matrix.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field mlops-evidence-field">
-                            {"Metrics JSON"}
-                            <textarea
-                                value={(*candidate_metrics_json).clone()}
-                                oninput={{
-                                    let candidate_metrics_json = candidate_metrics_json.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        candidate_metrics_json.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field mlops-evidence-field">
-                            {"Draft rule candidate payload"}
-                            <textarea
-                                value={(*mined_rule_candidates_json).clone()}
-                                oninput={{
-                                    let mined_rule_candidates_json = mined_rule_candidates_json.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        mined_rule_candidates_json.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Anomaly candidate kind"}
-                            <select
-                                value={(*anomaly_candidate_kind).clone()}
-                                onchange={{
-                                    let anomaly_candidate_kind = anomaly_candidate_kind.clone();
-                                    Callback::from(move |event: Event| {
-                                        anomaly_candidate_kind.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                    })
-                                }}
-                            >
-                                <option value="provider_peer_anomaly">{"provider_peer_anomaly"}</option>
-                                <option value="provider_graph_anomaly">{"provider_graph_anomaly"}</option>
-                                <option value="claim_entity_anomaly">{"claim_entity_anomaly"}</option>
-                            </select>
-                        </label>
-                        <label class="mlops-field">
-                            {"Anomaly candidate id"}
-                            <input
-                                value={(*anomaly_candidate_id).clone()}
-                                oninput={{
-                                    let anomaly_candidate_id = anomaly_candidate_id.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        anomaly_candidate_id.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Anomaly report URI"}
-                            <input
-                                value={(*anomaly_source_report_uri).clone()}
-                                oninput={{
-                                    let anomaly_source_report_uri = anomaly_source_report_uri.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        anomaly_source_report_uri.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field">
-                            {"Anomaly decision"}
-                            <select
-                                value={(*anomaly_decision).clone()}
-                                onchange={{
-                                    let anomaly_decision = anomaly_decision.clone();
-                                    Callback::from(move |event: Event| {
-                                        anomaly_decision.set(event.target_unchecked_into::<HtmlSelectElement>().value());
-                                    })
-                                }}
-                            >
-                                <option value="accepted_for_review">{"accepted_for_review"}</option>
-                                <option value="rejected">{"rejected"}</option>
-                                <option value="open_investigation_review">{"open_investigation_review"}</option>
-                                <option value="request_more_evidence">{"request_more_evidence"}</option>
-                            </select>
-                        </label>
-                        <label class="mlops-field">
-                            {"Anomaly evidence refs"}
-                            <input
-                                value={(*anomaly_evidence_refs).clone()}
-                                oninput={{
-                                    let anomaly_evidence_refs = anomaly_evidence_refs.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        anomaly_evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field mlops-evidence-field">
-                            {"Anomaly candidate payload"}
-                            <textarea
-                                value={(*anomaly_candidate_payload).clone()}
-                                oninput={{
-                                    let anomaly_candidate_payload = anomaly_candidate_payload.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        anomaly_candidate_payload.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field mlops-evidence-field">
-                            {"Evidence refs"}
-                            <input
-                                value={(*evidence_refs).clone()}
-                                oninput={{
-                                    let evidence_refs = evidence_refs.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        evidence_refs.set(event.target_unchecked_into::<HtmlInputElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
-                        <label class="mlops-field mlops-notes-field">
-                            {"Notes"}
-                            <textarea
-                                value={(*action_notes).clone()}
-                                oninput={{
-                                    let action_notes = action_notes.clone();
-                                    Callback::from(move |event: InputEvent| {
-                                        action_notes.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
-                                    })
-                                }}
-                            />
-                        </label>
+                        {mlops_text_field("Candidate version", &candidate_model_version)}
+                        {mlops_text_field("Candidate artifact", &candidate_artifact_uri)}
+                        {mlops_text_field("Candidate artifact SHA", &candidate_artifact_sha256)}
+                        {mlops_text_field("Training artifact", &training_artifact_uri)}
+                        {mlops_text_field("Training artifact SHA", &training_artifact_sha256)}
+                        {mlops_text_field("Serving manifest", &serving_manifest_uri)}
+                        {mlops_text_field("Candidate endpoint", &candidate_endpoint_url)}
+                        {mlops_text_field("Validation report", &validation_report_uri)}
+                        {mlops_text_field("Candidate AUC", &candidate_auc)}
+                        {mlops_text_field("Candidate KS", &candidate_ks)}
+                        {mlops_text_field("Candidate precision", &candidate_precision)}
+                        {mlops_text_field("Candidate recall", &candidate_recall)}
+                        {mlops_text_field("Candidate F1", &candidate_f1)}
+                        {mlops_text_field("Candidate accuracy", &candidate_accuracy)}
+                        {mlops_text_field("Candidate threshold", &candidate_threshold)}
+                        {mlops_text_field("Feature importance URI", &candidate_feature_importance_uri)}
+                        {mlops_text_field("Permutation importance URI", &candidate_permutation_importance_uri)}
+                        {mlops_textarea_field("Confusion matrix JSON", &candidate_confusion_matrix, "mlops-evidence-field")}
+                        {mlops_textarea_field("Metrics JSON", &candidate_metrics_json, "mlops-evidence-field")}
+                        {mlops_textarea_field("Draft rule candidate payload", &mined_rule_candidates_json, "mlops-evidence-field")}
+                        {mlops_select_field("Anomaly candidate kind", &anomaly_candidate_kind, &["provider_peer_anomaly", "provider_graph_anomaly", "claim_entity_anomaly"])}
+                        {mlops_text_field("Anomaly candidate id", &anomaly_candidate_id)}
+                        {mlops_text_field("Anomaly report URI", &anomaly_source_report_uri)}
+                        {mlops_select_field("Anomaly decision", &anomaly_decision, &["accepted_for_review", "rejected", "open_investigation_review", "request_more_evidence"])}
+                        {mlops_text_field("Anomaly evidence refs", &anomaly_evidence_refs)}
+                        {mlops_textarea_field("Anomaly candidate payload", &anomaly_candidate_payload, "mlops-evidence-field")}
+                        {mlops_text_field_with_class("Evidence refs", &evidence_refs, "mlops-evidence-field")}
+                        {mlops_textarea_field("Notes", &action_notes, "mlops-notes-field")}
                         <div class="mlops-boundary-card">
                             <span>{"Boundary"}</span>
                             <strong>{"Evidence before action"}</strong>
@@ -1080,5 +633,76 @@ pub fn mlops_workspace_page() -> Html {
                 on_select_retraining_job={select_retraining_job}
             />
         </section>
+    }
+}
+
+fn mlops_text_field(label: &'static str, state: &UseStateHandle<String>) -> Html {
+    mlops_text_field_with_class(label, state, "")
+}
+
+fn mlops_text_field_with_class(
+    label: &'static str,
+    state: &UseStateHandle<String>,
+    extra_class: &'static str,
+) -> Html {
+    html! {
+        <label class={classes!("mlops-field", extra_class)}>
+            {label}
+            <input
+                value={(**state).clone()}
+                oninput={{
+                    let state = state.clone();
+                    Callback::from(move |event: InputEvent| {
+                        state.set(event.target_unchecked_into::<HtmlInputElement>().value());
+                    })
+                }}
+            />
+        </label>
+    }
+}
+
+fn mlops_textarea_field(
+    label: &'static str,
+    state: &UseStateHandle<String>,
+    extra_class: &'static str,
+) -> Html {
+    html! {
+        <label class={classes!("mlops-field", extra_class)}>
+            {label}
+            <textarea
+                value={(**state).clone()}
+                oninput={{
+                    let state = state.clone();
+                    Callback::from(move |event: InputEvent| {
+                        state.set(event.target_unchecked_into::<HtmlTextAreaElement>().value());
+                    })
+                }}
+            />
+        </label>
+    }
+}
+
+fn mlops_select_field(
+    label: &'static str,
+    state: &UseStateHandle<String>,
+    options: &'static [&'static str],
+) -> Html {
+    html! {
+        <label class="mlops-field">
+            {label}
+            <select
+                value={(**state).clone()}
+                onchange={{
+                    let state = state.clone();
+                    Callback::from(move |event: Event| {
+                        state.set(event.target_unchecked_into::<HtmlSelectElement>().value());
+                    })
+                }}
+            >
+                {for options.iter().map(|option| html! {
+                    <option value={*option}>{*option}</option>
+                })}
+            </select>
+        </label>
     }
 }
