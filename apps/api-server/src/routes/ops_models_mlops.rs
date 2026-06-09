@@ -3,7 +3,7 @@ use super::ops_models_audit::{
     record_mlops_alert_delivery_audit, record_mlops_alert_delivery_task_review_audit,
     record_mlops_monitoring_audit, record_mlops_monitoring_review_task_audit,
 };
-use super::ops_models_gates::{
+use super::ops_models_mlops_tasks::{
     alert_delivery_tasks_from_events, build_mlops_alert_delivery_response,
     build_mlops_monitoring_report_response, monitoring_review_tasks_from_events,
 };
