@@ -24,6 +24,7 @@ mod ops_models_audit;
 mod ops_models_gates;
 mod ops_models_mlops;
 mod ops_models_mlops_tasks;
+mod ops_models_retraining;
 mod ops_models_types;
 mod ops_models_validation;
 pub mod ops_providers;
