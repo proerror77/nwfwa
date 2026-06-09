@@ -51,6 +51,7 @@ mod triage_helpers;
 mod types;
 mod types_core;
 mod types_evidence;
+mod types_rules;
 mod webhook_helpers;
 
 use self::agent_helpers::agent_run_log_from_persisted;
